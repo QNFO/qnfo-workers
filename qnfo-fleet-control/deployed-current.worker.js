@@ -1099,6 +1099,7 @@ function secretEq(a, b) {
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 // 0.54.0 BREACH-PLAYBOOKS-TOOL-LOOP-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): the doctor may now write tool_error_exclusions (BD_WRITE_TABLES, the one table the tool playbooks of migrations/2026-10-26-breach-playbooks-tool-loop.sql add: it classes a reviewed tool-error literal so the same caller error stops filing a TOOL-FAILURE issue), and it waits for an effect another loop produces: a verify_sql that reads pending-<reason> on an applied case keeps the case open until its lease ends (then lease-expired, as before) and supersedes it when the issue closed meanwhile, so a rule can be verified on the independent effect (the planner re-reading a re-armed verdict) and not on the marker the action wrote. Review fixes: the owner card of the owner-card kind carries an empty default_in_effect (the default is in its why), because human_actions_default_adopt_ai closes any open card with a non-empty default at birth when it is not decision-shaped, and a handed-owner case verifies only on a card the owner resolved, not on one a trigger closed (DEFAULT-ADOPTED-1, DEFAULT-APPROVE-1, AUTONOMY-FIRST-1). ops_config and human_actions stay off the list, and the statement validators (one INSERT or UPDATE, a top-level id = ?1 predicate, no OR, no free-text column) are unchanged.
+// 0.53.1 BREACH-DOCTOR-GATE-1 (2026-10-26, agent_issues 1000266, pillar autonomy; patch: a fix to the validator of 0.53.0): two reviewers ran forms through bdWriteWhy and then through real SQLite (?1 = 1) and found statements it accepted that change rows of other issues, although the ledger says every action and revert statement is bound to the issue: bdBoundWhy tested that the WHERE text CONTAINED `id = ?1` with no OR, and it took the first WHERE of the whole text (the DO UPDATE ... WHERE of an upsert bound an INSERT ... SELECT over every issue; WHERE NOT issue_id = ?1, issue_id = ?1 = 0, issue_id = ?1 NOT NULL and UPDATE ... FROM passed). The check is now structural: the statement is read as top-level items (a parenthesised group is one item), cut at its first ON CONFLICT, its first top-level WHERE is split into AND conjuncts (BETWEEN ... AND and CASE ... END do not split) and one conjunct must be EXACTLY [alias.]id|issue_id = ?1, ?1 = [alias.]id|issue_id or [alias.]id|issue_id IN (?1); an OR anywhere after the WHERE (or-widens), a compound SELECT, UPDATE ... FROM (update-from), an unbalanced paren and a quoted identifier are refused, and an INSERT ... SELECT must name its columns and fill issue_id from ?1 or from the id of the alias the predicate binds (insert-id-unbound, insert-no-column-list). bdStrip reads the text in one pass the way SQLite does: `/* -- */ OR 1 = 1` hid an OR behind two regex passes. The five seed playbooks pass unchanged, so there is no migration. breach-doctor.test.mjs adds every reproduced form, a table of legitimate shapes and a real-SQLite property test (12468 generated statements, every one the gate accepts changes only issue 1); it fails 20 checks on 0.53.0.
 // 0.53.0 BREACH-DOCTOR-FIX-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): review of 0.52.0. (1) bdWriteWhy enforces what the ledger asserts: every action and revert statement carries a top-level id = ?1 / issue_id = ?1 predicate and no OR beside it (no-id-predicate, or-widens), and ops_config and human_actions are off BD_WRITE_TABLES, so a playbook can no longer reach the kill switch or the trust list. (2) A demotion is a pause with a release: after BD_RELEASE_MIN (60) minutes the rule runs again as a trial of one case a tick, a failed trial case demotes it again, a verified one lifts the cap, and failures count from the rule's last change of standing; an action that changes no row on an issue closed meanwhile supersedes the case instead of failing it. (3) breaches_undiagnosed_over_60m flags at min(120, breach_doctor_min_age_min + 60) minutes and the age gate defaults to 60 (migrations/2026-10-26-breach-doctor-fix.sql sets it), so no threshold exceeds 120 minutes. breach-doctor.test.mjs, migrations/breach-doctor-fix.test.mjs.
 // 0.52.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class) and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 and the observed value at 200 characters. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call.
 // 0.52.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. The generic playbook-gap row is seeded in measure and files no issue (a gap issue carries no anchor the code loop can edit); the self issue after 3 failed cases is the only issue the doctor files by itself, and migrations/2026-10-26-breach-doctor-trust.sql makes the planner read its BREACH-DOCTOR-1: title as trusted. No model call, no D1 trigger. breach-doctor.test.mjs.
@@ -12483,8 +12484,30 @@ function bdKv(o) {
   return parts.join(" ").slice(0, 480);
 }
 // ---- validation: playbooks are data, so every statement is checked before it runs (S1)
+// One left-to-right pass, the way SQLite reads the text (BREACH-DOCTOR-GATE-1): a string literal becomes '', a -- comment (to the line end) and a block comment (an unterminated one runs to the end
+// of the text) become a space, and a quoted identifier ("x", `x`, [x]) keeps only its word characters inside double quotes, so a paren, a quote or a keyword cannot hide in it. Three regex passes in
+// a row read `/* -- */ OR 1 = 1` as a comment to the line end and an unterminated block comment, and the gate never saw the OR that SQLite runs.
 function bdStrip(sql) {
-  return String(sql).replace(/'(?:[^']|'')*'/g, "''").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+  var s = String(sql), n = s.length, out = "", i = 0;
+  while (i < n) {
+    var ch = s.charAt(i), j, k;
+    if (ch === "'") {
+      j = i + 1;
+      for (;;) { k = s.indexOf("'", j); if (k < 0) { j = n; break; } if (s.charAt(k + 1) === "'") { j = k + 2; continue; } j = k + 1; break; }
+      out += "''"; i = j; continue;
+    }
+    if (ch === "-" && s.charAt(i + 1) === "-") { k = s.indexOf("\n", i); i = k < 0 ? n : k; out += " "; continue; }
+    if (ch === "/" && s.charAt(i + 1) === "*") { k = s.indexOf("*/", i + 2); i = k < 0 ? n : k + 2; out += " "; continue; }
+    if (ch === '"' || ch === "`" || ch === "[") {
+      var close = ch === "[" ? "]" : ch;
+      j = i + 1;
+      var end = n;
+      for (;;) { k = s.indexOf(close, j); if (k < 0) { j = n; break; } if (close !== "]" && s.charAt(k + 1) === close) { j = k + 2; continue; } end = k; j = k + 1; break; }
+      out += '"' + s.slice(i + 1, end).replace(/[^A-Za-z0-9_]/g, "_") + '"'; i = j; continue;
+    }
+    out += ch; i++;
+  }
+  return out;
 }
 function bdTopVerb(s) {
   var depth = 0, i = 0, n = s.length;
@@ -12516,28 +12539,91 @@ function bdReadOnlyWhy(sql, allowParam) {
   if (rest.indexOf("?") !== -1) return "bad-param";
   return null;
 }
-// The id predicate "bound to the issue" rests on. bdTopLevel drops everything inside parentheses (so a conjunct hidden in a subquery over another table does not count and an IN list
-// or a CTE cannot carry the binding); the WHERE of the statement (up to its ON CONFLICT) must then hold a conjunct `id = ?1`, `issue_id = ?1` or `a.id = ?1` (either order; `id IN (?1)` is read
-// as `id = ?1`) and no OR. An id test in a CASE of the SET list is no WHERE and does not bind: the statement would still rewrite every row.
-function bdTopLevel(s) {
-  var depth = 0, out = "";
-  for (var i = 0; i < s.length; i++) {
-    var ch = s.charAt(i);
-    if (ch === "(") { if (depth === 0) out += " "; depth++; continue; }
-    if (ch === ")") { if (depth > 0) depth--; continue; }
-    if (depth === 0) out += ch;
+// The id predicate "bound to the issue" rests on. BREACH-DOCTOR-GATE-1 (0.53.1): the check is structural. An id test in a CASE of the SET list is no WHERE and does not bind: the statement would still rewrite every row. bdItems reads the stripped statement as top-level items (a parenthesised group is one item, so nothing inside a subquery, a CTE or an
+// IN list is a predicate of the statement). The statement body is cut at its first ON CONFLICT (the DO UPDATE ... WHERE of an upsert is not the statement's WHERE); its WHERE is the first
+// top-level WHERE of what is left; the WHERE ends at the first GROUP BY, HAVING, WINDOW, ORDER BY, LIMIT or RETURNING; it is split into AND conjuncts (an AND that belongs to a BETWEEN or sits
+// inside a CASE does not split) and one conjunct must be EXACTLY [alias.]id|issue_id = ?1, ?1 = [alias.]id|issue_id or [alias.]id|issue_id IN (?1), with nothing attached to it (a NOT, a second
+// comparison, NOT NULL, IS, a COLLATE all make it a different conjunct and bind nothing). An OR anywhere after the WHERE, a compound SELECT (UNION, INTERSECT, EXCEPT), UPDATE ... FROM (the
+// updated table is then joined to rows the predicate does not bind) and an unbalanced paren are refused. For INSERT ... SELECT the rows written are the rows the SELECT returns, so the INSERT
+// names its columns and the SELECT item that fills issue_id is ?1 or the id of the same alias the predicate binds (`FROM agent_issues a, issue_plans p WHERE a.id = ?1` filling issue_id from p
+// would write a row for every plan).
+function bdItems(s) {
+  var re = /[A-Za-z_][A-Za-z0-9_$]*|\?\d*|\d+(?:\.\d*)?|''|\S/g, m, items = [], depth = 0, start = 0;
+  while ((m = re.exec(s))) {
+    var t = m[0];
+    if (t === "(") { if (depth === 0) start = re.lastIndex; depth++; continue; }
+    if (t === ")") { if (depth === 0) return null; depth--; if (depth === 0) items.push({ t: "()", g: s.slice(start, m.index).trim() }); continue; }
+    if (depth === 0) items.push({ t: t.toLowerCase() });
   }
-  return out;
+  return depth === 0 ? items : null;
+}
+// The alias of an item run that is exactly [alias.]id|issue_id: "" for a bare column, the lowercased alias, or null when the run is anything else.
+function bdIdRef(run) {
+  var q = "", c = run;
+  if (run.length === 3 && run[1].t === ".") { q = run[0].t; c = [run[2]]; }
+  if (c.length !== 1 || (c[0].t !== "id" && c[0].t !== "issue_id") || !/^[a-z_]\w*$/.test(q + "x")) return null;
+  return q;
+}
+// A conjunct that binds: the alias it names ("" for none), or null.
+function bdIdConjunct(c) {
+  var n = c.length;
+  if (n >= 3 && c[n - 2].t === "=" && c[n - 1].t === "?1") return bdIdRef(c.slice(0, n - 2));
+  if (n >= 3 && c[0].t === "?1" && c[1].t === "=") return bdIdRef(c.slice(2));
+  if (n >= 3 && c[n - 1].t === "()" && c[n - 1].g === "?1" && c[n - 2].t === "in") return bdIdRef(c.slice(0, n - 2));
+  return null;
 }
 function bdBoundWhy(s) {
-  var top = bdTopLevel(s.replace(/\b(issue_id|id)\s+in\s*\(\s*\?1\s*\)/gi, "$1 = ?1")).replace(/\b(insert|update)\s+or\s+\w+\b/gi, "$1");
-  var w = top.search(/\bwhere\b/i);
+  var it = bdItems(s), v = 0;
+  if (!it) return "unbalanced-parens";
+  while (v < it.length && it[v].t !== "insert" && it[v].t !== "update") v++;
+  if (v >= it.length) return "no-target";
+  var verb = it[v].t, j = v + 1, end = it.length, k;
+  if (it[j] && it[j].t === "or") j += 2;
+  for (k = j; k < it.length - 1; k++) if (it[k].t === "on" && it[k + 1].t === "conflict") { end = k; break; }
+  var body = it.slice(j, end);
+  var has = function (w) { return body.some(function (x) { return x.t === w; }); };
+  if (has("union") || has("intersect") || has("except")) return "compound-select";
+  if (verb === "update" && has("from")) return "update-from";
+  var w = -1;
+  for (k = 0; k < body.length; k++) if (body[k].t === "where") { w = k; break; }
   if (w < 0) return "no-id-predicate";
-  var seg = top.slice(w + 5), oc = seg.search(/\bon\s+conflict\b/i);
-  if (oc >= 0) seg = seg.slice(0, oc);
-  var bound = /(?:^|[^\w.])(?:\w+\.)?(?:issue_id|id)\s*=\s*\?1(?!\d)/i.test(seg) || /\?1(?!\d)\s*=\s*(?:\w+\.)?(?:issue_id|id)\b/i.test(seg);
-  if (!bound) return "no-id-predicate";
-  if (/\bor\b/i.test(seg)) return "or-widens";
+  var tail = body.slice(w + 1), stop = tail.length;
+  for (k = 0; k < tail.length; k++) if (/^(group|having|window|order|limit|returning)$/.test(tail[k].t)) { stop = k; break; }
+  if (tail.some(function (x) { return x.t === "or"; })) return "or-widens";
+  var conj = [], cur = [], caseDepth = 0, between = false, c;
+  for (k = 0; k < stop; k++) {
+    c = tail[k];
+    if (c.t === "case") caseDepth++;
+    else if (c.t === "end" && caseDepth > 0) caseDepth--;
+    else if (c.t === "between" && caseDepth === 0) between = true;
+    else if (c.t === "and" && caseDepth === 0) { if (between) between = false; else { conj.push(cur); cur = []; continue; } }
+    cur.push(c);
+  }
+  conj.push(cur);
+  var quals = [];
+  for (k = 0; k < conj.length; k++) { var q = bdIdConjunct(conj[k]); if (q !== null) quals.push(q); }
+  if (!quals.length) return "no-id-predicate";
+  if (verb === "insert") {
+    var p = 2;
+    if (body[p] && body[p].t === "as") p += 2;
+    if (!body[p] || body[p].t !== "()") return "insert-no-column-list";
+    var cols = body[p].g.toLowerCase().split(",").map(function (x) { return x.trim(); }), pos = cols.indexOf("issue_id");
+    if (pos < 0) return "insert-no-issue-id-column";
+    var sel = -1, from = -1;
+    for (k = p + 1; k < body.length; k++) if (body[k].t === "select") { sel = k; break; }
+    if (sel < 0) return "no-id-predicate";
+    for (k = sel + 1; k < w; k++) if (body[k].t === "from") { from = k; break; }
+    var list = body.slice(sel + 1, from < 0 ? w : from), items = [], run = [];
+    while (list.length && (list[0].t === "distinct" || list[0].t === "all")) list = list.slice(1);
+    for (k = 0; k < list.length; k++) { if (list[k].t === ",") { items.push(run); run = []; } else run.push(list[k]); }
+    items.push(run);
+    var item = items[pos] || [];
+    if (item.length > 2 && item[item.length - 2].t === "as") item = item.slice(0, item.length - 2);
+    if (!(item.length === 1 && item[0].t === "?1")) {
+      var iq = bdIdRef(item);
+      if (iq === null || quals.indexOf(iq) < 0) return "insert-id-unbound";
+    }
+  }
   return null;
 }
 // action_sql and revert_sql statements: exactly one INSERT or UPDATE on an allowlisted table, bound to the issue (?1) by a top-level id predicate, no free-text column.
@@ -12548,6 +12634,7 @@ function bdWriteWhy(sql) {
   var s = bdStrip(q).replace(/\s+/g, " ").trim();
   if (BD_FREE_TEXT_RE.test(s)) return "free-text-column";
   if (BD_FORBIDDEN_KW_RE.test(s)) return "forbidden-keyword";
+  if (s.indexOf('"') !== -1) return "quoted-identifier";
   var verb = bdTopVerb(s);
   if (verb !== "insert" && verb !== "update") return "not-insert-or-update";
   var m = verb === "insert" ? /\binsert\s+(?:or\s+(\w+)\s+)?into\s+"?([a-z_][a-z0-9_]*)"?/i.exec(s) : /\bupdate\s+(?:or\s+(\w+)\s+)?"?([a-z_][a-z0-9_]*)"?/i.exec(s);

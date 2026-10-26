@@ -10,7 +10,9 @@
 // breach_diagnoses and v_breach_doctor_status; the self issue after 3 failed cases is the only issue the doctor files by itself, and it names a doer once the trust pair is listed); switched on with
 // UPDATE breach_playbooks SET mode = 'on' WHERE rule_id = 'playbook-gap', a gap issue is filed once per family (owner prose and the catch-all are skipped; none while 3 are open); the age
 // gate is 60 minutes (BREACH-DOCTOR-FIX-1, bounded to 10..120) and the undiagnosed metric flags at min(120, gate + 60) minutes; an in-flight case with an expired lease is failed in measure and left alone only when the switch is off; the owner-card and file-issue kinds work; an injection payload in an issue body or plan reason reaches no table the doctor writes; one tick at a time, the lock is
-// released after an error; the tick never throws; the call site is on every */10 tick; the mirror and VERSION match.
+// released after an error; the tick never throws; the call site is on every */10 tick; the mirror and VERSION match. BREACH-DOCTOR-GATE-1 (0.53.1): the id-bound gate is structural: every form two reviewers
+// ran through bdWriteWhy and real SQLite (INSERT ... SELECT with the id predicate only in the upsert's WHERE, NOT / = 0 / NOT NULL on the id conjunct, UPDATE ... FROM, a predicate in a subquery) is refused, a table of
+// legitimate shapes passes and changes only issue 1 in SQLite, the five seed playbooks pass unchanged, and a property test over 12,000 generated statements proves that no statement the gate accepts changes another issue.
 // Output MUST contain "0 failed" on success.   node qnfo-fleet-control/breach-doctor.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -950,5 +952,200 @@ const ownerProse = (raw) => { for (let i = 0; i < 6; i++) { raw.prepare("INSERT 
   const r = await tick(raw);
   ok(r.ok === true && r.rule_errors === 1 && r.acted === 5, "a trigger_sql that throws is counted and the other rules still act", r);
 }
+// ---- BREACH-DOCTOR-GATE-1 (0.53.1): the id-bound gate is structural. Two reviewers of 0.53.0 ran forms through bdWriteWhy and then through real SQLite (?1 = 1) and found statements the gate
+// accepted that change rows of other issues: the gate only tested that the WHERE text CONTAINED `id = ?1` and held no OR, and it took the first WHERE of the whole text.
+{
+  const api = loadApi();
+  const wr = api.bdWriteWhy;
+  const FIX_DDL = `
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'open', priority TEXT DEFAULT 'medium', close_channel TEXT);
+CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, remediation TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE issue_plans (issue_id INTEGER PRIMARY KEY, planned_at TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT, task_id TEXT, path TEXT, model TEXT, attempts INTEGER DEFAULT 1);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, status TEXT DEFAULT 'active');`;
+  // fixture A: issues 1..4 each with a triage row, a plan and a contract; fixture B: the same without those rows for issue 1 (so an INSERT for issue 1 has something to write)
+  const fixture = (withOne) => {
+    const x = new DatabaseSync(":memory:");
+    x.exec(FIX_DDL);
+    for (let i = 1; i <= 4; i++) {
+      x.prepare("INSERT INTO agent_issues (id, title) VALUES (?, ?)").run(i, "t" + i);
+      if (withOne || i > 1) {
+        x.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (?, 'rc', 'triaged', 'a', 'x')").run(i);
+        x.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome) VALUES (?, 'now', 'x')").run(i);
+        x.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) VALUES (?, ?, 'p', 'a', 'SELECT 1', 'd1-query', 'e')").run("c" + i, i);
+      }
+    }
+    return x;
+  };
+  const snap = (x) => {
+    const m = new Map();
+    const add = (t, k, r) => m.set(t + "|" + k, (m.get(t + "|" + k) || "") + JSON.stringify(r) + "\n");
+    for (const r of x.prepare("SELECT * FROM agent_issues ORDER BY id").all()) add("agent_issues", r.id, r);
+    for (const t of ["issue_triage", "issue_plans"]) for (const r of x.prepare("SELECT * FROM " + t + " ORDER BY issue_id").all()) add(t, r.issue_id, r);
+    for (const r of x.prepare("SELECT * FROM remediation_contracts ORDER BY class").all()) add("remediation_contracts", r.issue_id, r);
+    return m;
+  };
+  // run one statement with ?1 = 1 on a fixture and say whether a row of another issue changed, appeared or vanished (the fixture is rolled back)
+  const run = (x, sql) => {
+    x.exec("BEGIN");
+    try {
+      const before = snap(x);
+      let err = null;
+      try { x.prepare(sql).all(1); } catch (e) { err = String(e.message || e); }
+      const after = snap(x);
+      let others = false, one = false;
+      for (const k of new Set([...before.keys(), ...after.keys()])) {
+        if (before.get(k) === after.get(k)) continue;
+        if (k.endsWith("|1")) one = true; else others = true;
+      }
+      return { err, others, one };
+    } finally { x.exec("ROLLBACK"); }
+  };
+  // fixture C: four issues and no triage row, plan or contract at all (an INSERT for every issue shows there)
+  const A = fixture(true), B = fixture(false), C = fixture(false);
+  C.exec("DELETE FROM issue_triage; DELETE FROM issue_plans; DELETE FROM remediation_contracts");
+  const both = (sql) => { const a = run(A, sql), b = run(B, sql), c = run(C, sql); return { err: a.err || b.err || c.err, others: a.others || b.others || c.others, one: a.one || b.one || c.one }; };
+
+  // 1. the forms the reviewers ran (all accepted by 0.53.0 and each changes rows other than issue 1); harm: the statement really writes other issues' rows when run
+  const I = "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence)";
+  const UPS = " ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = excluded.triage_state, close_evidence = excluded.close_evidence";
+  const refused = [
+    ["(1) INSERT ... SELECT ... GROUP BY id ON CONFLICT DO UPDATE ... WHERE issue_id = ?1 (the first WHERE found is the upsert's)", I + " SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues GROUP BY id ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = excluded.triage_state WHERE issue_id = ?1", "no-id-predicate", true],
+    ["(1) the ORDER BY id variant", I + " SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues ORDER BY id ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = excluded.triage_state WHERE issue_id = ?1", "no-id-predicate", true],
+    ["(2) WHERE NOT issue_id = ?1", "UPDATE issue_triage SET triage_state = 'closed' WHERE NOT issue_id = ?1", "no-id-predicate", true],
+    ["(3) WHERE issue_id = ?1 = 0", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 = 0", "no-id-predicate", true],
+    ["(4) WHERE issue_id = ?1 NOT NULL", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 NOT NULL", "no-id-predicate", true],
+    ["(5) UPDATE ... FROM a joined table (the only id predicate is on the joined table)", "UPDATE issue_triage SET triage_state = 'closed' FROM agent_issues a WHERE a.id = ?1", "update-from", true],
+    ["(5) UPDATE ... FROM a subquery that carries the id predicate", "UPDATE issue_triage SET triage_state = 'closed' FROM (SELECT issue_id FROM issue_plans WHERE issue_id = ?1) p WHERE p.issue_id > 0", "update-from", true],
+    ["(5) UPDATE ... FROM issue_plans joined on nothing", "UPDATE issue_triage SET triage_state = 'closed' FROM issue_plans p WHERE p.issue_id = ?1", "update-from", true],
+    ["(5) INSERT ... SELECT whose id predicate sits in a subquery (IN)", I + " SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues WHERE id IN (SELECT issue_id FROM issue_plans WHERE issue_id = ?1 OR 1)" + UPS, "no-id-predicate", true],
+    ["(5) INSERT ... SELECT whose id predicate sits in a subquery (EXISTS)", I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE EXISTS (SELECT 1 FROM issue_plans p WHERE p.issue_id = ?1)" + UPS, "no-id-predicate", true],
+    ["(5) INSERT ... SELECT with the id predicate in a JOIN ... ON and a different WHERE", I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a JOIN issue_plans p ON p.issue_id = ?1 WHERE a.status = 'open'" + UPS, "no-id-predicate", true],
+    ["(5) the predicate binds another alias than the one that fills issue_id (cross join)", I + " SELECT p.issue_id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a, issue_plans p WHERE a.id = ?1" + UPS, "insert-id-unbound", true],
+    ["(5) a compound SELECT: the second SELECT has no predicate", I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE a.id = ?1 UNION SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues WHERE 1" + UPS, "compound-select", true],
+    ["(5) INSERT ... SELECT with no column list (issue_id position unknown)", "INSERT INTO issue_triage SELECT p.issue_id, 'r', 'closed', 'o', 'x', NULL, NULL, 0 FROM agent_issues a, issue_plans p WHERE a.id = ?1 ON CONFLICT(issue_id) DO UPDATE SET rc = 'r'", "insert-no-column-list", true],
+    ["an OR beside the predicate", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 OR 1 = 1", "or-widens", true],
+    ["an OR in front of the predicate", "UPDATE issue_triage SET triage_state = 'closed' WHERE ?1 > 0 OR issue_id = ?1", "or-widens", true],
+    ["an OR in the tail after the predicate (RETURNING is no reason to stop looking)", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND 1 RETURNING issue_id, 1 OR 1", "or-widens", false],
+    ["an OR hidden behind a block comment that contains a line comment marker", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 /* -- */ OR 1 = 1", "or-widens", true],
+    ["an OR behind a quoted identifier that holds a paren", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND \"(\" = \"(\" OR 1 = 1", "quoted-identifier", null],
+    ["an OR behind a bracket identifier that holds a paren", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND [(] IS NOT NULL OR 1 = 1", "quoted-identifier", null],
+    ["BETWEEN swallows the AND: (?1 BETWEEN 0 AND issue_id) = ?1", "UPDATE issue_triage SET triage_state = 'closed' WHERE ?1 BETWEEN 0 AND issue_id = ?1", "no-id-predicate", true],
+    ["an IN list with a second member", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id IN (?1, 2)", "no-id-predicate", true],
+    ["a negated IN", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id NOT IN (?1)", "no-id-predicate", true],
+    ["<>", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id <> ?1", "no-id-predicate", true],
+    [">=", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id >= ?1", "no-id-predicate", true],
+    ["IS NOT", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id IS NOT ?1", "no-id-predicate", true],
+    ["== is read as two marks, not as the equality the gate accepts (conservative)", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id == ?1", "no-id-predicate", false],
+    ["the parameter only in the SET list", "UPDATE issue_triage SET reopened_count = ?1 WHERE owner = 'a'", "no-id-predicate", true],
+    ["a CASE in the WHERE is no conjunct (conservative)", "UPDATE issue_triage SET triage_state = 'closed' WHERE CASE WHEN 1 THEN issue_id = ?1 ELSE 1 END", "no-id-predicate", false],
+    ["a predicate inside parentheses is a subquery or a group, not a conjunct of the statement", "UPDATE issue_triage SET triage_state = 'closed' WHERE (issue_id = ?1)", "no-id-predicate", false],
+    ["a lookalike column", "UPDATE issue_triage SET triage_state = 'closed' WHERE parent_id = ?1", "no-id-predicate", false],
+    ["an unbalanced paren", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND (owner = 'a'", "unbalanced-parens", false],
+    ["INSERT ... VALUES (?1, ...) has no WHERE", "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (?1, 'r', 'closed', 'o', 'x')", "no-id-predicate", false],
+    ["a quoted identifier is refused (it could hold a paren, a keyword or a free-text column name)", "UPDATE issue_triage SET \"triage_state\" = 'closed' WHERE issue_id = ?1", "quoted-identifier", false]
+  ];
+  for (const [name, sql, why, harm] of refused) {
+    const got = wr(sql);
+    ok(got === why, "refused (" + why + "): " + name, got);
+    if (harm !== null) {
+      const r = both(sql);
+      ok(harm ? r.err === null && r.others === true : r.others === false, harm ? "and it really does write other issues' rows in SQLite: " + name : "(no row of another issue changes: this refusal is conservative) " + name, r);
+    }
+  }
+
+  // 2. the legitimate shapes: accepted, and on real SQLite with ?1 = 1 only issue 1's rows change (and issue 1's rows do change)
+  const shapes = [
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE ?1 = issue_id",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id IN (?1)",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id IN ( ?1 )",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_triage.issue_id = ?1",
+    "UPDATE issue_triage AS t SET triage_state = 'closed' WHERE t.issue_id = ?1 AND t.owner = 'a'",
+    "UPDATE OR IGNORE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND (owner = 'a' OR owner = 'b')",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE owner = 'a' AND issue_id = ?1 AND triage_state <> 'closed'",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND triage_state BETWEEN 'a' AND 'z'",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE triage_state BETWEEN 'a' AND 'z' AND issue_id = ?1",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND CASE WHEN owner = 'a' THEN 1 AND 1 ELSE 0 END",
+    "UPDATE issue_triage SET reopened_count = reopened_count + 1 WHERE issue_id = ?1 AND NOT EXISTS (SELECT 1 FROM issue_plans p WHERE p.issue_id = ?1 AND p.outcome = 'zzz')",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 RETURNING issue_id",
+    "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 /* a comment */ AND owner = 'a' -- and a line comment",
+    "WITH e AS (SELECT 'a' AS o) UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND owner = (SELECT o FROM e)",
+    "UPDATE issue_triage SET triage_state = 'triaged', close_evidence = NULL, reopened_count = reopened_count + 1 WHERE issue_id = ?1",
+    "UPDATE agent_issues SET status = 'closed' WHERE id = ?1 AND status = 'open'",
+    "UPDATE agent_issues AS a SET status = 'closed' WHERE a.id = ?1",
+    "UPDATE agent_issues SET close_channel = NULL, priority = 'low' WHERE id = ?1 AND status = 'open'",
+    "UPDATE issue_plans SET outcome = 'y' WHERE issue_id = ?1",
+    "UPDATE remediation_contracts SET status = 'done' WHERE issue_id = ?1",
+    I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE a.id = ?1" + UPS,
+    I + " SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues WHERE id = ?1" + UPS,
+    I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE ?1 = a.id" + UPS,
+    I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE a.id IN (?1)" + UPS,
+    I + " SELECT a.id AS issue_id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(issue_id) DO NOTHING",
+    "INSERT INTO issue_triage (rc, issue_id, triage_state, owner, sla_due_at) SELECT 'r', ?1, 'closed', 'o', 'x' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(issue_id) DO NOTHING",
+    I + " SELECT a.id, 'r', 'closed', 'o', 'x', p.outcome FROM agent_issues a JOIN issue_plans p ON p.issue_id = a.id WHERE p.outcome = 'x' AND a.id = ?1 GROUP BY a.id ORDER BY a.id LIMIT 1" + UPS,
+    "WITH e AS (SELECT 'ev' AS ev) " + I + " SELECT a.id, 'r', 'closed', 'o', 'x', e.ev FROM agent_issues a, e WHERE e.ev <> '' AND a.id = ?1" + UPS + " WHERE rc <> 'zzz' OR 1 = 1",
+    I + " SELECT a.id, 'r', 'closed', 'o', 'x', (SELECT MAX(p.outcome) FROM issue_plans p WHERE p.issue_id = a.id) FROM agent_issues a WHERE NOT EXISTS (SELECT 1 FROM issue_plans q WHERE q.outcome = 'zzz') AND a.id = ?1" + UPS,
+    "INSERT OR IGNORE INTO issue_plans (issue_id, planned_at, outcome) SELECT a.id, 'now', 'x' FROM agent_issues a WHERE a.id = ?1",
+    "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c-' || a.id, a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(class) DO UPDATE SET status = 'active'"
+  ];
+  for (const sql of shapes) {
+    const got = wr(sql), r = both(sql);
+    ok(got === null, "legitimate shape accepted: " + sql.slice(0, 90), got);
+    ok(r.err === null && r.others === false && r.one === true, "and in SQLite with ?1 = 1 it runs, changes issue 1 and no other issue: " + sql.slice(0, 90), r);
+  }
+
+  // 3. the seed playbooks (migrations/2026-10-26-breach-doctor.sql) pass the new gate unchanged: no seed needs a rewrite, so this change adds no migration
+  {
+    const raw = world();
+    const seeds = raw.prepare("SELECT * FROM breach_playbooks ORDER BY rule_id").all();
+    ok(seeds.map((s) => s.rule_id).join(",") === "CM-R1,CM-R2,CM-R3,CM-R5,playbook-gap", "the five seed playbooks are in the world");
+    for (const s of seeds) {
+      const v = api.bdValidateRule(s);
+      ok(v.ok === true, "seed " + s.rule_id + " passes bdValidateRule under the structural gate", v);
+      for (const st of [...JSON.parse(s.action_sql), ...JSON.parse(s.revert_sql)]) ok(wr(st) === null, "seed " + s.rule_id + " statement passes: " + st.slice(0, 60), wr(st));
+    }
+  }
+
+  // 4. property: build WHERE clauses from fragments (bound, unbound, widening, lookalike) joined with AND / OR, in six statement templates; EVERY statement the gate accepts must, run with ?1 = 1,
+  // change no row of issues 2..4 (on both fixtures). The gate may refuse a harmless statement; it may never accept a harmful one.
+  {
+    const frags = ["{C} = ?1", "?1 = {C}", "{C} IN (?1)", "NOT {C} = ?1", "{C} = ?1 = 0", "{C} = ?1 NOT NULL", "{C} <> ?1", "{C} >= ?1", "{C} <= ?1", "{C} IN (?1, 2)", "{C} IS NOT ?1", "({C} = ?1)", "1", "?1 > 0", "(1 OR {C} = ?1)",
+      "{C} IN (SELECT id FROM agent_issues WHERE id = ?1 OR 1)", "EXISTS (SELECT 1 FROM agent_issues WHERE id = ?1)", "{C} BETWEEN 0 AND 9", "?1 BETWEEN 0 AND {C} = ?1", "CASE WHEN 1 THEN {C} = ?1 ELSE 1 END",
+      "{C} > 0 /* -- */", "'a' = 'a'", "{C} = ?1 /* x */ OR 1", "NOT ({C} <> ?1)", "{C} IN (?1) = 1", "{C} = ?1 AND {C} > 0"];
+    const templates = [
+      ["UPDATE issue_triage SET reopened_count = reopened_count + 1 WHERE {W}", "issue_id"],
+      ["UPDATE agent_issues SET priority = 'high' WHERE {W}", "id"],
+      ["UPDATE remediation_contracts SET status = 'x' WHERE {W}", "issue_id"],
+      ["INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT a.id, 'r', 'x', 'o', 'x' FROM agent_issues a WHERE {W} ON CONFLICT(issue_id) DO UPDATE SET rc = 'r2'", "a.id"],
+      ["INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT a.id, 'r', 'x', 'o', 'x' FROM agent_issues a WHERE {W} GROUP BY a.id ORDER BY a.id LIMIT 9 ON CONFLICT(issue_id) DO UPDATE SET rc = 'r2'", "a.id"],
+      ["INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT p.issue_id, 'r', 'x', 'o', 'x' FROM agent_issues a, issue_plans p WHERE {W} ON CONFLICT(issue_id) DO UPDATE SET rc = 'r2'", "a.id"]
+    ];
+    let seed = 20261026;
+    const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+    const wheres = [];
+    for (const f of frags) for (const g of frags) for (const c of [" AND ", " OR "]) wheres.push(f + c + g);
+    for (let i = 0; i < 700; i++) wheres.push(frags[rnd(frags.length)] + (rnd(2) ? " AND " : " OR ") + frags[rnd(frags.length)] + (rnd(2) ? " AND " : " OR ") + frags[rnd(frags.length)]);
+    for (const f of frags) wheres.push(f);
+    let total = 0, accepted = 0, executed = 0;
+    const violations = [], perTemplate = templates.map(() => 0);
+    for (let ti = 0; ti < templates.length; ti++) {
+      for (const w of wheres) {
+        const [t, col] = templates[ti];
+        const sql = t.replace("{W}", w.split("{C}").join(col));
+        total++;
+        if (wr(sql) !== null) continue;
+        accepted++; perTemplate[ti]++;
+        const r = both(sql);
+        if (r.err === null) executed++;
+        if (r.others) violations.push(sql);
+      }
+    }
+    console.log("gate property: " + total + " generated statements, " + accepted + " accepted by bdWriteWhy, " + executed + " executed on the 4-issue fixtures, " + violations.length + " changed another issue (accepted per template " + perTemplate.join("/") + ")");
+    ok(violations.length === 0, "property: no statement the gate accepts changes a row of another issue (" + total + " generated, " + accepted + " accepted, " + executed + " executed)", violations.slice(0, 3));
+    ok(accepted >= 150 && executed >= accepted * 0.9, "property: the generator is not vacuous (the gate accepts the bound shapes and SQLite runs them)", { total, accepted, executed });
+    ok(perTemplate.slice(0, 5).every((n) => n > 20) && perTemplate[5] === 0, "property: each of the five bound templates has accepted cases, the cross-join template none", perTemplate);
+  }
+}
+
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
