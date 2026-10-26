@@ -199,6 +199,15 @@ def main() -> int:
     recovered = "error: failed to push some refs to 'x'\nhint: git pull --rebase\nstatus pushed on attempt 2\n"
     check("a recovered push is not a finding", cw.classify(recovered, "canonical-deploy")[0] == "unknown")
     check("lock contention is deploy-lock-contention, not unknown", cw.classify("::error::DEPLOY-LOCK-CONTENTION: deploy-guard lock not acquired after 12 attempts", "deploy-code-orchestrator")[0] == "deploy-lock-contention")
+    # WATCHDOG-ECHO-CLASS-1: the marker in the echoed step script is no contention; the rendered error annotation is (shapes read from run 40297792142 of deploy-qnfo-agents)
+    echoed = ('2026-10-26T09:12:52.2738068Z [36;1m  echo "::error::DEPLOY-LOCK-CONTENTION: deploy-guard lock not acquired after 12 attempts - refusing to deploy"[0m\n'
+              '2026-10-26T09:12:53.2121605Z lock response (attempt 1): {"acquired":true,"token":"x","holder":"ci/deploy-qnfo-agents"}\n'
+              '2026-10-26T09:13:06.2248132Z     X [provisioned_class_missing_from_config] class FleetCodeAgent has a provisioned Durable Object namespace\n'
+              '2026-10-26T09:13:06.2852162Z ##[error]Process completed with exit code 1.\n')
+    check("a lock marker only inside the echoed step script is not lock contention", cw.classify(echoed, "deploy-qnfo-agents")[0] == "unknown", cw.classify(echoed, "deploy-qnfo-agents"))
+    emitted = echoed + "2026-10-26T09:14:00.0000000Z ##[error]DEPLOY-LOCK-CONTENTION: deploy-guard lock not acquired after 12 attempts - refusing to deploy\n"
+    check("the rendered error annotation is lock contention", cw.classify(emitted, "deploy-qnfo-agents")[0] == "deploy-lock-contention")
+    check("a timestamped bare ::error:: line is lock contention", cw.classify("2026-10-26T09:14:00.0000000Z ::error::DEPLOY-LOCK-CONTENTION: x", "w")[0] == "deploy-lock-contention")
     check("git CONFLICT is still push-race", cw.classify("CONFLICT (content): Merge conflict in a.json", "w")[0] == "push-race")
 
     # SUPERSEDED-FAILURE-SKIP-1 (issues #332/#333): shapes taken from the live 2026-10-01 12:10-12:13Z ping-pong.
