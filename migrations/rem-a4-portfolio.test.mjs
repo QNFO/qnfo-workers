@@ -168,9 +168,10 @@ const c = (cls) => one(a, "SELECT * FROM remediation_contracts WHERE class = ?",
 const val = (db, probe) => { const r = db.prepare(probe).get(); return [r.expected, r.observed]; };
 const LIFECYCLE_NEW = JSON.stringify({ steps: [{ type: "sql", db: "AUDIT", sql: "INSERT OR IGNORE INTO portfolio_gaps (kind, entity, detail, day) SELECT 'deploy-unrecorded', s.service, 'x', date('now') FROM service_registry s WHERE s.kind='worker' AND s.state='live' AND NOT EXISTS (SELECT 1 FROM deployment_history dh WHERE dh.resource_name=s.service AND dh.action IN ('deploy','deployed') AND COALESCE(dh.status,'success')='success')" }] });
 const LIFECYCLE_OLD = LIFECYCLE_NEW.replace("IN ('deploy','deployed')", "= 'deploy'");
-function p100341(life, deps) {
+function p100341(life, deps, ledger = true) {
   const db = new DatabaseSync(":memory:");
-  db.exec("CREATE TABLE fleet_tasks (id TEXT PRIMARY KEY, definition TEXT); CREATE TABLE service_registry (service TEXT PRIMARY KEY, kind TEXT, state TEXT); CREATE TABLE deployment_history (id INTEGER PRIMARY KEY AUTOINCREMENT, resource_name TEXT, action TEXT, status TEXT)");
+  db.exec("CREATE TABLE fleet_tasks (id TEXT PRIMARY KEY, definition TEXT); CREATE TABLE service_registry (service TEXT PRIMARY KEY, kind TEXT, state TEXT); CREATE TABLE deployment_history (id INTEGER PRIMARY KEY AUTOINCREMENT, resource_name TEXT, action TEXT, status TEXT); CREATE TABLE project_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, action TEXT)");
+  if (ledger) db.prepare("INSERT INTO project_ledger (project_id, action) VALUES ('W.voice-stt', 'deployed')").run();
   db.prepare("INSERT INTO fleet_tasks VALUES ('portfolio-lifecycle', ?)").run(life);
   db.prepare("INSERT INTO service_registry VALUES ('voice-stt', 'worker', 'live')").run();
   for (const [action, st] of deps) db.prepare("INSERT INTO deployment_history (resource_name, action, status) VALUES ('voice-stt', ?, ?)").run(action, st);
@@ -184,6 +185,8 @@ const r3 = p100341(LIFECYCLE_NEW, []);
 ok(r3[1] === "1", "100341: no deployment row for voice-stt reads 1", r3);
 const r4 = p100341(LIFECYCLE_NEW, [["deployed", "failed"], ["deploy-direct", "success"]]);
 ok(r4[1] === "1", "100341: a failed or deploy-direct row does not count", r4);
+const r5 = p100341(LIFECYCLE_NEW, [["deployed", "success"]], false);
+ok(/no project_ledger row shows what W\.voice-stt runs/.test(r5[1]), "100341: no project_ledger row for W.voice-stt (the project cannot show what it runs) reads a non-zero text", r5);
 ok(c("issue-100341").status === "active" && c("issue-100341").last_verdict === null && c("issue-100341").attempts === 0 && !/VACUOUS-PROBE-V3-1/.test(c("issue-100341").action) && c("issue-100341").module === "rem-a4-portfolio", "100341: contract re-armed with an honest action");
 
 function p99953(o = {}) {
