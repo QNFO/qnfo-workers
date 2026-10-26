@@ -6,9 +6,9 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: UPDATE agent_issues SET description = (SELECT b.description FROM bak_20261026_rem_a5_notes b WHERE b.id = agent_issues.id) WHERE id IN (SELECT id FROM bak_20261026_rem_a5_notes)
--- spof-review: adds no cron, D1 trigger, external host or credential; thirteen issue notes.
+-- spof-review: adds no cron, D1 trigger, external host or credential; thirteen issue notes and one wording correction on 99909.
 
-CREATE TABLE IF NOT EXISTS bak_20261026_rem_a5_notes AS SELECT id, description FROM agent_issues WHERE id IN (2447, 2522, 2971, 99906, 99923, 99933, 99935, 99938, 99943, 99950, 100226, 100464, 1000155);
+CREATE TABLE IF NOT EXISTS bak_20261026_rem_a5_notes AS SELECT id, description FROM agent_issues WHERE id IN (2447, 2522, 2971, 99906, 99909, 99923, 99933, 99935, 99938, 99943, 99950, 100226, 100464, 1000155);
 
 UPDATE agent_issues SET description = COALESCE(description, '') || char(10) ||
   'REM-A5 2026-10-26 19:30Z: qnfo-artifacts is retired (marker and probe binding in PR 4800, cf-ops-actions unbind-service run 40383849057 and delete-worker run 40384144124, registry half PR 4833): worker_count reads 36 until the next hourly census (35 expected). Not retirable now: qnfo-workers (the Workers Builds git trigger recreates that stub on every push that is not skip-ci, issue 1000156; removing the trigger changes the owner Cloudflare integration) and voice-stt (no repository directory, a bearer token held by the owner, clients unknown). Candidates from a read-only investigation, not re-checked here: fold qnfo-evolve into qnfo-cloud-ops and qnfo-model-eval into qnfo-ai-calibration with scripts/fold_worker.py (both are D1-only loops). Eight scripts created since 2026-10-17 (github-steward, evolve, model-eval, artifacts, voice-stt, q08-mind, qnfo-workers, qnfo-agents) account for the growth. Each retirement needs its own fleet-graph impact check.'
@@ -17,6 +17,10 @@ WHERE id = 99923 AND instr(COALESCE(description, ''), 'REM-A5 2026-10-26') = 0;
 UPDATE agent_issues SET description = COALESCE(description, '') || char(10) ||
   'REM-A5 2026-10-26 19:00Z: the 30-day run rate is workers_ai 660.09 + owner_gateway 321.89 (the owner''s own desktop clients on the gateway) + direct_providers_external 450 (owner-stated, unverified) + ai_gateway deepseek 29.86 + plan 5 = 1466.84 (v_cost_run_rate). 777 of it (owner clients, direct providers, plan) is outside any fleet change, so the 650 target cannot be met while that floor stands. The Workers AI part is a 7-day window that still holds the 10-19 to 10-21 burst (5.45M, 4.22M and 2.13M neurons; 0.67M to 1.13M a day since) and falls to about 300 by 10-29 at the present burn (decision REM-A5-COST-WINDOW-1). No target or cap was changed.'
 WHERE id = 99938 AND instr(COALESCE(description, ''), 'REM-A5 2026-10-26') = 0;
+
+-- Correction to the note PR 4828 put on 99909: the nine closed rows are code-loop tasks closed with a session or by-PR note (the watchmaker query reads merge_note and last_error), not rows closed by a person.
+UPDATE agent_issues SET description = replace(description, 'closed by a person 9', 'closed with a session or by-PR note 9')
+WHERE id = 99909 AND instr(COALESCE(description, ''), 'closed by a person 9') > 0;
 
 UPDATE agent_issues SET description = COALESCE(description, '') || char(10) ||
   'REM-A5 2026-10-26 19:20Z: workers_ai_cost_30d_usd sums 30 days of neurons (27.56M at 17:01Z). The 10-18 to 10-21 burst alone is 16.45M neurons, about 180 USD, so the 95 threshold cannot be met before about 11-17 even at zero spend; at the present 0.7M to 1.1M neurons a day the 30-day figure settles between 230 and 360 USD. Spend is also held by the research daily budget since 04:32Z (control research-daily-neuron-gate, issue 100622). No target or cap was changed.'

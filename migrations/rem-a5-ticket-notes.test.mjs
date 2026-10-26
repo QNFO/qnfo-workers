@@ -30,6 +30,7 @@ function world() {
   w.exec("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, status TEXT DEFAULT 'open')");
   const ins = w.prepare("INSERT INTO agent_issues (id, title, description) VALUES (?, ?, ?)");
   for (const id of IDS.concat([777, 1798])) ins.run(id, "T" + id, "original text of " + id);
+  ins.run(99909, "T99909", "original text of 99909 REM-A5 2026-10-26 19:00Z: ... (github:rwnq8 21, merged_by null 13, closed by a person 9, session 1) ..."); // the 4828 note, with the wording this file corrects
   return w;
 }
 const q1 = (w, s, ...p) => w.prepare(s).get(...p);
@@ -46,7 +47,8 @@ for (const id of IDS) {
   ok(!BLOCKER_PHRASES.some((p) => note.toLowerCase().includes(p)), id + ": no phrase that v_blocker_claims counts", BLOCKER_PHRASES.filter((p) => note.toLowerCase().includes(p)));
   ok(!denyText.test(note), id + ": no word the orchestrator's PLAN_DENY_TEXT refuses", note.match(denyText) && note.match(denyText)[0]);
 }
-ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE instr(description, 'REM-A5') > 0").n === 13, "exactly thirteen tickets changed");
+ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE instr(description, 'REM-A5') > 0 AND id <> 99909").n === 13, "exactly thirteen tickets got a note (99909 only has a wording correction)");
+{ const d = q1(w, "SELECT description d FROM agent_issues WHERE id = 99909").d; ok(d.includes("closed with a session or by-PR note 9") && !d.includes("closed by a person 9") && d.includes("github:rwnq8 21, merged_by null 13"), "99909: the one wording in the earlier note is corrected and the rest of it is kept", d); }
 ok(q1(w, "SELECT description d FROM agent_issues WHERE id = 777").d === "original text of 777" && q1(w, "SELECT description d FROM agent_issues WHERE id = 1798").d === "original text of 1798", "an unrelated ticket and the blocker-verdict ticket 1798 keep their text (its verdict is tied to it)");
 { // the arithmetic the notes state
   ok(290 + 1034 + 2 + 3 + 1 === 1330, "sla_breaches_over_120m: 290 + 1034 + 2 + 3 + 1 = 1330");
