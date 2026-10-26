@@ -35,7 +35,7 @@ The decisive legal question is not for this document. Art. 2(2)(c) takes process
 | # | Risk | Existing measures (found in code or README) | Proposed measures | Residual |
 |---|---|---|---|---|
 | 1 | Health and location data leave the owner's control | One data subject; sign-in by an e-mailed one-time code, hashed codes and session tokens; separate database that research workers cannot bind; a privacy view, an export and "delete everything"; voice notes deleted after 30 days; a neutral lock-screen line for care pushes | Record where each model call runs; keep the safety plan out of any prompt that is logged | Low to medium |
-| 2 | Models run by a processor read sensitive text | All three models are Workers AI models (Cloudflare); no third-party provider API was found in the twin's model list | Verify that no call leaves Cloudflare; AI Gateway payload logging off for the twin | Low if verified |
+| 2 | Models run by a processor read sensitive text, and the prompts are stored by AI Gateway | All three models are Workers AI models (Cloudflare); no third-party provider API was found in the twin's model list. **But every twin model call passes `{ gateway: { id: "default" } }` with no `collectLog`, `skipCache` or `cacheTtl` option (personal-api/worker.js, read 2026-10-26), and the settings of gateway `default`, read from the Cloudflare API the same day, are: payload logging on (`collect_logs`), up to 2,000,000 logs kept with the oldest deleted first (a count, not a period), response cache TTL 2,628,288 s (about 30 days), Logpush off.** So the owner's prompts and the answers are held in the gateway logs and cache | Turn payload logging and caching off for twin calls (the binding's gateway options `collectLog: false` and `skipCache: true`, or the matching `cf-aig-` request headers; a code task on personal-api/worker.js); decide whether gateway `default` should log payloads at all | Medium until the twin's calls stop being logged |
 | 3 | OAuth refresh tokens for the owner's Google and Microsoft accounts sit in personal-life | A separate database and the one-user sign-in | Verify whether the tokens are encrypted at rest at application level; scope the sync to what the twin uses | Unknown until verified |
 | 4 | Third parties' data from mail and calendar enter answers | The owner's own accounts only | Do not copy third-party mail bodies into long-lived tables; a retention period for synced content | Medium |
 | 5 | Crisis handling errs (a miss, or a false alarm) | Fixed crisis lines, the owner's own safety plan, never a diagnosis, WHO-5 suggests a GP only | Review the crisis path with an adviser; keep the text under the owner's control | Medium (not a data-protection risk alone) |
@@ -45,7 +45,7 @@ The decisive legal question is not for this document. Art. 2(2)(c) takes process
 ## 5. Open questions
 
 1. Does the household exemption cover the twin, given third-party data in mail and calendar and the use of processors?
-2. Is any call of the twin sent to a provider API outside Cloudflare? (The model list says no.)
+2. Is any call of the twin sent to a provider API outside Cloudflare? (The model list says no.) Should gateway `default` keep payloads of the twin's calls (it does today, risk 2)?
 3. Are the OAuth tokens encrypted at rest at application level?
 4. Retention periods for journal, location, chat and synced content.
 
