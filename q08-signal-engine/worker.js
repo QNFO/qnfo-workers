@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.3-dotted-names"; // 0.37.3 Q08-DOTTED-NAMES-1 (2026-10-26), see the note below.
+var VERSION = "0.37.4-ground-blind"; // 0.37.4 Q08-GATE-GROUND-BLIND-1 (2026-10-26), see the note below.
+/* 0.37.4 (2026-10-26, charter pillar reach, agent_issues 100607, 100439): Q08-GATE-GROUND-BLIND-1 removes the two checks of the writer gate that refused every comma-grouped dollar amount and every "score, rating, ratio or reputation of 0.85" as fabricated without reading the source; the grounding check that runs on every draft before any panel call and on the final text already refuses a figure the source does not hold. */
 /* 0.37.3 (2026-10-26, charter pillar reach, agent_issues 100607): Q08-DOTTED-NAMES-1 stops the grounding check refusing a dotted name (Qwen3.8-27B, PLAN.md, Node.js) or a possessive plural that stands in the source; the ground word set only gains words, so nothing accepted before is refused. */
 /* 0.37.2 (2026-10-26, charter pillar reach, agent_issues 100439, 100453): Q08-ARXIV-POOL-1 reads the newest arXiv submissions from ops_config q08_arxiv_pool (30 to 200, absent = 100; was a fixed 30) because an arXiv run publishes about 5 times as often as a Hacker News run, and removes the never-called structuralPreflight. */
 /* 0.37.0 BP26-AI-LABEL-1 (2026-10-26, charter pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every piece page carries a visible "AI-generated" label linked to the published method note and JSON-LD creditText; HTML responses add nosniff, HSTS (no includeSubDomains) and X-Frame-Options SAMEORIGIN. */
@@ -1570,10 +1571,14 @@ function gate(text, banned) {
   if (banned && banned.length) {
     for (var bp of banned) { if (bp.re.test(text)) { problems.push("overused precedent on this site: " + bp.label + " - remove it"); break; } }
   }
-  if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric \u2014 no fabricated scores");
+  // Q08-GATE-GROUND-BLIND-1 (0.37.4, agent_issues 100607 and 100439): this gate used to refuse every comma-grouped dollar amount and every
+  // "score, rating, ratio or reputation of 0.85" as fabricated, whatever the source said. It cannot see the source, and the deterministic
+  // grounding check that runs on every draft before any panel call (and again on the final text in verifyPiece) already refuses a figure the
+  // source does not hold. Six runs of 2026-10-19 to 26 ended here with all six composes spent: the story headline "Oregon Police Are Charging a
+  // Local News Outlet $2.5M ..." (the draft said $2,484,599), "OLED iPad Mini" ($1,249), "Woman faces six years in prison over Cash App ..."
+  // ($50,000) and three arXiv papers (a reported result "of 0.85") - the stories with figures, and the arXiv lane that publishes 5 times as
+  // often as the Hacker News lane. The identifier check below is kept.
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier \u2014 no fabricated IDs");
-  var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
-  if (curAmt && curAmt.length) problems.push("large currency amount(s) " + curAmt.slice(0, 3).join(", ") + " \u2014 likely fabricated; use the signal's figures or none");
 
   var lines = text.split("\n");
   var bulletLines = 0, tableLines = 0, paraLines = 0;
