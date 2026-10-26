@@ -10,10 +10,11 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.62.0";
+var VERSION = "1.63.0";
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
 /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+/* 1.63.0 CF-AGENTS-1 (2026-10-26, pillar autonomy; owner directive 2026-10-25: every Cloudflare agent tool reachable from /cmd): cfagent commands drive the Cloudflare Agents SDK agent qnfo-agents over SVC_QNFO_AGENTS (turns, runs, tools, schedules, MCP, sandbox); cfagent! and changes need a fresh code; code-task proposals come back as task buttons. */
 /* 1.61.0 LIVE-FAILURE-OVERVIEW-1 (2026-10-25, pillar autonomy): fleet-live/v2 adds ranked breach, primary-root-cause and per-source freshness data; the overview shows failure rows before the owner queue, groups desktop area navigation, and refreshes every 15 s; /api/cmd now returns an explicit POST-only 405 contract. */
 /* 1.60.0 AGENT-TRACING-1 (2026-10-25, pillar autonomy; minor: add metadata-only agent, model, tool and approval spans; preserve 1% sampling); PSR-MODEL-FLOOR-1 (#4084, research): use allowlisted GLM-5.3-Flash for free portfolio summaries and preserve the paid fallback; WEBMCP-SITEMAP-1 (pillar reach): serve the canonical public sitemap for list_site_pages. */
 /* 1.59.2 PORTFOLIO-LATEST-ROADMAP-1 (2026-10-25, agent_issues 1000194): GET /api/portfolio/latest now returns the persisted roadmap_now, roadmap_next, roadmap_later, goals_adopted and goals_completed counts so dashboard consumers can read the program roadmap and goal measures directly. Additive response change; no new worker, cron or binding. */
@@ -10500,6 +10501,11 @@ var CMD_HELP = [
 "  tools [word]           every fleet tool: Cloudflare API, D1, R2, KV, GitHub, shell, containers, deploys",
 "  tool <name> {json}     run one, e.g. tool fleet_status {}",
 "  agent: <text>          one turn of the durable coding agent (8 tool rounds)",
+"  cfagent <request>      the Cloudflare Agents SDK agent (agents.qnfo.org): Code Mode over every fleet tool, MCP, schedules",
+"  cfagent! <request>     the same with the write scope: mutating tools, fleet issues, schedules, MCP connections (*)",
+"  cfagent runs | cfagent run <id> | cfagent tools | cfagent schedules | cfagent mcp",
+"  cfagent schedule <cron|Ns> <request> | cfagent unschedule <id> | cfagent mcp add <name> <url> | cfagent mcp drop <id> (*)",
+"  cfagent sandbox <js>   run JavaScript in its Dynamic Worker sandbox, e.g. async () => (await codemode.fleet_sql({sql:'SELECT 1'}))",
 "Sign in:  login (emails a 6-digit code)  then type the code.  logout",
   "Anything else is answered in plain English, with proposed actions you can tap."
 ].join("\n");
@@ -11950,7 +11956,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
           await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, ?6, ?7)").bind(traceId, (a.op + " " + JSON.stringify(a.args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, holder ? 1 : 0, Date.now()).run();
         } catch (e) {
         }
-        return ownerJson({ ok: r.ok, kind: "answer", text: r.ok ? r.text : null, error: r.ok ? null : r.error, executed: a.op, holder });
+        return ownerJson({ ok: r.ok, kind: "answer", text: r.ok ? r.text : null, error: r.ok ? null : r.error, executed: a.op, actions: r.actions && r.actions.length ? r.actions : void 0, holder });
       }
     }
     return ownerJson({ ok: true, kind: "answer", text: p.text || "", actions: p.actions || [], items: p.items || null, links: p.links || null, go: p.go || null, holder });
@@ -12004,7 +12010,7 @@ var CON_DBS = { audit: "AUDIT", outreach: "OUTREACH", living: "LIVING", graph: "
 var CON_DBS_READONLY = { identity: 1 };
 var CON_PROTECTED = ["remediation_verifications", "work_claims", "owner_sessions", "owner_codes", "cmd_log", "console_backups", "owner_docs", "sla_due_at"];
 // qnfo-kaizen dropped 2026-10-06: the worker was retired (WORKER-RETIRE-WAVE-2, #1756) and SVC_QNFO_KAIZEN is no longer bound.
-var CON_SVC = { "qnfo-email": "SVC_QNFO_EMAIL", "qnfo-cloud-ops": "SVC_QNFO_CLOUD_OPS", "qnfo-fleet-control": "SVC_QNFO_FLEET_CONTROL", "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
+var CON_SVC = { "qnfo-email": "SVC_QNFO_EMAIL", "qnfo-cloud-ops": "SVC_QNFO_CLOUD_OPS", "qnfo-fleet-control": "SVC_QNFO_FLEET_CONTROL", "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-agents": "SVC_QNFO_AGENTS", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
 var CON_MAX_ROWS = 200;
 var CON_BACKUP_MAX = 2e3;
 var CON_BACKUP_CHARS = 19e5;
@@ -12015,6 +12021,11 @@ var CON_OPS = {
   agentlogin: { destructive: false, label: "Email the agent sign-in code" },
   agentverify: { destructive: false, label: "Exchange the agent code for a session" },
   agentstatus: { destructive: false, label: "Agent job status" },
+  cfagent: { destructive: false, label: "Ask the Cloudflare agent" },
+  cfagentw: { destructive: true, label: "Ask the Cloudflare agent (write scope)" },
+  cfagentget: { destructive: false, label: "Read the Cloudflare agent" },
+  cfagentbox: { destructive: false, label: "Run in the agent sandbox" },
+  cfagentset: { destructive: true, label: "Change the Cloudflare agent" },
   iprio: { destructive: false, label: "Set priority" },
   iowner: { destructive: false, label: "Set owner" },
   icomment: { destructive: false, label: "Comment" },
@@ -12525,6 +12536,27 @@ function conParse(text) {
     if (/^agent-login$/i.test(at)) return { actions: [cmdAction("agentlogin", {})], auto: true, text: "Email the agent sign-in code" };
     if ((am = /^agent-verify\s+(\d{6})$/i.exec(at))) return { actions: [cmdAction("agentverify", { code: am[1] })], auto: true, text: "Verify the agent code" };
     if ((am = /^agent-status\s+(\S+)$/i.exec(at))) return { actions: [cmdAction("agentstatus", { id: am[1] })], auto: true, text: "Agent job " + am[1] };
+    // CF-AGENTS-1 (1.63.0): the Cloudflare Agents SDK agent (qnfo-agents). Reads and read-scope turns run at once with the owner
+    // session; the write scope, schedules and MCP connections are confirm buttons that need a fresh code.
+    if (/^cf-?agents?\b/i.test(at)) {
+      const ca = at.replace(/^cf-?agents?/i, "");
+      if (/^\s*$/.test(ca)) return { text: "cfagent <request>, cfagent! <request> (write scope), cfagent runs | run <id> | tools | schedules | mcp, cfagent schedule <cron|Ns> <request>, cfagent sandbox <js>. Type 'help' for the rest." };
+      if ((am = /^\s+runs$/i.exec(ca))) return { actions: [cmdAction("cfagentget", { path: "/runs?limit=12", title: "runs" })], auto: true, text: "Cloudflare agent runs" };
+      if ((am = /^\s+run\s+(run_[a-z0-9_]{6,60})$/i.exec(ca))) return { actions: [cmdAction("cfagentget", { path: "/runs/" + am[1], title: am[1] })], auto: true, text: "Cloudflare agent " + am[1] };
+      if (/^\s+tools$/i.test(ca)) return { actions: [cmdAction("cfagentget", { path: "/tools", title: "tools" })], auto: true, text: "Cloudflare agent tools" };
+      if (/^\s+schedules$/i.test(ca)) return { actions: [cmdAction("cfagentget", { path: "/schedules", title: "schedules" })], auto: true, text: "Cloudflare agent schedules" };
+      if (/^\s+mcp$/i.test(ca)) return { actions: [cmdAction("cfagentget", { path: "/mcp-servers", title: "MCP servers" })], auto: true, text: "Cloudflare agent MCP servers" };
+      if ((am = /^\s+sandbox\s+([\s\S]{5,8000})$/i.exec(ca))) return { actions: [cmdAction("cfagentbox", { code: am[1].trim(), title: "sandbox" })], auto: true, text: "Running in the agent sandbox" };
+      if ((am = /^\s+schedule\s+(?:"([^"]{9,60})"|(\d{2,7})s?)\s+([\s\S]{8,4000})$/i.exec(ca))) {
+        const sch = am[1] ? { cron: am[1] } : { delay_s: Number(am[2]) };
+        return { actions: [cmdAction("cfagentset", { method: "POST", path: "/schedules", body: Object.assign({ text: am[3].trim() }, sch), title: "schedule " + (am[1] || am[2] + "s") })], text: "Schedule a Cloudflare agent turn (" + (am[1] ? "cron " + am[1] : "in " + am[2] + " s") + "): " + am[3].trim().slice(0, 200) };
+      }
+      if ((am = /^\s+unschedule\s+([A-Za-z0-9_-]{4,80})$/i.exec(ca))) return { actions: [cmdAction("cfagentset", { method: "DELETE", path: "/schedules/" + am[1], title: "unschedule " + am[1] })], text: "Cancel agent schedule " + am[1] };
+      if ((am = /^\s+mcp\s+add\s+([A-Za-z0-9_.-]{1,60})\s+(https:\/\/\S{4,400})$/i.exec(ca))) return { actions: [cmdAction("cfagentset", { method: "POST", path: "/mcp-servers", body: { name: am[1], url: am[2] }, title: "MCP " + am[1] })], text: "Connect the agent to the MCP server " + am[1] + " at " + am[2] };
+      if ((am = /^\s+mcp\s+drop\s+([A-Za-z0-9_-]{4,80})$/i.exec(ca))) return { actions: [cmdAction("cfagentset", { method: "DELETE", path: "/mcp-servers/" + am[1], title: "MCP drop " + am[1] })], text: "Disconnect MCP server " + am[1] };
+      if ((am = /^!\s*:?\s*([\s\S]{3,8000})$/.exec(ca))) return { actions: [cmdAction("cfagentw", { text: am[1].trim(), title: am[1].trim() })], text: "Cloudflare agent, write scope (every fleet tool, issues, schedules, MCP): " + am[1].trim().slice(0, 300) };
+      if ((am = /^\s*:?\s+([\s\S]{3,8000})$/.exec(ca))) return { actions: [cmdAction("cfagent", { text: am[1].trim(), title: am[1].trim() })], auto: true, text: "Cloudflare agent: " + am[1].trim().slice(0, 160) };
+    }
   }
   const t = String(text || "").trim();
   const lo = t.toLowerCase();
@@ -12592,6 +12624,43 @@ function conParse(text) {
 async function conIssueTouch(env, id) {
   const a = await env.AUDIT.prepare("SELECT id, status, priority, title FROM agent_issues WHERE id = ?1").bind(id).first();
   return a || null;
+}
+
+// CF-AGENTS-1 (1.63.0): one call to qnfo-agents. A turn waits up to 20 s; a code-task proposal comes back as a 'task' button, which files
+// an owner task (OWNER-TASK-, the provenance the code loop's planner trusts) when the owner taps it.
+async function conCfAgent(env, op, args) {
+  const svc = env.SVC_QNFO_AGENTS;
+  if (!svc || typeof svc.fetch !== "function") return { ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" };
+  const write = op === "cfagentw" || op === "cfagentset";
+  let method = "GET", path = String(args.path || "/"), body;
+  if (op === "cfagent" || op === "cfagentw") { method = "POST"; path = "/run"; body = { text: String(args.text || "").slice(0, 8e3), wait_ms: 2e4 }; }
+  else if (op === "cfagentbox") { method = "POST"; path = "/sandbox"; body = { code: String(args.code || "").slice(0, 8e3) }; }
+  else if (op === "cfagentset") { method = String(args.method || "POST").toUpperCase(); body = args.body || undefined; }
+  if (!/^\/[A-Za-z0-9_\/?=&.-]{0,200}$/.test(path) || ["GET", "POST", "DELETE"].indexOf(method) < 0) return { ok: false, error: "bad agent route" };
+  let r, t, j = null;
+  try {
+    r = await svc.fetch("https://agents.qnfo.org" + path, { method, headers: { "content-type": "application/json", "x-agent-scope": write ? "write" : "read" }, body: method === "GET" ? void 0 : JSON.stringify(body || {}), signal: AbortSignal.timeout(28e3) });
+    t = await r.text();
+    try { j = JSON.parse(t); } catch (e) { j = null; }
+  } catch (e) {
+    return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) };
+  }
+  if (!j) return { ok: false, error: "qnfo-agents HTTP " + r.status + ": " + conClip(t, 400) };
+  if (j.ok === false) return { ok: false, error: String(j.error || "qnfo-agents HTTP " + r.status) };
+  const run = j.run;
+  if (run && run.id) {
+    const lines = [run.id + ": " + run.status + (run.steps ? " - " + run.steps + " steps" : "") + (run.tools_used ? ", tools " + run.tools_used : "") + (run.model ? " - " + run.model : "") + " - scope " + run.scope];
+    if (run.result) lines.push("", conClip(run.result, 4e3));
+    if (run.error) lines.push("", "error: " + conClip(run.error, 600));
+    if (run.status === "queued" || run.status === "running") lines.push("", "Still working. Read it with: cfagent run " + run.id);
+    const props = Array.isArray(run.proposals) ? run.proposals : [];
+    if (props.length) lines.push("", props.length + " code-task proposal" + (props.length === 1 ? "" : "s") + ": tap to file as your task; the code loop opens and merges the PR.");
+    const actions = props.slice(0, 6).filter(function(x) { return x && x.task_text; }).map(function(x) { return cmdAction("task", { text: String(x.task_text).slice(0, 2e3), title: "code task " + String(x.path || "").slice(0, 60) }); });
+    return { ok: run.status !== "failed", text: lines.join("\n"), error: run.status === "failed" ? "agent run " + run.id + " failed: " + conClip(run.error || "", 400) : void 0, actions };
+  }
+  if (Array.isArray(j.runs)) return { ok: true, text: j.runs.length ? j.runs.map(function(x) { return x.id + " " + x.status + " " + (x.scope || "") + " - " + conClip(x.prompt || "", 90) + (x.error ? " (" + conClip(x.error, 80) + ")" : ""); }).join("\n") + "\n\nRead one: cfagent run <id>" : "No agent runs yet. Try: cfagent what changed in qnfo-ops this week?" };
+  if (Array.isArray(j.direct)) return { ok: true, text: "Direct tools: " + j.direct.map(function(x) { return x.name; }).join(", ") + "\nCode Mode: " + (j.codemode || "-") + "\nqnfo-ops tools: " + (j.ops_tools || []).length + " (" + (j.ops_tools || []).filter(function(x) { return x.readonly; }).length + " read-only; the rest need cfagent!)\nMCP server: https://agents.qnfo.org/mcp" };
+  return { ok: true, text: conClip(JSON.stringify(j, null, 2), 4e3) };
 }
 
 // FLEET-CONSOLE-AGENT-1: the stored qnfo-ops owner session, or null.
@@ -12678,6 +12747,9 @@ async function conExec(env, owner, op, args) {
       const body = await r.text();
       return { ok: r.status < 500, text: method + " " + worker + path + (svc ? " (service binding)" : "") + " -> HTTP " + r.status + " " + (r.headers.get("content-type") || "") + "\n" + conClip(body, 4e3), error: r.status >= 500 ? "HTTP " + r.status + ": " + conClip(body, 600) : void 0 };
     }
+    // CF-AGENTS-1 (1.63.0): the Cloudflare Agents SDK agent over SVC_QNFO_AGENTS (props.caller qnfo-fleet-dashboard). conExec has
+    // already required the owner session; cfagentw and cfagentset are destructive, so /api/cmd/run asked for a fresh code first.
+    if (op === "cfagent" || op === "cfagentw" || op === "cfagentget" || op === "cfagentbox" || op === "cfagentset") return await conCfAgent(env, op, args || {});
     // FLEET-CONSOLE-AGENT-1: proxy to the real fleet agent loop.
     if (op === "agent" || op === "agentlogin" || op === "agentverify" || op === "agentstatus") {
       const svc = env.SVC_QNFO_OPS;
