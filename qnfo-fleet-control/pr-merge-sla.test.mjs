@@ -101,6 +101,7 @@ function makeGh(sc) {
 async function run(sc, opts) {
   const d1 = makeD1();
   (sc.config || []).forEach(([k, v]) => d1.db.prepare("INSERT INTO ops_config (key, value) VALUES (?1, ?2)").run(k, v));
+  if (sc.seed) sc.seed(d1.db);
   const gh = makeGh(sc);
   const sandbox = { evApi: gh.evApi, evGraphql: gh.evGraphql, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, setTimeout, __export: null };
   vm.createContext(sandbox);
@@ -175,6 +176,22 @@ const scenario = (prs, extra) => Object.assign({ branches: [{ name: "main", prot
   eq(out.merged_prs, [], "merged_prs is empty");
 }
 {
+  // PR-MERGE-SLA-10M-1 review (session_01LJNL3L): the harness opens every session pull request as a draft, so a body that says it is kept as a draft on purpose holds it
+  const bodies = ["Draft until an independent adversarial review of the migration has returned.", "This stays a draft while the owner decides.", "Keep it as a draft for now.", "Not ready for merge: the probe is missing.", "not ready to merge", "Not ready for review"];
+  const prs = Object.fromEntries(bodies.map((b, i) => [110 + i, prj(110 + i, "claude/body-hold-" + i, "a" + (110 + i), { draft: true, body: b })]));
+  const ok1 = prj(120, "claude/body-ok", "a120", { draft: true, body: "The harness opens every session pull request as a draft; this one is green and finished. Ready for review." });
+  prs[120] = ok1;
+  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x, x, Object.assign({}, x, { draft: false })]])) });
+  const { out } = await run(sc);
+  eq(sc.merges.map((m) => m.pr), [120], "only the draft whose body holds no keep-as-draft phrase is merged; each of the six held bodies is left alone");
+  eq((sc.gql || []).length, 1, "and only that one is marked ready");
+  eq(out.merged_prs, [120], "merged_prs lists it alone");
+  const dnm = prj(121, "claude/ready-held", "a121", { body: "not ready for merge until the probe lands" });
+  const sc2 = scenario({ 121: dnm }, { prSeq: { 121: [dnm] } });
+  await run(sc2);
+  eq(sc2.merges || [], [], "the body phrases hold a ready pull request too, not only a draft");
+}
+{
   // the switch: stale_pr_merge_drafts = off restores "a draft is never merged"
   const d = prj(70, "claude/draft-off", "a70", { draft: true });
   const sc = scenario({ 70: d }, { prSeq: { 70: [d] }, config: [["stale_pr_merge_drafts", "off"]] });
@@ -223,6 +240,44 @@ const scenario = (prs, extra) => Object.assign({ branches: [{ name: "main", prot
   eq(rb({ number: 5, created_at: "2026-10-26T06:00:00Z", state: "open", base: { ref: "main", repo: R }, head: { ref: "h" }, draft: true }, "now").draft, 1, "pure: draft is stored as 1");
   eq(rb({ number: 5, created_at: "2026-10-26T06:00:00Z", state: "closed", closed_at: "2026-10-26T06:05:00Z", base: { ref: "main", repo: R } }, "now").closed_at, "2026-10-26T06:05:00Z", "pure: a closed pull request keeps closed_at");
   eq(rb({ number: 5, state: "open", base: { ref: "main", repo: R } }, "now"), null, "pure: no created_at, no row");
+}
+
+// ---- 2b. PR-AGE-RECONCILE-1: a pull request that left the open list is resolved with one read ----
+{
+  const live = prj(91, "claude/live", "a91", { created_at: hAgo(0.5), updated_at: hAgo(0.01) });
+  const DDL = "CREATE TABLE IF NOT EXISTS pr_sla_state (pr INTEGER PRIMARY KEY, opened_at TEXT NOT NULL, head_ref TEXT, draft INTEGER DEFAULT 0, state TEXT NOT NULL DEFAULT 'open', last_seen TEXT, closed_at TEXT)";
+  const seedRow = (db, pr, openedAgoH, state = "open", seenAgoH = 0.2) => db.exec(DDL) || db.prepare("INSERT INTO pr_sla_state (pr, opened_at, head_ref, draft, state, last_seen) VALUES (?1, ?2, 'x', 1, ?3, ?4)").run(pr, hAgo(openedAgoH), state, hAgo(seenAgoH));
+  const mergedElsewhere = prj(92, "claude/by-runner", "a92", { state: "closed", merged: true, merged_at: hAgo(0.05), closed_at: hAgo(0.05), created_at: hAgo(0.2), updated_at: hAgo(0.05) });
+  const closedElsewhere = prj(93, "claude/dropped", "a93", { state: "closed", closed_at: hAgo(0.05), created_at: hAgo(0.3), updated_at: hAgo(0.05) });
+  const stillOpen = prj(94, "claude/open-but-unlisted", "a94", { created_at: hAgo(0.3), updated_at: hAgo(0.01) });
+  const sc = scenario({ 91: live }, { prSeq: { 91: [live] } });
+  sc.prs = { 91: live, 92: mergedElsewhere, 93: closedElsewhere, 94: stillOpen }; // 95 is unreadable (404)
+  sc.pulls = [lite(live)];
+  sc.seed = (db) => { seedRow(db, 92, 0.2); seedRow(db, 93, 0.3); seedRow(db, 94, 0.3); seedRow(db, 95, 0.4); seedRow(db, 96, 0.5, "merged"); };
+  const t = await run(sc);
+  const st = Object.fromEntries(t.d1.db.prepare("SELECT pr, state, closed_at FROM pr_sla_state").all().map((r) => [r.pr, r]));
+  eq(st[92].state, "merged", "a pull request the code-loop runner merged is recorded merged");
+  eq(st[92].closed_at, hAgo(0.05), "its closed_at is GitHub's merged_at, so merged_within_10m_24h reads the real time");
+  eq(st[93].state, "closed", "a pull request closed without a merge is recorded closed");
+  eq(st[94].state, "open", "a pull request GitHub still reports open (a list that missed it) stays open");
+  eq(st[95].state, "open", "a pull request whose read fails stays open for the next tick (404 here)");
+  eq(st[96].state, "merged", "a row already merged is not read again");
+  eq([t.calls.filter((c) => c === "GET /pulls/92").length, t.calls.filter((c) => c === "GET /pulls/96").length, t.calls.filter((c) => c === "GET /pulls/91").length], [1, 0, 0], "one read per gone pull request, none for a settled row, none for a pull request still in the list");
+  eq(t.out.pr_age_resolved, 3, "the tick reports how many rows it resolved (merged, closed and the one still open recorded again)");
+  // the cap: ten gone pull requests, eight read
+  const many = {};
+  const sc2 = scenario({ 91: live }, { prSeq: { 91: [live] } });
+  for (let n = 100; n < 110; n++) many[n] = prj(n, "claude/m" + n, "a" + n, { state: "closed", merged: true, merged_at: hAgo(0.05), closed_at: hAgo(0.05), created_at: hAgo(0.2) });
+  sc2.prs = Object.assign({ 91: live }, many);
+  sc2.pulls = [lite(live)];
+  sc2.seed = (db) => { for (let n = 100; n < 110; n++) seedRow(db, n, 0.2); };
+  const t2 = await run(sc2);
+  eq(t2.d1.db.prepare("SELECT COUNT(*) AS n FROM pr_sla_state WHERE state = 'merged'").get().n, 8, "at most 8 gone pull requests are read in a tick");
+  const t3 = await run(Object.assign({}, sc2, { seed: (db) => { for (let n = 100; n < 110; n++) seedRow(db, n, 0.2, n < 108 ? "merged" : "open"); } }));
+  eq(t3.d1.db.prepare("SELECT COUNT(*) AS n FROM pr_sla_state WHERE state = 'merged'").get().n, 10, "the next tick takes the rest");
+  // a failing D1 read never breaks the tick
+  const t4 = await run(Object.assign({}, scenario({ 91: live }, { prSeq: { 91: [live] } }), { seed: (db) => db.exec("CREATE TABLE pr_sla_state (pr INTEGER PRIMARY KEY)") }));
+  eq(t4.out.ok === true && t4.out.pr_age_resolved === 0, true, "a tick whose pr_sla_state cannot be written still completes and resolves nothing");
 }
 
 // ---- 3. POST /gh/poke ----

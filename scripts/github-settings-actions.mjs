@@ -326,6 +326,13 @@ export async function actionRulesetRevert(api, cfg, mode) {
 // in progress, was created more than STUCK_RUN_MIN_AGE_H hours ago, and has no job that is running now (a queued run has none; the stuck deploy-gate run has one
 // job and it concluded). Dry (default) lists the candidates and what it skipped and why; live deletes at most STUCK_RUN_MAX_DELETES runs with the admin credential
 // and stops at the first refusal, recording its status and GitHub's text: a refusal is the answer and is never retried with another credential.
+// DELETE-STUCK-RUNS-2 (2026-10-26): the first live run (run 40290472819) was answered `DELETE run 37655533507` -> 403 "Could not delete the workflow run" with the
+// repository credential too: GitHub deletes only a run that has completed, and these never completed. The documented endpoint for a run that ignores cancellation is
+// force-cancel, so each candidate is force-cancelled first (POST .../force-cancel, the same credential and the same write right as a cancel), polled until it reads
+// completed (STUCK_RUN_POLL_TRIES reads, STUCK_RUN_POLL_MS apart), and then deleted. A refusal of the force-cancel is recorded with its status and text and stops the run
+// exactly like a refused delete: that is the answer (a missing Actions write right would show as 403 here), it is not retried and not reworded.
+export const STUCK_RUN_POLL_TRIES = 6;
+export const STUCK_RUN_POLL_MS = 3000;
 export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
   const repo = cfg.repo, r = { action: "delete-stuck-runs", repo, mode, ok: false, min_age_h: STUCK_RUN_MIN_AGE_H, candidates: [], skipped: [], deleted: [] };
   const cutoff = (now || Date.now()) - STUCK_RUN_MIN_AGE_H * 3600000;
@@ -348,15 +355,29 @@ export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
     r.candidates.push({ ...row, jobs: ((jobs.body && jobs.body.jobs) || []).length });
   }
   r.candidate_count = r.candidates.length;
-  if (mode !== "live") { r.ok = true; r.note = "dry run: nothing written; " + r.candidates.length + " stuck run(s) would be deleted (cap " + STUCK_RUN_MAX_DELETES + " per run)"; return r; }
+  if (mode !== "live") { r.ok = true; r.note = "dry run: nothing written; " + r.candidates.length + " stuck run(s) would be force-cancelled and then deleted (cap " + STUCK_RUN_MAX_DELETES + " per run)"; return r; }
+  const pollMs = env && env.STUCK_RUN_POLL_MS !== undefined && env.STUCK_RUN_POLL_MS !== "" ? Number(env.STUCK_RUN_POLL_MS) : STUCK_RUN_POLL_MS;
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  r.force_cancelled = []; r.not_completed = [];
   for (const c of r.candidates.slice(0, STUCK_RUN_MAX_DELETES)) {
-    const d = await api.call("DELETE", "/repos/" + repo + "/actions/runs/" + c.id);
+    const base = "/repos/" + repo + "/actions/runs/" + c.id;
+    const f = await api.call("POST", base + "/force-cancel");
+    if (!f.ok) { r.refused = { call: "POST force-cancel run " + c.id, status: f.status, message: f.message }; break; }
+    r.force_cancelled.push(c.id);
+    let done = false;
+    for (let i = 0; i < STUCK_RUN_POLL_TRIES && !done; i++) {
+      await sleep(pollMs);
+      const g = await api.call("GET", base);
+      done = g.ok && !!g.body && g.body.status === "completed";
+    }
+    if (!done) { r.not_completed.push(c.id); continue; }
+    const d = await api.call("DELETE", base);
     if (!d.ok) { r.refused = { call: "DELETE run " + c.id, status: d.status, message: d.message }; break; }
     r.deleted.push(c.id);
   }
   r.remaining = r.candidates.length - r.deleted.length;
   r.ok = !r.refused;
-  if (r.ok && r.remaining > 0) r.note = r.remaining + " candidate(s) beyond the cap of " + STUCK_RUN_MAX_DELETES + " stay for the next run";
+  if (r.ok && r.remaining > 0) r.note = r.remaining + " candidate(s) stay: " + r.not_completed.length + " force-cancelled but not completed after " + STUCK_RUN_POLL_TRIES + " reads (a later run deletes them once completed is read), the rest beyond the cap of " + STUCK_RUN_MAX_DELETES;
   return r;
 }
 
