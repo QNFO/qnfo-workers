@@ -20,6 +20,7 @@ const helpers = cut("function squash(s) {", "__name(squash") + "\n" + cut("async
 const race = cut("var ASK_MODELS = ", "async function sha256hex(").replace("var ASK_HEDGE_MS = 4e3;", "var ASK_HEDGE_MS = 150;")
   + "\n" + cut("// CMD-ASK-FAST-1: race the models", "// One plain-English answer: models raced")
   + "\n" + cut("// One model call with a real abort", "// One plain-English answer: models raced");
+const raceDirect = race.replace("var ASK_DIRECT_HEDGE_MS = 5e3;", "var ASK_DIRECT_HEDGE_MS = 200;");
 const q08 = cut("var Q08_Q = ", "async function cmdAnswer(");
 const fb = cut("function cmdModelReason(err) {", "// What the owner reads for a request that has no answer at all");
 const mk = (svc) => { const sb = { AbortController, setTimeout, clearTimeout, Date, JSON, Math, String, Promise, Array, Object, Error, RegExp }; vm.createContext(sb);
@@ -76,6 +77,22 @@ const d1 = { prepare: (sql) => { const st = db.prepare(sql); return { all: async
   ok(!all.ok && (all.error.match(/router_timeout/g) || []).length === f.ASK_MODELS.length, "when every model times out in the router each failure is named router_timeout", all);
   const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
   ok(v && Number(v[1]) * 1e6 + Number(v[2]) * 1e3 + Number(v[3]) >= 1029004, "VERSION is at least 1.29.4", v && v[0]);
+}
+{ // CMD-DIRECT-LEG-1 (1.62.0): the router serves every leg with one stalled model; the direct AI binding leg answers
+  const sb = { AbortController, setTimeout, clearTimeout, Date, JSON, Math, String, Promise, Array, Object, Error, RegExp }; vm.createContext(sb);
+  vm.runInContext(raceDirect + "\n__f = { cmdRaceModels, ASK_DIRECT_LEGS };", sb);
+  const f = sb.__f, runs = [];
+  const stall = { SVC_QNFO_AI: { fetch: (u, o) => new Promise((res, rej) => o.signal.addEventListener("abort", () => rej(new Error("aborted")))) },
+    AI: { run: async (id) => { runs.push(id); return { choices: [{ message: { content: "direct " + id } }] }; } } };
+  const t0 = Date.now();
+  const r = await f.cmdRaceModels(stall, [{ role: "user", content: "q" }], 6000);
+  ok(r.ok && /\(direct\)$/.test(r.model) && Date.now() - t0 < 1500 && runs[0] === "@cf/deepseek-ai/deepseek-v4-flash-0731", "a stalled router is beaten by the direct deepseek-v4-flash leg", { r, runs, ms: Date.now() - t0 });
+  const runs2 = [];
+  const allFail = { SVC_QNFO_AI: { fetch: async () => ({ ok: false, status: 504, json: async () => ({}) }) }, AI: { run: async (id) => { runs2.push(id); throw new Error("boom"); } } };
+  const r2 = await f.cmdRaceModels(allFail, [{ role: "user", content: "q" }], 6000);
+  ok(!r2.ok && runs2.length === f.ASK_DIRECT_LEGS.length && f.ASK_DIRECT_LEGS.every((m) => r2.error.includes(m + ": direct leg")), "when the router fails at once the direct legs still run, and each is named", r2);
+  const quiet = await f.cmdRaceModels({ SVC_QNFO_AI: { fetch: async (u, o) => resp(200, "router ok") } , AI: { run: async () => { throw new Error("must not run"); } } }, [{ role: "user", content: "q" }], 6000);
+  ok(quiet.ok && quiet.model === "glm-5.3-flash", "a healthy router answers and no direct leg is used", quiet);
 }
 console.log(fail ? fail + " failed" : pass + " passed");
 if (fail) process.exit(1);
