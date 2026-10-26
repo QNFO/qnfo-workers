@@ -1098,9 +1098,10 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
+// 0.49.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 8 hours (family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.48.1-version-ahead"; /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.49.0-breach-doctor"; /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -11098,6 +11099,9 @@ var worker_default2 = {
       ctx.waitUntil(workflowFailureIntake(env).catch((e) => console.error("workflowFailureIntake error:", e && e.message || e)));
       // SLA-TICK-10M-1 (0.30.0): SLA measurement and breach actions at 10-minute resolution (they ran hourly).
       ctx.waitUntil(slaTick10m(env).then(function (r) { console.log("sla tick (10m): " + JSON.stringify(r)); }).catch((e) => console.error("slaTick10m error:", e && e.message || e)));
+      // BREACH-DOCTOR-1 (0.49.0, agent_issues 1000266): the fleet diagnoses and remediates its own unowned breaches on EVERY 10-minute tick (not behind onTwentyGrid). It is worker code, never a D1 trigger on
+      // fleet_tick; ops_config breach_doctor = off stops it before any write, and it never throws out of the slot.
+      ctx.waitUntil(breachDoctorTick(env, {}).then(function (r) { console.log("breach doctor (10m): " + JSON.stringify({ ok: r.ok, mode: r.mode, diagnosed: r.diagnosed, acted: r.acted, verified: r.verified, failed: r.failed, taint: r.taint_dropped, undiagnosed: r.undiagnosed, error: r.error || null, ms: r.ms })); }).catch((e) => console.error("breachDoctorTick error:", e && e.message || e)));
       ctx.waitUntil(remediationContractsTick(env, { budgetMs: 25000 }).then(function (r) { console.log("remediation tick (10m): " + JSON.stringify({ due: r.due, pass: r.pass, fail: r.fail, skipped: r.skipped, budget_left: r.budget_left })); }).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
       if (onTwentyGrid) return advisorMod.default.scheduled(event, env, ctx);
       return;
@@ -12022,6 +12026,681 @@ async function rtEnsureLivePath(db, out, env) {
   }
 }
 // ---- REOPEN-LIVE-PATH-3:END ----
+// ---- BREACH-DOCTOR-1:BEGIN ----
+// BREACH-DOCTOR-1 (0.49.0, 2026-10-26, agent_issues 1000266, pillar autonomy; owner directive 2026-10-24, repeated 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY
+// REMEDIATING"). Measured that day: 447 open agent_issues, 371 with no doer, and no loop owned the diagnosis of a family. This tick classifies every unowned open issue older than
+// breach_doctor_min_age_h, matches it against breach_playbooks (data, validated here before it runs), applies the allowlisted action, verifies it, and writes its ledger
+// (breach_diagnoses, breach_diagnosis_events, decision_log). It is worker code on the */10 slot and never a D1 trigger on fleet_tick (FLEET-TICK-SPLIT-1, the SQLITE_NOMEM outage).
+// Safety, in the order a tick enforces it: ops_config breach_doctor = off returns before any write; the metrics are written first (a dead heartbeat cannot hide); one tick at a time
+// (loop_lock k = breach-doctor, 4 minutes); a playbook younger than breach_doctor_playbook_cooldown_min runs in measure; a rule with 2 failed or reverted cases in 24 hours
+// demotes itself to measure; per-rule max_per_tick and max_per_day, max_actions and max_cases per tick; a wall budget with no new case after 85% of it; a live work claim skips a case;
+// every applied action stores its revert_sql and writes decision_log. TAINT RULE: free text (issue bodies, cloud_ops_events text, exceptions_json, plan reasons) never reaches an
+// issue, a probe, a task or a prompt: the engine reads such text only to turn it into an enum code, playbook action SQL may not name those columns, and every fact is a number, an id or a token.
+// The read cost is fixed by design: about 15,000 rows a tick (measured on live D1 2026-10-26: the state reads 5,500, the four CM triggers 7,000), never v_issue_age_ladder
+// (211,166 rows and 712 ms on the same question). No model call in v1.
+var BD_LOCK_KEY = "breach-doctor";
+var BD_LOCK_TTL_MS = 240000;
+var BD_LEASE_MIN = 30;
+var BD_LEASE_MAX_MIN = 120;
+var BD_TITLE_PREFIX = "BREACH-DOCTOR-1:";
+var BD_ACTION_KINDS = ["sql", "file-issue", "owner-card"];
+var BD_WRITE_TABLES = ["issue_triage", "agent_issues", "remediation_contracts", "issue_plans", "ops_config", "human_actions"];
+var BD_FREE_TEXT_RE = /\b(description|exceptions_json|cloud_ops_events|worker_logs|last_error|detail|meta)\b/i;
+var BD_FORBIDDEN_KW_RE = /\b(delete|drop|alter|create|pragma|attach|detach|vacuum|reindex)\b/i;
+var BD_RULE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,40}$/;
+var BD_TOKEN_RE = /^[a-z][a-z0-9-]{2,48}$/;
+var BD_FAMILY_RE = /^[A-Za-z0-9*][A-Za-z0-9_.:*-]{0,40}$/;
+var BD_SUBJECT_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,48}$/;
+var BD_FACT_STR_RE = /^[A-Za-z0-9_.:#\/@+-]{0,96}$/;
+var BD_PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+// The owner-card reasons: an enum, never text. Each is an identity-bound step the harness, the secret lock or the doctrine reserve for the owner.
+var BD_OWNER_REASONS = {
+  "credential": "a credential only the owner can mint",
+  "money": "a payment or a spend the owner must approve",
+  "legal-signing": "a legal or signing act in the owner's name",
+  "owner-account": "the owner's own account or a channel whose terms forbid automation",
+  "personal-data": "machine or personal data of the owner"
+};
+// The family of an issue comes from this code table of title prefixes and sources, never from the text; an unknown title is "other".
+var BD_FAMILIES = [
+  ["CODE-MERGE-REFUSED-1:", "CODE-MERGE-REFUSED-1"], ["CODE-LOOP-EXHAUSTED-1:", "CODE-LOOP-EXHAUSTED-1"], ["PROBE-NEEDED-1:", "PROBE-NEEDED-1"],
+  ["METRIC-TRIGGER-", "METRIC-TRIGGER"], ["METRIC-REGRESSION-1:", "METRIC-REGRESSION-1"], ["METRIC-FIX-RELAPSED-1:", "METRIC-FIX-RELAPSED-1"],
+  ["TOOL-FAILURE:", "TOOL-FAILURE"], ["[self-heal] tool", "SELF-HEAL-TOOL"], ["SELF-AUDIT-TOOLERR", "SELF-AUDIT-TOOLERR"],
+  ["CHAOS-DRILL-FAILED-1:", "CHAOS-DRILL-FAILED-1"], ["FLEET-JOURNEY-FAILED-1:", "FLEET-JOURNEY-FAILED-1"], ["PAPER-LEARN-1", "PAPER-LEARN-1"],
+  ["PORTFOLIO-GAP", "PORTFOLIO-GAP"], ["WORKFLOW-FAILED-1:", "WORKFLOW-FAILED-1"], ["SECRET-CHANGE-OBSERVED", "SECRET-CHANGE-OBSERVED"],
+  ["TP-LEVER-STALLED-1", "TP-LEVER-STALLED-1"], ["CF-MODEL-EVAL-1", "CF-MODEL-EVAL-1"], ["LOOP-BREAKER-1", "LOOP-BREAKER-1"], ["CRON-FAULT-1", "CRON-FAULT-1"],
+  ["CF-CHANGELOG-1", "CF-CHANGELOG-1"], ["VERIFICATION-", "VERIFICATION"], ["WORKERS-BP-", "WORKERS-BP"], ["PROMPT-STORE-", "PROMPT-STORE"]
+];
+var bdRetryAt = 0;
+function bdIso(ms) { return new Date(ms).toISOString().slice(0, 19) + "Z"; }
+function bdFamily(title, source) {
+  var tl = String(title || "").toLowerCase();
+  for (var i = 0; i < BD_FAMILIES.length; i++) if (tl.indexOf(BD_FAMILIES[i][0].toLowerCase()) === 0) return BD_FAMILIES[i][1];
+  var s = String(source || "");
+  if (s === "owner-chat") return "OWNER-CHAT";
+  if (s.indexOf("qnfo-fleet-dashboard:owner-request") === 0) return "OWNER-REQUEST";
+  return "other";
+}
+// plan_reason text becomes one of these codes and the text is dropped.
+function bdReasonCode(detail) {
+  var t = String(detail || "");
+  if (!t.trim()) return "none";
+  if (/names? no worker|no worker/i.test(t)) return "names-no-worker";
+  if (/raw read.{0,40}404|HTTP 404/i.test(t)) return "raw-read-404";
+  if (/owner[- ]task/i.test(t)) return "owner-task";
+  if (/multi[- ]file|more than one file|several files/i.test(t)) return "multi-file";
+  if (/data surface|config(uration)? file|\.json\b|\.toml\b/i.test(t)) return "data-config";
+  return "model-other";
+}
+function bdEnum(v, fallback) { var s = String(v == null ? "" : v).toLowerCase(); return /^[a-z][a-z0-9-]{1,30}$/.test(s) ? s : fallback; }
+function bdVerdictCode(v) {
+  var m = /^[a-z][a-z0-9-]{1,40}/.exec(String(v == null ? "" : v).toLowerCase());
+  return m ? m[0] : "none";
+}
+function bdRung(ageH) { return ageH >= 168 ? "7d" : ageH >= 48 ? "48h" : ageH >= 24 ? "24h" : ageH >= 16 ? "16h" : "8h"; }
+function bdKv(o) {
+  var parts = [];
+  Object.keys(o).forEach(function (k) { var v = o[k]; parts.push(k + "=" + (typeof v === "number" || (typeof v === "string" && BD_FACT_STR_RE.test(v)) ? v : "?")); });
+  return parts.join(" ").slice(0, 480);
+}
+// ---- validation: playbooks are data, so every statement is checked before it runs (S1)
+function bdStrip(sql) {
+  return String(sql).replace(/'(?:[^']|'')*'/g, "''").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+function bdTopVerb(s) {
+  var depth = 0, i = 0, n = s.length;
+  while (i < n) {
+    var ch = s.charAt(i);
+    if (ch === "(") { depth++; i++; continue; }
+    if (ch === ")") { depth--; i++; continue; }
+    if (depth === 0 && /[A-Za-z_]/.test(ch)) {
+      var j = i;
+      while (j < n && /[A-Za-z0-9_]/.test(s.charAt(j))) j++;
+      var w = s.slice(i, j).toLowerCase();
+      if (w === "insert" || w === "update" || w === "delete" || w === "replace" || w === "select") return w;
+      i = j;
+      continue;
+    }
+    i++;
+  }
+  return "";
+}
+// trigger_sql and verify_sql: one literal read-only SELECT (the remediation tick's write-keyword guard), no placeholder other than ?1 (verify only).
+function bdReadOnlyWhy(sql, allowParam) {
+  var q = String(sql == null ? "" : sql).trim();
+  if (!q) return "empty";
+  if (q.indexOf(";") !== -1) return "semicolon";
+  var flat = q.toLowerCase().replace(/\s+/g, " "), ql = " " + flat + " ";
+  if (!/^(select|with) /.test(flat)) return "not-a-select";
+  if (__RT_WRITE_KW.some(function (k) { return ql.indexOf(" " + k) !== -1; })) return "write-keyword";
+  var rest = bdStrip(q).replace(allowParam ? /\?1(?!\d)/g : /$^/, "");
+  if (rest.indexOf("?") !== -1) return "bad-param";
+  return null;
+}
+// action_sql and revert_sql statements: exactly one INSERT or UPDATE on an allowlisted table, bound to the issue (?1), no free-text column.
+function bdWriteWhy(sql) {
+  var q = String(sql == null ? "" : sql).trim();
+  if (!q) return "empty";
+  if (q.indexOf(";") !== -1) return "semicolon";
+  var s = bdStrip(q).replace(/\s+/g, " ").trim();
+  if (BD_FREE_TEXT_RE.test(s)) return "free-text-column";
+  if (BD_FORBIDDEN_KW_RE.test(s)) return "forbidden-keyword";
+  var verb = bdTopVerb(s);
+  if (verb !== "insert" && verb !== "update") return "not-insert-or-update";
+  var m = verb === "insert" ? /\binsert\s+(?:or\s+(\w+)\s+)?into\s+"?([a-z_][a-z0-9_]*)"?/i.exec(s) : /\bupdate\s+(?:or\s+(\w+)\s+)?"?([a-z_][a-z0-9_]*)"?/i.exec(s);
+  if (!m) return "no-target";
+  if (m[1] && /^replace$/i.test(m[1])) return "replace-into";
+  var table = m[2].toLowerCase();
+  if (BD_WRITE_TABLES.indexOf(table) < 0) return "table-not-allowed";
+  if (verb === "insert" && table === "agent_issues") return "insert-agent-issues";
+  if (s.indexOf("?1") === -1) return "no-issue-param";
+  if (/\?(?!1(?!\d))/.test(s)) return "bad-param";
+  return null;
+}
+function bdStatements(text, min, max) {
+  var a;
+  try { a = JSON.parse(String(text == null ? "" : text)); } catch (e) { return null; }
+  if (!Array.isArray(a) || a.length < min || a.length > max) return null;
+  for (var i = 0; i < a.length; i++) if (typeof a[i] !== "string") return null;
+  return a;
+}
+function bdFactsSafe(o) {
+  if (o === null || typeof o === "boolean") return true;
+  if (typeof o === "number") return isFinite(o);
+  if (typeof o === "string") return BD_FACT_STR_RE.test(o);
+  if (Array.isArray(o)) return o.length <= 20 && o.every(bdFactsSafe);
+  if (typeof o === "object") {
+    var ks = Object.keys(o);
+    return ks.length <= 40 && ks.every(function (k) { return /^[a-z][a-z0-9_]{0,40}$/.test(k) && bdFactsSafe(o[k]); });
+  }
+  return false;
+}
+function bdValidateRule(r) {
+  var id = String(r && r.rule_id != null ? r.rule_id : "");
+  var bad = function (why) { return { ok: false, why: why, id: BD_RULE_ID_RE.test(id) ? id : "bad-id" }; };
+  if (!BD_RULE_ID_RE.test(id)) return bad("bad-rule-id");
+  var kind = String(r.action_kind || "sql");
+  if (BD_ACTION_KINDS.indexOf(kind) < 0) return bad("bad-action-kind");
+  if (!BD_TOKEN_RE.test(String(r.cause_class || ""))) return bad("bad-cause-class");
+  if (!BD_FAMILY_RE.test(String(r.family || ""))) return bad("bad-family");
+  var w = bdReadOnlyWhy(r.trigger_sql, false);
+  if (w) return bad("trigger-" + w);
+  w = bdReadOnlyWhy(r.verify_sql, true);
+  if (w) return bad("verify-" + w);
+  var act = bdStatements(r.action_sql, kind === "sql" ? 1 : 0, kind === "sql" ? 6 : 0);
+  var rev = bdStatements(r.revert_sql, kind === "sql" ? 1 : 0, 6);
+  if (!act || !rev) return bad("bad-json");
+  for (var i = 0; i < act.length; i++) { w = bdWriteWhy(act[i]); if (w) return bad("action-" + w); }
+  for (var j = 0; j < rev.length; j++) { w = bdWriteWhy(rev[j]); if (w) return bad("revert-" + w); }
+  return { ok: true, id: id, kind: kind, action: act, revert: rev };
+}
+// ---- configuration and plumbing
+async function bdConfig(db) {
+  var m = {};
+  var rs = await db.prepare("SELECT key, value FROM ops_config WHERE key LIKE 'breach_doctor%'").all();
+  ((rs && rs.results) || []).forEach(function (r) { m[r.key] = r.value; });
+  var num = function (k, d, lo, hi) { var n = parseInt(String(m[k] == null ? "" : m[k]).trim(), 10); return isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  var mode = String(m.breach_doctor == null ? "" : m.breach_doctor).trim().toLowerCase();
+  return {
+    mode: /^(off|0|false|no|disabled)$/.test(mode) ? "off" : mode === "on" ? "on" : "measure",
+    max_cases: num("breach_doctor_max_cases", 40, 1, 60), max_actions: num("breach_doctor_max_actions", 6, 0, 20),
+    budget_ms: num("breach_doctor_budget_ms", 20000, 5000, 40000), min_age_h: num("breach_doctor_min_age_h", 8, 1, 72),
+    cooldown_min: num("breach_doctor_playbook_cooldown_min", 30, 0, 120)
+  };
+}
+async function bdBatch(db, stmts) {
+  if (!stmts.length) return [];
+  if (typeof db.batch === "function") {
+    var all = [];
+    for (var i = 0; i < stmts.length; i += 50) all = all.concat(await db.batch(stmts.slice(i, i + 50)));
+    return all;
+  }
+  var out = [];
+  for (var k = 0; k < stmts.length; k++) out.push(await stmts[k].run());
+  return out;
+}
+function bdChanges(r) { return r && r.meta ? Number(r.meta.changes) || 0 : 0; }
+async function bdSha12(text) {
+  var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join("").slice(0, 12);
+}
+function bdErrCode(e) {
+  var m = String(e && e.message || e);
+  return /no such (table|column)/i.test(m) ? "no-such-table" : /D1_ERROR|SQLITE|constraint|UNIQUE/i.test(m) ? "d1-error" : /timeout|timed out/i.test(m) ? "timeout" : "other";
+}
+function bdEvent(ctx, ev) {
+  return ctx.db.prepare("INSERT INTO breach_diagnosis_events (ts, issue_id, diagnosis_id, event, from_state, to_state, detail, tick_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+    .bind(ctx.nowIso, ev.issue_id == null ? null : ev.issue_id, ev.diagnosis_id == null ? null : ev.diagnosis_id, ev.event, ev.from || null, ev.to || null, String(ev.detail || "").slice(0, 480), ctx.tickId);
+}
+async function bdEventNow(ctx, ev) {
+  try { await bdEvent(ctx, ev).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:event", error: String(e && e.message).slice(0, 160) })); }
+}
+// A taint-drop is written once an hour per (rule, reason), so a rule that stays broken is counted without flooding the ledger.
+async function bdTaintDrop(ctx, ruleId, why) {
+  ctx.out.taint_dropped++;
+  var detail = "rule=" + ruleId + " why=" + why;
+  try {
+    var seen = await ctx.db.prepare("SELECT 1 AS x FROM breach_diagnosis_events WHERE event = 'taint-drop' AND detail = ?1 AND ts > ?2 LIMIT 1").bind(detail, bdIso(ctx.nowMs - 3600000)).first();
+    if (!seen) await bdEvent(ctx, { event: "taint-drop", detail: detail }).run();
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:taint", error: String(e && e.message).slice(0, 160) })); }
+}
+async function bdLock(db, holder, nowMs) {
+  var r = await db.prepare("INSERT INTO loop_lock (k, holder, expires_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET holder = excluded.holder, expires_at = excluded.expires_at WHERE loop_lock.expires_at < ?4")
+    .bind(BD_LOCK_KEY, holder, bdIso(nowMs + BD_LOCK_TTL_MS), bdIso(nowMs)).run();
+  return bdChanges(r) > 0;
+}
+// ---- state: one fixed set of reads per tick (about 5,500 rows)
+async function bdLoadState(ctx) {
+  var db = ctx.db, cfg = ctx.cfg, st = { old: [], oldById: {}, owned: {}, claims: {}, live: {}, liveRows: [], diagnosed: {}, failedCount: {}, failedLast: {}, dead: {} };
+  var rs = await db.prepare("SELECT id, title, source, priority, created_at FROM agent_issues WHERE status = 'open' AND created_at <= ?1").bind(ctx.nowMs - cfg.min_age_h * 3600000).all();
+  st.old = ((rs && rs.results) || []).map(function (r) {
+    return { id: Number(r.id), title: String(r.title || ""), source: r.source, priority: BD_PRIORITY_RANK[r.priority] == null ? "medium" : r.priority, created_at: Number(r.created_at) || 0 };
+  });
+  st.old.sort(function (x, y) { return (BD_PRIORITY_RANK[x.priority] - BD_PRIORITY_RANK[y.priority]) || (x.created_at - y.created_at) || (x.id - y.id); });
+  st.old.forEach(function (i) { st.oldById[i.id] = i; });
+  // the three doer kinds of v_breach_owner, read once instead of once per issue
+  var rl = await db.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND instr(COALESCE(description, ''), 'code-task:') > 0").all();
+  ((rl && rl.results) || []).forEach(function (r) { st.owned[r.id] = "code-task line"; });
+  var rt = await db.prepare("SELECT goal FROM code_tasks WHERE status NOT IN ('failed', 'closed', 'superseded', 'needs_human')").all();
+  ((rt && rt.results) || []).forEach(function (r) { var m = /^\[issue #(\d+)\]/i.exec(String(r.goal || "")); if (m && !st.owned[m[1]]) st.owned[m[1]] = "live code task"; });
+  var rc = await db.prepare("SELECT issue_id, path FROM work_claims WHERE released_at IS NULL AND expires_at > ?1").bind(ctx.nowIso).all();
+  ((rc && rc.results) || []).forEach(function (r) {
+    var m = /^issue:(\d+)$/.exec(String(r.path || "")), id = r.issue_id != null ? r.issue_id : (m ? m[1] : null);
+    if (id != null) { st.claims[id] = 1; if (!st.owned[id]) st.owned[id] = "live work claim"; }
+  });
+  var rd = await db.prepare("SELECT id, goal, status, attempts FROM code_tasks WHERE status IN ('failed', 'closed', 'superseded', 'needs_human')").all();
+  ((rd && rd.results) || []).forEach(function (r) {
+    var m = /^\[issue #(\d+)\]/i.exec(String(r.goal || "")) || /^ct_im(\d+)$/.exec(String(r.id || ""));
+    if (!m) return;
+    var d = st.dead[m[1]] || (st.dead[m[1]] = { n: 0, status: "none", attempts: 0 });
+    d.n++; d.status = bdEnum(r.status, "other"); d.attempts = Math.max(d.attempts, Number(r.attempts) || 0);
+  });
+  var rv = await db.prepare("SELECT id, issue_id, state, rule_id, cause_class, mode, evidence_hash, action_kind, action_ref, attempts, verify_passes, lease_until, family, case_key FROM breach_diagnoses WHERE state NOT IN ('verified', 'superseded', 'reverted', 'failed')").all();
+  st.liveRows = (rv && rv.results) || [];
+  st.liveRows.forEach(function (r) { st.live[r.issue_id] = r; });
+  var rg = await db.prepare("SELECT DISTINCT issue_id FROM breach_diagnoses").all();
+  ((rg && rg.results) || []).forEach(function (r) { st.diagnosed[r.issue_id] = 1; });
+  var rf = await db.prepare("SELECT issue_id, COUNT(*) AS n, MAX(last_progress_at) AS last FROM breach_diagnoses WHERE state IN ('failed', 'reverted') GROUP BY issue_id").all();
+  ((rf && rf.results) || []).forEach(function (r) { st.failedCount[r.issue_id] = Number(r.n) || 0; st.failedLast[r.issue_id] = String(r.last || ""); });
+  return st;
+}
+// ---- metrics first (S6), written by this code and not by a trigger
+async function bdWriteMetrics(ctx) {
+  var db = ctx.db, st = ctx.st, since = bdIso(ctx.nowMs - 864e5), cutoff = ctx.nowMs - (ctx.cfg.min_age_h + 1) * 3600000;
+  var undiag = st.old.filter(function (i) { return i.created_at <= cutoff && !st.owned[i.id] && i.title.indexOf(BD_TITLE_PREFIX) !== 0 && !st.diagnosed[i.id]; }).length;
+  var q = await db.prepare("SELECT (SELECT COUNT(*) FROM breach_diagnoses WHERE state = 'verified' AND verified_at > ?1) AS verified, (SELECT COUNT(*) FROM breach_diagnoses WHERE state IN ('failed', 'reverted') AND last_progress_at > ?1) AS failed, (SELECT COUNT(*) FROM breach_diagnosis_events WHERE event = 'taint-drop' AND ts > ?1) AS taint, (SELECT MAX(ts) FROM breach_diagnosis_events WHERE event = 'tick') AS last_tick").bind(since).first();
+  var lastTick = q && q.last_tick ? Date.parse(q.last_tick) : NaN;
+  var age = isFinite(lastTick) ? Math.max(0, Math.round((ctx.nowMs - lastTick) / 60000)) : 0;
+  var vals = [["breaches_undiagnosed_over_60m", undiag], ["breaches_auto_remediated_24h", q ? Number(q.verified) || 0 : 0], ["doctor_actions_failed_24h", q ? Number(q.failed) || 0 : 0], ["doctor_tick_age_min", age], ["doctor_taint_violations_24h", q ? Number(q.taint) || 0 : 0]];
+  await bdBatch(db, vals.map(function (v) { return db.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind(v[0], String(v[1]), ctx.nowIso); }));
+  ctx.out.undiagnosed = undiag;
+}
+// ---- rules: validate, demote, hits
+async function bdLoadRules(ctx) {
+  var db = ctx.db, cfg = ctx.cfg, rules = [];
+  var rs = await db.prepare("SELECT * FROM breach_playbooks WHERE enabled = 1 ORDER BY rule_id").all();
+  var rf = await db.prepare("SELECT rule_id, COUNT(*) AS n FROM breach_diagnoses WHERE state IN ('failed', 'reverted') AND last_progress_at > ?1 GROUP BY rule_id").bind(bdIso(ctx.nowMs - 864e5)).all();
+  var failed = {};
+  ((rf && rf.results) || []).forEach(function (r) { failed[r.rule_id] = Number(r.n) || 0; });
+  var list = (rs && rs.results) || [];
+  for (var i = 0; i < list.length; i++) {
+    var row = list[i], v = bdValidateRule(row);
+    if (!v.ok) { await bdTaintDrop(ctx, v.id, v.why); continue; }
+    var mode = row.mode === "on" ? "on" : "measure", ageMin = (ctx.nowMs - Date.parse(row.created_at)) / 60000;
+    if (mode === "on" && (failed[v.id] || 0) >= 2) {
+      // S3: two failed or reverted cases in 24 hours demote the rule to measure until a migration fixes and re-enables it.
+      mode = "measure";
+      ctx.out.demoted++;
+      try {
+        await bdBatch(db, [
+          db.prepare("UPDATE breach_playbooks SET mode = 'measure', note = substr('demoted ' || ?2 || ' after ' || ?3 || ' failed cases in 24 h. ' || COALESCE(note, ''), 1, 500) WHERE rule_id = ?1 AND mode = 'on'").bind(v.id, ctx.nowIso, failed[v.id]),
+          bdEvent(ctx, { event: "demote", detail: "rule=" + v.id + " failed_24h=" + failed[v.id] + " to=measure" })
+        ]);
+      } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:demote", rule: v.id, error: String(e && e.message).slice(0, 160) })); }
+    }
+    rules.push({ id: v.id, kind: v.kind, family: String(row.family), cause_class: String(row.cause_class), trigger: String(row.trigger_sql), verify: String(row.verify_sql), action: v.action, revert: v.revert,
+      version: Number(row.version) || 1, max_per_tick: Math.max(0, Number(row.max_per_tick) || 0), max_per_day: Math.max(0, Number(row.max_per_day) || 0), row_mode: mode,
+      shadow: !(ageMin >= cfg.cooldown_min), eff: cfg.mode === "on" && mode === "on" && ageMin >= cfg.cooldown_min ? "on" : "measure" });
+  }
+  return rules;
+}
+async function bdRuleHits(ctx, rules) {
+  var hits = {};
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i];
+    if (rule.kind === "file-issue" && rule.id === "playbook-gap") continue;
+    try {
+      var rs = await ctx.db.prepare("SELECT * FROM (" + rule.trigger + ") LIMIT ?1").bind(ctx.cfg.max_cases * 3).all();
+      var rows = (rs && rs.results) || [];
+      for (var k = 0; k < rows.length; k++) {
+        var r = rows[k], id = Number(r.issue_id), facts = null;
+        if (!(id > 0) || !BD_SUBJECT_RE.test(String(r.subject == null ? "" : r.subject))) continue;
+        try { facts = JSON.parse(String(r.facts_json == null ? "{}" : r.facts_json)); } catch (eP) { facts = null; }
+        if (!facts || typeof facts !== "object" || Array.isArray(facts) || !bdFactsSafe(facts)) { await bdTaintDrop(ctx, rule.id, "fact-value"); continue; }
+        (hits[id] || (hits[id] = [])).push({ rule: rule, subject: String(r.subject), facts: facts });
+      }
+    } catch (e) {
+      ctx.out.rule_errors++;
+      console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:trigger", rule: rule.id, error: String(e && e.message).slice(0, 200) }));
+    }
+  }
+  return hits;
+}
+// ---- facts: numbers, ids and enum codes; the free text that is read (the plan reason) leaves only as a code
+async function bdBaseFacts(ctx, items) {
+  var db = ctx.db, ids = items.map(function (it) { return Number(it.issue.id); }).filter(function (n) { return n > 0; });
+  var plans = {}, contracts = {};
+  if (ids.length) {
+    var list = ids.join(",");
+    var rp = await db.prepare("SELECT issue_id, outcome, detail FROM issue_plans WHERE issue_id IN (" + list + ")").all();
+    ((rp && rp.results) || []).forEach(function (r) { plans[r.issue_id] = { outcome: bdEnum(r.outcome, "other"), reason: bdReasonCode(r.detail) }; });
+    var rc = await db.prepare("SELECT issue_id, status, last_verdict FROM remediation_contracts WHERE issue_id IN (" + list + ") ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'holding' THEN 1 ELSE 2 END").all();
+    ((rc && rc.results) || []).forEach(function (r) { if (!contracts[r.issue_id]) contracts[r.issue_id] = { status: bdEnum(r.status, "other"), verdict: bdVerdictCode(r.last_verdict) }; });
+  }
+  ctx.plans = plans; ctx.contracts = contracts;
+}
+function bdCaseFacts(ctx, item) {
+  var i = item.issue, p = ctx.plans[i.id], c = ctx.contracts[i.id], d = ctx.st.dead[i.id];
+  var facts = { family: item.family, priority: i.priority, rung: bdRung((ctx.nowMs - i.created_at) / 3600000), plan_outcome: p ? p.outcome : "none", plan_reason: p ? p.reason : "none",
+    contract_status: c ? c.status : "none", contract_verdict: c ? c.verdict : "none", dead_tasks: d ? d.n : 0, dead_task_status: d ? d.status : "none", dead_task_attempts: d ? d.attempts : 0 };
+  if (item.hit) Object.keys(item.hit.facts).forEach(function (k) { facts[k] = item.hit.facts[k]; });
+  return facts;
+}
+// ---- the case phase: select, diagnose, act
+function bdSelect(ctx, hits) {
+  var st = ctx.st, items = [], picked = {};
+  var retryAfter = bdIso(ctx.nowMs - 3600000);
+  var eligible = function (i) {
+    return i.title.indexOf(BD_TITLE_PREFIX) !== 0 && !st.owned[i.id] && (st.failedCount[i.id] || 0) < 3 && !(st.failedLast[i.id] && st.failedLast[i.id] > retryAfter) && (!st.live[i.id] || st.live[i.id].state === "diagnosed");
+  };
+  var needs = function (i, hit) {
+    var lv = st.live[i.id];
+    if (!lv) return true;
+    if (!hit) return false;
+    return lv.rule_id !== hit.rule.id || lv.mode !== hit.rule.eff || hit.rule.eff === "on";
+  };
+  st.old.forEach(function (i) {
+    var h = hits[i.id] && hits[i.id][0];
+    if (h && eligible(i) && needs(i, h)) { items.push({ issue: i, hit: h, family: bdFamily(i.title, i.source) }); picked[i.id] = 1; }
+  });
+  st.old.forEach(function (i) {
+    if (!picked[i.id] && eligible(i) && !st.live[i.id]) items.push({ issue: i, hit: null, family: bdFamily(i.title, i.source) });
+  });
+  if (items.length > ctx.cfg.max_cases) { ctx.out.cases_deferred = items.length - ctx.cfg.max_cases; items = items.slice(0, ctx.cfg.max_cases); }
+  return items;
+}
+function bdOverBudget(ctx) { return Date.now() - ctx.t0 > 0.85 * ctx.budgetMs; }
+async function bdDiagnose(ctx, item) {
+  var hit = item.hit, rule = hit ? hit.rule : null, i = item.issue, lv = ctx.st.live[i.id];
+  var facts = bdCaseFacts(ctx, item);
+  if (!bdFactsSafe(facts)) { await bdTaintDrop(ctx, rule ? rule.id : "unclassified", "fact-value"); return null; }
+  var factsJson = JSON.stringify(facts);
+  if (factsJson.length > 2000) factsJson = JSON.stringify({ family: item.family, priority: i.priority, truncated: 1 });
+  var hash = await bdSha12(factsJson);
+  var ruleId = rule ? rule.id : "unclassified", cause = rule ? rule.cause_class : "unclassified";
+  var caseKey = (ruleId + ":" + (hit ? hit.subject : item.family)).slice(0, 120);
+  var mode = rule ? rule.eff : (ctx.cfg.mode === "on" ? "on" : "measure");
+  var detail = (rule ? "rule=" + ruleId + " cause=" + cause : "unclassified family=" + item.family) + " mode=" + mode + (rule && mode === "measure" ? " would-do=" + rule.kind : "");
+  var diag = { id: null, issue_id: i.id };
+  var acting = !!(rule && rule.eff === "on");
+  if (!lv) {
+    var insStmt = ctx.db.prepare("INSERT OR IGNORE INTO breach_diagnoses (issue_id, case_key, family, rule_id, rule_version, cause_class, facts_json, evidence_hash, state, mode, attempts, opened_at, diagnosed_at, last_progress_at, tick_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'diagnosed', ?9, ?10, ?11, ?11, ?11, ?12)")
+      .bind(i.id, caseKey, item.family, ruleId, rule ? rule.version : 1, cause, factsJson, hash, mode, ctx.st.failedCount[i.id] || 0, ctx.nowIso, ctx.tickId);
+    if (!acting) {
+      // a case that will not act is written with the others in one batch at the end of the phase; its event finds the row by issue
+      ctx.pending.push(insStmt, ctx.db.prepare("INSERT INTO breach_diagnosis_events (ts, issue_id, diagnosis_id, event, from_state, to_state, detail, tick_id) VALUES (?1, ?2, (SELECT MAX(id) FROM breach_diagnoses WHERE issue_id = ?2), 'diagnosed', NULL, 'diagnosed', ?3, ?4)")
+        .bind(ctx.nowIso, i.id, detail.slice(0, 480), ctx.tickId));
+      ctx.out.diagnosed++;
+      return diag;
+    }
+    var ins = await insStmt.run();
+    if (bdChanges(ins) < 1) return null;
+    diag.id = ins.meta && ins.meta.last_row_id != null ? Number(ins.meta.last_row_id) : null;
+    ctx.out.diagnosed++;
+    await bdEventNow(ctx, { issue_id: i.id, diagnosis_id: diag.id, event: "diagnosed", from: null, to: "diagnosed", detail: detail });
+  } else {
+    diag.id = lv.id;
+    if (lv.rule_id !== ruleId || lv.mode !== mode || lv.evidence_hash !== hash) {
+      await bdBatch(ctx.db, [
+        ctx.db.prepare("UPDATE breach_diagnoses SET case_key = ?2, family = ?3, rule_id = ?4, rule_version = ?5, cause_class = ?6, facts_json = ?7, evidence_hash = ?8, mode = ?9, last_progress_at = ?10, tick_id = ?11 WHERE id = ?1 AND state = 'diagnosed'")
+          .bind(lv.id, caseKey, item.family, ruleId, rule ? rule.version : 1, cause, factsJson, hash, mode, ctx.nowIso, ctx.tickId),
+        bdEvent(ctx, { issue_id: i.id, diagnosis_id: lv.id, event: "diagnosed", from: "diagnosed", to: "diagnosed", detail: detail })
+      ]);
+      ctx.out.rediagnosed++;
+    }
+  }
+  diag.rule_id = ruleId; diag.cause = cause; diag.hash = hash; diag.facts_json = factsJson; diag.case_key = caseKey;
+  return diag;
+}
+async function bdFail(ctx, diag, item, from, code, detail) {
+  var attempts = (ctx.st.failedCount[item.issue.id] || 0) + 1;
+  ctx.out.failed++;
+  await bdBatch(ctx.db, [
+    ctx.db.prepare("UPDATE breach_diagnoses SET state = 'failed', error_code = ?2, attempts = ?3, verify_passes = 0, lease_until = NULL, last_progress_at = ?4, tick_id = ?5 WHERE id = ?1").bind(diag.id, code, attempts, ctx.nowIso, ctx.tickId),
+    bdEvent(ctx, { issue_id: item.issue.id, diagnosis_id: diag.id, event: "fail", from: from, to: "failed", detail: "rule=" + diag.rule_id + " error=" + code + (detail ? " " + detail : "") })
+  ]);
+  ctx.st.failedCount[item.issue.id] = attempts;
+  ctx.st.failedLast[item.issue.id] = ctx.nowIso;
+  delete ctx.st.live[item.issue.id];
+  if (attempts >= 3) await bdFileSelfIssue(ctx, diag.rule_id, code);
+}
+// the lease of a case the doctor drives itself is 3 ticks; the case whose artefact is an issue another loop works (file-issue) gets the 120-minute ceiling (SLA-120M-1)
+function bdLeaseIso(ctx, minutes) { return bdIso(ctx.nowMs + Math.min(BD_LEASE_MAX_MIN, minutes || BD_LEASE_MIN) * 60000); }
+// S3 caps and checks, then the action by kind (S2)
+async function bdAct(ctx, item, diag) {
+  var rule = item.hit.rule, db = ctx.db, id = item.issue.id;
+  if (ctx.actionsLeft <= 0) { ctx.out.actions_deferred++; return; }
+  ctx.perRule[rule.id] = ctx.perRule[rule.id] || { tick: 0, day: null };
+  var pr = ctx.perRule[rule.id];
+  if (pr.tick >= rule.max_per_tick) { ctx.out.actions_deferred++; return; }
+  if (pr.day === null) {
+    var dq = await db.prepare("SELECT COUNT(*) AS n FROM breach_diagnoses WHERE rule_id = ?1 AND applied_at > ?2").bind(rule.id, bdIso(ctx.nowMs - 864e5)).first();
+    pr.day = dq ? Number(dq.n) || 0 : 0;
+  }
+  if (pr.day >= rule.max_per_day) { ctx.out.actions_deferred++; return; }
+  var claim = await db.prepare("SELECT 1 AS x FROM work_claims WHERE (issue_id = ?1 OR path = 'issue:' || ?1) AND released_at IS NULL AND expires_at > ?2 LIMIT 1").bind(id, ctx.nowIso).first();
+  if (claim) { ctx.out.claim_skipped++; await bdEventNow(ctx, { issue_id: id, diagnosis_id: diag.id, event: "skip", detail: "rule=" + rule.id + " live-work-claim" }); return; }
+  pr.tick++; pr.day++; ctx.actionsLeft--;
+  if (rule.kind === "sql") await bdActSql(ctx, item, diag, rule);
+  else if (rule.kind === "file-issue") await bdActFileIssue(ctx, item, diag, rule);
+  else if (rule.kind === "owner-card") await bdActOwnerCard(ctx, item, diag, rule);
+}
+async function bdActSql(ctx, item, diag, rule) {
+  var db = ctx.db, id = item.issue.id, lease = bdLeaseIso(ctx), revertJson = JSON.stringify(rule.revert);
+  // write ahead: the case is queued before the action runs, so a crash leaves a case the verify step settles, never an action with no ledger row
+  await db.prepare("UPDATE breach_diagnoses SET state = 'queued', action_kind = 'sql', revert_sql = ?2, mode = 'on', lease_until = ?3, last_progress_at = ?4, tick_id = ?5 WHERE id = ?1").bind(diag.id, revertJson, lease, ctx.nowIso, ctx.tickId).run();
+  var res, changes = 0;
+  try {
+    for (var k = 0; k < rule.action.length; k++) { var w = bdWriteWhy(rule.action[k]); if (w) throw new Error("validation:" + w); }
+    res = await bdBatch(db, rule.action.map(function (s) { return db.prepare(s).bind(id); }));
+    res.forEach(function (r) { changes += bdChanges(r); });
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:action", rule: rule.id, issue: id, error: String(e && e.message).slice(0, 200) }));
+    await bdFail(ctx, diag, item, "queued", /^validation:/.test(String(e && e.message)) ? "validation" : "sql-error", "");
+    return;
+  }
+  if (changes < 1) { await bdFail(ctx, diag, item, "queued", "no-rows", ""); return; }
+  var tables = {};
+  rule.action.forEach(function (s) { var m = /\b(?:into|update)\s+(?:or\s+\w+\s+)?"?([a-z_][a-z0-9_]*)"?/i.exec(bdStrip(s)); if (m) tables[m[1].toLowerCase()] = 1; });
+  var tabs = Object.keys(tables).join(",");
+  var ref = "applied:" + ctx.tickId;
+  try {
+    var dl = await db.prepare("INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'none', ?10)")
+      .bind("qnfo-fleet-control:breach-doctor", "cause_class " + diag.cause + " evidence_hash " + diag.hash, "BREACH-DOCTOR-1 " + rule.id + " sql on issue " + id, String(diag.facts_json).slice(0, 700),
+        "applied in " + ctx.tickId + ": " + changes + " row(s) changed, verify pending (breach_diagnoses #" + diag.id + ")", "tables " + tabs + ", issue " + id + " only (every statement is bound to it)",
+        "breach_diagnoses #" + diag.id + " revert_sql, bound to issue " + id + ": " + revertJson.slice(0, 900), "fleet resolves " + diag.cause + " without a session",
+        "verify_sql of " + rule.id + " reads ok on two consecutive ticks", tabs).run();
+    if (dl && dl.meta && dl.meta.last_row_id != null) ref = "dl" + dl.meta.last_row_id;
+  } catch (eL) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:decision-log", rule: rule.id, error: String(eL && eL.message).slice(0, 200) })); }
+  await bdBatch(db, [
+    db.prepare("UPDATE breach_diagnoses SET state = 'applied', action_ref = ?2, applied_at = ?3, verify_class = 'verify_sql', verify_passes = 0, lease_until = ?4, last_progress_at = ?3, tick_id = ?5 WHERE id = ?1").bind(diag.id, ref, ctx.nowIso, lease, ctx.tickId),
+    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "action", from: "queued", to: "applied", detail: "rule=" + rule.id + " kind=sql changes=" + changes + " ref=" + ref })
+  ]);
+  ctx.out.acted++;
+}
+// file-issue: one deduped issue per rule and subject, source qnfo-fleet-control, a description made only of enums and ids
+async function bdFileIssue(ctx, title, descLines, priority, probe) {
+  var db = ctx.db;
+  var ex = await db.prepare("SELECT id FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND (status = 'open' OR created_at > ?2) ORDER BY id DESC LIMIT 1").bind(title, ctx.nowMs - 864e5).first();
+  if (ex && ex.id != null) return { id: Number(ex.id), existed: true };
+  var ins = await db.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, descLines.join("\n"), priority, ctx.nowMs).run();
+  if (bdChanges(ins) < 1) return null;
+  var row = await db.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim(?1))").bind(title).first();
+  if (!row || row.id == null) return null;
+  if (probe) {
+    var cid = "issue-" + row.id;
+    var up = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'breach-doctor-1', precondition = ?3, action = ?4, escalate_to = 'qnfo-fleet-control' WHERE class = ?1")
+      .bind(cid, probe, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause").run();
+    if (bdChanges(up) < 1) await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'breach-doctor-1')")
+      .bind(cid, row.id, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause", probe).run();
+  }
+  return { id: Number(row.id), existed: false };
+}
+async function bdActFileIssue(ctx, item, diag, rule) {
+  var id = item.issue.id, subject = item.hit.subject, lease = bdLeaseIso(ctx, BD_LEASE_MAX_MIN);
+  var title = BD_TITLE_PREFIX + " " + rule.id + " " + subject;
+  var probe = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM breach_diagnoses WHERE rule_id = '" + rule.id + "' AND issue_id = " + Number(id) + " AND state IN ('failed', 'reverted')) AS TEXT) AS observed";
+  await ctx.db.prepare("UPDATE breach_diagnoses SET state = 'queued', action_kind = 'file-issue', mode = 'on', lease_until = ?2, last_progress_at = ?3, tick_id = ?4 WHERE id = ?1").bind(diag.id, lease, ctx.nowIso, ctx.tickId).run();
+  var f;
+  try {
+    f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").", "Rule " + rule.id + " (cause " + diag.cause + ") matched issue " + id + " in family " + item.family + " (subject " + subject + ").",
+      "Facts: " + bdKv(Object.assign({}, item.hit.facts)), "Doer: the fleet. Definition of done: issue " + id + " has a doer or is closed with evidence."], "medium", probe);
+  } catch (e) { f = null; console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:file-issue", rule: rule.id, error: String(e && e.message).slice(0, 200) })); }
+  if (!f) { await bdFail(ctx, diag, item, "queued", "sql-error", ""); return; }
+  await bdBatch(ctx.db, [
+    ctx.db.prepare("UPDATE breach_diagnoses SET state = 'queued', action_ref = ?2, applied_at = ?3, verify_class = 'verify_sql', lease_until = ?4, last_progress_at = ?3 WHERE id = ?1").bind(diag.id, String(f.id), ctx.nowIso, lease),
+    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "action", from: "queued", to: "queued", detail: "rule=" + rule.id + " kind=file-issue filed=" + f.id + (f.existed ? " existed" : "") })
+  ]);
+  ctx.out.acted++;
+}
+async function bdActOwnerCard(ctx, item, diag, rule) {
+  var id = item.issue.id, reason = item.hit.facts.reason;
+  if (!Object.prototype.hasOwnProperty.call(BD_OWNER_REASONS, String(reason))) { await bdTaintDrop(ctx, rule.id, "owner-reason"); await ctx.db.prepare("UPDATE breach_diagnoses SET mode = 'measure' WHERE id = ?1").bind(diag.id).run(); return; }
+  var slug = ("breach-doctor-" + rule.id + "-" + id).toLowerCase();
+  var why = "IDENTITY-BOUND: " + reason + "\nIssue " + id + " (family " + item.family + ", priority " + item.issue.priority + ") needs " + BD_OWNER_REASONS[reason] + ". The fleet cannot take this step and has not worked around it (rule " + rule.id + ").\n"
+    + "Closing probe: this card resolves when human_actions " + slug + " is resolved; BREACH-DOCTOR-1 reads it every 10 minutes.";
+  try {
+    await ctx.db.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'normal', 'qnfo-fleet-control BREACH-DOCTOR-1')")
+      .bind(slug, "Owner step needed for issue " + id + " (" + rule.id + ")", why, "Issue " + id + " stays open at its priority and the fleet takes no further action on it until this card is resolved.", "Take the step, then resolve this card on https://fleet.qnfo.org/owner.").run();
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:owner-card", rule: rule.id, error: String(e && e.message).slice(0, 200) })); await ctx.db.prepare("UPDATE breach_diagnoses SET mode = 'measure' WHERE id = ?1").bind(diag.id).run(); return; }
+  await bdBatch(ctx.db, [
+    ctx.db.prepare("UPDATE breach_diagnoses SET state = 'handed-owner', action_kind = 'owner-card', action_ref = ?2, mode = 'on', applied_at = ?3, lease_until = NULL, last_progress_at = ?3, tick_id = ?4 WHERE id = ?1").bind(diag.id, slug, ctx.nowIso, ctx.tickId),
+    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "handoff", from: "diagnosed", to: "handed-owner", detail: "rule=" + rule.id + " reason=" + reason + " card=" + slug })
+  ]);
+  ctx.out.acted++;
+}
+// S3: three failures of one issue file a self issue for the code loop (the doctor never diagnoses its own issues)
+async function bdFileSelfIssue(ctx, ruleId, code) {
+  try {
+    var title = BD_TITLE_PREFIX + " self " + ruleId + " " + code;
+    var probe = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM breach_diagnoses WHERE rule_id = '" + ruleId + "' AND state IN ('failed', 'reverted') AND last_progress_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS TEXT) AS observed";
+    var f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").", "An issue reached 3 failed cases of rule " + ruleId + " (last error " + code + "). The doctor stops diagnosing that issue.",
+      "Read: SELECT id, issue_id, state, error_code, attempts FROM breach_diagnoses WHERE rule_id = '" + ruleId + "' AND state IN ('failed', 'reverted') ORDER BY id DESC LIMIT 10; SELECT event, detail FROM breach_diagnosis_events WHERE event IN ('fail', 'demote') ORDER BY id DESC LIMIT 10.",
+      "Doer: the code loop or a session fixes the playbook row by migration (its action_sql guard or its verify_sql) or the engine step named by the error code.", "Definition of done: no case of rule " + ruleId + " failed in the last 24 hours."], "high", probe);
+    if (f && !f.existed) ctx.out.self_issues++;
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:self-issue", rule: ruleId, error: String(e && e.message).slice(0, 200) })); }
+}
+// ---- verify (S5): two consecutive passes of verify_sql are verified; a failed verify, an SQL error or an expired lease is failed
+async function bdVerifyPhase(ctx, rules) {
+  var db = ctx.db, byId = {}, rows = ctx.st.liveRows.filter(function (r) { return r.state === "applied" || r.state === "verifying" || r.state === "queued" || r.state === "handed-owner"; });
+  rules.forEach(function (r) { byId[r.id] = r; });
+  for (var i = 0; i < rows.length; i++) {
+    if (bdOverBudget(ctx)) { ctx.out.budget_skipped++; break; }
+    var row = rows[i], item = { issue: { id: row.issue_id } }, diag = { id: row.id, rule_id: row.rule_id };
+    ctx.out.verified_checked++;
+    if (row.state === "handed-owner") {
+      var card = await db.prepare("SELECT status FROM human_actions WHERE slug = ?1").bind(row.action_ref).first();
+      if (card && card.status !== "open") {
+        await bdBatch(db, [db.prepare("UPDATE breach_diagnoses SET state = 'verified', verified_at = ?2, last_progress_at = ?2, tick_id = ?3 WHERE id = ?1").bind(row.id, ctx.nowIso, ctx.tickId),
+          bdEvent(ctx, { issue_id: row.issue_id, diagnosis_id: row.id, event: "verify", from: "handed-owner", to: "verified", detail: "rule=" + row.rule_id + " card=" + bdEnum(card.status, "other") })]);
+        ctx.out.verified++;
+      }
+      continue;
+    }
+    if (row.state === "queued" && !row.action_ref && (!row.lease_until || row.lease_until >= ctx.nowIso)) continue;
+    var rule = byId[row.rule_id], observed = null, expected = null, errCode = null;
+    if (!rule) { if (row.lease_until && row.lease_until < ctx.nowIso) { await bdFail(ctx, diag, item, row.state, "lease-expired", ""); } continue; }
+    try {
+      var stmt = db.prepare(rule.verify);
+      var vr = await (rule.verify.indexOf("?1") !== -1 ? stmt.bind(row.issue_id) : stmt).first();
+      var keys = vr ? Object.keys(vr) : [];
+      expected = vr ? (vr.expected !== undefined ? vr.expected : vr[keys[0]]) : null;
+      observed = vr ? (vr.observed !== undefined ? vr.observed : vr[keys[1]]) : null;
+    } catch (e) { errCode = "verify-error"; console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:verify", rule: row.rule_id, error: String(e && e.message).slice(0, 200) })); }
+    var es = expected == null ? "" : String(expected).trim(), os = observed == null ? "" : String(observed).trim();
+    if (errCode) { await bdFail(ctx, diag, item, row.state, errCode, ""); continue; }
+    if (es && es === os) {
+      var passes = (Number(row.verify_passes) || 0) + 1;
+      if (passes >= 2) {
+        await bdBatch(db, [db.prepare("UPDATE breach_diagnoses SET state = 'verified', verify_passes = ?2, verified_at = ?3, lease_until = NULL, last_progress_at = ?3, tick_id = ?4 WHERE id = ?1").bind(row.id, passes, ctx.nowIso, ctx.tickId),
+          bdEvent(ctx, { issue_id: row.issue_id, diagnosis_id: row.id, event: "verify", from: row.state, to: "verified", detail: "rule=" + row.rule_id + " passes=" + passes })]);
+        ctx.out.verified++;
+      } else {
+        await bdBatch(db, [db.prepare("UPDATE breach_diagnoses SET state = 'verifying', verify_passes = ?2, lease_until = ?3, last_progress_at = ?4, tick_id = ?5 WHERE id = ?1").bind(row.id, passes, bdLeaseIso(ctx), ctx.nowIso, ctx.tickId),
+          bdEvent(ctx, { issue_id: row.issue_id, diagnosis_id: row.id, event: "renew", from: row.state, to: "verifying", detail: "rule=" + row.rule_id + " passes=" + passes })]);
+      }
+    } else if (row.lease_until && row.lease_until < ctx.nowIso) {
+      await bdFail(ctx, diag, item, row.state, "lease-expired", "");
+    } else if (row.state === "queued" && rule.kind === "file-issue") {
+      continue;
+    } else {
+      await bdFail(ctx, diag, item, row.state, "verify-failed", "observed=" + bdVerdictCode(os));
+    }
+  }
+}
+// S4: one playbook-gap issue per family per 24 hours, to the code loop, naming counts and enum facts only
+async function bdGapPhase(ctx, rules) {
+  var gap = null;
+  rules.forEach(function (r) { if (r.id === "playbook-gap") gap = r; });
+  if (!gap || gap.eff !== "on") return;
+  var db = ctx.db, filed = 0;
+  var day = await db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: playbook gap %' AND created_at > ?1").bind(ctx.nowMs - 864e5).first();
+  var room = Math.min(gap.max_per_tick, gap.max_per_day - (day ? Number(day.n) || 0 : 0));
+  if (room <= 0) return;
+  var rs = await db.prepare("SELECT family, COUNT(*) AS n FROM breach_diagnoses WHERE state = 'diagnosed' AND cause_class = 'unclassified' GROUP BY family ORDER BY n DESC LIMIT 20").all();
+  var fams = (rs && rs.results) || [];
+  for (var i = 0; i < fams.length && filed < room; i++) {
+    var fam = String(fams[i].family), n = Number(fams[i].n) || 0;
+    if (!BD_SUBJECT_RE.test(fam)) continue;
+    var title = BD_TITLE_PREFIX + " playbook gap " + fam;
+    var ex = await db.prepare("SELECT 1 AS x FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND (status = 'open' OR created_at > ?2) LIMIT 1").bind(title, ctx.nowMs - 864e5).first();
+    if (ex) continue;
+    var rc = await db.prepare("SELECT json_extract(facts_json, '$.plan_outcome') AS po, json_extract(facts_json, '$.plan_reason') AS pr, json_extract(facts_json, '$.priority') AS pri, COUNT(*) AS c FROM breach_diagnoses WHERE state = 'diagnosed' AND cause_class = 'unclassified' AND family = ?1 GROUP BY 1, 2, 3 ORDER BY c DESC LIMIT 12").bind(fam).all();
+    var counts = ((rc && rc.results) || []).map(function (r) { return bdKv({ plan_outcome: bdEnum(r.po, "none"), plan_reason: bdEnum(r.pr, "none"), priority: bdEnum(r.pri, "medium"), count: Number(r.c) || 0 }); });
+    var probe = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM v_breach_diagnosis_current WHERE family = '" + fam + "' AND state = 'diagnosed' AND cause_class = 'unclassified') AS TEXT) AS observed";
+    try {
+      var f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").",
+        "Family " + fam + ": " + n + " open issues older than " + ctx.cfg.min_age_h + " hours have no doer and match no playbook (cause_class unclassified).", "Counts by enum: " + (counts.join(" | ") || "none"),
+        "Doer: the code loop. Add a breach_playbooks row for this family by migration: trigger_sql returns issue_id, subject, facts_json; action_sql and revert_sql statements bind ?1; verify_sql returns expected and observed. See migrations/2026-10-26-breach-doctor.sql for the shape. A new row runs in measure for 30 minutes.",
+        "Definition of done: SELECT COUNT(*) FROM v_breach_diagnosis_current WHERE family = '" + fam + "' AND state = 'diagnosed' AND cause_class = 'unclassified' reads 0."], "medium", probe);
+      if (f && !f.existed) { filed++; ctx.out.gap_issues++; await bdEventNow(ctx, { event: "diagnosed", detail: "playbook-gap family=" + fam + " unclassified=" + n + " issue=" + f.id }); }
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:gap", family: fam, error: String(e && e.message).slice(0, 200) })); }
+  }
+}
+// ---- supersede a live case whose issue closed or gained a doer since it was written, so the unique live index frees
+async function bdSupersede(ctx) {
+  var st = ctx.st, stmts = [], n = 0;
+  st.liveRows.forEach(function (r) {
+    if (r.state !== "diagnosed" || n >= ctx.cfg.max_cases * 2) return;
+    var why = !st.oldById[r.issue_id] ? "closed" : st.owned[r.issue_id] ? "owned" : null;
+    if (!why) return;
+    n++;
+    stmts.push(ctx.db.prepare("UPDATE breach_diagnoses SET state = 'superseded', last_progress_at = ?2, tick_id = ?3 WHERE id = ?1 AND state = 'diagnosed'").bind(r.id, ctx.nowIso, ctx.tickId));
+    stmts.push(bdEvent(ctx, { issue_id: r.issue_id, diagnosis_id: r.id, event: "supersede", from: "diagnosed", to: "superseded", detail: "rule=" + r.rule_id + " why=" + why }));
+    delete st.live[r.issue_id];
+  });
+  if (stmts.length) await bdBatch(ctx.db, stmts);
+  ctx.out.superseded = n;
+}
+async function breachDoctorTick(env, opts) {
+  var db = env && (env.AUDIT_DB || env.AUDIT || env.DB_AUDIT);
+  var out = { ok: false, mode: "none", diagnosed: 0, rediagnosed: 0, acted: 0, verified: 0, verified_checked: 0, failed: 0, demoted: 0, taint_dropped: 0, rule_errors: 0, claim_skipped: 0, actions_deferred: 0, budget_skipped: 0, superseded: 0, gap_issues: 0, self_issues: 0, undiagnosed: 0 };
+  if (!db) return out;
+  if (Date.now() < bdRetryAt) { out.paused = 1; return out; }
+  var t0 = Date.now(), holder = "bd-" + t0.toString(36) + "-" + crypto.randomUUID().slice(0, 8), locked = false, ctx = null;
+  try {
+    var cfg = await bdConfig(db);
+    out.mode = cfg.mode;
+    if (cfg.mode === "off") { out.ok = true; return out; }
+    locked = await bdLock(db, holder, t0);
+    if (!locked) { out.ok = true; out.skipped = "lock-held"; return out; }
+    ctx = { db: db, cfg: cfg, out: out, t0: t0, nowMs: t0, nowIso: bdIso(t0), tickId: "t" + t0.toString(36), budgetMs: opts && Number(opts.budgetMs) > 0 ? Number(opts.budgetMs) : cfg.budget_ms, perRule: {}, actionsLeft: cfg.max_actions, plans: {}, contracts: {}, pending: [], st: null };
+    ctx.st = await bdLoadState(ctx);
+    await bdWriteMetrics(ctx);
+    var rules = await bdLoadRules(ctx);
+    out.rules = rules.length;
+    await bdVerifyPhase(ctx, rules);
+    var hits = await bdRuleHits(ctx, rules);
+    out.hits = Object.keys(hits).length;
+    await bdSupersede(ctx);
+    var items = bdSelect(ctx, hits);
+    await bdBaseFacts(ctx, items);
+    for (var i = 0; i < items.length; i++) {
+      if (bdOverBudget(ctx)) { out.budget_skipped += items.length - i; await bdEventNow(ctx, { event: "budget-skip", detail: "skipped=" + (items.length - i) + " budget_ms=" + ctx.budgetMs }); break; }
+      var diag = await bdDiagnose(ctx, items[i]);
+      if (diag && diag.id != null && items[i].hit && items[i].hit.rule.eff === "on") await bdAct(ctx, items[i], diag);
+    }
+    await bdBatch(db, ctx.pending);
+    ctx.pending = [];
+    await bdGapPhase(ctx, rules);
+    out.ok = true;
+  } catch (e) {
+    out.error = bdErrCode(e);
+    if (out.error === "no-such-table") bdRetryAt = Date.now() + 600000;
+    console.error(JSON.stringify({ evt: "fleet-control:breachDoctorTick:caught", error: String(e && e.message).slice(0, 200) }));
+  } finally {
+    if (locked) {
+      try {
+        if (ctx) await bdEvent(ctx, { event: "tick", detail: bdKv({ mode: out.mode, v: VERSION, rules: out.rules || 0, hits: out.hits || 0, diagnosed: out.diagnosed, acted: out.acted, verified: out.verified, failed: out.failed, demoted: out.demoted, taint: out.taint_dropped, gap: out.gap_issues, undiagnosed: out.undiagnosed, deferred: out.actions_deferred, err: out.error || "none", ms: Date.now() - t0 }) }).run();
+      } catch (eT) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctorTick:tick-event", error: String(eT && eT.message).slice(0, 160) })); }
+      try { await db.prepare("DELETE FROM loop_lock WHERE k = ?1 AND holder = ?2").bind(BD_LOCK_KEY, holder).run(); }
+      catch (eU) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctorTick:unlock", error: String(eU && eU.message).slice(0, 160) })); }
+    }
+  }
+  out.ms = Date.now() - t0;
+  return out;
+}
+// ---- BREACH-DOCTOR-1:END ----
 async function rtReopenOnRelapse(db, c, es, os) {
   var closedMs = Number(c.issue_updated_at) || 0;
   var since = closedMs > 0 ? new Date(closedMs).toISOString().replace("T", " ").slice(0, 19) : "1970-01-01 00:00:00";

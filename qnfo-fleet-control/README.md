@@ -8,6 +8,24 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
+## BREACH-DOCTOR-1 (0.49.0, pillar autonomy; agent_issues 1000266)
+
+`breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
+(FLEET-TICK-SPLIT-1). Per tick: the five `doctor_*` / `breaches_*` metrics are written first; each enabled `breach_playbooks` row is validated
+(`trigger_sql` and `verify_sql` one read-only SELECT, every `action_sql` / `revert_sql` statement one INSERT or UPDATE on `issue_triage`,
+`agent_issues` (UPDATE only), `remediation_contracts`, `issue_plans`, `ops_config` or `human_actions`, bound to `?1` = the issue id, no
+free-text column); every open issue older than `breach_doctor_min_age_h` (8) with no doer is classified (`breach_diagnoses`: family from a code
+table, `cause_class` from the matching playbook or `unclassified`, facts from numbers, ids and enum codes only); a rule that is 30 minutes old
+and `on` applies its action (revert stored, `decision_log` row, `breach_diagnosis_events` row); two consecutive passes of `verify_sql` are
+verified. An unclassified family files one `BREACH-DOCTOR-1: playbook gap <family>` issue per 24 hours to the code loop.
+
+- Stop it: `UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor'` (no write follows), `'measure'` (diagnose, act on nothing), or one rule
+  with `UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = '...'`. A rule with 2 failed or reverted cases in 24 hours demotes itself to measure.
+- Add a playbook: an `INSERT OR IGNORE INTO breach_playbooks` in a migration; see `migrations/2026-10-26-breach-doctor.sql` (CM-R1..CM-R5) for the shape.
+  Use `json_array('<statement>')` for `action_sql` and `revert_sql`. The first 30 minutes it runs in measure.
+- Read it: `SELECT * FROM v_breach_doctor_status; SELECT * FROM v_breach_diagnosis_current;` and `v_breach_owner` for who owns each open issue.
+- Offline suites: `node qnfo-fleet-control/breach-doctor.test.mjs` (the engine over a node:sqlite D1 stub) and `node migrations/breach-doctor.test.mjs`.
+
 ## ADVISOR-AGENT-TRACING-1 (0.46.0, pillar autonomy)
 
 The folded advisor is a custom application-owned harness, not an AI SDK/Think/Flue agent.
