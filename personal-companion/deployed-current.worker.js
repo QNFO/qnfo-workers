@@ -3176,7 +3176,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.43.4-codeagent";
+var VERSION = "1.43.5-edge-headers";
+/* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
 /* 1.43.2 COMPANION-SERIAL-TITLE-1 (2026-10-26, pillar personal; patch): a serial installment takes the running title with its number ("<title>, part N", N from companion_series.chapters plus one) before the duplicate-title check, so the check no longer rejects a full compose for keeping the title the prompt tells the writer to keep; every other form keeps the check as it was. */
 // 1.43.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every reading.q08.org piece says in its meta line that it is AI-generated and has no human review before publication.
@@ -8673,3 +8674,28 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH personal-companion ----
 wmAttach(worker_default, "personal-companion");
+// ---- BP26-EDGE-SECURITY-1:BEGIN (2026-10-26, agent_issues 1000356, pillar security) ----
+// The zone adds HSTS and nosniff to q08.org hosts; the pages themselves sent no Referrer-Policy and no frame protection (reading.q08.org) or no frame protection (travel.q08.org),
+// so any site could frame them. This wraps the final fetch handler (outside the WebMCP wrapper) and adds the three headers a route has not set itself. The response is copied
+// only when a header is missing, because a redirect or an upstream response has immutable headers; a WebSocket upgrade is returned as it is.
+function edgeSecure(res) {
+  try {
+    if (!res || res.status === 101 || res.webSocket) return res;
+    var h = res.headers;
+    if (h.get("Referrer-Policy") && h.get("X-Frame-Options") && h.get("X-Content-Type-Options")) return res;
+    var out = new Response(res.body, res);
+    if (!out.headers.get("Referrer-Policy")) out.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (!out.headers.get("X-Frame-Options")) out.headers.set("X-Frame-Options", "DENY");
+    if (!out.headers.get("X-Content-Type-Options")) out.headers.set("X-Content-Type-Options", "nosniff");
+    return out;
+  } catch (e) {
+    return res;
+  }
+}
+(function edgeAttach(target) {
+  var inner = target.fetch;
+  target.fetch = async function (request, env, ctx) {
+    return edgeSecure(await inner.call(this, request, env, ctx));
+  };
+})(worker_default);
+// ---- BP26-EDGE-SECURITY-1:END ----
