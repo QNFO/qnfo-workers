@@ -27,6 +27,11 @@ name: conflict-repair
 # GitHub has not computed (mergeable null while main keeps moving) with git merge-tree instead of skipping it. Before this a conflicting session pull
 # request, always a draft, was never repaired, and a conflicting one GitHub left unknown was not either.
 #
+# OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, owner: "Yes, auto-approve all"): the approval-gated zero-job pull_request runs that a repair push creates are APPROVED, not deleted
+# (scripts/conflict_repair.py clear_phantom_runs): only a run of that push on this repository's own branch, never a fork run, a person's run or a dispatched run, and a refused
+# approval falls back to the deletion. Set `CONFLICT_REPAIR_APPROVE: "off"` in this job's env to restore "nothing is approved" (the stale-PR lane's twin switch is ops_config
+# stale_pr_merge_workflows, which lets the lane merge a pull request that changes .github/, this file included).
+#
 # SECRETS: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID for the ledger rows (cloud_ops_events kind
 # conflict-repair-reapplied, branch_hygiene_log), as remediation-consumer uses them; nothing new.
 # A pull request opened with GITHUB_TOKEN starts no pull_request workflow, so the script dispatches the check workflows
