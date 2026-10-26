@@ -88,6 +88,12 @@ def live_workers(root):
     return out
 
 
+def bundle_names(root):
+    """Live worker directories that are the esbuild bundle of their src/ (the audit's GENERATED-BUNDLE rule): the only ones a source map is for."""
+    A = _audit()
+    return [d.name for d in A.live_dirs(pathlib.Path(root)) if A.generated_bundle(d)]
+
+
 # ---------------------------------------------------------------- source maps and observability
 SM_TOML = re.compile(r"^[ \t]*upload_source_maps[ \t]*=[ \t]*true\b", re.M)
 SM_JSON = re.compile(r"\"upload_source_maps\"\s*:\s*true")
@@ -146,8 +152,14 @@ def collect_workers_config(ctx):
                            if not DEPLOY_SM.search(ops) else "qnfo-ops/worker.js mentions source maps; check the deploy path before adding wrangler.toml lines")
         except Exception:  # noqa: BLE001
             pass
+        try:
+            bundles = bundle_names(ctx.root)
+        except Exception:  # noqa: BLE001
+            bundles = None
+        bundle_note = ("; validity: only %d of %d are generated bundles (%s), the others are hand-written single files whose deployed worker.js is its own source, so a source map for them would map a file to itself and the flag changes nothing deployed" % (
+            len(bundles), len(workers), ",".join(bundles) or "none")) if bundles is not None else ""
         out.append(Result("workers_with_source_maps", with_maps / float(len(workers)),
-                          "%d of %d live worker directories set upload_source_maps = true (wrangler config scan); %s" % (with_maps, len(workers), deploy_note), rows))
+                          "%d of %d live worker directories set upload_source_maps = true (wrangler config scan); %s%s" % (with_maps, len(workers), deploy_note, bundle_note), rows))
     else:
         out.append(Result("workers_with_source_maps", None, "no live worker directory found in the checkout", []))
     # ---- observability
@@ -546,6 +558,7 @@ def selftest():
         res = {r.metric: r for r in collect_workers_config(ctx)}
         ok(abs(res["workers_with_source_maps"].value - 0.25) < 1e-9, "1 of 4 live workers sets upload_source_maps (the commented line and the retired directory do not count): %r" % res["workers_with_source_maps"].value)
         ok("no source-map upload code" in res["workers_with_source_maps"].note, "the note says the deploy path has no source-map code")
+        ok("only 0 of 4 are generated bundles" in res["workers_with_source_maps"].note, "the note says how few workers a source map is for: %r" % res["workers_with_source_maps"].note[-200:])
         ok(abs(res["observability_enabled_share"].value - 0.75) < 1e-9 and "config scan" in res["observability_enabled_share"].note, "config fallback: 3 of 4 enable observability: %r" % res["observability_enabled_share"].value)
         # ---- observability from the API
         os.environ["CF_ACCOUNT_ID"] = "acct"
