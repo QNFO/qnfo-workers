@@ -579,6 +579,8 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   ok(j.executed === "iretry", "T20g 'retry issue 100140' (nothing after the reference) runs", j);
   j = await (await cmd(e.env, "resolve 1001 the pageview probe reads 5000 views in the last hour", C)).json();
   ok((j.actions || []).some((x) => x.op === "iclose"), "T20h 'resolve <id> <evidence>' is still a command", j);
+  j = await (await cmd(e.env, "approve 1001.")).json();
+  ok(j.kind === "answer" && /No open owner card names issue 1001/.test(j.text || ""), "T20i0 a reference followed by a full stop is still a reference (answered in code, not sent to the model)", j);
   j = await (await cmd(e.env, "approve 424242 7")).json();
   ok(/Nothing matches|No open owner card/.test(j.text || ""), "T20i an explicit reference that resolves to nothing is said plainly", j);
   // the owner's own short lines (cmd_log 2026-10-24 00:10Z: "Approve all", "Approve") still resolve to the decision that waits

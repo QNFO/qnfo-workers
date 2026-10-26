@@ -12978,7 +12978,7 @@ function decRefs(text) {
     if (/\b(?:prs?|pull(?:\s+requests?)?|runs?|workflows?|commits?)\s*$/i.test(s.slice(0, m.index + m[0].indexOf("#")))) continue;
     add({ kind: "issue", id: Number(m[1]), raw: "#" + m[1] });
   }
-  if ((m = /^\s*(\d{3,7})(?=\s|$)/.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
+  if ((m = /^\s*(\d{3,7})(?=[\s.,;:!?)]|$)/.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
   re = /(?:^|\s)(\d{5,7})(?=[\s.,;:)]|$)/g;
   while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
   re = /(?:^|[\s(])((?:ha|goals):[A-Za-z0-9:._-]{2,150})/g;
