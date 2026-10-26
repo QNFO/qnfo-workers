@@ -30,7 +30,6 @@ import sqlite3
 import sys
 import time
 import urllib.parse
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bp26_producers import Collector, Result  # noqa: E402
@@ -40,7 +39,6 @@ COLS = ("id", "ts", "actor", "session", "tool", "action_kind", "target", "inputs
 SEAL_MAX = 1200          # rows sealed per run (12 per statement, 100 statements): the 8-day backfill is sealed within a few runs
 VERIFY_MAX = 20000       # rows re-verified per run; the whole chain until it is longer than this
 PAGE = 500
-BUCKET = "qnfo-backups"
 WINDOW_S = 7 * 86400
 GRACE_S = 30 * 60
 MATCH_S = 20 * 60
@@ -78,20 +76,20 @@ def iso(t):
 
 
 # ---------------------------------------------------------------- R2 (a copy of each daily root outside D1)
-def _r2(method, key, data=None, ctype=None):
-    import remediation_consumer as RC  # noqa: E402  (lazy: the offline suite never reaches the network)
-    req = urllib.request.Request("%s/accounts/%s/r2/buckets/%s/objects/%s" % (RC.CF_API, RC.ACCOUNT, BUCKET, urllib.parse.quote(key, safe="/")), data=data, method=method,
-                                 headers=dict({"Authorization": "Bearer " + RC.TOKEN, "User-Agent": "qnfo-bp26-auditchain/1"}, **({"Content-Type": ctype} if ctype else {})))
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, b""
-    except Exception as e:  # noqa: BLE001
-        return 0, str(e).encode("utf-8")[:120]
+# The module never calls the object store itself: it uses the existing, reviewed helpers of scripts/continuity_snapshot.py (bucket qnfo-backups, the runner token), imported
+# lazily so the offline suite never reaches the network. A refused write is recorded on the root row (r2_ok = 0) and in the evidence rows, never hidden.
+def _r2_put(key, data):
+    import continuity_snapshot as CS  # noqa: E402
+    return (200, b"") if CS.r2_put_obj(key, data, "application/json") else (0, b"")
 
 
-R2 = {"put": lambda key, data: _r2("PUT", key, data, "application/json"), "get": lambda key: _r2("GET", key)}
+def _r2_get(key):
+    import continuity_snapshot as CS  # noqa: E402
+    obj = CS.r2_get_json(key)
+    return (200, json.dumps(obj).encode("utf-8")) if obj is not None else (404, b"")
+
+
+R2 = {"write": _r2_put, "read": _r2_get}
 
 
 # ---------------------------------------------------------------- chain
@@ -194,7 +192,7 @@ def collect_audit_chain(ctx):
     total = int(ctx.d1("SELECT COUNT(*) AS n FROM agent_action_chain")[0]["n"])
     if not ctx.dry:
         try:
-            made = ensure_root(ctx.d1, day, int(head["seq"]), head["row_hash"], total, stamp, R2["put"])
+            made = ensure_root(ctx.d1, day, int(head["seq"]), head["row_hash"], total, stamp, R2["write"])
             if made:
                 note.append(made)
         except Exception as e:  # noqa: BLE001
@@ -203,7 +201,7 @@ def collect_audit_chain(ctx):
     r2_bad = False
     if latest and int(latest[0]["r2_ok"] or 0):
         try:
-            st, raw = R2["get"](latest[0]["r2_key"])
+            st, raw = R2["read"](latest[0]["r2_key"])
             if 200 <= int(st) < 300:
                 copy = json.loads(raw.decode("utf-8"))
                 r2_bad = copy.get("head_hash") != latest[0]["head_hash"]
@@ -498,8 +496,8 @@ def selftest():
     ok(seal(d1, iso(now))[0] == 1 and d1("SELECT prev_hash FROM agent_action_chain ORDER BY seq DESC LIMIT 1")[0]["prev_hash"] == chain[-1]["row_hash"], "a new row chains from the previous head")
     ok(verify(d1)[:2] == (True, 6), "verify: 6 rows recompute")
     stored = {}
-    R2["put"] = lambda key, data: (stored.__setitem__(key, data), (200, b""))[1]
-    R2["get"] = lambda key: (200, stored[key]) if key in stored else (404, b"")
+    R2["write"] = lambda key, data: (stored.__setitem__(key, data), (200, b""))[1]
+    R2["read"] = lambda key: (200, stored[key]) if key in stored else (404, b"")
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     r = collect_audit_chain(P.Ctx(d1=d1, now=now))[0]
     ok(r.value == 1 and ("audit-chain/%s.json" % day) in stored and d1("SELECT COUNT(*) AS n FROM agent_action_roots")[0]["n"] == 1, "the first run of the day verifies and writes one root to D1 and R2: %r" % (r,))
