@@ -24,7 +24,7 @@ ok([...body.matchAll(/\b(?:LIKE|GLOB)\s+'((?:[^']|'')*)'/gi)].every((m) => Buffe
 const rollbackLine = /^-- Rollback: (.*)$/m.exec(sql)[1];
 ok([...rollbackLine.matchAll(/\bLIKE\s+'((?:[^']|'')*)'/gi)].every((m) => Buffer.byteLength(m[1]) <= 50), "the Rollback's LIKE patterns are at most 50 bytes too");
 
-const TITLE_A = "BREACH-UNMAPPED-1: six breaching metrics have no metric_breach_cause row, so the breach view and the guard breaches_unmapped read them as unmapped";
+const TITLE_A = "BREACH-UNMAPPED-1: breaching metrics with no metric_breach_cause row, so the breach view and the guard breaches_unmapped read them as unmapped";
 const TITLE_B = "PR-SLA-METRIC-CADENCE-1: pr_open_over_10m is written every 50 minutes by its trigger throttle while the 10-minute merge SLA is judged on it";
 ok((sql.split("'" + TITLE_A + "'").length - 1) === 3 && (sql.split("'" + TITLE_B + "'").length - 1) === 3, "each title is one literal used by the insert, the NOT EXISTS guard and the contract update (3 times each)");
 
@@ -69,7 +69,7 @@ for (const [name, title] of [["A", TITLE_A], ["B", TITLE_B]]) {
   ok(!/code-task:/.test(i.description), name + ": no code-task line (the fix is data or a migration, not a worker.js edit)");
 }
 const a = issue(w, TITLE_A), b = issue(w, TITLE_B);
-ok(["drift_total", "cf_obs_reopen_churn_24h", "records_past_retention", "pii_in_logs", "agent_tool_calls_outside_allowlist", "metrics_worsening_7d"].every((m) => a.description.includes(m)) && /breach-doctor, code-loop, heartbeat, issue-backlog, measurement, owner-routing, publishing, spend, structure/.test(a.description), "A names the six metrics and the nine cause keys");
+ok(["drift_total", "cf_obs_reopen_churn_24h", "records_past_retention", "pii_in_logs", "agent_tool_calls_outside_allowlist", "metrics_worsening_7d", "guard_rcs", "evolve_parse_pass_pct_7d", "ask_plain_share_7d"].every((m) => a.description.includes(m)) && /6 at 20:00Z/.test(a.description) && /8 at 20:01Z/.test(a.description) && /breach-doctor, code-loop, heartbeat, issue-backlog, measurement, owner-routing, publishing, spend, structure/.test(a.description), "A names both readings (6 at 20:00Z, 8 at 20:01Z), the metrics seen and the nine cause keys");
 ok(/18:11:02Z, 19:01:23Z and 19:51:30Z/.test(b.description) && /50 minutes/.test(b.description) && /0\.8 ms/.test(b.description) && /TRIGGER-FLAP-1/.test(b.description) && /agent_issues 2192/.test(b.description), "B names the three write times, the 50-minute throttle, the 0.8 ms cost, TRIGGER-FLAP-1 and issue 2192");
 
 // ---- the contracts
