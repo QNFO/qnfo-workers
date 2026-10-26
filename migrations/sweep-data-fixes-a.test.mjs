@@ -1,8 +1,10 @@
 // Offline suite (node:sqlite) for migrations/2026-10-26-sweep-data-fixes-a.sql (SWEEP-DATA-FIXES-A-1), data fixes for agent_issues
-// 99916, 100388, 100405, 1000100, 1000102 and 1000186 (3003 was fixed by CADENCE-SLA-CONTINUITY-1 first; the suite asserts this file leaves cadence_sla alone). The fixture is built from the live qnfo-audit shapes and values read on 2026-10-26
-// (SELECT only). The suite proves, for every closing probe the fixes name, that the probe FAILS on the pre-state and PASSES on the migrated
-// state; that exactly the intended rows change and no other row does; that a second apply and an already-fixed database change nothing but
-// the one decision_log row; that no rule is appended twice; and that the Rollback header line restores the pre-state from the backup tables.
+// 99916, 100388, 100405, 1000100, 1000102 and 1000186 (3003 was fixed by CADENCE-SLA-CONTINUITY-1 first; the suite asserts this file leaves cadence_sla alone).
+// The fixture is built from the live qnfo-audit shapes and values read on 2026-10-26 (SELECT only). The suite proves, for every closing probe the fixes name, that
+// the probe FAILS on the pre-state and PASSES on the migrated state (the contract probes are read back from remediation_contracts, so what runs is what the file wrote);
+// that exactly the intended rows change and no other row does; that a second apply and an already-fixed database change nothing but the one decision_log row; that no
+// rule is appended twice; that the Rollback header line restores the pre-state and deletes only the rows this file created; and that the two third-party addresses
+// occur only in the two email_filters INSERTs. It reads no repository file other than qnfo-email/worker.js (applyFilters), so a follow-up that lands later cannot turn it red.
 // SWEEP_A_SQL=<path> points the suite at a mutated copy of the migration (mutation checks). Run: node --no-warnings migrations/sweep-data-fixes-a.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -15,17 +17,30 @@ const all = (db, sql, ...p) => db.prepare(sql).all(...p).map((r) => ({ ...r }));
 const count = (s, t) => s.split(t).length - 1;
 const section = async (name, fn) => { try { await fn(); } catch (e) { fail++; console.log("FAIL section " + name + " threw :: " + (e && e.message)); } };
 
-// ------------------------------------------------------------------ the owner's closing probes (d1-query: expected/observed)
+// The two senders (emails 1104 and 1077). They are written here once and nowhere else in this file.
+const SENDER_1104 = ["ravi.kumar.13p01", "gmail.com"].join("@");
+const SENDER_1077 = ["jornalpublication10", "gmail.com"].join("@");
+
+const OPS_KEY = "OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1";
+const TITLES = {
+  enforce: "COST-QUALITY-FLOOR-ENFORCE-1: a downgrade at a spend cap must revert when output quality falls",
+  narrative: "PSR-NARRATIVE-CAP-SOFT-1: the weekly program narrative stays silent at a breached ai_spend cap, against BUDGET-SOFT-ROUTE-1",
+  doc: "COST-QUALITY-FLOOR-DOC-1: state the owner cost and quality directive in the autonomous operation doctrine",
+  claude: "COST-QUALITY-FLOOR-CLAUDE-1: state the owner cost and quality directive under BUDGET-SOFT-ROUTE-1 in CLAUDE.md",
+  sla: "MANAGEMENT-PERSONAS-SLA-1: management_personas.sla_min is 240, above the 120-minute SLA ceiling",
+  pathb: "MANAGEMENT-PERSONAS-PATH-B-1: management_personas.path_b names the weekly review as the scorecard writer, the daily rollup is",
+};
+const FM_CLASS = "fm-ticket-quotes-its-own-counted-marker";
+
+// ------------------------------------------------------------------ probes this suite owns (the contract probes are read back from the migrated database)
 const P = {
   "99916": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM agent_issues WHERE id = 99916 AND instr(description, 'session-task:') > 0",
   "99916b": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM analytics_metric_triggers WHERE id = 2934 AND instr(action, 'session-task:') > 0",
   "100388": "SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(DISTINCT i.slug) FROM cf_changelog_items i JOIN cloudflare_capability_catalog c ON c.slug = i.slug WHERE i.action IN ('reopened','new-row') AND c.status IN ('not_considered','proposed') AND replace(substr(i.seen_at,1,19),'T',' ') < datetime('now','-14 days')) <= 5 THEN 'ok' ELSE 'breach' END AS observed",
-  "100405": "SELECT 'present' AS expected, (SELECT CASE WHEN COUNT(*) = 1 THEN 'present' END FROM ops_config WHERE key = 'OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1') AS observed",
-  "1000100": "SELECT 'recorded' AS expected, CASE WHEN COUNT(*) >= 1 THEN 'recorded' END AS observed FROM decision_log WHERE instr(evidence, 'op-mvn8obo496f4') > 0 AND instr(assumption, 'no write or dispatch tool') > 0",
-  "1000102": "SELECT '2|spam' AS expected, (SELECT CAST(COUNT(*) AS TEXT) FROM email_filters WHERE enabled = 1 AND action = 'spam' AND lower(field) IN ('from','sender') AND lower(pattern) IN ('ravi.kumar.13p01@gmail.com','jornalpublication10@gmail.com')) || '|' || COALESCE((SELECT status FROM emails WHERE id = 1104), '') AS observed",
-  "1000186": "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM fleet_agents WHERE (id = 'portfolio-manager' OR id LIKE 'program-manager:%') AND (instr(system_prompt, 'PERSONAL-QNFO-SEPARATION-1') = 0 OR instr(system_prompt, 'NO-JOURNALS-1') = 0 OR instr(system_prompt, 'weekly program note into the portfolio review.') > 0 OR instr(system_prompt, '(Mondays 06:00Z)') > 0)) + (SELECT COUNT(*) FROM management_personas WHERE instr(decision_authority, 'PERSONAL-QNFO-SEPARATION-1') = 0 OR instr(decision_authority, 'NO-JOURNALS-1') = 0) AS TEXT) AS observed",
+  "100405-record": "SELECT 'present' AS expected, (SELECT CASE WHEN COUNT(*) = 1 THEN 'present' END FROM ops_config WHERE key = '" + OPS_KEY + "') AS observed",
 };
-const probe = (db, key) => { const r = one(db, P[key]); return { passes: r.expected === r.observed, ...r }; };
+const run = (db, sql) => { const r = one(db, sql); return { passes: r.expected === r.observed, ...r }; };
+const probe = (db, key) => run(db, P[key]);
 
 // ------------------------------------------------------------------ live shapes (qnfo-audit, read 2026-10-26)
 const DECISION_PARSE_TRIGGER = `CREATE TRIGGER decision_predictions_parse AFTER INSERT ON decision_log
@@ -66,12 +81,28 @@ CREATE TRIGGER email_filters_no_unsafe_auto_reply_ins BEFORE INSERT ON email_fil
 CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('hold', 'filter', 'pause', 'kill-switch', 'gate', 'cap', 'guard', 'lease')), guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0, disposition TEXT NOT NULL CHECK (disposition IN ('remove', 'demote', 'replace', 'keep')), disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned', 'applied')), alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 CREATE TABLE fleet_agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, system_prompt TEXT NOT NULL, model TEXT NOT NULL, tools TEXT, task_id TEXT, enabled INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT);
 CREATE TABLE management_personas (persona_key TEXT PRIMARY KEY, level TEXT NOT NULL, scope TEXT NOT NULL, charter TEXT, kpis TEXT, decision_authority TEXT, sla_min INTEGER, path_a TEXT, path_b TEXT, status TEXT DEFAULT 'active', updated_at TEXT);
+CREATE TABLE fleet_tasks (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, definition TEXT NOT NULL, timeout_ms INTEGER NOT NULL DEFAULT 30000, retries INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT, max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, deferred_since TEXT);
+CREATE TRIGGER remediation_probe_semicolon_ins AFTER INSERT ON remediation_contracts WHEN NEW.verify_transport LIKE 'd1-query%' AND instr(COALESCE(NEW.verify_probe, ''), ';') > 0 BEGIN UPDATE remediation_contracts SET verify_probe = replace(rtrim(trim(verify_probe), ';'), ';', ',') WHERE class = NEW.class; END;
+CREATE TRIGGER remediation_probe_semicolon_upd AFTER UPDATE OF verify_probe, verify_transport ON remediation_contracts WHEN NEW.verify_transport LIKE 'd1-query%' AND instr(COALESCE(NEW.verify_probe, ''), ';') > 0 BEGIN UPDATE remediation_contracts SET verify_probe = replace(rtrim(trim(verify_probe), ';'), ';', ',') WHERE class = NEW.class; END;
+CREATE TRIGGER remediation_probe_edit_rerun AFTER UPDATE OF verify_probe, verify_transport ON remediation_contracts WHEN NEW.verify_probe IS NOT OLD.verify_probe OR NEW.verify_transport IS NOT OLD.verify_transport BEGIN UPDATE remediation_contracts SET next_due_at = datetime('now') WHERE class = NEW.class; END;
+CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
 CREATE TRIGGER decision_log_no_update BEFORE UPDATE ON decision_log BEGIN SELECT RAISE(ABORT, 'decision_log is append-only'); END;
 CREATE TRIGGER decision_log_no_delete BEFORE DELETE ON decision_log BEGIN SELECT RAISE(ABORT, 'decision_log is append-only'); END;
 CREATE TABLE decision_predictions (decision_id INTEGER, kind TEXT, subject TEXT, op TEXT, value REAL, due_at TEXT, origin TEXT, PRIMARY KEY (decision_id, kind, subject));
 ${DECISION_PARSE_TRIGGER};
 `;
+
+// The birth template of an issue contract (ORPHAN-GUARD-BIRTH-1 + contract_probe_templates_v3_generic): born superseded with a probe that reads the issue's own status.
+const VAC_ACTION = "VACUOUS-PROBE-V3-1: this contract measures nothing while the issue is open, so it is born superseded and never blocks the close. A doer that knows the defect replaces this probe with one that measures it.";
+const vacProbe = (id) => `SELECT 'closed' AS expected, (SELECT CASE WHEN status IN ('closed', 'resolved') THEN 'closed' ELSE NULL END FROM agent_issues WHERE id = ${id}) AS observed`;
+const BIRTH_TRIGGER = `CREATE TRIGGER birth_contract AFTER INSERT ON agent_issues BEGIN
+  INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, module, last_verdict)
+  VALUES ('issue-' || NEW.id, NEW.id, 'no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)', '${VAC_ACTION}',
+    'SELECT ''closed'' AS expected, (SELECT CASE WHEN status IN (''closed'', ''resolved'') THEN ''closed'' ELSE NULL END FROM agent_issues WHERE id = ' || NEW.id || ') AS observed',
+    'd1-query', 'qnfo-fleet-control', 'superseded', 'probe-template-v3-generic', 'superseded:closure-observing-probe-at-birth');
+END`;
 
 // ------------------------------------------------------------------ live values (read 2026-10-26)
 const DESC_99916 = "METRIC-TRIGGER #2934 session_dependent_issues_open=9 gt 0 -> Pillar autonomy (AUTONOMY-FIRST-AUDIT-1). Read the issues: SELECT a.id, a.title, t.owner FROM agent_issues a LEFT JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = 'open' AND (a.description LIKE '%session-task:%' OR t.owner LIKE 'session%'). Group them by why the code loop refused them (cont (owner qnfo-code-orchestrator, target agent_issues)";
@@ -91,6 +122,7 @@ const AUTH_TAIL = "; files one ROOT-CAUSE-1 issue per issue family that keeps re
 const AUTH_PROGRAM = "decides every hour which open issues of its program are in focus, moves them to the front of the code loop's queue, promotes them to high and restores them when they leave focus, closes metric-trigger issues whose metric recovered and supersedes duplicate metric issues (persona_actions)" + AUTH_TAIL;
 const AUTH_PORTFOLIO = "decides every hour how the focus slots are split across programs and which program is the constraint (portfolio_allocations), and demotes stale fleet-filed critical issues to high (persona_actions demote); money, credentials, legal or signing acts and the owner's accounts stay owner cards" + AUTH_TAIL;
 const PERSONAS = [["program:QNFO.OPS", "program"], ["program:QNFO.RSCH", "program"], ["program:QNFO.INFRA", "program"], ["program:QNFO.REACH", "program"], ["program:QNFO.PERSONAL", "program"], ["portfolio:fleet", "portfolio"]];
+const PATH_B = "qnfo-fleet-dashboard weekly review (PORTFOLIO-STRATEGIC-1) recomputes scorecards; POST /api/portfolio/strategic";
 const CATALOG = [
   ["cfc-artifacts", "Artifacts is now in open beta", "Artifacts", "Artifacts , Cloudflare's versioned file system that speaks Git, is now in open beta.", "not_considered", "cf-changelog", "new-row", "2026-10-04T08:00:09.728Z"],
   ["data-pipelines", "Ingest event streams into an R2 data lake", "Pipelines, R2 Data Catalog, R2 SQL", "Rejected: event volume is a few hundred thousand requests per 30 days; D1 and Analytics Engine cover it. | cf-changelog 2026-10-01: Cloudflare Basin is now generally available (was rejected; re-evaluate)", "proposed", "claude-session:cf-capability-audit-2026-10-02", "reopened", "2026-10-04T08:00:09.728Z"],
@@ -102,19 +134,29 @@ const CATALOG = [
 ];
 const SLUGS = CATALOG.map((c) => c[0]).sort();
 
+// The management-personas workflow: one SQL step carries the prompt that asks a model for a roadmap proposal (the live definition has the anchor sentence exactly once).
+const ANCHOR = "Reply in exactly this form, each on its own line:";
+const wfDefinition = (extra = "") => JSON.stringify({ steps: [
+  { type: "sql", name: "recur-clear", db: "AUDIT", sql: "DELETE FROM issue_recurrence_now" },
+  { type: "sql", name: "rm-research", db: "AUDIT", sql: "INSERT INTO cf_agent_requests (requester, kind, prompt, instance, priority) SELECT 'program-manager:' || c.program_code, 'run', 'You are the program manager of ' || c.program_code || '. Research it: read qnfo-audit and the code of the program''s workers in the repository. Then propose ONE new feature or quality improvement that a single-file change can deliver, not a fix for an open issue. " + extra + ANCHOR + "' || char(10) || 'TITLE: <under 80 characters>' || char(10) || 'EDIT: <the exact change, under 120 words>', 'roadmap-' || c.program_code, 'medium' FROM program_charters c WHERE c.status = 'active'" },
+  { type: "sql", name: "lever-request", db: "AUDIT", sql: "INSERT INTO cf_agent_requests (requester, kind, prompt, instance, priority) SELECT 'x', 'run', 'Answer in under 250 words.', 'lever', 'medium'" },
+] });
+
 function seed(db) {
   db.exec(SCHEMA);
-  // 99916 / 2934
+  // 99916 / 2934 / the session-dependent count
   const iss = db.prepare("INSERT INTO agent_issues (id, title, description, status) VALUES (?, ?, ?, 'open')");
   iss.run(99916, "METRIC-TRIGGER-2934-SESSION-DEPENDENT-ISSUES-OPEN: Autonomy-first gap", DESC_99916);
   iss.run(2604, "METRIC-TRIGGER #6116 papers_queued_over_120m", "papers queue breach, owner is a session");
   iss.run(100064, "personal-companion fix", "wo failed generation runs between them.\nsession-task: repo=qnfo-workers path=personal-companion/worker.js\n(INTAKE-PROVENANCE)");
-  iss.run(1000189, "issue 1000189", "reopens issue 1000183 which carries `session-task: repo=qnfo-workers path=scripts/remediation_consumer.py` in prose");
+  iss.run(777001, "an issue that quotes the marker in prose", "an ordinary issue that mentions `session-task: repo=qnfo-workers path=x/worker.js` as an example in the middle of a sentence");
   iss.run(100405, "OWNER-NOTE-46: code:ct_hoq2y5kjmyf7lp", DESC_100405);
   iss.run(1000100, "OWNER-TASK-op-mvn8obo496f4: Remediation record", "Remediation record: log that this chat thread has no write/dispatch tool and that execution authority rests with server-side action carriers");
+  iss.run(1000102, "OWNER-TASK-op-mvn8ocpfc485: Classify the journal solicitations", "Classify the two solicitations as journal-pitch mail and mark them for blocking per NO-JOURNALS-1");
+  iss.run(1000186, "OWNER-TASK-op-mvnqbba7470b: Enforce in the new agent personas", "Enforce in the new agent personas that personal-api work is never cross-pollinated and that publication goes only to papers.qnfo.org");
   iss.run(5000, "an ordinary open issue", "nothing to see");
   const tri = db.prepare("INSERT INTO issue_triage (issue_id, owner) VALUES (?, ?)");
-  tri.run(99916, "qnfo-code-orchestrator"); tri.run(2604, "session-chatbox-20261017"); tri.run(100064, "personal-companion"); tri.run(1000189, "qnfo-ops"); tri.run(5000, "qnfo-ops");
+  tri.run(99916, "qnfo-code-orchestrator"); tri.run(2604, "session-chatbox-20261017"); tri.run(100064, "personal-companion"); tri.run(777001, "qnfo-ops"); tri.run(5000, "qnfo-ops");
   const trg = db.prepare("INSERT INTO analytics_metric_triggers (id, metric_key, title, operator, threshold, action, owner) VALUES (?, ?, ?, 'gt', ?, ?, ?)");
   trg.run(2934, "session_dependent_issues_open", "Autonomy-first gap", 0, ACTION_2934, "qnfo-code-orchestrator");
   trg.run(1204, "cf_changelog_open_proposals_14d", "Autonomy gap: Cloudflare features undecided after 14 days", 5, "Pillar autonomy. The changelog loop reopens rejected catalog rows ...", "qnfo-fleet-control");
@@ -132,11 +174,11 @@ function seed(db) {
   // 1000102
   const em = db.prepare("INSERT INTO emails (id, message_id, sender, recipient, subject, classification, status) VALUES (?, ?, ?, 'rowan.quni@qnfo.org', ?, 'personal-unverified', ?)");
   em.run(966, "m-966", "kavithakavi6162@gmail.com", "Editorial update and paper inquiry", "spam");
-  em.run(1077, "m-1077", "jornalpublication10@gmail.com", "Research Across All Disciplines", "spam");
-  em.run(1104, "m-1104", "ravi.kumar.13p01@gmail.com", "Details for research authors", "processed");
+  em.run(1077, "m-1077", SENDER_1077, "Research Across All Disciplines", "spam");
+  em.run(1104, "m-1104", SENDER_1104, "Details for research authors", "processed");
   em.run(1105, "m-1105", "someone.else@example.org", "Details for research authors", "processed");
-  em.run(1150, "m-1150", "ravi.kumar.13p01@gmail.com", "A different mail from the same address", "processed");
-  em.run(1200, "m-1200", "ravi.kumar.13p01@gmail.com", "Another one", "received");
+  em.run(1150, "m-1150", SENDER_1104, "A different mail from the same sender", "processed");
+  em.run(1200, "m-1200", SENDER_1104, "Another one", "received");
   const flt = db.prepare("INSERT INTO email_filters (id, rule_type, field, pattern, action, priority, enabled) VALUES (?, 'filter', ?, ?, ?, ?, 1)");
   flt.run(30, "from", "advancedresearchpub.com", "spam", 100); flt.run(37, "from", "rowan.quni@qnfo.org", "accept", 200); flt.run(38, "sender", "kavithakavi6162@gmail.com", "spam", 50);
   db.exec("INSERT INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, evidence) VALUES ('code-merge-trusted-sources', 'ops_config', 'filter', 'outside text', 1, 'replace', 'applied', 'seed')");
@@ -144,17 +186,24 @@ function seed(db) {
   const ag = db.prepare("INSERT INTO fleet_agents (id, name, system_prompt, model, tools, enabled, version, updated_at) VALUES (?, ?, ?, 'router:qnfo-ai', '[]', 1, 1, '2026-10-25T11:26:40.180Z')");
   for (const [id, p] of Object.entries(PROMPTS)) ag.run(id, id, p);
   ag.run("some-other-agent", "Other", "An unrelated agent prompt without either rule.");
-  const mp = db.prepare("INSERT INTO management_personas (persona_key, level, scope, decision_authority, sla_min, status, updated_at) VALUES (?, ?, ?, ?, 240, 'active', '2026-10-26 07:00:00')");
-  for (const [k, lvl] of PERSONAS) mp.run(k, lvl, k.split(":")[1], lvl === "portfolio" ? AUTH_PORTFOLIO : AUTH_PROGRAM);
+  const mp = db.prepare("INSERT INTO management_personas (persona_key, level, scope, decision_authority, sla_min, path_b, status, updated_at) VALUES (?, ?, ?, ?, 240, ?, 'active', '2026-10-26 07:00:00')");
+  for (const [k, lvl] of PERSONAS) mp.run(k, lvl, k.split(":")[1], lvl === "portfolio" ? AUTH_PORTFOLIO : AUTH_PROGRAM, PATH_B);
+  db.prepare("INSERT INTO fleet_tasks (id, name, type, definition, version, updated_at) VALUES ('management-personas', 'management-personas', 'workflow', ?, 7, '2026-10-26T09:43:36Z')").run(wfDefinition());
+  db.prepare("INSERT INTO fleet_tasks (id, name, type, definition, version, updated_at) VALUES ('other-workflow', 'other', 'workflow', ?, 3, '2026-10-20T00:00:00Z')").run(wfDefinition("A different workflow that happens to contain the anchor. "));
+  // the issue contracts as live: 100405 active (ISSUE-PROBE-AGENT-1, probe found_action), the others born superseded with the vacuous probe
+  const con = db.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, module, last_verdict, attempts, max_attempts, next_due_at) VALUES (?, ?, ?, ?, ?, 'd1-query', 'qnfo-fleet-control', ?, 'probe-template-v3-generic', ?, ?, 3, ?)");
+  con.run("issue-100405", 100405, "ISSUE-PROBE-AGENT-1", VAC_ACTION, "SELECT 'found_action' AS expected, CASE WHEN EXISTS (SELECT 1 FROM code_tasks WHERE lower(goal) LIKE '%100405%') THEN 'found_action' ELSE 'action_absent' END AS observed", "active", "fail", 1, "2026-10-26 10:18:39");
+  for (const id of [1000100, 1000102, 1000186]) con.run("issue-" + id, id, "no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)", VAC_ACTION, vacProbe(id), "superseded", "superseded:closure-observing-probe-at-birth", 0, "2026-10-25 02:59:16");
   // decision_log and the metric the decision predicts
   db.exec("INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path) VALUES ('s', 'a', 'EARLIER-DECISION-1: x', 'e', 'o', 'b', 'r')");
   db.exec("INSERT INTO metric_registry (metric, last_value, last_refreshed) VALUES ('cf_changelog_open_proposals_14d', '7', '2026-10-26T09:01:00.746Z')");
+  db.exec(BIRTH_TRIGGER); // from here on every filed issue is born with the vacuous contract, as live
   return db;
 }
 const fresh = () => seed(new DatabaseSync(":memory:"));
 const apply = (db, sql = SQL) => db.exec(sql);
 
-const PK = { agent_issues: "id", analytics_metric_triggers: "id", cloudflare_capability_catalog: "slug", ops_config: "key", email_filters: "id", emails: "id", control_registry: "control", fleet_agents: "id", management_personas: "persona_key", decision_log: "id", issue_triage: "issue_id", cf_changelog_items: "guid" };
+const PK = { agent_issues: "id", analytics_metric_triggers: "id", cloudflare_capability_catalog: "slug", ops_config: "key", email_filters: "id", emails: "id", control_registry: "control", fleet_agents: "id", management_personas: "persona_key", decision_log: "id", issue_triage: "issue_id", cf_changelog_items: "guid", fleet_tasks: "id", remediation_contracts: "class", failure_modes: "fm_key" };
 function snap(db, skip = []) {
   const out = {};
   for (const [t, pk] of Object.entries(PK)) if (!skip.includes(t)) { out[t] = {}; for (const r of all(db, `SELECT * FROM ${t}`)) out[t][r[pk]] = JSON.stringify(r); }
@@ -165,19 +214,28 @@ function changed(a, b, t) {
   return [...keys].filter((k) => a[t][k] !== b[t][k]).sort();
 }
 const same = (a, b, skip = []) => Object.keys(PK).filter((t) => !skip.includes(t) && changed(a, b, t).length).length === 0;
+const contract = (db, cls) => one(db, "SELECT * FROM remediation_contracts WHERE class = ?", cls);
+const issueByTitle = (db, t) => one(db, "SELECT * FROM agent_issues WHERE title = ?", t);
 
 // ------------------------------------------------------------------ 0. the file itself
 await section("0 the file itself", async () => {
+  const stmts = SQL.split("\n").filter((l) => !l.startsWith("--")).join("\n");
   ok(/^-- APPLY-BY: ci$/m.test(SQL) && /^-- DB: qnfo-audit$/m.test(SQL), "header opts in: APPLY-BY ci, DB qnfo-audit");
   ok(/^-- Rollback: UPDATE /m.test(SQL), "a Rollback header line exists");
-  ok(!/^\s*(DELETE\s+FROM|DROP\s)/im.test(SQL.split("\n").filter((l) => !l.startsWith("--")).join("\n")), "no statement deletes or drops (so no BACKUP header is needed)");
+  ok(!/^\s*(DELETE\s+FROM|DROP\s)/im.test(stmts), "no statement deletes or drops (so no BACKUP header is needed)");
   ok(!/claude\.ai|anthropic\.com/i.test(SQL), "no claude.ai or anthropic.com link in a tracked file (cloudflare-only-host-guard)");
   ok(!/(secret|token|password|api[_-]?key)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{16,}/i.test(SQL), "no secret value in the file");
-  const stmts = SQL.split("\n").filter((l) => !l.startsWith("--")).join("\n");
   ok((stmts.match(/INSERT INTO decision_log/g) || []).length === 1, "exactly one decision_log INSERT statement");
-  ok(!/cadence_sla/.test(stmts), "the migration does not write cadence_sla: 3003 was fixed by CADENCE-SLA-CONTINUITY-1 (migrations/2026-10-26-cadence-sla-continuity.sql)");
   ok(!/(UPDATE|DELETE FROM)\s+decision_log/i.test(stmts), "decision_log is only appended to");
-  ok(/CREATE TABLE IF NOT EXISTS bak_20261026_sweep_a_/.test(stmts) && (stmts.match(/CREATE TABLE IF NOT EXISTS bak_20261026_sweep_a_/g) || []).length === 6, "six bak_20261026_sweep_a_* before-state tables are created in the file");
+  ok(!/cadence_sla/.test(stmts), "the migration does not write cadence_sla: 3003 was fixed by CADENCE-SLA-CONTINUITY-1 (migrations/2026-10-26-cadence-sla-continuity.sql)");
+  ok((stmts.match(/CREATE TABLE IF NOT EXISTS bak_20261026_sweep_a_/g) || []).length === 9, "nine bak_20261026_sweep_a_* tables are created in the file (eight before-state copies and the created-rows registry)");
+  // the two third-party addresses: only inside the two email_filters INSERTs, never in a comment, a decision row, a registry row or an issue text
+  const chunks = SQL.split(/;\s*\n/);
+  for (const a of [SENDER_1104, SENDER_1077]) {
+    const holding = chunks.filter((c) => c.includes(a));
+    ok(holding.length === 1 && /INSERT INTO email_filters/.test(holding[0]) && count(holding[0], a) === 2, `an address occurs only in its own email_filters INSERT (twice: the value and the NOT EXISTS guard)`, holding.map((h) => h.slice(0, 80)));
+  }
+  ok(!SQL.split("\n").filter((l) => l.startsWith("--")).join("\n").includes("@gmail"), "no e-mail address in a header comment");
 });
 
 // ------------------------------------------------------------------ 1. every closing probe fails before and passes after
@@ -186,39 +244,52 @@ const post = fresh();
 const preSnap = snap(pre);
 apply(post);
 const postSnap = snap(post);
-for (const k of Object.keys(P)) {
-  const before = probe(pre, k), after = probe(post, k);
-  ok(!before.passes, `probe ${k} does not pass on the pre-state`, before);
-  ok(after.passes, `probe ${k} passes on the migrated state`, after);
-}
+const stored = (cls) => contract(post, cls).verify_probe;
+await section("1 every closing probe fails before and passes after", async () => {
+  for (const k of Object.keys(P)) {
+    const before = probe(pre, k), after = probe(post, k);
+    ok(!before.passes, `probe ${k} does not pass on the pre-state`, before);
+    if (k === "100405-record") ok(after.passes, `probe ${k} passes on the migrated state (the record exists; it is NOT the closing probe of 100405)`, after); else ok(after.passes, `probe ${k} passes on the migrated state`, after);
+  }
+  // the contract probes are read back from the migrated database: what the fleet will run is what is tested
+  for (const cls of ["issue-1000100", "issue-1000102", "issue-1000186"]) {
+    const sql = stored(cls);
+    ok(!run(pre, sql).passes, `${cls}: the stored probe does not pass on the pre-state`, run(pre, sql));
+    ok(run(post, sql).passes, `${cls}: the stored probe passes on the migrated state`, run(post, sql));
+  }
+  ok(!run(pre, stored(FM_CLASS)).passes && run(post, stored(FM_CLASS)).passes, "the detector probe fails on the pre-state (the ticket quotes the pattern) and passes after", [run(pre, stored(FM_CLASS)), run(post, stored(FM_CLASS))]);
+});
 
 // ------------------------------------------------------------------ 2. exactly the intended rows change
 await section("2 exactly the intended rows change", async () => {
+  const newIssueIds = Object.keys(postSnap.agent_issues).filter((k) => !(k in preSnap.agent_issues));
+  const newClasses = newIssueIds.map((i) => "issue-" + i);
   const exp = {
-    agent_issues: ["99916"], analytics_metric_triggers: ["2934"],
-    cloudflare_capability_catalog: SLUGS, ops_config: ["OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1"], emails: ["1104"],
-    control_registry: ["email-filter-journal-pitch-senders"], fleet_agents: Object.keys(PROMPTS).sort(), management_personas: PERSONAS.map((p) => p[0]).sort(),
-    decision_log: ["2"], issue_triage: [], cf_changelog_items: [],
+    analytics_metric_triggers: ["2934"], cloudflare_capability_catalog: SLUGS, ops_config: [OPS_KEY], emails: ["1104"], control_registry: ["email-filter-journal-pitch-senders"],
+    fleet_agents: Object.keys(PROMPTS).sort(), management_personas: PERSONAS.map((p) => p[0]).sort(), decision_log: ["2"], issue_triage: [], cf_changelog_items: [],
+    fleet_tasks: ["management-personas"], failure_modes: ["ticket-quotes-its-own-counted-marker"],
+    agent_issues: ["99916", ...newIssueIds], remediation_contracts: ["issue-100405", "issue-1000100", "issue-1000102", "issue-1000186", FM_CLASS, ...newClasses],
   };
   for (const [t, keys] of Object.entries(exp)) ok(JSON.stringify(changed(preSnap, postSnap, t)) === JSON.stringify([...keys].sort()), `only the intended ${t} rows change`, { got: changed(preSnap, postSnap, t), want: keys });
+  ok(newIssueIds.length === 6 && JSON.stringify(newIssueIds.map((i) => JSON.parse(postSnap.agent_issues[i]).title).sort()) === JSON.stringify(Object.values(TITLES).sort()), "exactly the six follow-up issues are filed, by title", newIssueIds.length);
   ok(changed(preSnap, postSnap, "email_filters").length === 2 && all(post, "SELECT id FROM email_filters WHERE id > 38").length === 2, "email_filters gains exactly two rows and no existing one changes");
 });
 
 // ------------------------------------------------------------------ 4. 99916: the ticket stops counting itself; the example query keeps its meaning
 await section("4 99916: the ticket stops counting itself; the example query keeps its meaning", async () => {
   const countQ = "SELECT COUNT(*) n FROM agent_issues a WHERE a.status = 'open' AND (COALESCE(a.description, '') LIKE '%session-task:%' OR EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = a.id AND t.owner LIKE 'session%'))";
-  ok(one(pre, countQ).n === 4 && one(post, countQ).n === 3, "session_dependent_issues_open falls by exactly the ticket itself (4 -> 3)", { pre: one(pre, countQ).n, post: one(post, countQ).n });
+  ok(one(pre, countQ).n === 4 && one(post, countQ).n === 3, "session_dependent_issues_open falls by exactly the ticket itself (4 -> 3), and the six new issues add none", { pre: one(pre, countQ).n, post: one(post, countQ).n });
   const d = (db) => one(db, "SELECT description FROM agent_issues WHERE id = 99916").description;
   const a = (db) => one(db, "SELECT action FROM analytics_metric_triggers WHERE id = 2934").action;
   ok(!d(post).includes("session-task:") && d(post).includes("'%session-task' || ':%'"), "ticket text holds the split literal, not the marker", d(post));
   ok(!a(post).includes("session-task:") && a(post).includes("'%session-task' || ':%'"), "trigger 2934 action holds the split literal, so a refile cannot count itself", a(post));
   ok(a(post).includes("a code-task: and code-anchor: line in place of its session-task line"), "the trigger's prose (session-task without a colon) is kept");
-  const q = (txt) => txt.slice(txt.indexOf("SELECT a.id"), txt.indexOf("')", txt.indexOf("t.owner LIKE") ) + 2);
+  const q = (txt) => txt.slice(txt.indexOf("SELECT a.id"), txt.indexOf("')", txt.indexOf("t.owner LIKE")) + 2);
   const rowsPre = all(pre, q(d(pre))).map((r) => r.id).sort((x, y) => x - y), rowsPost = all(post, q(d(post))).map((r) => r.id).sort((x, y) => x - y);
-  ok(JSON.stringify(rowsPre) === JSON.stringify([2604, 100064, 99916, 1000189].sort((x, y) => x - y)), "before: the quoted example query returns the ticket itself and the three other rows", rowsPre);
+  ok(JSON.stringify(rowsPre) === JSON.stringify([2604, 100064, 99916, 777001].sort((x, y) => x - y)), "before: the quoted example query returns the ticket itself and the three other rows", rowsPre);
   ok(!rowsPost.includes(99916) && JSON.stringify(rowsPost) === JSON.stringify(rowsPre.filter((i) => i !== 99916)), "after: the rewritten example query returns the same rows minus the ticket", { rowsPre, rowsPost });
   ok(d(post).replace("'%session-task' || ':%'", "'%session-task:%'") === d(pre), "nothing else in the ticket text changed");
-  ok(one(post, "SELECT description FROM agent_issues WHERE id = 1000189").description === one(pre, "SELECT description FROM agent_issues WHERE id = 1000189").description, "another issue that quotes the marker is not rewritten");
+  ok(one(post, "SELECT description FROM agent_issues WHERE id = 777001").description === one(pre, "SELECT description FROM agent_issues WHERE id = 777001").description, "another issue that mentions the marker is not rewritten");
 });
 
 // ------------------------------------------------------------------ 5. 100388: seven Cloudflare catalog rows decided with a reason, none left undecided
@@ -241,15 +312,25 @@ await section("5 100388: seven Cloudflare catalog rows decided with a reason, no
   ok(n(pre) === 7 && n(post) === 0, "the trigger-1204 query reads 7 before and 0 after", { pre: n(pre), post: n(post) });
 });
 
-// ------------------------------------------------------------------ 6. 100405: the owner's words, verbatim, in the shape of the earlier directive rows
-await section("6 100405: the owner's words, verbatim, in the shape of the earlier directive rows", async () => {
-  const r = one(post, "SELECT value, note FROM ops_config WHERE key = 'OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1'");
+// ------------------------------------------------------------------ 6. 100405: the owner's words, verbatim, recorded as what it is (a record nothing enforces yet)
+await section("6 100405: the owner's words, verbatim, recorded as a record that nothing enforces yet", async () => {
+  const r = one(post, `SELECT value, note FROM ops_config WHERE key = '${OPS_KEY}'`);
   let j = null; try { j = JSON.parse(r.value); } catch (e) { /* asserted below */ }
   ok(j && j.id === "COST-QUALITY-FLOOR-1" && j.date === "2026-10-21", "the value is JSON with the id and date", r.value && r.value.slice(0, 80));
   const m = /to the card code:ct_hoq2y5kjmyf7lp: (.*?) Definition of done:/s.exec(DESC_100405);
   ok(m && j && j.directive_verbatim === m[1], "directive_verbatim equals the owner's note text read from agent_issues 100405", { want: m && m[1], got: j && j.directive_verbatim });
-  ok(j && /OWNER-NOTE-46/.test(j.source) && /100405/.test(j.source) && /BUDGET-SOFT-ROUTE-1/.test(j.reading) && /not the owner/.test(j.limits), "source, reading and limits are recorded, the reading labelled as the fleet's");
-  ok(/follow-up PR/.test(r.note), "the note records that the CLAUDE.md line is a follow-up");
+  ok(j && /^none: recorded only/.test(j.enforced_by) && /no loop reads/.test(j.enforced_by), "enforced_by says none: recorded only, no loop reads the key", j && j.enforced_by);
+  ok(j && !("carried_by" in j) && !("reading" in j) && typeof j.intended === "string" && /BUDGET-SOFT-ROUTE-1/.test(j.intended) && /v_output_quality_headline/.test(j.intended), "no carried_by or reading claim; an intended field states what enforcement will be");
+  ok(j && /COST-QUALITY-FLOOR-ENFORCE-1/.test(j.follow_up) && /OWNER-NOTE-46/.test(j.source) && /100405/.test(j.source) && /not the owner/.test(j.limits), "follow-up, source and the labelled limits are recorded");
+  ok(/RECORD ONLY/.test(r.note) && /nothing enforces it yet/.test(r.note) && !/honor/i.test(r.note) && /COST-QUALITY-FLOOR-ENFORCE-1/.test(r.note), "the note says no loop honors the key yet and names the enforcement issue", r.note);
+  // the contract of issue 100405 must not close on the record alone
+  const c100405 = stored("issue-100405");
+  ok(run(post, c100405).observed === "recorded-only" && !run(post, c100405).passes, "the 100405 contract does not pass while the key exists and the enforcement issue is open", run(post, c100405));
+  const closed = fresh(); apply(closed);
+  closed.prepare("UPDATE agent_issues SET status = 'closed' WHERE title = ?").run(TITLES.enforce);
+  ok(run(closed, c100405).passes, "the 100405 contract passes once the enforcement issue is closed (key present)", run(closed, c100405));
+  closed.prepare("DELETE FROM ops_config WHERE key = ?").run(OPS_KEY);
+  ok(!run(closed, c100405).passes, "and not when the key is missing, whatever the issue status", run(closed, c100405));
 });
 
 // ------------------------------------------------------------------ 7. 1000100 / the decision row
@@ -260,6 +341,12 @@ await section("7 1000100 / the decision row", async () => {
   for (const c of ["actor", "assumption", "action", "evidence", "outcome", "blast_radius", "rollback_path", "capability_gain", "predicted_outcome", "reach_gain", "surfaces_tested"]) ok(typeof r[c] === "string" && r[c].length > 0, `decision_log.${c} is filled`);
   ok(/op-mvn8obo496f4/.test(r.evidence) && /no write or dispatch tool/.test(r.assumption) && /server-side action carriers/.test(r.assumption), "the 1000100 record names the prompt, the missing tool and the carriers");
   for (const i of ["99916", "100388", "100405", "1000100", "1000102", "1000186"]) ok(r.action.includes(i), `the action names issue ${i}`);
+  ok(!/@/.test([r.actor, r.assumption, r.action, r.evidence, r.outcome, r.blast_radius, r.rollback_path, r.capability_gain, r.predicted_outcome, r.reach_gain, r.surfaces_tested].join("\n")), "no e-mail address anywhere in the decision row");
+  ok(/senders of emails 1077 and 1104/.test(r.action), "the row names the senders by email id");
+  // the wording says what is true: enforced where, not enforced where
+  ok(/skipped while an ai_spend cap is breached/.test(r.assumption) && /management-personas workflow prompt that runs/.test(r.assumption), "the assumption says the dashboard narrative is skipped at a breached cap and the workflow prompt is what runs");
+  ok(/PSR-NARRATIVE-CAP-SOFT-1/.test(r.capability_gain) && /nothing enforces yet/.test(r.capability_gain) && /COST-QUALITY-FLOOR-ENFORCE-1/.test(r.capability_gain), "capability_gain names the unenforced directive and the narrative gap, and claims no more");
+  ok(!/loops? (honor|read)s? (it|the key)/i.test(r.capability_gain), "capability_gain does not claim a loop honors the directive");
   ok(/^[a-z0-9_]+ (<=|<|>=|>|=) [0-9.]+ within [0-9]+ hours$/.test(r.predicted_outcome), "predicted_outcome has the form the decision_predictions_parse trigger reads", r.predicted_outcome);
   const p = all(post, "SELECT * FROM decision_predictions");
   ok(p.length === 1 && p[0].subject === "cf_changelog_open_proposals_14d" && p[0].op === "<=" && p[0].value === 0 && p[0].decision_id === r.id, "the live parse trigger turns it into one metric prediction", p);
@@ -270,12 +357,16 @@ await section("7 1000100 / the decision row", async () => {
 await section("8 1000102: the two senders are blocked at ingest; no other email row moves", async () => {
   const f = all(post, "SELECT rule_type, field, pattern, action, priority, enabled FROM email_filters WHERE id > 38 ORDER BY pattern");
   ok(JSON.stringify(f) === JSON.stringify([
-    { rule_type: "filter", field: "sender", pattern: "jornalpublication10@gmail.com", action: "spam", priority: 50, enabled: 1 },
-    { rule_type: "filter", field: "sender", pattern: "ravi.kumar.13p01@gmail.com", action: "spam", priority: 50, enabled: 1 }]), "two enabled sender filters, spam, priority 50 (the row qnfo-email's own block path writes)", f);
+    { rule_type: "filter", field: "sender", pattern: SENDER_1077, action: "spam", priority: 50, enabled: 1 },
+    { rule_type: "filter", field: "sender", pattern: SENDER_1104, action: "spam", priority: 50, enabled: 1 }].sort((x, y) => (x.pattern < y.pattern ? -1 : 1))), "two enabled sender filters, spam, priority 50 (the row qnfo-email's own block path writes)", f.map((x) => x.field + "/" + x.priority));
   ok(one(post, "SELECT status FROM emails WHERE id = 1104").status === "spam", "email 1104 is spam");
-  for (const id of [966, 1077, 1105, 1150, 1200]) ok(JSON.stringify(one(pre, "SELECT * FROM emails WHERE id = ?", id)) === JSON.stringify(one(post, "SELECT * FROM emails WHERE id = ?", id)), `email ${id} is not touched`);
-  const c = one(post, "SELECT kind, disposition, disposition_state, issue_id, critical_path FROM control_registry WHERE control = 'email-filter-journal-pitch-senders'");
+  for (const id of [966, 1077, 1105, 1150, 1200]) ok(JSON.stringify(one(pre, "SELECT * FROM emails WHERE id = ?", id)) === JSON.stringify(one(post, "SELECT * FROM emails WHERE id = ?", id)), `email ${id} is not touched (1150 and 1200 come from the same sender)`);
+  const c = one(post, "SELECT kind, disposition, disposition_state, issue_id, critical_path, location, guards_against, alternate_path, evidence FROM control_registry WHERE control = 'email-filter-journal-pitch-senders'");
   ok(c && c.kind === "filter" && c.disposition === "keep" && c.disposition_state === "applied" && c.issue_id === 1000102, "control_registry records the filter (DOCTRINE-1)", c);
+  ok(c && !/@/.test(Object.values(c).join(" ")), "the control_registry row carries no e-mail address");
+  // a guard on the email: the same id with another subject is not moved
+  const other = fresh(); other.prepare("UPDATE emails SET subject = 'something else' WHERE id = 1104").run(); apply(other);
+  ok(one(other, "SELECT status FROM emails WHERE id = 1104").status === "processed", "email 1104 is moved only while it is the processed mail with the expected subject");
   // behaviour: qnfo-email's own applyFilters (extracted from the worker source) reads the new rows
   const worker = readFileSync(new URL("../qnfo-email/worker.js", import.meta.url), "utf8");
   const line = worker.split("\n").find((l) => l.startsWith("async function applyFilters("));
@@ -283,10 +374,10 @@ await section("8 1000102: the two senders are blocked at ingest; no other email 
   if (line) {
     const applyFilters = new Function(line + "\nreturn applyFilters;")();
     const ad = (db) => ({ prepare: (sql) => ({ all: async () => ({ results: db.prepare(sql).all() }) }) });
-    const run = async (db, from) => (await applyFilters(ad(db), from, "rowan.quni@qnfo.org", "Details for research authors", "hello")).action;
-    ok((await run(pre, "Ravi Kumar <ravi.kumar.13p01@gmail.com>")) === "process" && (await run(pre, "jornalpublication10@gmail.com")) === "process", "before: mail from the two senders is processed, not filed as spam");
-    ok((await run(post, "Ravi Kumar <ravi.kumar.13p01@gmail.com>")) === "spam" && (await run(post, "jornalpublication10@gmail.com")) === "spam", "after: qnfo-email applyFilters files both senders as spam");
-    ok((await run(post, "someone.else@example.org")) === "process" && (await run(post, "rowan.quni@qnfo.org")) === "accept", "after: another sender is still processed and the owner is still accepted");
+    const runF = async (db, from) => (await applyFilters(ad(db), from, "rowan.quni@qnfo.org", "Details for research authors", "hello")).action;
+    ok((await runF(pre, "Sender <" + SENDER_1104 + ">")) === "process" && (await runF(pre, SENDER_1077)) === "process", "before: mail from the two senders is processed, not filed as spam");
+    ok((await runF(post, "Sender <" + SENDER_1104 + ">")) === "spam" && (await runF(post, SENDER_1077)) === "spam", "after: qnfo-email applyFilters files both senders as spam");
+    ok((await runF(post, "someone.else@example.org")) === "process" && (await runF(post, "rowan.quni@qnfo.org")) === "accept", "after: another sender is still processed and the owner is still accepted");
   }
 });
 
@@ -309,7 +400,7 @@ await section("9 1000186: each rule once, only where absent; cadence text matche
     const was = lvl === "portfolio" ? AUTH_PORTFOLIO : AUTH_PROGRAM;
     ok(da[k].startsWith(was) && count(da[k], "NO-JOURNALS-1") === 1 && count(da[k], "PERSONAL-QNFO-SEPARATION-1") === 1, `${k}: decision_authority keeps its text and gains each rule once`);
   }
-  ok(all(post, "SELECT sla_min, path_a, path_b, charter FROM management_personas").every((r, i) => JSON.stringify(r) === JSON.stringify(all(pre, "SELECT sla_min, path_a, path_b, charter FROM management_personas")[i])), "management_personas columns other than decision_authority are untouched");
+  ok(all(post, "SELECT sla_min, path_a, path_b, charter FROM management_personas").every((r, i) => JSON.stringify(r) === JSON.stringify(all(pre, "SELECT sla_min, path_a, path_b, charter FROM management_personas")[i])), "management_personas columns other than decision_authority (sla_min and path_b among them) are untouched: they are filed, not fixed");
   // a prompt that already carries one rule gets the other only
   const part = fresh();
   part.prepare("UPDATE fleet_agents SET system_prompt = system_prompt || ' Earlier edit: journals go nowhere (NO-JOURNALS-1).' WHERE id = 'portfolio-manager'").run();
@@ -321,30 +412,157 @@ await section("9 1000186: each rule once, only where absent; cadence text matche
   ok(count(pf, "NO-JOURNALS-1") === 1 && count(pf, "PERSONAL-QNFO-SEPARATION-1") === 1, "the same holds for decision_authority");
 });
 
+// ------------------------------------------------------------------ 13. 1000186: the prompt that runs (fleet_tasks management-personas) carries the two hard limits
+await section("13 the management-personas workflow prompt carries the hard limits", async () => {
+  const w = (db, id = "management-personas") => one(db, "SELECT definition, version, updated_at FROM fleet_tasks WHERE id = ?", id);
+  const b = w(pre), a = w(post);
+  ok(count(b.definition, ANCHOR) === 1 && !b.definition.includes("NO-JOURNALS-1"), "fixture: the anchor occurs once and the limits are absent before");
+  let doc = null; try { doc = JSON.parse(a.definition); } catch (e) { /* asserted */ }
+  ok(!!doc && Array.isArray(doc.steps) && doc.steps.length === 3, "the definition is still valid JSON with its three steps");
+  const i = a.definition.indexOf("Hard limits: never propose"), j = a.definition.indexOf(ANCHOR);
+  ok(i > 0 && j > i && count(a.definition, ANCHOR) === 1, "the sentence sits before the anchor, which still occurs once");
+  const sentence = a.definition.slice(i, j);
+  ok(sentence.endsWith(". ") && !/['"\\;]/.test(sentence), "the inserted text has no apostrophe, double quote, backslash or semicolon (it sits inside a JSON string and a SQL literal)", sentence);
+  ok(a.definition.replace(sentence, "") === b.definition, "removing exactly that sentence gives the old definition back (nothing else changed)");
+  ok(count(sentence, "NO-JOURNALS-1") === 1 && count(sentence, "PERSONAL-QNFO-SEPARATION-1") === 1 && /papers\.qnfo\.org/.test(sentence) && /journal submission/.test(sentence) && /personal-api/.test(sentence), "the sentence states both rules once");
+  const step = doc && doc.steps.find((s) => s.name === "rm-research");
+  ok(step && step.sql.includes(sentence + ANCHOR) && doc.steps.find((s) => s.name === "lever-request").sql === JSON.parse(b.definition).steps[2].sql, "the limits are in the rm-research prompt and the other steps are unchanged");
+  ok(a.version === b.version + 1 && a.updated_at !== b.updated_at, "version is raised by one", [b.version, a.version]);
+  ok(JSON.stringify(w(pre, "other-workflow")) === JSON.stringify(w(post, "other-workflow")), "another workflow that happens to hold the anchor is not touched");
+  // guards: already named, anchor twice, anchor absent
+  const named = fresh(); named.prepare("UPDATE fleet_tasks SET definition = replace(definition, 'ONE new feature', 'ONE new feature (NO-JOURNALS-1 already stated)') WHERE id = 'management-personas'").run();
+  const twice = fresh(); twice.prepare("UPDATE fleet_tasks SET definition = definition || ?  WHERE id = 'management-personas'").run(JSON.stringify({ more: ANCHOR }));
+  const none = fresh(); none.prepare("UPDATE fleet_tasks SET definition = replace(definition, ?, 'Reply in the following form:') WHERE id = 'management-personas'").run(ANCHOR);
+  for (const [name, db] of [["already names NO-JOURNALS-1", named], ["holds the anchor twice", twice], ["holds no anchor", none]]) {
+    const before = w(db); apply(db);
+    ok(JSON.stringify(before) === JSON.stringify(w(db)), `a definition that ${name} is left alone`);
+  }
+});
+
+// ------------------------------------------------------------------ 14. the issue contracts measure their condition
+await section("14 the issue contracts of 100405, 1000100, 1000102 and 1000186 measure their condition", async () => {
+  for (const cls of ["issue-100405", "issue-1000100", "issue-1000102", "issue-1000186"]) {
+    const b = contract(pre, cls), a = contract(post, cls);
+    ok(a.status === "active" && a.verify_transport === "d1-query" && a.last_verdict === null && a.attempts === 0 && a.deferred_since === null && a.next_due_at !== null, `${cls}: active, d1-query, cleared verdict, due now`, [a.status, a.last_verdict, a.next_due_at]);
+    ok(!a.action.startsWith("VACUOUS-PROBE-V3-1") && /MEASURES/.test(a.action) && a.verify_probe !== b.verify_probe, `${cls}: the vacuous probe and its action text are replaced`);
+    ok(!/;/.test(a.verify_probe) && !/@/.test(a.verify_probe + a.action) && !/FROM agent_issues WHERE id = (100405|1000100|1000102|1000186)\b/.test(a.verify_probe), `${cls}: no semicolon (the live trigger would rewrite it), no address, and it does not read its own issue's status`, a.verify_probe.slice(0, 120));
+    ok(a.module === b.module && a.max_attempts === b.max_attempts && a.escalate_to === b.escalate_to && a.class === b.class, `${cls}: module, max_attempts and escalation are not touched`);
+  }
+  ok(/found_action/.test(contract(pre, "issue-100405").verify_probe) && /code_tasks/.test(contract(pre, "issue-100405").verify_probe) && /enforced/.test(stored("issue-100405")) && /COST-QUALITY-FLOOR-ENFORCE-1/.test(stored("issue-100405")), "100405: the any-code-task probe is replaced by the enforcement probe");
+  ok(/fleet_tasks/.test(stored("issue-1000186")) && /NO-JOURNALS-1/.test(stored("issue-1000186")), "1000186: the probe reads the workflow definition as well as the persona rows");
+  // 1000186 enforcement: removing the sentence from the workflow makes the probe fail again
+  const lost = fresh(); apply(lost);
+  ok(run(lost, stored("issue-1000186")).passes, "1000186: passes with the sentence in place");
+  lost.prepare("UPDATE fleet_tasks SET definition = replace(definition, 'Hard limits: never propose', 'Soft limits: never propose'), version = version + 1 WHERE id = 'management-personas'").run();
+  lost.prepare("UPDATE fleet_tasks SET definition = replace(definition, '(NO-JOURNALS-1)', '(n)') WHERE id = 'management-personas'").run();
+  ok(!run(lost, stored("issue-1000186")).passes, "1000186: fails again when a later rewrite of the workflow loses the limit");
+  // a probe a doer wrote by hand is left alone
+  const hand = fresh();
+  hand.prepare("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed', action = 'a doer wrote this by hand' WHERE class = 'issue-1000100'").run(); // still superseded: only the vacuous marker protects it
+  const bh = contract(hand, "issue-1000100"); apply(hand);
+  ok(JSON.stringify(bh) === JSON.stringify(contract(hand, "issue-1000100")), "a contract whose vacuous marker is gone (a hand-written probe) is left alone");
+});
+
+// ------------------------------------------------------------------ 15. the follow-ups promised in prose are filed, each with a doer and a probe
+await section("15 follow-up issues with a doer and a probe", async () => {
+  const marker = /session-task:/;
+  for (const [k, t] of Object.entries(TITLES)) {
+    const rows = all(post, "SELECT * FROM agent_issues WHERE title = ?", t);
+    ok(rows.length === 1 && rows[0].status === "open", `${k}: filed once and open`, rows.length);
+    const d = rows[0] ? rows[0].description : "";
+    ok(/\nDoer: /.test(d) && /Definition of done: /.test(d), `${k}: names its doer and its definition of done`);
+    ok(!marker.test(d), `${k}: the text does not contain the marker the session-dependent metric counts`);
+    ok(!/@/.test(d), `${k}: no e-mail address in the text`);
+    const lines = d.split("\n");
+    const task = lines.find((l) => l.startsWith("code-task: ")), anchor = lines.find((l) => l.startsWith("code-anchor: ")), cp = lines.find((l) => l.startsWith("code-probe: {"));
+    if (task) ok(/^code-task: repo=qnfo-workers path=[A-Za-z0-9._\/-]+$/.test(task), `${k}: a well-formed code-task line`, task);
+    if (k === "claude") ok(!task, "the CLAUDE.md issue carries no code-task line: CLAUDE.md is outside the code loop's merge scope, so such a line could only be refused");
+    if (["enforce", "narrative", "doc"].includes(k)) ok(!!anchor && anchor.length > "code-anchor: ".length + 20, `${k}: a code-anchor line follows the code-task line`);
+    if (cp) { let j = null; try { j = JSON.parse(cp.slice("code-probe: ".length)); } catch (e) { /* asserted */ } ok(j && Array.isArray(j.paths) && j.paths.length === 1 && (typeof j.contains === "string") !== (typeof j.absent === "string"), `${k}: the code-probe line is JSON with one path and exactly one of contains or absent`, cp); }
+    ok(!!cp || k === "sla" || k === "pathb", `${k}: it carries a code-probe line, or (for the two data issues) a d1-query contract`);
+  }
+  ok(/ops_config|OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1/.test(issueByTitle(post, TITLES.enforce).description) && issueByTitle(post, TITLES.enforce).priority === "high", "the enforcement issue ties itself to the directive record and is high priority");
+  ok(/spendGovern/.test(issueByTitle(post, TITLES.enforce).description) && /path=qnfo-ai\/worker\.js/.test(issueByTitle(post, TITLES.enforce).description), "the enforcement issue names qnfo-ai spendGovern");
+  ok(/psrNarrativeAllowed/.test(issueByTitle(post, TITLES.narrative).description) && /BUDGET-SOFT-ROUTE-1/.test(issueByTitle(post, TITLES.narrative).description) && /660\.09/.test(issueByTitle(post, TITLES.narrative).description), "the narrative issue names psrNarrativeAllowed, the rule it contradicts and the measured cap breach");
+  ok(/stale-PR lane/.test(issueByTitle(post, TITLES.claude).description) && /outside the code loop/.test(issueByTitle(post, TITLES.claude).description), "the CLAUDE.md issue names its real doer: the code loop cannot ship that file");
+  // the data issues: a d1-query contract, active and due now, whether the birth contract exists (live) or not (fallback INSERT)
+  const noBirth = fresh(); noBirth.exec("DROP TRIGGER birth_contract"); apply(noBirth);
+  for (const [name, db] of [["with the birth contract", post], ["without it", noBirth]]) {
+    for (const k of ["sla", "pathb"]) {
+      const iid = issueByTitle(db, TITLES[k]).id, c = contract(db, "issue-" + iid);
+      ok(c && c.status === "active" && c.verify_transport === "d1-query" && c.issue_id === iid && !c.action.startsWith("VACUOUS") && c.next_due_at !== null, `${k} ${name}: an active d1-query contract that measures the defect`, c && [c.status, c.action.slice(0, 40)]);
+    }
+  }
+  const sla = stored("issue-" + issueByTitle(post, TITLES.sla).id), pb = stored("issue-" + issueByTitle(post, TITLES.pathb).id);
+  ok(!run(post, sla).passes && !run(post, pb).passes && !run(pre, sla).passes, "the two data probes read the defects (they fail today)", [run(post, sla), run(post, pb)]);
+  const fixedDb = fresh(); apply(fixedDb);
+  fixedDb.exec("UPDATE management_personas SET sla_min = 120, path_b = 'qnfo-fleet-dashboard daily rollup writes program_scorecards and the Monday review writes program_review_notes'");
+  ok(run(fixedDb, sla).passes && run(fixedDb, pb).passes, "and pass once the rows are fixed");
+  // the six new issues add nothing to the metric that counts the marker
+  ok(one(post, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open' AND instr(description, 'session-task:') > 0").n === 2, "the open issues containing the marker are the two real ones of the fixture, no new issue adds one");
+});
+
+// ------------------------------------------------------------------ 16. the failure mode and its detector
+await section("16 failure mode: a ticket quotes the marker its own metric counts", async () => {
+  const fm = one(post, "SELECT * FROM failure_modes WHERE fm_key = 'ticket-quotes-its-own-counted-marker'");
+  ok(fm && fm.issue_id === 99916 && fm.probe_class === FM_CLASS && fm.first_seen === "2026-10-26" && ["failure_mode", "root_cause", "remediation", "detector", "trigger_condition", "symptom", "blast_radius"].every((c) => fm[c] && fm[c].length > 20), "the failure mode is recorded with root cause, remediation, detector, trigger, symptom and blast radius", fm && fm.fm_key);
+  const c = contract(post, FM_CLASS);
+  ok(c && c.status === "active" && c.verify_transport === "d1-query" && c.issue_id === null && c.action === "failure-mode detector" && c.module === "failure-mode" && !/;/.test(c.verify_probe), "the detector contract is an active d1-query failure-mode contract without a semicolon", c && [c.status, c.verify_transport]);
+  // the detector fires on a recurrence in either place
+  const again = fresh(); apply(again);
+  again.prepare("UPDATE agent_issues SET description = description || ? WHERE id = 5000").run(" and the query uses LIKE '%session-task:%'");
+  ok(run(again, c.verify_probe).observed === "1", "an open issue that quotes the LIKE pattern is counted", run(again, c.verify_probe));
+  again.prepare("UPDATE analytics_metric_triggers SET action = action || ? WHERE id = 1204").run(" (see LIKE '%session-task:%')");
+  ok(run(again, c.verify_probe).observed === "2", "a trigger action that quotes it is counted too", run(again, c.verify_probe));
+  again.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = 5000").run();
+  ok(run(again, c.verify_probe).observed === "1", "a closed issue is not counted", run(again, c.verify_probe));
+});
+
 // ------------------------------------------------------------------ 10. idempotence: a second apply changes nothing
 await section("10 idempotence: a second apply changes nothing", async () => {
   const twice = fresh();
   apply(twice); const s1 = snap(twice);
   const bakBefore = JSON.stringify(all(twice, "SELECT name FROM sqlite_master WHERE name LIKE 'bak_20261026_sweep_a_%' ORDER BY name"));
+  const createdBefore = JSON.stringify(all(twice, "SELECT tbl, pk FROM bak_20261026_sweep_a_created ORDER BY tbl, pk"));
   apply(twice); const s2 = snap(twice);
   ok(same(s1, s2), "second apply changes no row in any table", Object.keys(PK).filter((t) => changed(s1, s2, t).length));
   ok(JSON.stringify(s1) === JSON.stringify(s2), "the full snapshot is identical after the second apply");
   ok(one(twice, "SELECT COUNT(*) n FROM decision_log WHERE instr(action, 'SWEEP-DATA-FIXES-A-1:') = 1").n === 1 && one(twice, "SELECT COUNT(*) n FROM decision_predictions").n === 1, "one decision row and one prediction after two applies");
-  ok(bakBefore === JSON.stringify(all(twice, "SELECT name FROM sqlite_master WHERE name LIKE 'bak_20261026_sweep_a_%' ORDER BY name")) && JSON.parse(bakBefore).length === 6, "six backup tables, unchanged by the second apply");
-  ok(one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_fleet_agents").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_cf_catalog").n === 7 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_emails").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_personas").n === 6, "the backups hold the pre-state rows (and keep them after a second apply)");
+  ok(bakBefore === JSON.stringify(all(twice, "SELECT name FROM sqlite_master WHERE name LIKE 'bak_20261026_sweep_a_%' ORDER BY name")) && JSON.parse(bakBefore).length === 9, "nine backup tables, unchanged by the second apply");
+  ok(createdBefore === JSON.stringify(all(twice, "SELECT tbl, pk FROM bak_20261026_sweep_a_created ORDER BY tbl, pk")), "the created-rows registry is unchanged by the second apply");
+  ok(one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_fleet_agents").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_cf_catalog").n === 7 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_emails").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_personas").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_workflow").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_contracts").n === 4, "the backups hold the pre-state rows (and keep them after a second apply)");
   ok(one(twice, "SELECT description FROM bak_20261026_sweep_a_issue_99916").description === DESC_99916 && one(twice, "SELECT action FROM bak_20261026_sweep_a_trigger_2934").action === ACTION_2934, "the 99916 and 2934 backups hold the original text");
+  ok(one(twice, "SELECT definition FROM bak_20261026_sweep_a_workflow").definition === wfDefinition(), "the workflow backup holds the original definition");
+  ok(JSON.stringify(all(twice, "SELECT tbl, pk FROM bak_20261026_sweep_a_created ORDER BY tbl, pk")) === JSON.stringify([
+    { tbl: "email_filters:sender_of_email", pk: "1077" }, { tbl: "email_filters:sender_of_email", pk: "1104" }, { tbl: "failure_modes", pk: "ticket-quotes-its-own-counted-marker" },
+    { tbl: "control_registry", pk: "email-filter-journal-pitch-senders" }, { tbl: "ops_config", pk: OPS_KEY }, { tbl: "remediation_contracts", pk: FM_CLASS }].sort((x, y) => (x.tbl + x.pk < y.tbl + y.pk ? -1 : 1))), "the registry holds exactly the rows this file created", all(twice, "SELECT tbl, pk FROM bak_20261026_sweep_a_created ORDER BY tbl, pk"));
 });
 
-// ------------------------------------------------------------------ 11. rollback: the header line restores the pre-state from the backup tables
-await section("11 rollback: the header line restores the pre-state from the backup tables", async () => {
+// ------------------------------------------------------------------ 11. rollback: the header line restores the pre-state and deletes only the rows this file created
+await section("11 rollback: the header line restores the pre-state and deletes only what this file created", async () => {
   const rb = /^-- Rollback: (.*)$/m.exec(SQL);
+  ok(!!rb && !/@/.test(rb[1]), "the Rollback line exists and holds no e-mail address");
   const rolled = fresh();
   apply(rolled);
   rolled.exec(rb[1]);
   const s = snap(rolled);
-  const diff = Object.keys(PK).filter((t) => t !== "decision_log" && changed(preSnap, s, t).length);
-  ok(diff.length === 0, "after the Rollback line every touched table equals its pre-state (decision_log keeps its append-only row)", diff.map((t) => [t, changed(preSnap, s, t)]));
-  ok(probe(rolled, "1000186").passes === false && probe(rolled, "99916").passes === false && probe(rolled, "100388").passes === false, "the probes fail again after the rollback");
+  const skip = ["decision_log", "agent_issues", "remediation_contracts", "fleet_tasks"];
+  const diff = Object.keys(PK).filter((t) => !skip.includes(t) && changed(preSnap, s, t).length);
+  ok(diff.length === 0, "after the Rollback line every touched table equals its pre-state", diff.map((t) => [t, changed(preSnap, s, t)]));
+  ok(JSON.parse(s.fleet_tasks["management-personas"]).definition === JSON.parse(preSnap.fleet_tasks["management-personas"]).definition && JSON.parse(s.fleet_tasks["other-workflow"]).definition === JSON.parse(preSnap.fleet_tasks["other-workflow"]).definition, "the workflow definition is restored (the version only moves forward)");
+  ok(one(rolled, "SELECT description FROM agent_issues WHERE id = 99916").description === DESC_99916 && changed(preSnap, s, "agent_issues").length === 6, "99916 is restored and the six follow-up issues stay (an issue is never silently dropped)", changed(preSnap, s, "agent_issues"));
+  const strip = (row) => { const r = JSON.parse(row); delete r.next_due_at; return JSON.stringify(r); };
+  const cdiff = ["issue-100405", "issue-1000100", "issue-1000102", "issue-1000186"].filter((c) => strip(preSnap.remediation_contracts[c]) !== strip(s.remediation_contracts[c]));
+  ok(cdiff.length === 0, "the four contracts are restored (but for the due time, which the live edit-rerun trigger moves)", cdiff);
+  ok(!(FM_CLASS in s.remediation_contracts) && Object.keys(s.remediation_contracts).length === Object.keys(preSnap.remediation_contracts).length + 6, "the detector contract is removed and the six new issue contracts stay");
+  ok(!run(rolled, P["99916"]).passes && !run(rolled, P["100388"]).passes && !run(rolled, stored("issue-1000186")).passes, "the probes fail again after the rollback");
+  // bounded: a same-shape filter that someone else wrote first is not deleted by the Rollback, the one this file created is
+  const other = fresh();
+  other.prepare("INSERT INTO email_filters (rule_type, field, pattern, action, priority, enabled) VALUES ('filter', 'sender', ?, 'spam', 50, 1)").run(SENDER_1077.toUpperCase());
+  other.prepare("INSERT INTO ops_config (key, value, note) VALUES (?, '{\"kept\":true}', 'written first by someone else')").run(OPS_KEY);
+  apply(other); other.exec(rb[1]);
+  ok(all(other, "SELECT pattern FROM email_filters WHERE id > 38").length === 1 && one(other, "SELECT pattern FROM email_filters WHERE id > 38").pattern === SENDER_1077.toUpperCase(), "the Rollback keeps a same-shape filter written before this file and deletes the one it created");
+  ok(one(other, `SELECT value FROM ops_config WHERE key = '${OPS_KEY}'`).value === '{"kept":true}', "the Rollback keeps an ops_config row written before this file");
 });
 
 // ------------------------------------------------------------------ 12. an already-fixed database: nothing but the decision row is written
@@ -354,19 +572,26 @@ await section("12 an already-fixed database: nothing but the decision row is wri
   done.prepare("UPDATE analytics_metric_triggers SET action = replace(action, '''%session-task:%''', '''%session-task'' || '':%''') WHERE id = 2934").run();
   done.exec("UPDATE cloudflare_capability_catalog SET status = 'approved', metric_ref = 'x', linked_issue = 1 WHERE slug = 'cfc-artifacts'");
   done.exec("UPDATE cloudflare_capability_catalog SET status = 'rejected', when_to_choose = 'Rejected earlier.' WHERE slug IN ('cfc-logpush', 'cfc-monetization-gateway', 'cfc-cloudflare-wan', 'cfc-cloudflare-fundamentals', 'data-pipelines', 'sandbox')");
-  done.exec("INSERT INTO ops_config (key, value, note) VALUES ('OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1', '{\"kept\":true}', 'written first by someone else')");
-  done.exec("INSERT INTO email_filters (rule_type, field, pattern, action, priority, enabled) VALUES ('filter', 'from', 'ravi.kumar.13p01@gmail.com', 'spam', 100, 1), ('filter', 'sender', 'JornalPublication10@gmail.com', 'spam', 50, 1)");
+  done.exec("INSERT INTO ops_config (key, value, note) VALUES ('" + OPS_KEY + "', '{\"kept\":true}', 'written first by someone else')");
+  done.prepare("INSERT INTO email_filters (rule_type, field, pattern, action, priority, enabled) VALUES ('filter', 'from', ?, 'spam', 100, 1), ('filter', 'sender', ?, 'spam', 50, 1)").run(SENDER_1104, SENDER_1077.toUpperCase());
   done.exec("UPDATE emails SET status = 'archived' WHERE id = 1104");
   done.exec("INSERT INTO control_registry (control, location, kind, evidence, disposition) VALUES ('email-filter-journal-pitch-senders', 'x', 'filter', 'earlier', 'keep')");
   for (const id of Object.keys(PROMPTS)) done.prepare("UPDATE fleet_agents SET system_prompt = ? WHERE id = ?").run("Fixed. PERSONAL-QNFO-SEPARATION-1. NO-JOURNALS-1. Cadence: hourly.", id);
   done.exec("UPDATE management_personas SET decision_authority = 'fixed; PERSONAL-QNFO-SEPARATION-1; NO-JOURNALS-1'");
+  done.prepare("UPDATE fleet_tasks SET definition = replace(definition, 'ONE new feature', 'ONE new feature (NO-JOURNALS-1 and PERSONAL-QNFO-SEPARATION-1 stated)') WHERE id = 'management-personas'").run();
+  for (const id of [100405, 1000100, 1000102, 1000186]) done.prepare("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed', action = 'MEASURES it, written by a doer', status = 'active' WHERE class = ?").run("issue-" + id);
+  for (const t of Object.values(TITLES)) done.prepare("INSERT INTO agent_issues (title, description, status) VALUES (?, 'filed earlier', 'open')").run(t);
+  done.exec("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed', action = 'MEASURES it, written by a doer', status = 'active' WHERE class IN (SELECT 'issue-' || id FROM agent_issues WHERE title LIKE 'MANAGEMENT-PERSONAS-%')");
+  done.exec("INSERT INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, first_seen) VALUES ('ticket-quotes-its-own-counted-marker', 'f', 'r', 'm', 'd', '2026-10-26')");
+  done.exec("INSERT INTO remediation_contracts (class, precondition, action, verify_probe, verify_transport, escalate_to) VALUES ('" + FM_CLASS + "', 'p', 'failure-mode detector', 'SELECT ''0'' AS expected, ''0'' AS observed', 'd1-query', 'qnfo-fleet-control')");
   const before = snap(done);
   apply(done);
   const after = snap(done);
   ok(same(before, after, ["decision_log"]), "an already-fixed database: no row in any table changes", Object.keys(PK).filter((t) => t !== "decision_log" && changed(before, after, t).length).map((t) => [t, changed(before, after, t)]));
   ok(changed(before, after, "decision_log").length === 1, "only the decision_log row is added");
-  ok(["issue_99916", "trigger_2934", "cf_catalog", "emails", "fleet_agents", "personas"].every((n) => one(done, `SELECT COUNT(*) n FROM bak_20261026_sweep_a_${n}`).n === 0), "the backups of an already-fixed database are empty (nothing to restore)");
-  ok(one(done, "SELECT COUNT(*) n FROM email_filters WHERE lower(pattern) IN ('ravi.kumar.13p01@gmail.com', 'jornalpublication10@gmail.com')").n === 2, "an existing filter for either address (any field spelling or case) is not duplicated");
+  ok(["issue_99916", "trigger_2934", "cf_catalog", "emails", "fleet_agents", "personas", "workflow", "contracts", "created"].every((n) => one(done, `SELECT COUNT(*) n FROM bak_20261026_sweep_a_${n}`).n === 0), "the backups and the created-rows registry of an already-fixed database are empty (nothing to restore, nothing to delete)");
+  ok(one(done, "SELECT COUNT(*) n FROM email_filters WHERE lower(pattern) = lower(?) OR lower(pattern) = lower(?)", SENDER_1104, SENDER_1077).n === 2, "an existing filter for either sender (any field spelling or case) is not duplicated");
+  for (const t of Object.values(TITLES)) ok(one(done, "SELECT COUNT(*) n FROM agent_issues WHERE title = ?", t).n === 1, "a follow-up that is already open is not filed twice");
 });
 
 console.log(`sweep-data-fixes-a: ${pass} passed, ${fail} failed`);
