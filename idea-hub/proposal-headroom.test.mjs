@@ -126,7 +126,7 @@ CREATE TABLE signal_worker_boundary (worker TEXT NOT NULL, source TEXT NOT NULL,
   // all five counts go through the one clause: no count of idea_proposals by status is left in the worker
   ok((raw.match(/FROM idea_proposals WHERE " \+ PROPOSAL_PENDING_WHERE/g) || []).length === 5, "five counts use PROPOSAL_PENDING_WHERE (proposalRoom, runConsume, runOwnerCorpus, thinkLoop, runAskGap)", (raw.match(/FROM idea_proposals WHERE " \+ PROPOSAL_PENDING_WHERE/g) || []).length);
   ok(!/COUNT\(\*\)[^"]*FROM idea_proposals WHERE status IN \('new'/.test(raw), "no count of the pending proposals bypasses the clause");
-  ok(/WHERE status='new' ORDER BY \(CASE WHEN rationale LIKE '\[scoring-error %' THEN 1 ELSE 0 END\) ASC/.test(raw), "triage's own selection of the marked rows is unchanged (they are still scored on their schedule)");
+  ok(/WHERE status='new' AND NOT \(" \+ COOLING_SQL \+ "\) ORDER BY \(CASE WHEN " \+ MARKED_SQL \+ " THEN 1 ELSE 0 END\) ASC/.test(raw), "triage's own selection still takes unmarked rows first, scores marked rows on their schedule and (1.14.4, IDEA-TRIAGE-COOLING-STARVE-1) leaves the rows still cooling out of the batch");
 }
 const vm2 = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(raw);
 ok(vm2 && (+vm2[1] > 1 || (+vm2[1] === 1 && (+vm2[2] > 8 || (+vm2[2] === 8 && +vm2[3] >= 6)))), "VERSION is at least 1.8.6", vm2 && vm2[0]);

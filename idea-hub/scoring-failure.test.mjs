@@ -93,6 +93,34 @@ const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString();
   ok(out.errors === 0 && out.scoring_failed === n - 1, "the rest of the batch is the marked rows, each counted as scoring_failed", out);
 }
 
+// 8. IDEA-TRIAGE-COOLING-STARVE-1 (1.14.4): rows still cooling do not take batch slots, and marked rows go oldest last failure first
+{
+  const db = fresh(), env = mk(db);
+  const n = api.TRIAGE_BATCH;
+  // n rows past their third failure (one try a day), created long before everything else, failed 2 h ago: they fill the whole batch under the old selection
+  const cool = [];
+  for (let i = 0; i < n; i++) cool.push(add(db, "owner-corpus", "POISON cooling " + i + LONG, "2026-10-1" + (i % 10) + "T00:00:00Z", "[scoring-error 3 " + iso(2 * 3600e3) + "] earlier"));
+  // rows that failed once, created later: they must be retried this run
+  const once = [];
+  for (let i = 0; i < 3; i++) once.push(add(db, "owner-corpus", "POISON once " + i + LONG, "2026-10-20T0" + i + ":00:00Z", "[scoring-error 1 " + iso((10 - i) * 3600e3) + "] earlier"));
+  aiCalls = 0;
+  const out = await api.triageProposals(env);
+  ok(out.scoring_cooling === n, "the cooling rows are counted (scoring_cooling) without being selected", out);
+  ok(once.every((id) => /^\[scoring-error 2 /.test(row(db, id).rationale)), "the rows that failed once are retried although n older cooling rows exist: they are not starved", once.map((id) => row(db, id).rationale));
+  ok(cool.every((id) => /^\[scoring-error 3 /.test(row(db, id).rationale)), "the cooling rows keep their marker (no model call for them)", cool.map((id) => row(db, id).rationale));
+  ok(out.scoring_failed === 3 && out.errors === 0, "exactly the three untried rows were scored and failed, no error", out);
+}
+{
+  // the batch is the marked rows with the oldest last failure first, not the oldest created
+  const db = fresh(), env = mk(db);
+  const n = api.TRIAGE_BATCH, ids = [];
+  for (let i = 0; i < n + 2; i++) ids.push(add(db, "owner-corpus", "POISON ordered " + i + LONG, "2026-10-19T0" + i + ":00:00Z", "[scoring-error 1 " + iso((i + 1) * 3600e3) + "] earlier"));
+  // ids[0] failed 1 h ago (most recent), ids[n+1] failed n+2 h ago (oldest failure): the last n by failure age are tried, the two most recently failed wait
+  const out = await api.triageProposals(env);
+  const tried = ids.filter((id) => /^\[scoring-error 2 /.test(row(db, id).rationale));
+  ok(tried.length === n && !tried.includes(ids[0]) && !tried.includes(ids[1]), "with more marked rows than the batch holds, those whose last failure is oldest are tried first", { tried, ids, out });
+}
+
 // 6. a thrown error is still a cron fault
 {
   const db = fresh();
