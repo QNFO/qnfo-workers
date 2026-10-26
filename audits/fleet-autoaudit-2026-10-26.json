@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-26 09:47:40",
+  "audited_at": "2026-10-26 10:17:37",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "idea-hub"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -535,7 +542,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.14.1-codeagent",
+        "version": "1.14.3",
         "worker": "idea-hub"
       },
       {
@@ -550,7 +557,7 @@
       },
       {
         "dir": "q08-mind",
-        "version": "2.2.0",
+        "version": "2.2.1",
         "worker": "q08-mind"
       },
       {
@@ -615,7 +622,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.50.0-workflows-merge",
+        "version": "0.51.0-gate-not-required",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -670,7 +677,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.57.3",
+        "version": "2.57.4",
         "worker": "qnfo-ops"
       },
       {
@@ -680,7 +687,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.36.0-cost-first",
+        "version": "0.36.1-source-voice",
         "worker": "qnfo-research-exec"
       },
       {
@@ -820,9 +827,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.14.1-codeagent",
+      "before": "1.14.3",
       "http": 200,
-      "live": "1.14.1-codeagent",
+      "live": "1.14.3",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1001,9 +1008,9 @@
       "worker": "personal-life-search"
     },
     "q08-mind": {
-      "before": "2.2.0",
+      "before": "2.2.1",
       "http": 200,
-      "live": "2.2.0",
+      "live": "2.2.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-mind"
@@ -1348,9 +1355,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.50.0-workflows-merge",
+      "before": "0.51.0-gate-not-required",
       "http": 200,
-      "live": "0.50.0-workflows-merge",
+      "live": "0.51.0-gate-not-required",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1508,9 +1515,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.57.3",
+      "before": "2.57.4",
       "http": 200,
-      "live": "2.57.3",
+      "live": "2.57.4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1596,9 +1603,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.36.0-cost-first",
+      "before": "0.36.1-source-voice",
       "http": 200,
-      "live": "0.36.0-cost-first",
+      "live": "0.36.1-source-voice",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
