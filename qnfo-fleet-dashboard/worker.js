@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.67.2-codeagent"; // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
+var VERSION = "1.67.3-codeagent"; // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
@@ -5922,7 +5922,20 @@ async function askVisitor(request) {
   return (await sha256hex(ip + "|" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "|fleet-ask")).slice(0, 16);
 }
 async function ownerRequestIssue(env, title, body) {
+  // OWNER-PROMPT-TWIN-LINK-1: if an OPEN owner-request ticket already has the same prompt, return it and count the refile.
   const now = Date.now();
+  const colon = title.indexOf(": ");
+  const newPrompt = (colon >= 0 ? title.slice(colon + 2) : title).trim().toLowerCase();
+  try {
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS agent_issue_refiles (issue_id INTEGER PRIMARY KEY, refiles INTEGER NOT NULL DEFAULT 1, last_at INTEGER, last_source TEXT)").run();
+  } catch (e) {
+    console.error(JSON.stringify({ scope: "OWNER-PROMPT-TWIN-LINK-1", step: "agent_issue_refiles-create", error: String(e && e.message || e) }));
+  }
+  const twin = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE status = 'open' AND source = 'qnfo-fleet-dashboard:owner-request' AND lower(trim(substr(title, instr(title, ': ') + 2))) = ?1 ORDER BY id LIMIT 1", [newPrompt]))[0];
+  if (twin) {
+    await env.AUDIT.prepare("INSERT INTO agent_issue_refiles (issue_id, refiles, last_at, last_source) VALUES (?1, 1, ?2, ?3) ON CONFLICT(issue_id) DO UPDATE SET refiles = refiles + 1, last_at = ?2, last_source = ?3").bind(twin.id, now, "qnfo-fleet-dashboard:owner-request").run();
+    return Number(twin.id);
+  }
   await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-dashboard:owner-request', 'owner-request', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1)").bind(title, body, now).run();
   const row = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
   return row ? Number(row.id) : null;
