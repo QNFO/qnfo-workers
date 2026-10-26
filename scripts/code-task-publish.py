@@ -768,12 +768,43 @@ def repropose(store, task, log=print):
     return nid
 
 
+# PUBLISH-LANE-SERIAL-1 (2026-10-26, owner directive "why aren't fleet PRs being merged immediately"): on 2026-10-26 six code tasks queued against
+# the one 1.1 MB qnfo-research-exec/worker.js were published at the same moment. They serialize per worker by design (the merge runner merges one
+# change per worker at a time and every merge bumps the same VERSION line and mirror), so each merge made the others conflict, the tail waited for
+# conflict repair and a gate, aged past the 120-minute close and was re-proposed as -r2 and -r3: 27 of 58 fleet pull requests in 48 hours closed
+# unmerged. A lane is a worker's worker.js (its mirror counts as the same lane) or, for any other file, that file. While a task of the lane has
+# an open branch or pull request, the next one stays ready_to_publish and publishes against the main that already holds its predecessor, so it
+# applies without a conflict. Tasks of different lanes still publish together. A failed in-flight read publishes ungated: the loop never stops
+# on this gate, and a predecessor that is closed (the runner closes a stale one at 120 minutes) frees the lane.
+LANE_INFLIGHT = ("branch_pushed", "published", "pr_open")
+LANE_WORKER_FILE = re.compile(r"^([^/]+)/(?:deployed-current\.)?worker\.js$")
+
+
+def lane_key(path) -> str:
+    m = LANE_WORKER_FILE.match(str(path or ""))
+    return m.group(1) if m else str(path or "")
+
+
+def lanes_in_flight(store, log=print) -> dict:
+    """{lane: id of the oldest task that has an open branch or pull request in it}; {} when D1 cannot be read."""
+    try:
+        rows = store.rows("SELECT id, path FROM code_tasks WHERE status IN ('branch_pushed','published','pr_open') ORDER BY created_at ASC")
+    except Exception as e:  # noqa: BLE001 - fail open: a read error must not stop the code loop
+        log(f"::warning::PUBLISH-LANE-SERIAL-1: the in-flight read failed ({e}); publishing without the lane gate")
+        return {}
+    busy = {}
+    for r in rows:
+        busy.setdefault(lane_key(r.get("path")), r["id"])
+    return busy
+
+
 def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
     ready = list_ready(store)
     if not ready:
         log("no ready_to_publish tasks")
         return {"published": 0, "failed": 0, "skipped": 0}
     out = {"published": 0, "failed": 0, "skipped": 0}
+    busy = lanes_in_flight(store, log)
     for t in ready:
         if t.get("repo") != REPO_NAME and repo_slug(t.get("repo")) == REPO_NAME:
             # REPO-SLUG-PUBLISH-1: repair the row to the bare slug (qnfo-fleet-control's opener and merge runner compare
@@ -788,11 +819,18 @@ def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
             log(f"skip {t['id']}: repo {t.get('repo')} is not {REPO_NAME}")
             out["skipped"] += 1
             continue
+        lane = lane_key(t.get("path"))
+        if busy.get(lane) not in (None, t["id"]):
+            log(f"hold {t['id']}: {lane} already has an open change ({busy[lane]}); it publishes against the main that holds it (PUBLISH-LANE-SERIAL-1)")
+            out["held"] = out.get("held", 0) + 1
+            continue
         if not claim(store, t):
             log(f"skip {t['id']}: claimed by another run")
             out["skipped"] += 1
             continue
         st, url, err, note = publish_one(t, repo_dir, base, pr, delegate)
+        if st in ("published", "branch_pushed"):
+            busy.setdefault(lane, t["id"])
         if st == "syntax_retry":
             requeue_for_syntax(store, t["id"], err)
             out["retried"] = out.get("retried", 0) + 1
@@ -927,7 +965,11 @@ def selftest():
     good = ("diff --git a/scripts/x.py b/scripts/x.py\n--- a/scripts/x.py\n+++ b/scripts/x.py\n@@ -1,2 +1,2 @@\n-def f():\n-    return 1\n+def f():\n+    return 2\n")
     stale = good.replace("return 1", "return 99")  # base the file no longer has -> must not apply
 
-    def add(store, tid, patch, repo=REPO_NAME, path="scripts/x.py", status="ready_to_publish", branch=None):
+    def add(store, tid, patch, repo=REPO_NAME, path="scripts/x.py", status="ready_to_publish", branch=None, free_lane=True):
+        # PUBLISH-LANE-SERIAL-1: the scenarios below share one store and one path; an earlier scenario's published task would hold the lane
+        # for the next one, so a scenario that is not about the gate merges its predecessors first.
+        if free_lane and status == "ready_to_publish":
+            store.changes("UPDATE code_tasks SET status='merged' WHERE status IN ('published','branch_pushed','pr_open') AND path=?", [path])
         store.changes("INSERT INTO code_tasks (id,repo,path,goal,status,step,ctx,branch,created_at,updated_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
                       [tid, repo, path, "return 2", status, json.dumps({"patch": patch}), branch or ("codeagent-" + tid[3:15]), now(), now()])
 
@@ -1025,13 +1067,15 @@ def selftest():
     _sh(work, "git", "fetch", "-q", "origin", "main")
     pr = FakePR()
 
-    def add_edits(tid, patch, edits, path="scripts/x.py", mirror=None):
+    def add_edits(tid, patch, edits, path="scripts/x.py", mirror=None, age_min=0):
         store.changes("INSERT INTO code_tasks (id,repo,path,goal,status,step,ctx,branch,created_at,updated_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
-                      [tid, REPO_NAME, path, "return 2", "ready_to_publish", json.dumps({"patch": patch, "edits": edits, "mirror": mirror}), "codeagent-" + tid[3:15], now(), now()])
+                      [tid, REPO_NAME, path, "return 2", "ready_to_publish", json.dumps({"patch": patch, "edits": edits, "mirror": mirror}), "codeagent-" + tid[3:15], ago(age_min), now()])
 
-    add_edits("ct_rebaseok0001", stale, [{"search": "    return 1", "replace": "    return 2"}])
-    add_edits("ct_rebasegone01", stale, [{"search": "    return 7", "replace": "    return 2"}])
-    add_edits("ct_rebasesame01", stale, [{"search": "    return 1", "replace": "    return 1"}])
+    # PUBLISH-LANE-SERIAL-1: three tasks on one file in one run. The two that never open a branch (superseded, publish_failed) are older and go
+    # first, so each is still exercised; the one that publishes takes the lane last.
+    add_edits("ct_rebasegone01", stale, [{"search": "    return 7", "replace": "    return 2"}], age_min=3)
+    add_edits("ct_rebasesame01", stale, [{"search": "    return 1", "replace": "    return 1"}], age_min=2)
+    add_edits("ct_rebaseok0001", stale, [{"search": "    return 1", "replace": "    return 2"}], age_min=1)
     r = publish_all(store, work, "main", pr, quiet)
     t = row(store, "ct_rebaseok0001")
     check("stale patch with edits: rebuilt on main and published, the rebase recorded on the task",
@@ -1050,6 +1094,7 @@ def selftest():
     check("edits that change nothing: publish_failed, never an empty branch", ts["status"] == "publish_failed" and "changes nothing" in ts["last_error"], dict(ts))
     brg = subprocess.run(["git", "--git-dir", remote, "branch", "--list", "codeagent-rebasegone01", "codeagent-rebasesame01"], capture_output=True, text=True)
     check("failed and superseded rebases push no branch", brg.stdout.strip() == "" and r["failed"] == 1)
+    store.changes("UPDATE code_tasks SET status='merged' WHERE id='ct_rebaseok0001'")  # its pull request merged: the lane is free
     add_edits("ct_rebaseanch01", stale, [{"search": "    return 7", "replace": "    return 2"}])
     store.changes("UPDATE code_tasks SET ctx=json_set(ctx, '$.anchor', ?) WHERE id=?", ["def f():", "ct_rebaseanch01"])
     r2 = publish_all(store, work, "main", pr, quiet)
@@ -1111,6 +1156,7 @@ def selftest():
         _sh(work, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "mirror drift")
         _sh(work, "git", "push", "-q", "origin", "HEAD:main")
         _sh(work, "git", "fetch", "-q", "origin", "main")
+        store.changes("UPDATE code_tasks SET status='merged' WHERE id='ct_rebasejs0001'")  # PUBLISH-LANE-SERIAL-1: its pull request merged, the lane is free
         add_edits("ct_rebasemir001", stale_js, [{"search": 'new Response("a")', "replace": 'new Response("c")'}], path="w/worker.js", mirror="w/deployed-current.worker.js")
         publish_all(store, work, "main", pr, quiet)
         tm = row(store, "ct_rebasemir001")
@@ -1298,9 +1344,9 @@ def selftest():
         mig_patch = ("diff --git a/migrations/2026-10-12-v.sql b/migrations/2026-10-12-v.sql\nnew file mode 100644\n--- /dev/null\n+++ b/migrations/2026-10-12-v.sql\n@@ -0,0 +1,4 @@\n"
                      + "".join("+" + ln + "\n" for ln in mig_body.splitlines()))
 
-        def add_ctx(store, tid, ctx, path="w/worker.js"):
+        def add_ctx(store, tid, ctx, path="w/worker.js", age_min=0):
             store.changes("INSERT INTO code_tasks (id,repo,path,goal,status,step,ctx,branch,created_at,updated_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
-                          [tid, REPO_NAME, path, "v is two", "ready_to_publish", json.dumps(ctx), "codeagent-" + tid[3:15], now(), now()])
+                          [tid, REPO_NAME, path, "v is two", "ready_to_publish", json.dumps(ctx), "codeagent-" + tid[3:15], ago(age_min), now()])
 
         # a source-only patch: the mirror that equalled the source on main is carried; the suite the change breaks sends it back
         remote, work, store = js_fixture()
@@ -1324,8 +1370,9 @@ def selftest():
         # multi-file: the worker, its test and a new migration land on one branch; the suite passes because the test moved with the code
         remote, work, store = js_fixture()
         pr = FakePR()
-        add_ctx(store, "ct_multifile001", {"patch": src_patch + test_patch + mig_patch, "paths": ["w/v.test.mjs", "migrations/2026-10-12-v.sql"]})
-        add_ctx(store, "ct_multibreak01", {"patch": src_patch, "paths": []})
+        # PUBLISH-LANE-SERIAL-1: both tasks are in lane w; the one sent back by the suite check opens no branch, so it goes first (older)
+        add_ctx(store, "ct_multibreak01", {"patch": src_patch, "paths": []}, age_min=2)
+        add_ctx(store, "ct_multifile001", {"patch": src_patch + test_patch + mig_patch, "paths": ["w/v.test.mjs", "migrations/2026-10-12-v.sql"]}, age_min=1)
         r = publish_all(store, work, "main", pr, quiet)
         t, tb = row(store, "ct_multifile001"), row(store, "ct_multibreak01")
         check("multi-file: one branch carries the worker, its mirror, the test and the new migration",
@@ -1342,6 +1389,7 @@ def selftest():
                                   ("ct_multibad0005", ["w/a.mjs", "w/b.mjs", "w/c.mjs", "w/d.mjs"], src_patch), ("ct_multibad0006", "w/v.test.mjs", src_patch),
                                   ("ct_multibad0007", ["w/v.test.mjs"], src_patch + good)):
             add_ctx(store, tid, {"patch": patch, "paths": paths})
+        store.changes("UPDATE code_tasks SET status='merged' WHERE id='ct_multifile001'")  # its pull request merged: the lane is free for the refusals
         publish_all(store, work, "main", pr, quiet)
         bad_rows = [row(store, "ct_multibad000%d" % i) for i in range(1, 8)]
         check("multi-file: a worker source, a mirror, another directory, a denied path, too many, a non-list, and a file outside ctx.paths are all refused",
@@ -1410,6 +1458,68 @@ def selftest():
     publish_all(store, work, "main", pr, quiet, delegate=True)
     check("delegated: an existing PR for the branch is still adopted", row(store, "ct_delegate0002")["status"] == "published" and row(store, "ct_delegate0002")["pr_url"].endswith("/pull/77"))
 
+    # ---- PUBLISH-LANE-SERIAL-1: one open change per lane; the next task publishes once the first has merged or closed
+    check("lane_key: a worker's source and its mirror are one lane, any other file is its own",
+          lane_key("qnfo-research-exec/worker.js") == lane_key("qnfo-research-exec/deployed-current.worker.js") == "qnfo-research-exec"
+          and lane_key("scripts/x.py") == "scripts/x.py" and lane_key("qnfo-fleet-control/code-merge.test.mjs") == "qnfo-fleet-control/code-merge.test.mjs"
+          and lane_key("a/b/worker.js") == "a/b/worker.js" and lane_key(None) == "")
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+    add(store, "ct_laneold00001", good, branch="codeagent-laneold00001", free_lane=False)
+    store.changes("UPDATE code_tasks SET created_at=? WHERE id=?", [ago(2), "ct_laneold00001"])
+    add(store, "ct_lanenew00001", good, branch="codeagent-lanenew00001", free_lane=False)
+    store.changes("UPDATE code_tasks SET created_at=? WHERE id=?", [ago(1), "ct_lanenew00001"])
+    r = publish_all(store, work, "main", pr, quiet)
+    check("one lane, two ready tasks: the older publishes, the younger is held with nothing claimed or pushed",
+          row(store, "ct_laneold00001")["status"] == "published" and row(store, "ct_lanenew00001")["status"] == "ready_to_publish"
+          and r.get("held") == 1 and r["published"] == 1 and pr.created == ["codeagent-laneold00001"], (r, pr.created))
+    r = publish_all(store, work, "main", pr, quiet)
+    check("the next run holds it again while the first is still open", row(store, "ct_lanenew00001")["status"] == "ready_to_publish" and r.get("held") == 1 and r["published"] == 0, r)
+    store.changes("UPDATE code_tasks SET status='merged' WHERE id='ct_laneold00001'")
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    r = publish_all(store, work, "main", pr, quiet)
+    check("once the first has merged, the held task publishes", row(store, "ct_lanenew00001")["status"] == "published" and not r.get("held") and r["published"] == 1, r)
+
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+    add(store, "ct_laneclosed01", good, status="closed", branch="codeagent-laneclosed01", free_lane=False)
+    add(store, "ct_lanefree0001", good, branch="codeagent-lanefree0001", free_lane=False)
+    r = publish_all(store, work, "main", pr, quiet)
+    check("a closed or failed predecessor does not hold the lane", row(store, "ct_lanefree0001")["status"] == "published" and not r.get("held"), r)
+
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+    add(store, "ct_laneopen0001", good, status="pr_open", branch="codeagent-laneopen0001", free_lane=False)
+    add(store, "ct_lanewait0001", good, branch="codeagent-lanewait0001", free_lane=False)
+    store.changes("UPDATE code_tasks SET path='scripts/other.py' WHERE id='ct_lanewait0001'")
+    # a different lane is not held (the patch is for scripts/x.py, so it is refused by the path check, which proves the task was attempted)
+    r = publish_all(store, work, "main", pr, quiet)
+    check("a task in a different lane is attempted while another lane is open", not r.get("held") and row(store, "ct_lanewait0001")["status"] != "ready_to_publish", r)
+
+    remote, work, base_store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+
+    class UnreadableLanes:
+        """The store, except that the in-flight read fails."""
+        def __init__(self, inner):
+            self.inner = inner
+        def rows(self, sql, params=()):
+            if "status IN ('branch_pushed','published','pr_open')" in sql and "created_at ASC" in sql and "SELECT id, path" in sql:
+                raise RuntimeError("D1 HTTP 503")
+            return self.inner.rows(sql, params)
+        def changes(self, sql, params=()):
+            return self.inner.changes(sql, params)
+    add(base_store, "ct_laneread0001", good, status="published", branch="codeagent-laneread0001", free_lane=False)
+    add(base_store, "ct_laneread0002", good, branch="codeagent-laneread0002", free_lane=False)
+    logs = []
+    r = publish_all(UnreadableLanes(base_store), work, "main", pr, logs.append)
+    check("an unreadable in-flight list publishes ungated and says so, never stopping the loop",
+          row(base_store, "ct_laneread0002")["status"] == "published" and not r.get("held") and any("PUBLISH-LANE-SERIAL-1" in x for x in logs), (r, logs))
+
     print(f"\nselftest: {len(fails)} failure(s)")
     return 1 if fails else 0
 
@@ -1426,8 +1536,10 @@ def main():
     delegate = os.environ.get("CODE_TASK_PR_OPENER", "").strip() == "qnfo-fleet-control"
     try:
         git(a.repo_dir, "fetch", "-q", "origin", a.base)
+        # PUBLISH-LANE-SERIAL-1: outcomes first, so a pull request that merged or closed since the last run has freed its lane
+        outcomes = reconcile_outcomes(store, GhPR())
         out = publish_all(store, a.repo_dir, a.base, GhPR(), delegate=delegate)
-        out["outcomes"] = reconcile_outcomes(store, GhPR())
+        out["outcomes"] = outcomes
     except RuntimeError as e:
         print("::error::code-task-publish could not run: " + str(e))
         return 2
