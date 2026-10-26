@@ -8,13 +8,13 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
-## BREACH-DOCTOR-1 (0.52.0, pillar autonomy; agent_issues 1000266)
+## BREACH-DOCTOR-1 (0.52.0, reviewed in 0.53.0 BREACH-DOCTOR-FIX-1; pillar autonomy; agent_issues 1000266)
 
 `breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
 (FLEET-TICK-SPLIT-1). Per tick, in this order: the five `doctor_*` / `breaches_*` metrics are written first (a dead heartbeat cannot hide);
 each enabled `breach_playbooks` row is validated; the verify phase settles the cases in flight (two consecutive passes of `verify_sql` are
-verified; a failed verify, an SQL error or an expired lease is failed); every open issue older than `breach_doctor_min_age_min` (120 minutes,
-SLA-120M-1) with no doer (a `code-task:` line, a live code task or a live work claim) is classified into `breach_diagnoses` (family from a code
+verified; a failed verify, an SQL error or an expired lease is failed); every open issue older than `breach_doctor_min_age_min` (60 minutes since 0.53.0,
+so a case has the rest of the 120-minute SLA-120M-1 window to be applied and verified twice) with no doer (a `code-task:` line, a live code task or a live work claim) is classified into `breach_diagnoses` (family from a code
 table of title prefixes, `cause_class` from the playbook that matched or `unclassified`, facts from numbers, ids and enum codes only), critical first,
 up to `breach_doctor_max_cases`; a case whose playbook is `on` and older than the cooldown applies its action (revert stored in the ledger,
 a `decision_log` row, a `breach_diagnosis_events` row). One tick at a time (`loop_lock` k = `breach-doctor`, 4 minutes). On live D1 a tick reads
@@ -29,11 +29,16 @@ about 10,500 rows (the largest statement 4,023; it never reads `v_issue_age_ladd
 | `breach_doctor_max_cases` | `40` (1..60) | issues classified per tick; the 263 unowned issues of 2026-10-26 drain in 7 ticks. Over the cap waits for the next tick (backpressure, never a stop) |
 | `breach_doctor_max_actions` | `6` (0..20) | state-changing actions per tick; the rest are deferred |
 | `breach_doctor_budget_ms` | `20000` (5000..40000) | wall budget per tick; no new case starts after 85% of it |
-| `breach_doctor_min_age_min` | `120` (10..120) | an unowned open issue becomes a case from this age in minutes (no SLA exceeds 120 minutes) |
+| `breach_doctor_min_age_min` | `60` (10..120) | an unowned open issue becomes a case from this age in minutes (no SLA exceeds 120 minutes; control `breach-doctor-age-gate`). `breaches_undiagnosed_over_60m` flags 60 minutes past it and never later than 120 |
 | `breach_doctor_playbook_cooldown_min` | `30` (0..120) | a playbook younger than this (from `breach_playbooks.created_at`) runs in measure |
 
 Per rule: `UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = '...'` stops one rule; `mode = 'measure'` keeps it diagnosing only; a rule with 2 failed or
-reverted cases in 24 hours demotes itself to measure (event `demote`) until a migration fixes it and sets it back to `on`. Per-rule `max_per_tick` and `max_per_day`
+reverted cases in 24 hours demotes itself to measure (event `demote`, note `demoted <time> ...`). The demotion is a pause with a release (control `breach-doctor-auto-demotion`):
+`BD_RELEASE_MIN` (60) minutes later the engine sets the row back to `on` as a trial (note `trial <time> ...`, event `selected` with `release=trial`) that runs one case at a time, and none while
+a case of the rule is in flight; a failed trial case demotes the rule again, a verified one restores it (note `restored <time> ...`, event `selected` with `release=restored`) and lifts the cap.
+Failures count from the last change of the rule's standing, so a restored rule is not demoted again for the failures that paused it. A rule an operator set to measure by hand (no `demoted` note) is
+never released. An action that changes no row on an issue that is no longer open (ISSUE-HYGIENE-1 closed it first) supersedes the case instead of failing it. The contract
+`fm-breach-doctor-rule-latched` files an issue when a demotion outlives 120 minutes (the release did not run). Per-rule `max_per_tick` and `max_per_day`
 defer, never stop. The strike cap is in code, not in `ops_config`: an issue whose last case failed is retried after `BD_RETRY_MIN` (60) minutes, after `BD_STRIKES` (3) failed or
 reverted cases at most once in `BD_STRIKE_RETRY_MIN` (120) minutes, and the self issue `BREACH-DOCTOR-1: self <rule> <code>` is filed once (control `breach-doctor-strike-cap`:
 a rate with a release, never a permanent exclusion). The self issue is the only issue the doctor files by itself.
@@ -46,7 +51,9 @@ An `INSERT OR IGNORE INTO breach_playbooks (...)` in a migration; `migrations/20
   `action_kind` (`sql`, `file-issue` or `owner-card`: the kinds are closed in code), `min_ladder` (stored, not read in v1), `max_per_tick`, `max_per_day`, `enabled`, `mode` (`measure` or `on`), `note`.
 - `trigger_sql`: one read-only SELECT (or WITH ... SELECT, no semicolon, no write keyword) that returns `issue_id`, `subject` (a token) and `facts_json` (an object of numbers, ids and enum codes).
 - `action_sql` and `revert_sql`: JSON arrays of 1 to 6 statements (use `json_array('<statement>', ...)`). Each statement is exactly one INSERT or UPDATE on `issue_triage`, `agent_issues` (UPDATE only),
-  `remediation_contracts`, `issue_plans`, `ops_config` or `human_actions`; it binds `?1` = the issue id and no other placeholder; no semicolon, no DELETE, DROP, ALTER, CREATE, PRAGMA or ATTACH,
+  `remediation_contracts` or `issue_plans` (`ops_config`, which holds the kill switch and the trusted-source list, and `human_actions` are not writable by a playbook); it binds `?1` = the issue id and no other placeholder,
+  and carries a top-level `id = ?1`, `issue_id = ?1` or `a.id = ?1` predicate (an `INSERT ... SELECT ... FROM agent_issues a WHERE ... AND a.id = ?1` for an insert) with no `OR` beside it outside parentheses
+  (`bdWriteWhy`: `no-id-predicate`, `or-widens`; a predicate hidden in a subquery does not count). That is the whole of what "bound to the issue" means; the decision_log row says the same; no semicolon, no DELETE, DROP, ALTER, CREATE, PRAGMA or ATTACH,
   no `INSERT OR REPLACE`, no INSERT into `agent_issues` or `code_tasks`, and no reference to a free-text column or table (`description`, `exceptions_json`, `detail`, `meta`, `last_error`, `worker_logs`, `cloud_ops_events`).
   A `file-issue` or `owner-card` row carries `[]` for both.
 - `verify_sql`: one read-only SELECT (it may bind `?1` = the issue id) that returns `expected` and `observed`; equal text is a pass, and two consecutive passes verify the case.
@@ -71,7 +78,7 @@ existing file), so it would only add an unowned issue. The gap is recorded inste
 
 ### What the metrics mean
 
-`breaches_undiagnosed_over_60m` counts an unowned issue until a case found its cause (a playbook matched); an issue classified `unclassified` was only looked at and stays counted, so classifying the backlog
+`breaches_undiagnosed_over_60m` counts an unowned issue once it is `min(120, breach_doctor_min_age_min + 60)` minutes old (120 by default) until a case found its cause (a playbook matched); an issue classified `unclassified` was only looked at and stays counted, so classifying the backlog
 does not make it read 0. `breaches_auto_remediated_24h` (cases that reached `verified`) is the outcome the doctor has to earn. Issues titled `BREACH-DOCTOR-1:` are classified and counted like any other
 (family `BREACH-DOCTOR-1`) but match no playbook and take no action (control `breach-doctor-own-issue-guard`). The five metrics are mapped to a root cause in `metric_breach_cause` by the same migration.
 A case in `queued`, `applied` or `verifying` with an expired lease is failed by the verify phase (`lease-expired`); `queue_sla` row `breach-doctor-case-in-flight` and the contract `fm-breach-doctor-case-age`
@@ -86,7 +93,7 @@ watch the oldest one (120 minutes), which also covers `breach_doctor = off`, whe
   verified=... failed=... demoted=... taint=... gap=... undiagnosed=... deferred=... err=... ms=...`), `diagnosed` (`rule=<id> cause=<class> mode=<measure|on> would-do=<kind>` or `unclassified family=<F>`), `action`, `verify`, `renew`,
   `handoff` (an owner card), `fail` (`rule=<id> error=<code>`: `sql-error`, `no-rows`, `validation`, `verify-failed`, `verify-error`, `lease-expired`), `supersede` (the issue closed or gained a doer), `skip` (a live work claim),
   `budget-skip`, `demote` and `taint-drop` (`rule=<id> why=<code>`). A tick that did not run leaves no `tick` event: `doctor_tick_age_min` and the contract `fm-breach-doctor-stalled` read that.
-- Offline suites: `node qnfo-fleet-control/breach-doctor.test.mjs` (the engine over a node:sqlite D1 stub), `node migrations/breach-doctor.test.mjs` and `node migrations/breach-doctor-trust.test.mjs`.
+- Offline suites: `node qnfo-fleet-control/breach-doctor.test.mjs` (the engine over a node:sqlite D1 stub), `node migrations/breach-doctor.test.mjs`, `node migrations/breach-doctor-fix.test.mjs` and `node migrations/breach-doctor-trust.test.mjs`.
 
 ## ADVISOR-AGENT-TRACING-1 (0.46.0, pillar autonomy)
 

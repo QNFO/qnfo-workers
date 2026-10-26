@@ -166,7 +166,7 @@ const probeIssues = (db) => db.prepare("SELECT * FROM agent_issues WHERE title L
 }
 // wiring
 const tickSrc = src.slice(src.indexOf("await rtEscalateStaleDeferrals(db, out);"));
-ok(tickSrc.indexOf("await rtEnsureLivePath(db, out);") > 0 && tickSrc.indexOf("await rtEnsureLivePath(db, out);") < 400, "the remediation tick calls the filer right after the deferral sweep");
+ok(tickSrc.indexOf("await rtEnsureLivePath(db, out, env);") > 0 && tickSrc.indexOf("await rtEnsureLivePath(db, out, env);") < 400, "the remediation tick calls the filer right after the deferral sweep, handing it env (PROBE-AUTHOR-HARDEN-1: the author needs the AI binding)");
 ok(src.includes("deferral_escalated: [], probe_needed_filed: [] }"), "the tick output carries probe_needed_filed");
 ok(!/LIKE '[^']{50,}'/.test(src.slice(a, b)), "no LIKE literal in the block reaches D1's 50 byte limit");
 const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
