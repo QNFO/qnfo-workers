@@ -446,6 +446,18 @@ because each one was broken at least once; the linked issue holds the evidence.
   (a flagship-version metric read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
+## Output quality outranks metric count (OUTPUT-QUALITY-LEDGER-1)
+- Owner directive 2026-10-26, verbatim: "DO NOT LOSE SIGHT OF CONTINUED DRIVE TO BETTER QUALITY OUTPUTS OF ALL KINDS (PAPERS/POSTS/PUBLICATIONS/PROMOTION/CODE/ETC).
+  IS THE FLEET ACTUALLY GETTING 'BETTER' AND HOW WOULD WE KNOW?" It binds every session and loop; `docs/OUTPUT-QUALITY-LEDGER.md` has the detail.
+- Whether outputs got better is read from `SELECT * FROM v_output_quality_by_surface; SELECT * FROM v_output_quality_headline;` (outcome measures only, now against
+  seven days earlier; `improving_with_gaps` means a surface has no measured outcome). Clearing breaches, closing issues and raising a gate pass rate are not quality.
+- A pool mean is not evidence: compare the same items a week apart, or items made after a change against items made before (the paper score's mean rose 64 to 73
+  while the same 464 papers fell 64.3 to 61.4). A gate or a rule-based score is a proxy: it is labelled `proxy` in `output_quality_measures`, never a target, and
+  never counted toward the verdict. A measure that cannot move any more (81% of new papers score 95 or more) is a `validity` finding, not good news.
+- A worker that produces output outsiders read (paper, essay, post, reply, code) names its outcome measure in `output_quality_measures` (role `outcome`, polarity, a
+  tolerance) in the PR that adds it, or is listed as a gap in the doc. A worse outcome is fixed at its producer; no measure is added to the outcome list to dilute it.
+- Do not close or reject findings (errata, retractions, reader reports) to lower a quality count; closure needs the reason or the fix.
+
 ## Writing that outsiders read (ENSEMBLE-POLICY-1)
 - Read `docs/ENSEMBLE-POLICY.md` before adding or changing a worker that writes prose for readers outside the fleet. LLM errors are
   correlated (a 9-judge, 7-family panel is worth about 2.2 votes), so layers must come from disjoint model families, stay few and
@@ -468,8 +480,25 @@ because each one was broken at least once; the linked issue holds the evidence.
   the SLA views report only untriaged issues. Never write "+7 days" or another future date into it.
   See migrations/2026-10-03-priority-queue.sql (backups and rollback in its header).
 
+## Paper revisions and withdrawals (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)
+- Owner directive 2026-10-26: "papers should never disappear en masse; versioning needs to preserve changes across multiple revisions for auditing and provenance."
+  `docs/PAPER-LEDGER.md` has the detail; the DDL is in `migrations/living-paper/`.
+- Every change to a paper's body, status, version, title, abstract or metadata is one immutable row in living-paper `paper_change_ledger` (full prior body in
+  `paper_change_bodies`): read a paper's history from `v_paper_revisions`, never from `paper_version_history` (it keeps one body per version). A writer that changes `papers`
+  sets `change_actor` (`<worker>:<run id>`) and `change_reason` (different text for each change) in the same UPDATE, or its change is recorded as `unattributed`.
+- A trigger refuses more than 25 papers an hour (80 a day) leaving published, distributed or external_preprint, and more than 5 deleted an hour. An intended larger withdrawal
+  first inserts a reasoned, expiring `paper_withdrawal_override` row. Never drop the trigger to get a statement through; a refusal is the guard working.
+- A new trigger on `papers` must not run an FTS5 statement for an update that leaves `title` and `abstract` alone (PAPERS-FTS-DRIFT-1: it corrupted `papers_fts`).
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
 - GitHub `schedule` triggers fire rarely and late on this repository (95 schedule runs in total by 2026-10-02; mirror-autosync
   ran 9 times), so no periodic work may depend on one; periodic work belongs in worker crons.
+- Issue hygiene (ISSUE-HYGIENE-1 and PORTFOLIO-NOT-ISSUES-1, 2026-10-26; owner question "why are there over 800 GitHub issues?"): GitHub Issues carry work that
+  finishing the work closes. `roadmap_mirror_scope` (qnfo-audit) names the roadmap sources that are not issues (projects, metric-breach twins of a METRIC-TRIGGER ticket,
+  failure-mode registry rows): they stay in `roadmap_implementation`, on the Projects board and in `/roadmap`, qnfo-github-steward closes their mirrors `not_planned` and never
+  reopens them, and a source set to `mirrored = 1` is mirrored again with no deploy. A ticket about another record (PROBE-NEEDED-1, CODE-MERGE-REFUSED-1, CODE-LOOP-EXHAUSTED-1,
+  a self-heal ledger copy, a repeated owner prompt) closes with the fact that resolved it: the hourly D1 workflow `issue-meta-fold` (fleet_tasks, :20) saves the before-state in
+  `issue_fold_ledger` and closes through the triage row with "moot: ..." or "superseded by <id> ..." evidence. A new filer of such tickets gets a rule in that workflow and in
+  `migrations/issue-hygiene.test.mjs`; never a trigger on `agent_issues` (AGENT-ISSUES-TRIGGER-DEPTH-1: D1 refuses writes whose trigger programs nest more than 10 levels).

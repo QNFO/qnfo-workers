@@ -37,7 +37,43 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.35.1"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+var VERSION = "0.37.0"; // 0.37.0 BP26-AI-LABEL-1 (2026-10-26): visible AI-generated label, see the note below.
+/* 0.37.0 BP26-AI-LABEL-1 (2026-10-26, charter pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every piece page carries a visible "AI-generated" label linked to the published method note and JSON-LD creditText; HTML responses add nosniff, HSTS (no includeSubDomains) and X-Frame-Options SAMEORIGIN. */
+// 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+
+// Register new metric key
+if (typeof Q08_METRIC_KEYS !== 'undefined') {
+  Q08_METRIC_KEYS.push(["q08_retraction_rate_30d", "retraction_rate_30d"]);
+}
+
+// Compute retraction_rate_30d metric
+async function computeRetractionRate30d(db) {
+  const now = Date.now();
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+  const rows = await db.all(
+    `SELECT id FROM published_pieces WHERE published_at >= ?`,
+    new Date(thirtyDaysAgo).toISOString()
+  );
+  const total = rows.length;
+  if (total < 10) return null;
+  const result = await db.get(
+    `SELECT COUNT(DISTINCT pp.id) AS cnt FROM published_pieces pp JOIN q08_retractions r ON r.piece_id = pp.id WHERE pp.published_at >= ?`,
+    new Date(thirtyDaysAgo).toISOString()
+  );
+  const retracted = result.cnt;
+  return retracted / total;
+}
+
+// Hook into existing 7d metrics calculation if function exists
+if (typeof getMetrics7d === 'function') {
+  const originalGetMetrics7d = getMetrics7d;
+  getMetrics7d = async function(db) {
+    const metrics = await originalGetMetrics7d.call(this, db);
+    metrics.retraction_rate_30d = await computeRetractionRate30d(db);
+    return metrics;
+  };
+}
+/* 0.36.0 PUBLICATION-GATE-AUDIT-2 (2026-10-26, pillar reach; minor: a new data product, q08_retraction_rate_30d, and a writer-order switch). Evidence: engine_runs, 14 days to 2026-10-26: 20 ok of 537 finished runs (3.7%), 517 gate failures, about 48 attempts and 0.5 published pieces a day, the daily neuron pace reached on 8 to 17 runs a day since 2026-10-21. (1) Q08-WRITER-ORDER-2: nemotron, gpt-oss, kimi, by end-to-end yield (10.2%, 1.7%, 0.9%), not by the writer-gate pass rate; ops_config q08_compose_order overrides. (2) Q08-LEDGER-TAG-FORMS-2: ledger citations in round, curly, fullwidth and lenticular brackets, with "&" or "/" between numbers, after a dagger, or as [ledger S3] are removed before any check (the cause of 38 accuracy failures that listed ledger numbers as figures and tags as names). (3) Q08-REVIEWER-HYGIENE-1: a reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), an item whose closing clause says it is supported is acquitted. (4) Q08-PRECHECK-CONTEXT-1: each flagged item carries 24 characters of context on the stage row. (5) Q08-RETRACTION-METRIC-1: q08_retraction_rate_30d. No gate was loosened: names, figures, years, the lede check, the reader panel, the two-family fact-check and the prune are unchanged. */
 /* 0.35.1 Q08-RETRY-PROGRESS-1: a repair that returns exactly a draft already rejected in the same verifyAndRevise invocation stops as an accuracy failure before spending another verification. Changed drafts still receive the full verification; no claim-count heuristic, quality threshold, reviewer family, retry ceiling or spend control changes. Run 955 spent 16 fact-check calls on multiple repairs; its log does not retain draft text, so savings on that run are not claimed. */
 /* 0.35.0 Q08-RUN-STAGE-ATTRIBUTION-1: engine_runs now records reader-panel and fact-check calls separately while preserving verify_calls as their total. The q08.org/api/runs?limit=60 evidence sample returned 20 rows (IDs 952 through 933), not 60; 13 were gate_failed and 7 deferred. No quality gate, spend policy, or generation behavior changed. */
 /* 0.34.4 Q08-LEDGER-WHITESPACE-GROUPS-1: the grounding normalizer now removes grouped source-ledger citations such as [S2 S3] and [S1, S2 S3] before any gate reads the draft. The factual and reader-quality gates are unchanged. */
@@ -162,6 +198,9 @@ async function metrics7d(env) {
   var reads = await one("SELECT COALESCE(SUM(human),0) human, COALESCE(SUM(crawler),0) crawler, COUNT(*) days FROM q08_daily_reads WHERE day >= ?1", [since.slice(0, 10)]);
   var votes = await one("SELECT COUNT(*) n, SUM(CASE WHEN signal = 'good' THEN 1 ELSE 0 END) good FROM q08_feedback WHERE created_at >= ?1", [voteSince]);
   var subs = await one("SELECT COUNT(*) n FROM subscribers WHERE status = 'confirmed'");
+  // Q08-RETRACTION-METRIC-1 (0.36.0): of the pieces published in 30 days, the share that carry a q08_retractions row. On 2026-10-26 131 of
+  // the 145 pieces ever published were retracted and no metric showed it. Unknown under 10 pieces is null, never a value.
+  var ret = await one("SELECT COUNT(*) n, SUM(CASE WHEN r.slug IS NOT NULL THEN 1 ELSE 0 END) retracted FROM published_pieces p LEFT JOIN q08_retractions r ON r.slug = p.slug WHERE p.published_at >= ?1", [new Date(Date.now() - 30 * 864e5).toISOString()]);
   var neurons = null;
   if (env.AUDIT) {
     var nr = await env.AUDIT.prepare("SELECT COALESCE(SUM(neurons),0) n FROM ai_call_counters WHERE worker = ?1 AND day >= ?2").bind(WORKER, since.slice(0, 10)).first().catch(function () { return null; });
@@ -189,12 +228,13 @@ async function metrics7d(env) {
     neurons: neurons,
     neurons_per_published_piece: neurons == null ? null : ratio(neurons, published),
     confirmed_subscribers: Number(subs && subs.n) || 0,
+    retraction_rate_30d: Number(ret && ret.n) >= 10 ? ratio(Number(ret.retracted) || 0, Number(ret.n)) : null,
     vote_cutoff: VOTE_CUTOFF
   };
 }
 // q08 writes its own registry values (the rows, targets and triggers are in migrations/2026-10-02-q08-metrics.sql). A value
 // that is not a finite number is not written: unknown is never a value.
-var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_confirmed_subscribers", "confirmed_subscribers"], ["q08_panel_unavailable_share_7d", "panel_unavailable_share_7d"], ["q08_forecasts_overdue_open", "forecasts_overdue_open"], ["q08_forecast_void_share", "forecast_void_share"]];
+var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_confirmed_subscribers", "confirmed_subscribers"], ["q08_retraction_rate_30d", "retraction_rate_30d"], ["q08_panel_unavailable_share_7d", "panel_unavailable_share_7d"], ["q08_forecasts_overdue_open", "forecasts_overdue_open"], ["q08_forecast_void_share", "forecast_void_share"]];
 // Hours from an ISO timestamp (or epoch ms) to nowMs, rounded to 0.1; null when unparseable or in the future.
 function hoursSince(t, nowMs) {
   if (t == null || t === "") return null;
@@ -1179,10 +1219,17 @@ function buildPrompt(friction, fewShot, recentStructures, opts) {
 // most runs paid for a low-yield 740-neuron call before trying the 290-neuron gpt-oss writer. Lead with gpt-oss;
 // outside a breached spend cap, try kimi before nemotron for its higher measured yield. At a cap, try the cheaper
 // nemotron before kimi. This changes only fallback order; all gates and retry ceilings stay unchanged.
+// Q08-WRITER-ORDER-2 (0.36.0, 2026-10-26): the 2026-10-25 order above was chosen on the writer-gate pass rate (a proxy: it only says the draft
+// had a title, a lede and no banned phrase). What matters is whether a run publishes. engine_runs, 14 days to 2026-10-26, by the writer
+// that produced the final draft: nemotron 14 ok of 137 runs (10.2%), gpt-oss 5 of 287 (1.7%), kimi 1 of 113 (0.9%); 212 of the 517 gate
+// failures were gpt-oss drafts failing the accuracy check, and all 23 runs that listed eight or more unsupported figures and all 35 that
+// listed a ledger tag as a name were gpt-oss. Nemotron leads, gpt-oss follows, kimi (the dearest call and the lowest yield) is last. All gates
+// and ceilings are unchanged; ops_config q08_compose_order (comma-separated model ids) overrides the order without a deploy, and unknown ids
+// are ignored. The same order serves a breached spend cap: the spend cap steers the call, not the writer with the lowest yield per neuron.
 var COMPOSE_MODELS = [
+  "@cf/nvidia/nemotron-3-120b-a12b",
   "@cf/openai/gpt-oss-120b",
   "@cf/moonshotai/kimi-k2.6",
-  "@cf/nvidia/nemotron-3-120b-a12b",
 ];
 var COMPOSE_MAX_TOKENS = 8000;
 // Q08-BUDGET-ROUTE-1 (0.24.0, issue 1780; BUDGET-SOFT-ROUTE-1): while the fleet_budget ai_spend:workers-ai cap is breached, the writer
@@ -1190,12 +1237,25 @@ var COMPOSE_MAX_TOKENS = 8000;
 // gpt-oss). Work never stops at a cap; it steers. The order returns to COMPOSE_MODELS when the cap clears. An unreadable budget reads
 // as breached (the cheap side of a D1 fault), as in qnfo-research-exec LEAN-ENSEMBLE-1.
 var COMPOSE_MODELS_AT_CAP = [
-  "@cf/openai/gpt-oss-120b",
   "@cf/nvidia/nemotron-3-120b-a12b",
+  "@cf/openai/gpt-oss-120b",
   "@cf/moonshotai/kimi-k2.6",
 ];
+var COMPOSE_ORDER_KEY = "q08_compose_order";
+function parseComposeOrder(v) {
+  var out = [];
+  String(v == null ? "" : v).split(/[\s,]+/).forEach(function (m) { if (COMPOSE_MODELS.indexOf(m) >= 0 && out.indexOf(m) < 0) out.push(m); });
+  if (!out.length) return null;
+  COMPOSE_MODELS.forEach(function (m) { if (out.indexOf(m) < 0) out.push(m); });
+  return out;
+}
 async function composeOrder(env) {
   if (!env || !env.AUDIT) return COMPOSE_MODELS;
+  try {
+    var o = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(COMPOSE_ORDER_KEY).first();
+    var po = parseComposeOrder(o && o.value);
+    if (po) return po;
+  } catch (e) { console.error("q08 composeOrder override read failed: " + String(e && e.message || e).slice(0, 160)); }
   try {
     var b = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM fleet_budget WHERE node_class IN ('ai_spend:workers-ai', 'ai_spend:total') AND current > cap").first();
     return b && Number(b.n) > 0 ? COMPOSE_MODELS_AT_CAP : COMPOSE_MODELS;
@@ -1409,7 +1469,24 @@ async function verdictMicroCall(env, essay) {
 // The parenthesised "(S3)" is left alone on purpose: it is not a tag the ledger prints, groundingProblems does not flag it, and it is how
 // real text writes Amazon S3.
 var LEDGER_TAG_RE = /[ \t]*\[S\d{1,3}(?:\s*[,;\u2013\u2014-]\s*S?\d{1,3}|\s+S\d{1,3})*\]/g;
-function stripLedgerTags(t) { var s = String(t); return /\[S\d/.test(s) ? s.replace(LEDGER_TAG_RE, "").replace(/^[ \t]+(?=\S)/gm, "") : s; }
+// Q08-LEDGER-TAG-FORMS-2 (0.36.0, 2026-10-26): 517 gate failures in 14 days; the pre-check listed ledger numbers as figures ("figure not in the
+// source: 40," with the comma that a "(S39, S40, S41)" list leaves behind) and tags as names ("name not in the source: S28 S29") in 38 accuracy
+// failures, and "prune located nothing" because no sentence holds a bare "33". A writer prints a tag in more forms than [S3]: in round,
+// curly, fullwidth and lenticular brackets (gpt-oss), with "&" or "/" between numbers, after a dagger line reference, as "[ledger S3]".
+// All of those go, with their space. A lone "(S3)" or "{S3}" below S10 stays, because it is how real text writes Amazon S3; a word between
+// numbers ("[S1 and S2]") is left alone, as it always was (fact-ledger.test.mjs pins it).
+var LEDGER_TAG_ALT_RE = /[ \t]*[\u3010\u3014\uFF3B\u27E6\[({]\s*(?:(?:source|ledger)\s+)?\**S\s?\d{1,3}\**(?:\s*[,;\/&\u2013\u2014-]\s*\**S?\s?\d{1,3}\**|\s+S\d{1,3}|\s*[\u2020\u2021]\s*L?\d{1,4}(?:\s*[-\u2013]\s*L?\d{1,4})?)*\s*[.,]?\s*[\u3011\u3015\uFF3D\u27E7\])}]/gi;
+function stripLedgerTags(t) {
+  var s = String(t), before = s;
+  if (/\[S\d/.test(s)) s = s.replace(LEDGER_TAG_RE, "");
+  if (/[\u3010\u3014\uFF3B\u27E6\[({]\s*(?:(?:source|ledger)\s+)?\**S\s?\d/i.test(s)) {
+    s = s.replace(LEDGER_TAG_ALT_RE, function (m) {
+      var nums = m.match(/\d{1,3}/g) || [];
+      return /^\s*[({]/.test(m) && nums.length < 2 && Number(nums[0]) < 10 ? m : "";
+    });
+  }
+  return s === before ? s : s.replace(/^[ \t]+(?=\S)/gm, "");
+}
 function normalizeDraftCore(text) {
   if (!text) return text;
   var t = stripHandles(stripLedgerTags(String(text).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n")));
@@ -2580,8 +2657,10 @@ function groundNumbers(text) {
 function groundingProblems(text, ground, opts) {
   var o = opts || {}, nowYear = Number(String(o.today || utcDay()).slice(0, 4));
   var body = String(text || "").replace(/^[ \t]*FORECAST-JSON:.*$/gim, " ").replace(/\n?worth your time:[^\n]*$/im, " ").replace(/^#\s+/gm, "").replace(/\(?(?:This|A|An) hypothetical[^)]*\)?/gi, " ");
-  var words = groundWords(ground), nums = groundNumbers(ground), out = [], seen = {};
-  function add(kind, v) { var k = kind + v.toLowerCase(); if (seen[k]) return; seen[k] = 1; out.push(kind + ": " + v); }
+  var words = groundWords(ground), nums = groundNumbers(ground), out = [], seen = {}, ctxs = [], at = -1;
+  // Q08-PRECHECK-CONTEXT-1 (0.36.0): drafts of failed runs are not stored, so a new tag form could only be guessed from the figures it left behind.
+  // Each flagged item now carries the 24 characters around it, kept on the returned array and written to the stage row.
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (seen[k]) return; seen[k] = 1; out.push(kind + ": " + v); if (at >= 0 && ctxs.length < 6) ctxs.push(v + " <<" + body.slice(Math.max(0, at - 24), at + v.length + 12).replace(/\s+/g, " ") + ">>"); }
   // figures: every number must be in the source, except small counts, future years and (forecasts) probabilities and horizons
   var nre = /\$?\d[\d,]*(?:\.\d+)?\s*(%|percent|days?|weeks?|months?|quarters?|years?|hours?)?/gi, m;
   while ((m = nre.exec(body))) {
@@ -2597,7 +2676,7 @@ function groundingProblems(text, ground, opts) {
     if (o.forecast && /^(days?|weeks?|months?|quarters?|years?)$/.test(unit)) continue;
     if (!isYear && !unit && /^\d{1,2}$/.test(num) && val <= 10 && raw.indexOf("$") < 0) continue;
     if (!isYear && !unit && /^\d$/.test(num)) continue;
-    add(isYear ? "year not in the source" : "figure not in the source", raw.trim());
+    at = m.index; add(isYear ? "year not in the source" : "figure not in the source", raw.trim()); at = -1;
   }
   // names: capitalised words or phrases that are not at the start of a sentence and are absent from the source
   var sentences = body.split(/(?<=[.!?:;—]["'\)\]”’*_]*)\s+|\n+/);
@@ -2624,13 +2703,14 @@ function groundingProblems(text, ground, opts) {
         var low = nameParts.toLowerCase().replace(/[^a-z0-9' ]/g, " ").replace(/\s+/g, " ").trim();
         if (low && !GROUND_OK.has(low)) {
           var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !/^\d+$/.test(w); });
-          if (miss.length) add("name not in the source", joined);
+          if (miss.length) { var nb = out.length; add("name not in the source", joined); if (out.length > nb && ctxs.length < 6) { var ix = sent.indexOf(core[0]); ctxs.push(joined + " <<" + sent.slice(Math.max(0, ix - 24), ix + joined.length + 12).replace(/\s+/g, " ") + ">>"); } }
         }
       }
       i = Math.max(j, i + 1);
     }
   });
-  return out.slice(0, 14);
+  var res = out.slice(0, 14); res.ctx = ctxs;
+  return res;
 }
 // Q08-FACT-LEDGER-1 (0.32.0, agent_issues 2606): the deterministic source-grounding check ran last (verifyPiece), after the reader panel and
 // its editor rounds had read and rewritten the draft, so a draft whose names, years or figures the source does not hold cost up to
@@ -2667,14 +2747,14 @@ async function groundPreCheckMode(env) {
 function groundPreCheck(piece, ground, o) {
   var opts = o || {}, forecast = !!opts.forecast, soft = opts.mode === "prune";
   __groundPreCalls++;
-  function stageRow(pass, fix, tells) { return { round: 0, role: "ground_precheck", model: "", family: "", would_read: false, score: null, tells: (tells || []).slice(0, 5), fix: ("Q08-FACT-LEDGER-1 pre-check: " + fix).slice(0, 300), pass: !!pass }; }
+  function stageRow(pass, fix, tells, ctx) { return { round: 0, role: "ground_precheck", model: "", family: "", would_read: false, score: null, tells: (tells || []).slice(0, 5), fix: ("Q08-FACT-LEDGER-1 pre-check: " + fix + (ctx && ctx.length ? " | context: " + ctx.slice(0, 3).join(" | ") : "")).slice(0, 520), pass: !!pass }; }
   try {
     var probs = groundingProblems(piece.text, ground, { forecast: forecast });
     if (!probs.length) return { ok: true, piece: piece, problems: [], trail: "clean", rows: [] };
     function refuse(why, remaining) {
       var rest = remaining && remaining.length ? remaining : probs;
-      if (soft) return { ok: true, piece: piece, problems: [], trail: why + " (" + GROUND_PRE_KEY + "=prune: the draft goes to the panel unchanged)", rows: [stageRow(false, why + "; " + probs.length + " flagged, the draft went to the panel unchanged (" + GROUND_PRE_KEY + "=prune)", probs)], passedOn: true, flagged: rest };
-      return { ok: false, piece: piece, problems: rest, trail: why, rows: [stageRow(false, why + "; " + probs.length + " flagged, the panel was not asked", probs)] };
+      if (soft) return { ok: true, piece: piece, problems: [], trail: why + " (" + GROUND_PRE_KEY + "=prune: the draft goes to the panel unchanged)", rows: [stageRow(false, why + "; " + probs.length + " flagged, the draft went to the panel unchanged (" + GROUND_PRE_KEY + "=prune)", probs, probs.ctx)], passedOn: true, flagged: rest };
+      return { ok: false, piece: piece, problems: rest, trail: why, rows: [stageRow(false, why + "; " + probs.length + " flagged, the panel was not asked", probs, probs.ctx)] };
     }
     if (forecast) return refuse("a forecast draft names or counts what the source does not hold (no prune for a forecast)");
     var pr = pruneUnsupported(piece.text, probs);
@@ -2834,9 +2914,42 @@ function reasonIsInference(item) {
 }
 // Q08-FACT-OBJECT-ITEM-1 (0.14.3, run 338): a reviewer listed an item as an object ({"label": ..., "claim": ..., "reason": ...}), which
 // became "[object Object]", an unlabelled FACT nobody could delete. An object item is rebuilt as "LABEL: claim -- reason".
+// Q08-REVIEWER-HYGIENE-1 (0.36.0, 2026-10-26): of 18 fact-check failures read from engine_runs on 2026-10-24..26, seven were not claims the
+// draft makes. A reviewer printed an object as a string (`{"fact":"FACT: ... -- reason"}`, `{"FACT":"claim -- reason"}`, kimi, 3), listed the
+// word "reason" or an empty claim with only a reason (gpt-oss, 2), or listed a claim and then wrote "still, it is in the source material, so
+// supported" (gpt-oss, 1; a FACT label skipped the supported test that an unlabelled item gets). Each such item doomed the draft: the needle
+// was JSON, so the prune located nothing and the run ended after 3 writer, 7 reviewer and 3 fact-check calls. Reviewer output is now read as
+// what it is before it is classified: an object printed as a string is unwrapped; an item with no claim text is set aside (a fail that names
+// nothing else still fails closed); an item whose own closing clause says the claim is supported is acquitted, not deleted and not failed.
+function unwrapJsonItem(str) {
+  var t = String(str);
+  if (!/^\s*\{\s*"/.test(t)) return t;
+  try { var o = JSON.parse(t); if (o && typeof o === "object" && !Array.isArray(o)) { var r = factItemText(o); if (r) return r; } } catch (e) { /* truncated or malformed: take the value below */ }
+  var m = t.match(/^\s*\{\s*"(fact|inference)"\s*:\s*"((?:[^"\\]|\\.)*)/i);
+  if (!m) return t;
+  var v = m[2].replace(/\\"/g, '"').replace(/\\n/g, " ").trim();
+  return /^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]/i.test(v) ? v : m[1].toUpperCase() + ": " + v;
+}
+function itemHasNoClaim(item) {
+  var s = String(item).replace(/^\s*\**\s*(?:FACT|INFERENCE)\s*\**\s*[:\-]\s*/i, "").trim();
+  if (/^--/.test(s)) return true;
+  var i = s.lastIndexOf(" -- "), claim = i >= 0 ? s.slice(0, i) : s;
+  return normForMatch(claim).replace(/\b(?:reason|claim|fact|inference|none|null|na|n a)\b/g, "").trim().length < 1;
+}
+var SUPPORTED_CLAUSE_RE = /^(?:(?:so|therefore|thus|hence|and|but|still|yet)\s+)*(?:(?:it|this|that|the claim|the sentence|the statement)\s+(?:is|are)\s+)?(?:fully\s+|directly\s+|in fact\s+)?(?:supported|in (?:the )?source(?: material| text)?|stated in (?:the )?source(?: material)?|found in (?:the )?source(?: material)?)(?:\s+by (?:the )?(?:source|source material|article|background))?$/;
+function reviewerSaysSupported(item) {
+  var s = String(item), i = s.lastIndexOf(" -- ");
+  if (i < 0) return false;
+  var parts = s.slice(i + 4).split(/\s+--\s+|[;,.:\u2014]/).map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+  var last = parts.length ? parts[parts.length - 1] : "";
+  return !!last && !/\b(?:not|no|never|un\w+|partly|partially|only|but|cannot|can't)\b|n't/.test(last) && SUPPORTED_CLAUSE_RE.test(last);
+}
 function factItemText(x) {
   if (x == null) return "";
+  if (typeof x === "string") return unwrapJsonItem(x);
   if (typeof x !== "object") return String(x);
+  var lk = Object.keys(x).filter(function (k) { return /^(fact|inference)$/i.test(k) && typeof x[k] === "string" && x[k].trim(); });
+  if (lk.length === 1) { var kv = x[lk[0]].trim(); return /^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]/i.test(kv) ? kv : lk[0].toUpperCase() + ": " + kv; }
   var pick = function (keys) { for (var i = 0; i < keys.length; i++) { if (x[keys[i]] != null && String(x[keys[i]]).trim()) return String(x[keys[i]]).trim(); } return ""; };
   var label = pick(["label", "type", "kind", "category"]).toUpperCase();
   var claim = pick(["claim", "quote", "quotation", "text", "sentence", "item", "excerpt"]);
@@ -2867,15 +2980,17 @@ function claimIsReasoning(item, labelledFact) {
   return labelledFact ? (GENERAL_MARK_RE.test(claim) || INFERENCE_REASON_RE.test(reason)) : REASONING_MARK_RE.test(claim);
 }
 function splitFactItems(items) {
-  var facts = [], inferences = [];
+  var facts = [], inferences = [], acquitted = [];
   (items || []).forEach(function (x) {
     var s = String(x).replace(/\s+/g, " ").trim();
+    if (itemHasNoClaim(s)) return; // no claim text to check, delete or fail on; a fail that names nothing else still fails closed (parseFactVerdict)
+    if (reviewerSaysSupported(s)) { acquitted.push(s.slice(0, 260)); return; }
     var m = s.match(/^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]\s*/i);
     if (m && (m[1].toUpperCase() === "INFERENCE" || claimIsReasoning(s.slice(m[0].length), true) || (s.lastIndexOf(" -- ") > 0 && wordingOnly(s.slice(s.lastIndexOf(" -- ") + 4))))) inferences.push(s.slice(m[0].length).slice(0, 260));
     else if (!m && (reasonIsInference(s) || claimIsReasoning(s))) inferences.push(s.slice(0, 260));
     else facts.push((m ? s.slice(m[0].length) : s).slice(0, 260));
   });
-  return { facts: facts.filter(Boolean), inferences: inferences.filter(Boolean) };
+  return { facts: facts.filter(Boolean), inferences: inferences.filter(Boolean), acquitted: acquitted };
 }
 function parseFactVerdict(text) {
   // COMPANION/Q08-VERDICT-TOLERANT-1: a reviewer that wraps its JSON in prose, trails off before the closing brace or prints the JSON twice
@@ -2898,9 +3013,9 @@ function parseFactVerdict(text) {
   // Q08-FACT-INFERENCE-1: the verdict follows the FACT items. A fail that names nothing at all stays a fail (fail-closed); a fail that
   // names only INFERENCE items is a pass with those sentences to delete.
   if (u.length) v = "fail";
-  else if (v === "fail" && !sp.inferences.length) u = ["the reviewer rejected the draft without naming a claim"];
+  else if (v === "fail" && !sp.inferences.length && !sp.acquitted.length) u = ["the reviewer rejected the draft without naming a claim"];
   else v = "pass";
-  return { verdict: v, unsupported: u, inferences: sp.inferences };
+  return { verdict: v, unsupported: u, inferences: sp.inferences, acquitted: sp.acquitted.length };
 }
 // FACTCHECK-NOTHINK-1 (measured 2026-10-12 against the live models with the same fact-check prompt): reasoning reviewers spent 4-9 s and
 // 245 neurons thinking about a task that needs a comparison, and timed out on long drafts at 110 s. These per-model switches return the same
@@ -3811,16 +3926,24 @@ function pieceHead(p, desc) {
   return '<meta name="citation_title" content="' + q08Attr(q08Plain(p.title)) + '"><meta name="citation_publication_date" content="' + q08Attr(d) + '"><meta name="citation_abstract_html_url" content="' + q08Attr(u) + '"><meta name="citation_publisher" content="q08"><meta name="citation_author" content="q08">' +
     '<meta property="article:published_time" content="' + q08Attr(p.published_at || "") + '"><meta property="article:section" content="' + (p.kind === "forecast" ? "Forecast" : "Analysis") + '">';
 }
+// BP26-AI-LABEL-1 (0.37.0, 2026-10-26): EU AI Act Article 50(4) requires AI-generated text published to inform the public on matters of
+// public interest to be disclosed as such unless a human holds editorial responsibility; q08 publishes without a human review step, so every
+// piece says so where it is read, links the method note, and states it in machine-readable form (JSON-LD creditText). The label is
+// unconditional: there is no switch, because the obligation has no off position.
+var AI_METHOD_URL = ORIGIN + "/p/2026-10-26-how-q08-researches-writes-and-scores-its-forecasts-m3th0d";
+var AI_LABEL_TEXT = "AI-generated";
+var AI_CREDIT_TEXT = "Researched and written by AI; factual claims are checked by an independent AI fact-checker before publication. No human reviews pieces before they appear. Method: " + AI_METHOD_URL;
+function aiLabelHtml() { return '<a class="q-badge" href="' + escHtml(AI_METHOD_URL) + '" title="' + escHtml(AI_CREDIT_TEXT) + '" style="text-decoration:none">' + AI_LABEL_TEXT + "</a>"; }
 function renderPiece(p, fr) {
   var body = mdToHtml(p.body_md || "").replace(/^\s*<h1>[\s\S]*?<\/h1>\s*/, "");
   var refs = renderSources(p.sources_json);
   var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><textarea class="q-input" name="note" maxlength="280" rows="2" style="flex-basis:100%;order:2" placeholder="Optional: what was missing?" aria-label="Optional note: what was missing?"></textarea><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button></form>';
   var date = (p.published_at || "").slice(0, 10);
   var desc = q08Short(q08Lede(p.body_md), 160);
-  var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + q08Inline(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + "</p>" +
+  var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + q08Inline(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + " \u00b7 " + aiLabelHtml() + "</p>" +
     '<div class="q-prose piece">' + body + "</div>" + (p.kind === "forecast" ? renderForecastBox(fr) : "") + fb + renderShare(p) + renderFunnel(p.slug) + (refs ? '<div class="q08-refs">' + refs.replace(/^\s*<section class="refs">/, "").replace(/<\/section>\s*$/, "") + "</div>" : "") + "</article>" + q08Sub(false);
   return q08Page({ title: q08Plain(p.title) + " \u00b7 q08", description: desc, canonical: ORIGIN + "/p/" + p.slug, ogType: "article", extraHead: pieceHead(p, desc),
-    jsonld: { "@context": "https://schema.org", "@type": "Article", headline: q08Plain(p.title).slice(0, 110), description: desc, datePublished: p.published_at || undefined, dateModified: p.published_at || undefined, url: ORIGIN + "/p/" + p.slug, mainEntityOfPage: ORIGIN + "/p/" + p.slug, isAccessibleForFree: true, inLanguage: "en", articleSection: p.kind === "forecast" ? "Forecast" : "Analysis", isPartOf: p.kind === "forecast" ? { "@type": "CreativeWorkSeries", name: "q08 Forecast Ledger", url: ORIGIN + "/forecasts" } : undefined, author: { "@type": "Organization", name: "q08", url: ORIGIN + "/" }, publisher: { "@type": "Organization", name: "q08", url: ORIGIN + "/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } } } }, html);
+    jsonld: { "@context": "https://schema.org", "@type": "Article", headline: q08Plain(p.title).slice(0, 110), description: desc, datePublished: p.published_at || undefined, dateModified: p.published_at || undefined, url: ORIGIN + "/p/" + p.slug, mainEntityOfPage: ORIGIN + "/p/" + p.slug, isAccessibleForFree: true, inLanguage: "en", creditText: AI_CREDIT_TEXT, articleSection: p.kind === "forecast" ? "Forecast" : "Analysis", isPartOf: p.kind === "forecast" ? { "@type": "CreativeWorkSeries", name: "q08 Forecast Ledger", url: ORIGIN + "/forecasts" } : undefined, author: { "@type": "Organization", name: "q08", url: ORIGIN + "/" }, publisher: { "@type": "Organization", name: "q08", url: ORIGIN + "/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } } } }, html);
 }
 // Bare fragments (subscribe, confirm, unsubscribe, not found) get the full page shell.
 function q08Wrap(fragment, title) {
@@ -4053,7 +4176,7 @@ function cleanNote(v) {
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __forecast = { forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
-export const __gen = { q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
+export const __gen = { parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };
 export const __cuts = { readerCutIndices: readerCutIndices, applyReaderCuts: applyReaderCuts };
@@ -4125,6 +4248,10 @@ function withPolicyHeaders(resp) {
   var r = new Response(resp.body, resp);
   r.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   r.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
+  // BP26-EDGE-HEADERS-1 (0.37.0): OWASP secure-headers baseline for HTML. No includeSubDomains: other q08.org hosts are deployed separately.
+  r.headers.set("X-Content-Type-Options", "nosniff");
+  r.headers.set("Strict-Transport-Security", "max-age=31536000");
+  r.headers.set("X-Frame-Options", "SAMEORIGIN");
   return r;
 }
 async function countPieceRead(env, req, slug, ctx) {

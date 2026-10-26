@@ -62,7 +62,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // This starts the new-paper backlog without stopping revisions.
 // PROPOSAL-STAGE-PRIORITY-1 (2026-10-25, continuation of PROPOSAL-FAIRNESS-1): the claim query started two proposals at 10:06 UTC, but the stage loop picked a researching row by rowid, so a remediation review row could run ahead of the proposal review row at the next budget window. The stage query now orders source=proposal first, then claimed_at, at every stage. No cost, gate or review-depth change.
 // DAILY-BUDGET-SCHEDULE-1 (2026-10-25, agent_issues 100622, critical): spent=216310 vs pace=201000 held every stage from 10:11 to 12:00 UTC while two proposals and three revisions sat researching. The prorated pace now only reports; the hold is the hard daily budget. A per-round re-check stops one concurrent round from crossing the cap. The pace remains in GET /budget and the event text.
-var VERSION = "0.33.9-codeagent"; /* 0.33.3 BROKEN-BINDING-PAPERS-1 + BROKEN-BINDING-BIBLIOGRAPHY-1 (2026-10-25, remediation sweep; pillar reliability): reconcileDOIBatch read and wrote papers through env.QNFO_AUDIT, but qnfo-audit has no papers table (living-paper owns it, bound here as LIVING_PAPER), so every reconcile pass threw and DOI reconciliation had never run. The citation cross-check then queried a bibliography table that exists in neither database, raising D1_ERROR for every reference; it now probes once per run and follows RESEARCH-THROUGHPUT-1's documented skip path (logged, deterministic release gate unchanged). Found by the fleet graph sql-table-missing findings, which were real. */ /* 0.33.2 FLOOR-REARM-NOOP-1 (2026-10-25, remediation sweep of the dashboard's 59 metric breaches; pillar reliability): floorRearmTick probes sqlite_master for bak_20261019_research_parked before querying it, so the missing migration is the no-op its contract already promised instead of a D1_ERROR on every 10-minute tick (134 scheduled exceptions/day, the worker's only error class and one of the two workers behind the dashboard's "errors in the last 3h" finding). */ /* 0.32.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): publish, revision and errata SQL write and read doi only (the registrar columns are no longer touched); dead DOIs are recognised by the 10.5281 prefix. */ /* 0.31.0 COST-SUSTAIN-1 (2026-10-21, owner directive: research and publication <= $300/month all-in, quality must not drop; pillar cost): a hard daily neuron budget (ops_config research_daily_neurons, default 360000 = $3.96/day at $0.011/1k; 2026-10-09..12 ran 252-345k/day for 22-31 papers/day) paced across the UTC day (spent <= budget x (hour+1)/24 + 10% burst) gates every model-spending path of this worker and its folded members (stages, revision loop, claim-integrity sweep, reviser and thin-prior-work members): work over the pace waits for the next tick, nothing is skipped, gates and review depth are unchanged. Root cause it closes: every earlier cost control was soft (width, model order) and a throughput config raise (research_parallel 96, 2026-10-18) tripled spend to 3.5-4.2M neurons/day with nothing to stop it. Event research-budget; GET /budget. */ /* 0.29.0 RESEARCH-TERMINAL-REARMED-1 + PARKED-REGROUND-1 + NOTICE-REPAIR-SKIP-BLOCKED-1 (2026-10-20, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100026, 100043, 100049, 100051, 100153, 100165, 100274; pillar autonomy; minor: a recovery it now takes on its own): (a) every RESEARCH-TERMINAL issue gets a self-closing contract, whatever the reason: resolved when the row has left the terminal state (re-armed and back in the pipeline, or published), or parked for a content reason with the queue advancing, or when every automatic recovery is spent (terminal_rearms >= 2); a reason that can be a pipeline fault closes only on the first or last of these; markError dedupes the issue against open issues only (a row that went terminal again after its issue closed filed nothing) and upserts the contract on its class; (b) PARKED-REGROUND-1: the hourly park sweep returns up to 2 rows parked for a content or convergence failure to ground with a fresh draft, once per recovery, rows with an open issue first (park_rearm = off stops it); (d) VERIFY-ZERO-CLAIMS-1: a verify pass whose extraction found no claim in a paper with 6 or more numeric equalities logs a verify-zero-claims event (the pass itself is unchanged), measured by the fm-verify-zero-claims-quantitative detector (PAPER-LEARN-1 learning, issue 100234); (c) noticeRepairTick counts repairs, not attempts: eight papers the living-paper publish floor refuses (retracted -> published under 20,000 chars) held the batch of 8 for ever and the restorable ones behind them were never tried; a refused paper is reported as blocked and the loop goes on. terminal-rearmed.test.mjs, poison-park.test.mjs. */ /* 0.28.7 RESEARCH-TERMINAL-HARD-REVIEW-SELFCLOSE-1 (2026-10-20, agent_issues 100294 lever 1, 100290; pillar autonomy; patch): a row parked because the review found HARD findings the revise cycles did not resolve ("review: N HARD findings unresolved after M revise cycles") is the integrity gate withholding the paper, like a verify mismatch with every gate passing; its RESEARCH-TERMINAL issue now gets the same self-closing contract (parked row with its reason, queue advancing) instead of waiting for a person (14 of the last 15 closed by hand after about 54 h). "revise: no applicable edit" and every other terminal reason keep no contract and stay open for a fix, since they can be a pipeline fault. poison-park.test.mjs. */ /* 0.28.1 PROPORTIONATE-NOTICE-2 (2026-10-19): papers_fabricated_claims_open counts flags on published pipeline papers only; four flags left on the owner's papers before 0.28.0 held the metric above 0. */ /* 0.28.0 PROPORTIONATE-NOTICE-1 (2026-10-19, owner: corrections "overly aggressive ... a warning notice about trivial semantics that seems to nullify the whole paper"): no banner under a paper's title for a revision or a wording correction, only a Version History line; the claim check covers pipeline papers only; noticeRepairTick restores the owner's corrected or retracted papers from paper_integrity_backups and turns earlier banners into history lines. */ /* 0.27.6 REVISION-NONREGRESS-1 (2026-10-19): a loop revision with under 70% of the live references or 60% of its words is sent back through the pipeline instead of replacing the live paper. */ /* 0.27.5 REVISION-CLAIMGATE-1 (2026-10-19): claimAudit strips the revision banner, Version History and Provenance section before scanning; the claim gate read those pipeline notes as fabricated claims and blocked the first loop revisions. */ /* 0.27.3 REVISION-CLAIM-FIRST-1 (2026-10-19): a queued revision row is claimed ahead of resumable drafts too; re-armed revise rows kept arriving and the five revision rows queued 17:31-18:20 were never claimed. At most revision_loop_inflight (8) rows jump the queue. */ /* 0.27.2: merged main (0.26.1/0.26.2 code-agent fixes). */ /* 0.27.1 REVISION-ELIGIBLE-2 (2026-10-19): the loop takes only qnf- identifiers or queue-row papers (qnfo-2025-* is the owner's imported writing, 8 such rows were parked), and a queued revision row is claimed ahead of the 72-hour FIFO so revisions are not starved behind 106 old proposals. */ /* 0.27.0 REVISION-ERRATA-1 (2026-10-19, pillar research): open internal_errata for a published paper (PAPER-LEARN-1 confirmed errors, reviser findings) go into its revision brief and put it first in the revision loop after 60 minutes; rlEligible no longer excludes pipeline papers that carry the owner as byline (226 qnf- papers were kept out). */ /* 0.26.0 REVISION-LOOP-1 (2026-10-19, pillar research, owner directive "continually self-improve, self-correct, loop in new information, and iterate"): published pipeline papers go back through the whole pipeline on a rate (ops_config revision_loop_*), oldest and gate failures first, and publish as the next minor version with a Version History; remediation rewrites follow the live version instead of a fixed 2.0.0; publishV2 keeps every replaced text in living-paper paper_version_history; GET /revision-loop and /paper-versions. */ /* 0.25.0 WAI-WIDTH-GOVERNOR-1 (2026-10-19, pillar cost, agent_issues 99924, 2731, 99928, 99937, 2930; BUDGET-SOFT-ROUTE-1 backpressure, never a stop): (a) the stage width is governed AIMD style under the LEAN-WIDTH-1 cap: a tick whose last 30 minutes show more than 15% of its stage runs rate-limited (3021/3040 on the first attempt, at least 3) halves the next width (floor 4), a clean tick adds 2 (event research-width); ops_config research_governor = off restores the plain cap; (b) after a 3021/3040 on a model every slot of the isolate skips it for 20 s, to its fallback or by waiting; (c) AI_RATE_FALLBACK never names a model whose input rate is above the primary's (glm-5.3-flash fell back to gpt-oss-120b, 2.3x): the call waits one gauge window and tries once more; (d) kimi-k2.6 (6.3x the glm-5.3-flash input rate, 172 of 324 calls failed on 10-19, 29% of the worker's neurons) runs in revise and in the verify text path only as the last retry after glm-5.3-flash and gpt-oss-120b (ops_config research_kimi_last_resort = off drops it). */ /* 0.24.0 RESEARCH-FLOOR-1 (rebased onto 0.23.0 CLAIM-INTEGRITY-1) (2026-10-19, agent_issues 99913, pillar research): (a) REVISE-SHRINK-GUARD-1: a revise patch that would take a paper from at or above the publish floor (20,000 chars) to below it, cut more than 20% of it, or drop its cited references under the reference floor counts as not applied (event revise-shrink-refused), so the second model runs with the limit stated; (b) COMPLETE-TO-FLOOR-1: the complete stage extends a complete paper under the floor with grounded sections (event floor-extend, at most 6 rounds, goal 1.2x the floor) and gate-length / gate-refcount findings route verify and revise to complete instead of the patch reviser (event floor-route); (c) FLOOR-REARM-1: the hourly sweep returns the rows frozen in bak_20261019_research_parked to complete, 5 per run, once each. */ /* 0.22.0 CLAIM-INTEGRITY-1 (2026-10-19, owner directive: the pipeline published experimental designs, pilot measurements, pre-registrations and blind expert reviews that never happened; pillar research): the writer, reconcile, revise and patch prompts forbid describing empirical work as done and the reviewer counts it HARD; claimGate (deterministic scan, a gpt-oss-120b extraction and a glm-5.3-flash confirmation) holds such a paper in verify and blocks a publishV2 revision that carries one; claimIntegritySweep audits every published paper newest first on each 10-minute tick (again at each new version), rewrites confirmed statements as proposals or assumptions with a Correction Notice as a new version, and retracts a paper with 5 or more, or one a correction cannot clear (status retracted, notice body, original in qnfo-audit.paper_integrity_backups). GET /claim-integrity reads the ledger; ops_config claim_integrity_mode = measure | off. */ /* 0.21.1 KIMI-TIMEOUT-FALLBACK-1 (2026-10-19, pillar research): a 3046 timeout on kimi-k2.6, the revise stage's second model (268 of 520 calls failed on 10-18/19, ~210 s each), falls back at once to glm-5.3-flash instead of three retries and an empty answer. */ /* 0.21.0 THIN-PRIOR-WORK-1 (2026-10-19, pillar research, agent_issues 99949; metric papers_live_failing_release_gate 140): every hour at :30 two published papers that fail the release gate as quality:thin get a Prior Work and Related Literature section grounded in the full texts of up to three related gate-passing QNFO papers, checked by a second model family, and queued as a revision for publishV2; ops_config thin_prior_work = off stops it. 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.35.0-repo-provenance"; /* 0.35.0 REPO-DEPOSIT-1 + RESEARCH-PROVENANCE-1 (2026-10-26, pillar research; minor: the worker now keeps the research record complete on its own): a run and its paper are one Git Data API commit in QNFO/qnfo-research (runs/cycle-N/<slug>/ + papers/<slug>/ with a provenance.json), retried on the new head after a refused ref update, with a blob-integrity check and a manifest read-back, so a deposit is ok only when it landed; the manifest is v2 (run id, configured models, paper hash, UTF-8 byte counts) with an RO-Crate beside it; every attempt is a research_run_ledger row; a failed deposit is retried by the 10-minute sync tick, which also restores the gaps listed in the repository's provenance/known-gaps.json (run files from R2 only if the hash equals the manifest's; paper text from living-paper) and compares a few published papers per tick with their git copy (research_repo_sync_batch). Closes: 97 of 400 deposits logged ok with an HTTP 409, 154 manifest-listed files missing from 47 runs, 48 runs without a manifest, 201 pipeline papers with no papers/<slug>/paper.md, revisions that never reached git (PUT without sha, HTTP 422), and unquoted SQL (datetime(now)) in an empty catch that left publication_artifacts at 0 GitHub rows. Until QNFO/qnfo-research carries provenance/IMPORT.json a run still goes to the legacy repository (atomically) and paper text is not written. ops_config research_repo_target / research_repo_sync / research_repo_restore switch it off without a deploy. repo-deposit.test.mjs (27 cases on a fake Git Data API). repoCatchupTick finishes the consolidation on its own: while the legacy repository has cycles that runs/ lacks, or its history is not an ancestor of main (the repository merges squash-only, which drops the imported commits), it dispatches the qnfo-research workflow ensemble-catchup.yml (at most every 6 hours) and, once none are missing, the history is linked and 3 consolidated deposits are ledgered, files one PORTFOLIO-ARCHIVE-1 request for the legacy repository (research_repo_archive = off stops it). GET /repo-ledger. */ /* 0.34.0 ERRATA-CONFIRM-COST-1 (2026-10-26, agent_issues 1000032/1000035, pillar cost; minor: the confirm rate is now a setting the fleet tunes on its own): the internal-errata confirm checks PAPER-LEARN-1 findings with deepseek-v4-flash first and kimi-k2.6 second (kimi was 33% of the shared research budget on 2026-10-25), reads a 24k-char excerpt instead of 48k, takes ops_config errata_confirm_max rows per tick (default 12, at most 48; BREACH-SELFHEAL-1 tunes it) and records which model settled each row. */ /* 0.33.3 BROKEN-BINDING-PAPERS-1 + BROKEN-BINDING-BIBLIOGRAPHY-1 (2026-10-25, remediation sweep; pillar reliability): reconcileDOIBatch read and wrote papers through env.QNFO_AUDIT, but qnfo-audit has no papers table (living-paper owns it, bound here as LIVING_PAPER), so every reconcile pass threw and DOI reconciliation had never run. The citation cross-check then queried a bibliography table that exists in neither database, raising D1_ERROR for every reference; it now probes once per run and follows RESEARCH-THROUGHPUT-1's documented skip path (logged, deterministic release gate unchanged). Found by the fleet graph sql-table-missing findings, which were real. */ /* 0.33.2 FLOOR-REARM-NOOP-1 (2026-10-25, remediation sweep of the dashboard's 59 metric breaches; pillar reliability): floorRearmTick probes sqlite_master for bak_20261019_research_parked before querying it, so the missing migration is the no-op its contract already promised instead of a D1_ERROR on every 10-minute tick (134 scheduled exceptions/day, the worker's only error class and one of the two workers behind the dashboard's "errors in the last 3h" finding). */ /* 0.32.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): publish, revision and errata SQL write and read doi only (the registrar columns are no longer touched); dead DOIs are recognised by the 10.5281 prefix. */ /* 0.31.0 COST-SUSTAIN-1 (2026-10-21, owner directive: research and publication <= $300/month all-in, quality must not drop; pillar cost): a hard daily neuron budget (ops_config research_daily_neurons, default 360000 = $3.96/day at $0.011/1k; 2026-10-09..12 ran 252-345k/day for 22-31 papers/day) paced across the UTC day (spent <= budget x (hour+1)/24 + 10% burst) gates every model-spending path of this worker and its folded members (stages, revision loop, claim-integrity sweep, reviser and thin-prior-work members): work over the pace waits for the next tick, nothing is skipped, gates and review depth are unchanged. Root cause it closes: every earlier cost control was soft (width, model order) and a throughput config raise (research_parallel 96, 2026-10-18) tripled spend to 3.5-4.2M neurons/day with nothing to stop it. Event research-budget; GET /budget. */ /* 0.29.0 RESEARCH-TERMINAL-REARMED-1 + PARKED-REGROUND-1 + NOTICE-REPAIR-SKIP-BLOCKED-1 (2026-10-20, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100026, 100043, 100049, 100051, 100153, 100165, 100274; pillar autonomy; minor: a recovery it now takes on its own): (a) every RESEARCH-TERMINAL issue gets a self-closing contract, whatever the reason: resolved when the row has left the terminal state (re-armed and back in the pipeline, or published), or parked for a content reason with the queue advancing, or when every automatic recovery is spent (terminal_rearms >= 2); a reason that can be a pipeline fault closes only on the first or last of these; markError dedupes the issue against open issues only (a row that went terminal again after its issue closed filed nothing) and upserts the contract on its class; (b) PARKED-REGROUND-1: the hourly park sweep returns up to 2 rows parked for a content or convergence failure to ground with a fresh draft, once per recovery, rows with an open issue first (park_rearm = off stops it); (d) VERIFY-ZERO-CLAIMS-1: a verify pass whose extraction found no claim in a paper with 6 or more numeric equalities logs a verify-zero-claims event (the pass itself is unchanged), measured by the fm-verify-zero-claims-quantitative detector (PAPER-LEARN-1 learning, issue 100234); (c) noticeRepairTick counts repairs, not attempts: eight papers the living-paper publish floor refuses (retracted -> published under 20,000 chars) held the batch of 8 for ever and the restorable ones behind them were never tried; a refused paper is reported as blocked and the loop goes on. terminal-rearmed.test.mjs, poison-park.test.mjs. */ /* 0.28.7 RESEARCH-TERMINAL-HARD-REVIEW-SELFCLOSE-1 (2026-10-20, agent_issues 100294 lever 1, 100290; pillar autonomy; patch): a row parked because the review found HARD findings the revise cycles did not resolve ("review: N HARD findings unresolved after M revise cycles") is the integrity gate withholding the paper, like a verify mismatch with every gate passing; its RESEARCH-TERMINAL issue now gets the same self-closing contract (parked row with its reason, queue advancing) instead of waiting for a person (14 of the last 15 closed by hand after about 54 h). "revise: no applicable edit" and every other terminal reason keep no contract and stay open for a fix, since they can be a pipeline fault. poison-park.test.mjs. */ /* 0.28.1 PROPORTIONATE-NOTICE-2 (2026-10-19): papers_fabricated_claims_open counts flags on published pipeline papers only; four flags left on the owner's papers before 0.28.0 held the metric above 0. */ /* 0.28.0 PROPORTIONATE-NOTICE-1 (2026-10-19, owner: corrections "overly aggressive ... a warning notice about trivial semantics that seems to nullify the whole paper"): no banner under a paper's title for a revision or a wording correction, only a Version History line; the claim check covers pipeline papers only; noticeRepairTick restores the owner's corrected or retracted papers from paper_integrity_backups and turns earlier banners into history lines. */ /* 0.27.6 REVISION-NONREGRESS-1 (2026-10-19): a loop revision with under 70% of the live references or 60% of its words is sent back through the pipeline instead of replacing the live paper. */ /* 0.27.5 REVISION-CLAIMGATE-1 (2026-10-19): claimAudit strips the revision banner, Version History and Provenance section before scanning; the claim gate read those pipeline notes as fabricated claims and blocked the first loop revisions. */ /* 0.27.3 REVISION-CLAIM-FIRST-1 (2026-10-19): a queued revision row is claimed ahead of resumable drafts too; re-armed revise rows kept arriving and the five revision rows queued 17:31-18:20 were never claimed. At most revision_loop_inflight (8) rows jump the queue. */ /* 0.27.2: merged main (0.26.1/0.26.2 code-agent fixes). */ /* 0.27.1 REVISION-ELIGIBLE-2 (2026-10-19): the loop takes only qnf- identifiers or queue-row papers (qnfo-2025-* is the owner's imported writing, 8 such rows were parked), and a queued revision row is claimed ahead of the 72-hour FIFO so revisions are not starved behind 106 old proposals. */ /* 0.27.0 REVISION-ERRATA-1 (2026-10-19, pillar research): open internal_errata for a published paper (PAPER-LEARN-1 confirmed errors, reviser findings) go into its revision brief and put it first in the revision loop after 60 minutes; rlEligible no longer excludes pipeline papers that carry the owner as byline (226 qnf- papers were kept out). */ /* 0.26.0 REVISION-LOOP-1 (2026-10-19, pillar research, owner directive "continually self-improve, self-correct, loop in new information, and iterate"): published pipeline papers go back through the whole pipeline on a rate (ops_config revision_loop_*), oldest and gate failures first, and publish as the next minor version with a Version History; remediation rewrites follow the live version instead of a fixed 2.0.0; publishV2 keeps every replaced text in living-paper paper_version_history; GET /revision-loop and /paper-versions. */ /* 0.25.0 WAI-WIDTH-GOVERNOR-1 (2026-10-19, pillar cost, agent_issues 99924, 2731, 99928, 99937, 2930; BUDGET-SOFT-ROUTE-1 backpressure, never a stop): (a) the stage width is governed AIMD style under the LEAN-WIDTH-1 cap: a tick whose last 30 minutes show more than 15% of its stage runs rate-limited (3021/3040 on the first attempt, at least 3) halves the next width (floor 4), a clean tick adds 2 (event research-width); ops_config research_governor = off restores the plain cap; (b) after a 3021/3040 on a model every slot of the isolate skips it for 20 s, to its fallback or by waiting; (c) AI_RATE_FALLBACK never names a model whose input rate is above the primary's (glm-5.3-flash fell back to gpt-oss-120b, 2.3x): the call waits one gauge window and tries once more; (d) kimi-k2.6 (6.3x the glm-5.3-flash input rate, 172 of 324 calls failed on 10-19, 29% of the worker's neurons) runs in revise and in the verify text path only as the last retry after glm-5.3-flash and gpt-oss-120b (ops_config research_kimi_last_resort = off drops it). */ /* 0.24.0 RESEARCH-FLOOR-1 (rebased onto 0.23.0 CLAIM-INTEGRITY-1) (2026-10-19, agent_issues 99913, pillar research): (a) REVISE-SHRINK-GUARD-1: a revise patch that would take a paper from at or above the publish floor (20,000 chars) to below it, cut more than 20% of it, or drop its cited references under the reference floor counts as not applied (event revise-shrink-refused), so the second model runs with the limit stated; (b) COMPLETE-TO-FLOOR-1: the complete stage extends a complete paper under the floor with grounded sections (event floor-extend, at most 6 rounds, goal 1.2x the floor) and gate-length / gate-refcount findings route verify and revise to complete instead of the patch reviser (event floor-route); (c) FLOOR-REARM-1: the hourly sweep returns the rows frozen in bak_20261019_research_parked to complete, 5 per run, once each. */ /* 0.22.0 CLAIM-INTEGRITY-1 (2026-10-19, owner directive: the pipeline published experimental designs, pilot measurements, pre-registrations and blind expert reviews that never happened; pillar research): the writer, reconcile, revise and patch prompts forbid describing empirical work as done and the reviewer counts it HARD; claimGate (deterministic scan, a gpt-oss-120b extraction and a glm-5.3-flash confirmation) holds such a paper in verify and blocks a publishV2 revision that carries one; claimIntegritySweep audits every published paper newest first on each 10-minute tick (again at each new version), rewrites confirmed statements as proposals or assumptions with a Correction Notice as a new version, and retracts a paper with 5 or more, or one a correction cannot clear (status retracted, notice body, original in qnfo-audit.paper_integrity_backups). GET /claim-integrity reads the ledger; ops_config claim_integrity_mode = measure | off. */ /* 0.21.1 KIMI-TIMEOUT-FALLBACK-1 (2026-10-19, pillar research): a 3046 timeout on kimi-k2.6, the revise stage's second model (268 of 520 calls failed on 10-18/19, ~210 s each), falls back at once to glm-5.3-flash instead of three retries and an empty answer. */ /* 0.21.0 THIN-PRIOR-WORK-1 (2026-10-19, pillar research, agent_issues 99949; metric papers_live_failing_release_gate 140): every hour at :30 two published papers that fail the release gate as quality:thin get a Prior Work and Related Literature section grounded in the full texts of up to three related gate-passing QNFO papers, checked by a second model family, and queued as a revision for publishV2; ops_config thin_prior_work = off stops it. 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -491,10 +491,10 @@ async function reclaimStaleResearching(env) {
     "UPDATE research_queue SET claimed_at=NULL WHERE claimed_at IS NOT NULL AND ((status='review' AND stage='publish') OR (status='researching' AND stage IN ('ground','ensemble','reconcile','complete','review','revise','verify'))) AND id NOT IN (SELECT id FROM research_queue WHERE ((status='review' AND stage='publish') OR (status='researching' AND stage IN ('ground','ensemble','reconcile','complete','review','revise','verify'))) ORDER BY claimed_at ASC LIMIT 24)"
   ).run();
   var staleClaim = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + RESEARCH_CLAIM_STALE_MIN + " minutes')";
-  var staleRearm = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + RESEARCH_FAILED_REARM_MIN + " minutes')";
+  var staleRearm = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + RESEARCH_CLAIM_STALE_MIN + " minutes')";
   var _rmax = Number(await recoverMax(env));
 var parked = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', claimed_at=NULL, error='PARKED-POISON-1: stale researching claim with recover_count exhausted (' || recover_count || '); not re-armed' WHERE " + staleClaim + " AND recover_count >= " + _rmax).run();
-  var req = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=NULL, attempt=0, recover_count=recover_count+1 WHERE " + staleRearm + " AND recover_count < " + _rmax).run();
+  var req = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=NULL, attempt=attempt+1, recover_count=recover_count+1, error='STALE-CLAIM-REAPER-1: reclaimed after ' || " + RESEARCH_CLAIM_STALE_MIN + " || ' min claimed_at; previous error: ' || COALESCE(error,'') WHERE " + staleRearm + " AND recover_count < " + _rmax).run();
   return { parked: (parked.meta && parked.meta.changes) || 0, requeued: (req.meta && req.meta.changes) || 0 };
 }
 // RERUN-ROUTE-1 (0.18.0, agent_issues 2473, pillar cost): markError sent every failing row back to stage ground, so a paper
@@ -1445,45 +1445,755 @@ function gateNonRegression(gate, liveGate) {
   });
   return rest.length ? { ok: false, reason: "quality gate: " + rest.join("; ") } : { ok: true, waived: "no_verification_marker (live version lacks one too)" };
 }
-async function depositToGithub(env, slug, title, md) {
-  if (!env.GITHUB_TOKEN) return { ok: false, error: "no github token" };
-  var owner = "QNFO", repo = "qnfo-research";
-  var prog = programFor(slug);
-  var dir = prog === "papers" ? "papers/" + slug : prog + "/" + slug;
-  var readme = "# " + (title || slug) + NL + NL + "Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)" + NL + "License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)" + NL + NL + "Auto-deposited by qnfo-research-exec (artifact-deposition P3).";
-  var files = [["paper.md", md || ""], ["README.md", readme]];
-  var out = [];
-  for (var i = 0; i < files.length; i++) {
-    var name = files[i][0], content = files[i][1];
-    var path = dir + "/" + name;
-    var body = JSON.stringify({ message: "auto-deposit: " + slug, content: b64(content), branch: "main" });
-    try {
-      var r = await fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, { method: "PUT", headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "QNFO-research-exec/0.8.0", "Content-Type": "application/json", Accept: "application/vnd.github+json" }, body });
-      var j = await r.json();
-      out.push({ file: name, status: r.status, sha: j && j.content && j.content.sha || "" });
-      if (r.status === 201 || r.status === 200) {
-        try {
-          await env.QNFO_AUDIT.prepare("INSERT INTO publication_artifacts (publication_id, artifact_type, artifact_name, sha256, file_size_bytes, created_at) VALUES (?, ?, ?, ?, ?, datetime(now))").bind(slug, "github-md", path, String(j.content && j.content.sha || ""), String(content).length).run();
-        } catch (ePa) {
-        }
+// REPO-DEPOSIT-BEGIN
+var REPO_DEPOSIT = (function() {
+// REPO-DEPOSIT-1 (pillar research, agent_issues RESEARCH-PROVENANCE-1): atomic, verified deposit of a pipeline run and its paper
+// into QNFO/qnfo-research. Offline suite: repo-deposit.test.mjs (a fake GitHub Git Data API). worker.js carries an identical
+// copy between the REPO-DEPOSIT-BEGIN/END markers and the suite fails when the two differ.
+// Standard: QNFO/qnfo-research docs/PROVENANCE-STANDARD.md (sections 3, 7, 8). The Python twin of the record builders is
+// qnfo-research tools/provenance.py; testdata/parity-* is the golden both implementations must produce.
+//
+// Why it exists (measured 2026-10-26): the old writer made one contents-API PUT per file on one branch; parallel slots got HTTP 409,
+// the loop ignored the status and logged ok (97 of 400 events), 154 manifest-listed files never landed, 48 runs have no manifest,
+// papers/<slug> was written by a PUT without `sha` (HTTP 422 for every later version: 95 of 121 papers have one commit), the
+// reconciled paper was never part of a run, and the ledger insert had unquoted SQL inside an empty catch.
+const REPO_DEPOSIT_VERSION = "1.0.0";
+
+const GH_API = "https://api.github.com";
+const TARGET_CONSOLIDATED = { owner: "QNFO", repo: "qnfo-research", branch: "main", runsDir: "runs", layout: "consolidated" };
+const TARGET_LEGACY = { owner: "QNFO", repo: "qnfo-ensemble-research", branch: "main", runsDir: "", layout: "legacy" };
+const RUN_MANIFEST_V2 = "qnfo-run-manifest/2";
+const PAPER_SCHEMA = "qnfo-paper-provenance/1";
+const CRATE_FILE = "ro-crate-metadata.json";
+const CRATE_CONTEXT = "https://w3id.org/ro/crate/1.2/context";
+const CRATE_SPEC = "https://w3id.org/ro/crate/1.2";
+const PROCESS_RUN_PROFILE = "https://w3id.org/ro/wfrun/process/0.4";
+const QNFO_NS = "https://qnfo.org/ns/provenance#";
+const ORCID = "https://orcid.org/0009-0002-4317-5604";
+const AUTHOR_NAME = "Rowan Brad Quni-Gudzinas";
+const LICENSE_ENTITY = { "@id": "https://qnfo.org/legal/license", "@type": "CreativeWork", name: "QNFO Unified License Agreement v2.1", identifier: "LicenseRef-QNFO-ULA-2.1" };
+const SIDECARS = new Set(["MANIFEST.json", CRATE_FILE, ".gitkeep"]);
+
+// ------------------------------------------------------------------------------------------------ bytes and hashes
+const ENC = new TextEncoder();
+function utf8(s) { return ENC.encode(String(s)); }
+function hex(buf) { return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join(""); }
+async function sha256Hex(data) { return hex(await crypto.subtle.digest("SHA-256", typeof data === "string" ? utf8(data) : data)); }
+// The id git gives a file (and Software Heritage's swh:1:cnt): sha1 of "blob <n>\0" + bytes. GitHub returns it for every blob we
+// create, so comparing it with our own proves the stored bytes are the bytes we hashed.
+async function gitBlobSha1(bytes) {
+  const head = utf8("blob " + bytes.length + "\0");
+  const all = new Uint8Array(head.length + bytes.length);
+  all.set(head, 0); all.set(bytes, head.length);
+  return hex(await crypto.subtle.digest("SHA-1", all));
+}
+function b64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function dumpJson(obj) { return JSON.stringify(obj, null, 2) + "\n"; }
+function encPath(p) { return String(p).split("/").map(encodeURIComponent).join("/"); }
+
+// ------------------------------------------------------------------------------------------------ GitHub (Git Data API)
+async function gh(env, deps, method, path, body, accept) {
+  const f = (deps && deps.fetch) || fetch;
+  try {
+    const r = await f(GH_API + path, {
+      method,
+      headers: Object.assign({ Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", Accept: accept || "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }, body ? { "Content-Type": "application/json" } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await r.text();
+    let json = null;
+    if (!accept) { try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; } }
+    return { status: r.status, ok: r.status >= 200 && r.status < 300, json, text, retryAfter: Number(r.headers && r.headers.get && r.headers.get("retry-after")) || 0 };
+  } catch (e) {
+    return { status: 0, ok: false, json: null, text: "", error: String(e && e.message || e).slice(0, 200), retryAfter: 0 };
+  }
+}
+const repoPath = (t) => "/repos/" + t.owner + "/" + t.repo;
+const transient = (r) => r.status === 0 || r.status >= 500 || r.status === 429 || (r.status === 403 && r.retryAfter > 0);
+
+async function readTextAt(env, deps, t, path, ref) {
+  const r = await gh(env, deps, "GET", repoPath(t) + "/contents/" + encPath(path) + "?ref=" + encodeURIComponent(ref), null, "application/vnd.github.raw+json");
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error("read " + path + " -> " + r.status + (r.error ? " " + r.error : ""));
+  return r.text;
+}
+async function listTree(env, deps, t, treeSha) {
+  const r = await gh(env, deps, "GET", repoPath(t) + "/git/trees/" + treeSha);
+  if (!r.ok) throw new Error("tree " + treeSha + " -> " + r.status);
+  return r.json.tree || [];
+}
+// Entries of a directory (by path) in the tree at `treeSha`; [] when the directory does not exist.
+async function listDirAt(env, deps, t, treeSha, dir) {
+  let sha = treeSha;
+  for (const seg of String(dir).split("/").filter(Boolean)) {
+    const hit = (await listTree(env, deps, t, sha)).find((e) => e.path === seg && e.type === "tree");
+    if (!hit) return [];
+    sha = hit.sha;
+  }
+  return listTree(env, deps, t, sha);
+}
+async function isAncestor(env, deps, t, commit, head) {
+  if (commit === head) return true;
+  const r = await gh(env, deps, "GET", repoPath(t) + "/compare/" + commit + "..." + head);
+  return !!(r.ok && r.json && (r.json.status === "ahead" || r.json.status === "identical"));
+}
+
+// One commit for many files, all or nothing. `opts.build(ctx)` is called on every attempt with the current head and returns the
+// changes ([{path, content}] or [{path, remove: true}]) so a retry re-reads what the other writer changed instead of overwriting it.
+// Retries a refused (non-fast-forward) ref update, a 5xx, a rate limit and a lost connection; after an ambiguous failure it checks
+// whether the commit landed before it tries again, so a lost response never produces a second commit.
+async function commitAtomic(env, deps, t, opts) {
+  const maxAttempts = opts.maxAttempts || 5;
+  const sleep = (deps && deps.sleep) || ((ms) => new Promise((res) => setTimeout(res, ms)));
+  const jitter = (deps && deps.random) || Math.random;
+  const clock = (deps && deps.now) || Date.now, t0 = clock(), deadline = opts.deadlineMs || 45000;
+  const blobs = new Map();
+  let last = "";
+  const wait = async (attempt, r) => sleep(Math.min(30000, (r && r.retryAfter ? r.retryAfter * 1000 : 0) || Math.round((400 * Math.pow(2, attempt - 1)) * (0.5 + jitter()))));
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // A pipeline tick has a time budget: a GitHub outage must not hold it for minutes. The next tick retries.
+    if (attempt > 1 && clock() - t0 > deadline) return { ok: false, landed: false, error: "deadline of " + deadline + " ms exceeded after " + (attempt - 1) + " attempts: " + last, attempts: attempt - 1 };
+    const ref = await gh(env, deps, "GET", repoPath(t) + "/git/ref/heads/" + t.branch);
+    if (!ref.ok) { last = "ref " + ref.status + (ref.error ? " " + ref.error : ""); if (transient(ref)) { await wait(attempt, ref); continue; } return { ok: false, landed: false, error: last, attempts: attempt }; }
+    const head = ref.json.object.sha;
+    const cm = await gh(env, deps, "GET", repoPath(t) + "/git/commits/" + head);
+    if (!cm.ok) { last = "commit " + cm.status; if (transient(cm)) { await wait(attempt, cm); continue; } return { ok: false, landed: false, error: last, attempts: attempt }; }
+    const treeSha = cm.json.tree.sha;
+    const ctx = {
+      head, treeSha, target: t,
+      readText: (path) => readTextAt(env, deps, t, path, head),
+      listDir: (dir) => listDirAt(env, deps, t, treeSha, dir),
+    };
+    let changes;
+    try { changes = await opts.build(ctx); } catch (e) { return { ok: false, landed: false, error: "build: " + String(e && e.message || e).slice(0, 200), attempts: attempt }; }
+    if (!changes || !changes.length) return { ok: true, empty: true, head, attempts: attempt, hashes: {} };
+    const entries = [], hashes = {};
+    let failed = null;
+    for (const c of changes) {
+      if (c.remove) { entries.push({ path: c.path, mode: "100644", type: "blob", sha: null }); continue; }
+      const bytes = utf8(c.content);
+      const h = await sha256Hex(bytes);
+      hashes[c.path] = { sha256: h, bytes: bytes.length };
+      let blobSha = blobs.get(h);
+      if (!blobSha) {
+        const b = await gh(env, deps, "POST", repoPath(t) + "/git/blobs", { content: b64(bytes), encoding: "base64" });
+        if (!b.ok) { failed = b; break; }
+        if (b.json.sha !== await gitBlobSha1(bytes)) return { ok: false, landed: false, error: "blob integrity: GitHub stored a different object for " + c.path, attempts: attempt };
+        blobSha = b.json.sha; blobs.set(h, blobSha);
       }
-    } catch (e) {
-      out.push({ file: name, error: String(e && e.message || e).slice(0, 120) });
+      entries.push({ path: c.path, mode: "100644", type: "blob", sha: blobSha });
+    }
+    if (failed) { last = "blob " + failed.status; if (transient(failed)) { await wait(attempt, failed); continue; } return { ok: false, landed: false, error: last + " " + String(failed.text).slice(0, 120), attempts: attempt }; }
+    const tr = await gh(env, deps, "POST", repoPath(t) + "/git/trees", { base_tree: treeSha, tree: entries });
+    if (!tr.ok) { last = "tree " + tr.status; if (transient(tr)) { await wait(attempt, tr); continue; } return { ok: false, landed: false, error: last + " " + String(tr.text).slice(0, 160), attempts: attempt }; }
+    const cr = await gh(env, deps, "POST", repoPath(t) + "/git/commits", { message: opts.message, tree: tr.json.sha, parents: [head] });
+    if (!cr.ok) { last = "commit-create " + cr.status; if (transient(cr)) { await wait(attempt, cr); continue; } return { ok: false, landed: false, error: last + " " + String(cr.text).slice(0, 160), attempts: attempt }; }
+    const commit = cr.json.sha;
+    const up = await gh(env, deps, "PATCH", repoPath(t) + "/git/refs/heads/" + t.branch, { sha: commit, force: false });
+    if (up.ok) return { ok: true, landed: true, commit, attempts: attempt, hashes, head };
+    if (up.status === 422 || up.status === 409) { last = "non-fast-forward"; await wait(attempt, null); continue; }
+    // Ambiguous (lost connection, 5xx): did it land? If so it is done; if not, a retry is safe.
+    const now = await gh(env, deps, "GET", repoPath(t) + "/git/ref/heads/" + t.branch);
+    if (now.ok && await isAncestor(env, deps, t, commit, now.json.object.sha)) return { ok: true, landed: true, commit, attempts: attempt, hashes, head, recovered: true };
+    last = "ref-update " + up.status + (up.error ? " " + up.error : "");
+    if (!transient(up)) return { ok: false, landed: false, error: last + " " + String(up.text).slice(0, 160), attempts: attempt };
+    await wait(attempt, up);
+  }
+  return { ok: false, landed: false, error: "gave up after " + maxAttempts + " attempts: " + last, attempts: maxAttempts };
+}
+
+// ------------------------------------------------------------------------------------------------ record builders
+const ROLE_PATTERNS = [
+  [/^SHARED-PROMPT\.md$/, "prompt"], [/^grounding\.md$/, "grounding"],
+  [/^writer-[a-z]-draft\.md$|^writer-[a-z]\/draft\.md$/, "draft"], [/^writer-[a-z]\/(notes|claims)\.md$/, "draft-support"],
+  [/^(reconciled-paper|RECONCILIATION|citation-audit)\.md$|^reconciled\.md$/, "reconciliation"],
+  [/^review-report(-\d+)?\.md$/, "review"], [/^verification\.md$/, "verification-report"], [/^verification\.py$/, "verification-script"],
+  [/^MANIFEST\.json$/, "manifest"],
+];
+function roleOf(rel) { for (const [rx, role] of ROLE_PATTERNS) if (rx.test(rel)) return role; return "other"; }
+function mimeOf(rel) { const m = /(\.[^./]+)$/.exec(rel); return ({ ".md": "text/markdown", ".py": "text/x-python", ".json": "application/json", ".txt": "text/plain" })[m ? m[1] : ""] || "application/octet-stream"; }
+
+const ARXIV_RE = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})|arXiv:\s*(\d{4}\.\d{4,5})/gi;
+const DOI_RE = /(?:doi\.org\/|doi:\s*)(10\.\d{4,9}\/[^\s)\]>"'`,;]+)/gi;
+function sourcesOf(grounding) {
+  const seen = new Map();
+  for (const m of String(grounding).matchAll(ARXIV_RE)) {
+    const aid = m[1] || m[2], id = "https://arxiv.org/abs/" + aid;
+    if (!seen.has(id)) seen.set(id, { "@id": id, "@type": "ScholarlyArticle", identifier: "arXiv:" + aid });
+  }
+  for (const m of String(grounding).matchAll(DOI_RE)) {
+    const doi = m[1].replace(/\.+$/, ""), id = "https://doi.org/" + doi;
+    if (!seen.has(id)) seen.set(id, { "@id": id, "@type": "ScholarlyArticle", identifier: "doi:" + doi });
+  }
+  return Array.from(seen.keys()).sort().slice(0, 200).map((k) => seen.get(k));
+}
+function recordedOutput(md) { const m = /## Execution output\n```\n([\s\S]*?)\n```/.exec(String(md)); return m ? m[1] : null; }
+function recordedExit(body) { const m = /\n*\[exit (-?\d+)\]\s*$/.exec(String(body)); return m ? Number(m[1]) : null; }
+const ref = (rels) => rels.map((r) => ({ "@id": r }));
+
+// files: [{rel, content}] present in the run directory; listed: {rel: {sha256}} from the manifest or null. Mirrors build_crate in
+// qnfo-research tools/provenance.py (parity golden: testdata/parity-crate.json). `preserve` copies the independent re-execution
+// recorded by that tool from the previous crate, so restoring a file does not erase it.
+async function buildCrate(input) {
+  const { runPath, cycle, slug, title, pipeline, deposit, listed } = input;
+  const files = input.files.filter((f) => f.rel !== CRATE_FILE && !/(^|\/)\.gitkeep$/.test(f.rel)).slice().sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+  const paperUrl = slug ? "https://papers.qnfo.org/papers/" + (input.paperSlug || slug) : null;
+  const root = {
+    "@id": "./", "@type": "Dataset",
+    name: "QNFO research run " + cycle + (slug ? ": " + (title || slug) : " (pilot)"),
+    description: "Interim and final artifacts of one run of the QNFO automated research pipeline, kept as deposited. MANIFEST.json is the pipeline's own record and is never rewritten; this crate adds the standard packaging, per-file fixity and the stage structure of the run.",
+    author: { "@id": ORCID }, license: { "@id": LICENSE_ENTITY["@id"] }, conformsTo: [{ "@id": PROCESS_RUN_PROFILE }],
+    "qnfo:cycle": cycle, "qnfo:runPath": runPath,
+  };
+  if (slug) root["qnfo:slug"] = slug;
+  if (pipeline) root["qnfo:pipelineVersion"] = pipeline;
+  if (deposit) { root.datePublished = deposit.date; if (deposit.commit) root["qnfo:depositCommit"] = deposit.commit; }
+  if (paperUrl) root.about = { "@id": paperUrl };
+  const parts = [], fileEnts = [], roles = {};
+  for (const f of files) {
+    const bytes = utf8(f.content), role = roleOf(f.rel);
+    fileEnts.push({ "@id": f.rel, "@type": "File", name: f.rel, encodingFormat: mimeOf(f.rel), contentSize: String(bytes.length), sha256: await sha256Hex(bytes), "qnfo:role": role, "qnfo:listedInManifest": !!(listed && listed[f.rel]) || f.rel === "MANIFEST.json" });
+    parts.push({ "@id": f.rel });
+    (roles[role] = roles[role] || []).push(f.rel);
+  }
+  const have = new Set(files.map((f) => f.rel));
+  const missingEnts = Object.keys(listed || {}).filter((fn) => !have.has(fn)).sort().map((fn) => ({ "@id": "#missing/" + fn, "@type": "CreativeWork", name: fn, sha256: listed[fn].sha256 || null, "qnfo:status": "listed-in-manifest-absent-from-repository" }));
+  if (missingEnts.length) root["qnfo:missingParts"] = missingEnts.map((m) => ({ "@id": m["@id"] }));
+  root.hasPart = parts;
+  const cp = { "@id": "#cpython", "@type": "SoftwareApplication", name: "CPython", description: "Interpreter that ran verification.py in the pipeline; its version was not recorded." };
+  const app = { "@id": "#pipeline", "@type": "SoftwareApplication", name: "qnfo-research-exec", url: "https://github.com/QNFO/qnfo-workers/tree/main/qnfo-research-exec" };
+  if (pipeline) app.version = pipeline;
+  const actions = [];
+  let prev = [];
+  for (const [aid, name, rls] of [["#grounding", "Literature grounding", ["prompt", "grounding"]], ["#drafting", "Independent drafting", ["draft", "draft-support"]], ["#reconciliation", "Reconciliation and citation audit", ["reconciliation"]], ["#review", "Adversarial review", ["review"]]]) {
+    const out = [].concat(...rls.map((r) => roles[r] || []));
+    if (!out.length) continue;
+    const act = { "@id": aid, "@type": "CreateAction", name, instrument: { "@id": "#pipeline" }, result: ref(out), actionStatus: { "@id": "http://schema.org/CompletedActionStatus" }, "qnfo:basis": "inferred-from-procedure" };
+    if (prev.length) act.object = ref(prev);
+    actions.push(act);
+    prev = out;
+  }
+  let graphSrc = [];
+  if (roles.grounding) {
+    const srcs = sourcesOf(files.find((f) => f.rel === roles.grounding[0]).content);
+    if (srcs.length) {
+      const g = actions.find((a) => a["@id"] === "#grounding");
+      if (g) { g.object = srcs.map((s) => ({ "@id": s["@id"] })); g["qnfo:sourcesBasis"] = "extracted-by-regex-from-grounding.md"; }
+      graphSrc = srcs;
     }
   }
-  try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime(now), artifact-deposit, qnfo-research-exec, ?)").bind((slug + " -> github " + JSON.stringify(out)).slice(0, 450)).run();
-  } catch (eL) {
+  const vscript = roles["verification-script"] || [], vreport = roles["verification-report"] || [];
+  const extra = [];
+  if (vscript.length) {
+    const rec = vreport.length ? recordedOutput(files.find((f) => f.rel === vreport[0]).content) : null;
+    const rcode = rec !== null ? recordedExit(rec) : null;
+    const orig = { "@id": "#verification-original", "@type": "CreateAction", name: "verification.py as run by the pipeline", instrument: { "@id": "#cpython" }, object: ref(vscript), result: ref(vreport.length ? vreport : vscript), actionStatus: { "@id": rcode ? "http://schema.org/FailedActionStatus" : "http://schema.org/CompletedActionStatus" }, "qnfo:basis": "recorded-in-verification.md" };
+    if (rcode !== null) orig["qnfo:exitCode"] = rcode;
+    if (deposit) { orig.endTime = deposit.date; orig.description = "endTime is the deposit time; the execution time itself was not recorded."; }
+    actions.push(orig);
+    const prior = input.preserve && input.preserve["@graph"];
+    const reex = prior && prior.find((e) => e["@id"] === "#verification-reexecution");
+    if (reex) {
+      actions.push(reex);
+      for (const id of [reex.instrument && reex.instrument["@id"], reex.agent && reex.agent["@id"]]) { const e = prior.find((x) => x["@id"] === id); if (e) extra.push(e); }
+    }
   }
-  return { ok: out.some(function(o) {
-    return o.status === 200 || o.status === 201;
-  }), files: out };
+  root.mentions = actions.map((a) => ({ "@id": a["@id"] }));
+  const graph = [{ "@id": CRATE_FILE, "@type": "CreativeWork", about: { "@id": "./" }, conformsTo: { "@id": CRATE_SPEC } }, ...extra, root, LICENSE_ENTITY, { "@id": PROCESS_RUN_PROFILE, "@type": "CreativeWork", name: "Process Run Crate", version: "0.4" }, { "@id": ORCID, "@type": "Person", name: AUTHOR_NAME }, cp, app];
+  if (paperUrl) graph.push({ "@id": paperUrl, "@type": ["CreativeWork", "ScholarlyArticle"], name: title || slug, url: paperUrl });
+  return { "@context": [CRATE_CONTEXT, { qnfo: QNFO_NS }], "@graph": graph.concat(graphSrc, fileEnts, missingEnts, actions) };
+}
+
+// The v2 manifest: what v1 recorded plus the run's identity, the configured models, the paper, a role per file and real byte counts
+// (v1 `bytes` was a JavaScript string length for 1,843 of 2,338 files).
+async function buildManifestV2(input) {
+  const files = {};
+  for (const f of input.files.slice().sort((a, b) => (a.rel < b.rel ? -1 : 1))) {
+    if (SIDECARS.has(f.rel)) continue;
+    const bytes = utf8(f.content);
+    files[f.rel] = { sha256: await sha256Hex(bytes), bytes: bytes.length, role: roleOf(f.rel) };
+  }
+  const m = {
+    schema: RUN_MANIFEST_V2, pipeline: input.pipeline,
+    run: { id: input.runId, slug: input.slug, cycle: input.cycle, worker: "qnfo-research-exec", worker_version: input.workerVersion, finished_at: input.finishedAt },
+    models: Object.assign({ basis: "configured-at-deposit" }, input.models || {}),
+    paper: input.paper ? { version: input.paper.version || null, sha256: await sha256Hex(input.paper.body), bytes: utf8(input.paper.body).length, path: input.paper.path } : null,
+    files,
+  };
+  return m;
+}
+
+function firstMatch(rx, text) { const m = rx.exec(text); return m ? m[1].trim() : null; }
+function declaredOf(readme, paperText) {
+  const head = String(paperText || "").slice(0, 6000), dois = [], seen = new Set();
+  for (const [src, text] of [["README.md", String(readme || "")], ["paper.md", head]]) {
+    for (const m of text.matchAll(/(?:DOI:?\**\s*|doi\.org\/)(10\.\d{4,9}\/[^\s)\]>"'*]+)/gi)) {
+      const doi = m[1].replace(/[.,;]+$/, ""), key = doi + "|" + src;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      dois.push({ doi, source: src });
+    }
+  }
+  return { version: firstMatch(/\*\*Version:\*\*\s*([0-9][^\s*]*)/, head), license: firstMatch(/^License:\s*(.+)$/m, String(readme || "")), dois };
+}
+function titleOf(paperText) { for (const line of String(paperText).split("\n").slice(0, 40)) if (line.startsWith("# ")) return line.slice(2).trim(); return null; }
+function readmeFor(title, slug) {
+  return "# " + (title || slug) + "\n\nAuthor: " + AUTHOR_NAME + " (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)\n\nAuto-deposited by qnfo-research-exec (artifact-deposition P3).";
+}
+
+// provenance.json for one paper (schemas/paper-provenance.schema.json). Snapshots and events are append-only; runs are a union.
+async function updatePaperRecord(prior, input) {
+  const sha = await sha256Hex(input.body), bytes = utf8(input.body).length;
+  const p = prior && typeof prior === "object" ? prior : {};
+  const snaps = Array.isArray(p.snapshots) ? p.snapshots.slice() : [];
+  if (!snaps.some((s) => s.sha256 === sha)) snaps.push({ sha256: sha, bytes, recorded_at: input.now, basis: input.basis || "deposit", version: input.version || declaredOf(input.readme, input.body).version, git_commit: input.gitCommit || null });
+  const runs = Array.isArray(p.runs) ? p.runs.slice() : [];
+  for (const r of input.runs || []) { const i = runs.findIndex((x) => x.path === r.path); if (i < 0) runs.push(r); else runs[i] = Object.assign({}, runs[i], r); }
+  const events = Array.isArray(p.events) ? p.events.slice() : [];
+  if (input.event) events.push({ event: input.event.event, at: input.now, detail: input.event.detail || null });
+  const slug = input.slug;
+  const prevIds = p.identifiers && Array.isArray(p.identifiers.research_queue_ids) ? p.identifiers.research_queue_ids : [];
+  const ids = { research_queue_ids: input.runId && !prevIds.includes(input.runId) ? prevIds.concat([input.runId]) : prevIds.slice(), living_paper_slug: (p.identifiers && p.identifiers.living_paper_slug) || slug };
+  return {
+    schema: PAPER_SCHEMA, slug,
+    paper: { path: input.paperDir + "/paper.md", title: input.title || titleOf(input.body), url: "https://papers.qnfo.org/papers/" + slug },
+    declared: declaredOf(input.readme, input.body), runs,
+    identifiers: ids,
+    snapshots: snaps, events,
+  };
+}
+
+// ------------------------------------------------------------------------------------------------ deposits
+async function nextCycle(ctx, t) {
+  const entries = await ctx.listDir(t.runsDir);
+  let n = 0;
+  for (const e of entries) { const m = /^cycle-(\d+)$/.exec(e.path); if (m) n = Math.max(n, Number(m[1])); }
+  return n + 1;
+}
+
+// One paper's run (and, in the consolidated layout, its paper) in one commit. input: {runId, slug, title, pipeline, workerVersion,
+// models, finishedAt, now, artifacts: [{file, content}], paper: {body, version, dir} | null}. Returns {ok, status, commit, cycle,
+// runPath, manifestSha256, error}; status is "ok" | "landed-unverified" | "error". Nothing is reported ok unless the commit is on the
+// branch and the manifest reads back with the hash we wrote.
+async function depositRun(env, deps, t, input) {
+  let out = null;
+  const res = await commitAtomic(env, deps, t, {
+    message: "research-pipeline: " + input.slug + " (run " + String(input.runId).slice(0, 8) + ")\n\nRun-Id: " + input.runId + "\nPipeline: " + input.pipeline + " / qnfo-research-exec " + input.workerVersion,
+    build: async (ctx) => {
+      const cycleN = await nextCycle(ctx, t), cycle = "cycle-" + cycleN;
+      const runPath = (t.runsDir ? t.runsDir + "/" : "") + cycle + "/" + input.slug;
+      const files = input.artifacts.map((a) => ({ rel: a.file, content: a.content })).filter((f) => !SIDECARS.has(f.rel));
+      const paperPath = input.paper && t.layout === "consolidated" ? input.paper.dir + "/paper.md" : null;
+      const manifest = await buildManifestV2({ files, pipeline: input.pipeline, runId: input.runId, slug: input.slug, cycle, workerVersion: input.workerVersion, finishedAt: input.finishedAt, models: input.models, paper: input.paper && paperPath ? { version: input.paper.version, body: input.paper.body, path: paperPath } : null });
+      const manifestText = dumpJson(manifest);
+      const all = files.concat([{ rel: "MANIFEST.json", content: manifestText }]);
+      const crate = await buildCrate({ runPath, cycle, slug: input.slug, title: input.title, pipeline: input.pipeline, deposit: { date: input.finishedAt, commit: null }, listed: manifest.files, files: all });
+      const crateText = dumpJson(crate);
+      const changes = all.map((f) => ({ path: runPath + "/" + f.rel, content: f.content })).concat([{ path: runPath + "/" + CRATE_FILE, content: crateText }]);
+      if (paperPath) {
+        const prevProv = await ctx.readText(input.paper.dir + "/provenance.json");
+        const prevReadme = await ctx.readText(input.paper.dir + "/README.md");
+        const readme = prevReadme !== null ? prevReadme : readmeFor(input.title, input.slug);
+        const prior = prevProv ? JSON.parse(prevProv) : null;
+        const rec = await updatePaperRecord(prior, { slug: input.slug, paperDir: input.paper.dir, title: input.title, body: input.paper.body, version: input.paper.version, readme, now: input.now, basis: prior ? "revision" : "deposit", runId: input.runId, runs: [{ path: runPath, relation: "produced-by", match: "slug-exact", manifest_sha256: await sha256Hex(manifestText) }] });
+        const prevPaper = await ctx.readText(paperPath);
+        if (prevPaper !== input.paper.body) changes.push({ path: paperPath, content: input.paper.body });
+        if (prevReadme === null) changes.push({ path: input.paper.dir + "/README.md", content: readme });
+        changes.push({ path: input.paper.dir + "/provenance.json", content: dumpJson(rec) });
+      }
+      out = { cycle, runPath, manifestSha256: await sha256Hex(manifestText), paperPath };
+      return changes;
+    },
+  });
+  if (!res.ok) return { ok: false, status: "error", error: res.error, attempts: res.attempts };
+  const verify = await verifyReadBack(env, deps, t, res.commit, out.runPath + "/MANIFEST.json", out.manifestSha256);
+  return { ok: verify.ok, status: verify.ok ? "ok" : "landed-unverified", commit: res.commit, attempts: res.attempts, cycle: out.cycle, runPath: out.runPath, paperPath: out.paperPath, manifestSha256: out.manifestSha256, error: verify.ok ? null : verify.error };
+}
+
+async function verifyReadBack(env, deps, t, commit, path, want) {
+  const sleep = (deps && deps.sleep) || ((ms) => new Promise((res) => setTimeout(res, ms)));
+  let err = "";
+  for (let i = 0; i < 3; i++) {
+    try {
+      const text = await readTextAt(env, deps, t, path, commit);
+      if (text !== null && await sha256Hex(text) === want) return { ok: true };
+      err = text === null ? "manifest not found at commit" : "manifest hash differs at commit";
+    } catch (e) { err = String(e && e.message || e).slice(0, 160); }
+    await sleep(1500);
+  }
+  return { ok: false, error: err };
+}
+
+// Paper text only (no run): a revision published through publishV2, a claim-integrity correction or retraction, or a restore.
+// papers: [{slug, dir, title, body, version, event?}]. Unchanged text is not committed. The README is created once, never overwritten.
+async function depositPapers(env, deps, t, papers, opts) {
+  const o = opts || {};
+  let summary = null;
+  const res = await commitAtomic(env, deps, t, {
+    message: (o.message || "paper-sync") + (papers.length === 1 ? ": " + papers[0].slug : ": " + papers.length + " papers"),
+    build: async (ctx) => {
+      const changes = [], done = [];
+      for (const p of papers) {
+        const prevPaper = await ctx.readText(p.dir + "/paper.md");
+        const prevReadme = await ctx.readText(p.dir + "/README.md");
+        const prevProv = await ctx.readText(p.dir + "/provenance.json");
+        const readme = prevReadme !== null ? prevReadme : readmeFor(p.title, p.slug);
+        const prior = prevProv ? JSON.parse(prevProv) : null;
+        const basis = p.basis || (prevPaper === null ? (o.restore ? "restore" : "deposit") : "revision");
+        const rec = await updatePaperRecord(prior, { slug: p.slug, paperDir: p.dir, title: p.title, body: p.body, version: p.version, readme, now: o.now, basis, runs: p.runs || [], event: p.event || (prevPaper === null && o.restore ? { event: "restored", detail: "paper text restored from living-paper" } : null) });
+        const recText = dumpJson(rec);
+        if (prevPaper === p.body && prevProv === recText) continue;
+        if (prevPaper !== p.body) changes.push({ path: p.dir + "/paper.md", content: p.body });
+        if (prevReadme === null) changes.push({ path: p.dir + "/README.md", content: readme });
+        if (prevProv !== recText) changes.push({ path: p.dir + "/provenance.json", content: recText });
+        done.push(p.slug);
+      }
+      summary = done;
+      return changes;
+    },
+  });
+  if (!res.ok) return { ok: false, status: "error", error: res.error, attempts: res.attempts, slugs: [] };
+  return { ok: true, status: "ok", empty: !!res.empty, commit: res.commit || null, attempts: res.attempts, slugs: summary || [] };
+}
+
+// Gap-ledger restore. The rows come from provenance/known-gaps.json in the repository. sources.runFile(slug, name, sha256) returns the
+// text of a run artifact from R2 (the copy whose hash matches if there is one) or null; sources.paper(slug) returns {title, body,
+// version, dir?} from living-paper or null. A missing run file is restored only if its sha256 equals the one the manifest recorded;
+// otherwise the row says why it cannot be (so it is not asked again every tick, and the rows behind it are reached). One commit
+// carries the files, the regenerated crate of each touched run and the updated ledger.
+async function restoreFromGaps(env, deps, t, sources, opts) {
+  const o = Object.assign({ maxChecks: 30, maxPapers: 3 }, opts || {});
+  let report = null;
+  const res = await commitAtomic(env, deps, t, {
+    message: "restore: gap ledger",
+    build: async (ctx) => {
+      const text = await ctx.readText("provenance/known-gaps.json");
+      if (!text) return null;
+      const ledger = JSON.parse(text);
+      const rep = { restoredFiles: 0, unrecoverable: 0, restoredPapers: 0, checked: 0 };
+      const changes = [], gaps = [], touched = new Set();
+      let checks = 0, papers = 0, dirty = false;
+      for (const g of ledger.gaps || []) {
+        if (g.kind === "manifest-file-missing" && g.status === "open") {
+          const slug = g.path.split("/")[2], unrec = Object.assign({}, g.unrecoverable || {}), remaining = [], expected = {};
+          for (const fn of g.files) {
+            const want = (g.expected_sha256 || {})[fn];
+            if (unrec[fn] || checks >= o.maxChecks || !want) { remaining.push(fn); if (want) expected[fn] = want; continue; }
+            checks++; rep.checked++;
+            const got = await sources.runFile(slug, fn, want);
+            if (got !== null && await sha256Hex(got) === want) { changes.push({ path: g.path + "/" + fn, content: got }); rep.restoredFiles++; touched.add(g.path); continue; }
+            unrec[fn] = got === null ? "no copy in R2 for any run of this slug" : "the copy in R2 is a different version (its hash differs from the manifest's)";
+            rep.unrecoverable++; dirty = true; remaining.push(fn); expected[fn] = want;
+          }
+          if (remaining.length) {
+            const row = Object.assign({}, g, { files: remaining, expected_sha256: expected });
+            if (Object.keys(unrec).length) row.unrecoverable = unrec;
+            if (remaining.every((fn) => unrec[fn])) row.status = "unrecoverable";
+            gaps.push(row);
+          }
+          continue;
+        }
+        if (g.kind === "paper-text-not-in-repo" && g.status === "open" && papers < o.maxPapers) {
+          const slug = g.path.split("/")[1], p = await sources.paper(slug);
+          papers++;
+          if (!p) { gaps.push(g); continue; }
+          const dir = p.dir || "papers/" + slug, readme = readmeFor(p.title, slug);
+          const rec = await updatePaperRecord(null, { slug, paperDir: dir, title: p.title, body: p.body, version: p.version, readme, now: o.now, basis: "restore", runs: (g.runs || []).map((r) => ({ path: r, relation: "produced-by", match: "slug-exact", manifest_sha256: null })), event: { event: "restored", detail: "paper text restored from living-paper" } });
+          changes.push({ path: dir + "/paper.md", content: p.body }, { path: dir + "/README.md", content: readme }, { path: dir + "/provenance.json", content: dumpJson(rec) });
+          rep.restoredPapers++;
+          continue;
+        }
+        gaps.push(g);
+      }
+      report = rep;
+      if (!changes.length && !dirty) return null;
+      for (const runPath of touched) {
+        const manText = await ctx.readText(runPath + "/MANIFEST.json");
+        if (!manText) continue;
+        const prevCrate = await ctx.readText(runPath + "/" + CRATE_FILE), man = JSON.parse(manText), prior = prevCrate ? JSON.parse(prevCrate) : null;
+        const present = [];
+        for (const e of await ctx.listDir(runPath)) {
+          if (e.type !== "blob" || e.path === CRATE_FILE) continue;
+          const added = changes.find((c) => c.path === runPath + "/" + e.path);
+          present.push({ rel: e.path, content: added ? added.content : await ctx.readText(runPath + "/" + e.path) });
+        }
+        for (const c of changes) if (c.path.startsWith(runPath + "/") && !present.some((f) => c.path === runPath + "/" + f.rel)) present.push({ rel: c.path.slice(runPath.length + 1), content: c.content });
+        const root = prior && prior["@graph"].find((e) => e["@id"] === "./");
+        const tm = root && /^QNFO research run cycle-\d+: (.+)$/.exec(root.name || "");
+        const crate = await buildCrate({ runPath, cycle: runPath.split("/")[1], slug: runPath.split("/")[2], title: tm ? tm[1] : null, pipeline: man.pipeline, deposit: root && root.datePublished ? { date: root.datePublished, commit: root["qnfo:depositCommit"] || null } : null, listed: man.files || {}, files: present, preserve: prior });
+        changes.push({ path: runPath + "/" + CRATE_FILE, content: dumpJson(crate) });
+      }
+      changes.push({ path: "provenance/known-gaps.json", content: dumpJson(Object.assign({}, ledger, { as_of: o.now || ledger.as_of, gaps })) });
+      return changes;
+    },
+  });
+  if (!res.ok) return { ok: false, status: "error", error: res.error, attempts: res.attempts };
+  return Object.assign({ ok: true, status: "ok", commit: res.commit || null, empty: !!res.empty, attempts: res.attempts }, report || {});
+}
+
+// Which repository a deposit goes to. "auto" (the default) uses the consolidated repository once it carries the import marker
+// provenance/IMPORT.json (the file the consolidation adds), otherwise the legacy ensemble repository, so the worker can be deployed
+// before or after the repository change without a coordinated switch. ops_config research_repo_target = legacy | consolidated pins it.
+// A transient error returns null (defer to the next tick) rather than guess: a flapping answer would scatter runs over both repositories.
+async function resolveTarget(env, deps, mode) {
+  if (mode === "legacy") return TARGET_LEGACY;
+  if (mode === "consolidated") return TARGET_CONSOLIDATED;
+  const r = await gh(env, deps, "GET", repoPath(TARGET_CONSOLIDATED) + "/contents/provenance/IMPORT.json?ref=" + TARGET_CONSOLIDATED.branch);
+  if (r.ok) return TARGET_CONSOLIDATED;
+  return r.status === 404 ? TARGET_LEGACY : null;
+}
+
+// Paper sync: compare the git copy of up to `k` papers (the slugs after `cursor` in the sorted list `slugs`) with the living-paper text
+// and commit the ones that differ in one commit. `load(batch)` returns [{slug, dir, title, body, version}] for the batch members that are
+// published (the others are skipped). Returns the next cursor ('' when the list wrapped); on an error the cursor does not move.
+async function syncPapers(env, deps, t, slugs, load, cursor, k, now) {
+  const start = slugs.findIndex((s) => s > (cursor || ""));
+  if (start < 0) return { ok: true, checked: 0, changed: [], nextCursor: "" };
+  const batch = slugs.slice(start, start + k);
+  const next = start + k >= slugs.length ? "" : batch[batch.length - 1];
+  const papers = await load(batch);
+  if (!papers.length) return { ok: true, checked: batch.length, changed: [], nextCursor: next };
+  const r = await depositPapers(env, deps, t, papers, { message: "paper-sync", now });
+  return Object.assign({}, r, { checked: batch.length, changed: r.slugs || [], nextCursor: r.ok ? next : cursor || "" });
+}
+
+// Names of the sub-directories of `dir` at the branch head (the paper directories under papers/, the cycles under runs/).
+async function listDirNames(env, deps, t, dir) {
+  const ref = await gh(env, deps, "GET", repoPath(t) + "/git/ref/heads/" + t.branch);
+  if (!ref.ok) throw new Error("ref " + ref.status);
+  const cm = await gh(env, deps, "GET", repoPath(t) + "/git/commits/" + ref.json.object.sha);
+  if (!cm.ok) throw new Error("commit " + cm.status);
+  return (await listDirAt(env, deps, t, cm.json.tree.sha, dir)).filter((e) => e.type === "tree").map((e) => e.path);
+}
+
+return {
+  REPO_DEPOSIT_VERSION, isAncestor, readTextAt, commitAtomic, depositRun, depositPapers, restoreFromGaps, syncPapers, listDirNames, resolveTarget,
+  buildCrate, buildManifestV2, updatePaperRecord, declaredOf, sourcesOf, roleOf, readmeFor, titleOf,
+  sha256Hex, gitBlobSha1, dumpJson, utf8, TARGET_CONSOLIDATED, TARGET_LEGACY, LICENSE_ENTITY, RUN_MANIFEST_V2, PAPER_SCHEMA,
+};
+})();
+// REPO-DEPOSIT-END
+// REPO-DEPOSIT-1 / RESEARCH-PROVENANCE-1 (0.35.0, pillar research). Standard: QNFO/qnfo-research docs/PROVENANCE-STANDARD.md.
+// The research record is one repository, QNFO/qnfo-research: a run in runs/cycle-N/<slug>/, its paper in papers/<slug>/ (or the program
+// directory programFor() names), both written in one Git Data API commit by repo-deposit.mjs, with a per-paper provenance.json and a
+// research_run_ledger row in D1. Until QNFO/qnfo-research carries provenance/IMPORT.json (the consolidation marker) a run still goes to
+// the legacy ensemble repository, atomically and with the v2 manifest, and paper text is not written (the sync tick catches up).
+// ops_config: research_repo_target (auto | legacy | consolidated), research_repo_sync, research_repo_restore, research_repo_sync_batch.
+var ARTIFACT_R2_NAMES = {
+  "grounding.md": ["grounding.md"], "writer-a-draft.md": ["draft-0.md"], "writer-b-draft.md": ["draft-1.md"], "writer-c-draft.md": ["draft-2.md"],
+  "reconciled-paper.md": ["reconciled.md"], "review-report.md": ["review-report-1.md", "review-report-0.md"], "review-report-0.md": ["review-report-0.md"],
+  "verification.md": ["verification.md"], "verification.py": ["verification.py"]
+};
+function paperDirFor(slug) {
+  var prog = programFor(slug);
+  return prog === "papers" ? "papers/" + slug : prog + "/" + slug;
+}
+async function repoTargetMode(env) {
+  var m = await floorFlag(env, "research_repo_target");
+  return m === "legacy" || m === "consolidated" ? m : "auto";
+}
+function repoModels() {
+  return { writers: WRITER_MODELS, writer_fallbacks: WRITER_FALLBACK_MODELS, stages: MODELS };
+}
+// Every deposit attempt is a ledger row (run id, repository, path, hashes, commit, status). A failed insert is logged, never swallowed.
+async function recordRunLedger(env, row, slug, t, res, info) {
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO research_run_ledger (run_id, slug, repo, run_path, cycle, paper_path, paper_version, paper_sha256, manifest_sha256, commit_sha, status, error, attempts, worker_version, deposited_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,1,?13,?14,datetime('now')) ON CONFLICT(run_id) DO UPDATE SET repo = excluded.repo, run_path = COALESCE(excluded.run_path, run_path), cycle = COALESCE(excluded.cycle, cycle), paper_path = COALESCE(excluded.paper_path, paper_path), paper_version = COALESCE(excluded.paper_version, paper_version), paper_sha256 = COALESCE(excluded.paper_sha256, paper_sha256), manifest_sha256 = COALESCE(excluded.manifest_sha256, manifest_sha256), commit_sha = COALESCE(excluded.commit_sha, commit_sha), status = excluded.status, error = excluded.error, attempts = attempts + 1, worker_version = excluded.worker_version, deposited_at = COALESCE(excluded.deposited_at, deposited_at), updated_at = datetime('now')")
+      .bind(String(row.id), slug, t ? t.owner + "/" + t.repo : null, res.runPath || null, res.cycle || null, res.paperPath || null, info && info.version || null, info && info.body ? await REPO_DEPOSIT.sha256Hex(info.body) : null, res.manifestSha256 || null, res.commit || null, res.status || (res.ok ? "ok" : "error"), res.error ? String(res.error).slice(0, 300) : null, VERSION, res.ok || res.status === "landed-unverified" ? nowIso() : null).run();
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "run-ledger", slug: slug, error: String(e && e.message || e).slice(0, 200) }));
+    try { await logEvent(env, "repo-ledger", "insert failed slug=" + slug + " " + String(e && e.message || e).slice(0, 200), "error"); } catch (e2) { console.error(JSON.stringify({ worker: WORKER, where: "run-ledger-event", slug: slug, error: String(e2 && e2.message || e2).slice(0, 200) })); }
+  }
+}
+// The paper side of publishV2 (version_queue drain) and of the claim-integrity writer. Consolidated layout only; the sync tick covers the rest.
+async function depositToGithub(env, slug, title, md, version, kind) {
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "no github token" };
+  try {
+    var t = await REPO_DEPOSIT.resolveTarget(env, null, await repoTargetMode(env));
+    if (!t) return { ok: false, status: "deferred", error: "target unresolved (transient)" };
+    if (t.layout !== "consolidated") return { ok: true, skipped: "consolidation pending" };
+    var led = await env.QNFO_AUDIT.prepare("SELECT run_path, manifest_sha256 FROM research_run_ledger WHERE slug = ?1 AND status IN ('ok','landed-unverified') AND run_path IS NOT NULL ORDER BY updated_at DESC LIMIT 1").bind(slug).first();
+    var p = { slug: slug, dir: paperDirFor(slug), title: title, body: md, version: version || null, runs: led ? [{ path: led.run_path, relation: "produced-by", match: "slug-exact", manifest_sha256: led.manifest_sha256 || null }] : [] };
+    if (kind === "retracted" || kind === "corrected") { p.basis = kind === "retracted" ? "retraction" : "correction"; p.event = { event: kind, detail: "CLAIM-INTEGRITY-1" }; }
+    var res = await REPO_DEPOSIT.depositPapers(env, null, t, [p], { message: kind ? "claim-integrity" : "paper-deposit", now: nowIso().slice(0, 10) });
+    if (!res.ok || !res.empty) await logEvent(env, "repo-paper", "slug=" + slug + " " + JSON.stringify(res).slice(0, 300), res.ok ? "ok" : "error");
+    return res;
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 200) };
+  }
+}
+// ---- the sync tick (every 10 minutes, a few GitHub reads): retry deposits, restore ledger gaps, bring paper text up to date ----
+async function repoSetFlag(env, key, value) {
+  await env.QNFO_AUDIT.prepare("UPDATE ops_config SET value = ?2, updated_at = datetime('now') WHERE key = ?1").bind(key, value).run();
+}
+// A run whose deposit failed or was deferred is rebuilt from R2 and living-paper and deposited again (the paper was already published).
+async function repoRetryDeposits(env, t) {
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT run_id, slug FROM research_run_ledger WHERE status IN ('error','deferred') AND attempts < 12 AND updated_at < datetime('now', '-5 minutes') ORDER BY updated_at LIMIT 2").all()).results || [];
+  var done = [];
+  for (var i = 0; i < rows.length; i++) {
+    var rq = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE id = ?1").bind(rows[i].run_id).first();
+    if (!rq) continue;
+    var pr = await env.LIVING_PAPER.prepare("SELECT title, body_md, version FROM papers WHERE slug = ?1").bind(rows[i].slug).first();
+    var arts = await collectArtifacts(env, String(rows[i].run_id));
+    var r = await pushArtifactsToGitHub(env, rows[i].slug, arts.map(function(a) { return { path: a.file, content: a.content }; }), { row: rq, title: pr && pr.title || rows[i].slug, body: pr && pr.body_md || null, version: pr && pr.version || null });
+    done.push({ slug: rows[i].slug, ok: !!r.ok, status: r.status });
+  }
+  return done;
+}
+// Gaps listed in the repository's provenance/known-gaps.json: run files come back from R2 only if the bytes hash to what the manifest
+// recorded; paper text comes from living-paper.
+async function repoRestoreTick(env, t) {
+  var sources = {
+    runFile: async function(slug, fn, want) {
+      var rows = (await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE paper_slug = ?1 ORDER BY created_at DESC LIMIT 8").bind(slug).all()).results || [];
+      var first = null, keys = ARTIFACT_R2_NAMES[fn] || [fn];
+      for (var i = 0; i < rows.length; i++) for (var k = 0; k < keys.length; k++) {
+        var c = await r2Get(env, rows[i].id + "/" + keys[k]);
+        if (!c) continue;
+        if (await REPO_DEPOSIT.sha256Hex(c) === want) return c;
+        if (first === null) first = c;
+      }
+      return first;
+    },
+    paper: async function(slug) {
+      var p = await env.LIVING_PAPER.prepare("SELECT title, body_md, version FROM papers WHERE slug = ?1 AND status = 'published' AND body_md IS NOT NULL AND body_md <> ''").bind(slug).first();
+      return p ? { title: p.title, body: p.body_md, version: p.version, dir: paperDirFor(slug) } : null;
+    }
+  };
+  return REPO_DEPOSIT.restoreFromGaps(env, null, t, sources, { now: nowIso().slice(0, 10), maxChecks: 30, maxPapers: 3 });
+}
+// Published papers are compared with their git copy a few per tick (cursor in ops_config); the ones that differ go in one commit.
+async function repoPaperSyncTick(env, t) {
+  var batch = Math.max(1, Math.min(20, Number(await floorFlag(env, "research_repo_sync_batch")) || 6));
+  var cur = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_repo_sync_cursor'").first();
+  var cursor = cur && cur.value ? String(cur.value) : "";
+  var set = {};
+  var qs = (await env.QNFO_AUDIT.prepare("SELECT DISTINCT paper_slug AS s FROM research_queue WHERE status = 'published' AND paper_slug IS NOT NULL").all()).results || [];
+  qs.forEach(function(r) { set[r.s] = 1; });
+  (await REPO_DEPOSIT.listDirNames(env, null, t, "papers")).forEach(function(n) { set[n] = 1; });
+  var slugs = Object.keys(set).sort();
+  var res = await REPO_DEPOSIT.syncPapers(env, null, t, slugs, async function(b) {
+    var ph = b.map(function(x, i) { return "?" + (i + 1); }).join(",");
+    var rows = (await env.LIVING_PAPER.prepare("SELECT slug, title, body_md, version FROM papers WHERE status = 'published' AND body_md IS NOT NULL AND body_md <> '' AND slug IN (" + ph + ")").bind(...b).all()).results || [];
+    return rows.map(function(r) { return { slug: r.slug, dir: paperDirFor(r.slug), title: r.title, body: r.body_md, version: r.version }; });
+  }, cursor, batch, nowIso().slice(0, 10));
+  if (res.ok && res.nextCursor !== cursor) await repoSetFlag(env, "research_repo_sync_cursor", res.nextCursor);
+  return { ok: res.ok, checked: res.checked, changed: res.changed, commit: res.commit || null, nextCursor: res.nextCursor, error: res.error };
+}
+async function repoSyncTick(env) {
+  if (!env.GITHUB_TOKEN) return { skipped: "no github token" };
+  var t = await REPO_DEPOSIT.resolveTarget(env, null, await repoTargetMode(env));
+  if (!t) return { skipped: "target unresolved (transient)" };
+  var out = { repo: t.repo };
+  try { var rd = await repoRetryDeposits(env, t); if (rd.length) out.retried = rd; } catch (e) { out.error = "retry: " + String(e && e.message || e).slice(0, 160); }
+  if (t.layout !== "consolidated") return Object.assign(out, { skipped: out.retried ? undefined : "consolidation pending" });
+  try { var cu = await repoCatchupTick(env, t); if (cu && (cu.dispatched !== undefined || cu.archive === "requested" || cu.missing || cu.linked === false)) out.catchup = cu; } catch (e) { out.error = "catchup: " + String(e && e.message || e).slice(0, 160); }
+  if ((await floorFlag(env, "research_repo_restore")) !== "off") {
+    try { var rr = await repoRestoreTick(env, t); if (!rr.ok || rr.restoredFiles || rr.restoredPapers || rr.unrecoverable) out.restore = rr; } catch (e) { out.error = "restore: " + String(e && e.message || e).slice(0, 160); }
+  }
+  if ((await floorFlag(env, "research_repo_sync")) !== "off") {
+    try { var ps = await repoPaperSyncTick(env, t); if (!ps.ok || (ps.changed && ps.changed.length)) out.sync = ps; else out.syncChecked = ps.checked; } catch (e) { out.error = "sync: " + String(e && e.message || e).slice(0, 160); }
+  }
+  return out;
+}
+// REPO-CONSOLIDATION-1: finish the consolidation without a person. While the legacy ensemble repository holds cycles that runs/ lacks, or its
+// history is not yet an ancestor of main, the qnfo-research workflow ensemble-catchup.yml (link the history, import newer cycles, the provenance
+// records) is dispatched, at most every 6 hours. When nothing is missing, the history is linked and three consolidated deposits are in the
+// ledger, one archive request is filed for the legacy repository on the PORTFOLIO-ARCHIVE-1 path (portfolio_actions, executed by
+// qnfo-fleet-control; reversible: GitHub unarchive).
+async function repoCatchupTick(env, t) {
+  if (t.layout !== "consolidated" || (await floorFlag(env, "research_repo_archive")) === "off") return null;
+  var asked = await env.QNFO_AUDIT.prepare("SELECT status FROM portfolio_actions WHERE action = 'archive-request' AND repo IN ('QNFO/qnfo-ensemble-research','qnfo-ensemble-research') ORDER BY id DESC LIMIT 1").first();
+  if (asked) return { archive: asked.status };
+  var legacy = REPO_DEPOSIT.TARGET_LEGACY;
+  var theirs = (await REPO_DEPOSIT.listDirNames(env, null, legacy, "")).filter(function(n) { return /^cycle-\d+$/.test(n); });
+  var have = {};
+  (await REPO_DEPOSIT.listDirNames(env, null, t, "runs")).forEach(function(n) { have[n] = 1; });
+  var missing = theirs.filter(function(n) { return !have[n]; });
+  // The repository merges squash-only, so the pull request that imported runs/ carries the files but not the 2,837 commits: the workflow links
+  // the source head (provenance/IMPORT.json) to main afterwards. Not linked yet = the same work to do, and no archive until it is done.
+  var srcHead = "";
+  try { srcHead = String(JSON.parse(await REPO_DEPOSIT.readTextAt(env, null, t, "provenance/IMPORT.json", t.branch) || "{}").source_head || ""); } catch (eIm) { srcHead = ""; }
+  var linked = srcHead ? await REPO_DEPOSIT.isAncestor(env, null, t, srcHead, t.branch) : true;
+  if (missing.length || !linked) {
+    var last = Number(await floorFlag(env, "research_repo_catchup_at")) || 0;
+    if (Date.now() - last < 6 * 3600 * 1000) return { missing: missing.length, linked: linked, waiting: true };
+    var r = await fetch("https://api.github.com/repos/" + t.owner + "/" + t.repo + "/actions/workflows/ensemble-catchup.yml/dispatches", { method: "POST", headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", Accept: "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify({ ref: t.branch }) });
+    await repoSetFlag(env, "research_repo_catchup_at", String(Date.now()));
+    return { missing: missing.length, first: missing[0], linked: linked, dispatched: r.status };
+  }
+  var proven = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_run_ledger WHERE status = 'ok' AND repo = 'QNFO/qnfo-research'").first();
+  if (!proven || Number(proven.n) < 3) return { missing: 0, archive: "waiting for 3 consolidated deposits" };
+  await env.QNFO_AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, 'QNFO/qnfo-ensemble-research', 'archive-request', 'requested', ?2)").bind(nowIso(), "REPO-CONSOLIDATION-1 (qnfo-research-exec " + VERSION + "): every cycle of this repository is in QNFO/qnfo-research runs/, its history is an ancestor of main there, and " + proven.n + " deposits have landed there; archiving is reversible (GitHub unarchive)").run();
+  return { missing: 0, archive: "requested" };
+}
+async function repoLedgerStatus(env) {
+  var by = (await env.QNFO_AUDIT.prepare("SELECT status, COUNT(*) AS n, MAX(updated_at) AS latest FROM research_run_ledger GROUP BY status").all()).results || [];
+  var recent = (await env.QNFO_AUDIT.prepare("SELECT run_id, slug, repo, run_path, status, commit_sha, updated_at FROM research_run_ledger ORDER BY updated_at DESC LIMIT 10").all()).results || [];
+  var failing = (await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM v_research_run_deposit_failures").first());
+  var cons = (await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_run_ledger WHERE status = 'ok' AND repo = 'QNFO/qnfo-research'").first());
+  var nf = failing ? Number(failing.n) : null, nc = cons ? Number(cons.n) : 0;
+  // healthy = the new deposit has worked in production: three consolidated deposits ledgered and no failure (issue RESEARCH-PROVENANCE-LIVE-1 closes on it)
+  return { by_status: by, recent: recent, deposit_failures: nf, consolidated_ok: nc, healthy: nc >= 3 && nf === 0, repo_deposit_version: REPO_DEPOSIT.REPO_DEPOSIT_VERSION };
 }
 __name(depositToGithub, "depositToGithub");
 __name2(depositToGithub, "depositToGithub");
 __name22(depositToGithub, "depositToGithub");
 __name222(depositToGithub, "depositToGithub");
 __name2222(depositToGithub, "depositToGithub");
+function structuralGate(md) {
+  var m = String(md || "");
+  var heads = [];
+  var lines = m.split(/\r?\n/);
+  for (var i = 0; i < lines.length; i++) {
+    var hm = lines[i].match(/^(#{1,4})\s+(.+?)\s*$/);
+    if (hm) heads.push({ level: hm[1].length, text: hm[2], line: i });
+  }
+  var problems = [];
+  // Generation-instruction residue (PUB-STRUCTURE-ORDER-1): no drafting directives may survive into a published body.
+  if (/(?:^|\n)\s*(?:[-*]\s*)?\/\/\s*(?:TODO|NOTE|FIXME)|<\|(?:SUPPORT|ASSISTANT|SYSTEM)\|>|as an ai language model|\bdo not publish\b/i.test(m)) {
+    problems.push("generation-instruction residue");
+  }
+  var seen = {};
+  var nums = [];
+  var firstAppendix = -1, lastMain = -1;
+  for (var h = 0; h < heads.length; h++) {
+    var t = heads[h].text.toLowerCase();
+    var key = t.replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+    if (seen[key] && heads[h].level <= 2) problems.push("duplicate section: " + heads[h].text);
+    seen[key] = true;
+    var nm = heads[h].text.match(/^(\d+)(?:\.\d+)*\.?\s+/);
+    if (nm) {
+      var top = Number(nm[1]);
+      if (nums.length && top > 0 && top <= nums[nums.length - 1]) problems.push("non-increasing section number " + top + " at " + heads[h].text);
+      nums.push(top);
+    }
+    if (/^appendix/i.test(t)) { if (firstAppendix < 0) firstAppendix = h; }
+    else if (heads[h].level <= 2) lastMain = h;
+  }
+  if (firstAppendix >= 0 && lastMain > firstAppendix) problems.push("appendix before main section");
+  // Semantic order: introduction before methods before results before conclusion before references.
+  var orderNames = [["introduction|intro|background|prior work|related work|literature review"], ["method|approach|framework|theory|model"], ["result|experiment|analysis|evaluation|discussion"], ["conclusion|concluding remarks"], ["references|bibliography"]];
+  var lastIdx = -1;
+  for (var o = 0; o < orderNames.length; o++) {
+    var found = -1;
+    for (var h2 = 0; h2 < heads.length; h2++) {
+      if (heads[h2].level <= 2 && (new RegExp("^(" + orderNames[o][0] + ")\\b", "i")).test(heads[h2].text)) { found = h2; break; }
+    }
+    if (found >= 0) {
+      if (found < lastIdx) problems.push("section order violation near: " + heads[found].text);
+      lastIdx = Math.max(lastIdx, found);
+    }
+  }
+  if (!problems.length) return { ok: true };
+  return { ok: false, reason: "structure gate: " + problems.slice(0, 5).join("; ") };
+}
+__name(structuralGate, "structuralGate");
+__name2(structuralGate, "structuralGate");
 function programFor(slug) {
   var x = String(slug || "");
   if (x.indexOf("jpcub") >= 0 || x.indexOf("joules-per") >= 0 || x.indexOf("joules") >= 0) return "joules-per-compute-benchmark";
@@ -1501,10 +2211,58 @@ __name2(programFor, "programFor");
 __name22(programFor, "programFor");
 __name222(programFor, "programFor");
 __name2222(programFor, "programFor");
+async function prunePaperBodyBackups(env, slug) {
+  if (!env || !env.LIVING_PAPER) return;
+  var perSlugMax = Math.max(2, Math.min(100, Number(env.PAPER_BODY_BACKUP_PER_SLUG_MAX || 20)));
+  var totalCharsMax = Math.max(1e7, Number(env.PAPER_BODY_BACKUP_TOTAL_CHARS_MAX || 5e8));
+  try {
+    var perSlug = await env.LIVING_PAPER.prepare(
+      "DELETE FROM paper_body_backups WHERE slug=? AND rowid NOT IN (SELECT rowid FROM paper_body_backups WHERE slug=? ORDER BY created_at DESC, rowid DESC LIMIT ?)"
+    ).bind(slug, slug, perSlugMax).run();
+    var prunedSlug = (perSlug && perSlug.meta && perSlug.meta.changes) || 0;
+    var total = await env.LIVING_PAPER.prepare(
+      "SELECT COALESCE(SUM(LENGTH(body_md)),0) AS total_chars, COUNT(*) AS row_count FROM paper_body_backups"
+    ).first();
+    var totalChars = Number(total && total.total_chars || 0);
+    if (totalChars > totalCharsMax) {
+      var over = totalChars - totalCharsMax;
+      var avg = Math.max(1, Math.floor(totalChars / Math.max(1, Number(total && total.row_count || 1))));
+      var batch = Math.min(10000, Math.max(1, Math.ceil(over / avg) + 1));
+      var globalPrune = await env.LIVING_PAPER.prepare(
+        "DELETE FROM paper_body_backups WHERE rowid IN (SELECT rowid FROM paper_body_backups ORDER BY created_at ASC, rowid ASC LIMIT ?)"
+      ).bind(batch).run();
+      var prunedGlobal = (globalPrune && globalPrune.meta && globalPrune.meta.changes) || 0;
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'backup-size-guard', 'qnfo-research-exec', ?)"
+      ).bind(("paper_body_backups size guard: " + totalChars + " chars > " + totalCharsMax + "; pruned " + prunedGlobal + " oldest rows (slug=" + String(slug || "?") + ")").slice(0, 450)).run();
+    } else if (prunedSlug > 0) {
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'backup-prune', 'qnfo-research-exec', ?)"
+      ).bind(("paper_body_backups per-slug prune: removed " + prunedSlug + " old rows for slug=" + String(slug || "?")).slice(0, 450)).run();
+    }
+  } catch (ePbpr) {
+  }
+}
+__name(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name2(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name22(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name222(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name2222(prunePaperBodyBackups, "prunePaperBodyBackups");
 async function publishV2(env, row) {
   var slug = row.slug || "paper";
   var minLen = Number(env.QUALITY_MIN_LEN || 8e3);
   var minRefs = Number(env.QUALITY_MIN_REFS || 5);
+  // PUB-STRUCTURE-ORDER-1: a malformed body (skipped/duplicate numbering, appendix before a main section, broken semantic
+  // section order, or generation-instruction residue) is blocked before any publication path is taken.
+  var sGate = structuralGate(String(row.corrected_md || ""));
+  if (!sGate.ok) {
+    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'structure-gate', 'BLOCK', ?, 'PUB-STRUCTURE-ORDER-1', 'qnfo-research-exec', 'P1')").bind(String(sGate.reason).slice(0, 300)).run();
+    } catch (eSg) {
+    }
+    return { ok: false, stage: "gate", error: sGate.reason };
+  }
   if (String(env.QUALITY_GATE_OFF || "") !== "1") {
     var gate = qualityGate(row, minLen, minRefs);
     if (!gate.ok && gate.reason.indexOf("no_verification_marker") >= 0) {
@@ -1635,7 +2393,11 @@ async function publishV2(env, row) {
     }
   }
   await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=NULL, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-  await depositToGithub(env, vSlug, row.title, vBody);
+  await depositToGithub(env, vSlug, row.title, vBody, row.version_to);
+  try {
+    await prunePaperBodyBackups(env, vSlug);
+  } catch (ePbpr) {
+  }
   return { ok: true, stage: vFirst ? "first-deposit" : "v2", doi: null, slug: vSlug };
 }
 __name(publishV2, "publishV2");
@@ -5687,30 +6449,26 @@ __name2(ghReq, "ghReq");
 __name22(ghReq, "ghReq");
 __name222(ghReq, "ghReq");
 __name2222(ghReq, "ghReq");
-async function pushArtifactsToGitHub(env, slug, files) {
+async function pushArtifactsToGitHub(env, slug, files, info) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "no GITHUB_TOKEN" };
+  var row = info && info.row;
+  if (!row) return { ok: false, error: "no research_queue row to deposit" };
+  var t = null;
   try {
-    const base = await ghReq(env, "/repos/" + GH_OWNER + "/" + GH_REPO + "/branches/main");
-    if (!base) return { ok: false, error: "no main branch info" };
-    const root = await ghReq(env, "/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/");
-    let n = 0;
-    if (Array.isArray(root)) {
-      for (const it of root) {
-        const m = String(it.name || "").match(/^cycle-(\d+)$/);
-        if (m) n = Math.max(n, parseInt(m[1], 10));
-      }
-    }
-    const cycle = "cycle-" + (n + 1);
-    const results = [];
-    for (const f of files) {
-      if (!f.content) continue;
-      const body = { message: "research-pipeline: " + cycle + "/" + slug + "/" + f.path, content: b64(f.content), branch: "main" };
-      const r = await fetch(GH_API + "/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + cycle + "/" + slug + "/" + f.path, { method: "PUT", headers: { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", "Accept": "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      results.push({ path: f.path, status: r.status });
-    }
-    return { ok: true, cycle, results };
+    t = await REPO_DEPOSIT.resolveTarget(env, null, await repoTargetMode(env));
+    if (!t) { var d = { ok: false, status: "deferred", error: "target unresolved (transient)" }; await recordRunLedger(env, row, slug, null, d, info); return d; }
+    var artifacts = files.filter(function(f) { return f.content; }).map(function(f) { return { file: f.path, content: f.content }; });
+    var res = await REPO_DEPOSIT.depositRun(env, null, t, {
+      runId: String(row.id), slug: slug, title: info.title, pipeline: PIPELINE_VERSION, workerVersion: VERSION, models: repoModels(),
+      finishedAt: new Date().toISOString(), now: nowIso().slice(0, 10), artifacts: artifacts,
+      paper: info.body && t.layout === "consolidated" ? { body: info.body, version: info.version || null, dir: paperDirFor(slug) } : null
+    });
+    await recordRunLedger(env, row, slug, t, res, info);
+    return res.ok ? { ok: true, status: res.status, cycle: res.cycle, commit: res.commit, repo: t.repo, attempts: res.attempts } : { ok: false, status: res.status, error: res.error, repo: t.repo, attempts: res.attempts };
   } catch (e) {
-    return { ok: false, error: String(e && e.message || e).slice(0, 200) };
+    var r = { ok: false, status: "error", error: String(e && e.message || e).slice(0, 200) };
+    await recordRunLedger(env, row, slug, t, r, info);
+    return r;
   }
 }
 __name(pushArtifactsToGitHub, "pushArtifactsToGitHub");
@@ -5726,7 +6484,9 @@ async function collectArtifacts(env, rid) {
     ["writer-a-draft.md", "draft-0.md"],
     ["writer-b-draft.md", "draft-1.md"],
     ["writer-c-draft.md", "draft-2.md"],
+    ["reconciled-paper.md", "reconciled.md"],
     ["review-report.md", rr1 ? "review-report-1.md" : rr0 ? "review-report-0.md" : null],
+    ["review-report-0.md", rr1 && rr0 ? "review-report-0.md" : null],
     ["verification.md", "verification.md"],
     ["verification.py", "verification.py"]
   ];
@@ -5736,9 +6496,7 @@ async function collectArtifacts(env, rid) {
     const content = await r2Get(env, rid + "/" + d[1]);
     if (content) out.push({ file: d[0], content, r2key: d[1] });
   }
-  const manifest = { pipeline: PIPELINE_VERSION, files: {} };
-  for (const a of out) manifest.files[a.file] = { sha256: await sha256hex(a.content), bytes: a.content.length };
-  out.push({ file: "MANIFEST.json", content: JSON.stringify(manifest, null, 2), r2key: null });
+  // REPO-DEPOSIT-1: the manifest is written by repo-deposit.mjs (v2: run identity, models, paper, real byte counts) inside the commit.
   return out;
 }
 __name(collectArtifacts, "collectArtifacts");
@@ -6400,7 +7158,7 @@ async function publishStageV2(env, row) {
   const ghFiles = artifacts.map(function(a) {
     return { path: a.file, content: a.content };
   });
-  const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
+  const ghr = await pushArtifactsToGitHub(env, slug, ghFiles, { row: row, title: paper.title, body: paper.body_md, version: paper.version });
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=NULL, published_at=?, error=NULL WHERE id=?").bind(nowIso(), row.id).run();
   return { ok: true, stage: "publish->published", doi: null, slug, github: ghr };
@@ -6486,7 +7244,8 @@ async function remediationPublish(env, row) {
   const ghFiles = artifacts.map(function(a) {
     return { path: a.file, content: a.content };
   });
-  const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
+  // The remediation text is only queued here (version_queue); publishV2 deposits the paper when it is published, so this deposits the run alone.
+  const ghr = await pushArtifactsToGitHub(env, slug, ghFiles, { row: row, title: existing.title || "", body: null, version: versionTo });
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', published_at=? WHERE id=?").bind(nowIso(), row.id).run();
   await logEvent(env, isRev ? "revision-loop" : "remediation", "queued newversion for " + slug + " " + versionFrom + " -> " + versionTo, "ok");
@@ -7742,7 +8501,7 @@ function reviserMemberCall(ctx) { var p = ctx && ctx.props; return !!(p && p.mem
 // BROWSER and SEND_EMAIL are the host's own. Its three jobs keep their minutes on this */15 tick (:00 watch,
 // :15 respond, :30 publish), each awaited. Public: GET /errata-hub/health. Every other route of it answers only a service
 // binding whose props name the member (props.member = "errata-hub", props.caller = qnfo-*), in place of ERRATA_TOKEN.
-var ERRATA_VERSION = "1.7.0-folded";
+var ERRATA_VERSION = "1.8.1-folded";
 var ERRATA_MEMBER = "errata-hub";
 var errataMod = (function () {
 var Buffer2 = __ErrataBuffer, Buffer3 = __ErrataBuffer;
@@ -29485,18 +30244,36 @@ async function sweepInternalErrata(env) {
 // finding is a deterministic render measurement and is confirmed without a model call. A finding whose paper is not in the
 // corpus (no slug or DOI matches) becomes no-paper: there is no text to check or correct. A failed call or an unreadable
 // verdict leaves the row internal-open for the next tick and is logged.
+// ERRATA-CONFIRM-COST-1 (2026-10-26, agent_issues 1000032/1000035, pillar cost): kimi-k2.6 confirms ran 207 calls and 158,848
+// neurons on 2026-10-25, 33% of the shared research budget (COST-SUSTAIN-1), and the research stages were held from 13:00 UTC
+// on. PAPER-LEARN-1 findings already carry glm and gpt-oss verdicts, so the independent check needs a third family: deepseek
+// v4 flash (44 neurons per 1k tokens against kimi's 99, 0.6% errors over 523 calls) goes first, kimi stays the second path, and
+// the excerpt around the quoted passage is 24k chars, not 48k. ops_config errata_confirm_max sets the rows per tick (default 12,
+// 1..48), so BREACH-SELFHEAL-1 raises it while the internal-open backlog is old and lowers it when the budget is short.
 var INTERNAL_CONFIRM_MAX = 12;
+var INTERNAL_CONFIRM_MAX_CEIL = 48;
 var INTERNAL_CONFIRM_BUDGET_MS = 24e4;
 var INTERNAL_CONFIRM_MIN_AGE = "-30 minutes";
 var CONFIRM_MODEL_REVISER = "@cf/openai/gpt-oss-120b";
 var CONFIRM_MODEL_OTHER = "@cf/moonshotai/kimi-k2.6";
-var CONFIRM_EXCERPT_MAX = 48e3;
+var CONFIRM_MODEL_THIRD = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+var CONFIRM_EXCERPT_MAX = 24e3;
 function internalConfirmModel(sender) {
   return /qnfo-paper-reviser/i.test(String(sender || "")) ? CONFIRM_MODEL_REVISER : CONFIRM_MODEL_OTHER;
 }
 function internalConfirmModels(sender) {
-  const first = internalConfirmModel(sender);
-  return [first, first === CONFIRM_MODEL_REVISER ? CONFIRM_MODEL_OTHER : CONFIRM_MODEL_REVISER];
+  // A reviser finding was written with deepseek, so it is checked by gpt-oss then kimi; every other finding by deepseek then kimi.
+  return internalConfirmModel(sender) === CONFIRM_MODEL_REVISER ? [CONFIRM_MODEL_REVISER, CONFIRM_MODEL_OTHER] : [CONFIRM_MODEL_THIRD, CONFIRM_MODEL_OTHER];
+}
+async function internalConfirmMax(env) {
+  try {
+    const r = await env.WATCH_DB.prepare("SELECT value FROM ops_config WHERE key = 'errata_confirm_max'").first();
+    const n = r ? parseInt(String(r.value), 10) : NaN;
+    if (Number.isFinite(n) && n >= 1) return Math.min(n, INTERNAL_CONFIRM_MAX_CEIL);
+  } catch (e) {
+    console.error("[errata-hub] internal confirm: errata_confirm_max unreadable:", String(e && e.message || e).slice(0, 160));
+  }
+  return INTERNAL_CONFIRM_MAX;
 }
 async function logConfirmDefer(env, row, why) {
   try {
@@ -29512,6 +30289,7 @@ function confirmRunInput(model, prompt) {
     input.reasoning_effort = "none";
   }
   if (/gpt-oss/.test(model)) input.reasoning = { effort: "low" };
+  if (/deepseek/.test(model)) input.chat_template_kwargs = { thinking: false };
   return input;
 }
 function confirmReplyText(res) {
@@ -29578,11 +30356,12 @@ async function settleInternalErratum(env, row, status, note) {
   }
 }
 async function confirmInternalErrata(env) {
-  const out = { ok: true, max: INTERNAL_CONFIRM_MAX, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [] };
+  const max = await internalConfirmMax(env);
+  const out = { ok: true, max: max, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [], models: {} };
   let rows = [];
   try {
     rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY RANDOM() LIMIT ?2")
-      .bind(INTERNAL_CONFIRM_MIN_AGE, INTERNAL_CONFIRM_MAX).all()).results || [];
+      .bind(INTERNAL_CONFIRM_MIN_AGE, max).all()).results || [];
   } catch (e) {
     out.ok = false;
     out.error = String(e && e.message || e).slice(0, 300);
@@ -29640,6 +30419,7 @@ async function confirmInternalErrata(env) {
         continue;
       }
       const status = v.confirmed ? "detected" : "rejected";
+      out.models[model] = (out.models[model] || 0) + 1;
       await settleInternalErratum(env, row, status, (v.confirmed ? "confirmed" : "not confirmed") + " by " + model + " against " + paper.slug + ": " + (v.why || "(no reason given)"));
       if (v.confirmed) out.confirmed++;
       else out.rejected++;
@@ -29763,7 +30543,7 @@ return {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "errata-hub", "AI", "WATCH_DB");
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, internal_confirm: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep", "internal-errata-confirm"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction is re-published only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)", "after the sweep, up to 3 internal-open rows older than 30 minutes are checked against the paper text by a model of another family (gpt-oss-120b for a reviser finding, kimi-k2.6 otherwise; a RENDER-HEALTH measurement needs none): confirmed -> detected (errata-respond drafts it), not confirmed -> rejected, no paper in the corpus -> no-paper; a failed call waits for the next tick (ERRATA-INTERNAL-CONFIRM-1)"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, internal_confirm: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep", "internal-errata-confirm"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction is re-published only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)", "after the sweep, up to ops_config errata_confirm_max (default 12) internal-open rows older than 30 minutes are checked against the paper text by a model of another family (gpt-oss-120b then kimi-k2.6 for a reviser finding, deepseek-v4-flash then kimi-k2.6 otherwise; a RENDER-HEALTH measurement needs none): confirmed -> detected (errata-respond drafts it), not confirmed -> rejected, no paper in the corpus -> no-paper; a failed call waits for the next tick (ERRATA-INTERNAL-CONFIRM-1)"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }
@@ -30141,8 +30921,17 @@ function retractionNotice(title, versionFrom, day, hits) {
   });
   return ["# Retracted: " + String(title || "").replace(/^Retracted:\s*/i, ""), "", "## Retraction Notice", "", "This paper (version " + (versionFrom || "?") + ") is retracted as of " + day + ". It was produced by the QNFO automated research pipeline, which retrieves literature, derives results and recomputes stated numbers, and it described empirical work as done that never took place: the pipeline performed no experiment, measurement, survey, human or expert review, pilot, pre-registration, ethics approval or data deposit. Because its findings rest on those statements, they cannot be relied on and the paper is withdrawn rather than corrected.", "", "Statements that described work that did not take place:", ""].concat(items).concat(["", "The withdrawn text is kept in the QNFO audit record. Detected and retracted automatically (CLAIM-INTEGRITY-1).", ""]).join("\n");
 }
-async function ciGithubSync(env, slug, md) {
+async function ciGithubSync(env, slug, md, kind) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "no github token" };
+  try {
+    var _t = await REPO_DEPOSIT.resolveTarget(env, null, await repoTargetMode(env));
+    if (_t && _t.layout === "consolidated") {
+      var _vm = /\*\*Version:\*\*\s*([0-9][^\s*]*)/.exec(String(md).slice(0, 6000));
+      return await depositToGithub(env, slug, (/^# (.+)$/m.exec(String(md)) || [])[1] || slug, md, _vm ? _vm[1] : null, kind);
+    }
+  } catch (eCs) {
+    console.error(JSON.stringify({ worker: WORKER, where: "ci-github-sync", slug: slug, error: String(eCs && eCs.message || eCs).slice(0, 200) }));
+  }
   var prog = programFor(slug);
   var path = (prog === "papers" ? "papers/" + slug : prog + "/" + slug) + "/paper.md";
   var url = "https://api.github.com/repos/QNFO/qnfo-research/contents/" + path;
@@ -30192,7 +30981,7 @@ async function ciRetract(env, p, hits, day) {
   if (env.MIRROR) {
     try { await env.MIRROR.put("papers/" + p.slug + ".md", notice); } catch (eM) { console.error(JSON.stringify({ worker: WORKER, where: "claim-integrity-mirror", error: String(eM && eM.message || eM).slice(0, 200) })); }
   }
-  await ciGithubSync(env, p.slug, notice);
+  await ciGithubSync(env, p.slug, notice, "retracted");
   await ciErrata(env, p, versionTo, "retracted", hits);
   return versionTo;
 }
@@ -30221,7 +31010,7 @@ async function ciCorrect(env, p, hits, day) {
   if (env.MIRROR) {
     try { await env.MIRROR.put("papers/" + p.slug + ".md", body); } catch (eM) { console.error(JSON.stringify({ worker: WORKER, where: "claim-integrity-mirror", error: String(eM && eM.message || eM).slice(0, 200) })); }
   }
-  await ciGithubSync(env, p.slug, body);
+  await ciGithubSync(env, p.slug, body, "corrected");
   await ciErrata(env, p, versionTo, "corrected", applied.applied);
   return { ok: true, versionTo: versionTo, applied: applied.applied.length };
 }
@@ -30268,6 +31057,51 @@ async function ciProcessPaper(env, p, mode) {
   await ciRecord(env, rec);
   return rec;
 }
+// CLAIM-SWEEP-BACKFILL-REVIEW-1 (0.32.1): re-review papers that were retracted on 2026-10-19 and are now outside rlEligible.
+// The pre-retraction body is audited from paper_integrity_backups; only a clean audit is restored to its prior status.
+async function ciBackfillRetracted(env, pipeSlugs, mode) {
+  var list = [];
+  try {
+    list = (await env.LIVING_PAPER.prepare("SELECT slug, version, identifier, updated_at FROM papers WHERE status = 'retracted' AND slug IS NOT NULL AND updated_at LIKE '2026-10-19%' ORDER BY updated_at DESC").all()).results || [];
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "claim-integrity-backfill-list", error: String(e && e.message || e).slice(0, 200) }));
+    return { reviewed: 0, restored: 0, left: 0 };
+  }
+  var outOfGate = list.filter(function(p) { return !rlEligible(p, pipeSlugs); });
+  if (!outOfGate.length) return { reviewed: 0, restored: 0, left: 0 };
+  var reviewed = 0, restored = 0, left = 0;
+  for (var i = 0; i < outOfGate.length; i++) {
+    var slug = outOfGate[i].slug;
+    try {
+      var p = await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, body_md, version, status FROM papers WHERE slug = ?1").bind(slug).first();
+      var backup = await env.QNFO_AUDIT.prepare("SELECT title, abstract, body_md, version, status FROM paper_integrity_backups WHERE slug = ?1 AND action = 'retracted' AND created_at LIKE '2026-10-19%' ORDER BY id DESC LIMIT 1").bind(slug).first();
+      if (!p || !backup) continue;
+      reviewed++;
+      var a = await claimAudit(env, String(backup.body_md || ""));
+      var rec = { slug: slug, version: p.version, sha: await sha256hex(String(backup.body_md || "")), mode: mode, candidates: a.candidates || 0, confirmed: a.ok ? (a.confirmed || []).length : 0, versionTo: null, hits: [] };
+      if (!a.ok || (a.confirmed && a.confirmed.length)) {
+        rec.verdict = "retracted-backfill-confirmed";
+        left++;
+      } else if (mode !== "enforce") {
+        rec.verdict = "retracted-backfill-clean";
+      } else {
+        var versionTo = ciBumpPatch(p.version);
+        await env.LIVING_PAPER.prepare("UPDATE papers SET status=?2, title=?3, abstract=?4, body_md=?5, version=?6, updated_at=datetime('now') WHERE slug=?1").bind(slug, backup.status || "published", backup.title || p.title || "", backup.abstract || p.abstract || "", backup.body_md || p.body_md || "", versionTo).run();
+        if (env.MIRROR) {
+          try { await env.MIRROR.put("papers/" + slug + ".md", backup.body_md || p.body_md || ""); } catch (eM) { console.error(JSON.stringify({ worker: WORKER, where: "claim-integrity-backfill-mirror", slug: slug, error: String(eM && eM.message || eM).slice(0, 200) })); }
+        }
+        await ciGithubSync(env, slug, backup.body_md || p.body_md || "");
+        rec.verdict = "restored";
+        rec.versionTo = versionTo;
+        restored++;
+      }
+      await ciRecord(env, rec);
+    } catch (e) {
+      console.error(JSON.stringify({ worker: WORKER, where: "claim-integrity-backfill", slug: slug, error: String(e && e.message || e).slice(0, 200) }));
+    }
+  }
+  return { reviewed: reviewed, restored: restored, left: left };
+}
 // The post-publication loop: each tick audits the newest published papers whose current version has no audit under these
 // rules (a correction or any later revision is a new version and is audited again), at most claim_integrity_batch at a time.
 async function claimIntegritySweep(env, opts) {
@@ -30291,9 +31125,10 @@ async function claimIntegritySweep(env, opts) {
   // PROPORTIONATE-NOTICE-1: only pipeline papers are audited and corrected. The owner's own writing (qnfo-2025-*, qnfo-2026-*,
   // externally deposited papers) describes work the owner did; the pipeline cannot know it did not happen, and 60 such papers were retracted.
   var pipeSlugs = await rlPipelineSlugs(env);
+  var backfill = await ciBackfillRetracted(env, pipeSlugs, mode);
   var pub = ((await env.LIVING_PAPER.prepare("SELECT slug, version, identifier, updated_at FROM papers WHERE status IN ('published','distributed') AND slug IS NOT NULL ORDER BY updated_at DESC").all()).results || []).filter(function(p) { return rlEligible(p, pipeSlugs); });
   var todo = pub.filter(function(p) { var k = p.slug + "@" + p.version; return !done[k] && (tries[k] || 0) < 3; });
-  var out = { mode: mode, published: pub.length, unaudited: todo.length, processed: [] };
+  var out = { mode: mode, backfill: backfill, published: pub.length, unaudited: todo.length, processed: [] };
   var t0 = Date.now();
   var pick = o.slug ? pub.filter(function(p) { return p.slug === o.slug; }) : todo.slice(0, batch);
   for (var i = 0; i < pick.length; i += 3) {
@@ -30533,13 +31368,8 @@ async function noticeRepairTick(env, opts) {
     if (!rlEligible(p, pipe)) return !!backups[p.slug];
     return p.status !== "retracted";
   });
-  var out = { candidates: todo.length, restored: [], cleaned: [], blocked: [] };
+  var out = { candidates: todo.length, restored: [], cleaned: [], blocked: [], d1Errors: [], mirrorErrors: [] };
   var day = nowIso().slice(0, 10);
-  // NOTICE-REPAIR-SKIP-BLOCKED-1 (agent_issues 100274): the loop took the first NR_BATCH candidates of every tick, so eight papers that
-  // living-paper refuses (PUBLISH-FLOOR-BLOCKED: trg_papers_pub_floor_upd3 does not let a retracted paper go back to published under
-  // 20,000 chars) held the batch for ever and the 12 papers behind them, restorable ones among them, were never tried (candidates 20,
-  // restored [] on every tick from 18:00Z). A refused paper is recorded as blocked and the loop goes on to the next candidate; the
-  // batch counts repairs, not attempts, and a tick makes at most NR_ATTEMPTS_MAX attempts.
   var _done = 0, _tried = 0;
   for (var i = 0; i < todo.length && _done < (o.batch || NR_BATCH) && _tried < NR_ATTEMPTS_MAX; i++) {
     var p = todo[i];
@@ -30547,9 +31377,9 @@ async function noticeRepairTick(env, opts) {
     try {
       if (!rlEligible(p, pipe)) {
         var b = backups[p.slug];
-        await env.LIVING_PAPER.prepare("UPDATE papers SET title=?2, abstract=?3, body_md=?4, version=?5, status=?6, updated_at=datetime('now') WHERE slug=?1").bind(p.slug, b.title, b.abstract, b.body_md, b.version, b.status || "published").run();
+        await rlDbRun(env.LIVING_PAPER, "UPDATE papers SET title=?2, abstract=?3, body_md=?4, version=?5, status=?6, updated_at=datetime('now') WHERE slug=?1", [p.slug, b.title, b.abstract, b.body_md, b.version, b.status || "published"]);
         if (env.MIRROR) {
-          try { await env.MIRROR.put("papers/" + p.slug + ".md", b.body_md); } catch (eM) { console.error(JSON.stringify({ worker: WORKER, where: "notice-repair-mirror", error: String(eM && eM.message || eM).slice(0, 200) })); }
+          try { await mirrorPutVerified(env.MIRROR, "papers/" + p.slug + ".md", b.body_md); } catch (eM) { out.mirrorErrors.push({ slug: p.slug, error: String(eM && eM.message || eM).slice(0, 120) }); }
         }
         await ciGithubSync(env, p.slug, b.body_md);
         await env.QNFO_AUDIT.prepare("UPDATE paper_revision_log SET status='claim-withdrawn', updated_at=datetime('now') WHERE slug=?1 AND status IN ('claim-corrected','claim-retracted')").bind(p.slug).run();
@@ -30557,11 +31387,11 @@ async function noticeRepairTick(env, opts) {
         out.restored.push(p.slug);
         _done++;
       } else {
-        var full = await env.LIVING_PAPER.prepare("SELECT body_md FROM papers WHERE slug=?1").bind(p.slug).first();
+        var full = await rlDbFirst(env.LIVING_PAPER, "SELECT body_md FROM papers WHERE slug=?1", [p.slug]);
         var body = rlWithHistory(String(full && full.body_md || ""), p.version, day, await rlHistoryEntries(env, p.slug));
-        await env.LIVING_PAPER.prepare("UPDATE papers SET body_md=?2, updated_at=updated_at WHERE slug=?1").bind(p.slug, body).run();
+        await rlDbRun(env.LIVING_PAPER, "UPDATE papers SET body_md=?2, updated_at=updated_at WHERE slug=?1", [p.slug, body]);
         if (env.MIRROR) {
-          try { await env.MIRROR.put("papers/" + p.slug + ".md", body); } catch (eM2) { console.error(JSON.stringify({ worker: WORKER, where: "notice-repair-mirror", error: String(eM2 && eM2.message || eM2).slice(0, 200) })); }
+          try { await mirrorPutVerified(env.MIRROR, "papers/" + p.slug + ".md", body); } catch (eM2) { out.mirrorErrors.push({ slug: p.slug, error: String(eM2 && eM2.message || eM2).slice(0, 120) }); }
         }
         await ciGithubSync(env, p.slug, body);
         out.cleaned.push(p.slug);
@@ -30570,11 +31400,67 @@ async function noticeRepairTick(env, opts) {
     } catch (e) {
       var _em = String(e && e.message || e);
       if (_em.indexOf("PUBLISH-FLOOR-BLOCKED") >= 0) out.blocked.push(p.slug);
+      else if (isD1TransientError(_em)) { out.d1Errors.push({ slug: p.slug, error: _em.slice(0, 160), at: nowIso() }); }
       else out.error = (out.error || "") + p.slug + ": " + _em.slice(0, 120) + "; ";
     }
   }
   if (out.blocked.length) out.blockedNote = out.blocked.length + " owner paper(s) refused by the living-paper publish floor (trg_papers_pub_floor_upd3: retracted -> published needs 20,000 chars); text left as it is";
+  if (out.d1Errors.length) out.error = (out.error || "") + "D1_TRANSIENT[" + out.d1Errors.length + "]: " + out.d1Errors.map(function(x) { return x.slug; }).join(",");
+  if (out.mirrorErrors.length) out.error = (out.error || "") + "MIRROR_VERIFY_FAILED[" + out.mirrorErrors.length + "]: " + out.mirrorErrors.map(function(x) { return x.slug; }).join(",");
   return out;
+}
+
+function isD1TransientError(msg) {
+  if (!msg) return false;
+  var m = String(msg).toUpperCase();
+  return m.indexOf("D1_ERROR") >= 0 || m.indexOf("NETWORK CONNECTION LOST") >= 0 || m.indexOf("INTERNAL ERROR") >= 0 || m.indexOf("DATABASE IS LOCKED") >= 0 || m.indexOf("BUSY") >= 0;
+}
+
+async function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+async function rlDbRun(db, sql, params, retries) {
+  retries = retries || 3;
+  var lastErr;
+  for (var i = 0; i < retries; i++) {
+    try {
+      var st = db.prepare(sql);
+      return await st.bind.apply(st, params).run();
+    } catch (e) {
+      lastErr = e;
+      var _em = String(e && e.message || e);
+      if (!isD1TransientError(_em)) throw e;
+      if (i < retries - 1) await sleep(200 + i * 400);
+    }
+  }
+  throw lastErr;
+}
+
+async function rlDbFirst(db, sql, params, retries) {
+  retries = retries || 3;
+  var lastErr;
+  for (var i = 0; i < retries; i++) {
+    try {
+      var st = db.prepare(sql);
+      return await st.bind.apply(st, params).first();
+    } catch (e) {
+      lastErr = e;
+      var _em = String(e && e.message || e);
+      if (!isD1TransientError(_em)) throw e;
+      if (i < retries - 1) await sleep(200 + i * 400);
+    }
+  }
+  throw lastErr;
+}
+
+async function mirrorPutVerified(bucket, key, body) {
+  if (!bucket) return;
+  var expected = String(body || "");
+  await bucket.put(key, expected);
+  var got = await bucket.get(key);
+  if (!got) throw new Error("MIRROR_VERIFY_MISSING: " + key);
+  var txt = await got.text();
+  if (txt !== expected) throw new Error("MIRROR_VERIFY_MISMATCH: " + key + " len " + expected.length + " != " + txt.length);
+  return true;
 }
 function rlEligible(p, pipelineSlugs) {
   return /^qnf-/i.test(String(p.identifier || "")) || !!pipelineSlugs[p.slug];
@@ -30712,6 +31598,16 @@ var worker_default = {
         await logEvent(env, "notice-repair", "tick threw: " + String(eNr && eNr.message || eNr).slice(0, 200), "error");
       }
     })());
+    // REPO-DEPOSIT-1: keep the research repository complete: retry failed deposits, restore ledger gaps, sync revised paper text (no model call).
+    ctx.waitUntil((async function() {
+      if (env.RESEARCH_HALT === "1") return;
+      try {
+        var _rp = await repoSyncTick(env);
+        if (!_rp.skipped || _rp.retried || _rp.error) await logEvent(env, "repo-sync", JSON.stringify(_rp).slice(0, 790), _rp.error || (_rp.restore && !_rp.restore.ok) || (_rp.sync && !_rp.sync.ok) ? "warn" : "ok");
+      } catch (eRp) {
+        await logEvent(env, "repo-sync", "tick threw: " + String(eRp && eRp.message || eRp).slice(0, 200), "error");
+      }
+    })());
     // REVISION-LOOP-1: published papers go back through the pipeline on a rate, every tick.
     ctx.waitUntil((async function() {
       if (env.RESEARCH_HALT === "1") return;
@@ -30822,7 +31718,7 @@ var worker_default = {
     if (new URL(request.url).pathname === "/reviser/health" && request.method === "GET") return reviserMod.fetch(new Request(new URL("/health", request.url)), reviserEnv(env), ctx);
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish", "claim-integrity", "revision-loop"], limitations: ["stages run only on the */10 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
+    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish", "claim-integrity", "revision-loop", "repo-deposit"], limitations: ["stages run only on the */10 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
@@ -30835,6 +31731,7 @@ var worker_default = {
       if (lr.busy) return json({ ok: true, worker: WORKER, version: VERSION, busy: true, note: "another run holds the single-flight lease" }, 409);
       return json({ ok: true, worker: WORKER, version: VERSION, out: lr.stages[0] || null });
     }
+    if (url.pathname === "/repo-ledger" && request.method === "GET") return json(Object.assign({ ok: true, worker: WORKER, version: VERSION }, await repoLedgerStatus(env)));
     if (url.pathname === "/claim-integrity" && request.method === "GET") return json(Object.assign({ ok: true, worker: WORKER, version: VERSION }, await claimIntegrityStatus(env)));
     if (url.pathname === "/claim-integrity/run" && request.method === "POST") {
       // Internal callers only, like /run: one paper (?slug=) or one batch, in the configured mode or ?mode=measure.
@@ -30860,6 +31757,15 @@ var worker_default = {
 };
 export {
   worker_default as default,
+  pushArtifactsToGitHub,
+  depositToGithub,
+  ciGithubSync,
+  collectArtifacts,
+  recordRunLedger,
+  repoSyncTick,
+  repoCatchupTick,
+  repoLedgerStatus,
+  paperDirFor,
   sanitizeRetrieved,
   chatbotResidue,
   provenanceSection,

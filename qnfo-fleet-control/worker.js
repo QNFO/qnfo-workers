@@ -1100,7 +1100,7 @@ __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.47.0-remediation-budget-metric"; /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.49.3-pr-sla-groups"; /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -2887,6 +2887,16 @@ async function evApi(env, method, path, body) {
   return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
 }
 __name(evApi, "evApi");
+// PR-MERGE-SLA-10M-1: the one GraphQL call the lane needs (markPullRequestReadyForReview; REST has no draft toggle). Same token and headers as evApi.
+async function evGraphql(env, query, variables) {
+  try {
+    var r = await timedFetch("https://api.github.com/graphql", { method: "POST", headers: evGh(env), body: JSON.stringify({ query: query, variables: variables || {} }) }, 15e3);
+    var raw = await r.text().catch(function() { return ""; }), j = null;
+    if (raw) { try { j = JSON.parse(raw); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evGraphql:caught", status: r.status, error: String(e && e.message) })); } }
+    return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
+  } catch (e) { return { status: 0, ok: false, j: { message: String(e && e.message || e).slice(0, 120) } }; }
+}
+__name(evGraphql, "evGraphql");
 function evDecode(b64) {
   return new TextDecoder().decode(Uint8Array.from(atob(String(b64 || "").replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); }));
 }
@@ -3352,10 +3362,26 @@ var CM_TRUSTED_SOURCES = "qnfo-fleet-dashboard:owner-request|OWNER-TASK-,qnfo-fl
 // SLA-120M-7 (0.31.2): both waits are SLAs and at most 120 minutes (owner directive 2026-10-14); they were 3 h.
 var CM_CHECKS_WAIT_MIN = 120;
 var CM_DEPLOY_WAIT_MIN = 120;
+// MERGE-DEPLOYED-UNBLOCK-1 (0.48.0, 2026-10-26): a runner merge in merge_state 'deployed' waits for a worker_live_audit row newer than its
+// deploy, and every other green pull request on the same worker waited behind it ("merge deferred, <worker> has a change in flight").
+// The audit writer (fleet-autodeploy's fleet-autoaudit.py) crashed from 2026-10-25T20:21Z, no row arrived, and four tasks (research-exec,
+// ai, gateway, deploy-guard) stayed 'deployed' for 9 hours while five green research-exec pull requests (4275, 4276, 4277, 4282, 4283)
+// aged past the 120-minute close. The wait is now bounded: a deployed task holds its worker for CM_DEPLOYED_BUSY_MIN (5) minutes (ticks are
+// 10 minutes apart, so this covers a deploy the tick has only just seen; a later deploy of the same worker is read as "superseded" by
+// evLiveCheck, so verification does not need the worker to stay quiet) and becomes 'unverifiable' (never reverted on a missing probe) after
+// CM_LIVE_AUDIT_WAIT_MIN, the same disposition a cron-only worker gets.
+var CM_LIVE_AUDIT_WAIT_MIN = 30;
+var CM_DEPLOYED_BUSY_MIN = 5;
+// ISO ('T', 'Z') and SQLite ('YYYY-MM-DD HH:MM:SS', UTC) timestamps both read as epoch ms; NaN when unreadable.
+function cmMs(v) { var x = String(v || ""); return Date.parse(x.replace(" ", "T") + (/[zZ]$|[+-]\d\d:?\d\d$/.test(x) ? "" : "Z")); }
 var CM_MAX_CANDIDATES = 5;
 var CM_MAX_MERGES = 1;
-var CM_MERGEABLE_READS = 3;
-var CM_MERGEABLE_WAIT_MS = 2000;
+// MERGEABLE-POLL-LONGER-1 (0.48.0, 2026-10-26): main takes a commit every 1.2 minutes (median, 363 in 24 h, 170 of them bot status snapshots), and each
+// one drops GitHub's cached mergeability for every open pull request. At 06:10Z four of five green research-exec pull requests read
+// mergeable=null on the tick ("GitHub is still computing mergeability") because 3 reads 2 s apart (6 s) ended before GitHub finished. 6 reads
+// 5 s apart give it 25 s; the wait is wall-clock only and a tick handles at most CM_MAX_CANDIDATES (5) pull requests.
+var CM_MERGEABLE_READS = 6;
+var CM_MERGEABLE_WAIT_MS = 5000;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
 var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
@@ -3520,6 +3546,20 @@ function cmApply(text, hunks, reverse, wild) {
 }
 __name(cmApply, "cmApply");
 // Like evBump, but tolerates a trailing comment after the VERSION literal (several workers keep a changelog there).
+// MERGE-VERSION-AHEAD-1 (0.48.1, 2026-10-26): numeric core x.y.z of a VERSION string, as version-bump-guard reads it.
+function cmVerCore(v) {
+  var m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || ""));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+__name(cmVerCore, "cmVerCore");
+// True when a is strictly ahead of b by numeric core. An unreadable side is not this gate's call: it answers true.
+function cmVerAhead(a, b) {
+  var x = cmVerCore(a), y = cmVerCore(b);
+  if (!x || !y) return true;
+  for (var i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  return false;
+}
+__name(cmVerAhead, "cmVerAhead");
 function cmBump(content, tag) {
   var all = String(content).match(/^var\s+VERSION\s*=\s*"[^"\n]*"/gm) || [];
   if (all.length !== 1) return null;
@@ -4190,6 +4230,15 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase, opts) {
   if (sc.kind === "worker") {
     var vm = /^(?:var|const|let)\s+VERSION\s*=\s*"([^"\n]*)"/m.exec(headText || "");
     out.version_to = vm ? vm[1] : null;
+    // MERGE-VERSION-AHEAD-1 (0.48.1, 2026-10-26): the pull request's own VERSION check ran when it was opened. Once the runner merges one change
+    // per worker per tick, a second pull request cut from the same base carries the SAME next version (qnfo-research-exec #4297 and #4282 both
+    // bumped 0.34.0 to 0.34.1), merges clean because both sides wrote identical text, and main's version-bump-guard fails with "unchanged VERSION
+    // after a byte change" (ci-watchdog #4319); a repeated version also reads as already deployed. The head's VERSION must be ahead of main's NOW;
+    // if not, the change is stale and goes the REBASE-REQUEUE-1 way: re-applied on current main with a fresh bump.
+    var mnt = await cmRead(env, t.path, "main");
+    if (mnt.transient) return { ok: false, transient: true, why: mnt.why };
+    var mvm = mnt.text ? /^(?:var|const|let)\s+VERSION\s*=\s*"([^"\n]*)"/m.exec(mnt.text) : null;
+    if (vm && mvm && !cmVerAhead(vm[1], mvm[1])) return { ok: false, stale: true, why: "VERSION-AHEAD-1: the pull request's VERSION " + vm[1] + " is not ahead of main's " + mvm[1] + " (another merge took it)" };
     if (!hunks) { out.revertible = false; out.revert_why = "a code-agent pull request stores no patch to invert"; }
     else if (!vm || !cmBump(headText, "-x")) { out.revertible = false; out.revert_why = "no single `var VERSION = \"x.y.z...\"` line to bump"; }
     else if (rebased ? !cmRevertEdits(headText, rebased, "-x") : !cmRevertText(headText, hunks[t.path], "-x")) { out.revertible = false; out.revert_why = rebased ? "the parked edits do not invert on the head" : "the patch does not invert on the head"; }
@@ -4338,7 +4387,15 @@ async function cmAdvance(env, cx, t) {
   }
   if (t.merge_state === "deployed") {
     var lc = await cmLiveCheck(env, sc.worker, t.version_to, t.deployed_at || t.merged_at, cx.now);
-    if (lc.state === "waiting") return { id: t.id, merge_state: "deployed", note: "waiting on a live audit after deploy" };
+    if (lc.state === "waiting") {
+      var depMs = cmMs(t.deployed_at || t.merged_at);
+      if (isFinite(depMs) && cx.now - depMs > CM_LIVE_AUDIT_WAIT_MIN * 6e4) {
+        await cmSave(env, cx, t.id, { merge_state: "unverifiable", merge_note: "deployed " + (t.deployed_at || "") + "; no worker_live_audit row newer than the deploy within " + CM_LIVE_AUDIT_WAIT_MIN + " minutes, so the live state cannot be read (the live-audit writer is stale; not reverted on a missing probe)" }, { touch: true });
+        await cmEvent(env, cx, "unverifiable", t, sc.worker + " " + t.version_to + " deployed; no live audit within " + CM_LIVE_AUDIT_WAIT_MIN + " minutes, so it is not verified (MERGE-DEPLOYED-UNBLOCK-1)", "error");
+        return { id: t.id, merge_state: "unverifiable", note: "no live audit within " + CM_LIVE_AUDIT_WAIT_MIN + " minutes" };
+      }
+      return { id: t.id, merge_state: "deployed", note: "waiting on a live audit after deploy" };
+    }
     if (lc.state === "unverifiable") {
       await cmSave(env, cx, t.id, { merge_state: "unverifiable", merge_note: "deployed " + (t.deployed_at || "") + "; a cron-only worker with no fleet_heartbeat row after the deploy, so the live state cannot be read (not reverted on a missing HTTP probe)" }, { touch: true });
       await cmEvent(env, cx, "unverifiable", t, sc.worker + " " + t.version_to + " deployed; cron-only, no heartbeat to verify it", "error");
@@ -4556,7 +4613,7 @@ __name(cmFailureExcerpt, "cmFailureExcerpt");
 var CM_REPAIR_ROUNDS = 2;
 var CM_REPAIR_RE = /goal review \(|required check\(s\) failed|does not apply to |do not re-apply to |conflicts with main|was to be created and exists/;
 // PATCH-REBUILD-1 (0.18.0): the refusals that mean "main moved under the change", not "the change is wrong".
-var CM_STALE_RE = /does not apply to |do not re-apply to |conflicts with main|was to be created and exists/;
+var CM_STALE_RE = /does not apply to |do not re-apply to |conflicts with main|was to be created and exists|is not ahead of main/;
 function cmRepairable(t, why) {
   if (!CM_REPAIR_RE.test(String(why || ""))) return false;
   var ctx = cmCtx(t) || {};
@@ -4743,7 +4800,7 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
   var res = { id: t.id, pr: num, action: d.action, why: d.why };
   var cmLimit = out.maxMerges || CM_MAX_MERGES;
   if (d.action === "merge" && (out.merges >= cmLimit || (d.worker && busy[d.worker]))) {
-    d = { action: "wait", green: true, why: "green; merge deferred (" + (out.merges >= cmLimit ? (cmLimit === 1 ? "one merge per tick" : cmLimit + " merges per tick") : d.worker + " has a change in flight") + ")" };
+    d = { action: "wait", green: true, why: "green; merge deferred (" + (out.merges >= cmLimit ? (cmLimit === 1 ? "one merge per tick" : cmLimit + " merges per tick") : d.worker + " has a change in flight: " + busy[d.worker]) + ")" };
     res.action = "wait"; res.why = d.why;
   }
   var greenSince = d.green ? (t.green_since || cx.iso) : null;
@@ -4788,7 +4845,7 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     var mg = await evMergePr(env, num, head2, title, msg);
     if (mg.ok) {
       out.merges++;
-      if (d.worker) busy[d.worker] = 1;
+      if (d.worker) busy[d.worker] = t.id + " merged this tick";
       await cmSave(env, cx, t.id, { status: "merged", merged_by: CM_RUNNER, merged_sha: (mg.j && mg.j.sha) || null, merged_at: cx.iso, merge_state: d.kind === "worker" ? "deploying" : "verified", version_to: d.version_to, merge_note: d.why + (d.kind === "worker" ? "; waiting on canonical deploy" : "; no deploy target"), merge_checked_at: cx.iso }, { touch: true });
       await evApi(env, "DELETE", "/git/refs/heads/" + t.branch);
       await cmEvent(env, cx, "merged", t, t.pr_url + " merged by " + CM_RUNNER + " (" + d.why + ")", "ok", { sha: mg.j && mg.j.sha, files: names, version_to: d.version_to, origin: g.provenance.origin });
@@ -5031,7 +5088,11 @@ async function codeMergeTick(env, opts) {
     for (var i = 0; i < inflight.length; i++) out.advanced.push(await cmAdvance(env, cx, inflight[i]));
   }
   var busy = {};
-  (await all("SELECT path FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) { var s = cmScope(r.path); if (s.worker) busy[s.worker] = 1; });
+  // MERGE-DEPLOYED-UNBLOCK-1: 'deployed' holds its worker only for CM_DEPLOYED_BUSY_MIN minutes; deploying and reverting hold it until they end.
+  (await all("SELECT id, path, merge_state, deployed_at, merged_at FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) {
+    if (r.merge_state === "deployed") { var dm = cmMs(r.deployed_at || r.merged_at); if (isFinite(dm) && nowMs - dm > CM_DEPLOYED_BUSY_MIN * 6e4) return; }
+    var s = cmScope(r.path); if (s.worker) busy[s.worker] = r.id + " " + r.merge_state;
+  });
   try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:codeMergeTick:caught", error: String(e && e.message) })); }
   // Pushed branches first: open their PRs (CI then starts by itself; they are merge candidates from the next tick).
   var pushed = await all("SELECT * FROM code_tasks WHERE repo IN ('qnfo-workers', 'QNFO/qnfo-workers') AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
@@ -5107,8 +5168,12 @@ var BH_STALE_PR_H = 24; // CYCLE-TIME-1: an open PR idle this long with no live 
 // not 2 hours. The lane already runs every 10 minutes (laneOnly), so a green PR now reaches main within about 30 minutes and the
 // canonical deploy ships it from there. Every other gate is unchanged: required checks green on the head, mergeable_state clean,
 // no HOLD: comment newer than the head, no .github/ change, no draft or WIP, and the post-deploy canary revert.
-var BH_MERGE_IDLE_MIN_DEFAULT = 20;
-var BH_MERGE_IDLE_MIN_FLOOR = 10;
+// PR-MERGE-SLA-10M-1 (0.49.0, owner directive 2026-10-26: every pull request merges within 10 minutes of opening): the quiet window is 3 minutes (floor 1),
+// not 20 (floor 10). The gate itself runs 5 minutes after every push and a new push resets the clock, so the window only has to cover the author's last
+// comment; at 20 minutes a pull request that was green 5 minutes after opening still waited 15 more. ops_config stale_pr_merge_idle_min = 20 restores the old window.
+var BH_MERGE_IDLE_MIN_DEFAULT = 3;
+var BH_MERGE_IDLE_MIN_FLOOR = 1;
+var BH_READY_WAIT_MS = 1500; // PR-MERGE-SLA-10M-1: GitHub answers draft:true for a moment after markPullRequestReadyForReview
 var BH_MERGE_MAX = 10; // pull requests evaluated for a merge per tick (4 GitHub reads each)
 // MERGEABILITY-REQUERY-1 (0.18.0): at the 08:00Z and 09:00Z lane ticks of 2026-10-12 five green quiet pull requests (941, 943,
 // 944, 946, 960) were passed over because GitHub answered mergeable null right after main moved, while a plain GET a few
@@ -5121,6 +5186,15 @@ var BH_MERGE_MAX = 10; // pull requests evaluated for a merge per tick (4 GitHub
 var BH_MERGEABLE_READS = 5;
 var BH_MERGEABLE_WAIT_MS = 2000;
 var BH_HOLD_RE = /\b(do[\s-]*not[\s-]*merge|don'?t[\s-]*merge|wip|work[\s-]in[\s-]progress)\b/i;
+// PR-MERGE-SLA-10M-1 (0.49.1, review by session_01LJNL3L: the harness opens every session pull request as a draft, so an author who keeps one on purpose says so in
+// the body, and the lane now merges drafts): the body phrases that ask the lane to wait. A title or label hold stays BH_HOLD_RE.
+// A hold phrase inside a fenced block or an inline code span documents a hold, it does not set one (#4385 quoted the phrases in backticks to describe the rule and held itself
+// for 14 minutes, review by session_01LJNL3L). An unterminated fence is left in the text, so an odd body errs towards holding.
+function bhHoldText(body) {
+  return String(body || "").replace(/```[\s\S]*?```/g, " ").replace(/~~~[\s\S]*?~~~/g, " ").replace(/`[^`\n]*`/g, " ");
+}
+__name(bhHoldText, "bhHoldText");
+var BH_BODY_HOLD_RE = /\b(do[\s-]*not[\s-]*merge|don'?t[\s-]*merge|draft[\s-]+until|stays?[\s-]+(a[\s-]+)?draft|keep[\s-]+(it[\s-]+|this[\s-]+)?(as[\s-]+)?a[\s-]+draft|not[\s-]+ready[\s-]+(for[\s-]+(review|merge)|to[\s-]+merge))\b/i;
 // STALE-PR-LANE-READS-HOLDS-1 (0.20.0, agent_issues 2389, pillar autonomy): on PR 949 a review comment at 06:17Z said part 4
 // "has a problem worth fixing before this merges"; the lane merged it at 09:00Z with the defect unchanged (fixed afterwards in
 // PR 1004). bhMergeDecide read the title, labels and body but never a comment, and GitHub's REQUEST_CHANGES review is not
@@ -5196,9 +5270,9 @@ function bhDecide(f) {
 }
 __name(bhDecide, "bhDecide");
 async function bhConfig(env) {
-  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
+  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, drafts: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
   try {
-    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled')").all()).results || [];
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled', 'stale_pr_merge_drafts')").all()).results || [];
     rows.forEach(function(r) {
       var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
       if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
@@ -5210,6 +5284,8 @@ async function bhConfig(env) {
       if (r.key === "stale_pr_nudge_enabled" && v) cfg.nudge = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       if (r.key === "stale_pr_conflict_repair_enabled" && v) cfg.conflictRepair = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       // STALE-PR-LANE-READS-HOLDS-1 (0.20.0): off stops the comment read, never the other gates.
+      // PR-MERGE-SLA-10M-1: a draft that is green, quiet and carries no hold or WIP marker is marked ready and merged; off restores "a draft is never merged".
+      if (r.key === "stale_pr_merge_drafts" && v) cfg.drafts = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       if (r.key === "stale_pr_holds_enabled" && v) cfg.holds = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       // PR-LANE-FAST-1: minutes of quiet before a merge; a value below the floor or unreadable keeps the floor or the default.
       if (r.key === "stale_pr_merge_idle_min" && v && isFinite(Number(v))) cfg.idleMin = Math.max(BH_MERGE_IDLE_MIN_FLOOR, Math.round(Number(v)));
@@ -5250,12 +5326,12 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   var no = function(why) { return { merge: false, why: why }; };
   if (!pr || typeof pr !== "object" || Array.isArray(pr) || !pr.number) return no("pull request not read");
   if (pr.state !== "open" || pr.merged) return no("not open");
-  if (pr.draft) return no("a draft");
+  if (pr.draft && !(opts && opts.drafts)) return no("a draft");
   var head = pr.head || {}, base = pr.base || {}, ref = String(head.ref || "");
   if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch: its own runner decides");
   if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
   var labels = (pr.labels || []).map(function(l) { return String(l && l.name || ""); }).join(" ");
-  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /(^|\s)(on-)?hold(\s|$)/i.test(labels) || /\bdo[\s-]*not[\s-]*merge\b/i.test(String(pr.body || ""))) return no("the pull request asks not to be merged (title, label or body)");
+  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /(^|\s)(on-)?hold(\s|$)/i.test(labels) || BH_BODY_HOLD_RE.test(bhHoldText(pr.body))) return no("the pull request asks not to be merged (title, label or body)");
   if (!Array.isArray(files) || !files.length || files.length >= 100) return no("its changed files could not be read (or 100+)");
   var names = files.map(function(f) { return String(f && f.filename || ""); });
   var gh = names.filter(function(n) { return /^\.github\//.test(n); });
@@ -5273,7 +5349,7 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   if (ck.pending.length) return no("check(s) still running on " + sha7 + ": " + ck.pending.join(", "));
   if (ck.other.length) return no("check(s) failed on " + sha7 + ": " + ck.other.join(", "));
   if (ck.status === "failure" || ck.status === "error" || ck.status === "pending") return no("the commit status on " + sha7 + " is " + ck.status);
-  return { merge: true, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
+  return { merge: true, draft: !!pr.draft, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
 }
 __name(bhMergeDecide, "bhMergeDecide");
 // STALE-PR-CHECK-REPAIR-1 (0.12.3, agent_issues 2122, pillar autonomy): a quiet session PR whose required checks are all green
@@ -5342,9 +5418,9 @@ __name(bhFileRepair, "bhFileRepair");
 // from branch_hygiene_log), so a PR GitHub never resolves is refused and logged, not nudged for ever.
 // Kill switch: ops_config stale_pr_nudge_enabled ('0' / 'off').
 var BH_NUDGE_MAX = 3;
-function bhNudgeDecide(pr, d) {
+function bhNudgeDecide(pr, d, opts) {
   var no = function(why) { return { nudge: false, why: why }; };
-  if (!pr || typeof pr !== "object" || pr.state !== "open" || pr.merged || pr.draft) return no("not an open, ready pull request");
+  if (!pr || typeof pr !== "object" || pr.state !== "open" || pr.merged || (pr.draft && !(opts && opts.drafts))) return no("not an open, ready pull request");
   if (!d || d.merge || !/^GitHub reports mergeable /.test(String(d.why || ""))) return no("mergeability is not what stops the merge");
   var st = String(pr.mergeable_state || "");
   if (pr.mergeable == null) return { nudge: true, why: "GitHub left mergeable null (mergeable_state " + (st || "unknown") + ")" };
@@ -5376,7 +5452,7 @@ __name(bhNudge, "bhNudge");
 async function bhLogNonMerge(env, iso, p, action, why) {
   var w = String(why || "").slice(0, 500), sha = (p.head && p.head.sha) || null;
   try {
-    if (action === "merge-nudge") await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-nudge', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, sha, w, p.number).run();
+    if (action === "merge-nudge" || action === "draft-ready") await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, 1, 0)").bind(iso, p.head.ref, sha, action, w, p.number).run();
     else await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) SELECT ?1, ?2, ?3, 'merge-refused', ?4, ?5, NULL, 1, 0 WHERE NOT EXISTS (SELECT 1 FROM branch_hygiene_log WHERE action = 'merge-refused' AND pr = ?5 AND COALESCE(sha, '') = COALESCE(?3, '') AND why = ?4)").bind(iso, p.head.ref, sha, w, p.number).run();
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhLogNonMerge:caught", error: String(e && e.message) })); }
 }
@@ -5388,15 +5464,15 @@ __name(bhLogNonMerge, "bhLogNonMerge");
 // line that would have undone a newer change on main. Pure: { conflict: true, files } or { conflict: false, why }. A hold, a
 // draft, a code-loop or evolve branch, a fork or a PR not into main is not repaired here.
 // Kill switch: ops_config stale_pr_conflict_repair_enabled ('0' / 'off').
-function bhConflictDecide(pr, files) {
+function bhConflictDecide(pr, files, opts) {
   var no = function(why) { return { conflict: false, why: why }; };
   if (!pr || typeof pr !== "object" || Array.isArray(pr) || !pr.number) return no("pull request not read");
-  if (pr.state !== "open" || pr.merged || pr.draft) return no("not an open, ready pull request");
+  if (pr.state !== "open" || pr.merged || (pr.draft && !(opts && opts.drafts))) return no("not an open, ready pull request");
   var head = pr.head || {}, base = pr.base || {}, ref = String(head.ref || "");
   if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch");
   if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
   var labels = (pr.labels || []).map(function(l) { return String(l && l.name || ""); }).join(" ");
-  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /\bdo[\s-]*not[\s-]*merge\b/i.test(String(pr.body || ""))) return no("the pull request asks not to be merged");
+  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || BH_BODY_HOLD_RE.test(bhHoldText(pr.body))) return no("the pull request asks not to be merged");
   if (pr.mergeable !== false || String(pr.mergeable_state || "") !== "dirty") return no("GitHub reports mergeable " + pr.mergeable + ", mergeable_state " + pr.mergeable_state);
   var names = Array.isArray(files) ? files.map(function(f) { return String(f && f.filename || ""); }).filter(Boolean) : [];
   return { conflict: true, files: names };
@@ -5442,14 +5518,15 @@ async function bhTryMerge(env, p, cfg) {
   var cr = await evApi(env, "GET", "/commits/" + head + "/check-runs?per_page=100");
   var st = await evApi(env, "GET", "/commits/" + head + "/status");
   if (!fl.ok || !cr.ok || !st.ok) return { merged: false, why: "files HTTP " + fl.status + ", check-runs HTTP " + cr.status + ", status HTTP " + st.status };
-  var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j, { controlPlane: !cfg || cfg.controlPlane !== false });
+  var mopts = { controlPlane: !cfg || cfg.controlPlane !== false, drafts: !cfg || cfg.drafts !== false };
+  var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j, mopts);
   if (!d.merge) {
     var why = d.why;
     if (!cfg || cfg.nudge !== false) {
-      var nd = bhNudgeDecide(pr.j, d);
+      var nd = bhNudgeDecide(pr.j, d, mopts);
       // Only a PR that would merge once GitHub answers is nudged: the same decision is replayed with mergeability assumed clean,
       // so a PR with a failing, missing or running check gets no update (its checks would only run again to the same end).
-      if (nd.nudge && bhMergeDecide(Object.assign({}, pr.j, { mergeable: true, mergeable_state: "clean" }), fl.j, (cr.j && cr.j.check_runs) || [], st.j, { controlPlane: !cfg || cfg.controlPlane !== false }).merge) {
+      if (nd.nudge && bhMergeDecide(Object.assign({}, pr.j, { mergeable: true, mergeable_state: "clean" }), fl.j, (cr.j && cr.j.check_runs) || [], st.j, mopts).merge) {
         var ng = await bhNudge(env, pr.j, nd, cfg && cfg.now);
         if (ng.nudged) return { merged: false, keep: true, nudged: true, why: ng.why };
         // keep: the pull request is not closed on the tick that first reads null; the refusal is still a merge-refused row.
@@ -5458,7 +5535,7 @@ async function bhTryMerge(env, p, cfg) {
       }
     }
     var rep = bhRepairDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j);
-    var cfl = !cfg || cfg.conflictRepair !== false ? bhConflictDecide(pr.j, fl.j) : { conflict: false };
+    var cfl = !cfg || cfg.conflictRepair !== false ? bhConflictDecide(pr.j, fl.j, mopts) : { conflict: false };
     return { merged: false, why: why, repair: rep.repair ? rep : null, conflict: cfl.conflict ? cfl : null, pr: pr.j };
   }
   // STALE-PR-LANE-READS-HOLDS-1 (0.20.0): the last gate before the merge call. keep: a held PR is not closed on this tick.
@@ -5466,6 +5543,17 @@ async function bhTryMerge(env, p, cfg) {
     var hd = await bhReadHold(env, n, head, cfg && cfg.now);
     if (hd.hold) return { merged: false, keep: true, held: true, why: hd.why, pr: pr.j };
     if (hd.expired) d.why += "; " + hd.why;
+  }
+  // PR-MERGE-SLA-10M-1: the REST merge refuses a draft, so a draft that passed every gate above is marked ready first (GraphQL) and decided once more on the
+  // fresh read; when GitHub is not clean yet the next lane tick (a poke, the event of the ready mark itself, or the 10-minute cron) merges it.
+  if (d.draft) {
+    if (cfg && cfg.afterReady) return { merged: false, keep: true, why: "still a draft after it was marked ready" };
+    var rdy = await bhReadyForReview(env, pr.j);
+    if (!rdy.ok) return { merged: false, keep: true, why: "the draft passed every gate but could not be marked ready: " + rdy.why };
+    if (BH_READY_WAIT_MS > 0) await new Promise(function(res) { setTimeout(res, BH_READY_WAIT_MS); });
+    var again = await bhTryMerge(env, p, Object.assign({}, cfg, { afterReady: true }));
+    if (again.merged) { again.why = "the draft was marked ready (PR-MERGE-SLA-10M-1), then " + again.why; return again; }
+    return { merged: false, keep: true, readied: true, why: "the draft was marked ready; " + again.why };
   }
   var title = String(pr.j.title || "pull request " + n).replace(/\s+/g, " ").slice(0, 200) + " (#" + n + ")";
   var msg = "Merged by qnfo-fleet-control STALE-PR-MERGE-FIRST-1 after " + ((cfg && cfg.idleMin) || BH_MERGE_IDLE_MIN_DEFAULT) + " min without activity: " + d.why + ". Owner directive 2026-10-04: merges never wait on the owner.";
@@ -5477,6 +5565,8 @@ async function bhTryMerge(env, p, cfg) {
 __name(bhTryMerge, "bhTryMerge");
 async function bhSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS branch_hygiene_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, branch TEXT NOT NULL, sha TEXT, action TEXT NOT NULL, why TEXT, pr INTEGER, archive_ref TEXT, ok INTEGER DEFAULT 1, dry INTEGER DEFAULT 0)").run();
+  // PR-MERGE-SLA-10M-1: the same table migrations/2026-10-26-pr-merge-sla-10m-lane.sql creates, so a tick never depends on the order the two land.
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS pr_sla_state (pr INTEGER PRIMARY KEY, opened_at TEXT NOT NULL, head_ref TEXT, draft INTEGER DEFAULT 0, state TEXT NOT NULL DEFAULT 'open', last_seen TEXT, closed_at TEXT, waits_on TEXT)").run();
 }
 __name(bhSchema, "bhSchema");
 async function bhPages(env, path, maxPages) {
@@ -5513,6 +5603,10 @@ async function branchHygieneTick(env, opts) {
   var prs = await bhPages(env, lane ? "/pulls?state=open&sort=updated&direction=desc" : "/pulls?state=all&sort=updated&direction=desc", lane ? 3 : 10);
   if (lane) out.lane_only = true;
   if (!prs.ok) { await beat("error", { pulls_http: prs.status }); return { ok: false, why: "pulls HTTP " + prs.status }; }
+  if (!dry) {
+    out.pr_age_rows = await bhRecordPrAge(env, prs.items, iso); // PR-MERGE-SLA-10M-1: the clock the 10-minute SLA is graded on
+    out.pr_age_resolved = await bhReconcilePrAge(env, prs.items, iso); // PR-AGE-RECONCILE-1: a pull request that left the open list was merged or closed by something else
+  }
   var byRef = {};
   prs.items.forEach(function(p) {
     if (!p || !p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) return;
@@ -5572,7 +5666,7 @@ async function branchHygieneTick(env, opts) {
   // MERGEABILITY-REQUERY-1, the pre-warm: one read of every lane candidate starts GitHub's mergeability computation for all
   // of them before the first is decided, so the answers are ready when the loop below reads them.
   var laneOk = function(q) {
-    if (!q || q.state !== "open" || q.draft || !q.head || !q.head.ref || !q.head.repo || q.head.repo.full_name !== EVOLVE_REPO) return false;
+    if (!q || q.state !== "open" || (q.draft && cfg.drafts === false) || !q.head || !q.head.ref || !q.head.repo || q.head.repo.full_name !== EVOLVE_REPO) return false;
     if (BH_PRESERVE.indexOf(q.head.ref) >= 0 || live[q.head.ref] || /^(codeagent-|evolve\/)/.test(q.head.ref)) return false;
     var u = q.updated_at ? Date.parse(q.updated_at) : NaN;
     return !isNaN(u) && (nowMs - u) >= cfg.idleMin * 6e4;
@@ -5584,7 +5678,7 @@ async function branchHygieneTick(env, opts) {
   }
   for (var pi = 0; pi < prs.items.length && prClosed < BH_MAX_ACTIONS; pi++) {
     var p = prs.items[pi];
-    if (!p || p.state !== "open" || p.draft) continue;
+    if (!p || p.state !== "open" || (p.draft && cfg.drafts === false)) continue;
     if (!p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) continue;
     if (BH_PRESERVE.indexOf(p.head.ref) >= 0 || live[p.head.ref]) continue;
     var updMs = p.updated_at ? Date.parse(p.updated_at) : NaN;
@@ -5600,11 +5694,13 @@ async function branchHygieneTick(env, opts) {
         await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "STALE-PR-MERGE-FIRST-1 (qnfo-fleet-control): merged after " + cfg.idleMin + " min without activity because " + tm.why + ". The canonical deploy ships it from main." });
         try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-stale-pr', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, tm.sha || p.head.sha || null, String(tm.why).slice(0, 500), p.number).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
         out.merged_prs.push(p.number);
+        await bhMarkPrMerged(env, p.number, iso);
         prClosed++;
         continue;
       }
       // MERGE-REFUSAL-LOG-1: no non-merge is silent.
-      await bhLogNonMerge(env, iso, p, tm.nudged ? "merge-nudge" : "merge-refused", tm.why);
+      await bhLogNonMerge(env, iso, p, tm.nudged ? "merge-nudge" : tm.readied ? "draft-ready" : "merge-refused", tm.why);
+      await bhMarkWaits(env, p.number, bhWaitsOn(tm)); // PR-MERGE-SLA-GROUPS-1
       if (tm.nudged) (out.nudged_prs = out.nudged_prs || []).push(p.number);
       if (tm.held) (out.held_prs = out.held_prs || []).push(p.number); // STALE-PR-LANE-READS-HOLDS-1: refused on a review comment, kept open
       if (tm.keep) continue; // GitHub is bringing the branch up to date; its checks run again, so it is not idle any more
@@ -5627,6 +5723,8 @@ async function branchHygieneTick(env, opts) {
         }
       }
     }
+    // PR-MERGE-SLA-10M-1: a draft is merged when it is green, never closed as stale by this loop (CYCLE-TIME-1 closes non-drafts only).
+    if (p.draft) continue;
     // NO-UNTRACKED-CLOSE-1 part 2 (0.33.14, 2026-10-18 owner audit): 2 of the 32 loop pull requests closed unmerged were
     // closed on age alone while a successor for the same issue was still in flight (PR 768, PR 752). Age is not evidence
     // that a change is unwanted: before closing, the same "[issue #N]" must not be carried by another OPEN pull request.
@@ -5666,6 +5764,81 @@ async function branchHygieneTick(env, opts) {
   return out;
 }
 __name(branchHygieneTick, "branchHygieneTick");
+// PR-MERGE-SLA-10M-1 (0.49.0): REST refuses to merge a draft, so a draft that passed every merge gate is marked ready through GraphQL on its node id.
+// Pure on the response shape: { ok: true } | { ok: false, why }.
+async function bhReadyForReview(env, pr) {
+  var id = pr && pr.node_id;
+  if (!id) return { ok: false, why: "the pull request has no node_id" };
+  var r = await evGraphql(env, "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { number isDraft } } }", { id: id });
+  if (r.ok && r.j && !r.j.errors && r.j.data && r.j.data.markPullRequestReadyForReview) return { ok: true };
+  var m = (r.j && r.j.errors && r.j.errors[0] && r.j.errors[0].message) || (r.j && r.j.message) || "";
+  return { ok: false, why: "GraphQL HTTP " + r.status + (m ? " " + String(m).replace(/\s+/g, " ").slice(0, 120) : "") };
+}
+__name(bhReadyForReview, "bhReadyForReview");
+// PR-MERGE-SLA-10M-1: one pr_sla_state row per pull request into main of this repository, from the list the tick already reads (no extra GitHub call).
+// opened_at is GitHub's created_at, the clock the owner's 10 minutes run on; state is open | merged | closed. Pure.
+function bhPrAgeRow(p, iso) {
+  if (!p || typeof p !== "object" || !p.number || !p.created_at) return null;
+  var base = p.base || {};
+  if (base.ref !== "main" || (base.repo && base.repo.full_name !== EVOLVE_REPO)) return null;
+  var state = p.merged_at ? "merged" : p.state === "open" ? "open" : "closed";
+  return { pr: Number(p.number), opened_at: String(p.created_at), head_ref: String(p.head && p.head.ref || "").slice(0, 120), draft: p.draft ? 1 : 0, state: state, last_seen: iso, closed_at: state === "open" ? null : String(p.merged_at || p.closed_at || iso) };
+}
+__name(bhPrAgeRow, "bhPrAgeRow");
+async function bhRecordPrAge(env, items, iso) {
+  try {
+    var rows = (items || []).map(function(p) { return bhPrAgeRow(p, iso); }).filter(Boolean).slice(0, 80);
+    if (!rows.length) return 0;
+    var sql = "INSERT INTO pr_sla_state (pr, opened_at, head_ref, draft, state, last_seen, closed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(pr) DO UPDATE SET head_ref = excluded.head_ref, draft = excluded.draft, state = excluded.state, last_seen = excluded.last_seen, closed_at = COALESCE(excluded.closed_at, pr_sla_state.closed_at)";
+    await env.AUDIT.batch(rows.map(function(r) { return env.AUDIT.prepare(sql).bind(r.pr, r.opened_at, r.head_ref, r.draft, r.state, r.last_seen, r.closed_at); }));
+    return rows.length;
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhRecordPrAge:caught", error: String(e && e.message) })); return 0; }
+}
+__name(bhRecordPrAge, "bhRecordPrAge");
+// PR-MERGE-SLA-GROUPS-1 (0.49.3): who a refused pull request waits on. 'hold' is an author's explicit request (title, label, body or a HOLD: comment); 'session' is a change to
+// .github/ or repository settings, which the lane never merges and a session merges by hand (CLAUDE.md, STALE-PR rules). Both stay in pr_sla_state and in v_pr_merge_sla as their own
+// counts (held_over_10m, session_over_10m); pr_open_over_10m counts only what nobody has asked the fleet to leave, so a hold does not file an issue every hour.
+function bhWaitsOn(tm) {
+  if (!tm) return null;
+  if (tm.held) return "hold";
+  var w = String(tm.why || "");
+  if (/asks not to be merged/.test(w)) return "hold";
+  if (/never merged automatically/.test(w)) return "session";
+  return null;
+}
+__name(bhWaitsOn, "bhWaitsOn");
+var bhWaitsWarned = false;
+async function bhMarkWaits(env, n, waits) {
+  try { await env.AUDIT.prepare("UPDATE pr_sla_state SET waits_on = ?2 WHERE pr = ?1").bind(n, waits).run(); }
+  catch (e) { if (!bhWaitsWarned) { bhWaitsWarned = true; console.error(JSON.stringify({ evt: "fleet-control:bhMarkWaits:caught", error: String(e && e.message) })); } }
+}
+__name(bhMarkWaits, "bhMarkWaits");
+// PR-AGE-RECONCILE-1 (0.49.1): the lane tick reads open pull requests only, so a pull request merged or closed by anything but the lane (the code-loop merge runner,
+// a person, a session) never left state 'open' in pr_sla_state; v_pr_merge_sla kept counting it as past 10 minutes until it aged out of its 30-minute window, and
+// merged_within_10m_24h missed it until the hourly all-states tick. Each tick reads, one request each and at most BH_AGE_RECONCILE of them, the pull requests the table
+// holds as open that are no longer in the list, and records what GitHub says. A failed read leaves the row open for the next tick.
+var BH_AGE_RECONCILE = 8;
+async function bhReconcilePrAge(env, items, iso) {
+  try {
+    var seen = {};
+    (items || []).forEach(function(p) { if (p && p.number) seen[Number(p.number)] = true; });
+    var r = await env.AUDIT.prepare("SELECT pr FROM pr_sla_state WHERE state = 'open' ORDER BY opened_at LIMIT 60").all();
+    var gone = ((r && r.results) || []).map(function(x) { return Number(x.pr); }).filter(function(n) { return n && !seen[n]; }).slice(0, BH_AGE_RECONCILE);
+    var resolved = 0;
+    for (var i = 0; i < gone.length; i++) {
+      var g = await evApi(env, "GET", "/pulls/" + gone[i]);
+      if (!g || !g.ok || !g.j || !g.j.number) continue;
+      if (!bhPrAgeRow(g.j, iso)) { await env.AUDIT.prepare("UPDATE pr_sla_state SET state = 'closed', closed_at = ?2, last_seen = ?2 WHERE pr = ?1").bind(gone[i], iso).run(); resolved++; continue; }
+      if (await bhRecordPrAge(env, [g.j], iso)) resolved++;
+    }
+    return resolved;
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhReconcilePrAge:caught", error: String(e && e.message) })); return 0; }
+}
+__name(bhReconcilePrAge, "bhReconcilePrAge");
+async function bhMarkPrMerged(env, n, iso) {
+  try { await env.AUDIT.prepare("UPDATE pr_sla_state SET state = 'merged', closed_at = ?2, last_seen = ?2 WHERE pr = ?1").bind(n, iso).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhMarkPrMerged:caught", error: String(e && e.message) })); }
+}
+__name(bhMarkPrMerged, "bhMarkPrMerged");
 // ---- BRANCH-HYGIENE-1:END ----
 // Folded autopilot activity snapshot: one row per scheduled worker per day (dashboard req24).
 async function activitySnapshotDaily(env) {
@@ -10668,6 +10841,52 @@ function ghAppBrokerCaller(props, hostname) {
   return GH_APP_BROKER_CALLERS.indexOf(c) >= 0 ? c : null;
 }
 // ---- GH-APP-FLEET-2:END
+// ---- PR-MERGE-SLA-10M-1:BEGIN (0.49.0, 2026-10-26, pillar autonomy; replayed by pr-merge-sla.test.mjs)
+// POST /gh/poke runs the merge lane and the code-loop merge runner now. GH-WEBHOOK-INTAKE-1 (0.44.0) built the same trigger behind an X-Hub-Signature-256 secret,
+// and that secret was never set and the webhook never registered on GitHub (both are owner-only repository-settings steps): cloud_ops_events kind gh-webhook has 0 rows
+// ever, so for six days both merge loops ran on the 10-minute poll alone, and CRON-MANDATE-1 (at most 144 fires a day per worker) forbids a faster cron. A poke needs no
+// secret because it trusts nothing it carries: it is a hint to run the loops, which read every pull request, check run and hold from GitHub with their own token and decide
+// from that, so a forged poke can only start a pass the next cron tick would run anyway. It is debounced to one run a minute (an atomic scheduler_state slot), refuses to run
+// when ops_config gh_poke_enabled is off, and fails closed when the slot cannot be taken. A small workflow (.github/workflows/lane-poke.yml) sends it when a pull request
+// opens or becomes ready and when a check workflow completes, so a green pull request merges within seconds of its last check instead of at the next 10-minute tick.
+var GH_POKE_DEBOUNCE_S = 60;
+async function ghPokeEnabled(env) {
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'gh_poke_enabled'").first();
+    var v = String(r && r.value != null ? r.value : "").trim().toLowerCase();
+    return ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
+  } catch (e) { return true; }
+}
+async function ghPokeClaim(env, nowMs) {
+  var iso = new Date(nowMs).toISOString(), floor = new Date(nowMs - GH_POKE_DEBOUNCE_S * 1000).toISOString();
+  try {
+    var r = await env.AUDIT.prepare("INSERT INTO scheduler_state (key, value, updated_at) VALUES ('gh_poke', ?1, ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at WHERE scheduler_state.updated_at < ?2").bind(iso, floor).run();
+    return !!(r && r.meta && Number(r.meta.changes) > 0);
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-claim", error: String(e && e.message || e).slice(0, 200) }));
+    return false;
+  }
+}
+async function ghPokeHandle(request, env, ctx) {
+  if (!(await ghPokeEnabled(env))) return json({ ok: true, enabled: false, ran: false }, 202);
+  var nowMs = Date.now(), iso = new Date(nowMs).toISOString();
+  if (!(await ghPokeClaim(env, nowMs))) return json({ ok: true, debounced: true, ran: false }, 202);
+  var hint = String(request.headers.get("X-Poke-Event") || "").replace(/[^A-Za-z0-9_ .-]/g, "").slice(0, 40);
+  var run = Promise.resolve().then(async function() {
+    var e2 = await ghAppEnv(env);
+    var lane = await branchHygieneTick(e2, { laneOnly: true });
+    var cm = await codeMergeTick(e2, {});
+    await ghWebhookRecord(env, "poke-" + nowMs, iso, "gh-poke", "PR-MERGE-SLA-10M-1: poke" + (hint ? " (" + hint + ")" : "") + ": lane merged " + ((lane && lane.merged_prs) || []).length + ", runner merges " + ((cm && cm.merges) || 0), { hint: hint, lane_merged: (lane && lane.merged_prs) || [], runner_merges: (cm && cm.merges) || 0 }, "lane-run");
+  }).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-run", error: String(e && e.message || e).slice(0, 200) })); });
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(run);
+  return json({ ok: true, poked: true, ran: true }, 202);
+}
+async function ghPokeStatus(env) {
+  var last = null;
+  try { last = await env.AUDIT.prepare("SELECT ts, text FROM cloud_ops_events WHERE kind = 'gh-poke' ORDER BY ts DESC LIMIT 1").first(); } catch (e) { last = null; }
+  return { ok: true, route: "gh-poke", worker_version: VERSION, enabled: await ghPokeEnabled(env), debounce_s: GH_POKE_DEBOUNCE_S, signature: "none (a poke trusts nothing it carries)", poll_kept_as_second_path: true, last: last ? { ts: last.ts, text: last.text } : null };
+}
+// ---- PR-MERGE-SLA-10M-1:END
 async function ghAppBrokerHandle(request, env, ctx) {
   var url = new URL(request.url);
   var caller = ghAppBrokerCaller(ctx && ctx.props, url.hostname);
@@ -10783,6 +11002,9 @@ var worker_default2 = {
     // GH-WEBHOOK-INTAKE-1 (0.43.0): GitHub pull_request, check_suite and push events, signature-verified; GET reports the route (open read, OPEN-ACCESS-1).
     if (p === "/gh/webhook" && request.method === "GET") return json(await ghWebhookStatus(env));
     if (p === "/gh/webhook" && request.method === "POST") return ghWebhookHandle(request, env, ctx);
+    // PR-MERGE-SLA-10M-1: the unsigned poke (no secret, debounced); see the block above ghPokeHandle.
+    if (p === "/gh/poke" && request.method === "GET") return json(await ghPokeStatus(env));
+    if (p === "/gh/poke" && request.method === "POST") return ghPokeHandle(request, env, ctx);
     // CHARTER-LOOP-1 (QUNIVERSE-CHARTER-1): the fleet's own account of itself. GET is public (it is what the charter
     // document publishes anyway); the tick is admin-gated like every other mutating route here.
     // PORTFOLIO-LOOP-1 (QNFO-PORTFOLIO-1): the organisation's repositories as one register.
@@ -11896,36 +12118,48 @@ async function rtProbeAuthorValidSql(db, sql, id) {
   }
   return null;
 }
+// One event per issue per hour for a probe the author could not write, so the reason is readable from D1 and a loop that never succeeds is visible (before, it was console.error only).
+async function rtProbeAuthorNote(db, id, reason, detail) {
+  console.error(JSON.stringify({ evt: "fleet-control:probe-author:" + reason, issue: id, detail: String(detail || "").slice(0, 200) }));
+  try {
+    await db.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-author-reject', ?2, 'qnfo-fleet-control', 'warn')").bind("par-" + id + "-" + new Date().toISOString().slice(0, 13), ("issue=" + id + " " + reason + ": " + String(detail || "")).slice(0, 400)).run();
+  } catch (eN) { /* the console line is the fallback */ }
+}
 async function rtAuthorLivePathProbe(db, env, orphan) {
   if (!orphan) return false;
   var id = Number(orphan.id);
   if (!(id > 0)) return false;
   if (rtProbeAuthorTickStamp !== rtProbeAuthorTickKey) { rtProbeAuthorTickStamp = rtProbeAuthorTickKey; rtProbeAuthorTickN = 0; }
   if (rtProbeAuthorTickN >= RT_PROBE_AUTHOR_MAX_PER_TICK) return false;
-  var ai = null;
-  try { ai = (env && (env["qnfo-ai"] || env.qnfo_ai)) || null; } catch (eB) { ai = null; }
-  if (!ai || typeof ai.run !== "function") return false;
+  // PROBE-AUTHOR-BINDING-1 (2026-10-26): this worker's Workers AI binding is AI ([ai] in wrangler.toml). The lookup that stood here read env["qnfo-ai"], a binding the worker has never had,
+  // so the function returned on its first test on every call: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. A missing binding is now an event.
+  if (!env || !env.AI || typeof env.AI.run !== "function") { await rtProbeAuthorNote(db, id, "no-ai-binding", "env.AI is not bound"); return false; }
   if (await rtFlagOff(db, "rt_probe_author")) return false;
   try {
     var made = await db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'remediation.probe-authored' AND ts > ?1").bind(new Date(Date.now() - 864e5).toISOString()).first();
     if ((made ? Number(made.n) || 0 : 0) >= RT_LIVEPATH_MAX_PER_DAY) return false;
   } catch (eC) { return false; }
   var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done over the tables the issue names: it reads pending while the defect stands and ok once it is fixed. It must be a single SELECT or WITH, must not write, must not read the status of issue " + id + " in agent_issues, must not mention needs-machine-probe, and must only use tables that exist. Reply with the SQL only.";
-  var r;
-  try { r = await ai.run(RT_PROBE_AUTHOR_MODEL, { messages: [{ role: "user", content: prompt }] }); }
-  catch (eR) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:model", issue: id, error: String(eR && eR.message).slice(0, 200) })); return false; }
-  var body = r ? (Array.isArray(r) ? r[0] : r) : null;
-  var text = String(body && (body.response || body.result) || "").trim();
-  if (!text) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:empty", issue: id })); return false; }
+  var r, input = { messages: [{ role: "user", content: prompt }], max_tokens: 1500 };
+  try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, Object.assign({ reasoning_effort: CM_REVIEW_EFFORT[RT_PROBE_AUTHOR_MODEL] || "low" }, input)); }
+  catch (eR) {
+    // the platform may refuse reasoning_effort for a model: one plain retry, as the code loop does after MODEL_OPT_REJECTED
+    try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, input); }
+    catch (eR2) { await rtProbeAuthorNote(db, id, "model-error", String(eR2 && eR2.message || eR2)); return false; }
+  }
+  // a chat model answers choices[0].message.content, an older one {response}: cmReviewReply reads both
+  var rep = cmReviewReply(Array.isArray(r) ? r[0] : r);
+  var text = String(rep.text || "").trim();
+  if (!text) { await rtProbeAuthorNote(db, id, "empty", "finish=" + rep.finish + " tokens=" + rep.tokens); return false; }
   var probe = rtProbeAuthorStrip(text);
   var bad = await rtProbeAuthorValidSql(db, probe, id);
-  if (bad) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:static-reject", issue: id, reason: bad })); return false; }
+  if (bad) { await rtProbeAuthorNote(db, id, "static-reject", bad); return false; }
   var dry;
   try { dry = await db.prepare(probe).all(); }
-  catch (eD) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:dry-run", issue: id, error: String(eD && eD.message).slice(0, 200) })); return false; }
+  catch (eD) { await rtProbeAuthorNote(db, id, "dry-run", String(eD && eD.message || eD)); return false; }
   var row0 = dry && dry.results && dry.results[0];
-  if (!row0) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:no-row", issue: id })); return false; }
-  if (String(row0.expected) === String(row0.observed)) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:vacuous", issue: id })); return false; }
+  if (!row0) { await rtProbeAuthorNote(db, id, "no-row", "the dry run returned no row"); return false; }
+  if (String(row0.expected) === String(row0.observed)) { await rtProbeAuthorNote(db, id, "vacuous", "expected equals observed at birth"); return false; }
   var cid = "issue-" + id;
   var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "probe-author-1 wrote the probe that measures issue " + id;
   var u = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'probe-author-1' WHERE class = ?1").bind(cid, probe).run();
@@ -11936,7 +12170,14 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-authored', ?2, 'qnfo-fleet-control', 'ok')").bind("pau-" + id + "-" + Date.now(), ("issue=" + id + " module=probe-author-1 probe=" + probe.slice(0, 240)).slice(0, 400)).run();
   } catch (eV) { /* the contract is the record; the event is a convenience */ }
   try {
-    await db.prepare("INSERT INTO decision_log (ts, decision, reason) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?1, ?2)").bind("PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id, "issue 100347: the model wrote a read-only d1-query probe for issue " + id + " (module probe-author-1); revert by UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'").run();
+    await db.prepare("INSERT INTO decision_log (ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'qnfo-fleet-control:probe-author-1', ?1, ?2, ?3, ?4, ?5, ?6, 'a probe written for an orphan issue without a session', ?7)").bind(
+      "Issue " + id + " is open with no contract that can judge it; a read-only d1-query probe that is not vacuous at birth and passes a static check is a safe way to give it one.",
+      "PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id,
+      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed; the dry run returned expected <> observed; probe: " + probe.slice(0, 300),
+      "contract issue-" + id + " is active with module probe-author-1",
+      "one remediation_contracts row; qnfo-cloud-ops PROBE-REVIEW-1 re-judges it with disjoint models",
+      "UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'",
+      "the PROBE-NEEDED-1 issue for " + id + " closes through its existing probe").run();
   } catch (eL) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:decision-log", issue: id, error: String(eL && eL.message).slice(0, 200) })); }
   rtProbeAuthorTickN++;
   return true;

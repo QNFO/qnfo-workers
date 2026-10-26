@@ -15527,7 +15527,7 @@ function buildPrintTemplates(meta) {
 }
 
 // worker.js
-var VERSION = "1.7.2"; /* 1.7.2 KATEX-0.19.1-1: refresh the bundled KaTeX runtime. */ /* 1.7.1 PDF-QUALITY-CACHE-INVALIDATION-1: bump renderer stamp so the backlog regenerates cached PDFs with publisher quality and review-status metadata. */ /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
+var VERSION = "1.7.4-codeagent"; /* 1.7.3 PDF-STALE-AFTER-BODY-EDIT-1 (2026-10-26, pillar reach): the tick re-renders a stored PDF whose paper changed after the upload, whatever the renderer stamp says; a corrected body is refreshed before a typesetting refresh. The check compares one R2 list with one D1 read over the whole corpus, so an old stale PDF behind many fresh ones is still found. */ /* 1.7.2 KATEX-0.19.1-1: refresh the bundled KaTeX runtime. */ /* 1.7.1 PDF-QUALITY-CACHE-INVALIDATION-1: bump renderer stamp so the backlog regenerates cached PDFs with publisher quality and review-status metadata. */ /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",
@@ -15774,6 +15774,36 @@ async function staleStamps(env, limit, rendererVersion) {
   }
   return confirmed;
 }
+async function staleBodies(env, limit) {
+  // PDF-STALE-AFTER-BODY-EDIT-1 (1.7.3): stored PDFs older than the paper they were rendered from. One R2 list gives every PDF's upload time and one D1 read
+  // gives every public paper's updated_at, so the whole corpus is compared each tick: a window of the newest N papers would never reach an older stale
+  // one once the newest are fresh (a bulk restore of 250 papers sets 250 updated_at values at once). The cron used to take this check only when no
+  // renderer version was passed, and it always passes one, so a corrected body kept its old public PDF until someone cleared pdf_path by hand (2026-10-26:
+  // 135 papers had their leaked appendices removed and the stored PDFs still carried them). Returns [] on any error so a listing failure never stops the loop.
+  var out = [];
+  if (!env || !env.RELEASES || !env.RELEASES.list || !env.LIVING) return out;
+  try {
+    var uploaded = {};
+    var cursor = null;
+    for (var page = 0; page < 8; page++) {
+      var res = await env.RELEASES.list({ prefix: "pdf/", limit: 1000, cursor: cursor || undefined });
+      var objs = (res && res.objects) || [];
+      for (var i = 0; i < objs.length; i++) if (objs[i] && objs[i].key) uploaded[objs[i].key] = objs[i].uploaded;
+      if (!res || !res.truncated) break;
+      cursor = res.cursor;
+    }
+    var rows = await env.LIVING.prepare("SELECT slug, updated_at, pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND body_md IS NOT NULL AND length(body_md) > 200 AND pdf_path IS NOT NULL AND pdf_path <> '' ORDER BY updated_at DESC").all();
+    var list = (rows && rows.results) || [];
+    for (var j = 0; j < list.length && out.length < limit; j++) {
+      var r = list[j];
+      if (pdfNeedsRefresh(r.updated_at, uploaded[String(r.pdf_path)] || null)) out.push({ slug: r.slug });
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "pdf-stale-bodies-failed", error: String(e && e.message || e).slice(0, 200) }));
+    return [];
+  }
+  return out;
+}
 async function pdfBacklogRows(env, batch, skip, opts) {
   // (a) papers with no PDF, newest first (the newest pages are the ones Scholar is crawling now); (b) stored PDFs that are stale:
   // older renderer stamp (RENDERER-STAMP-1) or a body changed after the upload. The total is the metric.
@@ -15788,21 +15818,31 @@ async function pdfBacklogRows(env, batch, skip, opts) {
   var refresh = [];
   var rendererVersion = opts && opts.rendererVersion;
   if (backlog.length < batch && env.RELEASES) {
+    var wanted = Math.max(1, batch - backlog.length);
+    var slugs = [];
     if (rendererVersion) {
-      var stale = await staleStamps(env, Math.max(1, batch - backlog.length), rendererVersion);
-      var slugs = [];
-      for (var s = 0; s < stale.length; s++) if (stale[s].slug && (skip[stale[s].slug] || 0) < PDF_FAIL_SKIP_AFTER) slugs.push(stale[s].slug);
+      // A corrected body is refreshed before a typesetting refresh: what readers download matters more than how it is set.
+      var changed = await staleBodies(env, wanted);
+      for (var c = 0; c < changed.length; c++) if (changed[c].slug && (skip[changed[c].slug] || 0) < PDF_FAIL_SKIP_AFTER && slugs.indexOf(changed[c].slug) < 0) slugs.push(changed[c].slug);
+      var stale = await staleStamps(env, wanted, rendererVersion);
+      for (var s = 0; s < stale.length; s++) if (stale[s].slug && (skip[stale[s].slug] || 0) < PDF_FAIL_SKIP_AFTER && slugs.indexOf(stale[s].slug) < 0) slugs.push(stale[s].slug);
       if (slugs.length) {
         var q = "SELECT " + PDF_META_COLUMNS + ", pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND slug IN (" + slugs.map(function (_, n) { return "?" + (n + 1); }).join(",") + ") ORDER BY updated_at DESC";
         var stmt = env.LIVING.prepare(q);
         var recS = await stmt.bind.apply(stmt, slugs).all();
-        for (var a = 0; a < ((recS && recS.results) || []).length && backlog.length + refresh.length < batch; a++) refresh.push(recS.results[a]);
+        var bySlug = {};
+        for (var b = 0; b < ((recS && recS.results) || []).length; b++) bySlug[recS.results[b].slug] = recS.results[b];
+        for (var a = 0; a < slugs.length && backlog.length + refresh.length < batch; a++) if (bySlug[slugs[a]]) refresh.push(bySlug[slugs[a]]);
       }
-    } else {
+    }
+    {
       var rec = await env.LIVING.prepare("SELECT " + PDF_META_COLUMNS + ", pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND pdf_path IS NOT NULL AND pdf_path <> '' AND updated_at > strftime('%Y-%m-%d %H:%M:%S','now','-2 days') ORDER BY updated_at DESC LIMIT 20").all();
       for (var j = 0; j < ((rec && rec.results) || []).length && backlog.length + refresh.length < batch; j++) {
         var qq = rec.results[j];
         if ((skip[qq.slug] || 0) >= PDF_FAIL_SKIP_AFTER) continue;
+        var already = false;
+        for (var d = 0; d < refresh.length; d++) if (refresh[d].slug === qq.slug) already = true;
+        if (already) continue;
         var h = null;
         try { h = await env.RELEASES.head(String(qq.pdf_path)); } catch (e) { h = null; }
         var up = h && h.uploaded ? { date: h.uploaded, stamp: (h.customMetadata && h.customMetadata.renderer) || "" } : null;

@@ -105,7 +105,22 @@ export const DDL = [
      url TEXT PRIMARY KEY,
      data TEXT NOT NULL,
      fetched_at TEXT NOT NULL
-   )`
+   )`,
+  // TRAVEL-PICKS-1: three places to eat and three things to do per stop, kept for the city they were made for.
+  `CREATE TABLE IF NOT EXISTS travel_picks (
+     id TEXT PRIMARY KEY,
+     stop_id TEXT NOT NULL,
+     city TEXT NOT NULL,
+     kind TEXT NOT NULL CHECK (kind IN ('eat','do')),
+     rank INTEGER NOT NULL,
+     name TEXT NOT NULL,
+     area TEXT,
+     why TEXT,
+     model TEXT,
+     status TEXT NOT NULL DEFAULT 'open',
+     created_at TEXT NOT NULL
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_travel_picks_stop ON travel_picks(stop_id, status)`
 ];
 
 // Seeded once with INSERT OR IGNORE; a row the owner edits always wins.
@@ -413,6 +428,14 @@ export async function travelTick(env, deps = {}) {
     }
   } catch (e) { console.error(JSON.stringify({ evt: "travel-trip:visa-check-failed", error: String(e && e.message || e).slice(0, 200) })); }
 
+  // TRAVEL-PICKS-1: one upcoming stop per tick gets its eat and do picks, so the Places tab is filled before the owner asks.
+  if (!deps.dry) {
+    try {
+      const due = await picksDue(db, today);
+      if (due) { const r = await makePicks(db, deps, c, due, nowIso); out.picks = r.ok ? due.city : "failed: " + r.error; }
+    } catch (e) { console.error(JSON.stringify({ evt: "travel-picks:tick-failed", error: String(e && e.message || e).slice(0, 200) })); }
+  }
+
   const state = tripState(rows, today, c);
   out.mode = state.mode;
   let tripKey, checkin;
@@ -427,7 +450,7 @@ export async function travelTick(env, deps = {}) {
   if (exists) { out.skipped = "already proposed " + tripKey; return out; }
 
   const profile = await many(db, "SELECT label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 80");
-  const reactions = await many(db, "SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? ORDER BY ts DESC LIMIT 60", addDays(today, -365));
+  const reactions = await many(db, "SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? AND (kind IS NULL OR kind NOT IN ('eat','do')) ORDER BY ts DESC LIMIT 60", addDays(today, -365));
   const month = new Date(checkin + "T12:00:00Z").toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
   const messages = promptFor(state, c, profile, reactions, month);
   let opts = [], model = null;
@@ -700,7 +723,7 @@ async function chatContextRows(db, today) {
   let profile = [];
   try { profile = await many(db, "SELECT id, facet, label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 80"); }
   catch (e) { console.error(JSON.stringify({ evt: "travel-chat:profile-read", error: String(e && e.message || e).slice(0, 200) })); }
-  const reactions = await many(db, "SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? ORDER BY ts DESC LIMIT 60", addDays(today, -365));
+  const reactions = await many(db, "SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? AND (kind IS NULL OR kind NOT IN ('eat','do')) ORDER BY ts DESC LIMIT 60", addDays(today, -365));
   return { rows, profile, reactions };
 }
 
@@ -820,11 +843,13 @@ const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;-
   ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.75rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
   "pre.draft{white-space:pre-wrap;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:.5rem;padding:.5rem;margin:.4rem 0}" +
   ".ed{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.ed label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.ed input{font:inherit;font-size:.92rem;padding:.3rem .4rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);max-width:11rem}" +
+  ".pillar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.45rem 0 0}.picks{flex-basis:100%;margin:.1rem 0 .2rem;padding-left:1.1rem}.picks li{margin:.3rem 0}button.small{font-size:.8rem;padding:.15rem .5rem;margin:.2rem 0 0}.pillar .pl{font-weight:600;font-size:.85rem;min-width:3.2rem}" +
   "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}";
 
-const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"trip\" aria-pressed=\"false\">Trip</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
+const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
-  "<section class=\"tab\" id=\"trip\" hidden><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
+  "<section class=\"tab\" id=\"places\" hidden><p class=\"muted\">Where to go, where to sleep, what to eat and what to do, stop by stop. Tap a question and the chat answers it.</p><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p></section>" +
+  "<section class=\"tab\" id=\"moving\" hidden><p class=\"muted\">How to get from one stop to the next, then every day with its weather.</p><h2>Moves</h2><div id=\"moves\"></div><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
   "<section class=\"tab\" id=\"imp\" hidden><h2>Import a booking</h2><p class=\"muted\">Paste a confirmation email or any booking text. I pick out the stays and journeys and add them to your trips.</p><p id=\"fwd\" class=\"muted\"></p><textarea id=\"imptext\" aria-label=\"Booking text\"></textarea><p><button class=\"primary\" type=\"button\" id=\"impgo\">Import</button></p><div id=\"impout\"></div></section>" +
   "<footer><form id=\"f\"><textarea id=\"t\" rows=\"1\" placeholder=\"Where to, or react to an idea...\" aria-label=\"Message\"></textarea><button class=\"primary\" id=\"send\">Send</button></form>" +
   "<details id=\"settings\"><summary>Settings and what I know</summary><p>Model: <select id=\"model\"></select> <span id=\"modelnote\"></span></p><p>What I use to plan (remove anything wrong):</p><ul id=\"known\"></ul>" +
@@ -947,6 +972,25 @@ function editor(fields, values, onSave, onDelete) {
   f.appendChild(msg);
   return f;
 }
+function pickRow(label, list, p, q) {
+  const r = el("div", "pillar"); r.appendChild(el("span", "pl", label));
+  if (list.length) {
+    const ul = el("ul", "picks");
+    for (const x of list) {
+      const li = el("li");
+      const a = el("a", "", x.name); a.href = x.map; a.target = "_blank"; a.rel = "noopener noreferrer"; li.appendChild(a);
+      if (x.area) li.appendChild(el("span", "muted", " · " + x.area));
+      if (x.why) li.appendChild(el("div", "muted", x.why));
+      const no = btn("Not for me", async () => { no.disabled = true; await api("/travel/api/pick-no", { id: x.id }); li.remove(); }); no.className = "small"; li.appendChild(no);
+      ul.appendChild(li);
+    }
+    r.appendChild(ul);
+  } else r.appendChild(el("span", "muted", "Suggestions arrive on their own, or get them now."));
+  const more = btn(list.length ? "Fresh ideas" : "Suggest now", async () => { more.disabled = true; more.textContent = "Thinking..."; const x = await api("/travel/api/picks", { stop: p.id }); if (x && x.ok) loadTrip(); else { more.disabled = false; more.textContent = (x && x.error) || "Try again"; } });
+  r.appendChild(more);
+  r.appendChild(btn("Ask", () => ask(q)));
+  return r;
+}
 const STOP_FIELDS = [["city", "Place"], ["country", "Country (2 letters)"], ["start_date", "Arrive", "date"], ["end_date", "Leave", "date"], ["note", "Note"]];
 const VISA_FIELDS = [["person", "Who"], ["country", "Country (2 letters)"], ["entry_date", "Entry day", "date"], ["max_days", "Days allowed", "number"], ["year_cap", "Days per calendar year (optional)", "number"]];
 function renderTrip(t) {
@@ -975,14 +1019,35 @@ function renderTrip(t) {
     c.appendChild(row); ck.appendChild(c);
   }
   const st = $("#stops"); st.innerHTML = "";
-  if (!t.stops.length) st.appendChild(el("p", "muted", "No stops planned yet. Add one, or ask in the chat."));
-  for (const s of t.stops) {
+  if (!t.places.length) st.appendChild(el("p", "muted", "No stops planned yet. Add one, or ask in the chat."));
+  for (const p of t.places) {
+    const s = t.stops.find((x) => x.id === p.id) || p;
     const c = el("div", "card");
-    c.appendChild(el("strong", "", s.city + (s.country_name ? ", " + s.country_name : "")));
-    c.appendChild(el("div", "muted", fmtDay(s.start_date) + " to " + fmtDay(s.end_date) + (s.note ? " · " + s.note : "") + (s.lat == null ? " · no weather (place not found)" : "")));
+    c.appendChild(el("strong", "", p.city + (p.country_name ? ", " + p.country_name : "")));
+    c.appendChild(el("div", "muted", fmtDay(p.start_date) + " to " + fmtDay(p.end_date) + " · " + p.nights + " night" + (p.nights === 1 ? "" : "s") + (p.weather ? " · " + p.weather.low + "° to " + p.weather.high + "°" + (p.weather.kind === "lastyear" ? " last year" : "") : "") + (p.note ? " · " + p.note : "")));
+    if (p.fog) c.appendChild(el("div", "flag", "Fog season: plan moves for late morning."));
+    const sl = el("div", "pillar"); sl.appendChild(el("span", "pl", "Sleep"));
+    sl.appendChild(el("span", "", p.sleep.booked.length ? "Booked: " + p.sleep.booked.join(", ") + (p.sleep.nights_open > 0 ? " (" + p.sleep.nights_open + " night" + (p.sleep.nights_open === 1 ? "" : "s") + " still open)" : "") : "Not booked yet"));
+    const stays = el("a", "btn", "Find a stay"); stays.href = p.sleep.search; stays.target = "_blank"; stays.rel = "noopener noreferrer"; sl.appendChild(stays);
+    sl.appendChild(btn("Ideas", () => ask(p.ask.sleep)));
+    c.appendChild(sl);
+    c.appendChild(pickRow("Eat", p.eat, p, p.ask.eat));
+    c.appendChild(pickRow("Do", p.do, p, p.ask.do));
     let open = null;
-    c.appendChild(btn("Edit", () => { if (open) { open.remove(); open = null; return; } open = editor(STOP_FIELDS, s, (x) => api("/travel/api/stop", { ...x, id: s.id }), () => api("/travel/api/stop", { id: s.id, delete: true })); c.appendChild(open); }));
+    c.appendChild(btn("Edit stop", () => { if (open) { open.remove(); open = null; return; } open = editor(STOP_FIELDS, s, (x) => api("/travel/api/stop", { ...x, id: p.id }), () => api("/travel/api/stop", { id: p.id, delete: true })); c.appendChild(open); }));
     st.appendChild(c);
+  }
+  const mv = $("#moves"); mv.innerHTML = "";
+  if (!t.moves.length) mv.appendChild(el("p", "muted", "No moves between stops yet."));
+  for (const m of t.moves) {
+    const c = el("div", "card" + (m.fog ? " warn" : ""));
+    c.appendChild(el("strong", "", fmtDay(m.day) + ": " + m.from + " to " + m.to));
+    c.appendChild(el("div", "muted", (m.booked.length ? "Booked: " + m.booked.join(", ") : "Not booked yet") + (m.cross ? " · border crossing" : "")));
+    if (m.fog) c.appendChild(el("div", "flag", "Fog season where you leave from: morning departures are often delayed. Leave after late morning."));
+    const row = el("div", "row");
+    const tr = el("a", "btn", "Routes and times"); tr.href = m.transit; tr.target = "_blank"; tr.rel = "noopener noreferrer"; row.appendChild(tr);
+    row.appendChild(btn("Best way", () => ask(m.ask)));
+    c.appendChild(row); mv.appendChild(c);
   }
   const dl = $("#days"); dl.innerHTML = "";
   for (const d of t.days) {
@@ -1016,13 +1081,14 @@ $("#impgo").onclick = async () => {
   } catch (e) { out.textContent = "Could not import: " + e.message; }
   $("#impgo").disabled = false;
 };
-document.querySelectorAll("nav.tabs button").forEach((b) => b.onclick = () => {
-  const tab = b.dataset.tab;
-  document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+function showTab(tab) {
+  document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.tab === tab)));
   $("#log").hidden = tab !== "chat"; document.querySelector("footer").hidden = tab !== "chat";
-  $("#trip").hidden = tab !== "trip"; $("#imp").hidden = tab !== "imp";
-  if (tab === "trip" || tab === "imp") loadTrip();
-});
+  $("#places").hidden = tab !== "places"; $("#moving").hidden = tab !== "moving"; $("#imp").hidden = tab !== "imp";
+  if (tab !== "chat") loadTrip();
+}
+function ask(q) { showTab("chat"); send(q); }
+document.querySelectorAll("nav.tabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 $("#f").onsubmit = (e) => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ""; send(v); };
 ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#f").requestSubmit(); } });
 $("#fresh").onclick = async () => { await api("/travel/api/reset", {}); log.innerHTML = ""; send("", true); };
@@ -1099,11 +1165,13 @@ export async function handleTravel(request, env, deps = {}) {
     const exp = Math.floor(nowMs / 1000) + LOGIN_TTL_MIN * 60;
     await db.prepare("INSERT INTO travel_logins (id, code_mac, exp, created_at) VALUES (?, ?, ?, ?)").bind(id, await codeMac(key, id, code), exp, nowIso).run();
     const tok = await makeToken(key, "login:" + id, exp);
-    const send = deps.send || (async () => ({ ok: false, error: "no sender" }));
+    // TRAVEL-SIGNIN-MAIL-1: the code goes through the sign-in sender, which the "less email" setting does not silence
+    const send = deps.sendCode || deps.send || (async () => ({ ok: false, error: "no sender" }));
     const r = await send("Travel planner code: " + code, "Your sign-in code: " + code + "\n\nOr tap: " + u.origin + "/travel/auth?i=" + id + "&t=" + encodeURIComponent(tok) + "\n\nIt works once, for " + LOGIN_TTL_MIN + " minutes. If you did not ask for it, ignore this mail.");
     if (!r || !r.ok) {
       await db.prepare("DELETE FROM travel_logins WHERE id = ?").bind(id).run();
-      return signInPage("The email could not be sent (" + esc(String(r && r.error || "unknown").slice(0, 120)) + ").");
+      console.error(JSON.stringify({ evt: "travel:code-mail-failed", error: String(r && r.error || "unknown").slice(0, 200) }));
+      return signInPage("Sorry, the code didn't go out. Wait a minute and tap the button again.");
     }
     return codePage("");
   }
@@ -1169,6 +1237,12 @@ export async function handleTravel(request, env, deps = {}) {
   if (p === "/travel/api/import") return jsonRes(await importText(env, deps, { text: body.text }));
   if (p === "/travel/api/stop") return jsonRes(await saveStop(db, deps, body, nowIso));
   if (p === "/travel/api/permit") return jsonRes(await savePermit(db, body, nowIso));
+  if (p === "/travel/api/picks") {
+    const st = await db.prepare("SELECT id, city, country, start_date, end_date, note FROM travel_stops WHERE id = ?").bind(String(body.stop || "")).first();
+    if (!st) return jsonRes({ ok: false, error: "no such stop" }, 404);
+    return jsonRes(await makePicks(db, deps, c, st, nowIso));
+  }
+  if (p === "/travel/api/pick-no") return jsonRes(await pickNo(db, String(body.id || ""), nowIso));
   if (p === "/travel/api/checkin-sent") {
     const ev = await db.prepare("SELECT id FROM events WHERE id = ? AND category = 'lodging'").bind(String(body.id || "")).first();
     if (!ev) return jsonRes({ ok: false, error: "no such stay" }, 404);
@@ -1441,13 +1515,67 @@ async function checkinCards(db, c, today) {
   return out;
 }
 
+// TRAVEL-PILLARS-1 (2026-10-26, owner: "where to go, where to sleep, what to eat, how to get around, and what to do ... it's
+// basically only two"). The page groups the plan into two pillars. Places: each stop with where to sleep (the booked stay
+// covering its nights, or a stay search), what to eat and what to do (one tap asks the chat for 2-3 specific picks), and its
+// weather. Getting around: each move between stops with its booked journey, a transit search and travel-day fog notes,
+// then the day-by-day list.
+export function placeCards(stops, today, wx, lodging, c, picks) {
+  return (stops || []).filter((s) => isoDay(s.start_date) && isoDay(s.end_date) && s.end_date > s.start_date && s.end_date >= today)
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : 1))
+    .map((s) => {
+      const nights = daysBetween(s.start_date, s.end_date);
+      const stays = (lodging || []).filter((e) => e.start_date < s.end_date && e.end_date > s.start_date && (!e.city || !s.city || norm(e.city).includes(norm(s.city).split(" ")[0]) || norm(s.city).includes(norm(e.city))));
+      const covered = new Set();
+      for (const e of stays) for (let d = e.start_date; d < e.end_date; d = addDays(d, 1)) if (d >= s.start_date && d < s.end_date) covered.add(d);
+      const w = wx && wx[s.id] ? Object.values(wx[s.id]) : [];
+      const hi = w.map((x) => x.tmax).filter((x) => x != null), lo = w.map((x) => x.tmin).filter((x) => x != null);
+      const where = s.city + (s.country ? ", " + countryName(s.country) : "");
+      const span = s.start_date + " to " + s.end_date;
+      return {
+        id: s.id, city: s.city, country: s.country, country_name: countryName(s.country), start_date: s.start_date, end_date: s.end_date, nights, note: s.note || "",
+        sleep: { booked: stays.map((e) => e.title || e.city), nights_open: nights - covered.size,
+          search: bookingLink({ city: s.city, country: countryName(s.country), checkin: s.start_date, nights, maxPerNight: c.max_per_night, currency: c.currency, adults: c.adults }) },
+        weather: hi.length ? { high: Math.round(Math.max(...hi)), low: Math.round(Math.min(...lo)), kind: w.some((x) => x.kind === "forecast") ? "forecast" : "lastyear" } : null,
+        fog: fogSeason(s.lat, s.lon, s.start_date) || fogSeason(s.lat, s.lon, addDays(s.end_date, -1)),
+        eat: pickList(picks, s, "eat"),
+        do: pickList(picks, s, "do"),
+        ask: {
+          sleep: "Where should we stay in " + where + " (" + span + ")? Two or three specific places that fit us, with the area for each.",
+          eat: "What should we eat in " + where + " (" + span + ")? Two or three specific places or dishes, and why they fit us.",
+          do: "What should we do in " + where + " (" + span + ")? Two or three specific things that fit us, not the generic circuit."
+        }
+      };
+    });
+}
+
+export function moveCards(stops, today, travel) {
+  const list = (stops || []).filter((s) => isoDay(s.start_date) && isoDay(s.end_date)).sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
+  const out = [];
+  for (let i = 1; i < list.length; i++) {
+    const a = list[i - 1], b = list[i];
+    const day = b.start_date;
+    if (day < today || norm(a.city) === norm(b.city)) continue;
+    const from = a.city + (a.country ? ", " + countryName(a.country) : ""), to = b.city + (b.country ? ", " + countryName(b.country) : "");
+    const booked = (travel || []).filter((t) => t.start_date === day || (t.start_date === addDays(day, -1) && t.end_date === day)).map((t) => t.title || t.city);
+    out.push({ day, from: a.city, to: b.city, cross: (a.country || "") !== (b.country || ""), booked, transit: transitLink(from, to),
+      fog: fogSeason(a.lat, a.lon, day),
+      ask: "How should we get from " + from + " to " + to + " on " + day + "? Compare train, bus and flight on door-to-door time and cost, and say which to book." });
+  }
+  return out;
+}
+
 export async function planState(db, c, nowMs, deps) {
   const today = localParts(nowMs, c.tz).day;
   const { stops, permits } = await tripRows(db, today);
   const lodging = await many(db, "SELECT title, city, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ?", today);
+  const travel = await many(db, "SELECT title, city, start_date, end_date FROM events WHERE category = 'travel' AND start_date >= ?", addDays(today, -1));
   const wx = await weatherFor(db, stops, today, deps || {}, nowMs);
+  const picks = await many(db, "SELECT id, stop_id, city, kind, rank, name, area, why FROM travel_picks WHERE status = 'open' ORDER BY rank");
   return {
     today,
+    places: placeCards(stops, today, wx, lodging, c, picks),
+    moves: moveCards(stops, today, travel),
     stops: stops.map((s) => ({ ...s, country_name: countryName(s.country) })),
     visa: visaStatus(permits, (await many(db, "SELECT city, country, start_date, end_date FROM travel_stops")), today),
     days: dayPlan(stops, today, wx, lodging),
@@ -1581,4 +1709,101 @@ export function planText(stops, visa) {
   const s = (stops || []).slice(0, 30).map((x) => "- " + x.city + (x.country ? ", " + x.country : "") + ": " + x.start_date + " to " + x.end_date + (x.note ? " (" + x.note + ")" : "")).join("\n");
   const v = (visa || []).map((x) => "- " + x.text).join("\n");
   return (s ? "Planned stops (not booked unless listed under Booked ahead):\n" + s : "") + (v ? (s ? "\n" : "") + "Visa limits:\n" + v : "");
+}
+
+// TRAVEL-PICKS-1 (2026-10-26). Rowan's pillars: where to go, sleep, eat and what to do ("basically only two": places and
+// getting around). Sleep had a search link; eat and do were only a chat question. Each stop now carries three places to eat
+// and three things to do, made from the profile on the tick (one stop per tick) or on demand, never asked as a question.
+// A "not for me" is a travel_reactions row (reaction 'no', kind eat|do) and every later pick for any city avoids it.
+// Links are map searches for the named place, never a made-up listing or booking.
+export const PICKS_SYSTEM = [
+  "You suggest where to eat and what to do for a traveller who loves travel and hates planning; they sometimes travel with a companion (the profile says who and how). You never ask questions.",
+  "Reply with JSON only, exactly this shape: {\"eat\":[{\"name\":\"\",\"area\":\"\",\"why\":\"\"}],\"do\":[{\"name\":\"\",\"area\":\"\",\"why\":\"\"}]}",
+  "Exactly 3 of each. name: a real, specific place, market, dish-and-place or activity that exists in that city, as it is known locally. area: the neighbourhood. why: one plain sentence on why it fits this traveller, from the profile.",
+  "Prefer what locals use over the generic tourist circuit. Respect every diet, budget, mobility and logistics fact in the profile. Never repeat anything listed as rejected."
+].join("\n");
+
+export function picksPrompt(stop, profileRows, rejected) {
+  const facts = (profileRows || []).map((r) => "- " + String(r.label || "") + ": " + String(r.statement || "")).join("\n").slice(0, PROFILE_CHARS);
+  const where = stop.city + (stop.country ? ", " + countryName(stop.country) : "");
+  const month = isoDay(stop.start_date) ? new Date(stop.start_date + "T12:00:00Z").toLocaleString("en-GB", { month: "long", timeZone: "UTC" }) : "";
+  return [
+    { role: "system", content: PICKS_SYSTEM },
+    { role: "user", content: [
+      "Stop: " + where + ", " + stop.start_date + " to " + stop.end_date + (month ? " (" + month + ")" : "") + (stop.note ? ". Note: " + stop.note : "") + ".",
+      "Profile:\n" + (facts || "- (no stored preferences yet)"),
+      "Rejected before (never suggest): " + ((rejected || []).slice(0, 30).join(", ") || "none")
+    ].join("\n\n") }
+  ];
+}
+
+export function parsePicks(text) {
+  const j = firstJson(text) || {};
+  const out = { eat: [], do: [] };
+  for (const kind of ["eat", "do"]) {
+    const seen = new Set();
+    for (const x of Array.isArray(j[kind]) ? j[kind] : []) {
+      const name = clean(x && x.name, 80);
+      if (!name || seen.has(norm(name))) continue;
+      seen.add(norm(name));
+      out[kind].push({ name, area: clean(x.area, 60), why: clean(x.why, 220) });
+      if (out[kind].length === 3) break;
+    }
+  }
+  return out;
+}
+
+export function mapLink(name, area, city, country) {
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([name, area, city, countryName(country)].filter(Boolean).join(", "));
+}
+
+function pickList(picks, stop, kind) {
+  return (picks || []).filter((x) => x.stop_id === stop.id && x.kind === kind && norm(x.city) === norm(stop.city))
+    .sort((a, b) => a.rank - b.rank)
+    .map((x) => ({ id: x.id, name: x.name, area: x.area || "", why: x.why || "", map: mapLink(x.name, x.area, stop.city, stop.country) }));
+}
+
+// The next stop within 60 days that has no open picks for its current city.
+export async function picksDue(db, today) {
+  return db.prepare("SELECT s.id, s.city, s.country, s.start_date, s.end_date, s.note FROM travel_stops s WHERE s.end_date >= ? AND s.start_date <= ? AND NOT EXISTS (SELECT 1 FROM travel_picks p WHERE p.stop_id = s.id AND p.status = 'open' AND lower(p.city) = lower(s.city)) ORDER BY s.start_date LIMIT 1")
+    .bind(today, addDays(today, 60)).first();
+}
+
+export async function makePicks(db, deps, c, stop, nowIso) {
+  if (typeof deps.ai !== "function") return { ok: false, error: "no model caller" };
+  let profile = [];
+  try { profile = await many(db, "SELECT label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 80"); }
+  catch (e) { console.error(JSON.stringify({ evt: "travel-picks:profile-read", error: String(e && e.message || e).slice(0, 200) })); }
+  const rejected = (await many(db, "SELECT p.name FROM travel_reactions r JOIN travel_picks p ON p.id = r.option_id WHERE r.reaction = 'no' AND r.kind IN ('eat','do') ORDER BY r.ts DESC LIMIT 30")).map((r) => r.name);
+  const messages = picksPrompt(stop, profile, rejected);
+  const models = [...new Set([...chatModels(c, deps.modelAllowed), ...MODELS])];
+  let got = null, model = null, lastErr = "";
+  for (const m of models) {
+    try {
+      const pk = parsePicks(modelText(await deps.ai(m, { messages, max_tokens: 1200, temperature: 0.5 })));
+      const rej = new Set(rejected.map(norm));
+      pk.eat = pk.eat.filter((x) => !rej.has(norm(x.name))); pk.do = pk.do.filter((x) => !rej.has(norm(x.name)));
+      if (pk.eat.length >= 2 && pk.do.length >= 2) { got = pk; model = m; break; }
+      lastErr = m + " gave too few";
+    } catch (e) { lastErr = m + ": " + String(e && e.message || e).slice(0, 160); }
+  }
+  if (!got) return { ok: false, error: "No suggestions this time (" + lastErr + "). Try again in a minute." };
+  await db.prepare("UPDATE travel_picks SET status = 'replaced' WHERE stop_id = ? AND status = 'open'").bind(stop.id).run();
+  for (const kind of ["eat", "do"]) {
+    for (const [i, x] of got[kind].entries()) {
+      await db.prepare("INSERT INTO travel_picks (id, stop_id, city, kind, rank, name, area, why, model, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)")
+        .bind(rid("pk_"), stop.id, stop.city, kind, i + 1, x.name, x.area || null, x.why || null, model, nowIso).run();
+    }
+  }
+  return { ok: true, model, eat: got.eat.length, do: got.do.length };
+}
+
+export async function pickNo(db, id, nowIso) {
+  if (!/^pk_[0-9a-f]{18}$/.test(id)) return { ok: false, error: "no such suggestion" };
+  const x = await db.prepare("SELECT id, city, kind, status FROM travel_picks WHERE id = ?").bind(id).first();
+  if (!x) return { ok: false, error: "no such suggestion" };
+  if (x.status !== "open") return { ok: true, changed: false };
+  await db.prepare("UPDATE travel_picks SET status = 'no' WHERE id = ?").bind(id).run();
+  await db.prepare("INSERT INTO travel_reactions (option_id, trip_key, reaction, city, kind, ts) VALUES (?, NULL, 'no', ?, ?, ?)").bind(id, x.city, x.kind, nowIso).run();
+  return { ok: true, changed: true };
 }

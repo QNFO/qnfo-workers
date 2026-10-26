@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.7.6-fleet-pr-share"; // 0.7.6 FLEET-PR-SHARE-1 (agent_issues 100420): hourly fleet_authored_pr_share_7d from two GitHub search counts; CLOSE-PROVENANCE-1 also finds RED-DRAIN-1 goals. // 0.7.5 CLOSE-PROVENANCE-1: a completed close comment names the merged fleet PR, or states that no code changed. // 0.7.4 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy; patch, no behaviour change): /health declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS), so the fleet snapshot counts this worker as conforming (it was one of the two empty rows holding the metric at 0.9412). // 0.7.3 MODEL-FLOOR-GUARD-RUNS-OBJECT-1 (agent_issues 100258, pillar autonomy; patch: a read that always came back empty): the workflow-runs endpoint answers an object {workflow_runs: [...]}, and paginate() keeps only array bodies, so recordModelFloorGuardRun never created model_floor_guard_runs (the table does not exist in qnfo-audit) and modelFloorGuardVisibility (0.7.2) wrote status "empty", runs 0 on every run although the workflow has 400+ runs on main. DESIRED_REPO is the settings object, not a repository name, so both also built the path QNFO/[object Object] (the recorder returned before its first read, the visibility call would have answered 404); both now name qnfo-workers as mainRulesVisibility does. Both now read body.workflow_runs through workflowRuns(), and a non-200 answer is recorded as status http_<n> instead of reading as no runs. model-floor-guard-visibility.test.mjs. // 0.7.0 PROTECTION-VISIBLE-1 (agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security): the branch-protection step ignored every answer except 404 and 200, so a credential that cannot read protection (403 "Resource not accessible by integration") produced repos_protected 0, errors 0 and drift 0 for every run since 2026-10-17 while 55 public repositories stayed unprotected. A GET that answers anything else is now counted (result.protection_unreadable: count, status map, GitHub's own text, an example repository) and written as one limitation; and the run records the rules that apply to QNFO/qnfo-workers main (result.main_rules: status, rule types, whether required_status_checks and pull_request are among them; one public GET), so the DoD of 2927 is a number in github_steward_runs.detail on every tick. // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.9.0-roadmap-twin-rows"; // 0.9.0 ROADMAP-TWIN-ROWS-1 (2026-10-26, pillar autonomy; minor: a decision the worker now takes on its own): a roadmap row whose artifact_type is agent_issue is the twin of a TRACKER-SYNC-1 ticket and is never a GitHub issue, whatever source writes it; the source best-practice-2026 had doubled 31 tickets in an hour. 0.8.0 PORTFOLIO-NOT-ISSUES-1 (owner question 2026-10-26 "why are there over 800 GitHub issues?", pillar autonomy; minor: the worker now decides which roadmap sources are Issues): 181 of the 381 open roadmap issues could never close or were a second ticket (77 projects, 75 metric-breach twins of METRIC-TRIGGER issues, 29 failure_modes registry rows). Sources with mirrored = 0 in roadmap_mirror_scope (default projects, metric-breach, failure_modes while the table is absent) are no longer filed, are never placed, and an open GitHub issue for one is closed not_planned with a comment that says it is not a verification and is never reopened; the public /roadmap count skips them. // 0.7.6 FLEET-PR-SHARE-1 (agent_issues 100420): hourly fleet_authored_pr_share_7d from two GitHub search counts; CLOSE-PROVENANCE-1 also finds RED-DRAIN-1 goals. // 0.7.5 CLOSE-PROVENANCE-1: a completed close comment names the merged fleet PR, or states that no code changed. // 0.7.4 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy; patch, no behaviour change): /health declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS), so the fleet snapshot counts this worker as conforming (it was one of the two empty rows holding the metric at 0.9412). // 0.7.3 MODEL-FLOOR-GUARD-RUNS-OBJECT-1 (agent_issues 100258, pillar autonomy; patch: a read that always came back empty): the workflow-runs endpoint answers an object {workflow_runs: [...]}, and paginate() keeps only array bodies, so recordModelFloorGuardRun never created model_floor_guard_runs (the table does not exist in qnfo-audit) and modelFloorGuardVisibility (0.7.2) wrote status "empty", runs 0 on every run although the workflow has 400+ runs on main. DESIRED_REPO is the settings object, not a repository name, so both also built the path QNFO/[object Object] (the recorder returned before its first read, the visibility call would have answered 404); both now name qnfo-workers as mainRulesVisibility does. Both now read body.workflow_runs through workflowRuns(), and a non-200 answer is recorded as status http_<n> instead of reading as no runs. model-floor-guard-visibility.test.mjs. // 0.7.0 PROTECTION-VISIBLE-1 (agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security): the branch-protection step ignored every answer except 404 and 200, so a credential that cannot read protection (403 "Resource not accessible by integration") produced repos_protected 0, errors 0 and drift 0 for every run since 2026-10-17 while 55 public repositories stayed unprotected. A GET that answers anything else is now counted (result.protection_unreadable: count, status map, GitHub's own text, an example repository) and written as one limitation; and the run records the rules that apply to QNFO/qnfo-workers main (result.main_rules: status, rule types, whether required_status_checks and pull_request are among them; one public GET), so the DoD of 2927 is a number in github_steward_runs.detail on every tick. // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -1297,35 +1297,68 @@ function psRmProject(r, byCode) {
   return f && f.status === "active" ? f : null;
 }
 
+/* PORTFOLIO-NOT-ISSUES-1 (0.8.0, 2026-10-26, pillar autonomy; owner question "why are there over 800 GitHub issues?"): GitHub Issues carry work that
+ * finishing the work closes. Measured 2026-10-26 on 828 open issues: 381 were roadmap mirrors, and 181 of those could never close or were a second
+ * ticket for something already tracked: 77 'projects' rows (PROJ-<code>: a worker or repository is a catalogue entry that is already a milestone,
+ * and a live project is never "completed"), 75 'metric-breach' objectives (RM-METRIC-<key>: the breaching metric already has its METRIC-TRIGGER
+ * issue, so one breach was two tickets) and 29 'failure_modes' registry entries (a lesson with a detector, not a task; one with an open issue is
+ * that issue's twin). Those sources stay in qnfo-audit.roadmap_implementation (the roadmap, the Projects board and the public /roadmap tree read
+ * them) but are not Issues. The scope is data (roadmap_mirror_scope, migrations/2026-10-26-issue-hygiene-1.sql, a source with mirrored = 1 is
+ * mirrored again on the next tick); this default holds while the table is absent, unreadable or empty. */
+var PS_RM_NOT_ISSUES_DEFAULT = ["projects", "metric-breach", "failure_modes"];
+async function psRmScope(env) {
+  var off = {};
+  try {
+    var rows = ((await env.AUDIT.prepare("SELECT source, mirrored FROM roadmap_mirror_scope").all()).results) || [];
+    if (rows.length) { rows.forEach(function (r) { if (!Number(r.mirrored)) off[r.source] = 1; }); return off; }
+  } catch (e) { /* the table is not applied yet: the default below */ }
+  PS_RM_NOT_ISSUES_DEFAULT.forEach(function (s) { off[s] = 1; });
+  return off;
+}
+/* ROADMAP-TWIN-ROWS-1 (0.9.0, 2026-10-26): a roadmap row whose artifact is an agent issue (artifact_type 'agent_issue', item AI-<id>) is the roadmap twin of
+ * an issue that TRACKER-SYNC-1 already mirrors as [#id]; a second GitHub issue for it tracks one thing twice. The rule is on the row's own artifact_type,
+ * not on a source name: the 'agent_issues' source was excluded by name, and the next research batch (source 'best-practice-2026', 31 rows in one hour on
+ * 2026-10-26, 15 already mirrored) arrived under a new name and doubled its issues. Whatever source writes such a row, it stays out of the mirror. */
+function psIsTwin(l) { return String(l.artifact_type || "") === "agent_issue"; }
+
 async function psRoadmap(env, out, projects) {
   var byCode = {};
   projects.forEach(function (p) { byCode[p.project_code] = p; });
+  var notIssue = await psRmScope(env);
+  /* An item is an open GitHub issue when D1 has it not done and its source is a work source (PORTFOLIO-NOT-ISSUES-1). */
+  var wantOpen = function (l) { return !PS_RM_DONE[l.status] && !notIssue[l.source] && !psIsTwin(l); };
   var open = await tsListAll(env, PS_REPO + "/issues?state=open&labels=roadmap", 10);
   if (!open) { out.errors.push({ scope: "portfolio-roadmap", why: "could not list open roadmap issues; no roadmap change this tick" }); return null; }
   var openNums = {}, byId = {};
   open.forEach(function (g) { if (g.pull_request) return; openNums[g.number] = g; var m = /^\[RM-(\d+)\]/.exec(g.title || ""); if (m) byId[m[1]] = g.number; });
-  var links = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.gh_state, g.d1_status, g.gh_node, r.status, r.evidence, r.item, r.verified_at, r.created_at FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id").all()).results) || [];
-  var mism = links.filter(function (l) { return (!PS_RM_DONE[l.status]) !== !!openNums[l.gh_number]; });
+  var links = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.gh_state, g.d1_status, g.gh_node, r.status, r.source, r.artifact_type, r.evidence, r.item, r.verified_at, r.created_at FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id").all()).results) || [];
+  var mism = links.filter(function (l) { return wantOpen(l) !== !!openNums[l.gh_number]; });
   /* Same budget, order and explained-burst guard as TRACKER-STATE-BUDGET-1 (the D1 change time is verified_at, else created_at). */
   var changedRm = function (l) { return Date.parse(l.verified_at || l.created_at || 0) || 0; };
-  /* Explained = the item moved across done/not-done since the last agreement (the link's d1_status, refreshed every tick for links that agree). */
-  var rguard = tsGuard(mism, links.length, function (l) { return !!l.d1_status && !!PS_RM_DONE[l.d1_status] !== !!PS_RM_DONE[l.status]; });
+  /* Explained = the item moved across done/not-done since the last agreement (the link's d1_status, refreshed every tick for links that agree),
+   * or its source is out of the mirror scope (a recorded decision in roadmap_mirror_scope, not a GitHub-side anomaly). */
+  var rguard = tsGuard(mism, links.length, function (l) { return !!notIssue[l.source] || psIsTwin(l) || (!!l.d1_status && !!PS_RM_DONE[l.d1_status] !== !!PS_RM_DONE[l.status]); });
   if (rguard.refused) out.errors.push({ scope: "portfolio-roadmap", why: rguard.refused + " of " + links.length + " roadmap links disagree with GitHub although D1 has not changed since the last sync; refusing a mass state flip" });
-  mism = tsOrder(rguard.rows, function (l) { return !PS_RM_DONE[l.status]; }, changedRm, function (l) { return Number(l.roadmap_id) || 0; });
+  mism = tsOrder(rguard.rows, wantOpen, changedRm, function (l) { return Number(l.roadmap_id) || 0; });
   var now = new Date().toISOString(), fixed = 0, tried = 0, rbudget = tsBudget(PS_RM_STATE_MAX), mismIds = {};
   mism.forEach(function (l) { mismIds[l.roadmap_id] = 1; });
   for (var i = 0; i < mism.length && rbudget.more(tried); i++) {
     var l = mism[i], r;
     tried++;
-    if (!PS_RM_DONE[l.status]) {
+    if (wantOpen(l)) {
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "open" });
       if (r.status === 200) { await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Reopened by PORTFOLIO-SYNC-1: roadmap item " + tsRedact(l.item) + " is '" + l.status + "' in qnfo-audit.roadmap_implementation, which is authoritative." }); out.roadmap_reopened++; }
+    } else if ((notIssue[l.source] || psIsTwin(l)) && !PS_RM_DONE[l.status]) {
+      /* Out of scope and still not done in D1: not a verification, so no completed close and no evidence block. */
+      await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Closed by PORTFOLIO-NOT-ISSUES-1: roadmap item " + tsRedact(l.item) + " (source `" + tsRedact(l.source) + "`) is a catalogue, twin or registry entry, not work that closing can finish (a row whose artifact is an agent issue is that issue's twin: the issue is its [#id] ticket). It stays in qnfo-audit.roadmap_implementation (the roadmap, the Projects board and the public /roadmap tree) and is tracked there; metric breaches are tracked by their METRIC-TRIGGER issue. This is not a verification." });
+      r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: "not_planned" });
+      if (r.status >= 200 && r.status < 300) { out.roadmap_closed++; out.roadmap_scoped_closed = (out.roadmap_scoped_closed || 0) + 1; }
     } else {
       await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Verified in qnfo-audit (roadmap " + tsRedact(l.item) + ": status **" + l.status + "**). Evidence:\n\n" + tsFence(l.evidence || "(none recorded)", 3000) });
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "retired" ? "not_planned" : "completed" });
       if (r.status === 200) out.roadmap_closed++;
     }
-    if (r && r.status >= 200 && r.status < 300) { fixed++; rbudget.d1(1); await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(PS_RM_DONE[l.status] ? "closed" : "open", l.status, now, l.roadmap_id).run(); }
+    if (r && r.status >= 200 && r.status < 300) { fixed++; rbudget.d1(1); await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(wantOpen(l) ? "open" : "closed", l.status, now, l.roadmap_id).run(); }
     else { out.errors.push({ scope: "portfolio-roadmap-state " + l.roadmap_id, status: r && r.status, why: String(r && r.text || "").slice(0, 100) }); if (tsRateLimited(r)) break; }
   }
   var stmts = [];
@@ -1337,11 +1370,11 @@ async function psRoadmap(env, out, projects) {
 
   /* Place open roadmap issues: an item mirrored before its project's milestone existed (milestones are capped per tick) is
    * moved into the milestone and given its labels once the milestone exists. Compared with GitHub's live state. */
-  var place = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.project_code, r.source, r.title, r.artifact_ref FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id WHERE r.status NOT IN ('verified','enforced-verified','violated-remediated','retired')").all()).results) || [];
+  var place = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.project_code, r.source, r.artifact_type, r.title, r.artifact_ref FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id WHERE r.status NOT IN ('verified','enforced-verified','violated-remediated','retired')").all()).results) || [];
   var placed = 0, pst = [];
   for (var q = 0; q < place.length && placed < PS_ISSUE_PER_TICK; q++) {
     var x2 = place[q], g2 = openNums[x2.gh_number], p2 = psRmProject(x2, byCode);
-    if (!g2 || !p2 || !p2.gh_milestone) continue;
+    if (!g2 || !p2 || !p2.gh_milestone || notIssue[x2.source] || psIsTwin(x2)) continue;
     var want2 = psLabelSet(p2.program_code, x2.source === "metric-breach" ? "fix" : "enhancement", ["roadmap"]);
     if (g2.milestone && g2.milestone.number === p2.gh_milestone && psSameLabels(g2, want2)) {
       if (x2.project_code !== p2.project_code) pst.push(env.AUDIT.prepare("UPDATE roadmap_gh_links SET project_code = ? WHERE roadmap_id = ?").bind(p2.project_code, x2.roadmap_id));
@@ -1355,7 +1388,11 @@ async function psRoadmap(env, out, projects) {
 
   /* Rows copied from agent_issues (source 'agent_issues') are already on GitHub as their [#id] issue (TRACKER-SYNC-1); mirroring
    * them again would track one defect twice, so they are never filed here. */
-  var todo = ((await env.AUDIT.prepare("SELECT r.id, r.item, r.source, r.title, r.artifact_type, r.artifact_ref, r.status, r.evidence FROM roadmap_implementation r LEFT JOIN roadmap_gh_links g ON g.roadmap_id = r.id WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') AND r.source <> 'agent_issues' ORDER BY r.id LIMIT ?").bind(PS_RM_CREATE_PER_TICK).all()).results) || [];
+  /* Out-of-scope sources are excluded in SQL, not after the LIMIT, so they can never starve the work items behind them (PORTFOLIO-NOT-ISSUES-1). */
+  var skipSrc = Object.keys(notIssue);
+  var todoStmt = env.AUDIT.prepare("SELECT r.id, r.item, r.source, r.title, r.artifact_type, r.artifact_ref, r.status, r.evidence FROM roadmap_implementation r LEFT JOIN roadmap_gh_links g ON g.roadmap_id = r.id WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') AND r.source <> 'agent_issues' AND r.artifact_type <> 'agent_issue'"
+    + (skipSrc.length ? " AND r.source NOT IN (" + skipSrc.map(function () { return "?"; }).join(",") + ")" : "") + " ORDER BY r.id LIMIT ?");
+  var todo = ((await todoStmt.bind.apply(todoStmt, skipSrc.concat([PS_RM_CREATE_PER_TICK])).all()).results) || [];
   for (var j = 0; j < todo.length; j++) {
     var row = todo[j], p = psRmProject(row, byCode), num = byId[String(row.id)], node = num && openNums[num] ? openNums[num].node_id : null;
     if (!num) {
@@ -1464,7 +1501,10 @@ async function portfolioTree(env) {
   var progs = ((await env.AUDIT.prepare("SELECT program_code, name FROM programs ORDER BY program_code").all()).results) || [];
   var projs = ((await env.AUDIT.prepare("SELECT project_code, program_code, name, source, gh_milestone FROM projects WHERE status = 'active' ORDER BY project_code").all()).results) || [];
   var kinds = ((await env.AUDIT.prepare("SELECT m.project_code, m.kind, count(*) AS n FROM issue_project_map m JOIN agent_issues a ON a.id = m.issue_id AND a.status = 'open' GROUP BY m.project_code, m.kind").all()).results) || [];
-  var rms = ((await env.AUDIT.prepare("SELECT g.project_code, count(*) AS n FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id WHERE r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') GROUP BY g.project_code").all()).results) || [];
+  var treeSkip = Object.keys(await psRmScope(env));
+  var rmsStmt = env.AUDIT.prepare("SELECT g.project_code, count(*) AS n FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id WHERE r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') AND r.artifact_type <> 'agent_issue'"
+    + (treeSkip.length ? " AND r.source NOT IN (" + treeSkip.map(function () { return "?"; }).join(",") + ")" : "") + " GROUP BY g.project_code");
+  var rms = ((await (treeSkip.length ? rmsStmt.bind.apply(rmsStmt, treeSkip) : rmsStmt).all()).results) || [];
   var kBy = {}, rBy = {};
   kinds.forEach(function (k) { (kBy[k.project_code] = kBy[k.project_code] || {})[k.kind] = k.n; });
   rms.forEach(function (r) { rBy[r.project_code] = r.n; });
@@ -1646,6 +1686,7 @@ var CAPABILITIES = [
   "main-rules-visibility: records the rules that apply to QNFO/qnfo-workers main (status, rule types, required checks) on every run",
   "tracker-sync: mirrors agent_issues to GitHub issues and code_tasks to pull requests every 10 minutes, oldest change first, inside a time and subrequest budget",
   "portfolio-sync: derives projects from the census and mirrors programs, projects, issues and the roadmap to GitHub labels, milestones, issues and the Projects board",
+  "roadmap-scope: files a roadmap item as a GitHub issue only when its source is a work source; sources with mirrored = 0 in roadmap_mirror_scope (default projects, metric-breach, failure_modes) stay in qnfo-audit and the Projects board, and an open issue for one is closed not_planned; a row whose artifact_type is agent_issue is the twin of an agent issue ticket and is never filed, whatever its source (ROADMAP-TWIN-ROWS-1)",
   "model-floor-guard-visibility: records the model-floor-guard workflow runs on main as a countable fact",
   "dispatch-liveness: files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes, from outside that failure domain",
   "reports: GET /report, GET /tracker, GET /portfolio and GET /roadmap return the last run of each stage"
@@ -1657,6 +1698,7 @@ var LIMITATIONS = [
   "a credential that cannot read branch protection (403 Resource not accessible by integration) leaves protection unchanged and is counted, never treated as protected",
   "stops a tick on a GitHub rate limit (429, or a 403 that says so) and makes no further call until Retry-After has passed",
   "the tracker mass-flip guard refuses a change in which D1 and GitHub disagree without an explained open/closed move, and leaves that pair for the next tick",
+  "a roadmap source taken out of the mirror scope closes its open GitHub issues as not_planned, 40 per tick; it deletes nothing in qnfo-audit, and putting the source back (mirrored = 1) reopens the linked issues of its not-done items, 40 per tick",
   "POST /tick and POST /tracker/tick need the steward key; GET reads are public",
   "runs on a 5-minute grid with the repository reconcile hourly on the :15 fire; /health reports only the worker and its settings, the last run is on /report"
 ];

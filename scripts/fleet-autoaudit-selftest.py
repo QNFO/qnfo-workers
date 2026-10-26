@@ -275,6 +275,86 @@ rc, calls = run_main("--apply")
 check("main --apply: deploys, makes no GitHub issue call and writes no publish-failed row", calls == {"publish": 0, "apply": 1, "failure_events": 0} and rc == 0, (rc, calls))
 
 
+# ---------------------------------------------------------------- AUDIT-CRASH-FIX-1 (2026-10-26, agent_issues 100448)
+# run_main() above replaces classify() and hands main() a guard dict with no `cf_script_list`, so it could not see that main()
+# iterated that key: in the real guard output it is a BOOLEAN, and `for entry in True` raised TypeError in every fleet-autodeploy run
+# from 2026-10-25T20:21Z (PRs 4201, 4221 and 4226 merged it; 27 failed runs; worker_live_audit frozen at 21:03Z for 9 hours). These
+# cases use the guard's real output (scripts/deploy-drift-guard-output.fixture.json, the `guard` object of
+# audits/fleet-autoaudit-2026-10-25.json) and fake only the network edges.
+import json as _json
+REAL_GUARD = _json.load(open(os.path.join(HERE, "deploy-drift-guard-output.fixture.json")))
+check("the fixture is the real shape: cf_script_list is a boolean", REAL_GUARD.get("cf_script_list") is True)
+
+try:
+    real_rows = fa.classify(REAL_GUARD)
+    check("classify() accepts the guard's real output (33 sync + 13 not-a-worker + 75 not-deployed = 121 rows)", len(real_rows) == 121, len(real_rows))
+except Exception as e:
+    check("classify() accepts the guard's real output", False, repr(e))
+
+def run_main_real(argv, guard_out):
+    """main() with the REAL classify(); only the guard, D1, GitHub and the deployer are faked."""
+    calls = {"rows": None, "apply": 0}
+    saved = {k: getattr(fa, k) for k in ("run_guard", "write_audit_rows", "purge_stale", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
+    saved_argv = sys.argv
+    fa.run_guard = lambda: dict(guard_out)
+    def _wr(rows):
+        calls["rows"] = rows
+        return len(rows), [], "2026-10-26 06:00:00"
+    fa.write_audit_rows = _wr
+    fa.purge_stale = lambda now: (0, None)
+    fa.publish_issue = lambda body, has_findings=True: ("updated", 52, None)
+    fa._record_publish_failure = lambda *a: None
+    def _apply(d):
+        calls["apply"] += 1
+        return []
+    fa.apply_ahead = _apply
+    fa.ROOT = tempfile.mkdtemp()
+    sys.argv = ["fleet-autoaudit.py", argv]
+    rc, err = None, None
+    try:
+        fa.main()
+    except SystemExit as e:
+        rc = e.code
+    except Exception as e:
+        err = repr(e)
+    finally:
+        for k, v in saved.items():
+            setattr(fa, k, v)
+        sys.argv = saved_argv
+    return rc, err, calls
+
+rc, err, calls = run_main_real("--audit", REAL_GUARD)
+check("main --audit on the guard's real output finishes and writes every row", err is None and rc == 0 and calls["rows"] is not None and len(calls["rows"]) == 121, (rc, err))
+rc, err, calls = run_main_real("--apply", REAL_GUARD)
+check("main --apply on the guard's real output finishes and reaches the deployer", err is None and rc == 0 and calls["apply"] == 1, (rc, err, calls["apply"]))
+
+# a class the guard emits as a flag, a null, a count or text must degrade to "no entries", whatever the class
+BAD_SHAPES = [True, False, None, 7, "x", {"a": 1}]
+crashed = []
+for key in ("sync_workers", "drift", "content_drift", "no_repo_version", "no_live_version", "no_health_route", "live_err",
+            "not_deployed_workers", "not_a_worker", "cron_only", "retired_present", "unmanaged_workers", "ahead", "cf_script_list"):
+    for bad in BAD_SHAPES:
+        try:
+            fa.classify(dict(REAL_GUARD, **{key: bad}))
+            fa.actionable(dict(REAL_GUARD, **{key: bad}), {}, [], None)
+        except Exception as e:
+            crashed.append((key, bad, repr(e)))
+check("no list-valued guard key can crash classify()/actionable(), whatever shape it arrives in", not crashed, crashed[:3])
+
+# UNMANAGED-PROBE-1: one reader, three outcomes
+um = fa.classify({"unmanaged_workers": [
+    {"worker": "voice-stt", "http": 200, "version": None},
+    {"worker": "gone", "http": 404, "version": None},
+    {"worker": "broken", "http": 0, "version": None},
+    {"worker": "versioned", "http": 200, "version": "2.1.0"},
+    "legacy-string"]})
+check("an unmanaged worker answering 200 is UNMANAGED_OK (expected, in the universe)", um["voice-stt"]["note"] == "UNMANAGED_OK" and um["voice-stt"]["http"] == 200 and um["voice-stt"]["match"] == 0, um.get("voice-stt"))
+check("an unmanaged worker answering 404 is UNMANAGED_NO_HEALTH, other answers UNMANAGED_ERR", um["gone"]["note"] == "UNMANAGED_NO_HEALTH" and um["broken"]["note"] == "UNMANAGED_ERR", (um["gone"], um["broken"]))
+check("the unmanaged row carries the live version the guard read; a legacy bare string is accepted", um["versioned"]["live"] == "2.1.0" and um["legacy-string"]["note"] == "UNMANAGED_OK", (um["versioned"], um["legacy-string"]))
+act = fa.actionable({}, um, [], None)
+check("only the unmanaged workers that do not answer 200 are findings", len(act) == 2 and any("`gone`" in a for a in act) and any("`broken`" in a for a in act) and not any("voice-stt" in a for a in act), act)
+
+
 # a publish that fails after retries leaves a fleet-visible event, and a broken D1 can never break the audit
 seen = []
 real_d1 = fa.d1

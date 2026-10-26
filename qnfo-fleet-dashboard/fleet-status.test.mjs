@@ -129,7 +129,7 @@ const seed = (db) => {
   ok(j.fleet_handling.count === 1 && j.fleet_handling.items[0].key === "code:ct_parked", "S2 the parked code task is in fleet_handling", j.fleet_handling);
   ok(!j.needs_you.items.some((x) => x.source === "code-loop"), "S2 no code-loop item is in needs_you");
   const hu = await (await get(env, "/api/human")).json();
-  ok(hu.count === 1 && (hu.fleet_items || []).length === 1 && hu.attention.open === 1, "S2 /api/human counts the owner's item only and lists the parked task as fleet_items", { count: hu.count, fleet: (hu.fleet_items || []).length, open: hu.attention.open });
+  ok(hu.count === 1 && hu.fleet_handling.count === 1 && hu.attention.open === 1, "S2 /api/human counts the owner's item only and lists the parked task under fleet_handling", { count: hu.count, fleet: hu.fleet_handling, open: hu.attention.open });
   const m = j.metrics;
   // fleet_ai_run_rate_30d_usd (mk) + 6 seeded; blind_metric has no value.
   ok(m.total === 7 && m.measured === 6, "S3 every enabled metric is counted once; one with no value is unmeasured", { total: m.total, measured: m.measured });
@@ -178,6 +178,6 @@ const seed = (db) => {
   const j = await (await get(env, "/api/status")).json();
   ok(j.headline.state === "blind" && j.metrics.in_breach === null && j.blind.some((x) => /v_fleet_metrics/.test(x)), "S6 an unreadable metric view is named and the headline cannot read all clear", { h: j.headline, b: j.blind });
 }
-ok((() => { const v = /^var VERSION = "(\d+)\.(\d+)\.(\d+)/m.exec(src); return v && (+v[1] > 1 || +v[2] >= 68); })(), "VERSION is at least 1.68.0");
+ok((() => { const v = /^var VERSION = "(\d+)\.(\d+)\.(\d+)/m.exec(src); return v && (+v[1] > 1 || +v[2] >= 69); })(), "VERSION is at least 1.69.0");
 console.log("fleet-status: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

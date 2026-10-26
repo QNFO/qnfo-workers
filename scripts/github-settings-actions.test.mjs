@@ -23,7 +23,7 @@ function fakeGitHub(opts = {}) {
   const st = {
     rulesets: opts.rulesets || [{ id: 25060446, name: "main-safety", enforcement: "active", rules: [{ type: "deletion" }, { type: "non_fast_forward" }], bypass_actors: [] }],
     sa: Object.assign({ secret_scanning: { status: "enabled" }, secret_scanning_push_protection: { status: "disabled" }, secret_scanning_validity_checks: { status: "disabled" }, secret_scanning_non_provider_patterns: { status: "disabled" } }, opts.sa || {}),
-    log: [], tokens: new Set()
+    log: [], tokens: new Set(), runs: (opts.runs || []).slice()
   };
   const json = (status, body) => ({ status, text: async () => (body === undefined ? "" : JSON.stringify(body)) });
   const fetchImpl = async (url, init) => {
@@ -57,6 +57,36 @@ function fakeGitHub(opts = {}) {
       ...Array.from({ length: 3 }, () => ({ activity_type: "push", actor: { login: "github-actions[bot]" } })),
       { activity_type: "pr_merge", actor: { login: "qnfo-fleet[bot]" } }, { activity_type: "push", actor: { login: "qnfo-fleet[bot]" } },
       { activity_type: "pr_merge", actor: { login: "rwnq8" } }, ...(opts.stranger ? [{ activity_type: "push", actor: { login: "someone-else" } }] : [])]);
+    if (method === "GET" && (m = /^\/repos\/QNFO\/qnfo-workers\/actions\/runs\?status=(queued|in_progress)/.exec(path))) {
+      if (opts.runsList403) return json(403, { message: "Resource not accessible by integration" });
+      const rows = st.runs.filter((x) => x.status === m[1]).map(({ jobs, ...x }) => x);
+      return json(200, { total_count: rows.length, workflow_runs: rows });
+    }
+    if (method === "GET" && (m = /\/actions\/runs\/(\d+)\/jobs/.exec(path))) {
+      const x = st.runs.find((y) => String(y.id) === m[1]);
+      if (!x) return json(404, { message: "Not Found" });
+      if (x.jobs === null) return json(500, { message: "Server Error" });
+      return json(200, { total_count: x.jobs.length, jobs: x.jobs });
+    }
+    // GitHub deletes only a run that has completed (run 40290472819, 2026-10-26: 403 "Could not delete the workflow run" for queued and wedged runs)
+    if (method === "POST" && (m = /\/actions\/runs\/(\d+)\/force-cancel$/.exec(path))) {
+      if (opts.forceCancelRefuse) return json(403, { message: "Resource not accessible by integration" });
+      const x = st.runs.find((y) => String(y.id) === m[1]);
+      if (!x) return json(404, { message: "Not Found" });
+      if (!opts.forceCancelStaysQueued) { x.status = "completed"; x.conclusion = "cancelled"; }
+      return json(202, {});
+    }
+    if (method === "GET" && (m = /\/actions\/runs\/(\d+)$/.exec(path))) {
+      const x = st.runs.find((y) => String(y.id) === m[1]);
+      return x ? json(200, { id: x.id, status: x.status, conclusion: x.conclusion || null }) : json(404, { message: "Not Found" });
+    }
+    if (method === "DELETE" && (m = /\/actions\/runs\/(\d+)$/.exec(path))) {
+      if (opts.deleteRefuse) return json(403, { message: "Could not delete the workflow run" });
+      const x = st.runs.find((y) => String(y.id) === m[1]);
+      if (x && x.status !== "completed") return json(403, { message: "Could not delete the workflow run" });
+      st.runs = st.runs.filter((y) => String(y.id) !== m[1]);
+      return json(204);
+    }
     return json(404, { message: "Not Found" });
   };
   return { fetchImpl, st };
@@ -213,10 +243,84 @@ const api = makeApi(g.fetchImpl, "t");
 let threw = 0;
 for (const p of ["/repos/QNFO/other/rulesets", "/orgs/QNFO/repos", "/user/repos", "/repos/QNFO/qnfo-workers-evil/rulesets", "/apps/qnfo-fleet/installations", "/apps/Evil_App"]) { try { await api.call("GET", p); } catch (e) { threw++; } }
 ok(threw === 6, "only QNFO/qnfo-workers and the org installations are reachable", threw);
-ok(ACTIONS.join() === "report,ruleset-main,ruleset-main-revert,secret-scanning" && SECRET_FEATURES.length === 4, "the action list is the documented four");
+ok(ACTIONS.join() === "report,ruleset-main,ruleset-main-revert,secret-scanning,delete-stuck-runs" && SECRET_FEATURES.length === 4, "the action list is the documented five");
 const wfText = readFileSync(join(repoRoot, ".github", "workflows", "github-settings-actions.yml"), "utf8");
 ok(/GH_ADMIN_TOKEN: \$\{\{ secrets\.QNFO_GH_PAT \}\}/.test(wfText) && !/run:.*\$\{\{ (github\.event\.)?inputs\./.test(wfText) && /IN_ACTION: \$\{\{ github\.event\.inputs\.action \}\}/.test(wfText) && /workflow_dispatch:/.test(wfText) && !/schedule:/.test(wfText), "the workflow passes inputs through env, takes the PAT from the secret and is dispatch-only");
 ok(!/ghp_|github_pat_|ghs_[A-Za-z0-9]{10}/.test(readFileSync(join(repoRoot, "scripts", "github-settings-actions.mjs"), "utf8")), "no credential value in the script");
+
+// ---- DELETE-STUCK-RUNS-1 (agent_issues 1000275): queued or in-progress runs older than 24 h with no job running now
+{
+  const H = 3600000, T0 = Date.now(), ago = (h) => new Date(T0 - h * H).toISOString();
+  const stuck = () => [
+    { id: 101, name: "remediation-bridge", status: "queued", head_branch: "main", created_at: ago(19 * 24), jobs: [] },
+    { id: 102, name: "code-task-publish", status: "queued", head_branch: "main", created_at: ago(19 * 24), jobs: [] },
+    { id: 103, name: "deploy-gate", status: "in_progress", head_branch: "codeagent-im1", created_at: ago(4 * 24), jobs: [{ status: "completed", conclusion: "failure" }] },
+    { id: 104, name: "deploy-gate", status: "in_progress", head_branch: "main", created_at: ago(30), jobs: [{ status: "in_progress" }] },
+    { id: 105, name: "version-bump-guard", status: "queued", head_branch: "x", created_at: ago(0.1), jobs: [] },
+    { id: 106, name: "github-settings-actions", status: "in_progress", head_branch: "main", created_at: ago(30), jobs: [] },
+    { id: 107, name: "unreadable", status: "queued", head_branch: "main", created_at: ago(48), jobs: null },
+  ];
+  ok(ACTIONS.includes("delete-stuck-runs") && /- delete-stuck-runs/.test(readFileSync(join(repoRoot, ".github", "workflows", "github-settings-actions.yml"), "utf8")), "the action is allowlisted in the script and offered by the workflow");
+
+  let g2 = fakeGitHub({ runs: stuck() });
+  let r2 = await run("delete-stuck-runs", "dry", wfRoot, g2.fetchImpl, { GITHUB_TOKEN: "ghs_session", GITHUB_RUN_ID: "106" });
+  ok(r2.ok && r2.candidates.map((c) => c.id).join() === "101,102,103", "dry: the two old queued runs and the old run whose only job concluded are the candidates", r2.candidates);
+  const why = Object.fromEntries(r2.skipped.map((x) => [x.id, x.why]));
+  ok(/running now/.test(why[104]) && /younger/.test(why[105]) && why[106] === "this run" && /jobs unreadable \(HTTP 500\)/.test(why[107]), "dry: a run with a job running, a young run, this run and a run whose jobs cannot be read are skipped, each with its reason", why);
+  ok(!g2.st.log.some((x) => x.method === "DELETE") && g2.st.runs.length === 7 && /force-cancelled and then deleted/.test(r2.note), "dry writes nothing");
+  ok(r2.credential === "GITHUB_TOKEN", "dry may use the session credential");
+
+  g2 = fakeGitHub({ runs: stuck() });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { GITHUB_TOKEN: "ghs_session", GITHUB_RUN_ID: "106" });
+  ok(!r2.ok && r2.refused && r2.refused.status === 0 && g2.st.log.length === 0, "live without the admin credential is a refusal and sends nothing", r2.refused);
+
+  g2 = fakeGitHub({ runs: stuck() });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_TOKEN: "ghs_session", GITHUB_RUN_ID: "106" });
+  ok(r2.ok && r2.deleted.join() === "101,102,103" && g2.st.runs.map((x) => x.id).join() === "104,105,106,107", "live deletes exactly the candidates and leaves the running, the young, this and the unreadable run", { d: r2.deleted, left: g2.st.runs.map((x) => x.id) });
+  ok(g2.st.tokens.size === 1 && g2.st.tokens.has("Bearer pat_admin") && r2.credential === "QNFO_GH_PAT", "live uses the admin credential only");
+
+  g2 = fakeGitHub({ runs: stuck(), deleteRefuse: true });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_TOKEN: "ghs_session", GITHUB_RUN_ID: "106" });
+  ok(!r2.ok && r2.refused.status === 403 && /Could not delete the workflow run/.test(r2.refused.message) && r2.refused.call === "DELETE run 101", "a refused delete is recorded with its status and GitHub's own text", r2.refused);
+  ok(g2.st.log.filter((x) => x.method === "DELETE").length === 1 && g2.st.tokens.size === 1 && r2.deleted.length === 0, "and it stops at the first refusal and is not retried with another credential");
+
+  g2 = fakeGitHub({ runs: Array.from({ length: 30 }, (_, i) => ({ id: 500 + i, name: "wedged", status: "queued", head_branch: "main", created_at: ago(72), jobs: [] })) });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin" });
+  ok(r2.ok && r2.deleted.length === 25 && r2.remaining === 5 && /beyond the cap of 25/.test(r2.note) && g2.st.runs.length === 5, "live deletes at most 25 per run and says how many remain", { n: r2.deleted.length, rem: r2.remaining });
+
+  g2 = fakeGitHub({ runs: [] });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin" });
+  ok(r2.ok && r2.candidates.length === 0 && r2.deleted.length === 0, "nothing stuck is a pass that deletes nothing");
+
+  g2 = fakeGitHub({ runs: stuck(), runsList403: true });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin" });
+  ok(!r2.ok && r2.refused.status === 403 && !g2.st.log.some((x) => x.method === "DELETE"), "a refused list is recorded and nothing is deleted", r2.refused);
+
+  // DELETE-STUCK-RUNS-2: GitHub deletes only a completed run, so each candidate is force-cancelled, read until completed, then deleted
+  g2 = fakeGitHub({ runs: stuck() });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
+  const seq = g2.st.log.filter((x) => (x.method === "POST" || x.method === "DELETE")).map((x) => x.method + " " + /runs\/(\d+)/.exec(x.path)[1]);
+  ok(r2.ok && seq.join() === "POST 101,DELETE 101,POST 102,DELETE 102,POST 103,DELETE 103", "live force-cancels each run and only then deletes it, one candidate at a time", seq);
+  ok(r2.force_cancelled.join() === "101,102,103" && r2.deleted.join() === "101,102,103" && r2.not_completed.length === 0 && g2.st.tokens.size === 1 && g2.st.tokens.has("Bearer pat_admin"), "the result lists what was force-cancelled and deleted, with the admin credential only", r2);
+
+  g2 = fakeGitHub({ runs: stuck(), forceCancelRefuse: true });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
+  ok(!r2.ok && r2.refused.call === "POST force-cancel run 101" && r2.refused.status === 403 && /not accessible/.test(r2.refused.message), "a refused force-cancel is recorded with its status and GitHub's text", r2.refused);
+  ok(g2.st.log.filter((x) => x.method === "POST").length === 1 && !g2.st.log.some((x) => x.method === "DELETE") && g2.st.tokens.size === 1 && r2.deleted.length === 0, "and it stops there: no delete is sent, no second candidate is tried, no other credential is used");
+
+  g2 = fakeGitHub({ runs: stuck(), forceCancelStaysQueued: true });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
+  ok(r2.ok && r2.not_completed.join() === "101,102,103" && r2.deleted.length === 0 && !g2.st.log.some((x) => x.method === "DELETE") && /force-cancelled but not completed/.test(r2.note), "a run that does not read completed after the polls is left, not deleted, and the note says why", r2);
+  ok(g2.st.log.filter((x) => x.method === "GET" && /runs\/101$/.test(x.path)).length === 6, "each run is read 6 times before the run gives up on it");
+
+  g2 = fakeGitHub({ runs: stuck(), deleteRefuse: true });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
+  ok(!r2.ok && r2.refused.call === "DELETE run 101" && g2.st.log.filter((x) => x.method === "POST").length === 1 && r2.force_cancelled.join() === "101", "a refused delete after a force-cancel stops the run and names the delete", r2.refused);
+
+  g2 = fakeGitHub({ runs: [{ id: 900, name: "old-but-fresh-enough", status: "queued", head_branch: "main", created_at: ago(23.9), jobs: [] }, { id: 901, name: "just-over", status: "queued", head_branch: "main", created_at: ago(24.1), jobs: [] }] });
+  r2 = await run("delete-stuck-runs", "dry", wfRoot, g2.fetchImpl, { GITHUB_TOKEN: "ghs_x" });
+  ok(r2.candidates.map((c) => c.id).join() === "901", "the age cut is 24 hours: 23.9 h is kept, 24.1 h is a candidate", r2.candidates);
+}
 
 rmSync(wfRoot, { recursive: true, force: true });
 console.log(pass + " passed, " + fail + " failed");

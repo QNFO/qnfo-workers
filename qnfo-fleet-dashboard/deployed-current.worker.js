@@ -10,10 +10,17 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.68.0"; // 1.68.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); parked code tasks and issue-loop dispatches are the fleet's, never counted as owner items; the old overview moved to /classic. prior 1.67.2
+var VERSION = "1.69.0"; // 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.0
+// 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. prior 1.67.3-codeagent // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
+/* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
+/* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
+/* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
 /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+/* 1.65.0 CF-AGENTS-LOOPS-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: "EXPAND AGENT INTEGRATION AND SURFACES FOR MORE AUTONOMOUS FLEET OPERATION"): cfagent requests [requester] lists what the fleet loops asked the Cloudflare agent through D1 cf_agent_requests. */
+/* 1.64.1 FM7-PARITY-MANAGERS-1 (2026-10-26, pillar core): /api/managers built its answer with the ok flag ahead of its schema_version literal, which qnfo-ops FM7-HEALTH-VERSION-PARITY-1 reads as a hardcoded /health version, so /ops/deploy refused 1.63.0 and 1.64.0 and both shipped through the code-only second path without the new SVC_QNFO_AGENTS binding. schema_version now comes first; cf-agents.test.mjs runs the same check. */
+/* 1.64.0 CF-AGENTS-1 (2026-10-26, pillar autonomy; owner directive 2026-10-25: every Cloudflare agent tool reachable from /cmd): cfagent commands drive the Cloudflare Agents SDK agent qnfo-agents over SVC_QNFO_AGENTS (turns, runs, tools, schedules, MCP, sandbox); cfagent! and changes need a fresh code; code-task proposals come back as task buttons. */
 /* 1.61.0 LIVE-FAILURE-OVERVIEW-1 (2026-10-25, pillar autonomy): fleet-live/v2 adds ranked breach, primary-root-cause and per-source freshness data; the overview shows failure rows before the owner queue, groups desktop area navigation, and refreshes every 15 s; /api/cmd now returns an explicit POST-only 405 contract. */
 /* 1.60.0 AGENT-TRACING-1 (2026-10-25, pillar autonomy; minor: add metadata-only agent, model, tool and approval spans; preserve 1% sampling); PSR-MODEL-FLOOR-1 (#4084, research): use allowlisted GLM-5.3-Flash for free portfolio summaries and preserve the paid fallback; WEBMCP-SITEMAP-1 (pillar reach): serve the canonical public sitemap for list_site_pages. */
 /* 1.59.2 PORTFOLIO-LATEST-ROADMAP-1 (2026-10-25, agent_issues 1000194): GET /api/portfolio/latest now returns the persisted roadmap_now, roadmap_next, roadmap_later, goals_adopted and goals_completed counts so dashboard consumers can read the program roadmap and goal measures directly. Additive response change; no new worker, cron or binding. */
@@ -2291,7 +2298,7 @@ var AREA_REGISTRY = [
   { id: "autonomy", name: "Autonomy loop", short: "Autonomy", what: "how the fleet works on itself: issues, the code loop, remedies, dispatches, the owner queue", sources: ["v_metric_trigger_state", "metric_history", "agent_issues", "code_tasks", "human_actions"],
     rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/, star: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
     root: { key: "remedy_efficacy_30d", explains: ["fix_hold_rate_30d"] },
-    flows: ["issues", "code"], widgets: ["controls"], controls: ["owner_queue_delegated"], pages: [],
+    flows: ["issues", "code"], widgets: ["controls"], controls: ["owner_queue_delegated"], pages: [{ key: "managers", label: "Managers", href: "/managers", feed: "/api/managers" }],
     queue: { sources: ["code-loop", "issue-loop", "objectives", "register", "gtd"], rx: null } },
   { id: "reliability", name: "Reliability and security", short: "Reliability", what: "whether it stays up and honest: guards, probes, drift, cron cadence, failure modes", sources: ["v_metric_trigger_state", "metric_history", "fleet probes"],
     rx: /guard|github_app|spof|runtime_verified|probe|drift|cadence_overdue|failure_mode|roster|blocker|dangling|cron_|deploy_|false_stops|security|sla_breach/, star: { key: "guard_rcs", label: "Guards failing", unit: "", good: "down" },
@@ -2446,6 +2453,7 @@ var API_INDEX = [
   { path: "/api/attention", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "attention/v1", cache: "public 15s, ETag", freshness: "the daily attention scorecard", what: "Human attention per channel, verdicts, shares and graded decisions." },
   { path: "/api/kpi", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-kpi/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "qnfo-audit read at request time", what: "The Metrics tab: issues, reach, posts, Buffer, subscribers." },
   { path: "/api/architecture", area: "platform", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "fleet-architecture/v1", cache: "public 15s, ETag (5 min in isolate memory)", freshness: "the fleet code and live topology graph (qnfo-graph), the service registry, the heartbeats and the cron table, read at request time", what: "The fleet's model of itself: workers, layers, bindings, schedules, who reads and writes what, how a change ships, who may do what, and what the model cannot see. /api/architecture/worker/<name>, /table/<name> and /impact/<worker> answer one thing; ?q=<text> searches." },
+  { path: "/api/managers", area: "autonomy", source: "live", lag_s: 3600, method: "GET", auth: "open", schema_version: "fleet-managers/v1", cache: "public 15s, ETag", freshness: "the hourly management-personas tick (:35); read live from D1", what: "What the portfolio manager and each program manager decided this hour: focus slots per program, the constraint, each program's focus issues, doer gaps and the focus moves of the last 24 hours." },
   { path: "/api/content", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "content-pipeline/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "v_content_pipeline, living-paper, q08-signal", what: "The content production line end to end." },
   { path: "/api/changelog", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
   { path: "/api/ga4", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
@@ -2706,6 +2714,7 @@ function rtQueueDigest(v) {
     urgent: v.urgent,
     items: v.items || [],
     receipts: v.receipts || [],
+    fleet_handling: v.fleet_handling ? v.fleet_handling.count : 0,
     upcoming: v.upcoming || [],
     blind: v.blind || [],
     decision: v.decision,
@@ -2729,7 +2738,6 @@ function rtAreasDigest(bodyA) {
    program per metric), activity from the ledgers the loops already write (decision_log, persona_actions, breach_selfheal_actions,
    issue_lifecycle, code_tasks, deployment_history), quality from v_output_quality_headline. The old overview stays at /classic, unchanged,
    for the owner's actions (reply, ratify, snooze). fleetStatusModel is pure; fleet-status.test.mjs drives it and the routes. */
-var FLEET_HANDLED_SOURCES = ["code-loop", "issue-loop"];
 var STATUS_PROGRAMS = [
   { code: "QNFO.RSCH", name: "Research and publications", what: "ideas to published papers, review, errata, revisions" },
   { code: "QNFO.REACH", name: "Reach and distribution", what: "readers, social posts, subscribers, outreach" },
@@ -2774,7 +2782,8 @@ function fleetStatusModel(p) {
   const blind = (p.blind || []).slice();
   for (const b of v.blind || []) blind.push("owner queue: " + b);
   const needs = (v.items || []).map(statusItem);
-  const fleet = (v.fleet_items || []).map(statusItem);
+  // OWNER-QUEUE-IDENTITY-ONLY-1 (1.68.0) keeps parked code tasks and issue-loop items out of v.items and lists them in v.fleet_handling.
+  const fleet = (v.fleet_handling && v.fleet_handling.items || []).map(statusItem);
   const names = {};
   for (const r of p.programs || []) names[r.program_code] = r.name;
   const progs = STATUS_PROGRAMS.map(function(x) {
@@ -3151,6 +3160,12 @@ if (path === "/health") {
     });
     return json(rP);
   }
+  // MANAGEMENT-PERSONAS-1 (1.63.0): the portfolio and program manager decisions, open and read-only (OPEN-ACCESS-1).
+  if ((path === "/managers" || path === "/managers/" || path === "/api/managers") && request.method === "GET") {
+    const mv = await managersView(env);
+    if (path === "/api/managers") return rtRead(request, url, mv, { schema: "fleet-managers/v1" });
+    return new Response(managersHtml(mv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
+  }
   if (path === "/api/portfolio/latest") {
     const notesL = await d1all(env.AUDIT, "SELECT day, program_code, manager_persona, verdict, risk_score, top_actions, narrative, roadmap_now, roadmap_next, roadmap_later, goals_adopted, goals_completed FROM program_review_notes ORDER BY day DESC, program_code LIMIT 12").catch(function() { return []; });
     const runsL = await d1all(env.AUDIT, "SELECT run_date, kind, summary FROM portfolio_runs WHERE kind='weekly-strategic' ORDER BY id DESC LIMIT 4").catch(function() { return []; });
@@ -3416,13 +3431,16 @@ async function runRefresh(env, ctx, opts) {
     // "Worker invocation ended with exceededWallTime" (14 internalError/24h, issue class
     // from the Workers Observability API). Bound the refresh so the handler always
     // returns a state (possibly degraded) well before the platform wall limit.
-    let st;
+    let st, deadlineTimer;
     try {
+      // SUITE-IDLE-TIMER-1 (2026-10-26): the deadline timer is cleared once the race settles; it kept running for the full 90 s, so the offline architecture suite idled 90 s after its last assertion.
       st = await Promise.race([buildState(env, ctx), new Promise(function(_res, rej) {
-        setTimeout(function() {
+        deadlineTimer = setTimeout(function() {
           rej(new Error("REFRESH-DEADLINE-1: buildState exceeded 90000ms"));
         }, 9e4);
-      })]);
+      })]).finally(function() {
+        clearTimeout(deadlineTimer);
+      });
     } catch (eD) {
       const prev = await loadState(env);
       if (prev && prev.state) return prev.state;
@@ -3673,6 +3691,13 @@ var worker_default = {
     // leaves no row and fm-single-heartbeat could not tell an idle fallback from a dead one. Each run now records in
     // fleet_heartbeat whether the guarded insert executed (ok 1) or threw (ok 0, the 2026-10-18 12:14Z outage shape).
     const tickOk = await feedFallbackTick(env);
+    // FLEET-TICK-HEAVY-SECOND-PRODUCER-1 (issue #1000271, RED-DRAIN-1 dispatch): qnfo-fleet-dashboard is the second producer of fleet_tick_heavy,
+    // alongside qnfo-code-orchestrator, so heavy D1 steps (BREACH-SELFHEAL-1) keep running when the primary producer is down. Guarded to one row per 9 minutes.
+    try {
+      await env.AUDIT.prepare("INSERT INTO fleet_tick_heavy (source) SELECT 'cron:qnfo-fleet-dashboard' WHERE NOT EXISTS (SELECT 1 FROM fleet_tick_heavy WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))").run();
+    } catch (e) {
+      console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_tick_heavy", note: String(e && e.message || e) }));
+    }
     try {
       await env.AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-fleet-dashboard', ?, ?, ?)").bind(VERSION, new Date().toISOString(), tickOk).run();
     } catch (e) {
@@ -6133,7 +6158,20 @@ async function askVisitor(request) {
   return (await sha256hex(ip + "|" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "|fleet-ask")).slice(0, 16);
 }
 async function ownerRequestIssue(env, title, body) {
+  // OWNER-PROMPT-TWIN-LINK-1: if an OPEN owner-request ticket already has the same prompt, return it and count the refile.
   const now = Date.now();
+  const colon = title.indexOf(": ");
+  const newPrompt = (colon >= 0 ? title.slice(colon + 2) : title).trim().toLowerCase();
+  try {
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS agent_issue_refiles (issue_id INTEGER PRIMARY KEY, refiles INTEGER NOT NULL DEFAULT 1, last_at INTEGER, last_source TEXT)").run();
+  } catch (e) {
+    console.error(JSON.stringify({ scope: "OWNER-PROMPT-TWIN-LINK-1", step: "agent_issue_refiles-create", error: String(e && e.message || e) }));
+  }
+  const twin = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE status = 'open' AND source = 'qnfo-fleet-dashboard:owner-request' AND lower(trim(substr(title, instr(title, ': ') + 2))) = ?1 ORDER BY id LIMIT 1", [newPrompt]))[0];
+  if (twin) {
+    await env.AUDIT.prepare("INSERT INTO agent_issue_refiles (issue_id, refiles, last_at, last_source) VALUES (?1, 1, ?2, ?3) ON CONFLICT(issue_id) DO UPDATE SET refiles = refiles + 1, last_at = ?2, last_source = ?3").bind(twin.id, now, "qnfo-fleet-dashboard:owner-request").run();
+    return Number(twin.id);
+  }
   await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-dashboard:owner-request', 'owner-request', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1)").bind(title, body, now).run();
   const row = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
   return row ? Number(row.id) : null;
@@ -6766,6 +6804,7 @@ function ownerMailView(v) {
   }
   return v;
 }
+var FLEET_HANDLED_SOURCES = ["code-loop", "issue-loop"];
 async function collectHumanActions(env) {
   const items = [];
   const blind = [];
@@ -7464,6 +7503,15 @@ async function humanView(env, st, ctx) {
   h.items = h.items.filter(function(i) {
     return !i.receipt;
   });
+  // OWNER-QUEUE-IDENTITY-ONLY-1 (owner 2026-10-26: "Why do so many things need me? I'm not doing any of them."): a parked code task or an
+  // issue-loop dispatch is fleet work (HUMAN-ITEMS-AUTOMATIC-1; BREACH-ONE-MEANING-1 (PR 4444) returns it to the fleet as failed at birth).
+  // It is listed apart as "The fleet is handling", never in the count, the banner or the area queues.
+  const fleetHandling = h.items.filter(function(i) {
+    return FLEET_HANDLED_SOURCES.indexOf(i.source) >= 0;
+  });
+  h.items = h.items.filter(function(i) {
+    return FLEET_HANDLED_SOURCES.indexOf(i.source) < 0;
+  });
   let gov = null;
   try {
     gov = meta.human_gov_snapshot ? JSON.parse(meta.human_gov_snapshot) : null;
@@ -7517,16 +7565,8 @@ if (gov && gov.cost) {
     return t != null && t - Date.now() > UPCOMING_DAYS * DAY_MS;
   };
   const upcoming = h.items.filter(isLater);
-  // FLEET-STATUS-1 (owner 2026-10-26, HUMAN-ITEMS-AUTOMATIC-1): a parked code task or an issue-loop dispatch is the fleet's to finish, never
-  // the owner's. They are listed as fleet_items ("the fleet is handling") and never counted in the owner's queue, its banner or its SLA.
-  const nowItems = h.items.filter(function(it) {
+  const items = h.items.filter(function(it) {
     return !isLater(it);
-  });
-  const fleetItems = nowItems.filter(function(it) {
-    return FLEET_HANDLED_SOURCES.indexOf(it.source) >= 0;
-  });
-  const items = nowItems.filter(function(it) {
-    return FLEET_HANDLED_SOURCES.indexOf(it.source) < 0;
   });
   // DASHBOARD-AUTONOMY-FIRST-1 (1.27.0, agent_issues 2171, charter rules 10 and 11): spend caps are the fleet's and a
   // breached cap steers model choice (BUDGET-SOFT-ROUTE-1), so SCALE_BACK is no owner card: it stays in the decision panel
@@ -7563,8 +7603,10 @@ if (gov && gov.cost) {
       return i.sev === "urgent";
     }).length,
     items,
-    fleet_items: fleetItems,
     receipts,
+    fleet_handling: { count: fleetHandling.length, items: fleetHandling.map(function(i) {
+      return { key: i.key, source: i.source, title: i.title, why: i.why, age: i.age };
+    }) },
     upcoming,
     blind: h.blind,
     // OWNER-SURFACE-HONESTY-1: inbox mail that owes no reply (sender domain, category, reason; never a subject), so a missing
@@ -8206,6 +8248,12 @@ function humanFragment(v) {
   if (v.upcoming && v.upcoming.length) {
     o.push('<details class="card up"><summary>Coming up <span class="ct">' + v.upcoming.length + "</span></summary><ul>");
     for (const it of v.upcoming) o.push("<li><b>" + e(it.due) + "</b> " + e(it.title) + (it.action ? ' <span class="meta">&mdash; ' + e(it.action) + "</span>" : "") + (/^https:\/\//.test(it.url || "") ? ' <a href="' + e(it.url) + '" rel="noopener">open</a>' : "") + "</li>");
+    o.push("</ul></details>");
+  }
+  // OWNER-QUEUE-IDENTITY-ONLY-1: fleet work the owner can read about but is never asked to do.
+  if (v.fleet_handling && v.fleet_handling.count) {
+    o.push('<details class="card up" id="fleet-handling"><summary>The fleet is handling <span class="ct">' + e(v.fleet_handling.count) + '</span></summary><p class="meta">Parked code tasks and issue-loop items. The fleet re-plans each one; none of these needs you.</p><ul>');
+    for (const it of v.fleet_handling.items) o.push("<li><b>" + e(String(it.title || "").slice(0, 140)) + "</b> <span class=\"meta\">" + e(String(it.source || "")) + "</span></li>");
     o.push("</ul></details>");
   }
   // OWNER-REQUEST-RECEIPT-1: how the owner's own requests ended. Title and issue number only: the issue text can quote private notes.
@@ -10162,6 +10210,15 @@ var OWNER_LOGIN_WINDOW_MS = 10 * 60 * 1e3;
 // (routed by qnfo-ai to deepseek-v4-flash, 2.0-2.2s in ai_queries) answered: 16s total. glm-5.3-flash stays as the fallback.
 var ASK_MODELS = ["glm-5.3-flash", "deepseek-v4-flash-wa", "gpt-oss-120b"];
 var ASK_HEDGE_MS = 4e3;
+// CMD-DIRECT-LEG-1 (1.62.0, 2026-10-26, owner: "FIX" on a CONTINUE that timed out). Measured: while the fleet spend cap is
+// breached qnfo-ai serves every leg of the race with glm-5.3-flash (BUDGET-SOFT-ROUTE-1), so the three router legs were one
+// model three times. glm-5.3-flash, shared with the paper writers, averaged 46.7 s with 16 of 83 calls ending in
+// router_timeout since 2026-10-24, while deepseek-v4-flash averaged 3.3 s with none (ai_queries). Every /cmd fallback in
+// cmd_log from 2026-10-24 to 10-25 shows three router_timeout legs and no other path. Now the race also runs these models
+// on this worker's own AI binding, outside the router, from ASK_DIRECT_HEDGE_MS on; they are small Workers AI models
+// (cents per thousand answers), and one starts only when the router has not answered.
+var ASK_DIRECT_LEGS = ["deepseek-v4-flash-wa", "gpt-oss-120b"];
+var ASK_DIRECT_HEDGE_MS = 5e3;
 async function sha256hex(s) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
   return Array.from(new Uint8Array(d)).map(function(b) {
@@ -10734,6 +10791,12 @@ var CMD_HELP = [
 "  tools [word]           every fleet tool: Cloudflare API, D1, R2, KV, GitHub, shell, containers, deploys",
 "  tool <name> {json}     run one, e.g. tool fleet_status {}",
 "  agent: <text>          one turn of the durable coding agent (8 tool rounds)",
+"  cfagent <request>      the Cloudflare Agents SDK agent (agents.qnfo.org): Code Mode over every fleet tool, MCP, schedules",
+"  cfagent! <request>     the same with the write scope: mutating tools, fleet issues, schedules, MCP connections (*)",
+"  cfagent runs | cfagent run <id> | cfagent tools | cfagent schedules | cfagent mcp",
+"  cfagent requests [requester]   what the fleet loops (managers, code loop) asked the agent through cf_agent_requests",
+"  cfagent schedule <cron|Ns> <request> | cfagent unschedule <id> | cfagent mcp add <name> <url> | cfagent mcp drop <id> (*)",
+"  cfagent sandbox <js>   run JavaScript in its Dynamic Worker sandbox, e.g. async () => (await codemode.fleet_sql({sql:'SELECT 1'}))",
 "Sign in:  login (emails a 6-digit code)  then type the code.  logout",
   "Anything else is answered in plain English, with proposed actions you can tap."
 ].join("\n");
@@ -11467,14 +11530,42 @@ async function cmdDirectModel(env, model, messages, why, t0, timeoutMs) {
 async function cmdRaceModels(env, messages, budgetMs, ctx, conversationId) {
   const t0 = Date.now();
   const errs = [];
+  const direct = env && env.AI ? ASK_DIRECT_LEGS.slice() : [];
   return await new Promise(function(resolve) {
-    let done = false, started = 0, pending = 0, timer = null;
+    let done = false, started = 0, pending = 0, timer = null, dtimer = null;
     function finish(r) {
       if (done) return;
       done = true;
       if (timer) clearTimeout(timer);
+      if (dtimer) clearTimeout(dtimer);
       resolve(r);
     }
+    function settle() {
+      if (!done && !pending && started >= ASK_MODELS.length && !direct.length) finish({ ok: false, error: errs.join(" | ") || "no model" });
+    }
+    // CMD-DIRECT-LEG-1: the second transport. One direct leg at a time; a failed one hands over to the next.
+    function launchDirect() {
+      dtimer = null;
+      if (done || !direct.length) return;
+      const left = budgetMs - (Date.now() - t0);
+      if (left < 3e3) {
+        direct.length = 0;
+        settle();
+        return;
+      }
+      const model = direct.shift();
+      pending++;
+      cmdDirectModel(env, model, messages, "direct leg", Date.now(), left).then(function(r) {
+        pending--;
+        if (r.ok) finish(r);
+        else {
+          errs.push(r.error);
+          launchDirect();
+          settle();
+        }
+      });
+    }
+    if (direct.length) dtimer = setTimeout(launchDirect, Math.min(ASK_DIRECT_HEDGE_MS, Math.max(0, budgetMs - 4e3)));
     function launch() {
       if (done) return;
       if (timer) {
@@ -11483,7 +11574,12 @@ async function cmdRaceModels(env, messages, budgetMs, ctx, conversationId) {
       }
       const left = budgetMs - (Date.now() - t0);
       if (started >= ASK_MODELS.length || left < 3e3) {
-        if (!pending) finish({ ok: false, error: errs.join(" | ") || "no model" });
+        started = ASK_MODELS.length;
+        if (!pending && !direct.length) finish({ ok: false, error: errs.join(" | ") || "no model" });
+        else if (!pending && dtimer) {
+          clearTimeout(dtimer);
+          launchDirect();
+        }
         return;
       }
       const model = ASK_MODELS[started++];
@@ -12151,7 +12247,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
           await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, ?6, ?7)").bind(traceId, (a.op + " " + JSON.stringify(a.args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, holder ? 1 : 0, Date.now()).run();
         } catch (e) {
         }
-        return ownerJson({ ok: r.ok, kind: "answer", text: r.ok ? r.text : null, error: r.ok ? null : r.error, executed: a.op, holder });
+        return ownerJson({ ok: r.ok, kind: "answer", text: r.ok ? r.text : null, error: r.ok ? null : r.error, executed: a.op, actions: r.actions && r.actions.length ? r.actions : void 0, holder });
       }
     }
     return ownerJson({ ok: true, kind: "answer", text: p.text || "", actions: p.actions || [], items: p.items || null, links: p.links || null, go: p.go || null, holder });
@@ -12205,7 +12301,7 @@ var CON_DBS = { audit: "AUDIT", outreach: "OUTREACH", living: "LIVING", graph: "
 var CON_DBS_READONLY = { identity: 1 };
 var CON_PROTECTED = ["remediation_verifications", "work_claims", "owner_sessions", "owner_codes", "cmd_log", "console_backups", "owner_docs", "sla_due_at"];
 // qnfo-kaizen dropped 2026-10-06: the worker was retired (WORKER-RETIRE-WAVE-2, #1756) and SVC_QNFO_KAIZEN is no longer bound.
-var CON_SVC = { "qnfo-email": "SVC_QNFO_EMAIL", "qnfo-cloud-ops": "SVC_QNFO_CLOUD_OPS", "qnfo-fleet-control": "SVC_QNFO_FLEET_CONTROL", "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
+var CON_SVC = { "qnfo-email": "SVC_QNFO_EMAIL", "qnfo-cloud-ops": "SVC_QNFO_CLOUD_OPS", "qnfo-fleet-control": "SVC_QNFO_FLEET_CONTROL", "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-agents": "SVC_QNFO_AGENTS", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
 var CON_MAX_ROWS = 200;
 var CON_BACKUP_MAX = 2e3;
 var CON_BACKUP_CHARS = 19e5;
@@ -12216,6 +12312,11 @@ var CON_OPS = {
   agentlogin: { destructive: false, label: "Email the agent sign-in code" },
   agentverify: { destructive: false, label: "Exchange the agent code for a session" },
   agentstatus: { destructive: false, label: "Agent job status" },
+  cfagent: { destructive: false, label: "Ask the Cloudflare agent" },
+  cfagentw: { destructive: true, label: "Ask the Cloudflare agent (write scope)" },
+  cfagentget: { destructive: false, label: "Read the Cloudflare agent" },
+  cfagentbox: { destructive: false, label: "Run in the agent sandbox" },
+  cfagentset: { destructive: true, label: "Change the Cloudflare agent" },
   iprio: { destructive: false, label: "Set priority" },
   iowner: { destructive: false, label: "Set owner" },
   icomment: { destructive: false, label: "Comment" },
@@ -12726,6 +12827,28 @@ function conParse(text) {
     if (/^agent-login$/i.test(at)) return { actions: [cmdAction("agentlogin", {})], auto: true, text: "Email the agent sign-in code" };
     if ((am = /^agent-verify\s+(\d{6})$/i.exec(at))) return { actions: [cmdAction("agentverify", { code: am[1] })], auto: true, text: "Verify the agent code" };
     if ((am = /^agent-status\s+(\S+)$/i.exec(at))) return { actions: [cmdAction("agentstatus", { id: am[1] })], auto: true, text: "Agent job " + am[1] };
+    // CF-AGENTS-1 (1.64.0): the Cloudflare Agents SDK agent (qnfo-agents). Reads and read-scope turns run at once with the owner
+    // session; the write scope, schedules and MCP connections are confirm buttons that need a fresh code.
+    if (/^cf-?agents?\b/i.test(at)) {
+      const ca = at.replace(/^cf-?agents?/i, "");
+      if (/^\s*$/.test(ca)) return { text: "cfagent <request>, cfagent! <request> (write scope), cfagent runs | run <id> | tools | schedules | mcp, cfagent schedule <cron|Ns> <request>, cfagent sandbox <js>. Type 'help' for the rest." };
+      if ((am = /^\s+runs$/i.exec(ca))) return { actions: [cmdAction("cfagentget", { path: "/runs?limit=12", title: "runs" })], auto: true, text: "Cloudflare agent runs" };
+      if ((am = /^\s+run\s+(run_[a-z0-9_]{6,60})$/i.exec(ca))) return { actions: [cmdAction("cfagentget", { path: "/runs/" + am[1], title: am[1] })], auto: true, text: "Cloudflare agent " + am[1] };
+      if (/^\s+tools$/i.test(ca)) return { actions: [cmdAction("cfagentget", { path: "/tools", title: "tools" })], auto: true, text: "Cloudflare agent tools" };
+      if (/^\s+schedules$/i.test(ca)) return { actions: [cmdAction("cfagentget", { path: "/schedules", title: "schedules" })], auto: true, text: "Cloudflare agent schedules" };
+      if (/^\s+mcp$/i.test(ca)) return { actions: [cmdAction("cfagentget", { path: "/mcp-servers", title: "MCP servers" })], auto: true, text: "Cloudflare agent MCP servers" };
+      if ((am = /^\s+requests(?:\s+([A-Za-z0-9:._-]{2,80}))?$/i.exec(ca))) return { actions: [cmdAction("cfagentget", { path: "/requests" + (am[1] ? "?requester=" + am[1] : ""), title: "loop requests" })], auto: true, text: "Fleet loops' requests to the Cloudflare agent" };
+      if ((am = /^\s+sandbox\s+([\s\S]{5,8000})$/i.exec(ca))) return { actions: [cmdAction("cfagentbox", { code: am[1].trim(), title: "sandbox" })], auto: true, text: "Running in the agent sandbox" };
+      if ((am = /^\s+schedule\s+(?:"([^"]{9,60})"|(\d{2,7})s?)\s+([\s\S]{8,4000})$/i.exec(ca))) {
+        const sch = am[1] ? { cron: am[1] } : { delay_s: Number(am[2]) };
+        return { actions: [cmdAction("cfagentset", { method: "POST", path: "/schedules", body: Object.assign({ text: am[3].trim() }, sch), title: "schedule " + (am[1] || am[2] + "s") })], text: "Schedule a Cloudflare agent turn (" + (am[1] ? "cron " + am[1] : "in " + am[2] + " s") + "): " + am[3].trim().slice(0, 200) };
+      }
+      if ((am = /^\s+unschedule\s+([A-Za-z0-9_-]{4,80})$/i.exec(ca))) return { actions: [cmdAction("cfagentset", { method: "DELETE", path: "/schedules/" + am[1], title: "unschedule " + am[1] })], text: "Cancel agent schedule " + am[1] };
+      if ((am = /^\s+mcp\s+add\s+([A-Za-z0-9_.-]{1,60})\s+(https:\/\/\S{4,400})$/i.exec(ca))) return { actions: [cmdAction("cfagentset", { method: "POST", path: "/mcp-servers", body: { name: am[1], url: am[2] }, title: "MCP " + am[1] })], text: "Connect the agent to the MCP server " + am[1] + " at " + am[2] };
+      if ((am = /^\s+mcp\s+drop\s+([A-Za-z0-9_-]{4,80})$/i.exec(ca))) return { actions: [cmdAction("cfagentset", { method: "DELETE", path: "/mcp-servers/" + am[1], title: "MCP drop " + am[1] })], text: "Disconnect MCP server " + am[1] };
+      if ((am = /^!\s*:?\s*([\s\S]{3,8000})$/.exec(ca))) return { actions: [cmdAction("cfagentw", { text: am[1].trim(), title: am[1].trim() })], text: "Cloudflare agent, write scope (every fleet tool, issues, schedules, MCP): " + am[1].trim().slice(0, 300) };
+      if ((am = /^\s*:?\s+([\s\S]{3,8000})$/.exec(ca))) return { actions: [cmdAction("cfagent", { text: am[1].trim(), title: am[1].trim() })], auto: true, text: "Cloudflare agent: " + am[1].trim().slice(0, 160) };
+    }
   }
   const t = String(text || "").trim();
   const lo = t.toLowerCase();
@@ -12793,6 +12916,44 @@ function conParse(text) {
 async function conIssueTouch(env, id) {
   const a = await env.AUDIT.prepare("SELECT id, status, priority, title FROM agent_issues WHERE id = ?1").bind(id).first();
   return a || null;
+}
+
+// CF-AGENTS-1 (1.64.0): one call to qnfo-agents. A turn waits up to 20 s; a code-task proposal comes back as a 'task' button, which files
+// an owner task (OWNER-TASK-, the provenance the code loop's planner trusts) when the owner taps it.
+async function conCfAgent(env, op, args) {
+  const svc = env.SVC_QNFO_AGENTS;
+  if (!svc || typeof svc.fetch !== "function") return { ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" };
+  const write = op === "cfagentw" || op === "cfagentset";
+  let method = "GET", path = String(args.path || "/"), body;
+  if (op === "cfagent" || op === "cfagentw") { method = "POST"; path = "/run"; body = { text: String(args.text || "").slice(0, 8e3), wait_ms: 2e4 }; }
+  else if (op === "cfagentbox") { method = "POST"; path = "/sandbox"; body = { code: String(args.code || "").slice(0, 8e3) }; }
+  else if (op === "cfagentset") { method = String(args.method || "POST").toUpperCase(); body = args.body || undefined; }
+  if (!/^\/[A-Za-z0-9_\/?=&.-]{0,200}$/.test(path) || ["GET", "POST", "DELETE"].indexOf(method) < 0) return { ok: false, error: "bad agent route" };
+  let r, t, j = null;
+  try {
+    r = await svc.fetch("https://agents.qnfo.org" + path, { method, headers: { "content-type": "application/json", "x-agent-scope": write ? "write" : "read" }, body: method === "GET" ? void 0 : JSON.stringify(body || {}), signal: AbortSignal.timeout(28e3) });
+    t = await r.text();
+    try { j = JSON.parse(t); } catch (e) { j = null; }
+  } catch (e) {
+    return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) };
+  }
+  if (!j) return { ok: false, error: "qnfo-agents HTTP " + r.status + ": " + conClip(t, 400) };
+  if (j.ok === false) return { ok: false, error: String(j.error || "qnfo-agents HTTP " + r.status) };
+  const run = j.run;
+  if (run && run.id) {
+    const lines = [run.id + ": " + run.status + (run.steps ? " - " + run.steps + " steps" : "") + (run.tools_used ? ", tools " + run.tools_used : "") + (run.model ? " - " + run.model : "") + " - scope " + run.scope];
+    if (run.result) lines.push("", conClip(run.result, 4e3));
+    if (run.error) lines.push("", "error: " + conClip(run.error, 600));
+    if (run.status === "queued" || run.status === "running") lines.push("", "Still working. Read it with: cfagent run " + run.id);
+    const props = Array.isArray(run.proposals) ? run.proposals : [];
+    if (props.length) lines.push("", props.length + " code-task proposal" + (props.length === 1 ? "" : "s") + ": tap to file as your task; the code loop opens and merges the PR.");
+    const actions = props.slice(0, 6).filter(function(x) { return x && x.task_text; }).map(function(x) { return cmdAction("task", { text: String(x.task_text).slice(0, 2e3), title: "code task " + String(x.path || "").slice(0, 60) }); });
+    return { ok: run.status !== "failed", text: lines.join("\n"), error: run.status === "failed" ? "agent run " + run.id + " failed: " + conClip(run.error || "", 400) : void 0, actions };
+  }
+  if (Array.isArray(j.requests)) return { ok: true, text: j.requests.length ? j.requests.map(function(x) { return "#" + x.id + " " + x.status + " " + x.kind + " " + x.requester + " - " + conClip(x.request || "", 90) + (x.error ? " (" + conClip(x.error, 80) + ")" : x.result ? "\n    " + conClip(x.result, 200) : ""); }).join("\n") : "No loop requests yet. A loop files one with INSERT INTO cf_agent_requests (requester, kind, prompt) VALUES (...)." };
+  if (Array.isArray(j.runs)) return { ok: true, text: j.runs.length ? j.runs.map(function(x) { return x.id + " " + x.status + " " + (x.scope || "") + " - " + conClip(x.prompt || "", 90) + (x.error ? " (" + conClip(x.error, 80) + ")" : ""); }).join("\n") + "\n\nRead one: cfagent run <id>" : "No agent runs yet. Try: cfagent what changed in qnfo-ops this week?" };
+  if (Array.isArray(j.direct)) return { ok: true, text: "Direct tools: " + j.direct.map(function(x) { return x.name; }).join(", ") + "\nCode Mode: " + (j.codemode || "-") + "\nqnfo-ops tools: " + (j.ops_tools || []).length + " (" + (j.ops_tools || []).filter(function(x) { return x.readonly; }).length + " read-only; the rest need cfagent!)\nMCP server: https://agents.qnfo.org/mcp" };
+  return { ok: true, text: conClip(JSON.stringify(j, null, 2), 4e3) };
 }
 
 // FLEET-CONSOLE-AGENT-1: the stored qnfo-ops owner session, or null.
@@ -12879,6 +13040,9 @@ async function conExec(env, owner, op, args) {
       const body = await r.text();
       return { ok: r.status < 500, text: method + " " + worker + path + (svc ? " (service binding)" : "") + " -> HTTP " + r.status + " " + (r.headers.get("content-type") || "") + "\n" + conClip(body, 4e3), error: r.status >= 500 ? "HTTP " + r.status + ": " + conClip(body, 600) : void 0 };
     }
+    // CF-AGENTS-1 (1.64.0): the Cloudflare Agents SDK agent over SVC_QNFO_AGENTS (props.caller qnfo-fleet-dashboard). conExec has
+    // already required the owner session; cfagentw and cfagentset are destructive, so /api/cmd/run asked for a fresh code first.
+    if (op === "cfagent" || op === "cfagentw" || op === "cfagentget" || op === "cfagentbox" || op === "cfagentset") return await conCfAgent(env, op, args || {});
     // FLEET-CONSOLE-AGENT-1: proxy to the real fleet agent loop.
     if (op === "agent" || op === "agentlogin" || op === "agentverify" || op === "agentstatus") {
       const svc = env.SVC_QNFO_OPS;
@@ -14362,18 +14526,8 @@ async function psrReview(env, day) {
     needs.push({ key: "portfolio-cost", action: "Spend decision: " + PSR_COST_METRIC + " = " + sc.cost + " USD/30d above the A9 ceiling (" + PSR_COST_CEILING + "). Raise the ceiling (owner policy) or cut paid calls.", due: null, why: "cost kill-band" });
     await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'urgent', ?6, 'portfolio-strategic')").bind("portfolio-cost-" + day, "Portfolio: AI spend above the A9 ceiling", PSR_COST_METRIC + " = " + sc.cost + " USD/30d, ceiling " + PSR_COST_CEILING, "Nothing changes automatically: the loop never raises a cap (CORE-PROMPT-1 rule 8).", "Decide: raise the ceiling, or cut paid calls. The review loop stays model-silent while any ai_spend cap is breached.", day).run();
   }
-  for (const nt of notes) {
-    if (nt.verdict !== "RED") continue;
-    const hist = await d1all(env.AUDIT, "SELECT verdict FROM program_review_notes WHERE program_code = ?1 AND day < ?2 ORDER BY day DESC LIMIT 2", [nt.code, day]).catch(function() {
-      return [];
-    });
-    if (hist.length === 2 && hist.every(function(h) {
-      return h.verdict === "RED";
-    })) {
-      needs.push({ key: "portfolio-red-" + nt.code, action: nt.code + " RED for 3 consecutive reviews: " + nt.acts, due: null, why: "persistent RED verdict" });
-      await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'normal', ?6, 'portfolio-strategic')").bind("portfolio-red-" + nt.code + "-" + day, "Portfolio: " + nt.code + " RED for 3 consecutive reviews", nt.acts, "The program manager persona keeps working the program; this card is the escalation.", "Review " + nt.code + ": unblock the loop or accept the program as the constraint for another cycle.", day).run();
-    }
-  }
+  // MANAGEMENT-PERSONAS-2 (1.66.0): a program RED for 3 reviews no longer files an owner card; the hourly portfolio manager
+  // makes it the constraint and its program manager acts on its focus issues (fleet.qnfo.org/managers).
   const redCount = notes.filter(function(n) {
     return n.verdict === "RED";
   }).length;
@@ -14387,6 +14541,102 @@ async function psrReview(env, day) {
   }), decisions, needs, narrative_allowed: narrativeAllowed };
 }
 __name(psrReview, "psrReview");
+
+// ==== MANAGEMENT-PERSONAS-1 (1.63.0, 2026-10-26): the managers page ====
+// The decisions are made in D1 by the hourly fleet_tasks workflow management-personas (migrations/2026-10-26-management-personas.sql):
+// the portfolio manager splits the focus slots across programs (portfolio_allocations), each program manager picks its focus issues
+// (program_focus) and moves them to the front of the code loop's queue, and each persona writes a plain brief (persona_briefs).
+// This page only reads them. A table that cannot be read is named in `unavailable`, never shown as an empty decision.
+async function managersView(env) {
+  const out = { schema_version: "fleet-managers/v1", ok: true, tick: null, portfolio: null, programs: [], focus_moves_24h: [], decisions_24h: [], decision_counts_24h: {}, quality: null, recurring: [], root_causes: [], history: [], unavailable: [] };
+  const read = async function(name, sql, params) {
+    try {
+      return await d1all(env.AUDIT, sql, params || []);
+    } catch (e) {
+      out.unavailable.push(name);
+      return [];
+    }
+  };
+  const t = await read("portfolio_allocations", "SELECT MAX(tick) AS tick FROM portfolio_allocations");
+  out.tick = t[0] && t[0].tick || null;
+  if (!out.tick) return out;
+  const briefs = await read("persona_briefs", "SELECT persona_key, level, scope, verdict, decision, summary FROM persona_briefs WHERE tick = ?1", [out.tick]);
+  const alloc = await read("portfolio_allocations", "SELECT program_code, manager_persona, verdict, risk_score, risk_24h, open_issues, slots, decision, reason FROM portfolio_allocations WHERE tick = ?1 ORDER BY risk_score DESC, program_code", [out.tick]);
+  const focus = await read("program_focus", "SELECT f.program_code, f.issue_id, f.rank, f.reason, f.has_doer, f.entered_at, i.title, i.priority FROM program_focus f LEFT JOIN agent_issues i ON i.id = f.issue_id ORDER BY f.program_code, f.rank");
+  out.focus_moves_24h = await read("program_focus_log", "SELECT ts, program_code, issue_id, action, reason FROM program_focus_log WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 40");
+  out.decisions_24h = await read("persona_actions", "SELECT ts, persona_key, kind, issue_id, from_value, to_value, evidence, reverted_at FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 60");
+  for (const c of await read("persona_actions", "SELECT kind, COUNT(*) AS n FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') GROUP BY kind")) out.decision_counts_24h[c.kind] = c.n;
+  const qrows = await read("quality_trend", "SELECT q.scope, q.quality_index, q.measured, q.in_breach, q.reopens_7d, (SELECT p.quality_index FROM quality_trend p WHERE p.scope = q.scope AND p.tick <= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY p.tick DESC LIMIT 1) AS index_24h FROM quality_trend q WHERE q.tick = (SELECT MAX(tick) FROM quality_trend)");
+  const qf = qrows.find(function(r) { return r.scope === "fleet"; });
+  if (qf) out.quality = { index: qf.quality_index, index_24h: qf.index_24h, measured: qf.measured, in_breach: qf.in_breach, reopens_7d: qf.reopens_7d, programs: qrows.filter(function(r) { return r.scope !== "fleet"; }) };
+  out.recurring = await read("issue_recurrence_now", "SELECT family, reopens_7d, issues_7d, reopens_24h, opens_24h, program_code FROM issue_recurrence_now ORDER BY reopens_7d DESC LIMIT 10");
+  out.root_causes = await read("agent_issues", "SELECT id, title, status, priority FROM agent_issues WHERE title LIKE 'ROOT-CAUSE-1:%' AND (status = 'open' OR updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 604800) * 1000) ORDER BY status = 'open' DESC, id DESC LIMIT 20");
+  out.history = await read("portfolio_allocations", "SELECT tick, program_code, verdict, risk_score, slots, decision FROM portfolio_allocations WHERE tick >= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY tick DESC, program_code");
+  const pb = briefs.find(function(b) { return b.level === "portfolio"; });
+  out.portfolio = pb ? { persona: pb.persona_key, verdict: pb.verdict, summary: pb.summary } : null;
+  for (const a of alloc) {
+    const b = briefs.find(function(x) { return x.scope === a.program_code && x.level === "program"; });
+    out.programs.push({
+      program_code: a.program_code, persona: a.manager_persona, verdict: a.verdict, risk: a.risk_score, risk_24h: a.risk_24h,
+      open_issues: a.open_issues, slots: a.slots, decision: a.decision, reason: a.reason, brief: b ? b.summary : null,
+      focus: focus.filter(function(f) { return f.program_code === a.program_code; }).map(function(f) {
+        return { issue_id: f.issue_id, rank: f.rank, title: f.title, priority: f.priority, why: f.reason, has_doer: f.has_doer === 1, since: f.entered_at };
+      })
+    });
+  }
+  out.unavailable = out.unavailable.filter(function(x, i, arr) { return arr.indexOf(x) === i; });
+  return out;
+}
+__name(managersView, "managersView");
+
+function managersHtml(v, holder) {
+  const vcls = function(x) { return x === "RED" ? "bad" : x === "AMBER" ? "warn" : "good"; };
+  const css = "<style>.mg-hero{font-size:15.5px;line-height:1.6;max-width:95ch;margin:0 0 18px}.mg-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}.mg-p h2{font-size:18px;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mg-p .mg-why{font-size:13.5px;color:var(--muted);margin:0 0 10px}.mg-p ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.5}.mg-p li{margin:0 0 4px}.mg-nd{color:var(--red);font-weight:600}.mg-b{font-size:13px;line-height:1.55;color:var(--muted);margin:10px 0 0}.mg-t{width:100%;border-collapse:collapse;font-size:13px}.mg-t td,.mg-t th{padding:4px 8px;border-bottom:1px solid var(--rule);text-align:left}.good{color:var(--teal)}.warn{color:#b7791f}.bad{color:var(--red)}</style>";
+  const head = fleetHead("Portfolio and program managers") + css + fleetTop("managers", false, holder);
+  let body = '<main class="wrap fl" style="max-width:1180px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Portfolio and program managers</h1>';
+  body += '<p class="meta" style="margin:0 0 14px;max-width:95ch">Every hour the portfolio manager decides how the fleet\'s attention is split across the five programs and which one is the constraint; each program manager then picks its focus issues inside that share, moves them to the front of the code loop\'s queue and raises them to high. The managers also decide issues on their own: a metric issue whose metric has recovered is closed with the reading as evidence, a duplicate metric issue is superseded by the newer one, and a critical a fleet loop filed more than a day ago with nobody working it becomes high. Only money, credentials, legal or signing acts and the owner\'s own accounts and papers wait for the owner. This page shows what they decided' + (v.tick ? ' at <b>' + esc(v.tick) + '</b>' : '') + '. Feed: <a href="/api/managers">/api/managers</a>.</p>';
+  if (v.unavailable && v.unavailable.length) body += '<p class="bad">Could not read: ' + esc(v.unavailable.join(", ")) + '.</p>';
+  if (!v.tick) return head + body + '<p>The first management tick has not run yet (hourly at :35).</p></main></body></html>';
+  if (v.portfolio) body += '<section class="card mg-hero"><h2 style="margin:0 0 6px">Portfolio manager <span class="tag ' + vcls(v.portfolio.verdict) + '">' + esc(v.portfolio.verdict) + '</span></h2>' + esc(v.portfolio.summary) + '</section>';
+  if (v.quality) {
+    const d = v.quality.index_24h == null ? "" : ' (24 hours ago ' + esc(String(v.quality.index_24h)) + ')';
+    const per = (v.quality.programs || []).map(function(r) { return esc(r.scope) + ' ' + (r.quality_index == null ? "unmeasured" : esc(String(r.quality_index))) + (r.index_24h == null || r.quality_index == null ? "" : ' (' + (r.quality_index - r.index_24h >= 0 ? "+" : "") + esc(String(Math.round((r.quality_index - r.index_24h) * 10) / 10)) + ')'); }).join(", ");
+    body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 6px">Quality: ' + esc(String(v.quality.index)) + ' of 100' + d + '</h2><p class="meta" style="margin:0 0 6px">The share of the ' + esc(String(v.quality.measured)) + ' measured fleet metrics that are on target (' + esc(String(v.quality.in_breach)) + ' in breach), and ' + esc(String(v.quality.reopens_7d)) + ' issue reopens in 7 days. A program whose quality falls 5 points in a day gets more focus. By program: ' + per + '.</p>';
+    if (v.recurring.length) {
+      body += '<table class="mg-t"><tr><th>Keeps coming back</th><th>Reopens, 7 days</th><th>Issues</th><th>Today</th><th>Program</th></tr>';
+      for (const r of v.recurring) body += '<tr><td>' + esc(r.family) + '</td><td>' + esc(String(r.reopens_7d)) + '</td><td>' + esc(String(r.issues_7d)) + '</td><td>' + esc(String(r.reopens_24h + r.opens_24h)) + '</td><td>' + esc(r.program_code || "") + '</td></tr>';
+      body += '</table>';
+    }
+    if (v.root_causes.length) body += '<p class="meta" style="margin:8px 0 0">Root-cause issues: ' + v.root_causes.map(function(r) { return '#' + esc(String(r.id)) + ' ' + esc(String(r.title).replace(/^ROOT-CAUSE-1: /, "")) + ' (' + esc(r.status) + ')'; }).join("; ") + '. Each closes once its family has been quiet for a day.</p>';
+    body += '</section>';
+  }
+  body += '<div class="mg-grid">';
+  for (const p of v.programs) {
+    const items = p.focus.map(function(f) {
+      return '<li><b>#' + esc(String(f.issue_id)) + '</b> ' + esc(f.title || "(issue not readable)") + ' <span class="meta">' + esc(f.priority || "") + ', ' + esc(f.why || "") + '</span>' + (f.has_doer ? '' : ' <span class="mg-nd">no doer yet</span>') + '</li>';
+    }).join("");
+    body += '<section class="card mg-p"><h2>' + esc(p.program_code) + ' <span class="tag ' + vcls(p.verdict) + '">' + esc(p.verdict) + '</span><span class="tag">' + esc(p.decision) + '</span><span class="tag">' + esc(String(p.slots)) + ' focus</span></h2>';
+    body += '<p class="mg-why">Risk ' + esc(String(p.risk)) + (p.risk_24h != null ? ' (24 h ago ' + esc(String(p.risk_24h)) + ')' : '') + ', ' + esc(String(p.open_issues)) + ' open. ' + esc(p.reason || "") + '</p>';
+    body += items ? '<ol>' + items + '</ol>' : '<p class="meta">No focus issues.</p>';
+    if (p.brief) body += '<p class="mg-b">' + esc(p.brief) + '</p>';
+    body += '</section>';
+  }
+  body += '</div>';
+  if (v.decisions_24h && v.decisions_24h.length) {
+    const kinds = { promote: "raised to high", restore: "priority restored", close: "closed, metric recovered", supersede: "superseded by a newer issue", demote: "critical lowered to high" };
+    const counts = Object.keys(v.decision_counts_24h || {}).map(function(k) { return esc(String(v.decision_counts_24h[k])) + ' ' + esc(kinds[k] || k); }).join(", ");
+    body += '<section class="card" style="margin-top:16px"><h2 style="font-size:18px;margin:0 0 8px">Decisions the managers took, last 24 hours</h2><p class="meta" style="margin:0 0 8px">' + counts + '. Each one records the value it replaced, so it can be undone.</p><table class="mg-t"><tr><th>When</th><th>Manager</th><th>Issue</th><th>Decision</th><th>Evidence</th></tr>';
+    for (const d of v.decisions_24h) body += '<tr><td>' + esc(String(d.ts || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(d.persona_key) + '</td><td>#' + esc(String(d.issue_id)) + '</td><td>' + esc(kinds[d.kind] || d.kind) + (d.from_value ? ' (' + esc(d.from_value) + ' to ' + esc(d.to_value || "") + ')' : '') + (d.reverted_at ? ' <span class="meta">undone ' + esc(String(d.reverted_at).slice(0, 16).replace("T", " ")) + '</span>' : '') + '</td><td>' + esc(String(d.evidence || "").slice(0, 240)) + '</td></tr>';
+    body += '</table></section>';
+  }
+  if (v.focus_moves_24h.length) {
+    body += '<section class="card" style="margin-top:16px"><h2 style="font-size:18px;margin:0 0 8px">Focus moves, last 24 hours</h2><table class="mg-t"><tr><th>When</th><th>Program</th><th>Issue</th><th>Move</th><th>Why</th></tr>';
+    for (const m of v.focus_moves_24h) body += '<tr><td>' + esc(String(m.ts || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(m.program_code) + '</td><td>#' + esc(String(m.issue_id)) + '</td><td>' + esc(m.action) + '</td><td>' + esc(m.reason || "") + '</td></tr>';
+    body += '</table></section>';
+  }
+  return head + body + '</main></body></html>';
+}
+__name(managersHtml, "managersHtml");
 
 async function portfolioStrategicRun(env, opts) {
   opts = opts || {};

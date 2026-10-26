@@ -105,6 +105,8 @@ class ClaimTests(unittest.TestCase):
             self.assertFalse(any("claimed by another run" in line for line in logs), logs)
             self.assertEqual(self.store.rows("SELECT status FROM code_tasks WHERE id=?", [task["id"]])[0]["status"],
                              "branch_pushed")
+            # PUBLISH-LANE-SERIAL-1: both iterations use one path, so the first change must merge before the second may publish
+            self.store.changes("UPDATE code_tasks SET status='merged' WHERE id=?", [task["id"]])
 
     def test_two_connections_one_winner(self):
         with tempfile.TemporaryDirectory(prefix="ctp-claim-") as root:
