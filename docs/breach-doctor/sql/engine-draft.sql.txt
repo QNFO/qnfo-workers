@@ -1,0 +1,184 @@
+-- DRAFT for migrations/2026-10-26-breach-doctor.sql (scratch copy; the repo is untouched). Syntax-checked on SQLite 3.45 against stub tables
+-- with the live column lists (PRAGMA table_info 2026-10-26). Phase A: ledger, playbooks, views, switches, metrics, registries. Phase B (view swap) is at the end, commented.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP VIEW IF EXISTS v_breach_doctor_status; DROP VIEW IF EXISTS v_breach_owner; DROP VIEW IF EXISTS v_breach_diagnosis_current; DROP TABLE IF EXISTS breach_playbooks; DROP TABLE IF EXISTS breach_diagnosis_events; DROP TABLE IF EXISTS breach_diagnoses; DELETE FROM analytics_metric_triggers WHERE metric_key IN ('breaches_undiagnosed_over_60m','breaches_auto_remediated_24h','doctor_actions_failed_24h','doctor_lease_without_progress','doctor_taint_violations_24h','fleet_tick_age_min','doctor_tick_age_min'); DELETE FROM metric_registry WHERE metric IN ('breaches_undiagnosed_over_60m','breaches_auto_remediated_24h','doctor_actions_failed_24h','doctor_lease_without_progress','doctor_taint_violations_24h','fleet_tick_age_min','doctor_tick_age_min'); DELETE FROM ops_config WHERE key LIKE 'breach_doctor%'; DELETE FROM control_registry WHERE control LIKE 'breach-doctor-%'; DELETE FROM spof_registry WHERE component LIKE 'breach doctor%'; DELETE FROM belief_registry WHERE belief_key LIKE 'belief-doctor-%'; DELETE FROM remediation_contracts WHERE class LIKE 'fm-breach-doctor-%' OR class LIKE 'belief-doctor-%'; DELETE FROM failure_modes WHERE fm_key LIKE 'breach-doctor-%' OR fm_key = 'fleet-tick-fanout-no-bulkhead'; breach_selfheal_actions and issue_age_replans are kept (read-only history) and re-exposed through the ledger by the doctor PR.
+-- BACKUP: breach_diagnoses
+-- spof-review: no new cron, worker or binding. Engine rides qnfo-fleet-control's */10 slot; second path = qnfo-cloud-ops BREACH-DOCTOR-WATCH-1 (same pattern as RESEARCH-WATCHDOG-1).
+-- charter-pillar: autonomy. Net-zero (table family): retires breach_selfheal_actions (0 rows) and issue_age_replans (479 rows) as writers once the doctor runs; both stay readable.
+
+CREATE TABLE IF NOT EXISTS breach_diagnoses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  issue_id INTEGER NOT NULL,                 -- the open agent_issues row; a system-level case first files a BREACH-DOCTOR-1: issue and uses its id
+  case_key TEXT NOT NULL,                    -- cause-level dedupe key '<rule_id>:<subject>'; many issues may share one case_key (one action, many issues)
+  family TEXT NOT NULL,                      -- enumerated by code from the title prefix (never copied text)
+  rule_id TEXT NOT NULL,
+  rule_version INTEGER NOT NULL DEFAULT 1,
+  cause_class TEXT NOT NULL CHECK (cause_class IN ('heartbeat-insert-failing','planner-name-resolution','probe-lane-conflict','probe-author-dead','replan-no-effect','plan-gap-no-data-lane','no-measurable-dod','stale-contract','code-fixable','owner-bound','unclassified')),
+  facts_json TEXT NOT NULL,                  -- structured facts only: ids, counts, codes; <= 2000 chars; passes the taint check
+  evidence_hash TEXT NOT NULL,               -- first 12 hex of sha-256(facts_json); a diagnosis row is rewritten only when it changes
+  confidence TEXT NOT NULL DEFAULT 'rule' CHECK (confidence IN ('rule','rule+model')),
+  model TEXT,                                -- NULL when deterministic
+  action_kind TEXT NOT NULL DEFAULT 'none' CHECK (action_kind IN ('none','restore-contract','requeue','supersede-contract','rearm-plan','ops-knob','quarantine-trigger','author-probe','code-task-issue','owner-card','close-on-probe')),
+  action_ref TEXT,                           -- the artefact: issue id, code task id, contract class, human_actions slug, decision_log id
+  revert_sql TEXT,                           -- stored with every applied SQL action, executed by the dashboard Revert verb
+  state TEXT NOT NULL DEFAULT 'diagnosed' CHECK (state IN ('diagnosed','queued','applied','verifying','verified','failed','reverted','handed-owner','superseded')),
+  verify_class TEXT,                         -- remediation_contracts.class of the closing probe (doctor-<id>)
+  mode TEXT NOT NULL DEFAULT 'on' CHECK (mode IN ('measure','on')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  opened_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  diagnosed_at TEXT,
+  applied_at TEXT,
+  verified_at TEXT,
+  last_progress_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  lease_until TEXT,                          -- set and renewed ONLY on a progress event; never more than 120 minutes ahead (SLA-120M-1)
+  tick_id TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_breach_diag_live ON breach_diagnoses (issue_id) WHERE state NOT IN ('verified','superseded','reverted','failed');
+CREATE INDEX IF NOT EXISTS idx_breach_diag_state_lease ON breach_diagnoses (state, lease_until);
+CREATE INDEX IF NOT EXISTS idx_breach_diag_case ON breach_diagnoses (case_key, state);
+CREATE INDEX IF NOT EXISTS idx_breach_diag_issue ON breach_diagnoses (issue_id, opened_at);
+CREATE INDEX IF NOT EXISTS idx_breach_diag_rule_ts ON breach_diagnoses (rule_id, state, last_progress_at);
+
+-- Append-only. One row per request, selection, state change, renewal, revert, taint drop or budget skip. The dashboard Diagnose verb writes event 'requested'.
+CREATE TABLE IF NOT EXISTS breach_diagnosis_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  issue_id INTEGER,
+  diagnosis_id INTEGER,
+  event TEXT NOT NULL CHECK (event IN ('requested','selected','diagnosed','action','verify','renew','handoff','fail','revert','supersede','taint-drop','budget-skip','tick')),
+  from_state TEXT,
+  to_state TEXT,
+  detail TEXT,                               -- <= 500 chars: constants, ids and counts only
+  tick_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_breach_diag_events_issue ON breach_diagnosis_events (issue_id, ts);
+CREATE INDEX IF NOT EXISTS idx_breach_diag_events_kind ON breach_diagnosis_events (event, ts);
+
+-- Rules as data. trigger_sql is a literal read-only SELECT (the remediation tick's __RT_WRITE_KW guard) returning issue_id, subject, facts_json; the executor
+-- adds LIMIT. action_template is a JSON object naming an action_kind and its parameters; the SQL of every action lives in CODE (an allowlist), never here.
+CREATE TABLE IF NOT EXISTS breach_playbooks (
+  rule_id TEXT PRIMARY KEY,
+  version INTEGER NOT NULL DEFAULT 1,
+  family TEXT NOT NULL,
+  cause_class TEXT NOT NULL,
+  trigger_sql TEXT NOT NULL,
+  action_template TEXT NOT NULL,
+  verify_template TEXT NOT NULL,             -- name of a probe builder in code: row-count-zero | metric-in-band | contract-verdict-pass | task-merged-deployed | tick-newer-than
+  min_ladder TEXT NOT NULL DEFAULT 'delegated',
+  max_per_tick INTEGER NOT NULL DEFAULT 3,
+  max_per_day INTEGER NOT NULL DEFAULT 12,
+  second_path INTEGER NOT NULL DEFAULT 0,    -- 1 = qnfo-cloud-ops BREACH-DOCTOR-WATCH-1 may also run it
+  enabled INTEGER NOT NULL DEFAULT 1,
+  mode TEXT NOT NULL DEFAULT 'on' CHECK (mode IN ('measure','on')),
+  note TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE VIEW IF NOT EXISTS v_breach_diagnosis_current AS
+SELECT d.* FROM breach_diagnoses d
+WHERE d.id = (SELECT MAX(x.id) FROM breach_diagnoses x WHERE x.issue_id = d.issue_id);
+
+-- The real-owner definition (Phase B swaps it into v_issue_age_ladder.doer). owner_kind is NULL when nothing owns the issue.
+-- A doctor lease counts only while it is live, backed by an artefact, and has progressed inside 120 minutes. An open IDENTITY-BOUND card counts as owner-bound
+-- and is reported apart so it can never hide inside the fleet's own number.
+CREATE VIEW IF NOT EXISTS v_breach_owner AS
+SELECT a.id AS issue_id,
+  CASE
+    WHEN instr(COALESCE(a.description,''), 'code-task:') > 0 THEN 'code-task line'
+    WHEN EXISTS (SELECT 1 FROM code_tasks k WHERE k.goal LIKE '[issue #' || a.id || ']%' AND k.status NOT IN ('failed','closed','superseded','needs_human')) THEN 'live code task'
+    WHEN EXISTS (SELECT 1 FROM work_claims w WHERE (w.issue_id = a.id OR w.path = 'issue:' || a.id) AND w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now')) THEN 'live work claim'
+    WHEN EXISTS (SELECT 1 FROM breach_diagnoses d WHERE d.issue_id = a.id AND d.mode = 'on' AND d.state IN ('queued','applied','verifying')
+                   AND d.action_ref IS NOT NULL AND d.action_kind <> 'none'
+                   AND d.lease_until > strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                   AND d.last_progress_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-120 minutes')) THEN 'breach doctor'
+    WHEN EXISTS (SELECT 1 FROM breach_diagnoses d WHERE d.issue_id = a.id AND d.state = 'handed-owner' AND d.action_kind = 'owner-card'
+                   AND EXISTS (SELECT 1 FROM human_actions h WHERE h.slug = d.action_ref AND h.status = 'open' AND instr(COALESCE(h.why,''), 'IDENTITY-BOUND:') > 0)) THEN 'owner card (identity-bound)'
+    ELSE NULL END AS owner_kind
+FROM agent_issues a WHERE a.status = 'open';
+
+CREATE VIEW IF NOT EXISTS v_breach_doctor_status AS
+SELECT
+  COALESCE((SELECT value FROM ops_config WHERE key = 'breach_doctor'), 'measure') AS mode,
+  COALESCE((SELECT value FROM ops_config WHERE key = 'breach_doctor_ai'), 'on') AS ai,
+  (SELECT MAX(ts) FROM breach_diagnosis_events WHERE event = 'tick') AS last_tick_at,
+  (SELECT COUNT(*) FROM breach_diagnoses WHERE opened_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS cases_24h,
+  (SELECT COUNT(*) FROM breach_diagnoses WHERE state = 'verified' AND verified_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS verified_24h,
+  (SELECT COUNT(*) FROM breach_diagnoses WHERE state IN ('failed','reverted') AND last_progress_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS failed_24h,
+  (SELECT COUNT(*) FROM breach_diagnoses WHERE state IN ('queued','applied','verifying')) AS in_flight,
+  (SELECT COUNT(*) FROM breach_diagnoses WHERE state IN ('queued','applied','verifying') AND lease_until < strftime('%Y-%m-%dT%H:%M:%SZ','now')) AS lease_expired,
+  (SELECT COUNT(*) FROM breach_diagnosis_events WHERE event = 'taint-drop' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS taint_drops_24h;
+
+INSERT OR IGNORE INTO ops_config (key, value, note) VALUES
+ ('breach_doctor', 'measure', 'BREACH-DOCTOR-1: on = diagnose and act; measure = diagnose, record would-do, act on nothing; off = stop (migrations/2026-10-26-breach-doctor.sql). Tri-state: read with bdMode(), not rtFlagOff().'),
+ ('breach_doctor_ai', 'on', 'BREACH-DOCTOR-1: off = deterministic rules only, no model call. A breached ai_spend cap routes to the cheapest model and fewer calls, never to a stop (BUDGET-SOFT-ROUTE-1).'),
+ ('breach_doctor_max_cases', '12', 'BREACH-DOCTOR-1: cases selected per 10-minute tick (1..40)'),
+ ('breach_doctor_max_actions', '6', 'BREACH-DOCTOR-1: state-changing actions per tick (0..20)'),
+ ('breach_doctor_max_ai', '3', 'BREACH-DOCTOR-1: model calls per tick (0..10); also 60 a day'),
+ ('breach_doctor_budget_ms', '20000', 'BREACH-DOCTOR-1: wall budget per tick, 5000..40000; no new case starts after 85% of it'),
+ ('breach_doctor_min_age_h', '8', 'BREACH-DOCTOR-1: an open issue with no doer is a case from this age (the 8 h rung), so the 24 h breach never forms'),
+ ('breach_doctor_rules_off', '', 'BREACH-DOCTOR-1: comma list of rule ids stopped without a deploy'),
+ ('breach_doctor_classes_on', 'restore-contract,requeue,supersede-contract,rearm-plan,author-probe,code-task-issue,close-on-probe,owner-card', 'BREACH-DOCTOR-1: action kinds allowed to act; quarantine-trigger and ops-knob stay measure until 3 verified');
+
+INSERT OR IGNORE INTO breach_playbooks (rule_id, family, cause_class, trigger_sql, action_template, verify_template, min_ladder, max_per_tick, max_per_day, second_path, mode, note) VALUES
+ ('R0-heartbeat-restore', 'fleet_tick', 'heartbeat-insert-failing',
+  'SELECT NULL AS issue_id, ''fleet_tick'' AS subject, json_object(''last_tick'', t.last_tick, ''errors_30m'', t.errs, ''error_code'', t.code) AS facts_json FROM (SELECT (SELECT MAX(ts) FROM fleet_tick) AS last_tick, (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''fleet-cron-tick-error'' AND ts > strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'',''-30 minutes'')) AS errs, (SELECT CASE WHEN instr(text,''SQLITE_NOMEM'')>0 THEN ''d1-nomem'' WHEN instr(text,''UNIQUE'')>0 THEN ''d1-unique'' WHEN instr(text,''too deep'')>0 THEN ''d1-trigger-depth'' ELSE ''other'' END FROM cloud_ops_events WHERE kind = ''fleet-cron-tick-error'' ORDER BY ts DESC LIMIT 1) AS code) t WHERE t.last_tick < strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'',''-30 minutes'') AND t.errs >= 3',
+  '{"action":"quarantine-trigger","table":"fleet_tick","suspect":"newest-migration-trigger","max":1}', 'tick-newer-than', 'autonomous', 1, 2, 1, 'measure',
+  'Quarantine = copy sqlite_master.sql into the case revert_sql, then DROP TRIGGER; suspects are triggers on fleet_tick named by a migration applied after the last good tick (migration_runs + the file on main). Stays measure until 3 verified diagnoses.'),
+ ('R1-planner-name-resolution', 'planner', 'planner-name-resolution',
+  'SELECT p.issue_id AS issue_id, ''planner'' AS subject, json_object(''plan_outcome'', p.outcome, ''reason_code'', ''raw-read-404'', ''path'', p.path) AS facts_json FROM issue_plans p JOIN agent_issues a ON a.id = p.issue_id WHERE a.status = ''open'' AND p.outcome = ''not-code'' AND p.path = ''qnfo-workers/worker.js''',
+  '{"action":"code-task-issue","path":"qnfo-code-orchestrator/worker.js","anchor_ref":"plan-names-filter","then":"rearm-plan"}', 'task-merged-deployed', 'delegated', 1, 2, 0, 'on',
+  'One code-task issue for the whole case_key (anchor: the .map(...).filter(...) line that builds names, checked unique on main), then rearm-plan for every issue sharing the case_key once the task merges.'),
+ ('R2-probe-lane-conflict', 'probe', 'probe-lane-conflict',
+  'SELECT a.id AS issue_id, ''probe-review'' AS subject, json_object(''contract'', c.class, ''module'', c.module, ''status'', c.status, ''target'', CAST(substr(a.title, 23) AS INTEGER)) AS facts_json FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id WHERE a.status = ''open'' AND a.title LIKE ''PROBE-NEEDED-1: issue-%'' AND c.module = ''reopen-live-path'' AND c.status = ''probe-review-refused''',
+  '{"action":"restore-contract","set_status":"active","then":"code-task-issue","path":"qnfo-cloud-ops/worker.js","anchor_ref":"probe-review-select"}', 'contract-verdict-pass', 'delegated', 6, 24, 1, 'on',
+  'Restore is reversible (revert_sql re-sets status probe-review-refused). The code task adds AND COALESCE(c.module, '''') <> ''reopen-live-path'' to PROBE_REVIEW_SELECT so the refusal cannot recur.'),
+ ('R3-probe-author-dead', 'probe', 'probe-author-dead',
+  'SELECT NULL AS issue_id, ''probe-author'' AS subject, json_object(''filed_24h'', f.n, ''authored_72h'', 0) AS facts_json FROM (SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = ''remediation.probe-needed-filed'' AND ts > strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'',''-24 hours'')) f WHERE f.n >= 3 AND NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''remediation.probe-authored'' AND ts > strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'',''-72 hours''))',
+  '{"action":"code-task-issue","path":"qnfo-fleet-control/worker.js","anchor_ref":"ensure-live-path-call"}', 'task-merged-deployed', 'delegated', 1, 2, 0, 'on',
+  'Three defects in one function family: call site passes no env, binding names do not exist (use aiRunAttr + env.AI), decision_log insert uses columns that do not exist.'),
+ ('R4-replan-no-effect', 'planner', 'replan-no-effect',
+  'SELECT NULL AS issue_id, ''issue-age-replan'' AS subject, json_object(''replans_7d'', r.n, ''now_queued'', r.q) AS facts_json FROM (SELECT COUNT(*) AS n, SUM(CASE WHEN p.outcome = ''queued'' THEN 1 ELSE 0 END) AS q FROM issue_age_replans x LEFT JOIN issue_plans p ON p.issue_id = x.issue_id WHERE x.ts > strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'',''-7 days'')) r WHERE r.n >= 50 AND COALESCE(r.q, 0) * 1.0 / r.n < 0.05',
+  '{"action":"ops-knob","key":"issue_age_replan","value":"off"}', 'row-count-zero', 'autonomous', 1, 1, 0, 'measure',
+  'Replace the blind daily re-roll with the doctor classification; the knob is the existing ISSUE-AGE-24H-1 switch, revert = value on.');
+
+INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
+ ('breaches_undiagnosed_over_60m', 'operational', 'target', 'open issues older than breach_doctor_min_age_h + 1 h with no doer and no breach_diagnoses row that has diagnosed_at set (v_issue_age_ladder, breach_diagnoses)', 'qnfo-audit.breach_diagnoses (BREACH-DOCTOR-1)', '285 on 2026-10-26 (no doctor)', '0', 'qnfo-fleet-control', 'trigger gt 0', '*/10', '> 0', '> 10', NULL, NULL, 'MEASURED', 'computed'),
+ ('breaches_auto_remediated_24h', 'outcome', 'target', 'breach_diagnoses rows that reached state verified in the last 24 hours (probe passed, issue closed or superseded with close_evidence)', 'qnfo-audit.breach_diagnoses (BREACH-DOCTOR-1)', '0 on 2026-10-26', '>= 12 (1.5 x the 8 unowned issues opened a day, ISSUE-THROUGHPUT-1)', 'qnfo-fleet-control', 'trigger lt 12', '*/10', '< 12', '< 4', NULL, NULL, 'MEASURED', 'computed'),
+ ('doctor_actions_failed_24h', 'operational', 'guard', 'doctor actions that ended failed or reverted in the last 24 hours', 'qnfo-audit.breach_diagnoses (BREACH-DOCTOR-1)', '0', '0', 'qnfo-fleet-control', 'trigger gt 0', '*/10', '> 0', '> 3', NULL, NULL, 'MEASURED', 'computed'),
+ ('doctor_lease_without_progress', 'operational', 'guard', 'doctor cases in queued, applied or verifying whose lease_until has passed: an owner that stopped owning', 'qnfo-audit.breach_diagnoses (BREACH-DOCTOR-1)', '0', '0', 'qnfo-fleet-control', 'trigger gt 0', '*/10', '> 0', '> 2', NULL, NULL, 'MEASURED', 'computed'),
+ ('doctor_taint_violations_24h', 'operational', 'guard', 'candidate texts the doctor dropped because they carried free text from an untrusted column (taint-drop events, 24 h); any value above 0 means a playbook is copying text', 'qnfo-audit.breach_diagnosis_events (BREACH-DOCTOR-1)', '0', '0', 'qnfo-fleet-control', 'trigger gt 0', '*/10', '> 0', '> 0', NULL, NULL, 'MEASURED', 'computed'),
+ ('fleet_tick_age_min', 'operational', 'target', 'minutes since the newest fleet_tick row; computed by a worker tick, never by a fleet_tick trigger, so a dead heartbeat cannot hide itself', 'qnfo-audit.fleet_tick (BREACH-DOCTOR-1 R0)', '85 on 2026-10-26 05:57Z', '<= 15', 'qnfo-fleet-control', 'trigger gt 25', '*/10', '> 15', '> 25', NULL, NULL, 'MEASURED', 'computed'),
+ ('doctor_tick_age_min', 'operational', 'target', 'minutes since the doctor wrote its last tick event; the second path (qnfo-cloud-ops) runs the second_path rules when it exceeds 30', 'qnfo-audit.breach_diagnosis_events (BREACH-DOCTOR-1)', 'n/a', '<= 15', 'qnfo-fleet-control', 'trigger gt 30', '*/10', '> 15', '> 30', NULL, NULL, 'MEASURED', 'computed');
+
+-- Metric triggers are inserted by the doctor PR with their code-task/code-anchor lines, because the anchors (async function breachDoctorTick(env, opts) {) exist only after it.
+-- Example row shape (not executed here): INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) SELECT 'doctor_actions_failed_24h', ...
+
+INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence) VALUES
+ ('breach-doctor-switch', 'ops_config breach_doctor (on|measure|off), read by qnfo-fleet-control bdMode() each tick', 'kill-switch', 'a doctor action that proves wrong', 0, 'keep', 'planned', 'qnfo-cloud-ops BREACH-DOCTOR-WATCH-1 reads the same switch; per-rule stop breach_doctor_rules_off; every applied action carries revert_sql', NULL, 'new loop 2026-10-26: reversible actions only, ladder-gated, shadow by default for quarantine-trigger and ops-knob; measured by doctor_actions_failed_24h'),
+ ('breach-doctor-caps', 'ops_config breach_doctor_max_cases/_max_actions/_max_ai/_budget_ms, bdInt() bounds', 'cap', 'one tick spending the shared isolate or the model budget', 0, 'demote', 'planned', 'caps steer by backpressure: excess cases wait for the next tick, a breached ai_spend cap routes to the cheapest model', NULL, 'the 10-minute tick shares one isolate with 11 other jobs; remediationContractsTick already works inside a 25 s budget'),
+ ('breach-doctor-taint-guard', 'qnfo-fleet-control bdTaint(): doctor-authored text may contain only playbook constants, numbers, and identifiers found in allowlisted registries', 'guard', 'prompt injection from untrusted free text (cloud_ops_events text, tool errors, issue bodies) reaching the code loop through a trusted doctor issue', 0, 'keep', 'planned', 'PLAN_TRUSTED unchanged on the planner; merge runner cmTrusted unchanged; doctor_taint_violations_24h', NULL, 'security immutable (doctrine section 9); not an autonomy limit, so RULE-8-RETIRED-1 does not reach it'),
+ ('breach-doctor-action-allowlist', 'qnfo-fleet-control bdActions: the only SQL/HTTP the doctor can run is written in code and parameterised with validated ids', 'gate', 'a playbook row or a model reply becoming executable SQL', 0, 'keep', 'planned', 'none needed: removing it would make D1 rows executable', NULL, 'playbooks are data, actions are code');
+
+INSERT OR IGNORE INTO spof_registry (component, critical_path, alternate_path, alternate_tested_at, evidence) VALUES
+ ('breach doctor tick (qnfo-fleet-control */10)', 'unowned breach -> diagnosis -> allowlisted action -> verified close', 'qnfo-cloud-ops jobBreachDoctorWatch: when doctor_tick_age_min > 30 it runs the second_path playbooks (heartbeat restore, doctor-stalled) with the same ledger; drilled daily like remediation:evidence:B', NULL, 'new 2026-10-26; the alternate is built in the doctor PR, the drill row lands with its first run');
+
+INSERT OR IGNORE INTO belief_registry (belief_key, claim, confidence, evidence, probe_class, built_on) VALUES
+ ('belief-doctor-structured-facts-suffice', 'structured facts (ids, counts, codes) are enough to classify the cause of at least 60% of the unowned breach families without reading issue prose', 0.6, 'to be tested: share of doctor cases with confidence rule that reach verified', 'belief-doctor-structured-facts-suffice', 'BREACH-DOCTOR-1'),
+ ('belief-fleet-tick-isolated', 'a faulty trigger on fleet_tick cannot stop the 10-minute heartbeat (falsified 2026-10-26 04:42Z: SQLITE_NOMEM on every insert for 85+ minutes)', 0.1, 'cloud_ops_events fleet-cron-tick-error NOMEM x76', 'belief-fleet-tick-isolated', 'BREACH-DOCTOR-1 R0');
+
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('fleet-tick-fanout-no-bulkhead', 'one trigger on fleet_tick that fails or exhausts memory stops the heartbeat for every fixer', '53 AFTER INSERT triggers share one transaction; FLEET-TICK-ISOLATE-1 retries with OR IGNORE, which absorbs constraint errors only; breach_selfheal_tick expands v_breach_selfheal 10 times and the insert fails with SQLITE_NOMEM', 'R0 quarantines the suspect trigger; new periodic fixers run as worker steps with their own statements, never as fleet_tick triggers', 'fm-fleet-tick-fresh: fleet_tick_age_min <= 25', 'fm-fleet-tick-fresh', '2026-10-26', NULL, 'no fleet_tick row in 30 minutes with fleet-cron-tick-error events', 'queue_sla fixes, ISSUE-AGE replans, scorecard and 40 metric refreshes stop; tick_completion_24h keeps its last value', 'every D1 trigger fixer'),
+ ('breach-doctor-stalled', 'the breach doctor stops ticking and unowned breaches age again', 'single worker cron', 'qnfo-cloud-ops BREACH-DOCTOR-WATCH-1', 'fm-breach-doctor-stalled: doctor_tick_age_min <= 30', 'fm-breach-doctor-stalled', '2026-10-26', NULL, 'doctor_tick_age_min > 30', 'breaches_undiagnosed_over_60m rises', 'all unowned issues');
+
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, max_attempts, expected_cadence_h, status, precondition, action, escalate_to) VALUES
+ ('fm-fleet-tick-fresh', NULL, 'SELECT ''0'' AS expected, CAST((SELECT CASE WHEN (julianday(''now'') - julianday(MAX(ts))) * 1440 > 25 THEN 1 ELSE 0 END FROM fleet_tick) AS TEXT) AS observed', 'd1-query', 3, 1, 'active', 'BREACH-DOCTOR-1', 'failure-mode detector', 'qnfo-fleet-control'),
+ ('fm-breach-doctor-stalled', NULL, 'SELECT ''0'' AS expected, CAST((SELECT CASE WHEN COALESCE((julianday(''now'') - julianday(MAX(ts))) * 1440, 999) > 30 THEN 1 ELSE 0 END FROM breach_diagnosis_events WHERE event = ''tick'') AS TEXT) AS observed', 'd1-query', 3, 1, 'active', 'BREACH-DOCTOR-1', 'failure-mode detector', 'qnfo-cloud-ops');
+
+-- trust surface: add to v_trust_ledger in the doctor PR (UNION ALL SELECT 'breach-doctor:remediate', SUM(state='verified'), SUM(state IN ('failed','reverted')), 'breach_diagnoses, 30 days').
+
+-- PHASE B (second migration, after >= 48 measure-mode diagnoses and doctor_taint_violations_24h = 0): replace v_issue_age_ladder so doer reads v_breach_owner.
+-- BACKUP table first: CREATE TABLE bak_YYYYMMDD_issue_age_ladder AS SELECT name, sql FROM sqlite_master WHERE name = 'v_issue_age_ladder';
+-- DROP VIEW v_issue_age_ladder; CREATE VIEW v_issue_age_ladder AS <same text, doer CASE gains the two v_breach_owner branches>; the Rollback line carries the verbatim old text.
+-- The strict count stays available: issues_over_24h_no_code_doer = rows whose owner_kind NOT IN ('breach doctor','owner card (identity-bound)').
