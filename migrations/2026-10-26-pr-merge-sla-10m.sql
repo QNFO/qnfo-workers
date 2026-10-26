@@ -1,0 +1,46 @@
+-- PR-MERGE-SLA-10M-1 (2026-10-26, owner standing directive; charter pillar: autonomy).
+-- Owner words, verbatim: "MERGE ALL PRS AND MAKE SURE THEY ALWAYS MERGE WITHIN 10 MINUTES OF OPENING. THE SYSTEM SHALL AUTOMATICALLY ADDRESS ANY CHECK FAILURES AND MERGE CONFLICTS TO MEET 10-MINUTE SLA AND MERGE/CLOSE AUTOMATICALLY"
+-- It tightens PR-LANE-FAST-1 (2026-10-14: a quiet window before the lane merges) and SLA-120M-1 (no SLA over 120 minutes) to 10 minutes from opening, for every pull request.
+-- Read 2026-10-26 06:40 to 07:05Z: ten qnfo-workers pull requests were open at 06:39Z, the oldest 88 minutes, six of them green code-loop pull requests against the one qnfo-research-exec/worker.js
+-- (one merge per worker per runner tick and per deploy, so each merge made the next conflict on the VERSION line and fail version-bump-guard; PUBLISH-LANE-SERIAL-1, PR 4306, stops the pile-up at the source).
+-- qnfo-audit.branch_hygiene_log over 24 h: 15 merge-stale-pr, 23 merge-refused (14 of them "mergeable true, mergeable_state unstable"), 49 conflict-repair-reapplied; ops_config stale_pr_merge_idle_min is already at its floor of 10.
+-- Gaps found in the lane (qnfo-fleet-control/worker.js, .github/workflows/conflict-repair.yml): bhMergeDecide, bhNudgeDecide and bhConflictDecide refuse a draft pull request and the conflict-repair probe selects non-drafts only, while the
+-- Claude Code harness opens its session pull requests as drafts (config auto-create-pr:draft), so those wait for a person to mark them ready; the lane window floors at 10 minutes and the lane ticks every 10;
+-- nothing records a pull request's age, so the 10-minute SLA has no metric. The issue filed below carries them, with its doer and probe (OWNER-NO-LOOSE-ENDS-1).
+-- This file (1) records the directive for machines (ops_config OWNER_DIRECTIVE_2026_10_26_PR_MERGE_SLA_10M_1, INSERT OR IGNORE, the shape of the earlier directive rows; the doctrine document carries it in the same PR),
+-- (2) files the uncovered lane gaps as one agent_issues row, and (3) writes the decision_log row for how this sweep landed the queued research-exec pull requests.
+-- spof-review: no new dependency, cron, trigger or credential.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM ops_config WHERE key = 'OWNER_DIRECTIVE_2026_10_26_PR_MERGE_SLA_10M_1'; UPDATE agent_issues SET status = 'closed' WHERE title LIKE 'PR-MERGE-SLA-10M-1:%' AND status = 'open'
+
+INSERT OR IGNORE INTO ops_config (key, value, note) VALUES ('OWNER_DIRECTIVE_2026_10_26_PR_MERGE_SLA_10M_1', '{"id":"PR-MERGE-SLA-10M-1","directive":"MERGE ALL PRS AND MAKE SURE THEY ALWAYS MERGE WITHIN 10 MINUTES OF OPENING. THE SYSTEM SHALL AUTOMATICALLY ADDRESS ANY CHECK FAILURES AND MERGE CONFLICTS TO MEET 10-MINUTE SLA AND MERGE/CLOSE AUTOMATICALLY","directive_verbatim":"MERGE ALL PRS AND MAKE SURE THEY ALWAYS MERGE WITHIN 10 MINUTES OF OPENING. THE SYSTEM SHALL AUTOMATICALLY ADDRESS ANY CHECK FAILURES AND MERGE CONFLICTS TO MEET 10-MINUTE SLA AND MERGE/CLOSE AUTOMATICALLY","date":"2026-10-26","measured_by":["pull request age, created_at to merged_at or closed_at, target 10 minutes or less (metric pr_open_over_10m once the lane records it)","branch_hygiene_log rows merge-stale-pr, merge-refused, merge-nudge, conflict-repair-reapplied","GET https://qnfo-fleet-control.q08.workers.dev/code-merge/status (the code-loop runner per task)"],"limits":"no limit moves: the interrupt gate, section 9, the harness permission checks, the secret lock and live work claims keep their precedence; a pull request is merged or closed with its reason, never merged in a form that loses what it exists to preserve, and a repository setting only the owner can change is an IDENTITY-BOUND card"}', 'PR-MERGE-SLA-10M-1 (owner standing directive 2026-10-26): every pull request merges, or closes with its reason, within 10 minutes of opening; check failures and conflicts are repaired by the system. Measured by pull request age; carried by the stale-PR lane, the code-loop runner, conflict repair and PUBLISH-LANE-SERIAL-1. No worker reads the key: the loops honor it through the doctrine.');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT
+  'PR-MERGE-SLA-10M-1: the merge lane and conflict repair skip draft pull requests, the lane window floors at 10 minutes, and no table records a pull request age',
+  'Charter pillar: autonomy. Owner directive 2026-10-26 (PR-MERGE-SLA-10M-1): every pull request merges, or closes with its reason, within 10 minutes of opening; check failures and merge conflicts are repaired by the system.' || char(10) ||
+  'Root causes, read 2026-10-26: (1) bhMergeDecide, bhNudgeDecide and bhConflictDecide in qnfo-fleet-control/worker.js refuse pr.draft, and the probe step of .github/workflows/conflict-repair.yml selects .draft==false, while the Claude Code harness opens its session pull requests as drafts (config auto-create-pr:draft): PRs 4305, 4306, 4309 and 4316 waited as drafts until a person or session marked them ready. (2) BH_MERGE_IDLE_MIN_FLOOR is 10 and the lane runs every 10 minutes, so a green clean pull request merges 10 to 30 minutes after its last push even when every gate passed. (3) The conflict-repair probe reads GitHub mergeable_state, which stays unknown while main is pushed every 1 to 5 minutes (PR 4308 read unknown for 11 minutes before dirty); git merge-tree --write-tree --name-only origin/main <head> answers at once for every open pull request. (4) Nothing records a pull request age, so the 10-minute SLA has no metric and no trigger.' || char(10) ||
+  'Doer: qnfo-code-orchestrator for the qnfo-fleet-control change after the live claim on qnfo-fleet-control/worker.js lapses (session_01LJNL3LGHVnU6qhuvNbAjDw holds it for MERGE-VERSION-AHEAD-1, PR 4326); a session for the .github/workflows/conflict-repair.yml probe, which the code loop does not change. Change: a draft that is green on every required check, quiet for the window, with no HOLD or WIP marker, is marked ready (GraphQL markPullRequestReadyForReview on pr.node_id) and merged in the same tick; floor 0 and default 2 minutes for stale_pr_merge_idle_min with an offset cron so the lane runs every 5 minutes; the probe counts drafts and finds conflicts with git merge-tree; the lane writes each open pull request to a pr_sla_state row so v_pr_merge_sla (open_n, over_10m, oldest_min), a queue_sla row with sla_min 10 and the metric pr_open_over_10m with its trigger can grade it.' || char(10) ||
+  'Definition of done: a green draft pull request with no hold is merged by the lane within 10 minutes of its last push (branch_hygiene_log merge-stale-pr row, ts minus the head commit time); a draft that conflicts only on VERSION lines is repaired by conflict-repair without a person; metric pr_open_over_10m exists with a trigger and reads 0; the canonical deploy of qnfo-fleet-control is verified live.' || char(10) ||
+  'code-task: repo=qnfo-workers path=qnfo-fleet-control/worker.js' || char(10) ||
+  'code-anchor: if (pr.draft) return no("a draft");' || char(10) ||
+  'code-probe: {"paths": ["qnfo-fleet-control/worker.js"], "contains": "PR-MERGE-SLA-10M-1"}',
+  'session', 'autonomy', 'high', 'open',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000,
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (
+  SELECT 1 FROM agent_issues
+  WHERE title LIKE 'PR-MERGE-SLA-10M-1:%'
+    AND status = 'open'
+);
+
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session_011iUExz3dr2XK5PGm4gwBjs',
+  'six green code-loop pull requests queued against one worker.js cannot merge one after another inside 10 minutes each: every merge conflicts the next on the VERSION line, fails version-bump-guard and costs a 5 minute gate and a deploy; the branches merge cleanly into each other, so one change lands them with one gate',
+  'PR-MERGE-SLA-10M-1: landed code-loop PRs 4275, 4277 and 4282 as one qnfo-research-exec 0.34.2 change (PR 4317); closed 4276 (changes the model timeout, not the watchdog its title names), 4283 (removes the mirror write from ciCorrect) and 4278 (duplicate of 4282) with the reasons on the pull requests',
+  'PR 4317 opened 06:48:41Z, merged about 06:54Z (6 minutes); GET /health of qnfo-research-exec reported 0.34.2-codeagent at 06:55Z; run-suites 58 passed 0 failed for the directory, version-bump-guard, mirror-guard, skip-token-guard and workers_standards_guard passed',
+  'merged and live', 'qnfo-research-exec only; the three closed pull requests can be reopened and re-proposed', 'revert commit of PR 4317 through the canonical deploy; reopen PRs 4276, 4278 and 4283',
+  'queued same-worker code-loop pull requests land as one change inside the window instead of one per runner tick',
+  'qnfo-research-exec /health reports 0.34.2-codeagent or higher and version-bump-guard stays green on main after the next code-loop merge to the same worker', 'none', 'GitHub pull requests, scripts/run-suites.mjs, version-bump-guard, qnfo-research-exec /health'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'PR-MERGE-SLA-10M-1: landed code-loop PRs 4275%');
