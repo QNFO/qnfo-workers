@@ -960,7 +960,7 @@ async function indexHandoffs(env, opts) {
   var behind = behindRow ? Number(behindRow.n) || 0 : 0;
   // The index's own count, for the reconciliation note (best effort: the binding may lack describe() or throw).
   var vectorCount = "";
-  try { if (typeof env.HANDOFFS_VZ.describe === "function") { var d = await env.HANDOFFS_VZ.describe(); if (d && d.vectorCount != null) vectorCount = "; index_vectors=" + d.vectorCount; } } catch (_) { }
+  try { if (typeof env.HANDOFFS_VZ.describe === "function") { var d = await env.HANDOFFS_VZ.describe(); if (d && d.vectorCount != null) vectorCount = "; index_vectors=" + d.vectorCount; } } catch (de) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "indexHandoffs.describe", error: String(de && de.message || de) })); }
   var now = new Date().toISOString();
   var note = "HANDOFFS-VZ-PRODUCER-1: indexed " + keep.length + " handoffs (" + vectors.length + " vectors), skipped_personal=" + skippedPersonal + ", up to id " + newLast + " at " + now + "; behind=" + behind + vectorCount;
   // Monotonic: a late or overlapping run cannot move the watermark back (a manual UPDATE ... SET value = 0 still re-indexes, the next run writes a larger id).
@@ -969,7 +969,7 @@ async function indexHandoffs(env, opts) {
 }
 // A failed run leaves the value and updated_at where they were and says why in the note (cron_fire_log reads ok because the error is caught).
 async function noteHandoffFailure(env, e) {
-  try { await env.AUDIT.prepare("UPDATE ops_config SET note = ?1 WHERE key = ?2").bind("HANDOFFS-VZ-PRODUCER-1: FAILED " + new Date().toISOString() + " " + String(e && e.message || e).slice(0, 200), HANDOFF_WM_KEY).run(); } catch (_) { }
+  try { await env.AUDIT.prepare("UPDATE ops_config SET note = ?1 WHERE key = ?2").bind("HANDOFFS-VZ-PRODUCER-1: FAILED " + new Date().toISOString() + " " + String(e && e.message || e).slice(0, 200), HANDOFF_WM_KEY).run(); } catch (ne) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "noteHandoffFailure", error: String(ne && ne.message || ne) })); }
 }
 // ---- HANDOFFS-VZ-PRODUCER-1:END
 async function runScheduled(event, env, ctx) {
