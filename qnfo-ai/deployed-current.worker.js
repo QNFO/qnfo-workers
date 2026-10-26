@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.40.2-codeagent"; /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.40.3-spend-twin-paths"; /* 5.40.3 QNFO-AI-SPEND-TWIN-PATHS-1 (2026-10-26, pillar cost, agent_issues 1000439, 1000440; patch): (a) QNFO-AI-SWALLOW-REVERT-1: the 5.40.2 code-loop change in the Workers AI binding wrapper (__aiAttrEnv) returned an empty successful reply for any error whose text matched spend, budget or cap, which includes the capacity error 3040, so a capacity error stopped reaching the fallback chains as an error; the wrapper rethrows again. (b) QNFO-AI-STREAM-SPEND-TWIN-1: a streamed deepseek-v4-pro or deepseek-v4-flash request whose paid call is refused (402 breaker, deepseek cap, router ledger total, fleet cap) is served by its Workers AI twin through the Workers AI stream branch with the caller's tools, the chunks name the twin, and the free chain that answers when there is no twin names the model that answered instead of the requested route. (c) QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1: the oversize-ensemble context fallback serves a refused paid call from the twin of deepseek-v4-flash (truncated to the twin context, _router.served_by and twin_reason name it) instead of HTTP 502. Suite: spend-twin-paths.test.mjs. prior 5.40.2-codeagent */ /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -82,12 +82,10 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
             }
           }
         }
-        // If the error is due to spend‑governor or budget caps, do not propagate it.
-        // Instead return a minimal successful response so the request is steered
-        // to the cheap Workers AI model rather than returning HTTP 502.
-        if (/spend|budget|cap/i.test(errMsg)) {
-          return { text: "", usage: {} };
-        }
+        // QNFO-AI-SWALLOW-REVERT-1 (5.40.3): 5.40.2 turned any binding error whose text matched spend, budget or cap into an
+        // empty success, and "Capacity temporarily exceeded" (3040) matches cap, so a capacity error reached every caller as an
+        // empty reply with no thrown error for its fallback chain to key on. The error is rethrown as before; a refused paid
+        // route is handled where the paid call is made (the stream branch and the ensemble context fallback).
         throw e;
       } finally {
         try {
@@ -2226,7 +2224,9 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, o
 __name(callDeepSeek, "callDeepSeek");
 __name2(callDeepSeek, "callDeepSeek");
 __name22(callDeepSeek, "callDeepSeek");
-async function qnfoAiFreeFallback(env, messages, maxTokens) {
+// QNFO-AI-STREAM-SPEND-TWIN-1 (5.40.3): an optional 4th argument receives the model that answered ({ model }), so a stream
+// that is served by the free chain can name that model in its chunks instead of the route the caller asked for.
+async function qnfoAiFreeFallback(env, messages, maxTokens, served) {
   const _cands = ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.7-code", "@cf/deepseek-ai/deepseek-v4-flash-0731"];
   for (let _i = 0; _i < _cands.length; _i++) {
     try {
@@ -2237,7 +2237,7 @@ async function qnfoAiFreeFallback(env, messages, maxTokens) {
       if (_effF) _inF.reasoning_effort = _effF;
       const _r = await withTimeout(aiRunAttr(env, "qnfo-ai", "chat-fallback", _cands[_i], _inF), 3e4, "free-fallback");
       const _t = _r && (_r.response != null ? _r.response : (_r.choices && _r.choices[0] && _r.choices[0].message && _r.choices[0].message.content)) || "";
-      if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); return String(_t); }
+      if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); if (served && typeof served === "object") served.model = _cands[_i]; return String(_t); }
     } catch (e) { console.error(JSON.stringify({ evt: "ai:qnfoAiFreeFallback:caught", error: String((e && e.message) || e) })); }
   }
   return null;
@@ -3084,7 +3084,25 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       }, "ensResp");
       if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > ENSEMBLE.primary.ctx - CTX_SAFETY_MARGIN) {
         const fbCap = clampTokens(max_tokens, DEFAULT_MAX_OUT);
-        const fb = await callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, fbCap, false);
+        // QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1 (agent_issues 1000440, 5.40.3; BUDGET-SOFT-ROUTE-1, DEEPSEEK-TWIN-1): a refused paid
+        // call (the 402 breaker, the deepseek cap, the router ledger total or the fleet cap) used to land in the ensemble catch
+        // below and answer HTTP 502; the same request answered 200 with the key funded. The refusal is caught here and the
+        // request is served by the Workers AI twin of deepseek-v4-flash, truncated to the twin context, and _router names it.
+        let fb, fbTwinName = null, fbTwinWhy = null;
+        try {
+          fb = await callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, fbCap, false);
+        } catch (eFbDs) {
+          const fbDsMsg = String(eFbDs && eFbDs.message || eFbDs || "");
+          const fbTwin = dsTwinSpec(MODELS["deepseek-v4-flash"]);
+          if (!fbTwin || !/^deepseek 402|^spend-governor/.test(fbDsMsg)) throw eFbDs;
+          const fbTwinBudget = modelCtx(fbTwin) - clampTokens(fbCap, fbTwin.maxOut) - CTX_SAFETY_MARGIN;
+          const fbTwinMsgs = estInputTokens > fbTwinBudget ? truncateMessagesToFit(messages, fbTwinBudget) : messages;
+          const fbTwinOut = await runWorkersAI(env, fbTwin.wa, fbTwinMsgs, clampTokens(fbCap, fbTwin.maxOut), false, { temperature: fbTwin.temp, top_p: fbTwin.topP });
+          fb = { choices: [{ message: { content: extractWAContent(fbTwinOut) } }] };
+          fbTwinName = MODELS["deepseek-v4-flash"].waTwin;
+          fbTwinWhy = /^deepseek 402/.test(fbDsMsg) ? "deepseek-402" : "spend-cap";
+          _servedBy = fbTwinName;
+        }
         const fbContent = fb?.choices?.[0]?.message?.content ?? "";
         const fbText = fbContent || FALLBACK_TEXT;
         const fbOutTokens = estimateOutputTokens(fbText);
@@ -3097,9 +3115,10 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
           choices: [{ index: 0, message: { role: "assistant", content: fbText }, finish_reason: fbTruncated ? "length" : "stop" }],
           usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: fbOutTokens, total_tokens: estimateInputTokens(messages) + fbOutTokens },
           _router: mkRouter("deepseek-v4-flash", "ensemble-context-fallback", {
-            ensemble_members: ["fallback-deepseek"],
+            ensemble_members: [fbTwinName ? "fallback-deepseek-wa" : "fallback-deepseek"],
             verification_result: "context_fallback",
-            estimated_input_tokens: estInputTokens
+            estimated_input_tokens: estInputTokens,
+            ...(fbTwinName ? { served_by: fbTwinName, twin_reason: fbTwinWhy } : {})
           })
         };
         return ensResp(fbText, fbBody);
@@ -3143,26 +3162,45 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   }
   if (isStream) {
     try {
-      if (effSpec.wa) {
+      // QNFO-AI-STREAM-SPEND-TWIN-1 (agent_issues 1000439, 5.40.3; BUDGET-SOFT-ROUTE-1, DEEPSEEK-TWIN-1): runModelTurn serves a refused
+      // paid DeepSeek route (the 402 breaker, the deepseek cap, the router ledger total or the fleet cap) by its Workers AI twin,
+      // by name; this stream branch had no such catch, so the refusal reached the free chain (glm-5.3-flash, tools dropped) and
+      // the chunks carried the route the caller asked for. The refusal is caught here and the twin is served through the
+      // Workers AI stream branch below with the caller's tools; no twin: the free chain as before, now named in its chunks.
+      let streamSpec = effSpec, streamTwinOf = null, dsStreamUp = null;
+      if (!effSpec.wa && effSpec.api) {
+        try {
+          dsStreamUp = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP, tool_choice: clientToolChoice });
+        } catch (eDsS) {
+          const dsSMsg = String(eDsS && eDsS.message || eDsS || "");
+          const twinS = dsTwinSpec(effSpec);
+          if (!twinS || !/^deepseek 402|^spend-governor/.test(dsSMsg)) throw eDsS;
+          streamSpec = twinS;
+          streamTwinOf = effSpec.waTwin;
+          _servedBy = effSpec.waTwin;
+          if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, { ...mkLogRec(), model: routedModel, streamed: 1, response: ("STREAM-SPEND-TWIN: " + (/^deepseek 402/.test(dsSMsg) ? "deepseek-402" : "spend-cap") + " -> " + effSpec.waTwin).slice(0, 400), latency_ms: Date.now() - t0 }));
+        }
+      }
+      if (streamSpec.wa) {
         const sTools = Array.isArray(tools) && tools.length ? tools : null;
-        const sToolMode = !!sTools && !!effSpec.tools;
+        const sToolMode = !!sTools && !!streamSpec.tools;
         const sOpts = {
           temperature: effTemp,
           top_p: effTopP,
           tools: sToolMode ? sTools : void 0,
           tool_choice: sToolMode ? clientToolChoice || "auto" : void 0,
-          vision: effSpec.vision
+          vision: streamSpec.vision
         };
-        const sCap0 = clampTokens(max_tokens, MAX_OUT[effSpec.wa]);
+        const sCap0 = clampTokens(max_tokens, MAX_OUT[streamSpec.wa]);
         let waOut0 = null;
         try {
-          waOut0 = await runWorkersAI(env, effSpec.wa, messages, sCap0, false, sOpts);
+          waOut0 = await runWorkersAI(env, streamSpec.wa, messages, sCap0, false, sOpts);
         } catch (eS) {
           const sMsg = String(eS && eS.message || eS || "");
           if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, { ...mkLogRec(), model: routedModel, streamed: 1, response: ("STREAM-UPSTREAM-ERROR: " + sMsg).slice(0, 400), latency_ms: Date.now() - t0 }));
           if (/3046|request timeout|timed out/i.test(sMsg)) {
             try {
-              waOut0 = await runWorkersAI(env, effSpec.wa, messages, Math.max(2048, Math.floor(sCap0 / 2)), false, sOpts);
+              waOut0 = await runWorkersAI(env, streamSpec.wa, messages, Math.max(2048, Math.floor(sCap0 / 2)), false, sOpts);
             } catch (eS2) {
               waOut0 = null;
             }
@@ -3176,8 +3214,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
           const nlnlT = String.fromCharCode(10, 10);
           const streamT = new ReadableStream({
             start(controller) {
-              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-" + rid(8), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent || "", tool_calls: waTCIndexed }, finish_reason: null }] }) + nlnlT));
-              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnlT));
+              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-" + rid(8), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: streamTwinOf || routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent || "", tool_calls: waTCIndexed }, finish_reason: null }] }) + nlnlT));
+              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: streamTwinOf || routedModel, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnlT));
               controller.enqueue(encT.encode("data: [DONE]" + nlnlT));
               controller.close();
             }
@@ -3187,7 +3225,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         if (!waContent || !String(waContent).trim()) {
           const wafbCands = [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
-            if (!wafb || wafb.wa && wafb.wa === effSpec.wa) continue;
+            if (!wafb || wafb.wa && wafb.wa === streamSpec.wa) continue;
             if (hasImage && !wafb.vision) continue;
             try {
               let wafbOut;
@@ -3204,22 +3242,21 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
           }
         }
         waContent = (waContent || "").trim() || FALLBACK_TEXT;
-        const waTruncated = waContent !== FALLBACK_TEXT && estimateOutputTokens(waContent) >= clampTokens(max_tokens, MAX_OUT[effSpec.wa]);
+        const waTruncated = waContent !== FALLBACK_TEXT && estimateOutputTokens(waContent) >= clampTokens(max_tokens, MAX_OUT[streamSpec.wa]);
         const enc3 = new TextEncoder();
         const nlnl = String.fromCharCode(10, 10);
         const stream0 = new ReadableStream({
           start(controller) {
-            controller.enqueue(enc3.encode("data: " + JSON.stringify({ id: "chatcmpl-" + rid(8), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent }, finish_reason: null }] }) + nlnl));
-            controller.enqueue(enc3.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: waTruncated ? "length" : "stop" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnl));
+            controller.enqueue(enc3.encode("data: " + JSON.stringify({ id: "chatcmpl-" + rid(8), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: streamTwinOf || routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent }, finish_reason: null }] }) + nlnl));
+            controller.enqueue(enc3.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: streamTwinOf || routedModel, choices: [{ index: 0, delta: {}, finish_reason: waTruncated ? "length" : "stop" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnl));
             controller.enqueue(enc3.encode("data: [DONE]" + nlnl));
             controller.close();
           }
         });
         return streamWithLog(new Response(stream0, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
       }
-      if (effSpec.api) {
-        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP, tool_choice: clientToolChoice });
-        return streamWithLog(upstream, env, ctx, mkLogRec());
+      if (dsStreamUp) {
+        return streamWithLog(dsStreamUp, env, ctx, mkLogRec());
       }
       if (effSpec.gateway) {
         const upstream = await callGateway(env, effSpec.model, messages, max_tokens, true);
@@ -3228,7 +3265,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       return json({ error: "no stream path for model" }, 400);
     } catch (e) {
       try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
-      try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) { const _enc = new TextEncoder(); const _nl3 = String.fromCharCode(10, 10); const _st = new ReadableStream({ start: function(ctrl) { ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: _ft }, finish_reason: null }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: [DONE]" + _nl3)); ctrl.close(); } }); return streamWithLog(new Response(_st, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec()); } } catch (_fbErr) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_fbErr && _fbErr.message) || _fbErr) })); }
+      try { const _ftServed = {}; const _ft = await qnfoAiFreeFallback(env, messages, max_tokens, _ftServed); if (_ft) { const _enc = new TextEncoder(); const _nl3 = String.fromCharCode(10, 10); const _st = new ReadableStream({ start: function(ctrl) { ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: _ftServed.model || routedModel, choices: [{ index: 0, delta: { role: "assistant", content: _ft }, finish_reason: null }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: _ftServed.model || routedModel, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: [DONE]" + _nl3)); ctrl.close(); } }); return streamWithLog(new Response(_st, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec()); } } catch (_fbErr) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_fbErr && _fbErr.message) || _fbErr) })); }
       return json({ error: "stream failed: " + e.message }, 502);
     }
   }
