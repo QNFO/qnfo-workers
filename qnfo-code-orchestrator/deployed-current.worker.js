@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.28.0-codeagent"; // FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+var VERSION = "0.28.1-codeagent"; // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -1926,6 +1926,7 @@ async function jsVerifyProbeTick(env) {
 // accepted values its page does not state, so it keeps its calls as they were. ops_config code_reasoning_low = off removes the option
 // without a deploy; a call the platform rejects because of it is made once more without it (audit code-task.model-opt-refused).
 const MODEL_OPTS = { "@cf/zai-org/glm-5.3": { reasoning_effort: "low" } };
+const EMPTY_RETRY_OPTS = { "@cf/moonshotai/kimi-k2.7-code": { chat_template_kwargs: { thinking: false } } };
 const MODEL_OPT_REJECTED = /reasoning[_ ]effort|invalid (?:parameter|request|argument|value)|unsupported (?:parameter|field)|unknown (?:parameter|field)|additional propert|unexpected (?:parameter|field)|\b400\b/i;
 async function modelOpts(env, model) {
   const o = MODEL_OPTS[model];
@@ -1950,8 +1951,19 @@ async function ai(env, model, messages) {
       out = await env.AI.run(model, req0);
     }
   }
-  const t = out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content));
-  const text = String(t || "").replace(/<think>[\s\S]*?<\/think>/g, "");
+  const pick = function (o) { const t = o && (o.response || (o.choices && o.choices[0] && o.choices[0].message && o.choices[0].message.content)); return String(t || "").replace(/<think>[\s\S]*?<\/think>/g, ""); };
+  let text = pick(out);
+  // EMPTY-REPLY-NOTHINK-1: kimi-k2.7-code spends its whole output budget on reasoning and returns no content on about a third of
+  // its calls (26 "the reply was empty" failures in 36 h on 2026-10-25/26, the loop's most repeated failure). An empty reply from a
+  // rung that can turn thinking off is asked once more, in the same call, with thinking off, instead of spending an attempt.
+  if (!text.trim() && EMPTY_RETRY_OPTS[model]) {
+    try {
+      const out2 = await env.AI.run(model, Object.assign({}, req0, EMPTY_RETRY_OPTS[model]));
+      const t2 = pick(out2);
+      await audit(env, "code-task.empty-retry", model + " answered nothing; asked again with thinking off: " + (t2.trim() ? t2.length + " chars" : "still empty"), { model: model, chars: t2.length }, t2.trim() ? "ok" : "empty");
+      if (t2.trim()) { out = out2; text = t2; }
+    } catch (eR) { console.error(JSON.stringify({ worker: "qnfo-code-orchestrator", where: "ai-empty-retry", model: String(model), error: String(eR && eR.message || eR).slice(0, 200) })); }
+  }
   const ms = Date.now() - t0;
   if (!text.trim()) {
     // EMPTY-REPLY-DIAG-1: record why a rung answered nothing (finish_reason "length" = reasoning ate the budget).
