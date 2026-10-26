@@ -47,6 +47,13 @@ VERSION_LINE = re.compile(r'^(var VERSION ?= ?)"([^"\n]*)"(;?.*)$', re.M)  # gro
 NOTE_BLOCK = re.compile(r"/\*.*?\*/", re.S)
 HOLD_RE = re.compile(r"(^|[\s\[(])(wip|do[\s-]*not[\s-]*merge|hold)([\s:\])]|$)", re.I)
 DIRTY_QUIET_MIN = 10  # a pull request whose newest commit is younger is still being worked on
+# CONFLICT-REPAIR-BOT-QUIET-1 (2026-10-26): a code-loop branch (codeagent-*) has no author mid-edit, so waiting ten minutes only adds latency.
+# Each merge to a hot worker (qnfo-research-exec took six queued code tasks at once on 2026-10-26) makes every other pull request on it
+# conflict, and the wait is paid once per merge: 5 pull requests x 10 minutes of quiet = 50 minutes of a 120-minute SLA. A repair is
+# followed by a gate of 5 to 9 minutes and conflicts recur only after another merge to the same worker (one per runner tick, >= 10 minutes
+# apart), so 3 minutes cannot start a repair loop.
+BOT_BRANCH_PREFIX = "codeagent-"
+BOT_QUIET_MIN = 3
 ISSUE_PR = re.compile(r"STALE-PR-CONFLICT-REPAIR-1\b[^\d#]{0,40}#?(\d+)")
 # The check workflows dispatched on a branch this script pushes (each declares workflow_dispatch; scripts/conflict_repair_test.py pins that).
 # PR-GUARD-FIXES-1 (2026-10-20, agent_issues 100295): a push with GITHUB_TOKEN does not "start no pull_request workflow". GitHub creates the
@@ -63,10 +70,43 @@ ISSUE_PR = re.compile(r"STALE-PR-CONFLICT-REPAIR-1\b[^\d#]{0,40}#?(\d+)")
 # ending the second its pull request closed or merged, is a gate artifact and no verdict on the change. (ci_watchdog.py classes a
 # zero-job run as invalid-workflow, so it would misdiagnose these if its scope widened from main to pull-request branches.)
 DISPATCHABLE = ["deploy-gate.yml", "version-bump-guard.yml", "mirror-guard.yml", "charter-guard.yml", "version-compare.yml"]
+# PHANTOM-RUN-CANCEL-1 (2026-10-26, owner directive "remediate all failing workflows"): the zero-job pull_request runs described above were two
+# thirds of every failure on the Actions page (56 of 84 in 24 h: seven repaired pull request heads x eight workflows, each shown red for 27
+# minutes and concluded `failure` the second the pull request closed). They carry no verdict, so after the dispatch the runs this push created
+# for the head (event pull_request, actor github-actions[bot], not completed) are cancelled while they are still open; a run that cannot be
+# cancelled is only logged. The dispatched workflow_dispatch runs are another event and are never touched.
+PHANTOM_PASSES = 3
+PHANTOM_WAIT_S = 8
 
 
 def emit(msg):
     print(msg, flush=True)
+
+
+def cancel_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None):
+    """Cancel the open pull_request runs that a GITHUB_TOKEN push of `sha` created. Returns [(run id, workflow name, cancelled)].
+
+    GitHub creates those runs a few seconds after the push, so the list is read `passes` times, `wait` seconds apart, and each run is
+    cancelled once. Nothing here can fail the repair: gh() answers None on any error and that is recorded as not cancelled.
+    """
+    api = api or gh
+    sleep = sleep or time.sleep
+    passes = PHANTOM_PASSES if passes is None else passes
+    wait = PHANTOM_WAIT_S if wait is None else wait
+    seen = {}
+    for i in range(passes):
+        if i:
+            sleep(wait)
+        data = api("repos/%s/actions/runs?head_sha=%s&event=pull_request&per_page=50" % (REPO, sha))
+        for run in (data or {}).get("workflow_runs", []) if isinstance(data, dict) else []:
+            rid = run.get("id")
+            if not rid or rid in seen or run.get("status") == "completed":
+                continue
+            if (run.get("actor") or {}).get("login") != "github-actions[bot]" or run.get("event") != "pull_request":
+                continue
+            done = api("repos/%s/actions/runs/%d/cancel" % (REPO, rid), "POST")
+            seen[rid] = (run.get("name"), done is not None)
+    return [(rid, name, ok) for rid, (name, ok) in sorted(seen.items())]
 
 
 SECRET_ENV = re.compile(r"TOKEN|SECRET|KEY|PASSWORD|CLOUDFLARE|CF_ACCOUNT", re.I)
@@ -246,7 +286,7 @@ def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.s
             age = (now - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))) / 60.0
         except ValueError:
             age = 1e9
-        if age >= quiet_min:
+        if age >= (min(quiet_min, BOT_QUIET_MIN) if ref.startswith(BOT_BRANCH_PREFIX) else quiet_min):
             found.append((age, n))
     found.sort(reverse=True)
     return [n for _, n in found[: max(1, limit)]]
@@ -647,6 +687,10 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             meta["pushed"] = 1
             for wf in DISPATCHABLE:
                 sh(["gh", "workflow", "run", wf, "--repo", REPO, "--ref", head_ref], check=False, timeout=60)
+            phantoms = cancel_phantom_runs(res["sha"])
+            if phantoms:
+                emit("PHANTOM-RUN-CANCEL-1 PR %d: %d zero-job pull_request run(s) on %s, cancelled %d (%s)" % (
+                    number, len(phantoms), res["sha"][:7], sum(1 for _, _, c in phantoms if c), ", ".join(n or "?" for _, n, _ in phantoms)))
             note = ("CONFLICT-REPAIR-INPLACE-1: this pull request conflicted with main and was quiet, so main was merged into `%s` "
                     "(only VERSION-line and mirror conflicts were resolved: %s; VERSION: %s). The checks ran on the runner before the push (%s) "
                     "and are dispatched again on the branch.") % (
@@ -665,6 +709,7 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             res["new_pr"] = new["number"]
             for wf in DISPATCHABLE:
                 sh(["gh", "workflow", "run", wf, "--repo", REPO, "--ref", branch], check=False, timeout=60)
+            cancel_phantom_runs(res["sha"])
             gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "Superseded by #%d: CONFLICT-REPAIR-DOER-1 re-applied this change onto main (%s)." % (new["number"], "; ".join("%s %s -> %s" % b for b in bumped) or "no VERSION change")})
             gh("repos/%s/pulls/%d" % (REPO, number), "PATCH", {"state": "closed"})
             res["outcome"] = "replaced"
@@ -693,6 +738,27 @@ def selftest():
     ce = clean_env()
     ok("CONFLICT_REPAIR_SELFTEST_TOKEN" not in ce and not any(SECRET_ENV.search(k) for k in ce) and "PATH" in ce, "clean_env drops every credential-named variable and keeps PATH")
     ok(core("0.14.0-conflict-repair") == (0, 14, 0) and core("x") is None, "core reads the numeric part")
+    # PHANTOM-RUN-CANCEL-1
+    bot = {"login": "github-actions[bot]"}
+    runs = [
+        {"id": 1, "name": "mirror-guard", "status": "queued", "event": "pull_request", "actor": bot},
+        {"id": 2, "name": "deploy-gate", "status": "action_required", "event": "pull_request", "actor": bot},
+        {"id": 3, "name": "done", "status": "completed", "event": "pull_request", "actor": bot},
+        {"id": 4, "name": "a person's run", "status": "in_progress", "event": "pull_request", "actor": {"login": "rwnq8"}},
+        {"id": 5, "name": "dispatched", "status": "in_progress", "event": "workflow_dispatch", "actor": bot},
+    ]
+    calls, napped = [], []
+    def fake_api(path, method="GET", fields=None):
+        calls.append((method, path))
+        if method == "GET":
+            return {"workflow_runs": runs}
+        return None if path.endswith("/2/cancel") else {}
+    got = cancel_phantom_runs("abc1234", api=fake_api, sleep=napped.append, passes=3, wait=8)
+    posts = [p for m, p in calls if m == "POST"]
+    ok(got == [(1, "mirror-guard", True), (2, "deploy-gate", False)], "only open pull_request runs of github-actions[bot] are cancelled; a refusal is recorded, not raised", got)
+    ok(len(posts) == 2 and all("/cancel" in p for p in posts) and not any("/3/" in p or "/4/" in p or "/5/" in p for p in posts), "a completed run, a person's run and a dispatched run are never touched", posts)
+    ok(len([1 for m, _ in calls if m == "GET"]) == 3 and napped == [8, 8], "the list is read three times, 8 s apart, and each run is cancelled once", (calls, napped))
+    ok(cancel_phantom_runs("abc1234", api=lambda *a, **k: None, sleep=lambda s: None) == [], "an unreadable run list cancels nothing and does not raise")
     ok(settled_evidence({"number": 1417, "state": "closed", "merged_at": "2026-10-18T08:57:52Z"}) == "CONFLICT-REPAIR-SETTLE-1: GitHub reads PR #1417 merged at 2026-10-18T08:57:52Z, so there is no conflict left to repair."
        and "closed unmerged" in settled_evidence({"number": 9, "state": "closed", "merged_at": None, "closed_at": "x"})
        and settled_evidence({"number": 9, "state": "open"}) is None and settled_evidence(None) is None,
@@ -794,6 +860,14 @@ def selftest():
     got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
     ok(got == [2, 1], "dirty_prs: conflicting quiet pull requests, longest quiet first; a clean one, a repair branch, a hold, a draft and one committed 30 s ago are left; a null mergeability is read again", got)
     ok(dirty_prs(1, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None) == [2], "dirty_prs: the limit is honoured")
+    # CONFLICT-REPAIR-BOT-QUIET-1: a codeagent-* branch waits 3 minutes, a person's branch still waits the full ten
+    saved_ages = dict(ages)
+    ages["a1"], ages["a2"] = 240, 240
+    got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
+    ok(1 in got and 2 not in got, "dirty_prs: a code-loop branch committed 4 minutes ago is taken, a person's branch committed 4 minutes ago is left", got)
+    ages["a1"] = 120
+    ok(1 not in dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None), "dirty_prs: a code-loop branch committed 2 minutes ago is still left (it may be mid-push)")
+    ages.clear(); ages.update(saved_ages)
     # in-place: main is merged into the pull request's own branch; the pull request keeps its commits and gets main's
     with tempfile.TemporaryDirectory() as d:
         def g(*a):

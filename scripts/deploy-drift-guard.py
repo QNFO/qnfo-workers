@@ -102,6 +102,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # VERSION-PRECEDENCE-1: capture the prefix so the plain VERSION constant can win.
@@ -483,6 +484,58 @@ def live_result(worker):
         return (False, "ERR:" + str(e)[:50])
 
 
+# UNMANAGED-PROBE-1 / AUDIT-CRASH-FIX-1 (2026-10-26, agent_issues 100448): worker_live_audit's universe was the repo directories, so a
+# script that is live in the account but has no directory was never probed. The consumer half merged three times (PRs 4201, 4221, 4226)
+# with no producer: this guard only ever emitted `cf_script_list`, a BOOLEAN ("was the list readable"), and the consumer iterated it,
+# which raised `TypeError: 'bool' object is not iterable` in every fleet-autodeploy run from 2026-10-25T20:21Z and froze
+# worker_live_audit. The producer lives here, next to the CF script list it is built from: `unmanaged_workers` is
+# [{worker, http, version}] for each deployed script that no repo directory names, probed on /health. A script answering 410 is a
+# deliberate tombstone (qnfo-workers, the Workers Builds project, answers 410 "retired") and is counted, not reported.
+UNMANAGED_MAX = 40
+UNMANAGED_THREADS = 8
+
+
+def health_probe(worker):
+    """(http, version) of https://<worker>.q08.workers.dev/health; http 0 when nothing answered."""
+    url = "https://" + worker + ".q08.workers.dev/health"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "qnfo-deploy-drift-guard"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            code, body = r.getcode(), r.read(65536)
+    except urllib.error.HTTPError as e:
+        return e.code, None
+    except Exception:
+        return 0, None
+    try:
+        data = json.loads(body.decode("utf-8", "replace"))
+        return code, (data.get("version") or data.get("VERSION")) if isinstance(data, dict) else None
+    except Exception:
+        return code, None
+
+
+def unmanaged_scripts(deployed, repo_workers, probe=health_probe):
+    """Deployed scripts with no repo directory, probed: (reported, tombstones, truncated).
+
+    `deployed` is None when the CF script list was unreadable; that is "unknown", never "nothing", so nothing is reported.
+    """
+    if deployed is None:
+        return [], 0, False
+    names = sorted(set(deployed) - set(repo_workers))
+    truncated = len(names) > UNMANAGED_MAX
+    names = names[:UNMANAGED_MAX]
+    if not names:
+        return [], 0, False
+    with ThreadPoolExecutor(max_workers=UNMANAGED_THREADS) as pool:
+        probed = list(pool.map(probe, names))
+    reported, tombstones = [], 0
+    for w, (http, version) in zip(names, probed):
+        if http == 410:
+            tombstones += 1
+            continue
+        reported.append({"worker": w, "http": http, "version": version})
+    return reported, tombstones, truncated
+
+
 def live_content(worker, acct, token):
     """Fetch the live bundle text via the CF API /content endpoint. None on any failure."""
     url = API_CONTENT.format(acct=acct, worker=worker)
@@ -519,6 +572,7 @@ def main():
     cron_only = []
     label_mismatch = []
     retired_present = []
+    repo_workers = set()
 
     for d in sorted(os.listdir(ROOT)):
         if not os.path.isdir(os.path.join(ROOT, d)):
@@ -530,6 +584,7 @@ def main():
         # NAME-RESOLUTION-1: the directory is not the worker name. Probe what is deployed.
         declared = wrangler_name(d)
         worker = declared or d
+        repo_workers.add(worker)
         if wanted and d not in wanted and worker not in wanted:
             continue
         # RETIRED-PRESENT-1 (#272): a directory marked FOLDED/RETIRED means the worker must be absent from the
@@ -613,6 +668,8 @@ def main():
             if live_text is not None and _sha(live_text) != _sha(rtext):
                 content_drift.append((d, worker, _sha(rtext)[:12], _sha(live_text)[:12], rpath))
 
+    unmanaged, unmanaged_tombstones, unmanaged_truncated = unmanaged_scripts(deployed, repo_workers) if scan_all else ([], 0, False)
+
     if want_json:
         print(json.dumps({
             "scope": "all" if scan_all else "narrative",
@@ -646,6 +703,9 @@ def main():
             "retired_present_count": len(retired_present),
             "name_resolution": True,
             "cf_script_list": deployed is not None,
+            "unmanaged_workers": unmanaged,
+            "unmanaged_tombstones": unmanaged_tombstones,
+            "unmanaged_truncated": unmanaged_truncated,
             "content_checked": bool(want_content and content_ok),
         }, sort_keys=True))
     else:
@@ -667,6 +727,8 @@ def main():
             print(f"NOT_A_WORKER {w} (dir {d})")
         for d, w, e in live_err:
             print(f"LIVE_ERR {w} (dir {d}): {e}")
+        for u in unmanaged:
+            print(f"UNMANAGED {u['worker']}: http={u['http']} version={u['version']} (live in the account, no repo directory)")
         for d, w, m in retired_present:
             print(f"RETIRED_PRESENT {w} (dir {d}): {m} marker but the script exists in the account")
         tag = "all" if scan_all else "narrative"

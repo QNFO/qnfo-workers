@@ -78,5 +78,21 @@ for path in ["radar-hub/worker.js", "fleet-exec/worker.js", "personal-companion/
         got = real(path)
         check("real file " + path + " yields a semver-shaped VERSION", bool(got and re.match(r"^\d+\.\d+\.\d+", got)), True)
 
+# ---------------------------------------------------------------- UNMANAGED-PROBE-1 / AUDIT-CRASH-FIX-1 (2026-10-26)
+# The guard is the producer of `unmanaged_workers` (deployed scripts that no repo directory names). `cf_script_list` stays a boolean.
+fake_http = {"voice-stt": (200, None), "stray": (200, "3.0.1"), "dark": (404, None), "tomb": (410, None), "down": (0, None)}
+probe = lambda w: fake_http[w]
+rep, tomb, trunc = g.unmanaged_scripts({"qnfo-ai", "voice-stt", "stray", "dark", "tomb", "down"}, {"qnfo-ai", "retired-dir-worker"}, probe)
+check("unmanaged = deployed minus repo-declared names, sorted, probed",
+      [(u["worker"], u["http"], u["version"]) for u in rep],
+      [("dark", 404, None), ("down", 0, None), ("stray", 200, "3.0.1"), ("voice-stt", 200, None)])
+check("a 410 tombstone is counted, never reported", (tomb, trunc), (1, False))
+check("an unreadable CF script list (None) reports nothing: unknown is not 'nothing deployed'", g.unmanaged_scripts(None, {"a"}, probe), ([], 0, False))
+check("every deployed script has a repo directory: nothing to probe", g.unmanaged_scripts({"a"}, {"a", "b"}, probe), ([], 0, False))
+many = {"w%02d" % i for i in range(g.UNMANAGED_MAX + 5)}
+rep, tomb, trunc = g.unmanaged_scripts(many, set(), lambda w: (200, None))
+check("the probe set is capped and says so", (len(rep), trunc), (g.UNMANAGED_MAX, True))
+check("deployed_workers() without credentials is None (unknown), not an empty set", g.deployed_workers("", ""), None)
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
