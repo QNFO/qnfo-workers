@@ -50,6 +50,9 @@ HOLD_RE = re.compile(r"(^|[\s\[(])(wip|do[\s-]*not[\s-]*merge|hold)([\s:\])]|$)"
 # minutes of quiet before a repair, which alone is the whole SLA. The repair is a fast-forward merge of main into the branch, never forced, so an
 # author's concurrent push wins and the next main push tries again; 3 minutes matches the merge lane's quiet window (qnfo-fleet-control
 # stale_pr_merge_idle_min).
+# PR-MERGE-SLA-10M-1: the body phrases that ask the lane and this doer to wait; the same set as BH_BODY_HOLD_RE in qnfo-fleet-control (a session that keeps its
+# pull request as a draft on purpose says so in the body, because the harness opens every one as a draft).
+BODY_HOLD_RE = re.compile(r"\b(do[\s-]*not[\s-]*merge|don'?t[\s-]*merge|draft[\s-]+until|stays?[\s-]+(a[\s-]+)?draft|keep[\s-]+(it[\s-]+|this[\s-]+)?(as[\s-]+)?a[\s-]+draft|not[\s-]+ready[\s-]+(for[\s-]+(review|merge)|to[\s-]+merge))\b", re.I)
 DIRTY_QUIET_MIN = 3  # a pull request whose newest commit is younger is still being worked on
 # PR-MERGE-SLA-10M-1: the harness opens every session pull request as a draft, so skipping drafts left them conflicting until their author came back.
 # A draft that asks to wait (WIP, hold, do-not-merge in the title, labels or body) is still left alone (asks_to_wait). Switch: CONFLICT_REPAIR_DRAFTS=off
@@ -275,7 +278,7 @@ def resolve_version_only(text, pr_side="theirs"):
 def asks_to_wait(pr):
     """True when the pull request's title, labels or description ask not to be touched (WIP, hold, do not merge)."""
     labels = " ".join(str((l or {}).get("name") or "") for l in (pr.get("labels") or []))
-    return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or re.search(r"\bdo[\s-]*not[\s-]*merge\b", str(pr.get("body") or ""), re.I))
+    return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or BODY_HOLD_RE.search(str(pr.get("body") or "")))
 
 
 def merge_tree_conflicts(number, cwd=None):
@@ -891,6 +894,8 @@ def selftest():
     ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n/* a */\n=======\n/* b */\n>>>>>>> pr\n') is None, "a VERSION line on one side only is refused")
     ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n=======\nvar VERSION = "2";\n/* n */ const z = 1;\n>>>>>>> pr\n') is None, "a note line that carries code is refused")
     ok(asks_to_wait({"title": "WIP: x"}) and asks_to_wait({"title": "hold: y"}) and asks_to_wait({"title": "z", "labels": [{"name": "do not merge"}]}) and asks_to_wait({"title": "z", "body": "please do-not-merge"}) and not asks_to_wait({"title": "Withhold nothing, shipping soon", "body": "ok"}), "asks_to_wait: WIP, hold and do-not-merge, not words that merely contain them")
+    ok(all(asks_to_wait({"title": "z", "body": b}) for b in ("Draft until an independent adversarial review has returned", "this stays a draft", "Keep it as a draft for now", "not ready for merge", "not ready to merge yet", "Not ready for review"))
+       and not any(asks_to_wait({"title": "z", "body": b}) for b in ("the harness opens every session pull request as a draft", "ready for review", "a draft that is green is marked ready", "drafting notes until later")), "asks_to_wait: the body phrases a session uses to keep a draft on purpose hold it; a body that only mentions drafts does not")
     stamp = lambda secs: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1000000 + secs))
     prs = {1: dict(base_pr, number=1, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a1", ref="codeagent-x")), 2: dict(base_pr, number=2, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a2", ref="fix/y")),
            3: dict(base_pr, number=3, mergeable=True, mergeable_state="clean", head=dict(base_pr["head"], sha="a3")), 4: dict(base_pr, number=4, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a4", ref="repair/pr-9-abc")),
