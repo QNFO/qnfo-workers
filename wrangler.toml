@@ -32,4 +32,19 @@ main = "worker.js"
 compatibility_date = "2026-10-25"
 workers_dev = true
 
+# BP26-OBSERVABILITY-1 (2026-10-26, agent_issues 1000354): the Cloudflare API shows this stub as the only one of 35 deployed Workers with observability off
+# (observability_enabled_share 34 of 35, scripts/bp26_repo.py). It serves 410 and holds no bindings, so logs and traces are declared the way every other worker
+# declares them (the Workers docs: `enabled` alone turns on logs only) and sampled low, because a 410 has little to read.
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05
+
 [previews]
