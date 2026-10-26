@@ -2,7 +2,7 @@
 // Proves: the header opts in (APPLY-BY ci, DB qnfo-audit, one Rollback line, nothing deleted or dropped); the lever issue MD-P1b keeps its code-task and code-probe lines
 // byte for byte and gets exactly one code-anchor line, the new one, which occurs exactly once in qnfo-fleet-control/worker.js (the old one is gone since PR 4649);
 // two queued code tasks (ct_im<issue>b for ilTriggerHit, ct_im<issue>c for perfBreaches) carry one single-line anchor each that occurs exactly once; a closed issue and a
-// replay change nothing; the Rollback line restores the anchor and supersedes the tasks; and the two functions still hold the shape the probe forbids (or the lever has landed).
+// replay change nothing; the Rollback line restores the anchor and supersedes the tasks; and the named functions still hold the shape the probe forbids, as many as the code loop has not yet fixed (or the lever has landed).
 // Output MUST contain "0 failed" on success.   node migrations/md-p1b-reanchor.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -57,12 +57,13 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
 const shape = ': op === "eq" ? v === thr : v >= thr;';
 const landed = count(shape) === 0;
 ok(count(OLD) === 0 || landed, "the old anchor occurs 0 times in the worker (PR 4649 rewrote it), or the lever has landed", count(OLD));
+// The code loop removes the two remaining sites one task at a time (ct_im1000430c merged first, 2026-10-26 18:00Z), so this suite must hold at 2, 1 and 0 remaining sites.
+ok(count(NEW) <= 1 && count(NEW2) <= 1, "neither new anchor is duplicated in qnfo-fleet-control/worker.js", [count(NEW), count(NEW2)]);
 if (!landed) {
-  ok(count(NEW) === 1 && count(NEW2) === 1, "each new anchor occurs exactly once in qnfo-fleet-control/worker.js", [count(NEW), count(NEW2)]);
-  ok(count(shape) === 2, "exactly the two remaining sites keep the shape the probe forbids (ilTriggerHit and perfBreaches)", count(shape));
-  const at = (name) => wsrc.indexOf(name);
-  const seg = (name) => wsrc.slice(at(name), at(name) + 900);
-  ok(seg(NEW).includes(shape) && seg(NEW2).includes(shape), "and each anchor opens the function that holds one of them");
+  const holds = (name) => { const i = wsrc.indexOf(name); return i >= 0 && wsrc.slice(i, i + 900).includes(shape); };
+  ok(count(shape) <= 2, "at most the two sites this file named keep the shape the probe forbids", count(shape));
+  ok(count(shape) === [NEW, NEW2].filter(holds).length, "and every remaining occurrence sits inside one of the two named functions (no third site appeared)", { remaining: count(shape), ilTriggerHit: holds(NEW), perfBreaches: holds(NEW2) });
+  ok(count(NEW) === 1 || count(NEW2) === 1, "while the lever is open at least one anchor is still a single line that occurs exactly once, so the code loop can act", [count(NEW), count(NEW2)]);
 }
 ok(NEW.length > 15 && NEW2.length > 15 && !NEW.includes("\n") && !NEW2.includes("\n"), "both anchors are real single lines (the intake reads one line of at most 300 characters)");
 
