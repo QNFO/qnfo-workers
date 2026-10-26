@@ -103,6 +103,20 @@ ISSUE-THROUGHPUT-1. The owner's words: "The system shall always triage, prioriti
 
 Machinery that carries it: ISSUE-SLA-2H-1 and its metrics with their triggers, METRIC-CLOSED-LOOP-1, the remediation contracts and their hourly tick, the code loop, the standing directive of 2026-10-20 above (HUMAN-ITEMS-AUTOMATIC-1), and migrations/2026-10-20-issue-throughput.sql (the family view and the directive row). Recorded for machines in `ops_config.OWNER_DIRECTIVE_2026_10_20_ISSUE_THROUGHPUT_1`.
 
+## Standing directive (2026-10-21, cost and quality)
+
+**Cost-consciousness directive: quality may not be reduced to cut cost; prefer lower-cost paths only when quality is preserved.**
+
+COST-QUALITY-FLOOR-1. The owner's words are the line above: a note on fleet.qnfo.org (2026-10-21, OWNER-NOTE-46 on agent_issues 100405), filed by OWNER-NOTES-ROUTE-1. It sits beside BUDGET-SOFT-ROUTE-1 (2026-10-06: a breached AI spend cap steers work to the cheapest capable model and never stops it) and OUTPUT-QUALITY-LEDGER-1 (2026-10-26: outputs are judged by outcome measures, not by metric counts). In practice:
+
+1. **The reading.** A cheaper model or path chosen at a breached cap is kept only while the output-quality outcome measures (`v_output_quality_headline`) do not fall, and is reverted when they do. This reading is the fleet's, not the owner's words.
+2. **It stays a floor on the cheap path, not a stop.** A breached cap still never refuses, defers or skips work (BUDGET-SOFT-ROUTE-1). The directive can lift a downgrade; it cannot halt a process.
+3. **What it does not move.** The interrupt gate, section 9, the harness's own permission checks, the shared-secrets lock and another session's live work claim keep their precedence.
+
+Not yet carried (read 2026-10-26): no worker or loop reads the directive and nothing enforces it. qnfo-ai downgrades callers at a breached cap (`spendGovern`, `spendGovernWA` and the fleet cap steer) without looking at output quality, and `fleet_budget` `ai_spend:workers-ai` stood at 660.09 against a cap of 95, so every capped caller was on the cheap path while no quality test applied. The `agent_issues` row `COST-QUALITY-FLOOR-ENFORCE-1` holds the doer and its closing condition (a suite that asserts a downgrade is lifted when `v_output_quality_headline` reports `worse > 0` and made when it reports 0, at all three points).
+
+Recorded for machines in `ops_config.OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1` (migrations/2026-10-26-sweep-data-fixes-a.sql), whose value says `enforced_by: none: recorded only`; this section is its written statement (COST-QUALITY-FLOOR-DOC-1).
+
 ## Standing directive (2026-10-26, pull requests merge within 10 minutes)
 
 **MERGE ALL PRS AND MAKE SURE THEY ALWAYS MERGE WITHIN 10 MINUTES OF OPENING. THE SYSTEM SHALL AUTOMATICALLY ADDRESS ANY CHECK FAILURES AND MERGE CONFLICTS TO MEET 10-MINUTE SLA AND MERGE/CLOSE AUTOMATICALLY.**
