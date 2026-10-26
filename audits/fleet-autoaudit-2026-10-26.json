@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 21:40:42",
+  "audited_at": "2026-10-26 22:09:28",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -631,7 +631,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.9.1-keep-catalogue-project",
+        "version": "0.10.0-issue-rollup",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1392,9 +1392,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.9.1-keep-catalogue-project",
+      "before": "0.10.0-issue-rollup",
       "http": 200,
-      "live": "0.9.1-keep-catalogue-project",
+      "live": "0.10.0-issue-rollup",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
