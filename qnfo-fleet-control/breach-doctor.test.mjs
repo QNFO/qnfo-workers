@@ -5,8 +5,9 @@
 // caps defer and never stop; verify needs two passes and a failed verify, an SQL error, an expired lease or a no-op action is failed; two failures in 24 hours demote the rule and
 // three failures of one issue file one self issue and slow its retries to once in 120 minutes (a rate with a release, not a permanent stop); unowned issues are classified critical first, owned and young
 // issues never; the doctor's own BREACH-DOCTOR-1: issues are classified and counted but match no playbook and take no action; breaches_undiagnosed_over_60m keeps counting an issue classified
-// "unclassified" (coverage is not a diagnosis); a playbook-gap issue is filed once
-// per family and only once the planner trusts the doctor's titles (the seeded row is measure and files nothing; owner prose and the catch-all are skipped; none while 3 are open); the age
+// "unclassified" (coverage is not a diagnosis); the seeded playbook-gap row is measure and files no issue (a gap issue carries no anchor the code loop can edit; the gap stays recorded by family in
+// breach_diagnoses and v_breach_doctor_status; the self issue after 3 failed cases is the only issue the doctor files by itself, and it names a doer once the trust pair is listed); switched on with
+// UPDATE breach_playbooks SET mode = 'on' WHERE rule_id = 'playbook-gap', a gap issue is filed once per family (owner prose and the catch-all are skipped; none while 3 are open); the age
 // gate is 120 minutes and bounded to 10..120; an in-flight case with an expired lease is failed in measure and left alone only when the switch is off; the owner-card and file-issue kinds work; an injection payload in an issue body or plan reason reaches no table the doctor writes; one tick at a time, the lock is
 // released after an error; the tick never throws; the call site is on every */10 tick; the mirror and VERSION match.
 // Output MUST contain "0 failed" on success.   node qnfo-fleet-control/breach-doctor.test.mjs
@@ -438,6 +439,21 @@ const NEVER = [900, 901, 902, 100997, 910, 2047, 555];
   ok(qa(raw, "SELECT detail FROM breach_diagnosis_events WHERE event = 'supersede'").map((x) => x.detail).join("|").includes("why=closed") && qa(raw, "SELECT detail FROM breach_diagnosis_events WHERE event = 'supersede'").map((x) => x.detail).join("|").includes("why=owned"), "supersede events name why");
 }
 
+// ---- the self issue is the only issue the doctor files by itself; once the trust pair (migrations/2026-10-26-breach-doctor-trust.sql) is listed it names a doer
+{
+  const raw = world(); old(raw);
+  raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
+  cfg(raw, "code_merge_trusted_sources", "session*,qnfo-fleet-control|METRIC-TRIGGER-,qnfo-fleet-control|BREACH-DOCTOR-1:");
+  raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-FAIL', 'TEST', 'test-cause', 'sql', ?, ?, ?, 'SELECT ''ok'' AS expected, ''ok'' AS observed', 3, 12, 1, 'on')")
+    .run("SELECT id AS issue_id, 'fails' AS subject, '{}' AS facts_json FROM agent_issues WHERE id = 912", JSON.stringify(["UPDATE issue_triage SET no_such_column = 1 WHERE issue_id = ?1"]), JSON.stringify(["UPDATE issue_triage SET sla_due_at = 'x' WHERE issue_id = ?1"]));
+  old(raw);
+  for (let i = 0; i < 2; i++) raw.prepare("INSERT INTO breach_diagnoses (issue_id, case_key, family, rule_id, cause_class, facts_json, evidence_hash, state, mode, attempts, error_code, last_progress_at) VALUES (912, 'k', 'f', 'T-FAIL', 'test-cause', '{}', 'h', 'failed', 'on', ?, 'sql-error', ?)").run(i + 1, new Date(Date.now() - 30 * H).toISOString().slice(0, 19) + "Z");
+  const before = q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1:%'").n;
+  const r = await tick(raw);
+  const si = q1(raw, "SELECT * FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self T-FAIL sql-error'");
+  ok(r.self_issues === 1 && si && si.source === "qnfo-fleet-control" && /Doer: the code loop or a session/.test(si.description) && !/Doer: none yet/.test(si.description) && !si.description.includes("PAYLOAD"), "with qnfo-fleet-control|BREACH-DOCTOR-1: in code_merge_trusted_sources the self issue names the code loop or a session as its doer", si && si.description);
+  ok(q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1:%'").n === before + 1 && q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: playbook gap %' AND id <> 911").n === 0, "and it is the only issue the doctor filed (playbook-gap stays in measure)");
+}
 // ---- taint: a playbook that names free text, and a fact that is prose, are dropped and counted
 {
   const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
@@ -483,7 +499,7 @@ const NEVER = [900, 901, 902, 100997, 910, 2047, 555];
   ok(diag(raw, 913).state === "verified" && r3.verified >= 1, "a resolved card verifies the handed-owner case");
 }
 
-// ---- playbook gap: seeded in measure, then armed with the trust entry
+// ---- playbook gap: seeded in measure (no issue filed), then switched on with one UPDATE
 const arm = (raw, trusted) => {
   raw.prepare("UPDATE breach_playbooks SET mode = 'on' WHERE rule_id = 'playbook-gap'").run();
   if (trusted) cfg(raw, "code_merge_trusted_sources", "session*,qnfo-fleet-control|METRIC-TRIGGER-,qnfo-fleet-control|BREACH-DOCTOR-1:");
@@ -493,13 +509,19 @@ const ownerProse = (raw) => { for (let i = 0; i < 6; i++) { raw.prepare("INSERT 
 {
   // as shipped: playbook-gap is measure, so the doctor diagnoses the unclassified families and files nothing
   const raw = world(); old(raw); ownerProse(raw);
+  const doctorIssues = () => q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1:%'").n;
+  const issuesBefore = doctorIssues();
   ok(q1(raw, "SELECT mode FROM breach_playbooks WHERE rule_id = 'playbook-gap'").mode === "measure", "playbook-gap is seeded in measure");
   const r = await tick(raw);
   for (let i = 0; i < 4; i++) await tick(raw);
-  ok(r.mode === "on" && r.gap_issues === 0 && gapTitles(raw).length === 0, "seeded in measure: no playbook-gap issue is filed (the planner would record it untrusted and it would have no doer)", gapTitles(raw));
+  ok(r.mode === "on" && r.gap_issues === 0 && gapTitles(raw).length === 0, "seeded in measure: no playbook-gap issue is filed (it carries no anchor the code loop can edit, so it would only add an unowned issue)", gapTitles(raw));
+  ok(doctorIssues() === issuesBefore && q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").n === 0, "five ticks later the doctor has filed no issue of any kind (no gap issue, no self issue: nothing failed)", [doctorIssues(), issuesBefore]);
   ok(qa(raw, "SELECT 1 FROM breach_diagnoses WHERE cause_class = 'unclassified' AND state = 'diagnosed'").length >= 10, "and the unclassified cases are still diagnosed, so the measure is the ledger");
   const unc = q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses WHERE cause_class = 'unclassified' AND state = 'diagnosed'").n;
   ok(unc >= 10 && Number(metric(raw, "breaches_undiagnosed_over_60m")) === unc, "and the backlog metric keeps counting them: with the gap rule in measure the cause of those issues is still unfound, so the metric does not reach 0", [metric(raw, "breaches_undiagnosed_over_60m"), unc]);
+  const gs = q1(raw, "SELECT unclassified_cases u, gap_families f, gap_by_family g FROM v_breach_doctor_status");
+  const byFam = qa(raw, "SELECT family, COUNT(*) n FROM v_breach_diagnosis_current WHERE state = 'diagnosed' AND cause_class = 'unclassified' GROUP BY family ORDER BY n DESC, family LIMIT 12");
+  ok(gs.u === unc && gs.f === byFam.length && gs.f >= 3 && gs.g === byFam.map((x) => x.family + ":" + x.n).join(" ") && /OWNER-CHAT:\d+/.test(gs.g) && !/[^A-Za-z0-9_.:* -]/.test(gs.g), "v_breach_doctor_status records the gap by family (largest first, family names and counts only)", gs);
 }
 {
   // armed without the trust entry: the description does not name the code loop as the doer
