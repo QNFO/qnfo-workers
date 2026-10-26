@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-26 10:17:37",
+  "audited_at": "2026-10-26 11:04:14",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "idea-hub"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -592,7 +585,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.38.0",
+        "version": "1.38.1-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -607,7 +600,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.32-codeagent",
+        "version": "1.3.33-codeagent",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -622,7 +615,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.51.0-gate-not-required",
+        "version": "0.52.0-breach-doctor",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -687,7 +680,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.36.1-source-voice",
+        "version": "0.36.2-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1208,9 +1201,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.38.0",
+      "before": "1.38.1-codeagent",
       "http": 200,
-      "live": "1.38.0",
+      "live": "1.38.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1250,9 +1243,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.32-codeagent",
+      "before": "1.3.33-codeagent",
       "http": 200,
-      "live": "1.3.32-codeagent",
+      "live": "1.3.33-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1355,9 +1348,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.51.0-gate-not-required",
+      "before": "0.52.0-breach-doctor",
       "http": 200,
-      "live": "0.51.0-gate-not-required",
+      "live": "0.52.0-breach-doctor",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1603,9 +1596,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.36.1-source-voice",
+      "before": "0.36.2-codeagent",
       "http": 200,
-      "live": "0.36.1-source-voice",
+      "live": "0.36.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
