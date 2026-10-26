@@ -12,7 +12,8 @@ collect_audit_chain  (hourly)  SQLite has no sha256, so the runner seals. Every 
                      R2 (a copy outside D1). Value 1 when everything recomputes, 0 on the first mismatch (the evidence names the seq), None when the table is empty.
 collect_audit_coverage (hourly) side effects judged against INDEPENDENT records, never against the triggers' own output: Cloudflare Workers deployments (API)
                      against agent_actions of kind deploy, settings, secret-write and rollback for the same worker within 20 minutes; a platform's public timeline
-                     (Mastodon, no credential) against agent_actions of kind publish. Window: 7 days, ending 30 minutes ago so a ledger row has time to land.
+                     (Mastodon, no credential) against agent_actions of kind publish; Cloudflare's secret-triggered versions (workers/triggered_by = secret) against secret-write rows, which the qnfo-ops secret watch writes via
+                     the cloud_ops_events trigger of migrations/2026-10-26-bp26-audit-log-secrets.sql. Window: 7 days, ending 30 minutes ago so a ledger row has time to land.
                      value = matched / all over the classes that have an independent record; a class that has none (mail, other platforms, papers, q08 pieces,
                      secret writes outside the ledger) is named in the evidence rows with its ledger parity and is NOT counted.
 collect_kill_switch_age (hourly) days since the last live drill with outcome pass in kill_switch_tests. None while none exists: no global kill switch exists yet
@@ -41,10 +42,12 @@ VERIFY_MAX = 20000       # rows re-verified per run; the whole chain until it is
 PAGE = 500
 WINDOW_S = 7 * 86400
 GRACE_S = 30 * 60
+SECRET_GRACE_S = 90 * 60
 MATCH_S = 20 * 60
 MAX_SCRIPTS = 60
 DEPLOY_KINDS = ("deploy", "settings", "secret-write", "rollback")
 CLASS_RECORD = {"deploy": "Cloudflare Workers deployments API, independent of every D1 ledger", "publish:mastodon": "the platform's own public timeline, independent",
+                "secret-write": "Cloudflare Workers versions annotated workers/triggered_by = secret, independent of every ledger (the qnfo-ops secret watch writes the row)",
                 "publish:papers": "living-paper paper_change_ledger, the papers system of record in another database; the runner mirrors it, so this checks the mirror, not the publisher", "publish:q08": "q08-signal published_pieces, the q08 system of record in another database; the runner mirrors it, so this checks the mirror, not the publisher"}
 
 
@@ -172,6 +175,19 @@ def ensure_root(d1, day, seq, head, total, stamp, r2_put):
     return "root %s written to D1%s" % (day, " and R2" if r2_ok else " (R2 refused: status %s)" % st)
 
 
+def collect_audit_seal(ctx):
+    """Sealing runs on every consumer run (no metric, so the framework never skips it): a row is exposed to rewriting only between its insert and its seal, so the gap should be one
+    consumer run (10 to 20 minutes), not the 50-minute cadence of the verifier, and the first backlog (the 8-day backfill, 1200 rows a run) drains in a few runs."""
+    if ctx.dry:
+        return []
+    try:
+        seal(ctx.d1, iso(ctx.now))
+    except Exception as e:  # noqa: BLE001
+        # not a metric result: the framework would count it as an unknown metric on every run; a failed seal shows as rows awaiting sealing (evidence row `unsealed` of audit_chain_verify)
+        print(json.dumps({"bp26_auditchain": "seal-failed", "error": str(e)[:160]}))
+    return []
+
+
 def collect_audit_chain(ctx):
     rows_out, stamp, day = [], iso(ctx.now), time.strftime("%Y-%m-%d", time.gmtime(ctx.now))
     sealed, note = 0, []
@@ -225,6 +241,56 @@ def _match(sorted_ts, t, tol=MATCH_S):
     return i < len(sorted_ts) and sorted_ts[i] <= t + tol
 
 
+def _scripts(ctx, acct, since):
+    """The worker scripts modified inside the window, read once per run (the deploy and secret classes share it)."""
+    if getattr(ctx, "_bp26_scripts", None) is None:
+        names = []
+        for s in (ctx.cf("/accounts/%s/workers/scripts" % acct).get("result") or []):
+            mod = parse_ts(s.get("modified_on"))
+            if s.get("id") and (mod is None or mod >= since):
+                names.append(s["id"])
+        ctx._bp26_scripts = sorted(names)[:MAX_SCRIPTS]
+    return ctx._bp26_scripts
+
+
+def secret_class(ctx, ledger):
+    """Secret writes: Cloudflare Workers versions annotated workers/triggered_by = secret (independent of every ledger) against agent_actions rows of kind secret-write for the same
+    worker within 20 minutes. The grace is 90 minutes: qnfo-ops SECRET-CHANGE-WATCH-1 copies a change into cloud_ops_events every 30 minutes, and that event is the writer."""
+    acct = os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or ""
+    if not acct:
+        return None, "no account id in this environment"
+    since, until = ctx.now - WINDOW_S, ctx.now - SECRET_GRACE_S
+    by_worker = {}
+    for r in ledger:
+        if r["action_kind"] == "secret-write" and r.get("target"):
+            t = parse_ts(r["ts"])
+            if t is not None:
+                by_worker.setdefault(r["target"], []).append(t)
+    for v in by_worker.values():
+        v.sort()
+    names = _scripts(ctx, acct, since)
+    matched, total, missing = 0, 0, []
+    for name in names:
+        if ctx.left() < 20:
+            break
+        try:
+            items = (ctx.cf("/accounts/%s/workers/scripts/%s/versions?per_page=100" % (acct, name)).get("result") or {}).get("items") or []
+        except Exception:  # noqa: BLE001
+            continue
+        for v in items:
+            if (v.get("annotations") or {}).get("workers/triggered_by") != "secret":
+                continue
+            t = parse_ts((v.get("metadata") or {}).get("created_on"))
+            if t is None or t < since or t > until:
+                continue
+            total += 1
+            if _match(by_worker.get(name, []), t):
+                matched += 1
+            elif len(missing) < 20:
+                missing.append(("secret-write:%s@%s" % (name, iso(t)), 0, "Cloudflare version %s of %s was triggered by a secret change and has no secret-write row in agent_actions within 20 minutes" % (v.get("number"), name)))
+    return (matched, total, missing, len(names)), None
+
+
 def deploy_class(ctx, ledger):
     """Cloudflare Workers deployments in the window against ledger rows (agent_actions of a deploy kind) for the same worker."""
     acct = os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or ""
@@ -239,12 +305,7 @@ def deploy_class(ctx, ledger):
                 by_worker.setdefault(r["target"], []).append(t)
     for v in by_worker.values():
         v.sort()
-    names = []
-    for s in (ctx.cf("/accounts/%s/workers/scripts" % acct).get("result") or []):
-        mod = parse_ts(s.get("modified_on"))
-        if s.get("id") and (mod is None or mod >= since):
-            names.append(s["id"])
-    names = sorted(names)[:MAX_SCRIPTS]
+    names = _scripts(ctx, acct, since)
     matched, total, missing = 0, 0, []
     for name in names:
         if ctx.left() < 20:
@@ -381,7 +442,7 @@ def collect_audit_coverage(ctx):
     except Exception as e:  # noqa: BLE001
         return [Result("audit_coverage", None, "agent_actions unreadable: %s" % str(e)[:140], [("agent_actions", None, str(e)[:200])])]
     rows, matched, total, parts, unmeasured = [], 0, 0, [], []
-    for name, fn in (("deploy", deploy_class), ("publish:mastodon", mastodon_class), ("publish:papers", papers_class), ("publish:q08", q08_class)):
+    for name, fn in (("deploy", deploy_class), ("publish:mastodon", mastodon_class), ("secret-write", secret_class), ("publish:papers", papers_class), ("publish:q08", q08_class)):
         try:
             res, why = fn(ctx, ledger)
         except Exception as e:  # noqa: BLE001
@@ -405,8 +466,7 @@ def collect_audit_coverage(ctx):
         rows.append(("ledger-only:publish-other-platforms", None, "posts on Buffer-routed platforms and Bluesky roll-ups %d, agent_actions rows %d: ledger parity only (their rows carry no public post id to match); not counted" % (sp, pa)))
     except Exception as e:  # noqa: BLE001
         rows.append(("ledger-only", None, "parity read failed: %s" % str(e)[:140]))
-    for cls, why in (("secret-write:direct", "a secret PUT outside the fleet ledger leaves no row; Cloudflare lists it as a deployment, which the deploy class counts when it is ledgered"),
-                     ("bluesky-and-buffer-platforms", "their rows carry no public post id to match against a timeline; ledger parity only (see ledger-only:publish-other-platforms)"),
+    for cls, why in (("bluesky-and-buffer-platforms", "their rows carry no public post id to match against a timeline; ledger parity only (see ledger-only:publish-other-platforms)"),
                      ("send:independent", "no independent record of sent mail is readable with the runner token (Cloudflare Email Service logs); see ledger-only:send")):
         rows.append(("no-ledger:" + cls, None, why))
     if not total:
@@ -428,6 +488,7 @@ def collect_kill_switch_age(ctx):
 
 
 COLLECTORS = [
+    Collector("audit_seal", collect_audit_seal, [], 0),                                  # every run: keeps the unsealed window to one consumer run
     Collector("audit_chain", collect_audit_chain, ["audit_chain_verify"], 50),
     Collector("mirror_publishes", collect_mirror_publishes, ["audit_coverage"], 50),   # before the coverage collector: the denominators come from the source databases, never from this mirror
     Collector("audit_coverage", collect_audit_coverage, ["audit_coverage"], 50),
@@ -537,6 +598,13 @@ def selftest():
     c.execute("DELETE FROM agent_actions WHERE id = 2")
     c.commit()
     ok(verify(d1)[0] is False and "missing" in verify(d1)[2], "a deleted agent_actions row is detected as missing: %r" % (verify(d1),))
+    # ---- the seal collector (every run, no metric)
+    c, d1 = _world()
+    ok(collect_audit_seal(P.Ctx(d1=d1, now=now)) == [] and collect_audit_seal(P.Ctx(d1=d1, now=now, dry=True)) == [], "the seal collector reports nothing when there is nothing to seal and never writes in a dry run")
+    deploy("w5", now - 20)
+    ok(collect_audit_seal(P.Ctx(d1=d1, now=now, dry=True)) == [] and d1("SELECT COUNT(*) AS n FROM agent_action_chain")[0]["n"] == 0, "dry: a new row stays unsealed")
+    r = collect_audit_seal(P.Ctx(d1=d1, now=now))
+    ok(r == [] and d1("SELECT COUNT(*) AS n FROM agent_action_chain")[0]["n"] == 1, "the seal collector seals the new row and returns no metric result: %r" % (r,))
     # ---- a dry run seals nothing
     c, d1 = _world()
     deploy("w0", now - 60)
@@ -556,10 +624,20 @@ def selftest():
                                 {"created_on": iso(now - 600), "source": "api"}, {"created_on": iso(now - 9 * 86400), "source": "api"}],
                    "worker-b": [{"created_on": iso(now - 5 * 86400), "source": "api"}]}
 
+    def ver(n, t, by):
+        return {"number": n, "metadata": {"created_on": iso(t)}, "annotations": {"workers/triggered_by": by}}
+    versions = {"worker-a": [ver(5, now - 86400 * 1.5, "secret"), ver(4, now - 86400, "upload"), ver(3, now - 600, "secret"), ver(2, now - 9 * 86400, "secret")],   # one matched, one inside the 90-minute grace, one outside the window
+                "worker-b": [ver(9, now - 4 * 86400, "secret"), ver(8, now - 3 * 86400, "upload")]}                                                              # one unmatched
+    c.execute("INSERT INTO agent_actions (ts, action_kind, target, source_table, source_id) VALUES (?, 'secret-write', 'worker-a', 'cloud_ops_events', 'sc-1')", [iso(now - 86400 * 1.5 + 30)])
+    c.execute("INSERT INTO agent_actions (ts, action_kind, target, source_table, source_id) VALUES (?, 'deploy', 'worker-b', 'x', 'near-deploy')", [iso(now - 4 * 86400 + 60)])   # a deploy near the secret version is not a secret-write row
+    c.commit()
+
     def cf(path):
         if path.endswith("/workers/scripts"):
             return {"result": [{"id": "worker-a", "modified_on": iso(now - 600)}, {"id": "worker-b", "modified_on": iso(now - 5 * 86400)}, {"id": "idle", "modified_on": iso(now - 40 * 86400)}]}
         name = path.split("/scripts/")[1].split("/")[0]
+        if "/versions" in path:
+            return {"result": {"items": versions.get(name, [])}}
         return {"result": {"deployments": deployments.get(name, [])}}
 
     class Resp(object):
@@ -597,11 +675,12 @@ def selftest():
     ctx0 = P.Ctx(d1=d1, d1_db=d1_db, cf=cf, http=http, now=now)
     r = collect_audit_coverage(ctx0)[0]
     # before the mirror: deploys 3 of 4 (worker-a t_a1 and t_a2 matched, t_a3 not; worker-b matched), statuses 1 of 2, papers 0 of 3 (publish, re-version, withdrawal), q08 0 of 2
-    ok(r.value is not None and abs(r.value - 4.0 / 11.0) < 1e-9, "coverage before the mirror is 4 of 11 (deploys 3/4, statuses 1/2, papers 0/3, q08 0/2): got %r" % (r.value,))
+    ok(r.value is not None and abs(r.value - 5.0 / 13.0) < 1e-9, "coverage before the mirror is 5 of 13 (deploys 3/4, statuses 1/2, secret writes 1/2, papers 0/3, q08 0/2): got %r" % (r.value,))
     miss = [x[0] for x in r.rows if x[1] == 0 and x[0].startswith(("deploy:", "publish:"))]
     ok(sum(1 for m in miss if m.startswith("publish:papers@")) == 3 and sum(1 for m in miss if m.startswith("publish:q08@")) == 2 and any(m.startswith("deploy:worker-a@") for m in miss) and any(m.startswith("publish:mastodon@") for m in miss),
        "the uncovered deployment, status, three paper events and two pieces are listed: %r" % miss)
-    ok(any(x[0] == "ledger-only:send" for x in r.rows) and sum(1 for x in r.rows if x[0].startswith("no-ledger:")) == 3, "classes with no outside record are named and not counted")
+    ok(any(x[0] == "ledger-only:send" for x in r.rows) and sum(1 for x in r.rows if x[0].startswith("no-ledger:")) == 2, "classes with no outside record are named and not counted")
+    ok(any(x[0].startswith("secret-write:worker-b@") and x[1] == 0 for x in r.rows) and not any(x[0].startswith("secret-write:worker-a@") for x in r.rows), "the unmatched secret version is listed; the matched one, the one in the grace period and the one outside the window are not")
     m1 = collect_mirror_publishes(P.Ctx(d1=d1, d1_db=d1_db, now=now, dry=True))[0]
     ok(m1.value is None and d1("SELECT COUNT(*) AS n FROM agent_actions WHERE via = 'runner-mirror'")[0]["n"] == 0 and "papers 4" in m1.note and "q08 2" in m1.note, "a dry mirror writes nothing: %r" % (m1,))
     m2 = collect_mirror_publishes(ctx0)[0]
@@ -612,7 +691,7 @@ def selftest():
     collect_mirror_publishes(ctx0)
     ok(d1("SELECT COUNT(*) AS n FROM agent_actions WHERE via = 'runner-mirror'")[0]["n"] == 6, "a second mirror run writes nothing new (idempotent)")
     r = collect_audit_coverage(ctx0)[0]
-    ok(abs(r.value - 9.0 / 11.0) < 1e-9, "after the mirror the denominators (from the source databases) are unchanged and papers 3/3, q08 2/2 give 9 of 11: got %r" % (r.value,))
+    ok(abs(r.value - 10.0 / 13.0) < 1e-9, "after the mirror the denominators (from the source databases) are unchanged and papers 3/3, q08 2/2 give 10 of 13: got %r" % (r.value,))
 
     def refuse(path):
         raise RuntimeError("HTTP 403")
@@ -638,7 +717,8 @@ def selftest():
     c.commit()
     v = collect_kill_switch_age(P.Ctx(d1=d1, now=now))[0].value
     ok(v is not None and abs(v - 3.0) < 0.05, "a live pass three days ago reads 3.0 and a later failed drill does not reset it: %r" % (v,))
-    ok([x.name for x in COLLECTORS] == ["audit_chain", "mirror_publishes", "audit_coverage", "kill_switch_age"] and all(isinstance(x.every_min, int) for x in COLLECTORS), "four collectors registered, the mirror before the coverage")
+    ok([x.name for x in COLLECTORS] == ["audit_seal", "audit_chain", "mirror_publishes", "audit_coverage", "kill_switch_age"] and all(isinstance(x.every_min, int) for x in COLLECTORS), "five collectors registered, the seal first and the mirror before the coverage")
+    ok(COLLECTORS[0].metrics == [] , "the seal collector has no metric, so the framework never skips it")
     print("bp26_auditchain selftest %s" % ("ok" if not fails else "FAILED %d" % len(fails)))
     return 1 if fails else 0
 

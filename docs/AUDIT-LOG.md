@@ -10,6 +10,7 @@ Metrics: `audit_chain_verify` (1 when the whole chain recomputes), `audit_covera
 | action_kind | written by | source ledger |
 |---|---|---|
 | deploy, settings, secret-write, rollback | AFTER INSERT trigger | `fleet_deploys` (classified by the rules of qnfo-deploy-guard: `SETTINGS-ONLY`, `SECRET-ONLY`, rollback markers); a failed deploy is a row with outcome `failed` |
+| secret-write | AFTER INSERT trigger (BP26-AUDIT-LOG-2) | `cloud_ops_events` rows of kind `secret-change`, which the qnfo-ops secret watch writes for every Cloudflare version triggered by a secret (worker, version number and time, never a value); the action time is the Cloudflare version time |
 | send | AFTER INSERT trigger | `emails` rows inserted with status sent or replied; the target is the recipient domain only, never the address |
 | publish | AFTER INSERT trigger | `social_media_posts` (status published), `social_threads` (status becomes posted) |
 | publish (papers, q08 pieces) | the runner (`via = runner-mirror`) | `living-paper.paper_change_ledger` and `q08-signal.published_pieces`: other databases, which a trigger cannot reach |
@@ -42,12 +43,13 @@ for a, c in zip(actions, chain):                       # both ordered, a["id"] =
 
 `audit_coverage` = rows found / events found, over the classes that have a record outside the log, for the last 7 days ending 30 minutes ago (a ledger row needs time to land):
 
-- deploy, settings, secret-write, rollback: Cloudflare Workers deployments (API), independent of every D1 ledger; a match is a row for the same worker within 20 minutes;
+- deploy, settings, rollback: Cloudflare Workers deployments (API), independent of every D1 ledger; a match is a row of a deploy kind for the same worker within 20 minutes;
+- secret-write: Cloudflare Workers versions annotated `workers/triggered_by = secret` (API, up to 100 versions a worker), matched by a `secret-write` row for the same worker within 20 minutes, with a 90-minute grace because the watch runs every 30 minutes;
 - publish on Mastodon: the account's public timeline, independent;
 - publish of papers and q08 pieces: counted against their own databases. The runner is their writer, so this checks the mirror, not the publisher.
 
 Named in the evidence rows (`bp26_probe_results`, metric `audit_coverage`) and not counted: sent mail and the posts routed through Buffer or Bluesky roll-ups (ledger parity only, no outside record the runner
-token can read), and a secret written outside the fleet ledger (Cloudflare shows it as a deployment, which the deploy class counts once it is ledgered).
+token can read).
 Not built yet and owned in BP26-AUDIT-LOG-1: the weekly FinOps digest per worker and loop, a `cost` value (every row has none today), outside matching for mail and Buffer platforms, and monthly sharding (revisit at about one million rows; the log grows about 3000 rows a week).
 
 Look-ups: `SELECT action_kind, outcome, COUNT(*) FROM agent_actions WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 days') GROUP BY 1, 2;` and `SELECT * FROM bp26_probe_results WHERE metric = 'audit_coverage' ORDER BY id DESC LIMIT 20;`.
