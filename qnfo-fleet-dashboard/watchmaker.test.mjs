@@ -14,6 +14,7 @@
 // GRANT-FOLLOWUP-HONEST-1: a grant-followup run that left a mailbox unread is dated as a run and counted with its reason
 // (gmail_pass_unset, errors) until a full read; only no run at all reads "never ran".
 // WATCHMAKER-RESEARCH-REPO-SYNC-1: the research record sync of qnfo-research-exec reads the updated_at of its ops_config cursor row (never ran, stalled after 2h, fresh).
+// BREACH-DOCTOR-WATCHMAKER-1 (agent_issues 1000398): the breach doctor tick of qnfo-fleet-control reads the newest event = 'tick' row of breach_diagnosis_events (fresh, stalled after 2h even while a newer event of another kind exists, not counted before its first due date, never ran after it).
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -132,6 +133,12 @@ db.prepare("INSERT INTO events_radar (slug, scanned_at) VALUES ('events-radar-20
 const wwmAt = (h) => new Date(NOW - h * 36e5).toISOString().replace("T", " ").slice(0, 19);
 db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES ('2026-10-05', 'cf-rum', 'web', 'site', '(all)', 'pageviews', 90, 'unknown', ?)").run(wwmAt(1));
 db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES ('2026-10-05', 'work-with-me', 'email', 'campaign', 'work-with-me:all', 'inbound_contacts_30d', 0, 'unknown', ?)").run(wwmAt(5.5));
+// BREACH-DOCTOR-WATCHMAKER-1 (agent_issues 1000398): qnfo-fleet-control's doctor tick writes one event = 'tick' row to breach_diagnosis_events on every run (live shape: ts as
+// strftime('%Y-%m-%dT%H:%M:%SZ'), event CHECK-constrained to a fixed list); a newer row of another event kind must not date the run.
+db.exec("CREATE TABLE breach_diagnosis_events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, issue_id INTEGER, diagnosis_id INTEGER, event TEXT NOT NULL, from_state TEXT, to_state TEXT, detail TEXT, tick_id TEXT)");
+const bdTs = (h) => ago(h).slice(0, 19) + "Z";
+db.prepare("INSERT INTO breach_diagnosis_events (ts, event, detail) VALUES (?, 'tick', 'mode=on rules=24 hits=4')").run(bdTs(0.2));
+db.prepare("INSERT INTO breach_diagnosis_events (ts, issue_id, event) VALUES (?, 1000001, 'diagnosed')").run(bdTs(0.1));
 
 function stmtOn(sql) {
   let args = [];
@@ -181,6 +188,21 @@ const op = (m, k) => m.ops.find((o) => o.key === k);
   db.prepare("UPDATE ops_config SET updated_at = ? WHERE key = 'research_repo_sync_cursor'").run(wm(0.4));
   const fresh = op(await api.watchmakerMeasure(env, NOW), "research-repo-sync");
   ok(fresh && !fresh.counted && /^ok, last run 0.4h ago$/.test(fresh.state), "a research repo sync that advanced 24 minutes ago is ok (" + (fresh && fresh.state) + ")");
+}
+{ // BREACH-DOCTOR-WATCHMAKER-1 (agent_issues 1000398): the doctor tick dates its own run through breach_diagnosis_events; only event = 'tick' rows count.
+  const bd = async (now) => op(await api.watchmakerMeasure(env, now || NOW), "breach-doctor");
+  const fresh = await bd();
+  ok(fresh && !fresh.counted && fresh.runner === "cron:qnfo-fleet-control" && /^ok, last run 0.2h ago$/.test(fresh.state), "a doctor tick 12 minutes ago is ok, run by qnfo-fleet-control (" + (fresh && fresh.state) + ")");
+  db.exec("UPDATE breach_diagnosis_events SET ts = '" + bdTs(3) + "' WHERE event = 'tick'");
+  const stale = await bd();
+  ok(stale && stale.counted && stale.state === "stalled: last run 3h ago, cadence 1h", "a doctor tick silent for 3h counts as stalled, although a newer diagnosed event exists (" + (stale && stale.state) + ")");
+  db.exec("DELETE FROM breach_diagnosis_events WHERE event = 'tick'");
+  const before = await bd();
+  ok(before && !before.counted && before.state === "first run due 2026-10-27T00:00:00Z", "with no tick row before the first due date the op is not counted (" + (before && before.state) + ")");
+  const after = await bd(Date.parse("2026-10-27T01:00:00Z"));
+  ok(after && after.counted && after.state === "never ran", "with no tick row after the first due date it counts as never ran: a diagnosed event does not prove the tick (" + (after && after.state) + ")");
+  db.prepare("INSERT INTO breach_diagnosis_events (ts, event, detail) VALUES (?, 'tick', 'mode=on rules=24 hits=4')").run(bdTs(0.2));
+  ok(!(await bd()).counted, "a fresh tick row clears the op again");
 }
 let m = await api.watchmakerMeasure(env, NOW);
 { const ce = op(m, "compat-exposure"); ok(ce && !ce.counted && ce.runner === "cron:qnfo-ops", "compat-exposure is listed, run by qnfo-ops, not counted when fresh (COMPAT-WATCHMAKER-1, " + (ce && ce.state) + ")"); }
