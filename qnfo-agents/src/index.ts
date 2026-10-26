@@ -18,6 +18,8 @@
 //   read    qnfo-fleet-dashboard or qnfo-ops (both verify the owner first): turns, read-only tools, D1 reads, sandbox runs.
 //   write   the same callers with x-agent-scope: write (the console sends it only after a fresh owner code): every ops tool,
 //           fleet issues, schedules and MCP connections. Code changes still go through the code loop as owner tasks.
+//   loop    a fleet loop's request in D1 cf_agent_requests (CF-AGENTS-LOOPS-1), drained every 5 minutes: the read tools plus fleet
+//           issues, code-task proposals and schedules on the requester's own instance (loop-<requester>); no mutating ops tool.
 // Deploy: WRANGLER-ONLY (a new Durable Object class needs a wrangler migration); .github/workflows/deploy-qnfo-agents.yml
 // deploys it with the deploy-guard lock, the fleet_deploys ledger and a /health canary that reverts a push that did not arrive.
 // Source is src/; worker.js is the esbuild bundle of src/index.ts (npm run build), kept identical to deployed-current.worker.js.
@@ -30,7 +32,7 @@ import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { createCodeTool } from "@cloudflare/codemode/ai";
 import { generateText, jsonSchema, stepCountIs, tool } from "ai";
 import { z } from "zod";
-import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines } from "./lib.js";
+import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest } from "./lib.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
 declare var VERSION: string;
@@ -43,7 +45,8 @@ const MAX_STEPS = 16;
 const TURN_TIMEOUT_MS = 10 * 60 * 1000;
 const STALE_RUN_MIN = 20;
 
-type Scope = "public" | "read" | "write";
+type Scope = "public" | "read" | "write" | "loop";
+const REQUEST_STALE_MIN = 30;
 interface Env {
   AI: any;
   AUDIT_DB: D1Database;
@@ -64,7 +67,8 @@ const CAPABILITIES = [
   "Code Mode: the model writes JavaScript that calls the tools inside a Dynamic Worker sandbox (LOADER)",
   "Workers AI through AI Gateway with a fallback model (createAI)",
   "the qnfo-ops tool surface: Cloudflare API, D1, R2, KV, GitHub, workspace, containers, deploys (scope-gated)",
-  "code changes as code-task proposals the owner files; the code loop opens and merges the PR"
+  "code changes as code-task proposals the owner files; the code loop opens and merges the PR",
+  "fleet loops reach it through D1 cf_agent_requests (run, sandbox, schedule), drained every 5 minutes in the loop scope"
 ];
 
 function json(body: unknown, status = 200): Response {
@@ -174,7 +178,7 @@ function directTools(c: ToolCtx): Record<string, any> {
       return { ok: true, proposed: true, note: "Returned to the caller as a code-task proposal." };
     }
   });
-  if (c.scope !== "write") return t;
+  if (c.scope !== "write" && c.scope !== "loop") return t;
   t.file_issue = tool({
     description: "File a fleet issue in qnfo-audit.agent_issues (a defect or follow-up for the fleet's loops).",
     inputSchema: z.object({ title: z.string(), description: z.string(), priority: z.enum(["critical", "high", "medium", "low"]).optional(), category: z.string().optional() }),
@@ -187,6 +191,7 @@ function directTools(c: ToolCtx): Record<string, any> {
       inputSchema: z.object({ text: z.string(), cron: z.string().optional(), delay_s: z.number().optional() }),
       execute: async (i: any) => agent.createSchedule({ text: i.text, cron: i.cron, delay_s: i.delay_s, scope: c.scope, caller: c.caller })
     });
+    if (c.scope !== "write") return t;
     t.mcp_connect = tool({
       description: "Connect this agent to a remote MCP server by URL (Streamable HTTP); its tools join later turns.",
       inputSchema: z.object({ name: z.string(), url: z.string() }),
@@ -273,7 +278,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
   async startRun(input: RunInput) {
     const text = String(input.text || "").trim().slice(0, 8000);
     if (!text) return { ok: false, error: "empty request" };
-    const scope: Scope = input.scope === "write" ? "write" : "read";
+    const scope: Scope = input.scope === "write" || input.scope === "loop" ? input.scope : "read";
     const id = runId();
     const now = Date.now();
     this.sql`INSERT INTO runs (id, prompt, scope, caller, status, created_ms) VALUES (${id}, ${text}, ${scope}, ${input.caller}, 'queued', ${now})`;
@@ -335,7 +340,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
     if (w.error) return { ok: false, error: w.error };
     const text = String(input.text || "").trim().slice(0, 4000);
     if (text.length < 8) return { ok: false, error: "say what the scheduled turn should do" };
-    const s = await this.schedule(w.when as any, "scheduledTurn" as any, { text, scope: input.scope === "write" ? "write" : "read", caller: input.caller });
+    const s = await this.schedule(w.when as any, "scheduledTurn" as any, { text, scope: input.scope === "write" || input.scope === "loop" ? input.scope : "read", caller: input.caller });
     return { ok: true, id: s.id, kind: w.kind, when: w.when };
   }
   async scheduledTurn(payload: { text: string; scope: Scope; caller: string }) {
@@ -372,6 +377,56 @@ export class FleetCodeAgent extends Agent<Env, State> {
   @callable() runs() { return this.listRuns(20); }
   @callable() status(id: string) { return this.getRun(id); }
   @callable() schedules() { return this.listSchedules(); }
+}
+
+// ---- CF-AGENTS-LOOPS-1: the D1 request queue any fleet loop writes (cf_agent_requests), drained by the 5-minute cron.
+const NOW_SQL = "strftime('%Y-%m-%dT%H:%M:%SZ','now')";
+async function finishRequest(env: Env, id: number, status: string, result: unknown, error: string | null) {
+  await env.AUDIT_DB.prepare("UPDATE cf_agent_requests SET status = ?2, result = ?3, error = ?4, finished_at = " + NOW_SQL + " WHERE id = ?1")
+    .bind(id, status, result == null ? null : clip(typeof result === "string" ? result : JSON.stringify(result), 8000), error ? clip(error, 600) : null).run();
+}
+
+async function drainRequests(env: Env) {
+  const db = env.AUDIT_DB;
+  const out = { reconciled: 0, started: 0, failed: 0 };
+  // 1. A running turn is finished when its cf_agent_runs row is; one with no result after REQUEST_STALE_MIN is re-queued (twice at
+  //    most) and then failed with the reason, so nothing waits silently.
+  const running: any = await db.prepare("SELECT q.id, q.attempts, q.started_at, a.status AS run_status, a.result AS run_result, a.error AS run_error FROM cf_agent_requests q LEFT JOIN cf_agent_runs a ON a.id = q.run_id WHERE q.status = 'running' LIMIT 50").all();
+  for (const r of running.results || []) {
+    if (r.run_status === "done" || r.run_status === "failed") { await finishRequest(env, r.id, r.run_status, r.run_result, r.run_error); out.reconciled++; continue; }
+    const age = (Date.now() - Date.parse(String(r.started_at || ""))) / 60000;
+    if (!(age > REQUEST_STALE_MIN)) continue;
+    if ((r.attempts || 0) < 2) await db.prepare("UPDATE cf_agent_requests SET status = 'queued', run_id = NULL, error = ?2 WHERE id = ?1").bind(r.id, "re-queued: no result after " + REQUEST_STALE_MIN + " minutes").run();
+    else { await finishRequest(env, r.id, "failed", null, "no result after " + REQUEST_STALE_MIN + " minutes, " + r.attempts + " attempts"); out.failed++; }
+  }
+  // 2. Start the next requests, critical first, then oldest.
+  const queued: any = await db.prepare("SELECT * FROM cf_agent_requests WHERE status = 'queued' ORDER BY CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, id LIMIT ?1").bind(DRAIN_PER_TICK).all();
+  for (const q of queued.results || []) {
+    const claim = await db.prepare("UPDATE cf_agent_requests SET status = 'running', attempts = attempts + 1, started_at = " + NOW_SQL + " WHERE id = ?1 AND status = 'queued'").bind(q.id).run();
+    if (!claim.meta || !claim.meta.changes) continue;
+    const v = validateRequest(q);
+    if (v.error) { await finishRequest(env, q.id, "failed", null, v.error); out.failed++; continue; }
+    const caller = "loop:" + q.requester;
+    try {
+      const stub: any = await getAgentByName(env.FleetCodeAgent as any, loopInstance(q.requester, q.instance));
+      if (v.kind === "run") {
+        const r = await stub.startRun({ text: q.prompt, scope: "loop", caller, wait_ms: 0 });
+        if (!r.ok || !r.run) { await finishRequest(env, q.id, "failed", null, String(r.error || "the agent did not start the turn")); out.failed++; continue; }
+        await db.prepare("UPDATE cf_agent_requests SET run_id = ?2 WHERE id = ?1").bind(q.id, r.run.id).run();
+      } else if (v.kind === "sandbox") {
+        const r = await stub.sandbox(String(q.code), "loop", caller);
+        await finishRequest(env, q.id, r.ok ? "done" : "failed", { result: r.result, logs: r.logs, proposals: r.proposals }, r.error ? String(r.error) : null);
+      } else {
+        const r = await stub.createSchedule({ text: q.prompt, cron: q.cron || undefined, delay_s: q.delay_s || undefined, scope: "loop", caller });
+        await finishRequest(env, q.id, r.ok ? "done" : "failed", r, r.ok ? null : String(r.error));
+      }
+      out.started++;
+    } catch (e) {
+      await finishRequest(env, q.id, "failed", null, errText(e));
+      out.failed++;
+    }
+  }
+  return out;
 }
 
 // ---- MCP server (stateless). Public clients get the repository reader; trusted callers get the scope's tools and the agent.
@@ -417,7 +472,8 @@ function selfDoc(caller: string, scope: Scope) {
     model: { primary: DEFAULT_MODEL, fallback: FALLBACK_MODEL, via: "Workers AI binding through AI Gateway 'default'", override: "ops_config qnfo_agents_model" },
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
-      trusted: ["POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
+      loops: ["INSERT INTO qnfo-audit.cf_agent_requests (requester, kind run|sandbox|schedule, prompt | code, cron | delay_s, instance?, priority?): drained every 5 minutes, outcome written back to the row"],
+      trusted: ["GET /requests?status=&requester=", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
     },
     surfaces: { console: "https://fleet.qnfo.org/cmd (cfagent <request>, cfagent! <request> for the write scope)", ops: "https://ops.qnfo.org/v1/agents/..." }
   };
@@ -456,10 +512,20 @@ export default {
       if (path === "/mcp-servers" && request.method === "POST") return json(await stub.connectMcp(b.name, b.url));
       if ((m = /^\/mcp-servers\/([A-Za-z0-9_-]{4,80})$/.exec(path)) && request.method === "DELETE") return json(await stub.disconnectMcp(m[1]));
       if (path === "/sandbox" && request.method === "POST") return json(await stub.sandbox(String(b.code || ""), scope, caller));
+      if (path === "/requests" && request.method === "GET") {
+        const st = String(url.searchParams.get("status") || ""), rq = String(url.searchParams.get("requester") || "");
+        const r: any = await env.AUDIT_DB.prepare("SELECT id, requester, kind, priority, status, attempts, run_id, substr(coalesce(prompt, code), 1, 200) AS request, substr(result, 1, 600) AS result, error, created_at, started_at, finished_at FROM cf_agent_requests WHERE (?1 = '' OR status = ?1) AND (?2 = '' OR requester = ?2) ORDER BY id DESC LIMIT 30").bind(st, rq).all();
+        return json({ ok: true, requests: r.results || [] });
+      }
       return json({ ok: false, error: "no such route", routes: selfDoc(caller, scope).routes }, 404);
     } catch (e) {
       logErr("fetch " + path, e);
       return json({ ok: false, error: errText(e) }, 500);
     }
+  },
+
+  // CF-AGENTS-LOOPS-1: every 5 minutes, drain the loops' request queue.
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(drainRequests(env).then((r) => console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r }))).catch((e) => logErr("drain", e)));
   }
 };

@@ -2,7 +2,7 @@
 // ADVERSARIAL: the helpers are tested directly; the bundle is checked by shape (it needs the Workers runtime to run). The live proof
 // is GET https://agents.qnfo.org/health answering this VERSION, a public POST /run answering 403, and a console turn reaching done.
 import { readFileSync } from "node:fs";
-import { callerOf, scopeOf, opsToolAllowed, readOnlySql, repoPathOk, codeTaskText, scheduleWhen, safeToolName, sliceLines, OPS_READ_ONLY } from "./src/lib.js";
+import { callerOf, scopeOf, opsToolAllowed, readOnlySql, repoPathOk, codeTaskText, scheduleWhen, safeToolName, sliceLines, OPS_READ_ONLY, validateRequest, loopInstance, requesterOk, DRAIN_PER_TICK } from "./src/lib.js";
 const here = (p) => new URL(p, import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
@@ -56,11 +56,26 @@ const toml = readFileSync(here("./wrangler.toml"), "utf8");
 ok(/new_sqlite_classes = \["FleetCodeAgent"\]/.test(toml) && /class_name = "FleetCodeAgent"/.test(toml), "the agent class is bound and migrated");
 ok(/^# charter-pillar: autonomy/m.test(toml), "charter pillar declared");
 ok(/props = \{ caller = "qnfo-agents" \}/.test(toml), "qnfo-ops sees this worker as caller qnfo-agents");
-ok(!/\[triggers\]|crons\s*=/.test(toml), "no wrangler cron (schedules are Durable Object alarms)");
+ok(/\[triggers\]\ncrons = \["\*\/5 \* \* \* \*"\]/.test(toml), "CF-AGENTS-LOOPS-1: one 5-minute cron drains cf_agent_requests");
 ok(readFileSync(here("./WRANGLER-ONLY"), "utf8").length > 20, "WRANGLER-ONLY keeps the canonical /content deploy away");
 const src = readFileSync(here("./src/index.ts"), "utf8");
 ok(/if \(!caller\) return json\(\{ ok: false, error: "This route is for the fleet console/.test(src), "every route past the open ones needs a trusted caller");
 ok(src.indexOf('path === "/mcp"') < src.indexOf("if (!caller) return json"), "/mcp is open, with the public tool set");
+
+// CF-AGENTS-LOOPS-1: the loop scope and the request queue.
+ok(opsToolAllowed("ops_d1_query", "loop") && !opsToolAllowed("deploy_worker", "loop") && !opsToolAllowed("d1_write", "loop"), "loop scope: read-only ops tools only");
+ok(validateRequest({ requester: "program-manager:research", kind: "run", prompt: "summarise the focus issues" }).kind === "run", "a run request validates");
+ok(!!validateRequest({ requester: "pm", kind: "run", prompt: "short" }).error, "a run needs a real prompt");
+ok(!!validateRequest({ requester: "pm", kind: "sandbox", code: "" }).error && validateRequest({ requester: "pm", kind: "sandbox", code: "async () => 1" }).kind === "sandbox", "a sandbox request needs code");
+ok(!!validateRequest({ requester: "pm", kind: "schedule", prompt: "check the queue", cron: "* * * * *" }).error && validateRequest({ requester: "pm", kind: "schedule", prompt: "check the queue", cron: "0 * * * *" }).kind === "schedule", "a schedule keeps the 5-minute floor");
+ok(!!validateRequest({ requester: "pm", kind: "deploy", prompt: "do something big" }).error, "unknown kinds are refused");
+ok(!requesterOk("") && !requesterOk("x y") && requesterOk("portfolio-manager"), "the requester names the loop");
+ok(loopInstance("program-manager:research") === "loop-program-manager-research" && loopInstance("pm", "managers") === "managers", "one agent instance per requester unless it names its own");
+ok(DRAIN_PER_TICK >= 1 && DRAIN_PER_TICK <= 5, "the drain is bounded per tick");
+ok(/async scheduled\(/.test(src) && /drainRequests\(env\)/.test(src), "the cron runs drainRequests");
+ok(/scope: "loop"/.test(src) && /if \(c\.scope !== "write"\) return t;\n    t\.mcp_connect/.test(src), "loop turns get schedules but never MCP connections");
+const mig = readFileSync(new URL("../migrations/2026-10-26-cf-agent-requests.sql", import.meta.url), "utf8");
+ok(/CREATE TABLE IF NOT EXISTS cf_agent_requests/.test(mig) && /INSERT OR IGNORE INTO queue_sla/.test(mig) && /analytics_metric_triggers/.test(mig), "the queue ships with its SLA row and metric trigger");
 
 console.log("qnfo-agents worker.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
