@@ -1,4 +1,4 @@
-// DASH-OWNER-ACTIONS-1 offline suite (qnfo-fleet-dashboard 1.65.0, agent_issues 100360). Owner report 2026-10-20: "Fleet command line
+// DASH-OWNER-ACTIONS-1 offline suite (qnfo-fleet-dashboard 1.66.0, agent_issues 100360). Owner report 2026-10-20: "Fleet command line
 // not executing. Need easier way to approve owner items and diagnose/resolve issues and problems from fleet dashboard." The approvals
 // the owner typed (11:20, 11:21 and 11:34Z) went to the AI path and, when three router legs timed out, nothing executed.
 // Proves: approve, decline, diagnose, retry and resolve are parsed in code and never call a model (T1, T12); a bare approve lists the
@@ -9,6 +9,10 @@
 // model does not answer, the matched intent comes back as tappable buttons that are stored (T10); resolve closes only on a passing
 // probe (T11); diagnose is an open read that hides titles from a stranger (T12); cmdFallback keeps working alone in a vm (T13); the
 // card buttons are the owner's only, 44 px, wrapped for a 360 px phone and delegated so the 15 s refresh keeps them (T14); retry (T15).
+// Review round (1.66.0): the hand-off is filed BEFORE anything is recorded and an approval never spends an Ask slot (T17); Approve and Decline
+// are offered only for a card that asks for a decision and is not a legal, signing, money, credential or account step (T18); a card with
+// no issue still hands the fleet a task it can act on, and a pick-one card needs the option (T19); a sentence that merely starts with a
+// verb belongs to the model, and retry runs unasked only for 'retry <reference>' (T20).
 // Run: node qnfo-fleet-dashboard/cmd-decide.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -37,6 +41,8 @@ const DESC = [
   "TRIAGE: owner qnfo-ops; doer is the revision and errata path (REVISION-LOOP-1, qnfo-research-exec)."
 ].join("\n");
 
+// the live hard markers of DEFAULT-APPROVE-1 (default_approve_markers kind 'hard', read 2026-10-26)
+const HARD = ["% payment %", "% payments %", "%payment decision%", "%invoice%", "%bank %", "%credit card%", "%billing account%", "%billing plan%", "%billing project%", "%purchase%", "%wire transfer%", "%top up%", "%top-up%", "% fund %", "%prepaid%", "%subscri%", "% pay %", "% paid %", "% fee %", "% fees %", "%renew%", "%registrar%", "%refund%", "%wallet%", "%$_%", "% legal %", "% signature %", "%signing%", "% sign the %", "%patent applic%", "% dpa %", "% dpa,%", "%irreversible%", "%delete%", "%wipe%", "%erase%", "%truncate%", "%drop table%", "%destroy%", "%unbacked%", "%api key%", "%oauth%", "%sign in to%", "%sign-in%", "%log in to%", "%login link%", "%login code%", "%password%", "%credential%", "%rotate%", "%secret%", "%token%", "%grant access%", "%your name%", "%owner's name%", "%mailbox%", "%email from%", "%send an email%", "%send email%", "%@_%._%", "%visibility%", "%make public%", "%be public%", "%one-time code%", "%verification code%", "%privacy of %", "%gdpr%", "%personal data%", "%suppress%", "%opt-out%", "%opt out%", "%unsubscribe%", "%consent%"];
 function mk(extra = {}) {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE fleet_dashboard_state (id INTEGER PRIMARY KEY, updated_at TEXT, state_json TEXT, refresh_ms INTEGER);
@@ -52,13 +58,23 @@ function mk(extra = {}) {
   CREATE TABLE code_tasks (id TEXT PRIMARY KEY, repo TEXT, path TEXT, goal TEXT, status TEXT, step TEXT, attempts INTEGER, branch TEXT, pr_url TEXT, last_error TEXT, merge_state TEXT, merge_note TEXT, updated_at TEXT);
   CREATE TABLE intents (id TEXT PRIMARY KEY, desire TEXT, source TEXT, device TEXT, type TEXT, domain TEXT, priority TEXT, summary TEXT, due TEXT, status TEXT, wbs_code TEXT, created_at TEXT, processed_at TEXT, triage_decision TEXT);
   CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_type TEXT, status TEXT, created_at TEXT, statement TEXT, alignment TEXT, updated_at TEXT);
+  CREATE TABLE default_approve_markers (kind TEXT NOT NULL, pattern TEXT NOT NULL, note TEXT, added_at TEXT, PRIMARY KEY (kind, pattern));
   CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
   CREATE TABLE breach_selfheal_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), check_class TEXT, subject TEXT NOT NULL, action TEXT, revert TEXT, evidence TEXT);
   CREATE TABLE v_issue_age_ladder (id INTEGER, title TEXT, priority TEXT, source TEXT, age_h REAL, doer TEXT, plan_outcome TEXT, planned_at TEXT, plan_reason TEXT, rung TEXT, breach INTEGER);
   CREATE VIEW v_issue_queue AS SELECT ROW_NUMBER() OVER (ORDER BY q.prank, q.id) AS pos, q.* FROM (SELECT a.id, CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END AS prank, a.priority, a.title, a.category, a.source, t.owner, t.triage_state, CASE WHEN COALESCE(a.description,'') LIKE '%code-task:%' THEN 1 ELSE 0 END AS has_code_task, CASE WHEN EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status = 'active') THEN 1 ELSE 0 END AS has_contract, a.linked_session, a.created_at, a.updated_at FROM agent_issues a LEFT JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = 'open') q;`);
+  if (extra.noMarkers) db.exec("DROP TABLE default_approve_markers");
+  else for (const pat of HARD) db.prepare("INSERT INTO default_approve_markers (kind, pattern, note) VALUES ('hard', ?, 'live')").run(pat);
   db.prepare("INSERT INTO fleet_dashboard_state VALUES (1,?,?,1)").run(new Date().toISOString(), JSON.stringify(STATE));
   if (!extra.noCard) db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES (?,?,?,?,?,?)").run(SLUG, "UIA-SOURCE-FIDELITY-1: approve or decline the seven fixes to the Ignorance Audit papers", "IDENTITY-BOUND: edits to the author's own paper bodies (authorship attribution and wording); loops never rewrite owner-authored papers.", "The papers stay as published.", "Approve or decline each of the seven fixes in agent_issues 100140. On approval the fleet applies them through the owner-document edit path and the issue closes on its own probe.", "claude-session");
   if (extra.second) db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES ('pick-pricing-model','Pick one pricing model for the API','The owner chooses; no loop can.','The current model stays.','Approve: model A (flat) or model B (metered).','claude-session')").run();
+  if (extra.shapes) {
+    const ins = db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES (?,?,?,?,?,?)");
+    ins.run("tilburg-dis-phd-inquiry-send", "Send the PhD inquiry to Tilburg DIS", "IDENTITY-BOUND: it goes out in the owner's name from the owner's mailbox; a loop cannot send it.", "No inquiry is sent.", "Read the drafted inquiry and send an email from your address.", "claude-session");
+    ins.run("domain-renewal-qnfo", "Renew qnfo.org before it expires", "IDENTITY-BOUND: the renewal is paid with the owner's money at the registrar.", "The domain lapses.", "Pay the renewal at the registrar.", "claude-session");
+    ins.run("eb1a-statement-email984", "Sign or decline the EB-1A statement", "IDENTITY-BOUND: a legal statement in the owner's name; its signature is a legal act.", "Nothing is signed.", "Sign or decline the EB-1A recommendation statement.", "claude-session");
+    ins.run("approve-logo-refresh", "Approve the refreshed logo", "The owner picks the brand; no loop can.", "The current logo stays.", "Approve the refreshed logo shown on the brand page, or decline it.", "claude-session");
+  }
   if (extra.plain) db.prepare("INSERT INTO human_actions (slug,title,why,action,source) VALUES ('orcid-link-works','Add the selected works to ORCID','issue 1001 found the gap','act','owner-only:x')").run();
   db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (100140,'UIA-SOURCE-FIDELITY-1: fix factual inconsistencies in the Ignorance Audit papers found while red-teaming the poster',?,'pipeline','medium',1791217360000,1791217360000)").run(DESC);
   db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (1001,'METRIC-TRIGGER-7: pageviews low','The lever is X.','analytics','medium',1791217360000,1791217360000)").run();
@@ -128,8 +144,10 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
   ok(/Nothing is waiting on a decision/.test(j.text) && !(j.actions || []).some((a) => a.op), "T2d with nothing waiting it says so", j);
   j = await (await cmd(e2.env, "approve 100140 7")).json();
   ok((j.actions || []).some((a) => a.op === "approve" && a.args.items.join() === "7"), "T2e a number after the id is an item, not a queue number", j);
+  j = await (await cmd(e2.env, "approve 424242")).json();
+  ok(/Nothing matches|No open owner card/.test(j.text) && !(j.actions || []).some((a) => a.op), "T2f an unknown explicit reference is said plainly, never guessed", j);
   j = await (await cmd(e2.env, "approve zzzqq")).json();
-  ok(/Nothing matches/.test(j.text) && !(j.actions || []).some((a) => a.op), "T2f an unknown target is said plainly, never guessed", j);
+  ok(j.kind === "pending" && !(j.actions || []).some((a) => a.op), "T2g a word that names nothing is not a reference: the model gets the line", j);
 }
 // T3. a bare six-digit line is an issue id unless a sign-in code is waiting
 {
@@ -215,7 +233,8 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
   const tasks = rows(e.db, "SELECT prompt, mode FROM owner_prompts WHERE mode = 'task'");
   ok(tasks.length === 1 && /OWNER-DECISION from fleet\.qnfo\.org/.test(tasks[0].prompt), "T8e exactly ONE hand-off task is filed through the task route", tasks.length);
   const p = tasks[0].prompt;
-  ok(/APPROVED items 1-7 of 7/.test(p) && /1\) .*qwave-qudit-advantage/.test(p) && /7\) The registry entry/.test(p), "T8f it names every approved item", p);
+  ok(/APPROVED items 1-7 of 7/.test(p) && /1\) ai4metascience-ignorance-audit section 2/.test(p) && /7\) The registry entry/.test(p) && /the full text of each is in issue 100140/.test(p), "T8f it names every approved item (clipped to fit, with the issue that holds the full text)", p);
+  ok(/Card: UIA-SOURCE-FIDELITY-1: approve or decline the seven fixes/.test(p) && /Asked: Approve or decline each of the seven fixes in agent_issues 100140/.test(p) && p.length <= 1800 && /Closing probe: remediation contract issue-100140/.test(p.slice(-400)), "T8f2 it carries the card's title and what it asks, fits the 1800 characters the issue body keeps, and still ends with the doer and the closing probe", p.length);
   ok(/revision and errata path of qnfo-research-exec/.test(p) && /remediation contract issue-100140/.test(p) && /Close issue 100140 only with that evidence/.test(p), "T8g it names the doer (the revision and errata path) and the issue's closing probe", p);
   ok(rows(e.db, "SELECT id FROM agent_issues WHERE title LIKE 'OWNER-TASK-%'").length === 1 && jr.text.indexOf("issue ") >= 0, "T8h the task became an issue the issue loop reads", jr.text);
   ok(/Nothing has been applied yet/.test(jr.text) && !/papers (were|are|have been) (changed|corrected|updated|applied)|were applied|fixes (are|were) applied/.test(jr.text), "T8i the reply never claims the papers changed", jr.text);
@@ -374,7 +393,11 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
   const single = mk({ noCard: true, second: true });
   const C3 = await signIn(single.env, single.db, single.m);
   const sp = await (await call(single.env, "/", { headers: C3 })).text();
-  ok(sp.includes('data-fleet-cmd="approve ha:pick-pricing-model">Approve<') && sp.includes('data-fleet-cmd="decline ha:pick-pricing-model">Decline<'), "T14l a card with no numbered parts gets plain Approve, Decline and Diagnose", sp.slice(0, 80));
+  ok(sp.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && !sp.includes('data-fleet-cmd="approve ha:pick-pricing-model">') && sp.includes('data-fleet-cmd="decline ha:pick-pricing-model">Decline<'), "T14l a pick-one card gets 'Approve an option' (it fills the command line), Decline and Diagnose, never a bare Approve", sp.slice(0, 80));
+  const plainDec = mk({ noCard: true, shapes: true });
+  const C4 = await signIn(plainDec.env, plainDec.db, plainDec.m);
+  const pp = await (await call(plainDec.env, "/", { headers: C4 })).text();
+  ok(pp.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<') && pp.includes('data-fleet-cmd="decline ha:approve-logo-refresh">Decline<') && pp.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T14m a card that asks to be approved gets plain Approve, Decline and Diagnose", pp.slice(0, 80));
 }
 // T15. retry
 {
@@ -410,6 +433,162 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
   const rx = /var CON_AI_CMD = (\/.*\/i);/.exec(src);
   const re = new Function("return " + rx[1])();
   ok(re.test("diagnose 100140") && re.test("approve ha:uia-source-fidelity-100140 3") && re.test("decline 100140") && !re.test("approve 100140; drop table x") && !re.test("sql! delete from notes"), "T16a the model may propose typing diagnose, approve and decline, nothing else", rx[1].slice(0, 120));
+}
+// T17. the hand-off is filed BEFORE anything is recorded, and an approval never spends an Ask slot
+const OWNER_PROMPTS_DDL = "CREATE TABLE IF NOT EXISTS owner_prompts (id TEXT PRIMARY KEY, ts TEXT DEFAULT (datetime('now')), mode TEXT, prompt TEXT, status TEXT, response TEXT, model TEXT, intent_id TEXT, error TEXT, issue_id INTEGER, visitor TEXT)";
+const HUMAN_RESPONSES_DDL = "CREATE TABLE IF NOT EXISTS human_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, kind TEXT NOT NULL, note TEXT, until TEXT, ts TEXT DEFAULT (datetime('now')), credential TEXT, issue_id INTEGER)";
+const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140", C)).json()).actions.find((x) => x.op === "approve");
+{
+  // a. the daily cap of the Ask route is used up: the owner's own approval is still filed and decided
+  const e = mk({ env: { OWNER_PROMPTS_DAILY_CAP: "1" } });
+  e.db.exec(OWNER_PROMPTS_DDL);
+  e.db.prepare("INSERT INTO owner_prompts (id, mode, prompt, status) VALUES ('op-ask1', 'ask', 'how are things', 'answered')").run();
+  const C = await signIn(e.env, e.db, e.m);
+  const a = await preview100140(e, C);
+  const r = await run(e.env, "approve", a.args, C); const jr = await r.json();
+  ok(r.status === 200 && jr.ok && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved" && rows(e.db, "SELECT id FROM owner_prompts WHERE mode = 'task'").length === 1, "T17 with the Ask cap used up (cap 1, one Ask today) the approval is still filed and the card resolved", jr);
+  const route = await post(e.env, "/api/owner/prompt", { text: "list the open owner cards", mode: "task" }, C);
+  ok(route.status === 429, "T17a the Ask route itself still refuses at its cap (the cap is unchanged)", route.status);
+  // b. the hand-off is not an Ask: with a cap of 1 and no Ask yet, one approval leaves the Ask route open
+  const e2 = mk({ env: { OWNER_PROMPTS_DAILY_CAP: "1" } });
+  const C2 = await signIn(e2.env, e2.db, e2.m);
+  const a2 = await preview100140(e2, C2);
+  await run(e2.env, "approve", a2.args, C2);
+  const route2 = await post(e2.env, "/api/owner/prompt", { text: "list the open owner cards", mode: "task" }, C2);
+  ok(rows(e2.db, "SELECT id FROM owner_prompts WHERE prompt LIKE 'OWNER-DECISION from %'").length === 1 && route2.status === 200, "T17b the approval's hand-off row does not count against the Ask cap (the next Ask is accepted)", route2.status);
+}
+{
+  // c. the hand-off cannot be filed: nothing is recorded, the card stays open, the same tap files it
+  const e = mk();
+  const C = await signIn(e.env, e.db, e.m);
+  const a = await preview100140(e, C);
+  e.db.exec("CREATE TRIGGER t_nointents BEFORE INSERT ON intents BEGIN SELECT RAISE(ABORT, 'intents unavailable'); END");
+  let r = await run(e.env, "approve", a.args, C), jr = await r.json();
+  ok(jr.ok === false && /hand-off to the fleet could not be filed/.test(jr.error) && /still open/.test(jr.error) && /Tap Approve again/.test(jr.error), "T17c a hand-off that cannot be filed says so and says nothing was recorded", jr);
+  ok(one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "open" && one(e.db, "SELECT COUNT(*) n FROM human_responses").n === 0 && !/OWNER-DECISION/.test(one(e.db, "SELECT description FROM agent_issues WHERE id = 100140").description) && one(e.db, "SELECT COUNT(*) n FROM owner_prompts").n === 0, "T17d the card is open, no human_responses row, no OWNER-DECISION line, no task row");
+  e.db.exec("DROP TRIGGER t_nointents");
+  r = await run(e.env, "approve", a.args, C); jr = await r.json();
+  ok(jr.ok && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved" && rows(e.db, "SELECT id FROM owner_prompts WHERE mode = 'task'").length === 1 && one(e.db, "SELECT COUNT(*) n FROM human_responses WHERE kind = 'approve'").n === 1, "T17e the second tap files the task once, records the approval and resolves the card", jr);
+  // d. the task is filed but the decision cannot be written: the retry finds the same task and files no second one
+  const e2 = mk();
+  const C2 = await signIn(e2.env, e2.db, e2.m);
+  const a2 = await preview100140(e2, C2);
+  e2.db.exec(HUMAN_RESPONSES_DDL);
+  e2.db.exec("CREATE TRIGGER t_norec BEFORE INSERT ON human_responses WHEN NEW.kind = 'approve' BEGIN SELECT RAISE(ABORT, 'responses unavailable'); END");
+  r = await run(e2.env, "approve", a2.args, C2); jr = await r.json();
+  ok(jr.ok === false && /hand-off task was filed/.test(jr.error) && /Tap Approve again/.test(jr.error) && one(e2.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "open" && rows(e2.db, "SELECT id FROM owner_prompts WHERE mode = 'task'").length === 1, "T17f a decision that cannot be written after the task was filed says the task exists and the card stays open", jr);
+  e2.db.exec("DROP TRIGGER t_norec");
+  r = await run(e2.env, "approve", a2.args, C2); jr = await r.json();
+  ok(jr.ok && /already queued/.test(jr.text) && rows(e2.db, "SELECT id FROM owner_prompts WHERE mode = 'task'").length === 1 && rows(e2.db, "SELECT id FROM agent_issues WHERE title LIKE 'OWNER-TASK-%'").length === 1 && one(e2.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved", "T17g the retry finds the same task: one task row, one OWNER-TASK issue, the card resolved", jr);
+}
+// T18. Approve and Decline only for a card that ASKS for a decision and is not a legal, signing, money, credential or account step
+{
+  const e = mk({ noCard: true, shapes: true });
+  const C = await signIn(e.env, e.db, e.m);
+  const page = await (await call(e.env, "/", { headers: C })).text();
+  ok(!page.includes('data-dec="ha:tilburg-dis-phd-inquiry-send"') && !page.includes('data-dec="ha:domain-renewal-qnfo"'), "T18 an IDENTITY-BOUND card that asks for no decision (send an e-mail, renew a domain) gets no decision block");
+  const eb = 'ha:eb1a-statement-email984';
+  ok(page.includes('data-dec="' + eb + '"') && page.includes('data-fleet-cmd="diagnose ' + eb + '">Diagnose<') && page.includes('data-fleet-cmd="done ' + eb + '">Done<') && !page.includes('data-fleet-cmd="approve ' + eb) && !page.includes('data-fleet-cmd="decline ' + eb) && /Only you can take this step/.test(page), "T18a the signing card (it says 'decline') shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + eb + '"'), page.indexOf('data-dec="' + eb + '"') + 600));
+  ok(page.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T18b a plain decision card still has its Approve");
+  for (const k of ["eb1a-statement-email984", "tilburg-dis-phd-inquiry-send", "domain-renewal-qnfo"]) {
+    for (const verb of ["approve", "decline"]) {
+      const j = await (await cmd(e.env, verb + " ha:" + k, C)).json();
+      ok(!(j.actions || []).some((x) => x.op === verb) && (j.actions || []).some((x) => /^diagnose /.test(x.cmd || "")), "T18c typing '" + verb + " ha:" + k + "' offers no " + verb + " button, only Diagnose and Done", j);
+      const r = await run(e.env, verb, { key: "ha:" + k, issue: null, items: null, note: "", title: "x" }, C); const jr = await r.json();
+      ok(jr.ok === false && /does not ask for a decision|yours alone/.test(jr.error), "T18d running " + verb + " on " + k + " is refused by the server", jr);
+    }
+  }
+  ok(one(e.db, "SELECT COUNT(*) n FROM human_actions WHERE status = 'open'").n === 4 && rows(e.db, "SELECT id FROM owner_prompts").length === 0 && one(e.db, "SELECT COUNT(*) n FROM human_responses").n === 0, "T18e nothing was resolved, recorded or handed to the fleet for any of the three");
+  const j = await (await cmd(e.env, "diagnose ha:eb1a-statement-email984", C)).json();
+  ok(/only you can take/.test(j.text) && !/Approve or decline it here/.test(j.text) && (j.actions || []).some((x) => x.cmd === "done " + eb), "T18f diagnose says it is the owner's own step and offers Done", j.text);
+  // a marker added to default_approve_markers is honoured (the logo card turns into an owner-only step)
+  const e2 = mk({ noCard: true, shapes: true });
+  e2.db.prepare("INSERT INTO default_approve_markers (kind, pattern) VALUES ('hard', '%brand page%')").run();
+  const C2 = await signIn(e2.env, e2.db, e2.m);
+  const p2 = await (await call(e2.env, "/", { headers: C2 })).text();
+  ok(!p2.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p2.includes('data-fleet-cmd="done ha:approve-logo-refresh">Done<'), "T18g a hard marker added in D1 takes effect on the next page", p2.length);
+  // the markers cannot be read: the embedded list stands in
+  const e3 = mk({ noCard: true, shapes: true, noMarkers: true });
+  const C3 = await signIn(e3.env, e3.db, e3.m);
+  const p3 = await (await call(e3.env, "/", { headers: C3 })).text();
+  ok(!p3.includes('data-fleet-cmd="approve ' + eb) && p3.includes('data-fleet-cmd="done ' + eb + '">Done<') && p3.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T18h without the markers table the embedded list still keeps the signing card to Diagnose and Done and the logo card decidable");
+  // the 100140 card (authors' papers, IDENTITY-BOUND) is not a hard card
+  const e4 = mk();
+  const C4 = await signIn(e4.env, e4.db, e4.m);
+  const p4 = await (await call(e4.env, "/", { headers: C4 })).text();
+  ok(p4.includes('data-fleet-cmd="approve ha:' + SLUG + ' 3">Approve 3<'), "T18i the seven-fix paper card keeps its buttons");
+}
+// T19. a card with no issue still hands the fleet a task it can act on; a pick-one card needs the option
+{
+  const e = mk({ noCard: true, shapes: true });
+  const C = await signIn(e.env, e.db, e.m);
+  const j = await (await cmd(e.env, "approve ha:approve-logo-refresh", C)).json();
+  const a = (j.actions || []).find((x) => x.op === "approve");
+  ok(a && a.args.issue === null, "T19 a card that names no issue previews an approve", j);
+  const r = await run(e.env, "approve", a.args, C); const jr = await r.json();
+  const p = (rows(e.db, "SELECT prompt FROM owner_prompts WHERE mode = 'task'")[0] || {}).prompt || "";
+  ok(jr.ok && /Card: Approve the refreshed logo/.test(p) && /Asked: Approve the refreshed logo shown on the brand page/.test(p) && /Why: The owner picks the brand/.test(p) && /No issue is linked to this card/.test(p) && /the card text above is the whole brief/.test(p), "T19a the task carries the card's title, what it asks, why, and says no issue is linked", p);
+  ok(/no issue is linked to this card, so there is no closing probe to cite/.test(jr.text) && !/closing probe of issue/.test(jr.text) && !/the loop that owns issue/.test(jr.text), "T19b the reply says what was filed: no issue, no closing probe, no named issue doer", jr.text);
+  ok(one(e.db, "SELECT status FROM human_actions WHERE slug = 'approve-logo-refresh'").status === "resolved", "T19c the card is resolved");
+  // pick one
+  const e2 = mk({ noCard: true, second: true });
+  const C2 = await signIn(e2.env, e2.db, e2.m);
+  let j2 = await (await cmd(e2.env, "approve ha:pick-pricing-model", C2)).json();
+  ok(!(j2.actions || []).some((x) => x.op) && /asks you to pick one/.test(j2.text) && (j2.actions || []).some((x) => x.fill === "approve ha:pick-pricing-model "), "T19d a bare approve on a pick-one card asks for the option and offers to fill the command line", j2);
+  const rb = await run(e2.env, "approve", { key: "ha:pick-pricing-model", issue: null, items: null, note: "", title: "x" }, C2); const jb = await rb.json();
+  ok(jb.ok === false && /pick one/.test(jb.error) && one(e2.db, "SELECT status FROM human_actions WHERE slug = 'pick-pricing-model'").status === "open" && rows(e2.db, "SELECT id FROM owner_prompts").length === 0, "T19e the server refuses a pick-one approval with no option and records nothing", jb);
+  j2 = await (await cmd(e2.env, "approve ha:pick-pricing-model model B (metered) why cheaper to run", C2)).json();
+  const a2 = (j2.actions || []).find((x) => x.op === "approve");
+  ok(a2 && a2.args.choice === "model B (metered)" && a2.args.note === "cheaper to run", "T19f the typed option is the choice and the reason is separate", a2 && a2.args);
+  const r2 = await run(e2.env, "approve", a2.args, C2); const jr2 = await r2.json();
+  const p2 = (rows(e2.db, "SELECT prompt FROM owner_prompts WHERE mode = 'task'")[0] || {}).prompt || "";
+  ok(jr2.ok && /Chosen option \(the owner's words\): model B \(metered\)/.test(p2) && /Card: Pick one pricing model for the API/.test(p2) && /Asked: Approve: model A \(flat\) or model B \(metered\)\./.test(p2), "T19g the task names the chosen option beside the card's own question", p2);
+  ok(/model B \(metered\)/.test(one(e2.db, "SELECT resolution FROM human_actions WHERE slug = 'pick-pricing-model'").resolution) && /choice: model B \(metered\)/.test(one(e2.db, "SELECT note FROM human_responses WHERE kind = 'approve'").note), "T19h the choice is on the card's resolution and in human_responses");
+  // nothing a doer could act on: no issue and no action text
+  const e3 = mk({ noCard: true });
+  e3.db.prepare("INSERT INTO human_actions (slug,title,why,action,source) VALUES ('approve-empty','Approve the thing','','Approve','x')").run();
+  const C3 = await signIn(e3.env, e3.db, e3.m);
+  const r3 = await run(e3.env, "approve", { key: "ha:approve-empty", issue: null, items: null, note: "", title: "x" }, C3); const j3 = await r3.json();
+  ok(j3.ok === false && /names no issue and carries no action text/.test(j3.error) && one(e3.db, "SELECT status FROM human_actions WHERE slug = 'approve-empty'").status === "open" && rows(e3.db, "SELECT id FROM owner_prompts").length === 0, "T19i a card with nothing to apply is left open and no task is filed", j3);
+}
+// T20. a sentence that merely starts with a verb is the model's; retry runs unasked only for 'retry <reference>'
+{
+  const e = mk({ second: true, ai: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answer: "model answer", actions: [] }) } }] }), { status: 200 }) });
+  const C = await signIn(e.env, e.db, e.m);
+  const NL = ["Resolve next fleet open item and deploy", "Resolve all content queues", "RESOLVE ALL FLEET DASHBOARD PAGES AND DEPLOY", "Resolve GitHub PR #3608 and #3445 conflicts and merge to main", "Approve the Living Papers launch post", "Retry the failed deploy of PR #1001 and tell me why", "approve PR #1001", "approve zzzqq", "approve papers", "Approve 3 of the proposals"];
+  let ip = 0;
+  for (const l of NL) {
+    for (const H of [{ "CF-Connecting-IP": "203.0.113." + (++ip) }, C]) {
+      const j = await (await cmd(e.env, l, H)).json();
+      ok(j.kind === "pending" && !/Nothing matches/.test(j.text || "") && !(j.actions || []).some((x) => x.op) && !j.executed, "T20 '" + l.slice(0, 44) + "' (" + (H === C ? "owner" : "visitor") + ") goes to the model, not to the verb grammar", j);
+    }
+  }
+  await flush();
+  ok(e.aiCalls.length >= NL.length, "T20a the model was called for each of them", e.aiCalls.length);
+  ok(one(e.db, "SELECT next_due_at FROM remediation_contracts WHERE class = 'METRIC-7'").next_due_at === null && one(e.db, "SELECT COUNT(*) n FROM cmd_log WHERE kind = 'action'").n === 0, "T20b no probe was marked due and no action ran for any of them");
+  const q = await (await cmd(e.env, "Approve the Living Papers launch post", { "CF-Connecting-IP": "198.51.100.1" })).json();
+  ok(q.quick === undefined, "T20c one shared word ('papers') does not put the 100140 card's buttons beside the answer", q);
+  const q2 = await (await cmd(e.env, "approve pricing model", { "CF-Connecting-IP": "198.51.100.2" })).json();
+  ok(q2.kind === "pending" && q2.quick && q2.quick.actions.some((x) => x.cmd === "approve ha:pick-pricing-model"), "T20d two title words ('pricing model') are a match: a button beside the model's answer, never a run", q2);
+  // the strict forms are commands
+  let j = await (await cmd(e.env, "retry #1001", C)).json();
+  ok(j.executed === "iretry", "T20e 'retry #1001' runs for the signed-in owner", j);
+  j = await (await cmd(e.env, "retry 100140 please", C)).json();
+  ok(!j.executed && j.actions && j.actions[0].op === "iretry" && /waits for your tap/.test(j.text), "T20f 'retry 100140 please' comes back as a button to tap", j);
+  j = await (await cmd(e.env, "retry issue 100140", C)).json();
+  ok(j.executed === "iretry", "T20g 'retry issue 100140' (nothing after the reference) runs", j);
+  j = await (await cmd(e.env, "resolve 1001 the pageview probe reads 5000 views in the last hour", C)).json();
+  ok((j.actions || []).some((x) => x.op === "iclose"), "T20h 'resolve <id> <evidence>' is still a command", j);
+  j = await (await cmd(e.env, "approve 424242 7")).json();
+  ok(/Nothing matches|No open owner card/.test(j.text || ""), "T20i an explicit reference that resolves to nothing is said plainly", j);
+  // the owner's own short lines (cmd_log 2026-10-24 00:10Z: "Approve all", "Approve") still resolve to the decision that waits
+  const e1 = mk();
+  for (const l of ["Approve all", "approve it", "Approve everything", "approve 1-5"]) {
+    j = await (await cmd(e1.env, l)).json();
+    ok(j.kind === "answer" && (j.actions || []).some((x) => x.op === "approve" && x.args.key === "ha:" + SLUG), "T20j '" + l + "' previews the one decision that waits", j);
+  }
+  j = await (await cmd(e.env, "Approve all")).json();
+  ok(!(j.actions || []).some((x) => x.op) && /Pick one/.test(j.text), "T20k 'Approve all' with two decisions waiting asks which, and runs nothing", j);
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

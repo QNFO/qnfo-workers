@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.66.0";
-/* 1.66.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused), records human_responses, resolves the card when every numbered item is decided, stamps OWNER-DECISION on the issues it names and files ONE hand-off task naming the approved items, the doer and the closing probe; diagnose is an open read; owner cards carry Approve / Decline / Diagnose buttons (per item on a numbered card); a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
+/* 1.66.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, not counted by it), and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
@@ -5917,6 +5917,33 @@ async function ownerRequestIssue(env, title, body) {
   const row = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
   return row ? Number(row.id) : null;
 }
+// DASH-OWNER-ACTIONS-1: the task branch of /api/owner/prompt, shared with the approval hand-off (cmdDecide). An owner's approval is
+// filed here directly, without the daily Ask cap: that cap protects an open endpoint from abuse, and a signed-in owner's own decision
+// (behind a code from the last 15 minutes) must never be refused by it. The route counts every owner_prompts row of the day except
+// these hand-offs, so approvals do not spend an Ask either. Throws when D1 refuses; the caller decides what to do then.
+async function ownerTaskFile(env, text, opts) {
+  await ensureOwnerTables(env);
+  await ownerRequestColumns(env);
+  const id = opts && opts.promptId || "op-" + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 4);
+  const iid = "int-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
+  const dup = await d1all(env.AUDIT, "SELECT id FROM intents WHERE desire = ? AND status NOT IN ('rejected','deduped') LIMIT 1", [text]);
+  const intentId = dup.length ? dup[0].id : iid;
+  // reuse: the same text is the same hand-off (a retry after the decision could not be recorded), so it is not filed a second time
+  if (dup.length && opts && opts.reuse) {
+    const prior = (await d1all(env.AUDIT, "SELECT id, issue_id FROM owner_prompts WHERE intent_id = ? AND mode = 'task' ORDER BY ts LIMIT 1", [intentId]).catch(function() {
+      return [];
+    }))[0];
+    if (prior) return { id: prior.id, intent_id: intentId, issue_id: prior.issue_id || null, duplicate: true };
+  }
+  if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
+  await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
+  await ownerNotesRoute(env).catch(function() {
+  });
+  const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
+    return [];
+  }))[0];
+  return { id, intent_id: intentId, issue_id: filed && filed.issue_id || null, duplicate: !!dup.length };
+}
 async function ownerNotesRoute(env) {
   await ensureOwnerTables(env);
   await ownerRequestColumns(env);
@@ -7966,7 +7993,7 @@ function humanFragment(v) {
       if (!(v.owner && v.owner.authed)) o.push('<div class="meta">Ratify and reject are not on the public page: they change the live objective weights.</div>');
     }
     // DASH-OWNER-ACTIONS-1: Approve / Decline / Diagnose on an owner-gated decision card, and per part on a numbered card (owner only).
-    if (v.owner && v.owner.authed && decIsDecisionCard(it)) o.push(decCardHtml(it, e));
+    if (v.owner && v.owner.authed && it.decision) o.push(decCardHtml(it, e));
     // FLEET-CONSOLE-1: Details shows everything behind the card in the pinned command line, without leaving the page.
     const mids = String(it.key).indexOf("mail:") === 0 ? (it.mail || []).map(function(m) { return Number(m.id) || 0; }).filter(Boolean) : [];
     const open = (/^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + (mids.length ? '<button type="button" data-fleet-cmd="draft a reply to message #' + Math.max.apply(null, mids) + '">Reply</button><button type="button" data-fleet-cmd="mail ' + Math.max.apply(null, mids) + '">Read</button><button type="button" data-fleet-cmd="spam ' + mids.join(" ") + '">Spam</button>' : "") + '<button type="button" data-fleet-cmd="info ' + e(it.key) + '">Details</button>';
@@ -10214,7 +10241,7 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     const cap = Math.max(1, Math.min(200, parseInt(env.OWNER_PROMPTS_DAILY_CAP || OWNER_PROMPT_CAP_DEFAULT, 10) || OWNER_PROMPT_CAP_DEFAULT));
     const today = new Date().toISOString().slice(0, 10);
     await ownerRequestColumns(env);
-    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ?", [today]);
+    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ? AND prompt NOT LIKE 'OWNER-DECISION from %'", [today]); // an approval hand-off (ownerTaskFile) is the owner's own decision, never an Ask
     if (cnt.length && Number(cnt[0].n) >= cap) return ownerJson({ error: "The fleet has answered its daily limit of " + cap + " questions; reading stays open and Ask resets at 00:00 UTC." }, 429);
     const visitor = await askVisitor(request);
     if (!holder) {
@@ -10223,17 +10250,8 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     }
     const id = "op-" + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 4);
     if (mode === "task") {
-      const iid = "int-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
-      const dup = await d1all(env.AUDIT, "SELECT id FROM intents WHERE desire = ? AND status NOT IN ('rejected','deduped') LIMIT 1", [text]);
-      const intentId = dup.length ? dup[0].id : iid;
-      if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
-      await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
-      await ownerNotesRoute(env).catch(function() {
-      });
-      const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
-        return [];
-      }))[0];
-      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, issue_id: filed && filed.issue_id || null, duplicate: !!dup.length });
+      const t = await ownerTaskFile(env, text, { promptId: id });
+      return ownerJson({ ok: true, id: t.id, status: "queued", intent_id: t.intent_id, issue_id: t.issue_id, duplicate: t.duplicate });
     }
     await cmdSweep(env);
     await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, visitor) VALUES (?1,'ask',?2,'running',?3)").bind(id, text, visitor).run();
@@ -12133,7 +12151,9 @@ var CON_HELP = [
   "  decline [<card>] [items] [why <reason>]   decline it; the default stays in effect (your session). A bare approve lists what waits on you",
   "  diagnose [<issue>]     what one issue waits on, who works it, what that means and the next step (open to everyone); bare: what is blocked",
   "  retry [<issue>]        run an issue's closing probe now; bare: ask your last unanswered question again;  retry run <run id>",
-  "  resolve <issue> [evidence]   close an issue on its passing probe, or on evidence you type (fresh code);  resolve <card>  marks it done"
+  "  resolve <issue> [evidence]   close an issue on its passing probe, or on evidence you type (fresh code);  resolve <card>  marks it done",
+  "  A verb names its target (an id, #id, ha:<key>, a keyword) or stands alone; a sentence that only starts with one goes to the AI. A pick-one card needs the option: approve ha:<key> <option>.",
+  "  A card for a legal, signing, money, credential or account step has no Approve or Decline (it is yours alone): diagnose it, then done ha:<key>."
 ].join("\n");
 CMD_HELP = CMD_HELP.replace("Sign in:", CON_HELP + "\nSign in:");
 var conDdlDone = /* @__PURE__ */ new WeakSet();
@@ -12919,15 +12939,21 @@ async function conExec(env, owner, op, args) {
   }
   return { ok: false, error: "unknown console action " + op };
 }
-// DASH-OWNER-ACTIONS-1 (1.65.0, agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
+// DASH-OWNER-ACTIONS-1 (1.65.0 build, reviewed and corrected in 1.66.0; agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
 // approve owner items and diagnose/resolve issues and problems from fleet dashboard."). The words an owner types to decide are
 // commands, not questions for a model: approve, decline, diagnose, retry and resolve are parsed here, find their target in the
 // queue and in qnfo-audit, and never call a model, so a stalled router (three router_timeout legs at 11:20, 11:21 and 11:34Z on
 // 2026-10-20) cannot stop a decision. approve is destructive (a code from the last 15 minutes, like done and ratify) and, like
 // decline, is the owner session's own: the loop token and the dormant owner key cannot make an identity-bound decision. A decision
 // is recorded (human_responses, the card, an OWNER-DECISION line on each issue the card names) and an approval is handed to the
-// fleet as ONE task that names the approved items, the doer and the issue's closing probe; the dashboard never says that the thing
-// approved has changed, because only the doer's work and the issue's own probe can show it.
+// fleet as ONE task that carries the card, the approved items, the doer and the issue's closing probe; the dashboard never says that
+// the thing approved has changed, because only the doer's work and the issue's own probe can show it.
+// 1.66.0 review: (1) the hand-off is filed BEFORE anything is recorded (ownerTaskFile, no Ask cap) so an approval cannot be lost; (2) Approve
+// and Decline exist only for a card that ASKS for a decision (approve, authorize, decline, pick one, choose one) and is not a hard-marker
+// step (default_approve_markers kind hard: money, legal, signing, credential, account): those get Diagnose and Done; (3) a pick-one card needs
+// the option and the hand-off always carries the card's title, ask and why; (4) a verb is a command only when it stands alone or names its
+// target, so "Resolve next fleet open item and deploy" and "Retry the failed deploy of PR #1001" stay with the model, and retry runs unasked
+// only for "retry <reference>".
 var DEC_NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 var DEC_STOP = /^(approve|authori[sz]e|accept|ratify|decline|refuse|reject|deny|diagnose|investigate|retry|resolve|please|each|every|all|everything|the|of|in|on|to|for|from|and|with|fixes|fix|items?|issues?|agent_issues|card|cards|that|this|these|those|them|it|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|only|except|now|just|can|you|could|would|will|ok|okay|yes|go|ahead|why|because|reason|what|about|them|are|was|were|has|have|been|then|than|also|here|there)$/i;
 var DEC_VERB_RX = /^(approve|authori[sz]e|ratify|decline|refuse|reject|resolve|retry)\b[\s:,.\-]*([\s\S]*)$/i;
@@ -12946,7 +12972,11 @@ function decRefs(text) {
   let m, re = /\b(?:agent_issues|issues?)\s*#?\s*(\d{3,7})\b/gi;
   while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[0] });
   re = /(?:^|[\s(])#(\d{3,7})\b/g;
-  while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: "#" + m[1] });
+  while ((m = re.exec(s))) {
+    // "PR #3608", "pull request #3608", "run #123": GitHub numbers share the range of the issue ids and are not issue references
+    if (/\b(?:prs?|pull(?:\s+requests?)?|runs?|workflows?|commits?)\s*$/i.test(s.slice(0, m.index + m[0].indexOf("#")))) continue;
+    add({ kind: "issue", id: Number(m[1]), raw: "#" + m[1] });
+  }
   if ((m = /^\s*(\d{3,7})(?=\s|$)/.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
   re = /(?:^|\s)(\d{5,7})(?=[\s.,;:)]|$)/g;
   while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
@@ -12954,7 +12984,7 @@ function decRefs(text) {
   while ((m = re.exec(s))) add({ kind: "key", key: m[1].replace(/[.,;:]+$/, ""), raw: m[1] });
   re = /\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/g;
   while ((m = re.exec(s))) add({ kind: "word", word: m[1], upper: true, raw: m[1] });
-  re = /(?:^|\s)([a-z0-9]+(?:-[a-z0-9]+)+)(?=[\s.,;:)]|$)/g;
+  re = /(?:^|\s)((?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)+)(?=[\s.,;:)]|$)/g;
   while ((m = re.exec(s))) add({ kind: "word", word: m[1], upper: false, raw: m[1] });
   return out.slice(0, 8);
 }
@@ -12991,10 +13021,53 @@ function decWantsItems(card) {
   const t = (card.action || "") + " " + (card.why || "") + " " + (card.title || "");
   return new RegExp("\\b(?:each|every|all)\\s+(?:of\\s+)?(?:the\\s+)?(?:\\d{1,2}|" + Object.keys(DEC_NUMS).join("|") + ")\\b", "i").test(t);
 }
-// An owner-gated decision card: it carries an IDENTITY-BOUND line (the autonomy-first gate's own marker for "this needs the
-// owner") or its action or title asks to approve, authorize or decline.
+// A card that ASKS for a decision: its action or title says approve, authorize, decline, pick one or choose one. An IDENTITY-BOUND line alone is
+// not a question (19 of the 40 cards that line matched on 2026-10-26 asked the owner to send an e-mail, renew a domain, create a token or sign a
+// statement), so it opens no button.
+var DEC_ASK_RX = /\b(approve|authori[sz]e|decline|pick one|choose one)\b/i;
+var DEC_PICK_RX = /\b(?:pick|choose) one\b/i;
+function decAsksDecision(it) {
+  return !!(it && String(it.key || "").indexOf("ha:") === 0 && !it.receipt && DEC_ASK_RX.test(String(it.action || "") + " " + String(it.title || "")));
+}
+// A card that asks to be decided and is not a legal, signing, money, credential or account act. The hard markers are DEFAULT-APPROVE-1's own
+// (default_approve_markers kind 'hard', the text ' ' || lower(title why action default) || ' ' matched with LIKE), read from D1 and kept five
+// minutes; DEC_HARD_FALLBACK_RX stands in when the table cannot be read. Approve and Decline are never offered for such a card, and nothing
+// is handed to the fleet for it: the fleet's authority never covers a legal, financial or signing act in the owner's name.
+var DEC_HARD_FALLBACK_RX = /\b(payments?|invoice|bank|credit card|billing|purchase|wire transfer|top[- ]?up|prepaid|subscri\w*|renew\w*|registrar|refund|wallet|fees?|legal|signature|signing|sign the|patent applic\w*|dpa|irreversible|delete|wipe|erase|truncate|drop table|destroy|api key|oauth|sign[- ]in|log in to|password|credential|rotate|secret|token|grant access|your name|owner's name|mailbox|send (?:an )?e-?mail|email from|visibility|make public|be public|one-time code|verification code|privacy of|gdpr|personal data|suppress\w*|opt[- ]?out|unsubscribe|consent)\b|\$\S/i;
+var decHardCache = null;
+function decLikeRx(pattern) {
+  return new RegExp("^" + String(pattern).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, "[\\s\\S]*").replace(/_/g, "[\\s\\S]") + "$", "i");
+}
+async function decLoadHard(env) {
+  const now = Date.now();
+  if (decHardCache && decHardCache.db === env.AUDIT && now - decHardCache.at < 3e5) return;
+  let list = null;
+  try {
+    const rows = await d1all(env.AUDIT, "SELECT pattern FROM default_approve_markers WHERE kind = 'hard'");
+    if (rows.length) list = rows.map(function(r) {
+      return decLikeRx(r.pattern);
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "decLoadHard", error: String(e && e.message || e).slice(0, 160) }));
+  }
+  decHardCache = { at: now, db: env.AUDIT, list };
+}
+function decHardText(card) {
+  return " " + [card.title, card.why, card.action, card.fallback].map(function(x) {
+    return String(x || "");
+  }).join(" ").toLowerCase() + " ";
+}
+function decIsHard(card) {
+  const t = decHardText(card);
+  return decHardCache && decHardCache.list ? decHardCache.list.some(function(rx) {
+    return rx.test(t);
+  }) : DEC_HARD_FALLBACK_RX.test(t);
+}
 function decIsDecisionCard(it) {
-  return !!(it && String(it.key || "").indexOf("ha:") === 0 && !it.receipt && (/IDENTITY-BOUND\s*:/i.test(String(it.why || "")) || /\b(approve|authori[sz]e|decline|pick one|choose one)\b/i.test(String(it.action || "") + " " + String(it.title || ""))));
+  return decAsksDecision(it) && !decIsHard(it);
+}
+function decPickOne(it) {
+  return DEC_PICK_RX.test(String(it && it.action || "") + " " + String(it && it.title || ""));
 }
 function decNumList(str) {
   const out = [];
@@ -13067,6 +13140,7 @@ async function decIssueRow(env, id) {
 }
 // The open owner cards: the queue's (what the page shows) and every other open row of human_actions (a snoozed card is still open).
 async function decOpenCards(env, c) {
+  await decLoadHard(env);
   const list = [], seen = {};
   const put = function(r) {
     const card = { key: "ha:" + r.slug, slug: r.slug, title: String(r.title || ""), why: String(r.why || ""), action: String(r.action || ""), fallback: String(r.fallback || ""), receipt: !!r.receipt, status: "open" };
@@ -13102,8 +13176,9 @@ function decCardMentions(card, id) {
 }
 // A typed target to a thing: { card, issue, objective, candidates, none, error, rest }. rest is the line without the target, where
 // the item list and the reason are read. Several matches come back as candidates (buttons), never as a guess.
-async function decResolve(env, c, text, refsOnly) {
+async function decResolve(env, c, text, refsOnly, minWords) {
   const s = String(text || "").trim();
+  const need = minWords || 2;
   const cards = await decOpenCards(env, c);
   const deciding = cards.filter(decIsDecisionCard);
   const refs = decRefs(s);
@@ -13186,9 +13261,9 @@ async function decResolve(env, c, text, refsOnly) {
     }
   }
   if (words.length) {
-    const lows = words.map(function(w) {
+    const lows = Array.from(new Set(words.map(function(w) {
       return w.toLowerCase();
-    });
+    })));
     const scored = cards.map(function(cd) {
       const hay = (cd.key + " " + cd.title).toLowerCase();
       return { cd, n: lows.filter(function(w) {
@@ -13199,7 +13274,8 @@ async function decResolve(env, c, text, refsOnly) {
     }).sort(function(a, b) {
       return b.n - a.n;
     });
-    if (scored.length) {
+    // two title words, never one: "Approve the Living Papers launch post" shares the single word 'papers' with an unrelated card
+    if (scored.length && scored[0].n >= need) {
       const top = scored.filter(function(x) {
         return x.n === scored[0].n;
       });
@@ -13209,7 +13285,7 @@ async function decResolve(env, c, text, refsOnly) {
       }), rest: s };
     }
   }
-  return { error: "Nothing matches '" + s.slice(0, 80) + "'. Give an issue id (100140), a card key (ha:...), a keyword of its title, or a queue number.", rest: s };
+  return { error: "Nothing matches '" + s.slice(0, 80) + "'. Give an issue id (100140), a card key (ha:...), two words of its title, or a queue number.", rest: s };
 }
 function decNoun(card, n) {
   return /\bfix(es)?\b/i.test((card.action || "") + " " + (card.title || "") + " " + (card.why || "")) ? n === 1 ? "fix" : "fixes" : n === 1 ? "item" : "items";
@@ -13264,6 +13340,10 @@ async function decApprove(env, c, kind, rest) {
   }
   const card = r.card;
   if (card.status && card.status !== "open") return { text: "'" + card.title + "' is already " + card.status + "; nothing to " + verb + "." };
+  await decLoadHard(env);
+  const own = [conCmd("diagnose " + card.key, "Diagnose"), cmdAction("done", { key: card.key, title: card.title })];
+  if (!decAsksDecision(card)) return { text: "'" + card.title + "' does not ask for a decision: it asks you to do something yourself, so there is nothing to " + verb + ". 'diagnose' says what it waits on; mark it done when you have done it.", actions: own };
+  if (decIsHard(card)) return { text: "'" + card.title + "' is a legal, signing, money, credential or account step. It is yours alone: Approve and Decline do not apply to it and nothing is handed to the fleet for it. 'diagnose' says what it waits on; mark it done when you have done it.", actions: own };
   let issue = r.issue || null;
   if (!issue) for (const id of decCardIds(card).slice(0, 3)) {
     issue = await decIssueRow(env, id);
@@ -13274,14 +13354,17 @@ async function decApprove(env, c, kind, rest) {
   const pick = decSelect(items, spec);
   if (pick.error) return { text: pick.error };
   const sel = pick.sel;
+  const pickOne = decPickOne(card);
+  const choice = pickOne ? decChoice(r.rest) : "";
+  if (kind === "approve" && pickOne && choice.length < 2) return { text: "'" + card.title + "' asks you to pick one, so a bare Approve cannot say which." + (card.action ? "\nThe card says: " + conClip(card.action, 300) : "") + "\nName your choice after the card: approve " + card.key + " <the option>.", actions: [{ fill: "approve " + card.key + " ", label: "Approve an option" }, conCmd("decline " + card.key, "Decline"), conCmd("diagnose " + card.key, "Diagnose")] };
   const prior = await decDecided(env, card.key);
   const kw = decKeyword(issue);
   const noun = decNoun(card, sel ? sel.length : 1);
   const scope = sel ? sel.length === items.length ? "all " + items.length + " " + noun : noun + " " + decFmtRange(sel) + " of " + items.length : "";
   const label = (kind === "approve" ? "Approve " : "Decline ") + (scope ? scope + " of " : "") + (issue ? "issue " + issue.id + (kw ? " (" + kw + ")" : "") : "'" + card.title.slice(0, 60) + "'");
-  const a = cmdAction(kind, { key: card.key, issue: issue ? issue.id : null, items: sel, note: spec.reason, title: card.title });
+  const a = cmdAction(kind, { key: card.key, issue: issue ? issue.id : null, items: sel, note: spec.reason, title: card.title, choice: choice || void 0 });
   a.label = label;
-  const L = [label + (spec.reason ? " - " + spec.reason : "")];
+  const L = [label + (choice ? ": " + choice : "") + (spec.reason ? " - " + spec.reason : "")];
   if (sel && holder) for (const i of items) if (sel.indexOf(i.n) >= 0) L.push("  " + i.n + ") " + i.text.slice(0, 150));
   if (sel && !holder) L.push("  (the text of each item is shown to the signed-in owner)");
   const done = Object.keys(prior).filter(function(k) {
@@ -13291,12 +13374,16 @@ async function decApprove(env, c, kind, rest) {
     return k + " " + prior[k];
   }).join(", ") + ".");
   if (kind === "approve") {
-    L.push("", "A tap records your approval, closes the card once every item is decided and files ONE task for the fleet that names the approved items, who applies them" + (issue ? " and the closing probe of issue " + issue.id : "") + ". It changes nothing else by itself: the work happens when the fleet picks the task up" + (issue ? ", and issue " + issue.id + " closes only when its own probe passes" : "") + ". It needs a code from the last 15 minutes.");
+    L.push("", "A tap files ONE task for the fleet first (it carries the card's title, what it asks and why" + (sel ? ", the approved items" : "") + (choice ? ", your choice" : "") + (issue ? ", the doer and the closing probe of issue " + issue.id : "; no issue is linked to this card, so it names no closing probe") + "), and only then records your approval and closes the card once every item is decided. If the task cannot be filed nothing is recorded and the card stays open. It changes nothing else by itself: the work happens when the fleet picks the task up" + (issue ? ", and issue " + issue.id + " closes only when its own probe passes" : "") + ". It needs a code from the last 15 minutes.");
   } else {
     L.push("", "A tap records your decline" + (sel ? " of " + (sel.length === 1 ? "this item" : "these items") : "") + "; " + (card.fallback ? card.fallback : "the default stays in effect") + ". The card closes when every item is decided.");
   }
   const acts = [a, conCmd("diagnose " + (issue ? issue.id : card.key), "Diagnose")];
   return { text: L.join("\n"), actions: acts };
+}
+// What the owner typed after a pick-one card's key: the option, without a "why ..." clause.
+function decChoice(rest) {
+  return String(rest || "").replace(/\s+/g, " ").replace(/\s(?:why|because|reason)\b[\s\S]*$/i, "").replace(/^\s*(?:option|choice)\s*[:\-]?\s*/i, "").trim().slice(0, 200);
 }
 // retry: the closing probe of an issue due now (op iretry), a failed workflow run again (op rerun) or, alone, the last question
 // that fell back (handled before the parse, where the text can be replaced).
@@ -13305,7 +13392,8 @@ async function decRetry(env, c, rest) {
   if ((m = /^run\s+#?(\d{6,14})$/i.exec(rest))) return { actions: [cmdAction("rerun", { run: Number(m[1]), title: "run " + m[1] })], auto: true, text: "Re-run the failed jobs of run " + m[1] };
   if (!decHasTarget(rest)) return { text: "Type 'retry' alone to ask your last unanswered question again, 'retry <issue id>' to mark an issue's closing probe due now, or 'retry run <run id>' to re-run a failed workflow." };
   const r = await decResolve(env, c, rest);
-  if (r.issue) return { actions: [cmdAction("iretry", { id: Number(r.issue.id), title: "#" + r.issue.id })], auto: true, text: "Mark the closing probe of #" + r.issue.id + " due now" };
+  // only 'retry <reference>' with nothing after the reference runs at once; any other wording comes back as a button to tap
+  if (r.issue) return { actions: [cmdAction("iretry", { id: Number(r.issue.id), title: "#" + r.issue.id })], auto: decOnlyRef(rest), text: "Mark the closing probe of #" + r.issue.id + " due now" + (decOnlyRef(rest) ? "" : " (the line held more than a reference, so this waits for your tap)") };
   if (r.candidates) return { text: "More than one issue matches. Pick one:", actions: r.candidates.filter(function(x) {
     return !x.card && /^\d+$/.test(x.arg);
   }).map(function(x) {
@@ -13334,6 +13422,26 @@ async function decResolveVerb(env, c, rest) {
   if (r.card) return { actions: [cmdAction("done", { key: r.card.key, title: r.card.title })], text: "Mark done: " + r.card.title };
   return { text: (r.error || "Nothing matches.") + "\nGive an issue id: 'resolve 100140'." };
 }
+// The first thing after retry / resolve: an issue id ("100140", "#100140", "issue 100140"), a card key, an UPPER-DASH keyword, a slug, or a
+// queue number on its own. A sentence that only has a reference somewhere inside it ("Resolve GitHub PR #3608 and #3445 conflicts ...",
+// "Retry the failed deploy of PR #1001 and tell me why") is the model's.
+var DEC_LEAD_REF_RX = /^(?:(?:agent_issues|issues?)\s*#?\s*\d{3,7}|#?\d{3,7}|(?:ha|goals):[A-Za-z0-9:._-]{2,150}|[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+|(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)+)(?=[\s.,;:)]|$)/;
+function decLeadRef(rest) {
+  const s = String(rest || "").trim();
+  return DEC_LEAD_REF_RX.test(s) || /^#?\d{1,2}$/.test(s) || /^run\s+#?\d{6,14}$/i.test(s);
+}
+// Approve / decline name their target anywhere in the line (the owner's own sentence "Approve each of the seven fixes in agent_issues
+// 100140" is one), by a queue number on its own, or by nothing at all beyond filler ("Approve all", "approve it", "approve 1-5": the
+// one decision that waits, or a list of them to pick from). A line with words of its own and no reference is a sentence.
+function decNamesTarget(rest) {
+  const s = String(rest || "").trim();
+  return decRefs(s).length > 0 || /^#?\d{1,2}(?:\s+(?:why|because|reason)\b[\s\S]*)?$/i.test(s) || decWords(s).length === 0 && !/\d{3,}/.test(s);
+}
+// The whole of what follows the verb is one reference and nothing else.
+function decOnlyRef(rest) {
+  const s = String(rest || "").trim(), refs = decRefs(s);
+  return refs.length === 1 && s.replace(refs[0].raw, "").replace(/[\s.,;:!?#]+/g, "") === "";
+}
 async function conDecide(env, text, c, owner) {
   const t = String(text || "").trim();
   const m = DEC_VERB_RX.exec(t);
@@ -13345,32 +13453,53 @@ async function conDecide(env, text, c, owner) {
     return null;
   }
   const word = m[1].toLowerCase(), rest = m[2].trim();
+  // A verb is a command only when it stands alone or names its target (DASH-OWNER-ACTIONS-1). "Resolve next fleet open item and deploy",
+  // "Approve the Living Papers launch post" and "Retry the failed deploy of PR #1001 and tell me why" are requests for the model: null
+  // sends them on to it, with the quick buttons beside the answer.
+  if (word === "retry" || word === "resolve") {
+    if (rest && !decLeadRef(rest)) return null;
+  } else if (rest && !decNamesTarget(rest)) return null;
   if (word === "retry") return await decRetry(env, c, rest);
   if (word === "resolve") return CMD_FIXALL_RX.test(t) ? null : await decResolveVerb(env, c, rest);
   const kind = /^(approve|authori[sz]e|ratify)$/.test(word) ? "approve" : "decline";
   return await decApprove(env, c, kind, rest);
 }
+function decClip(x, n) {
+  return String(x || "").replace(/\s+/g, " ").trim().slice(0, n);
+}
+// The one task an approval hands to the fleet. It must stand alone: the card's title, what it asks and why (when no issue holds the
+// brief), the approved items, the owner's chosen option, the doer and the closing probe. The text is the same for the same decision (no
+// clock in it, a decision number instead), so filing it again after the decision could not be recorded finds the first one. It is read
+// from owner_prompts into an issue body clipped at 1800 characters, so the items share what the fixed lines leave.
+function decHandoffText(card, issue, items, sel, others, paper, choice, round) {
+  const L = ["OWNER-DECISION from fleet.qnfo.org (owner session, approval code in the last 15 minutes, decision " + round + "): the owner APPROVED " + (sel ? "item" + (sel.length === 1 ? " " : "s ") + decFmtRange(sel) + " of " + items.length : "the decision") + " on owner card " + card.key + (issue ? " (issue " + issue.id + ": " + decClip(issue.title, 90) + ")" : "") + "."];
+  L.push("Card: " + decClip(card.title, 130));
+  if (card.action) L.push("Asked: " + decClip(card.action, issue ? 200 : 320));
+  if (card.why) L.push("Why: " + decClip(card.why, issue ? 140 : 260));
+  if (choice) L.push("Chosen option (the owner's words): " + decClip(choice, 200));
+  const tail = [];
+  if (sel && others.length) tail.push("Not approved here (declined or still undecided): " + decFmtRange(others) + ". Leave them as they are.");
+  tail.push("Doer: " + (paper ? "the revision and errata path of qnfo-research-exec (REVISION-LOOP-1); these are the owner's own papers, so change only what each approved item names, and nothing around it." : issue ? "the loop that owns issue " + issue.id + " (issue_triage.owner)." : "the loop that owns the card's subject; the card text above is the whole brief."));
+  if (issue) tail.push("Closing probe: remediation contract issue-" + issue.id + " (read it with: issue " + issue.id + "). Close issue " + issue.id + " only with that evidence, in issue_triage.close_evidence; the approval is not the evidence.");
+  else tail.push("No issue is linked to this card, so there is no closing probe to cite; the approval is not evidence that anything changed.");
+  const body = [];
+  if (sel) {
+    const fixed = L.concat(tail).join("\n").length + 90;
+    const per = Math.max(40, Math.min(200, Math.floor((1790 - fixed) / sel.length) - 6));
+    body.push("Apply exactly these approved items and nothing else" + (per < 150 && issue ? " (the full text of each is in issue " + issue.id + ")" : "") + ":");
+    for (const i of items) if (sel.indexOf(i.n) >= 0) body.push(i.n + ") " + i.text.slice(0, per));
+  }
+  return L.concat(body, tail).join("\n").slice(0, 1990);
+}
+async function decApprovalCount(env, key) {
+  try {
+    return Number((await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM human_responses WHERE key = ?1 AND kind = 'approve'", [key]))[0].n) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
 // Run an approval or a refusal. Reached only through /api/cmd/run (which has already asked for the code, and for a code from the
 // last 15 minutes for approve) and the owner session's own cookie.
-async function decOwnerRoute(request, env, ctx, owner, path, body) {
-  const inner = new Request("https://fleet.qnfo.org" + path, { method: "POST", headers: { "Content-Type": "application/json", "x-fleet-ui": "1", "CF-Connecting-IP": request.headers.get("CF-Connecting-IP") || "" }, body: JSON.stringify(body) });
-  const res = await ownerRoutes(inner, env, ctx, path, Object.assign({}, owner, { authed: true }));
-  const j = await res.json().catch(function() {
-    return {};
-  });
-  return { ok: res.ok && j.ok !== false && !j.error, status: res.status, j };
-}
-function decHandoffText(card, issue, items, sel, others, paper) {
-  const L = ["OWNER-DECISION from fleet.qnfo.org (" + new Date().toISOString().slice(0, 16) + "Z, owner session, approval code in the last 15 minutes): the owner APPROVED " + (sel ? "item" + (sel.length === 1 ? " " : "s ") + decFmtRange(sel) + " of " + items.length : "the decision") + " on owner card " + card.key + (issue ? " (issue " + issue.id + ": " + String(issue.title || "").slice(0, 110) + ")" : "") + "."];
-  if (sel) {
-    L.push("Apply exactly these approved items and nothing else:");
-    for (const i of items) if (sel.indexOf(i.n) >= 0) L.push(i.n + ") " + i.text.slice(0, 200));
-    if (others.length) L.push("Not approved here (declined or still undecided): " + decFmtRange(others) + ". Leave them as they are.");
-  }
-  L.push("Doer: " + (paper ? "the revision and errata path of qnfo-research-exec (REVISION-LOOP-1); these are the owner's own papers, so change only what each approved item names, and nothing around it." : issue ? "the loop that owns issue " + issue.id + " (issue_triage.owner)." : "the loop that owns the card's subject."));
-  if (issue) L.push("Closing probe: remediation contract issue-" + issue.id + " (read it with: issue " + issue.id + "). Close issue " + issue.id + " only with that evidence, in issue_triage.close_evidence; the approval is not the evidence.");
-  return L.join("\n").slice(0, 1950);
-}
 async function cmdDecide(request, env, ctx, owner, op, args) {
   if (ownerCredential(owner) !== "owner-session") return { ok: false, error: "An approval or a refusal is your own decision: it needs your email-code session (type 'login'). The fleet's loop token and the dormant owner key cannot make it." };
   const key = String(args && args.key || "");
@@ -13378,10 +13507,17 @@ async function cmdDecide(request, env, ctx, owner, op, args) {
   await ensureOwnerTables(env);
   await ownerRequestColumns(env);
   await ensureResponseCredential(env);
+  await decLoadHard(env);
   const slug = key.slice(3);
   const card = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status FROM human_actions WHERE slug = ?1").bind(slug).first();
   if (!card) return { ok: false, error: "No owner card " + slug + "." };
   if (card.status !== "open") return { ok: true, text: "'" + card.title + "' is already " + card.status + "; nothing was changed." };
+  const cardView = { key, title: card.title, why: card.why, action: card.action, fallback: card.fallback };
+  if (!decAsksDecision(cardView)) return { ok: false, error: "'" + card.title + "' does not ask for a decision: it asks you to do something yourself, so Approve and Decline do not apply. Mark it done when you have done it." };
+  if (decIsHard(cardView)) return { ok: false, error: "'" + card.title + "' is a legal, signing, money, credential or account step. It is yours alone: Approve and Decline do not apply and nothing is handed to the fleet for it. Mark it done when you have done it." };
+  const pickOne = decPickOne(cardView);
+  const choice = pickOne ? decClip(args.choice, 200) : "";
+  if (op === "approve" && pickOne && choice.length < 2) return { ok: false, error: "'" + card.title + "' asks you to pick one: name the option, 'approve " + key + " <the option>'. Nothing was recorded." };
   const ids = decCardIds(card);
   const issues = [];
   for (const id of ids.slice(0, 3)) {
@@ -13428,33 +13564,45 @@ async function cmdDecide(request, env, ctx, owner, op, args) {
     return i.n;
   }) : [];
   const summary = items.length ? (approvedAll.length ? "approved " + decFmtRange(approvedAll) : "") + (approvedAll.length && declinedAll.length ? ", " : "") + (declinedAll.length ? "declined " + decFmtRange(declinedAll) : "") : op === "approve" ? "approved" : "declined";
-  const batch = [
-    env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, credential) VALUES (?1, ?2, ?3, 'owner-session')").bind(key, op, decNote(sel, primary ? Number(primary.id) : 0, reason).slice(0, 500).trim() || null)
-  ];
-  if (closes) {
-    const anyApprove = approvedAll.length > 0;
-    batch.push(env.AUDIT.prepare("UPDATE human_actions SET status = ?1, resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?2 WHERE slug = ?3 AND status = 'open'").bind(anyApprove ? "resolved" : "dismissed", op + " via dashboard by " + OBJREV_RATIFIED_BY["owner-session"] + ": " + summary + (reason ? " (" + reason + ")" : ""), slug));
-  }
-  for (const x of issues) batch.push(env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " OWNER-DECISION " + op + (sel ? " items " + decFmtRange(sel) : "") + " on card " + key + (reason ? ": " + reason : "") + (op === "approve" ? ". Approved for the fleet to apply; it is not applied by this line, and this issue closes only on its own probe." : ". The default stays in effect for the declined parts."), now, x.id));
-  await env.AUDIT.batch(batch);
-  const L = [(op === "approve" ? "Approved" : "Declined") + (sel ? " " + decFmtRange(sel) + (items.length ? " of " + items.length : "") : "") + (primary ? " (issue " + primary.id + ")" : "") + ". Recorded in human_responses (credential owner-session) and on " + (issues.length ? decIssueClause(issues.map(function(x) {
-    return x.id;
-  })) : "the card") + " as OWNER-DECISION."];
-  L.push(closes ? "The card is " + (approvedAll.length ? "resolved" : "dismissed") + ": every part is decided." : "The card stays open until every item is decided: " + decFmtRange(undecided) + " left.");
   const fresh = sel ? sel.filter(function(n) {
     return prior[n] !== "approve";
   }) : prior["*"] === "approve" ? [] : [0];
+  // An approval is filed with the fleet BEFORE anything is recorded. The hand-off is what makes it real, so a decision is never written
+  // without it: when the task cannot be filed, nothing is recorded, the card stays open and the same tap files it again.
+  let filed = null, paper = false;
   if (op === "approve" && fresh.length) {
+    if (!primary && decClip(card.action, 400).length < 12) return { ok: false, error: "'" + card.title + "' names no issue and carries no action text, so there is nothing the fleet could apply from an approval. Nothing was recorded and the card stays open; mark it done if you handled it yourself." };
     const others = items.filter(function(i) {
       return decided[i.n] !== "approve";
     }).map(function(i) {
       return i.n;
     });
-    const paper = /paper|ignorance|living-paper|papers\.qnfo|manuscript/i.test((card.title || "") + " " + (card.action || "") + " " + (primary ? primary.title + " " + String(primary.description || "").slice(0, 600) : ""));
-    const t = await decOwnerRoute(request, env, ctx, owner, "/api/owner/prompt", { text: decHandoffText({ key }, primary, items, sel ? fresh : null, others, paper), mode: "task" });
-    if (t.ok) L.push("Handed to the fleet as ONE task" + (t.j.issue_id ? " (issue " + t.j.issue_id + ")" : "") + (t.j.duplicate ? " (already queued)" : "") + ": it names the approved items, the doer (" + (paper ? "the revision and errata path of qnfo-research-exec" : "the loop that owns the issue") + ")" + (primary ? " and the closing probe of issue " + primary.id : "") + ". Nothing has been applied yet" + (primary ? "; issue " + primary.id + " closes only when its own probe passes." : "."));
-    else L.push("The hand-off task could not be filed (" + (t.j.error || "HTTP " + t.status) + "). The OWNER-DECISION line on the issue" + (issues.length === 1 ? "" : "s") + " carries the approval for the fleet loops; nothing has been applied.");
+    paper = /paper|ignorance|living-paper|papers\.qnfo|manuscript/i.test((card.title || "") + " " + (card.action || "") + " " + (primary ? primary.title + " " + String(primary.description || "").slice(0, 600) : ""));
+    const round = (await decApprovalCount(env, key)) + 1;
+    try {
+      filed = await ownerTaskFile(env, decHandoffText(cardView, primary, items, sel ? fresh : null, others, paper, choice, round), { reuse: true });
+    } catch (e) {
+      return { ok: false, error: "The hand-off to the fleet could not be filed (" + decClip(e && e.message || e, 160) + "), so your approval was not recorded and the card is still open. Tap Approve again." };
+    }
   }
+  const batch = [
+    env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, credential) VALUES (?1, ?2, ?3, 'owner-session')").bind(key, op, (decNote(sel, primary ? Number(primary.id) : 0, reason) + (choice ? (reason || sel || primary ? " " : "") + "choice: " + choice : "")).slice(0, 500).trim() || null)
+  ];
+  if (closes) {
+    const anyApprove = approvedAll.length > 0;
+    batch.push(env.AUDIT.prepare("UPDATE human_actions SET status = ?1, resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?2 WHERE slug = ?3 AND status = 'open'").bind(anyApprove ? "resolved" : "dismissed", op + " via dashboard by " + OBJREV_RATIFIED_BY["owner-session"] + ": " + summary + (choice ? " (" + choice + ")" : "") + (reason ? " (" + reason + ")" : ""), slug));
+  }
+  for (const x of issues) batch.push(env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " OWNER-DECISION " + op + (sel ? " items " + decFmtRange(sel) : "") + " on card " + key + (choice ? ", choice: " + choice : "") + (reason ? ": " + reason : "") + (op === "approve" ? ". Approved for the fleet to apply; it is not applied by this line, and this issue closes only on its own probe." : ". The default stays in effect for the declined parts."), now, x.id));
+  try {
+    await env.AUDIT.batch(batch);
+  } catch (e) {
+    return { ok: false, error: (filed ? "The hand-off task was filed" + (filed.issue_id ? " (issue " + filed.issue_id + ")" : "") + ", but your approval could not be recorded (" + decClip(e && e.message || e, 120) + "). Tap Approve again: the same task is recognised and not filed twice." : "Your decision could not be recorded (" + decClip(e && e.message || e, 120) + "); nothing was changed.") };
+  }
+  const L = [(op === "approve" ? "Approved" : "Declined") + (sel ? " " + decFmtRange(sel) + (items.length ? " of " + items.length : "") : "") + (choice ? " (" + choice + ")" : "") + (primary ? " (issue " + primary.id + ")" : "") + ". Recorded in human_responses (credential owner-session) and on " + (issues.length ? decIssueClause(issues.map(function(x) {
+    return x.id;
+  })) : "the card") + " as OWNER-DECISION."];
+  L.push(closes ? "The card is " + (approvedAll.length ? "resolved" : "dismissed") + ": every part is decided." : "The card stays open until every item is decided: " + decFmtRange(undecided) + " left.");
+  if (filed) L.push("Handed to the fleet as ONE task" + (filed.issue_id ? " (issue " + filed.issue_id + ")" : "") + (filed.duplicate ? " (the same task was already queued)" : "") + ": it carries the card's title and what it asks" + (sel ? ", names the approved items" : "") + (choice ? ", your choice" : "") + (primary ? ", the doer (" + (paper ? "the revision and errata path of qnfo-research-exec" : "the loop that owns issue " + primary.id) + ") and the closing probe of issue " + primary.id : "; no issue is linked to this card, so there is no closing probe to cite") + ". Nothing has been applied yet" + (primary ? "; issue " + primary.id + " closes only when its own probe passes." : "."));
   return { ok: true, text: L.join("\n"), result: { key, op, items: sel, closes } };
 }
 // The overview: the blocked issues worst first, and what waits on the owner.
@@ -13473,7 +13621,7 @@ async function conDiagnoseOverview(env, c, holder) {
   }).sort(function(a, b) {
     return cmdPrio(a.priority) - cmdPrio(b.priority) || Number(a.id) - Number(b.id);
   });
-  const waiting = (await decOpenCards(env, c)).filter(decIsDecisionCard);
+  const waiting = (await decOpenCards(env, c)).filter(decAsksDecision);
   const L = ["Diagnosis (read from the fleet's data, no model):"];
   L.push(blocked.length ? blocked.length + " open issue" + (blocked.length === 1 ? " is" : "s are") + " blocked: a contract exists but cannot close it by itself. Worst first:" : "No open issue is blocked behind a failing contract.");
   for (const k of blocked.slice(0, 6)) L.push("  #" + k.id + " [" + k.priority + "] " + (holder ? conClip(String(k.title || "").replace(/\s+/g, " "), 70) + " - " : "(" + (k.category || "uncategorised") + ") ") + cmdBlockWhy(k));
@@ -13520,7 +13668,9 @@ async function conDiagnoseIssue(env, c, a, card, holder) {
   const L = [];
   L.push("Diagnosis of #" + id + " [" + (a.priority || "?") + "] " + a.status + (holder ? " - " + conClip(String(a.title || "").replace(/\s+/g, " "), 140) : " (" + (a.category || "uncategorised") + "; titles are shown to the signed-in owner)"));
   L.push("category " + (a.category || "?") + ", opened " + conIso(a.created_at) + (lad && lad.age_h != null ? ", age " + Math.round(Number(lad.age_h)) + " h" : ""));
-  const dcard = card && decIsDecisionCard(card) ? card : null;
+  const asks = !!(card && decAsksDecision(card));
+  const dcard = asks && !decIsHard(card) ? card : null;
+  const ycard = asks && !dcard ? card : null;
   for (const k of contracts) L.push("Closing probe " + k.class + ": " + k.status + ", last verdict " + (k.last_verdict || "none") + (k.last_attempt_at ? " at " + k.last_attempt_at : "") + ", attempt " + Number(k.attempts || 0) + " of " + Number(k.max_attempts || 0) + (k.next_due_at ? ", next check " + String(k.next_due_at).slice(0, 16).replace("T", " ") + " UTC" : ""));
   if (!contracts.length) L.push("Closing probe: none (no remediation contract is recorded for this issue).");
   if (vers[0]) L.push("Latest check: " + (Number(vers[0].pass) ? "PASS" : "FAIL") + " " + vers[0].verified_at + (vers[0].verifier ? " by " + vers[0].verifier : "") + (holder ? " - observed " + conClip(vers[0].observed, 200) : ""));
@@ -13530,7 +13680,7 @@ async function conDiagnoseIssue(env, c, a, card, holder) {
   for (const w of claims) L.push("Live work claim: " + w.holder + " until " + w.expires_at + (w.pr ? ", PR " + w.pr : "") + (holder ? " - " + conClip(w.intent, 140) : ""));
   for (const f of fms) L.push("Failure mode " + f.fm_key + ": " + conClip(f.failure_mode, 160));
   for (const h of heal) L.push("Self-heal (" + h.tbl + ", " + h.subject + ", " + h.ts + "): " + conClip(h.action, 200));
-  if (card) L.push("Owner card " + card.key + (dcard ? " waits on your decision" : " names it") + (holder && dcard && card.fallback ? "; if you do not decide: " + conClip(card.fallback, 140) : "") + ".");
+  if (card) L.push("Owner card " + card.key + (dcard ? " waits on your decision" : ycard ? " waits on a step only you can take" : " names it") + (holder && dcard && card.fallback ? "; if you do not decide: " + conClip(card.fallback, 140) : "") + ".");
   const latestPass = vers[0] && Number(vers[0].pass);
   const blockedK = contracts.find(function(k) {
     return k.status === "active" && !(Number(k.attempts || 0) < Number(k.max_attempts || 0) && String(k.escalate_to || "") !== "owner" && !CMD_PROBE_DEAD_RX.test(String(k.last_verdict || "")));
@@ -13541,6 +13691,7 @@ async function conDiagnoseIssue(env, c, a, card, holder) {
   let means;
   if (a.status !== "open") means = "It is " + a.status + (tri && tri.close_evidence ? ", with close evidence on file." : ", and no close evidence is recorded.");
   else if (dcard) means = "It is waiting on your decision, not on a loop: until you approve or decline the owner card, nothing else will move it.";
+  else if (ycard) means = "It is waiting on a step only you can take (a legal, signing, money, credential or account act): no loop will do it and the fleet is not handed it. Do it, then mark the owner card done.";
   else if (latestPass || contracts.some(function(k) {
     return k.last_verdict === "pass";
   })) means = "Its closing probe passes now, so it can be closed: it closes itself on the next remediation pass, or resolve it now.";
@@ -13553,6 +13704,7 @@ async function conDiagnoseIssue(env, c, a, card, holder) {
   L.push("", "What this means: " + means);
   const acts = [];
   if (holder && dcard) acts.push(conCmd("approve " + card.key, "Approve"), conCmd("decline " + card.key, "Decline"));
+  if (holder && ycard) acts.push(conCmd("done " + card.key, "Done"));
   if (holder && a.status === "open" && activeK) acts.push(conCmd("retry " + id, "Retry its probe"));
   if (a.status === "open" && latestPass) acts.push(conCmd("resolve " + id, "Resolve on its passing probe"));
   if (holder && a.status === "open" && !/code-task:/.test(String(a.description || ""))) acts.push({ fill: "codetask " + id + " <dir>/worker.js ", label: "Hand to the code loop" });
@@ -13564,9 +13716,11 @@ async function conDiagnoseCard(env, c, card, holder) {
   if (card.why) L.push("Why it is yours: " + conClip(card.why, 400));
   if (card.action) L.push("To do: " + conClip(card.action, 400));
   if (card.fallback) L.push("If you wait: " + conClip(card.fallback, 300));
-  L.push("", "What this means: it waits on you; no loop will decide it" + (decIsDecisionCard(card) ? ". Approve or decline it here." : "; done or snooze it."));
+  const hard = decAsksDecision(card) && decIsHard(card);
+  L.push("", "What this means: it waits on you; no loop will decide it" + (decIsDecisionCard(card) ? ". Approve or decline it here." : hard ? ": it is a legal, signing, money, credential or account step that only you can take, so Approve and Decline are not offered. Do it, then mark it done." : "; done or snooze it."));
   const acts = [];
   if (holder && decIsDecisionCard(card)) acts.push(conCmd("approve " + card.key, "Approve"), conCmd("decline " + card.key, "Decline"));
+  if (holder && hard) acts.push(conCmd("done " + card.key, "Done"));
   acts.push(conCmd("info " + card.key, "Details"));
   return { text: L.join("\n"), actions: acts };
 }
@@ -13587,7 +13741,7 @@ async function conDiagnoseLine(env, c, m, owner) {
   if (sched) return { text: cmdFmtWorker(sched, ((c.st.probes) || []).find(function(p) {
     return p.name === sched.name;
   })) + "\n\nWhat this means: " + (sched.status === "OK" || sched.status === "IDLE" ? "the worker is " + sched.status.toLowerCase() + "." : "the worker is " + sched.status + "; read its errors."), actions: holder ? [conCmd("logs " + sched.name, "Errors of " + sched.name)] : [] };
-  const r = await decResolve(env, c, rest);
+  const r = await decResolve(env, c, rest, false, 1);
   if (r.issue) return await conDiagnoseIssue(env, c, r.issue, r.card, holder);
   if (r.card) return await conDiagnoseCard(env, c, r.card, holder);
   if (r.candidates && strict) return { text: "More than one thing matches. Pick one:", actions: r.candidates.map(function(x) {
@@ -13600,9 +13754,15 @@ async function conDiagnoseLine(env, c, m, owner) {
 // The owner-gated decision cards of the queue, each with the numbered parts of the issue it names and which are decided (signed-in
 // owner only: the text of the parts comes from the issue, which can be private).
 async function ownerDecisionView(env, v) {
-  const cards = (v && v.items || []).filter(decIsDecisionCard).slice(0, 8);
+  await decLoadHard(env);
+  const cards = (v && v.items || []).filter(decAsksDecision).slice(0, 8);
   await Promise.all(cards.map(async function(it) {
     try {
+      // a legal, signing, money, credential or account step is the owner's alone: the block offers Diagnose and Done and reads no issue
+      if (decIsHard(it)) {
+        it.decision = { hard: true, issue: null, items: [] };
+        return;
+      }
       let issue = null;
       for (const id of decCardIds({ slug: String(it.key).slice(3), title: it.title, why: it.why, action: it.action }).slice(0, 3)) {
         issue = await decIssueRow(env, id);
@@ -13610,7 +13770,7 @@ async function ownerDecisionView(env, v) {
       }
       const items = issue && decWantsItems(it) ? decItems(issue.description) : [];
       const dec = items.length ? await decDecided(env, it.key) : {};
-      it.decision = { issue: issue ? Number(issue.id) : null, items: items.map(function(i) {
+      it.decision = { hard: false, pick: decPickOne(it), issue: issue ? Number(issue.id) : null, items: items.map(function(i) {
         return { n: i.n, text: i.text, state: dec[i.n] || null };
       }) };
     } catch (e) {
@@ -13628,7 +13788,10 @@ function decCardHtml(it, e) {
   const btn = function(cls, cmd, label) {
     return '<button type="button" class="' + cls + '" data-fleet-cmd="' + e(cmd) + '">' + e(label) + "</button>";
   };
-  if (d && d.items && d.items.length) {
+  if (d && d.hard) {
+    h += '<p class="dec-h">Only you can take this step (a legal, signing, money, credential or account act): Approve and Decline are not offered.</p>';
+    h += '<div class="dec-all">' + btn("dec-d", "diagnose " + key, "Diagnose") + btn("dec-d", "done " + key, "Done") + "</div>";
+  } else if (d && d.items && d.items.length) {
     const left = d.items.filter(function(i) {
       return !i.state;
     });
@@ -13640,7 +13803,9 @@ function decCardHtml(it, e) {
     })) : "";
     h += '<div class="dec-all">' + btn("dec-y", "approve " + key + only, left.length && left.length < d.items.length ? "Approve the " + left.length + " left" : "Approve all " + d.items.length) + btn("dec-n", "decline " + key + only, left.length && left.length < d.items.length ? "Decline the " + left.length + " left" : "Decline all") + btn("dec-d", "diagnose " + key, "Diagnose") + "</div>";
   } else {
-    h += '<div class="dec-all">' + btn("dec-y", "approve " + key, "Approve") + btn("dec-n", "decline " + key, "Decline") + btn("dec-d", "diagnose " + key, "Diagnose") + "</div>";
+    // a pick-one card cannot be approved bare: the button fills the command line with the card's key for the owner to name the option
+    const yes = d && d.pick ? '<button type="button" class="dec-y" data-fleet-fill="' + e("approve " + key + " ") + '">Approve an option</button>' : btn("dec-y", "approve " + key, "Approve");
+    h += '<div class="dec-all">' + yes + btn("dec-n", "decline " + key, "Decline") + btn("dec-d", "diagnose " + key, "Diagnose") + "</div>";
   }
   return h + "</div>";
 }
@@ -13687,7 +13852,7 @@ async function cmdLocalIntent(env, text, c, mode) {
       acts.push.apply(acts, A);
       if (r.card && String(r.card.key).indexOf("ha:") === 0) acts.push(conCmd("done " + r.card.key, "Done"), conCmd("snooze " + r.card.key + " 3d", "Snooze 3d"));
     }
-    if (!decide && (kind === "approve" || kind === "decline")) L.push("No owner card asks for a decision on it, so there is nothing to " + kind + "; 'diagnose' says what it waits on.");
+    if (!decide && (kind === "approve" || kind === "decline")) L.push(r.card && decAsksDecision(r.card) ? "It is a legal, signing, money, credential or account step that only you can take, so there is nothing to " + kind + " here; 'diagnose' says what it waits on." : "No owner card asks for a decision on it, so there is nothing to " + kind + "; 'diagnose' says what it waits on.");
   }
   if (!matched && mode === "fallback") acts.push(conCmd("queue", "Queue"), conCmd("suggest", "Suggest"), conCmd("issues", "Issues"));
   if (!matched && mode !== "fallback") return null;
