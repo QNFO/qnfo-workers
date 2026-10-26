@@ -3176,7 +3176,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.42.0-travel-picks";
+var VERSION = "1.43.0-ai-label";
+// 1.43.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every reading.q08.org piece says in its meta line that it is AI-generated and has no human review before publication.
 /* 1.42.0 TRAVEL-PICKS-1 (2026-10-26, pillar personal; minor): the owner's pillars (2026-10-24: "where to go, where to sleep, what to eat, how to get around, and what to do ... basically only two"). Each upcoming stop on the travel Places tab now carries three places to eat and three things to do, made from the profile on the hourly tick (one stop per tick, within 60 days) or by "Suggest now"/"Fresh ideas", each with a map-search link and a "Not for me" that is remembered (travel_reactions kind eat|do) and never bans the city from stop ideas. New table travel_picks; routes POST /travel/api/picks and /travel/api/pick-no. Nothing is booked. */
 /* 1.41.0 READING-NO-SOURCE-LEDE-1 (2026-10-26, pillar personal; minor): the owner (2026-10-21): "you also don't need to say lead every article was from Wikipedia". The writer no longer credits its source in the lede or the prose; each piece page lists its sources in a quiet footer instead, built from anchor_json refs; pieces already stored lose the "according to the Wikipedia article on ..." clause at display time (plainCredit), so the stored text, the grounding check and the fact-check are unchanged. */
 /* 1.40.0 TRAVEL-PILLARS-1 (2026-10-26, pillar personal, owner: "where to go, where to sleep, what to eat, how to get around, and what to do ... it's basically only two"; minor): the travel page groups the plan into two tabs. Places: visa days, check-in drafts and one card per stop with Sleep (booked stay and nights still open, a stay search, ideas), Eat and Do (one tap asks the chat for specific picks), its weather range and fog season. Getting around: each move between stops with its booked journey, a routes link, a "best way" question and fog from the place being left, then the day-by-day list. */
@@ -4548,11 +4549,13 @@ function renderIndex(pieces, keyQS, filter) {
 __name(renderIndex, "renderIndex");
 __name2(renderIndex, "renderIndex");
 __name22(renderIndex, "renderIndex");
+// BP26-AI-LABEL-1 (1.43.0): Article 50(4) disclosure on every piece; there is no human editorial review, so the label is unconditional.
+var AI_LABEL_HTML = "<span class=ai title=\"Written by AI and checked against its source material by automated review. No human reviews pieces before they appear.\">AI-generated</span>";
 function renderPiece(p, keyQS) {
   var bodyMd = String(p.body_md || "");
   var startsHeading = /^\s*#/.test(bodyMd);
   var ledeHtml = !startsHeading && p.lede ? "<p class=lede>" + escHtml(plainCredit(p.lede)) + "</p>" : "";
-  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + ledeHtml + renderBody(plainCredit(bodyMd)) + sourcesFoot(p.anchor_json);
+  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words &middot; " + AI_LABEL_HTML + "</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + ledeHtml + renderBody(plainCredit(bodyMd)) + sourcesFoot(p.anchor_json);
   var fb = "<div class=fb>Was this worth your time? <a href=/api/f?slug=" + p.slug + "&s=good>yes</a><a href=/api/f?slug=" + p.slug + "&s=flat>flat</a><a href=/api/f?slug=" + p.slug + "&s=no>no</a></div>";
   var foot = "<footer><a href=/ " + keyQS + ">back to index</a></footer>";
   return page(p.title, shell(body + fb + foot));
