@@ -502,6 +502,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
+- A close names its channel (CLOSE-CHANNEL-PROBE-2, agent_issues 100419). `agent_issues.close_channel` says which path closed an issue (a fix, a probe, a sweep, a session); a session that closes by SQL
+  sets it in the same UPDATE (`session:<name>`), because `issue_close_evidence_required` guards the evidence and nothing guards the channel: 49 closes of 7 days carried none and no trigger can add it
+  (SQLite cannot assign NEW.* in a BEFORE trigger, and an AFTER trigger that updates `agent_issues` again nests into the 24 existing triggers, AGENT-ISSUES-TRIGGER-DEPTH-1). Closing through `issue_triage`
+  (`triage_state` closed) writes it for you (`auto:triage-sync:<owner>`). The contract `issue-100419` counts the closes of the last 48 hours that carry none.
 - GitHub `schedule` triggers fire rarely and late on this repository (95 schedule runs in total by 2026-10-02; mirror-autosync
   ran 9 times), so no periodic work may depend on one; periodic work belongs in worker crons.
 - Issue hygiene (ISSUE-HYGIENE-1 and PORTFOLIO-NOT-ISSUES-1, 2026-10-26; owner question "why are there over 800 GitHub issues?"): GitHub Issues carry work that
