@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.9.0-handoffs-index"; /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.9.0-handoffs-index"; /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -892,13 +892,30 @@ var HANDOFF_TEXT_MAX = 9000;
 var HANDOFF_EMBED_BATCH = 32;
 var HANDOFF_UPSERT_BATCH = 100;
 var HANDOFF_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
+var HANDOFF_TIMEOUT_MS = 120000;
+// Field caps keep Pending and Next in the text of a very long handoff (the longest live summary is 38,313 characters).
+var HANDOFF_SUMMARY_MAX = 5000, HANDOFF_PENDING_MAX = 2000, HANDOFF_NEXT_MAX = 1000;
+// Personal/research separation (charter rule 10, CLAUDE.md): the handoffs index is read by scope=research retrieval, so a handoff of the
+// personal plane is never embedded. The row is skipped and the watermark still moves past it. The test is on the row's own labels
+// (project, WBS, session), which the writers set; the text is not scanned, because ops handoffs mention inboxes and mailboxes as a matter of course.
+// The index has no metadata index, so a vector written by mistake cannot be filtered out afterwards: this runs before the first upsert.
+var HANDOFF_PERSONAL_PROJECT = /personal|q08|twin|msgraph|^owner-/i;
+var HANDOFF_PERSONAL_WBS = /personal|q08/i;
+var HANDOFF_PERSONAL_SESSION = /^email-strategic-/i;
+function handoffIsPersonalPlane(r) {
+  return HANDOFF_PERSONAL_PROJECT.test(String(r.project_id || "")) || HANDOFF_PERSONAL_WBS.test(String(r.wbs_code || "")) || HANDOFF_PERSONAL_SESSION.test(String(r.session_id || ""));
+}
 function handoffText(r) {
   var head = "Handoff " + r.id + (r.session_id ? " session " + r.session_id : "") + (r.project_id ? " project " + r.project_id : "") + (r.wbs_code ? " wbs " + r.wbs_code : "") + (r.phase_completed ? " phase " + r.phase_completed : "") + (r.timestamp ? " at " + r.timestamp : "");
   var parts = [head];
-  if (r.summary) parts.push("Summary: " + r.summary);
-  if (r.pending_work) parts.push("Pending: " + r.pending_work);
-  if (r.next_action) parts.push("Next: " + r.next_action);
+  if (r.summary) parts.push("Summary: " + String(r.summary).slice(0, HANDOFF_SUMMARY_MAX));
+  if (r.pending_work) parts.push("Pending: " + String(r.pending_work).slice(0, HANDOFF_PENDING_MAX));
+  if (r.next_action) parts.push("Next: " + String(r.next_action).slice(0, HANDOFF_NEXT_MAX));
   return parts.join("\n").slice(0, HANDOFF_TEXT_MAX);
+}
+function withTimeout(p, ms, what) {
+  var t;
+  return Promise.race([p, new Promise(function (_, rej) { t = setTimeout(function () { rej(new Error(what + " timed out after " + ms + " ms")); }, ms); })]).finally(function () { clearTimeout(t); });
 }
 function handoffChunks(text) {
   var out = [], i = 0, n = text.length;
@@ -917,9 +934,11 @@ async function indexHandoffs(env, opts) {
   var wm = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(HANDOFF_WM_KEY).first();
   var last = wm && /^\d+$/.test(String(wm.value)) ? parseInt(wm.value, 10) : 0;
   var rows = (await env.AUDIT.prepare("SELECT id, session_id, project_id, phase_completed, summary, pending_work, next_action, timestamp, wbs_code FROM handoffs WHERE id > ?1 ORDER BY id LIMIT ?2").bind(last, limit).all()).results || [];
-  if (!rows.length) return { indexed: 0, vectors: 0, last_id: last, behind: 0 };
+  if (!rows.length) return { indexed: 0, skipped_personal: 0, vectors: 0, last_id: last, behind: 0 };
+  var keep = rows.filter(function (r) { return !handoffIsPersonalPlane(r); });
+  var skippedPersonal = rows.length - keep.length;
   var items = [];
-  rows.forEach(function (r) {
+  keep.forEach(function (r) {
     var chunks = handoffChunks(handoffText(r));
     chunks.forEach(function (c, i) { items.push({ r: r, idx: i, total: chunks.length, text: c }); });
   });
@@ -930,23 +949,34 @@ async function indexHandoffs(env, opts) {
     var data = res && res.data;
     if (!data || data.length !== batch.length) throw new Error("handoff embedding returned " + (data ? data.length : 0) + " vectors for " + batch.length + " chunks");
     batch.forEach(function (b, j) {
-      vectors.push({ id: "handoff:" + b.r.id + ":" + b.idx, values: data[j], metadata: { doc: "handoffs", id: String(b.r.id), session_id: String(b.r.session_id || ""), ts: String(b.r.timestamp || ""), chunk: String(b.idx), total: String(b.total), summary: String(b.r.summary || b.text).replace(/\s+/g, " ").slice(0, 300) } });
+      // The first chunk shows the handoff's own summary; a later chunk shows its own text, so a hit on Pending or Next displays the matched passage.
+      var shown = b.idx === 0 ? (b.r.summary || b.text) : b.text;
+      vectors.push({ id: "handoff:" + b.r.id + ":" + b.idx, values: data[j], metadata: { doc: "handoffs", id: String(b.r.id), session_id: String(b.r.session_id || ""), ts: String(b.r.timestamp || ""), chunk: String(b.idx), total: String(b.total), summary: String(shown).replace(/\s+/g, " ").slice(0, 300) } });
     });
   }
   for (var u = 0; u < vectors.length; u += HANDOFF_UPSERT_BATCH) await env.HANDOFFS_VZ.upsert(vectors.slice(u, u + HANDOFF_UPSERT_BATCH));
   var newLast = rows[rows.length - 1].id;
   var behindRow = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM handoffs WHERE id > ?1").bind(newLast).first();
   var behind = behindRow ? Number(behindRow.n) || 0 : 0;
+  // The index's own count, for the reconciliation note (best effort: the binding may lack describe() or throw).
+  var vectorCount = "";
+  try { if (typeof env.HANDOFFS_VZ.describe === "function") { var d = await env.HANDOFFS_VZ.describe(); if (d && d.vectorCount != null) vectorCount = "; index_vectors=" + d.vectorCount; } } catch (_) { }
   var now = new Date().toISOString();
-  var note = "HANDOFFS-VZ-PRODUCER-1: indexed " + rows.length + " handoffs (" + vectors.length + " vectors) up to id " + newLast + " at " + now + "; behind=" + behind;
-  await env.AUDIT.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at").bind(HANDOFF_WM_KEY, String(newLast), note, now).run();
-  return { indexed: rows.length, vectors: vectors.length, last_id: newLast, behind: behind };
+  var note = "HANDOFFS-VZ-PRODUCER-1: indexed " + keep.length + " handoffs (" + vectors.length + " vectors), skipped_personal=" + skippedPersonal + ", up to id " + newLast + " at " + now + "; behind=" + behind + vectorCount;
+  // Monotonic: a late or overlapping run cannot move the watermark back (a manual UPDATE ... SET value = 0 still re-indexes, the next run writes a larger id).
+  await env.AUDIT.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at WHERE CAST(ops_config.value AS INTEGER) < CAST(excluded.value AS INTEGER)").bind(HANDOFF_WM_KEY, String(newLast), note, now).run();
+  return { indexed: keep.length, skipped_personal: skippedPersonal, vectors: vectors.length, last_id: newLast, behind: behind };
+}
+// A failed run leaves the value and updated_at where they were and says why in the note (cron_fire_log reads ok because the error is caught).
+async function noteHandoffFailure(env, e) {
+  try { await env.AUDIT.prepare("UPDATE ops_config SET note = ?1 WHERE key = ?2").bind("HANDOFFS-VZ-PRODUCER-1: FAILED " + new Date().toISOString() + " " + String(e && e.message || e).slice(0, 200), HANDOFF_WM_KEY).run(); } catch (_) { }
 }
 // ---- HANDOFFS-VZ-PRODUCER-1:END
 async function runScheduled(event, env, ctx) {
-    // HANDOFFS-VZ-PRODUCER-1: every fire, so a new handoff is indexed within the hour; a failure is logged and leaves the watermark where it was.
-    try { const h = await indexHandoffs(env); if (h && h.indexed) console.log("[qnfo-infra] handoffs indexed: " + JSON.stringify(h)); }
-    catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "indexHandoffs", error: String(e && e.message || e) })); }
+    // HANDOFFS-VZ-PRODUCER-1: every fire, so a new handoff is indexed within the hour. A failure or a stalled call (120 s, so the refresh below still runs)
+    // is logged, written to the watermark row's note and leaves the watermark where it was.
+    try { const h = await withTimeout(indexHandoffs(env), Number(env && env.HANDOFFS_VZ_TIMEOUT_MS) || HANDOFF_TIMEOUT_MS, "indexHandoffs"); if (h && (h.indexed || h.skipped_personal)) console.log("[qnfo-infra] handoffs indexed: " + JSON.stringify(h)); }
+    catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "indexHandoffs", error: String(e && e.message || e) })); await noteHandoffFailure(env, e); }
     // INDEXER-FOLD-1: the folded qnfo-paper-indexer member's two jobs (its old "0 4" impact collection and "5 6" render
     // metrics) run on this worker's existing 06:30 trigger, impact first, both after the gateway's 06:00 sweep. No cron is
     // added: a newly registered trigger was seen not to fire (PROBER-ON-CAL-TICK-1), and the cron count drops by two. A

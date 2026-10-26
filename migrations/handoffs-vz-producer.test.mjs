@@ -3,8 +3,10 @@
 //  * the circular contract is saved (backup table) and replaced, a contract that is not the circular template is left alone, a second apply changes nothing;
 //  * a watermark the worker already moved is kept (INSERT OR IGNORE);
 //  * the issue probe counts handoffs older than 90 minutes above the watermark, for both timestamp formats the table holds, and ignores younger ones;
-//  * the detector is red for a missing watermark row and for a watermark that has not moved for 3 hours while handoffs sit above it, green while it moves
-//    (a healthy backfill), green when caught up, whatever the updated_at format (space or ISO);
+//  * the detector is red for a missing watermark row and for a watermark that has not moved for 3 hours while a handoff older than 3 hours sits above it, green
+//    while it moves (a healthy backfill), green when caught up, green when a quiet night is followed by one new handoff (the review's replay: the first version,
+//    which read only updated_at, went red for ten such windows in 14 days), whatever the updated_at format (space or ISO);
+//  * the capability row is written once and the Rollback line retires it;
 //  * the Rollback line restores the contract and retires the detector; the file adds no trigger and no DELETE or DROP.
 // Run: node --no-warnings migrations/handoffs-vz-producer.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
@@ -23,7 +25,8 @@ CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at
 CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
 CREATE TABLE handoffs (id INTEGER PRIMARY KEY, session_id TEXT, summary TEXT, timestamp TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, status TEXT);`);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, status TEXT);
+CREATE TABLE capability_ledger (capability TEXT PRIMARY KEY, provenance TEXT NOT NULL, prerequisites TEXT, reliability TEXT, acquired_at TEXT NOT NULL, last_exercised_at TEXT, evidence TEXT NOT NULL);`);
   if (contract !== null) db.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, last_verdict, module) VALUES ('issue-1000176', 1000176, 'p', 'a', ?, 'd1-query', 3, 'qnfo-fleet-control', 1, ?, 'superseded:closure-observing-probe-at-birth', 'probe-template-v3-generic')").run(contract.probe ?? CIRCULAR, contract.status ?? "superseded");
   return db;
 }
@@ -43,6 +46,10 @@ ok(q(db, "SELECT COUNT(*) n FROM failure_modes WHERE fm_key = 'handoffs-vz-stall
 const det = q(db, "SELECT * FROM remediation_contracts WHERE class = 'fm-handoffs-vz-stalled'");
 ok(det && det.status === "active" && det.verify_transport === "d1-query" && det.module === "failure-mode" && det.issue_id === null, "the detector contract is active, d1-query, not tied to an issue", det);
 ok(q(db, "SELECT COUNT(*) n FROM decision_log WHERE instr(action, 'HANDOFFS-VZ-PRODUCER-1:') = 1").n === 1, "one decision is logged");
+const dec = q(db, "SELECT * FROM decision_log WHERE instr(action, 'HANDOFFS-VZ-PRODUCER-1:') = 1");
+ok(/personal plane/.test(dec.action) && /charter rule 10/.test(dec.assumption) && /about 7 Workers AI embedding calls/.test(dec.blast_radius) && !/about 3 Workers AI/.test(dec.blast_radius), "the decision records the personal-plane skip and the measured load", dec);
+const cap = q(db, "SELECT * FROM capability_ledger WHERE capability = 'handoffs-vector-index-hourly-producer'");
+ok(cap && /1000176/.test(cap.provenance) && /unproven until the watermark moves/.test(cap.reliability) && /UPDATE ops_config SET value = 0/.test(cap.evidence), "the capability is recorded with an honest reliability and the fallback path", cap);
 ok(!/\bCREATE\s+TRIGGER\b/i.test(sql) && !/^\s*(DELETE|DROP)\b/im.test(sql.replace(/^--.*$/gm, "")), "the file adds no trigger and runs no DELETE or DROP");
 ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql), "the opt-in headers are present");
 
@@ -97,14 +104,32 @@ ok(r.observed === "0", "not moved for 170 minutes: still inside the 3-hour windo
 setWm(5, iso(190));
 r = run(db, detProbe);
 ok(r.observed === "1", "not moved for 190 minutes: past the window, red", r);
+// the review's replay: a quiet night, then one brand-new handoff. The watermark row is 5 hours old because the worker writes it only when it indexed something.
+db.exec("DELETE FROM handoffs");
+db.prepare("INSERT INTO handoffs (id, summary, timestamp) VALUES (100, 'old', ?), (101, 'new', ?)").run(iso(900), iso(5));
+setWm(100, iso(300));
+r = run(db, detProbe);
+ok(r.observed === "0", "quiet for 5 hours, then a handoff 5 minutes old above the watermark: green (the first version read red here)", r);
+setWm(100, spaced(300));
+r = run(db, detProbe);
+ok(r.observed === "0", "the same with a space-formatted updated_at: green", r);
+db.exec("DELETE FROM handoffs WHERE id = 101");
+db.prepare("INSERT INTO handoffs (id, summary, timestamp) VALUES (101, 'stuck', ?)").run(iso(240));
+setWm(100, iso(300));
+r = run(db, detProbe);
+ok(r.observed === "1", "a handoff 4 hours old above a watermark that is 5 hours old: the hourly run missed it, red", r);
+db.exec("DELETE FROM handoffs WHERE id = 101");
+db.prepare("INSERT INTO handoffs (id, summary, timestamp) VALUES (101, 'edge', ?)").run(iso(170));
+r = run(db, detProbe);
+ok(r.observed === "0", "a handoff 170 minutes old is still inside the 3-hour window: green", r);
 
 // 4. second apply changes nothing, a moved watermark survives
 db = build({});
 db.exec(sql);
 db.prepare("UPDATE ops_config SET value = '77', updated_at = ?, note = 'worker' WHERE key = 'handoffs_vz_last_id'").run(iso(5));
-const snap = JSON.stringify([db.prepare("SELECT * FROM remediation_contracts ORDER BY class").all(), db.prepare("SELECT * FROM failure_modes").all(), db.prepare("SELECT * FROM ops_config").all(), db.prepare("SELECT COUNT(*) n FROM decision_log").get(), db.prepare("SELECT COUNT(*) n FROM bak_20261026_rc_issue_1000176").get()]);
+const snap = JSON.stringify([db.prepare("SELECT * FROM remediation_contracts ORDER BY class").all(), db.prepare("SELECT * FROM failure_modes").all(), db.prepare("SELECT * FROM ops_config").all(), db.prepare("SELECT COUNT(*) n FROM decision_log").get(), db.prepare("SELECT * FROM capability_ledger").all(), db.prepare("SELECT COUNT(*) n FROM bak_20261026_rc_issue_1000176").get()]);
 db.exec(sql);
-ok(JSON.stringify([db.prepare("SELECT * FROM remediation_contracts ORDER BY class").all(), db.prepare("SELECT * FROM failure_modes").all(), db.prepare("SELECT * FROM ops_config").all(), db.prepare("SELECT COUNT(*) n FROM decision_log").get(), db.prepare("SELECT COUNT(*) n FROM bak_20261026_rc_issue_1000176").get()]) === snap, "a second apply changes no row, and the watermark the worker moved (77) is kept");
+ok(JSON.stringify([db.prepare("SELECT * FROM remediation_contracts ORDER BY class").all(), db.prepare("SELECT * FROM failure_modes").all(), db.prepare("SELECT * FROM ops_config").all(), db.prepare("SELECT COUNT(*) n FROM decision_log").get(), db.prepare("SELECT * FROM capability_ledger").all(), db.prepare("SELECT COUNT(*) n FROM bak_20261026_rc_issue_1000176").get()]) === snap, "a second apply changes no row, and the watermark the worker moved (77) is kept");
 
 // 5. a contract that is not the circular template is left alone
 db = build({ probe: "SELECT '0' AS expected, '0' AS observed", status: "active" });
@@ -124,6 +149,7 @@ db.exec(rollback);
 c = q(db, "SELECT * FROM remediation_contracts WHERE class = 'issue-1000176'");
 ok(c.verify_probe === CIRCULAR && c.status === "superseded" && c.module === "probe-template-v3-generic", "the Rollback line restores the circular contract", c);
 ok(q(db, "SELECT status FROM remediation_contracts WHERE class = 'fm-handoffs-vz-stalled'").status === "superseded" && /rolled back/.test(q(db, "SELECT detector FROM failure_modes WHERE fm_key = 'handoffs-vz-stalled'").detector), "the Rollback line retires the detector and marks the failure mode");
+ok(q(db, "SELECT reliability FROM capability_ledger WHERE capability = 'handoffs-vector-index-hourly-producer'").reliability === "retired by rollback", "the Rollback line retires the capability row");
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
