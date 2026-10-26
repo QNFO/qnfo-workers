@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 20:19:50",
+  "audited_at": "2026-10-26 20:48:25",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -551,7 +551,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.43.5-edge-headers",
+        "version": "1.43.6-reading-jsonld",
         "worker": "personal-companion"
       },
       {
@@ -606,7 +606,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.12.1-injection-defence",
+        "version": "2.12.2-tier-two-gate",
         "worker": "qnfo-email"
       },
       {
@@ -626,7 +626,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.44.0-plain-article",
+        "version": "3.44.2-frame-policy",
         "worker": "qnfo-gateway"
       },
       {
@@ -681,7 +681,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.38.1-codeagent",
+        "version": "0.38.2-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -958,9 +958,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.43.5-edge-headers",
+      "before": "1.43.6-reading-jsonld",
       "http": 200,
-      "live": "1.43.5-edge-headers",
+      "live": "1.43.6-reading-jsonld",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1253,9 +1253,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.12.1-injection-defence",
+      "before": "2.12.2-tier-two-gate",
       "http": 200,
-      "live": "2.12.1-injection-defence",
+      "live": "2.12.2-tier-two-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1384,9 +1384,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.44.0-plain-article",
+      "before": "3.44.2-frame-policy",
       "http": 200,
-      "live": "3.44.0-plain-article",
+      "live": "3.44.2-frame-policy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1598,9 +1598,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.38.1-codeagent",
+      "before": "0.38.2-codeagent",
       "http": 200,
-      "live": "0.38.1-codeagent",
+      "live": "0.38.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
