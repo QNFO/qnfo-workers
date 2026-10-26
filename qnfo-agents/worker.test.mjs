@@ -53,7 +53,7 @@ ok(w === readFileSync(here("./deployed-current.worker.js"), "utf8"), "deployed-c
 ok(/export\{[^}]*\bFleetCodeAgent\b[^}]*\}/.test(w), "the bundle exports FleetCodeAgent");
 ok(w.indexOf("glm-4.7-flash") < 0, "no banned model id in the bundle (MODEL-FLOOR-1)");
 const toml = readFileSync(here("./wrangler.toml"), "utf8");
-ok(/new_sqlite_classes = \["FleetCodeAgent"\]/.test(toml) && /class_name = "FleetCodeAgent"/.test(toml), "the agent class is bound and migrated");
+ok(/\[exports\.FleetCodeAgent\]\ntype = "durable-object"\nstorage = "sqlite"/.test(toml) && !/\[\[migrations\]\]/.test(toml) && /class_name = "FleetCodeAgent"/.test(toml), "the agent class is bound and declared in exports, never with the legacy migrations array (DO-EXPORTS-1)");
 ok(/^# charter-pillar: autonomy/m.test(toml), "charter pillar declared");
 ok(/props = \{ caller = "qnfo-agents" \}/.test(toml), "qnfo-ops sees this worker as caller qnfo-agents");
 ok(/\[triggers\]\ncrons = \["\*\/5 \* \* \* \*"\]/.test(toml), "CF-AGENTS-LOOPS-1: one 5-minute cron drains cf_agent_requests");

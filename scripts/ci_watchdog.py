@@ -358,6 +358,9 @@ def _absent(path: str, run: dict) -> bool:
     return st == 404
 
 
+LOCK_CONTENTION_LINE = re.compile(r"(?m)(?:##\[error\]|^(?:\S+Z )?::error::)[^\n]*(?:DEPLOY-LOCK-CONTENTION|deploy-guard lock not acquired)")
+
+
 def classify(log: str, wf_name: str) -> tuple[str, str]:
     L = log or ""
     if "DRIFT GATE FAILED" in L or "mirror-guard" in wf_name and "LAG" in L:
@@ -395,7 +398,11 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
         )
     # DEPLOY-LOCK-RETRY-1 (issue 1001): lease contention is transient, not an `unknown` defect. The workflow retries; a
     # remaining failure means a holder kept the lease past every attempt.
-    if "DEPLOY-LOCK-CONTENTION" in L or "deploy-guard lock not acquired" in L:
+    # WATCHDOG-ECHO-CLASS-1 (2026-10-26, #4506): the marker also sits in the TEXT of the deploy workflows' steps, which the runner echoes into every log, so run
+    # 40297792142 of deploy-qnfo-agents (the lock was acquired on attempt 1; wrangler failed on a Durable Object reconciliation) was filed as lock contention and told
+    # its reader to re-run. Only a line the step EMITTED counts: a rendered error annotation (`##[error]...`) or a bare `::error::` at the start of a log line, never an
+    # `echo "::error::..."` inside the echoed script.
+    if LOCK_CONTENTION_LINE.search(L):
         return "deploy-lock-contention", (
             "another deploy held the deploy-guard lease through every retry; confirm the worker's live /health VERSION "
             "equals main (the holder usually deployed it) and re-run, else inspect the holder in deploy_locks"
