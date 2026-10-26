@@ -1,12 +1,7 @@
 {
-  "audited_at": "2026-10-26 21:02:59",
-  "d1_write_failures": [
-    [
-      "qnfo-model-eval",
-      "HTTP 401: b'{\"result\":null,\"success\":false,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}],\"messages\":[]}'"
-    ]
-  ],
-  "d1_writes_ok": 122,
+  "audited_at": "2026-10-26 21:09:04",
+  "d1_write_failures": [],
+  "d1_writes_ok": 123,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -1783,5 +1778,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 2
+  "stale_rows_purged": 0
 }
