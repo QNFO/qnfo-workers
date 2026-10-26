@@ -72,7 +72,12 @@ UPSERT = ("INSERT INTO worker_live_audit "
           "http=excluded.http, live_version=excluded.live_version, "
           "registry_before=excluded.registry_before, match=excluded.match, "
           "note=excluded.note, probed_at=excluded.probed_at")
-PURGE = "DELETE FROM worker_live_audit WHERE probed_at <> ?"
+# TOMBSTONE-AUDIT-ROW-1 (agent_issues 1000157, 2026-10-26): qnfo-fleet-control writes one row for the Workers Builds stub (qnfo-workers, HTTP 410,
+# note TOMBSTONE_410) on every state pass, and this guard counts a 410 tombstone in unmanaged_workers without listing it, so no run of this script
+# advances that row and the purge below deleted it every few minutes: the registry worker stayed without an audit row (read live 2026-10-26: 123
+# fresh rows, none for qnfo-workers, with the state pass reporting it retired). A TOMBSTONE row that the state pass refreshed in the last 3 hours is
+# kept; one that is older (the stub went away) is purged like any other stale row.
+PURGE = "DELETE FROM worker_live_audit WHERE probed_at <> ? AND NOT (COALESCE(note, '') LIKE 'TOMBSTONE%' AND probed_at > datetime('now', '-3 hours'))"
 
 
 def die(msg, code=3):

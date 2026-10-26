@@ -445,5 +445,21 @@ calls.clear(); fa.gh_api = lambda m, p, b=None: (calls.append((m, p, b)) or ({"_
 r = fa.publish_issue("b", True)
 check("a failed lookup creates no duplicate issue and reports the error", r[0] == "lookup-failed" and "403" in r[2] and len(calls) == 1, (r, calls))
 
+# TOMBSTONE-AUDIT-ROW-1: the purge of a full audit keeps a TOMBSTONE row that the state pass refreshed in the last 3 hours (the Workers Builds stub,
+# which no run of this script advances) and purges everything else it did not advance, a stale tombstone included.
+import sqlite3
+_db = sqlite3.connect(":memory:")
+_db.execute("CREATE TABLE worker_live_audit (worker TEXT PRIMARY KEY, http INTEGER, live_version TEXT, registry_before TEXT, match INTEGER, note TEXT, probed_at TEXT)")
+_now = _db.execute("SELECT datetime('now')").fetchone()[0]
+for _w, _note, _age in (("advanced", "SYNC", None), ("older-sync", "SYNC", "-40 minutes"), ("orphan", "NOT_DEPLOYED", "-10 minutes"),
+                        ("stub-fresh", "TOMBSTONE_410 selfstate-probe http up=retired", "-30 minutes"),
+                        ("stub-stale", "TOMBSTONE_410 selfstate-probe http up=retired", "-5 hours"), ("no-note", None, "-1 minutes")):
+    _db.execute("INSERT INTO worker_live_audit (worker, note, probed_at) VALUES (?, ?, CASE WHEN ? IS NULL THEN ? ELSE datetime('now', ?) END)", (_w, _note, _age, _now, _age))
+_db.execute(fa.PURGE, (_now,))
+_left = sorted(r[0] for r in _db.execute("SELECT worker FROM worker_live_audit"))
+check("the purge keeps the row this run advanced and a tombstone row refreshed within 3 hours", _left == ["advanced", "stub-fresh"], _left)
+check("and purges an older row, an orphan, a stale tombstone and a row without a note", "older-sync" not in _left and "orphan" not in _left and "stub-stale" not in _left and "no-note" not in _left, _left)
+check("the purge keeps one placeholder and no LIKE pattern above 50 bytes", fa.PURGE.count("?") == 1 and "LIKE 'TOMBSTONE%'" in fa.PURGE, fa.PURGE)
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
