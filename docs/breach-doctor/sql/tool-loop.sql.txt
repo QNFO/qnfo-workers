@@ -1,0 +1,143 @@
+-- doctor-sql.sql : SQL behind tool-loop-family-doctor.md. Every SELECT below was run read-only against
+-- qnfo-audit (35e2e573-92f3-46ac-83c6-22f6429fc5e5) on 2026-10-26 06:30Z to 07:10Z unless marked DRAFT.
+-- Columns were checked with PRAGMA table_info first:
+--   agent_issues(id,title,description,source,category,priority,status,linked_session,created_at,updated_at,pipeline_stage,predicate_id,recheck_count,close_channel)
+--   issue_plans(issue_id,planned_at,outcome,detail,task_id,path,model,attempts)
+--   issue_triage(issue_id,rc,triage_state,owner,sla_due_at,close_evidence,remediation,triaged_at,reopened_count)
+--   tool_error_exclusions(pattern PK,err_class,rationale,added_at)   -- no tool column
+--   cloud_ops_events(id,ts,kind,text,meta,job,status)               -- ops tool rows: kind='ops_ai_tool', text=tool, meta JSON {error,resultOk,ms,args} or {_truncated,_len,_raw}
+--   ops_config(key,value,note,updated_at)  paper_learnings(id,slug,version,...,fleet_lever,application,applicability,confidence,fleet_status,status_note,issue_id,...)
+--   deployment_history(id,resource_type,resource_name,action,version_id,deployed_by,deployed_at,status,notes,_version,wbs_code)
+--   worker_live_audit(worker,http,live_version,registry_before,match,note,probed_at 'YYYY-MM-DD HH:MM:SS')
+--   service_registry(service,kind,version,base_url,purpose,capabilities,routes,tools,models,deps,updated_at,state)
+-- D1 limits hit while measuring: compound SELECT <= about 6 terms; a GLOB with 16 character classes is "too complex".
+
+-- ===== Q1 stale untrusted verdicts (R1). Emulates planTrusted over the live list. 32 rows on 2026-10-26.
+WITH RECURSIVE cfg(v) AS (SELECT value||',' FROM ops_config WHERE key='code_merge_trusted_sources'),
+split(entry, rest) AS (SELECT '', v FROM cfg UNION ALL SELECT trim(substr(rest,1,instr(rest,',')-1)), substr(rest,instr(rest,',')+1) FROM split WHERE rest<>''),
+rules AS (SELECT entry,
+  CASE WHEN instr(entry,'|')>0 THEN substr(entry,1,instr(entry,'|')-1) ELSE entry END sp,
+  CASE WHEN instr(entry,'|')>0 THEN substr(entry,instr(entry,'|')+1) ELSE '' END tp FROM split WHERE entry<>'')
+SELECT p.issue_id, a.source, substr(a.title,1,60) title, p.planned_at
+FROM issue_plans p JOIN agent_issues a ON a.id=p.issue_id
+WHERE a.status='open' AND p.outcome='untrusted'
+  AND EXISTS (SELECT 1 FROM rules r WHERE
+    (CASE WHEN substr(r.sp,-1)='*' THEN substr(COALESCE(a.source,''),1,length(r.sp)-1)=substr(r.sp,1,length(r.sp)-1) ELSE COALESCE(a.source,'')=r.sp END)
+    AND (r.tp='' OR substr(COALESCE(a.title,''),1,length(r.tp))=r.tp));
+-- DRAFT action (PLAN_REARM, <= 40 ids per tick, ids from Q1):
+--   UPDATE issue_plans SET planned_at='2000-01-01T00:00:00Z',
+--     detail=substr('DOCTOR-REARM-1 list changed '||?1||' (was untrusted at '||planned_at||')',1,600)
+--   WHERE outcome='untrusted' AND issue_id IN (<Q1 ids>);
+
+-- ===== Q2 per-tool facts, 72 h (R3). Joins the open TOOL-FAILURE issues; recovered = last_ok > last_err.
+WITH iss AS (SELECT a.id, replace(replace(a.title,'TOOL-FAILURE: ',''),' [error]','') tool FROM agent_issues a WHERE a.status='open' AND a.title LIKE 'TOOL-FAILURE: % [error]'),
+f AS (SELECT e.text tool, count(*) calls, sum(e.status='error') errs,
+  sum(e.status='error' AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(e.meta,''),x.pattern)>0 OR instr(COALESCE(e.text,''),x.pattern)>0)) unexcl,
+  max(CASE WHEN e.status='ok' THEN e.ts END) last_ok, max(CASE WHEN e.status='error' THEN e.ts END) last_err
+  FROM cloud_ops_events e WHERE e.kind='ops_ai_tool' AND e.ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') GROUP BY e.text)
+SELECT iss.id, iss.tool, f.calls, f.errs, f.unexcl, round(1.0*f.unexcl/MAX(1,f.calls),3) unexcl_rate, f.last_ok, f.last_err, (f.last_ok > f.last_err) recovered
+FROM iss LEFT JOIN f ON f.tool=iss.tool ORDER BY iss.id;
+-- Error head that survives truncation (meta._raw begins {"error":"...):
+--   COALESCE(json_extract(meta,'$.error'), substr(json_extract(meta,'$._raw'), instr(json_extract(meta,'$._raw'),'"error":"')+9, 80))
+
+-- ===== Q3 one tool, four producers (R5). Tool key from any of the four titles. 31 issues, 15 tools.
+WITH t AS (SELECT id, title,
+  CASE WHEN title LIKE 'TOOL-FAILURE: % [error]' THEN replace(replace(title,'TOOL-FAILURE: ',''),' [error]','')
+       WHEN title LIKE 'SELF-AUDIT-TOOLERR: %' THEN substr(title, 21)
+       WHEN title LIKE '[self-heal] tool % failing%' THEN substr(title, 18, instr(substr(title,18),' ')-1)
+       WHEN title LIKE 'TOOL-ERROR-RATE-%-1' THEN substr(title,17,length(title)-18) END tool,
+  CASE WHEN title LIKE 'TOOL-FAILURE:%' THEN 'TF' WHEN title LIKE 'SELF-AUDIT-TOOLERR:%' THEN 'SA' WHEN title LIKE '[self-heal]%' THEN 'SH' WHEN title LIKE 'TOOL-ERROR-RATE-%' THEN 'ER' END kind
+  FROM agent_issues WHERE status='open')
+SELECT tool, group_concat(kind||':'||id) issues, count(*) n FROM t WHERE tool IS NOT NULL GROUP BY tool ORDER BY n DESC, tool;
+
+-- ===== Q4 verification of a tool close (R3): expected 0 after 24 h. Bind ?tool and ?closed_at (ISO).
+SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM cloud_ops_events e
+WHERE e.kind='ops_ai_tool' AND e.text=?tool AND e.status='error' AND e.ts > ?closed_at
+  AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(e.meta,''),x.pattern)>0 OR instr(COALESCE(e.text,''),x.pattern)>0);
+
+-- ===== Q4b coverage of the proposed literals over 7 days (measured: unexcluded 162, covered 108, empty error 15, aborted 9, truncated-flagged 33)
+WITH pats(p) AS (VALUES ('use fleet_graph_find'),('GitHub 404: Not Found'),('self-fetch blocked'),('container timeout after'),('repo (owner/name) + path required'),('path must be a developers.cloudflare.com path'),('docs page not found'),('query required for mode'),(' is not valid JSON'),('error code: 52'),(': syntax error at offset'),('D1_ERROR: unrecognized token'),('too many terms in compound SELECT')),
+u AS (SELECT e.id, e.text tool, e.meta FROM cloud_ops_events e WHERE e.kind='ops_ai_tool' AND e.status='error' AND e.ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 days')
+  AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(e.meta,''),x.pattern)>0 OR instr(COALESCE(e.text,''),x.pattern)>0))
+SELECT (SELECT count(*) FROM u) unexcluded_7d, (SELECT count(*) FROM u WHERE EXISTS (SELECT 1 FROM pats WHERE instr(u.meta,p)>0)) covered,
+  (SELECT count(*) FROM u WHERE json_extract(u.meta,'$.error')='') empty_error, (SELECT count(*) FROM u WHERE instr(u.meta,'The operation was aborted')>0) aborted;
+
+-- ===== Q5 PAPER-LEARN apply rows per open issue (R9). 21 direct learnings in 5 issues, all 'PL-TRIAGE-1 apply'; 472 apply rows in all.
+SELECT issue_id, count(*) n, min(confidence) cmin, max(confidence) cmax, group_concat(DISTINCT verification) ver
+FROM paper_learnings WHERE issue_id IN (SELECT id FROM agent_issues WHERE status='open' AND title LIKE 'PAPER-LEARN-1:%')
+  AND fleet_status='proposed' AND applicability='direct' AND status_note LIKE 'PL-TRIAGE-1 apply%' GROUP BY issue_id;
+
+-- ===== Q6 planner capacity (R2): model calls today and how many were re-plans. 2026-10-26: 48 calls (cap 48), 32 re-plans, last 01:47Z.
+SELECT sum(attempts>1) replans, sum(attempts=1) first_time, count(*) n, min(planned_at) first_at, max(planned_at) last_at
+FROM issue_plans WHERE planned_at >= strftime('%Y-%m-%dT00:00:00Z','now') AND model IS NOT NULL;
+SELECT COALESCE(plan_outcome,'(none)') po, priority, count(*) n, round(min(age_h)) min_age, round(max(age_h)) max_age
+FROM v_issue_age_ladder WHERE title LIKE 'OWNER-TASK-%' GROUP BY po, priority ORDER BY n DESC;
+
+-- ===== Q7 secret-change facts (R7). Bind ?worker. All columns verified.
+SELECT 'event' k, ts, status, text FROM cloud_ops_events WHERE kind IN ('secret-change','binding-props-restore') AND instr(text, ?worker)=1 ORDER BY ts DESC LIMIT 4;
+SELECT resource_name, action, status, deployed_at FROM deployment_history WHERE resource_name=?worker ORDER BY deployed_at DESC LIMIT 3;
+SELECT worker, http, live_version, match, note, probed_at FROM worker_live_audit WHERE worker=?worker;
+SELECT count(*) auth_errors FROM cloud_ops_events WHERE status='error' AND ts > ?change_ts_plus_30m
+  AND (instr(COALESCE(meta,''),?worker)>0 OR instr(COALESCE(text,''),?worker)>0)
+  AND (instr(COALESCE(meta,''),'401')>0 OR instr(COALESCE(meta,''),'403')>0 OR instr(lower(COALESCE(meta,'')),'unauthorized')>0 OR instr(lower(COALESCE(meta,'')),'key rejected')>0);
+
+-- ===== Q8 chaos-drill diagnostics (R6)
+-- a) PROBE v2 for control ops-jobs-payload-redaction (DRAFT migration text; security control: ship as a PR, never a direct write).
+--    Run on live: returns observed='ok'. Synthetic check (separate VALUES CTE): flags 'Your one-time code is 123456', 'verify?token=AbCdEf0123456789ZZ',
+--    'login code: 654321'; does not flag 'the one-time code flow is documented', 'see /verify and later token=abc def'.
+SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM ops_jobs j, json_each(j.payload,'$.messages') m WHERE json_valid(j.payload) AND (
+  (instr(m.value,'one-time code')>0 AND substr(m.value, instr(m.value,'one-time code'), 60) GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*')
+  OR (instr(m.value,'verification code')>0 AND substr(m.value, instr(m.value,'verification code'), 60) GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*')
+  OR (instr(m.value,'login code')>0 AND substr(m.value, instr(m.value,'login code'), 60) GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*')
+  OR (instr(m.value,'token=')>0 AND length(substr(m.value, instr(m.value,'token=')+6, 16))=16
+      AND instr(substr(m.value, instr(m.value,'token=')+6, 16),' ')=0 AND instr(substr(m.value, instr(m.value,'token=')+6, 16),'&')=0
+      AND instr(substr(m.value, instr(m.value,'token=')+6, 16),'"')=0 AND instr(substr(m.value, instr(m.value,'token=')+6, 16),'\')=0
+      AND instr(substr(m.value, instr(m.value,'token=')+6, 16),',')=0)))
+  THEN 'a stored ops_jobs payload still holds a login link or a one-time code'
+  WHEN EXISTS (SELECT 1 FROM ops_jobs WHERE status IN ('succeeded','failed','terminated','cancelled') AND updated_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 days'))
+  THEN 'a terminal ops_jobs row is older than 15 days, so the 14-day sweep is not running' ELSE 'ok' END AS observed;
+-- limitation: tests the first occurrence of each phrase per message; the redactJobBody unit test must carry the all-occurrence check.
+-- b) remediation reopen on relapse: DRAFT probe v2 (live: 517 reopened events in 7 d)
+--    SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(*) FROM issue_lifecycle WHERE event='reopened' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 days'))>0 THEN 'ok' ELSE 'no reopened event in 7 days' END AS observed
+-- c) controls without probe
+SELECT control, critical_path, disposition, drill_state FROM v_control_alternate_status WHERE drill_state='no-probe' AND alternate_tested_at IS NULL;
+-- d) research stall facts
+SELECT max(ts) last_done FROM cloud_ops_events WHERE job='qnfo-research-exec' AND kind='done';
+SELECT max(ts) last_revise_patch FROM cloud_ops_events WHERE kind='revise-patch';
+SELECT status, count(*) FROM research_queue WHERE status IN ('queued','researching') GROUP BY status;
+-- e) re-entry producer
+SELECT status, count(*) n, max(ts) last FROM signals WHERE source='artifact_reentry' GROUP BY status;
+
+-- ===== Q9 OWNER-TASK duplicates and moot (R12). 5 groups / 18 issues; 5 tasks cite an already-closed issue.
+SELECT substr(title, instr(title,': ')+2, 45) stem, count(*) n, min(id) keep_id, group_concat(id) ids FROM agent_issues
+WHERE status='open' AND title LIKE 'OWNER-TASK-%' GROUP BY stem HAVING n>1 ORDER BY n DESC;
+WITH t AS (SELECT id, title, CASE WHEN instr(title,'issue #')>0 THEN CAST(substr(title, instr(title,'issue #')+7, 7) AS INTEGER) END ref FROM agent_issues WHERE status='open' AND title LIKE 'OWNER-TASK-%')
+SELECT t.id, t.ref, a.status ref_status FROM t JOIN agent_issues a ON a.id=t.ref WHERE t.ref>0 AND a.status<>'open';
+
+-- ===== DRAFT migration A (NOT applied). tool classes. Header lines required by MIGRATION-RUNNER-1.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM tool_error_exclusions WHERE rationale LIKE 'TOOL-CLASSIFY-2%'
+-- INSERT OR IGNORE INTO tool_error_exclusions (pattern, err_class, rationale) VALUES
+--  ('use fleet_graph_find','agent-input-error','TOOL-CLASSIFY-2 (2026-10-26): fleet_graph answers "no node with id or name X; use fleet_graph_find" or "no worker X; use fleet_graph_find with kind worker" for an id the caller guessed; 23 events in 72 h, 13 of them d1t:audit.* for graph id d1t:qnfo-audit.*; 0 non-error matches.'),
+--  ('GitHub 404: Not Found','agent-input-error','TOOL-CLASSIFY-2: github_issue_get, github_issue_comment and git_op against a number or path that does not exist (19 events 14 d; args.number 100350 is an agent_issues id, GitHub numbers stop near 4270).'),
+--  ('self-fetch blocked','correct-refusal','TOOL-CLASSIFY-2: qnfo-ops/worker.js:2745 refuses to fetch its own hostname; designed.'),
+--  ('container timeout after','infra-artifact','TOOL-CLASSIFY-2: the container dispatcher names a caller timeout (cold start about 15 s; retry or raise timeout_ms); 33 events 14 d; watched by the TOOL-EXCLUDED-SURGE-1 guard.'),
+--  ('repo (owner/name) + path required','agent-input-error','TOOL-CLASSIFY-2: github_file_write input validation.'),
+--  ('path must be a developers.cloudflare.com path','agent-input-error','TOOL-CLASSIFY-2: cf_docs input validation.'),
+--  ('docs page not found','agent-input-error','TOOL-CLASSIFY-2: cf_docs asked for a page that does not exist.'),
+--  ('query required for mode','agent-input-error','TOOL-CLASSIFY-2: cf_docs search without a query.'),
+--  (' is not valid JSON','agent-input-error','TOOL-CLASSIFY-2: caller code parsed a non-JSON body (V8 message without a class name); 8 events 14 d.'),
+--  ('error code: 52','infra-artifact','TOOL-CLASSIFY-2: a third-party host answered a Cloudflare 52x page that caller code parsed as JSON.'),
+--  (': syntax error at offset','agent-input-error','TOOL-CLASSIFY-2 interim: caller SQL syntax error; superseded by qnfo-ops D1-CALLER-REJECT-2.'),
+--  ('D1_ERROR: unrecognized token','agent-input-error','TOOL-CLASSIFY-2 interim: caller SQL with an unescaped quote.'),
+--  ('too many terms in compound SELECT','agent-input-error','TOOL-CLASSIFY-2 interim: caller SQL over the D1 compound limit; 11 events 14 d.');
+-- plus one decision_log row (assumption, action, evidence, rollback_path, predicted_outcome 'no new TOOL-FAILURE for these literals in 24 h') as in 2026-10-20-owner-otp-tool-exclusions.sql.
+
+-- ===== DRAFT migration B (NOT applied). trust list: add the doctor pair, narrow bare entries. Backup first (precedent 2026-10-20-plan-trust-parity.sql).
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: UPDATE ops_config SET value=(SELECT value FROM ops_config WHERE key='code_merge_trusted_sources--bak-<ts>') WHERE key='code_merge_trusted_sources'; DELETE FROM ops_config WHERE key='code_merge_trusted_sources--bak-<ts>'
+-- INSERT OR IGNORE INTO ops_config(key,value,note) SELECT 'code_merge_trusted_sources--bak-<ts>', value, 'backup before BREACH-DOCTOR-1 trust pair' FROM ops_config WHERE key='code_merge_trusted_sources';
+-- UPDATE ops_config SET value = value||',qnfo-fleet-control|BREACH-DOCTOR-1:', updated_at=datetime('now') WHERE key='code_merge_trusted_sources' AND instr(value,'BREACH-DOCTOR-1:')=0 AND EXISTS (SELECT 1 FROM ops_config WHERE key='code_merge_trusted_sources--bak-<ts>');
+-- (narrowing the 13 bare entries is a second statement list; test with plan-trust-parity.test.mjs and code-merge.test.mjs unchanged, they only pin the DEFAULT constants)

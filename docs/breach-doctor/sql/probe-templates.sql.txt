@@ -1,0 +1,109 @@
+-- PROBE-DOCTOR-1 SQL library. Every SELECT below was run read-only against qnfo-audit on 2026-10-26 with a real id or tool name
+-- substituted (T2 on github_issue_get = pending and run_code_net = ok, T3 on binding-census, T1 on 100341, T4 on content_items_over_stage_sla
+-- and trigger 786, T5 syntax); the INSERT/UPDATE forms in comments were NOT run. <N> / <TOOL> / <JOURNEY> / <METRIC> are literals the JS substitutes after the validators in the design
+-- (regex ^[A-Za-z0-9_.:-]{1,64}$ and a D1 lookup); they are never taken from free text unvalidated.
+
+-- ========== TRIGGERS (candidate selection) ==========
+-- R1 PN whose target is no longer open (tested: 5 rows: PN 100476, 100492, 100539, 100602, 1000087)
+SELECT p.id AS pn_id, t.id AS tid, t.status AS tstatus, t.close_channel,
+       (SELECT l.id FROM issue_lifecycle l WHERE l.issue_id = t.id AND l.to_status IN ('closed','resolved','wontfix') ORDER BY l.id DESC LIMIT 1) AS lc_id,
+       (SELECT l.ts FROM issue_lifecycle l WHERE l.issue_id = t.id AND l.to_status IN ('closed','resolved','wontfix') ORDER BY l.id DESC LIMIT 1) AS closed_ts,
+       (SELECT l.has_evidence FROM issue_lifecycle l WHERE l.issue_id = t.id AND l.to_status IN ('closed','resolved','wontfix') ORDER BY l.id DESC LIMIT 1) AS has_evidence
+FROM agent_issues p JOIN agent_issues t ON t.id = CAST(substr(p.title, 23) AS INTEGER)   -- 'PROBE-NEEDED-1: issue-' is 22 characters
+WHERE p.status = 'open' AND p.source = 'qnfo-fleet-control' AND p.title LIKE 'PROBE-NEEDED-1: issue-%'
+  AND t.status IN ('closed','resolved','wontfix')
+  AND COALESCE((SELECT MAX(l.ts) FROM issue_lifecycle l WHERE l.issue_id = t.id AND l.to_status IN ('closed','resolved','wontfix')), '') <= strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 minutes')
+  AND NOT EXISTS (SELECT 1 FROM issue_lifecycle l WHERE l.issue_id = t.id AND l.event = 'reopened' AND l.ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 minutes'))
+LIMIT 25;
+-- R1/R2 action (text, not run): one D1 batch
+--   UPDATE issue_triage SET close_evidence = ?1, triage_state = 'closed', owner = 'probe-doctor-1'
+--    WHERE issue_id = ?2 AND EXISTS (SELECT 1 FROM agent_issues p WHERE p.id = ?2 AND p.status = 'open')
+--      AND NOT EXISTS (SELECT 1 FROM agent_issues t WHERE t.id = ?3 AND t.status = 'open');      -- R1 only; R2 uses AND EXISTS (target open)
+--   -- trigger triage_close_sync_issue_upd then sets agent_issues.status='closed', close_channel='auto:triage-sync:probe-doctor-1'
+--   UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:pn-target-closed (probe-doctor-1)' WHERE class = 'issue-' || ?2;
+--   INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome)
+--     VALUES ('probe-doctor-1', '<why>', '<what>', '<issue_lifecycle id and ts>', 'closed PN <pn>', 'one auto-filed PN issue', 'UPDATE agent_issues SET status=''open'' WHERE id=<pn>', 'probe-doctor-1', 'PN count falls by 1; orphan visible in fm-open-issue-no-doer');
+-- (decision_log NOT NULL columns: actor, assumption, action, evidence, outcome, blast_radius, rollback_path; ts defaults)
+
+-- R2 PN whose target is an OWNER-TASK / OWNER-NOTE (tested: 20 rows)
+SELECT p.id AS pn_id, t.id AS tid, t.priority FROM agent_issues p JOIN agent_issues t ON t.id = CAST(substr(p.title, 23) AS INTEGER)
+WHERE p.status = 'open' AND p.source = 'qnfo-fleet-control' AND p.title LIKE 'PROBE-NEEDED-1: issue-%'
+  AND t.status = 'open' AND (t.title LIKE 'OWNER-TASK%' OR t.title LIKE 'OWNER-NOTE%') LIMIT 25;
+
+-- R3 the fleet's own PN probe refused by the model reviewer (tested: 17 rows; verify_probe must equal rtLivePathProbe(n) in JS)
+SELECT c.class, c.issue_id AS pn_id, CAST(substr(p.title, 23) AS INTEGER) AS tid, c.verify_probe
+FROM remediation_contracts c JOIN agent_issues p ON p.id = c.issue_id
+WHERE p.status = 'open' AND p.title LIKE 'PROBE-NEEDED-1: issue-%' AND c.status = 'probe-review-refused' AND c.module = 'reopen-live-path';
+-- R3 action (text): UPDATE remediation_contracts SET module = 'probe-template-v4-pn', status = 'active', last_verdict = NULL, attempts = 0,
+--   deferred_since = NULL, next_due_at = datetime('now') WHERE class = ?1 AND status = 'probe-review-refused' AND verify_probe = ?2;
+
+-- R7 issues whose only live contract is the circular BACKFILL-1 probe (tested: 9 rows)
+SELECT a.id, a.priority, a.title FROM agent_issues a
+WHERE a.status = 'open'
+  AND EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.class LIKE '%-BACKFILL-1' AND c.status IN ('active','holding'))
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.class NOT LIKE '%-BACKFILL-1' AND c.status IN ('active','holding','monitoring','escalated'));
+
+-- Orphans (R5/R6 input); RT_LIVEPATH_ORPHAN_SQL with R4's stricter "live" definition
+SELECT a.id, a.title, a.source, a.priority FROM agent_issues a
+WHERE a.status = 'open' AND a.title NOT LIKE 'PROBE-NEEDED-1: issue-%' AND a.title NOT LIKE 'OWNER-TASK%' AND a.title NOT LIKE 'OWNER-NOTE%'
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN ('active','holding','monitoring','escalated')
+                    AND c.class NOT LIKE '%-BACKFILL-1' AND instr(lower(c.verify_probe), 'close_evidence') = 0)
+ORDER BY CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, a.id;
+
+-- ========== TEMPLATE PROBES (expected / observed; each returns pending text while the defect stands) ==========
+-- T1 portfolio-gap (tested on issue 100341: 'pending: 7 of 7 gap rows still open')
+SELECT 'resolved' AS expected,
+  CASE WHEN (SELECT COUNT(*) FROM portfolio_gaps WHERE issue_id = <N>) = 0 THEN 'pending: no gap row carries issue <N>'
+       WHEN (SELECT COUNT(*) FROM portfolio_gaps WHERE issue_id = <N> AND status = 'open') = 0 THEN 'resolved'
+       ELSE 'pending: ' || (SELECT COUNT(*) FROM portfolio_gaps WHERE issue_id = <N> AND status = 'open') || ' of ' || (SELECT COUNT(*) FROM portfolio_gaps WHERE issue_id = <N>) || ' gap rows still open' END AS observed;
+
+-- T2 tool-recovery (tested on github_issue_get: 'pending: last_error=2026-10-25T08:26:28.460Z successes_since=1'); uses idx_coe_kind_text_ts
+-- threshold: last error at least 6 h old AND at least 5 successes since (6 of 15 tools pass today: run_code_net 41, ops_d1_write 27, dashboard_feed 14, git_clone_exec 12, github_file_write 6, container_workspace_exec 5)
+SELECT 'ok' AS expected,
+  CASE WHEN COALESCE((SELECT MAX(ts) FROM cloud_ops_events WHERE kind = 'ops_ai_tool' AND text = '<TOOL>' AND status = 'error'), '') <= strftime('%Y-%m-%dT%H:%M:%fZ','now','-6 hours')
+        AND (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = 'ops_ai_tool' AND text = '<TOOL>' AND status <> 'error'
+              AND ts > COALESCE((SELECT MAX(ts) FROM cloud_ops_events WHERE kind = 'ops_ai_tool' AND text = '<TOOL>' AND status = 'error'), '')) >= 5
+       THEN 'ok'
+       ELSE 'pending: last_error=' || COALESCE((SELECT MAX(ts) FROM cloud_ops_events WHERE kind = 'ops_ai_tool' AND text = '<TOOL>' AND status = 'error'), 'none')
+            || ' successes_since=' || (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = 'ops_ai_tool' AND text = '<TOOL>' AND status <> 'error'
+                 AND ts > COALESCE((SELECT MAX(ts) FROM cloud_ops_events WHERE kind = 'ops_ai_tool' AND text = '<TOOL>' AND status = 'error'), '')) END AS observed;
+-- T2 trigger: tool of a source-linked issue (tested: 18 open issues, all kind 'ops_ai_tool', job 'qnfo-ops')
+SELECT a.id, e.kind, e.job, e.text AS tool FROM agent_issues a JOIN cloud_ops_events e ON e.id = replace(a.source, 'cloud_ops_events:', '') AND e.kind = 'ops_ai_tool' WHERE a.status = 'open';
+
+-- T3 journey (tested on binding-census: 'pending: cf ok=0 age_min=12; gha ok=0 age_min=8')
+SELECT 'ok' AS expected,
+  CASE WHEN (SELECT COUNT(*) FROM v_journey_state WHERE journey = '<JOURNEY>') = 0 THEN 'pending: no journey_state row'
+       WHEN (SELECT MIN(ok) FROM v_journey_state WHERE journey = '<JOURNEY>' AND age_min <= 180) = 1
+            AND (SELECT COUNT(*) FROM v_journey_state WHERE journey = '<JOURNEY>' AND age_min > 180) = 0 THEN 'ok'
+       ELSE 'pending: ' || (SELECT group_concat(runner || ' ok=' || ok || ' age_min=' || CAST(age_min AS INT), '; ') FROM v_journey_state WHERE journey = '<JOURNEY>') END AS observed;
+
+-- T4 metric (tested on content_items_over_stage_sla: 'pending: val=2231.0 gt 0.0'; trigger 786: val 3 lt 5 hit 1)
+SELECT 'ok' AS expected,
+  CASE WHEN (SELECT hit FROM v_metric_trigger_state WHERE metric_key = '<METRIC>' ORDER BY id LIMIT 1) = 0
+        AND (SELECT val FROM v_metric_trigger_state WHERE metric_key = '<METRIC>' ORDER BY id LIMIT 1) IS NOT NULL THEN 'ok'
+       ELSE 'pending: ' || COALESCE((SELECT 'val=' || val || ' ' || operator || ' ' || threshold FROM v_metric_trigger_state WHERE metric_key = '<METRIC>' ORDER BY id LIMIT 1), 'no trigger for metric') END AS observed;
+-- T4 METRIC-TRIGGER-<id> form: replace the metric_key predicate by `id = <TRIGGER_ID>` (issue-1893 -> 786)
+
+-- T5 plan-delivery (delivery only: install as status 'monitoring', never 'active'; 0 orphans have issue_plans.task_id today)
+SELECT 'deployed' AS expected,
+  COALESCE((SELECT CASE WHEN deployed_at IS NOT NULL AND status = 'merged' THEN 'deployed' ELSE 'pending: task ' || id || ' ' || status || ' merge_state=' || COALESCE(merge_state, '-') END FROM code_tasks WHERE id = '<TASK_ID>'), 'pending: no code task') AS observed;
+
+-- ========== EXAMPLES OF THE QUALITY BAR FOR THE MODEL TIER (both tested, non-vacuous or healed, grounded in named tables) ==========
+-- CLOSE-CHANNEL-REQUIRED-1 (issue 100419): observed 2 of 135 closes in 24 h with NULL close_channel, expected 0
+SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed','resolved','wontfix') AND close_channel IS NULL AND updated_at > CAST(strftime('%s','now','-24 hours') AS INTEGER) * 1000) AS TEXT) AS observed;
+-- GATEWAY-CRON-DETACHED-1 (issue 100450): reads ok NOW, the incident has healed (green at birth -> R8, two reads 60 min apart, then autoclose)
+SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(*) FROM cron_fire_log WHERE source = 'worker:qnfo-gateway' AND fired_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours')) >= 2 THEN 'ok'
+  ELSE 'pending: ' || (SELECT COUNT(*) FROM cron_fire_log WHERE source = 'worker:qnfo-gateway' AND fired_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours')) || ' qnfo-gateway cron rows in 3h, last ' || COALESCE((SELECT MAX(fired_at) FROM cron_fire_log WHERE source = 'worker:qnfo-gateway'), 'never') END AS observed;
+
+-- ========== SCHEMA PACK for the model prompt (deterministic; JS picks table names that appear in title/description AND in sqlite_master) ==========
+-- SELECT m.name, (SELECT group_concat(name) FROM pragma_table_info(m.name)) AS cols FROM sqlite_master m WHERE m.type IN ('table','view') AND m.name IN (<=6 validated names>);
+
+-- ========== VERIFICATION PROBES (what closes the doctor's own work) ==========
+-- orphans under the R4 definition, OWNER-TASK/NOTE excluded (target 0; reads 138 now: 132 plain orphans that are not class C, plus 6 whose only live contract is a BACKFILL-1 or reads close_evidence)
+SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM agent_issues a WHERE a.status = 'open' AND a.title NOT LIKE 'OWNER-TASK%' AND a.title NOT LIKE 'OWNER-NOTE%'
+   AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN ('active','holding','monitoring','escalated') AND c.class NOT LIKE '%-BACKFILL-1' AND instr(lower(c.verify_probe), 'close_evidence') = 0)) AS TEXT) AS observed;
+-- the author works at all (fm-probe-author-unreachable): pending while orphans exist and nothing was installed in 24 h
+SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind IN ('remediation.probe-authored','doctor.probe-installed') AND ts > strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) >= 1 THEN 'ok' ELSE 'pending: no probe installed in 24 h' END AS observed;
+-- accept rate of the model tier (metric probe_author_accept_rate_7d, target >= 0.25 after 30 attempts; below it, route the class to doer-needed)
+SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = 'doctor.probe-author' AND ts > strftime('%Y-%m-%dT%H:%M:%fZ','now','-7 days')) < 30 THEN 'ok'
+  WHEN (SELECT 1.0 * SUM(status = 'ok') / COUNT(*) FROM cloud_ops_events WHERE kind = 'doctor.probe-author' AND ts > strftime('%Y-%m-%dT%H:%M:%fZ','now','-7 days')) >= 0.25 THEN 'ok' ELSE 'pending: accept rate below 0.25' END AS observed;
