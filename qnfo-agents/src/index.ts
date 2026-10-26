@@ -79,6 +79,20 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*" } });
 }
 function errText(e: unknown): string { return String((e as any)?.message || e).slice(0, 600); }
+
+// ALARM-TIMEOUT-2: 0.2.4 cut the Durable Object alarm exceptions ("The operation was aborted due to timeout", post_deploy_error_workers) from
+// 14 to 4 in three hours but not to 0, so a rejection nobody awaits still escapes (an AbortSignal timer firing inside a library that has
+// already moved on). The listener records where it came from, with its stack, which the alarm exception never carried, and keeps the
+// runtime from reporting it as the invocation's failure. A runtime without the event is left as it was.
+try {
+  (globalThis as any).addEventListener("unhandledrejection", (ev: any) => {
+    try {
+      const reason = ev && ev.reason;
+      console.error(JSON.stringify({ worker: WORKER, version: VERSION, where: "unhandledrejection", error: errText(reason), stack: String((reason && reason.stack) || "").slice(0, 1500) }));
+      if (ev && typeof ev.preventDefault === "function") ev.preventDefault();
+    } catch (e) { /* logging must never throw */ }
+  });
+} catch (e) { /* the event is not supported here */ }
 function logErr(where: string, e: unknown) { console.error(JSON.stringify({ worker: WORKER, version: VERSION, where, error: errText(e) })); }
 
 // ---- the qnfo-ops tool surface (TOOL-BRIDGE-1). qnfo-ops trusts this worker by ctx.props.caller on /v1/tools and

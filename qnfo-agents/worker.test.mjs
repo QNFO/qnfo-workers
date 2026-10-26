@@ -95,5 +95,9 @@ ok(/const STEP_TIMEOUT_MS = 3 \* 60 \* 1000;/.test(ts) && /timeout: \{ totalMs: 
 ok(/void this\.runFiber\("turn:" \+ id[^\n]*\.catch\(\(e\) => logErr\("fiber-recover", e\)\)/.test(ts), "the recovery fiber started from the alarm cannot reject out of it");
 ok(/try \{ await this\.startRun\(\{ text: payload\.text[^\n]*catch \(e\) \{ logErr\("scheduled-turn", e\); \}/.test(ts), "a scheduled turn that throws is logged, not retried by the alarm");
 
+// ALARM-TIMEOUT-2: a rejection nobody awaits is logged with its stack and kept from failing the alarm invocation.
+ok(/addEventListener\("unhandledrejection"/.test(ts) && /where: "unhandledrejection".{0,200}stack:/.test(ts) && /ev\.preventDefault\(\)/.test(ts), "an unhandled rejection is logged with its stack and prevented from failing the invocation");
+ok(/try \{\s*\(globalThis as any\)\.addEventListener\("unhandledrejection"[\s\S]*?\} catch \(e\) \{ \/\* the event is not supported here \*\/ \}/.test(ts), "registering the listener cannot throw at load");
+
 console.log("qnfo-agents worker.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
