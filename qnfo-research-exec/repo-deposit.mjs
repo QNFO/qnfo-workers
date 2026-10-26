@@ -522,7 +522,7 @@ async function listDirNames(env, deps, t, dir) {
 }
 
 export {
-  REPO_DEPOSIT_VERSION, commitAtomic, depositRun, depositPapers, restoreFromGaps, syncPapers, listDirNames, resolveTarget,
+  REPO_DEPOSIT_VERSION, isAncestor, readTextAt, commitAtomic, depositRun, depositPapers, restoreFromGaps, syncPapers, listDirNames, resolveTarget,
   buildCrate, buildManifestV2, updatePaperRecord, declaredOf, sourcesOf, roleOf, readmeFor, titleOf,
   sha256Hex, gitBlobSha1, dumpJson, utf8, TARGET_CONSOLIDATED, TARGET_LEGACY, LICENSE_ENTITY, RUN_MANIFEST_V2, PAPER_SCHEMA,
 };

@@ -55,7 +55,7 @@ export class FakeGitHub {
       return reply(200, { object: { sha: b.sha } });
     }
     if (method === "POST" && /\/actions\/workflows\/[\w.-]+\/dispatches$/.test(path)) { (this.dispatches = this.dispatches || []).push(path.split("/").slice(-2)[0]); return reply(204, "", true); }
-    if (method === "GET" && (m = /\/compare\/(\w+)\.\.\.(\w+)$/.exec(path))) return reply(200, { status: this.isAncestor(m[1], m[2]) ? (m[1] === m[2] ? "identical" : "ahead") : "diverged" });
+    if (method === "GET" && (m = /\/compare\/(\w+)\.\.\.(\w+)$/.exec(path))) { const a = m[1] === "main" ? this.head : m[1], b = m[2] === "main" ? this.head : m[2]; return reply(200, { status: this.isAncestor(a, b) ? (a === b ? "identical" : "ahead") : "diverged" }); }
     if (method === "GET" && path.startsWith(base + "/contents/")) {
       const file = decodeURIComponent(path.slice((base + "/contents/").length)), ref = u.searchParams.get("ref");
       const sha = ref === "main" ? this.head : ref;

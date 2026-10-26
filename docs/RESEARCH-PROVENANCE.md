@@ -20,7 +20,7 @@ is archived after the catch-up. DECISION-AUTOPROCEED-1: recorded in `decision_lo
 | a revision is published (publishV2) | `papers/<slug>/` updated, a snapshot appended to `provenance.json` | event `repo-paper` |
 | a claim-integrity correction or retraction | same writer, with a `corrected` / `retracted` event on the paper's record | `provenance.json` events |
 | every 10 minutes (`repoSyncTick`) | retry deposits that errored (2 per tick), restore listed gaps (30 checks, 3 papers per tick), compare `research_repo_sync_batch` papers with git | event `repo-sync` |
-| every 10 minutes (`repoCatchupTick`, consolidated layout only) | while `qnfo-ensemble-research` has cycles that `runs/` lacks: dispatch `ensemble-catchup.yml` in `QNFO/qnfo-research` (at most every 6 hours); when nothing is missing and 3 consolidated deposits are ledgered: one `archive-request` row in `portfolio_actions` for `QNFO/qnfo-ensemble-research` | event `repo-sync` (`catchup`), `portfolio_actions` |
+| every 10 minutes (`repoCatchupTick`, consolidated layout only) | while `qnfo-ensemble-research` has cycles that `runs/` lacks, or its history is not yet an ancestor of `main` (the import PR is squash-merged: the repository merges squash-only): dispatch `ensemble-catchup.yml` in `QNFO/qnfo-research` (at most every 6 hours); when nothing is missing, the history is linked and 3 consolidated deposits are ledgered: one `archive-request` row in `portfolio_actions` for `QNFO/qnfo-ensemble-research` | event `repo-sync` (`catchup`), `portfolio_actions` |
 
 Before `QNFO/qnfo-research` carries `provenance/IMPORT.json` the target is the legacy repository (runs only). The marker is the only
 coordination between the repository change and the deploy; order does not matter.

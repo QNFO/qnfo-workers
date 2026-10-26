@@ -239,6 +239,21 @@ test("repoCatchupTick: legacy cycles missing from runs/ -> workflow dispatched o
   assert.equal(await W.repoCatchupTick(env, t), null, "research_repo_archive = off");
 });
 
+test("repoCatchupTick: nothing missing but the legacy history is not yet an ancestor of main (squash-merged import) -> dispatch, and no archive", async () => {
+  const w = world();
+  w.legacy.foreignCommit({ "cycle-396/x/MANIFEST.json": "{}" });
+  w.cons.foreignCommit({ "runs/cycle-9/old/MANIFEST.json": "{}", "runs/cycle-396/x/MANIFEST.json": "{}", "provenance/IMPORT.json": JSON.stringify({ source_head: "f".repeat(40) }) });
+  for (let i = 0; i < 3; i++) w.d1.ledger.set("ok" + i, { run_id: "ok" + i, slug: "s" + i, repo: "QNFO/qnfo-research", status: "ok", attempts: 1 });
+  w.d1.config.research_repo_catchup_at = "0";
+  let r = await W.repoCatchupTick(w.env, W_TARGET());
+  assert.equal(r.missing, 0); assert.equal(r.linked, false); assert.equal(r.dispatched, 204); assert.equal(w.d1.portfolio.length, 0, "no archive while the history is unlinked");
+  // the workflow ran: the source head is now an ancestor of main
+  const src = w.cons.head;
+  w.cons.foreignCommit({ "provenance/IMPORT.json": JSON.stringify({ source_head: src }) });
+  r = await W.repoCatchupTick(w.env, W_TARGET());
+  assert.equal(r.archive, "requested"); assert.equal(w.d1.portfolio.length, 1);
+});
+
 test("repoCatchupTick does nothing in the legacy layout", async () => {
   const w = world({ consolidated: false });
   assert.equal(await W.repoCatchupTick(w.env, { layout: "legacy" }), null);
