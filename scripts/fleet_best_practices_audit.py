@@ -34,6 +34,11 @@ Checks. Severity `fail` is a pattern the guard also refuses in a change; `adviso
   fleet
     cron-budget                         total cron triggers across live workers against the 250-per-account limit (reported, fails above 200)
 
+Generated bundles (GENERATED-BUNDLE-AUDIT-1, issue 2758): a worker.js that is the esbuild bundle of its src/ (build.mjs, a src/ directory and a first
+line saying "generated from src/ by build.mjs"; qnfo-agents inlines the Agents SDK) is judged by src/*.js|ts|mjs, never by the vendored bundle lines,
+exactly as the CI guard does (scripts/workers_standards_guard.py generated_bundle, GENERATED-BUNDLE-1, imported and not copied); findings carry the
+src path, so a loop's code-task edits the source and not the bundle.
+
 Usage:
   python3 scripts/fleet_best_practices_audit.py [--json] [--check <name>] [--worker <dir>]   report; exit 0 always
   python3 scripts/fleet_best_practices_audit.py --d1                                          write qnfo-audit (WORKERS-BP-AUDIT-D1-1):
@@ -94,14 +99,35 @@ DOCS = {"math-random-token": "https://developers.cloudflare.com/workers/best-pra
         "compat-date-missing": "https://developers.cloudflare.com/workers/configuration/compatibility-dates/"}
 
 
+def _guard():
+    """scripts/workers_standards_guard.py, imported from this file's own directory: the audit and the CI gate share its allowlist loader and its
+    generated_bundle rule, so one reviewed exception and one definition of "generated" serve both."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import workers_standards_guard as W  # noqa: E402
+    return W
+
+
 def _allowlist():
     """scripts/workers-standards-allowlist.txt through the guard's own loader, so a reviewed exception is one record for both tools."""
     try:
-        sys.path.insert(0, str(ROOT / "scripts"))
-        import workers_standards_guard as W  # noqa: E402
+        W = _guard()
         return W.load_allowlist(), W.allowed
     except Exception:  # noqa: BLE001  (the audit is a report; a missing guard never stops it)
         return [], (lambda allow, path, rule, text: False)
+
+
+def generated_bundle(d):
+    """GENERATED-BUNDLE-AUDIT-1: the guard's own rule (build.mjs + src/ + a first worker.js line naming it generated). If the guard cannot be
+    imported the answer is False, which is the audit's old behaviour (scan worker.js), never a silent skip of a hand-written worker."""
+    try:
+        return bool(_guard().generated_bundle(str(d)))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def bundle_sources(d):
+    """The src/ files of a generated bundle that the guard checks (GENERATED-BUNDLE-1: <dir>/src/<file>.js|ts|mjs, top level only)."""
+    return sorted(p for p in (d / "src").iterdir() if p.is_file() and p.suffix in (".js", ".ts", ".mjs"))
 
 
 def strip_comments(cfg): return "\n".join(l for l in cfg.split("\n") if not l.strip().startswith("#"))
@@ -217,8 +243,15 @@ def scan_worker(d, allow=None, allowed=None):
     if cfg:
         out["config"] = config_findings(cfg, src)
         out["crons"] = len(crons(cfg))
-    if src:
-        out["code"] = code_findings(src.split("\n"), d.name + "/worker.js", allow, allowed)
+    if generated_bundle(d):
+        # GENERATED-BUNDLE-AUDIT-1: the bundle is vendored SDK code a person or a loop cannot fix (a minified line carries no `standards-ok:` comment
+        # and no stable allowlist text), so the code checks run over the source it was built from. The config cross-check above still reads the
+        # bundle: its node:* imports are what the runtime loads. Each code finding carries its own file.
+        for sf in bundle_sources(d):
+            rel = d.name + "/src/" + sf.name
+            out["code"] += [f + (rel,) for f in code_findings(sf.read_text(errors="replace").split("\n"), rel, allow, allowed)]
+    elif src:
+        out["code"] = [f + (d.name + "/worker.js",) for f in code_findings(src.split("\n"), d.name + "/worker.js", allow, allowed)]
     return out
 
 
@@ -236,8 +269,8 @@ def rows(res):
     for r in res:
         for name, ln, why in r["config"]:
             out.append((r["worker"], name, SEVERITY.get(name, "advisory"), r["worker"] + "/wrangler.toml", ln, "", why))
-        for name, ln, why, text in r["code"]:
-            out.append((r["worker"], name, SEVERITY.get(name, "advisory"), r["worker"] + "/worker.js", ln, text, why))
+        for name, ln, why, text, *fl in r["code"]:
+            out.append((r["worker"], name, SEVERITY.get(name, "advisory"), fl[0] if fl else r["worker"] + "/worker.js", ln, text, why))
     return out
 
 
@@ -430,6 +463,47 @@ INSERT INTO metric_registry VALUES ('workers_bp_findings_open', NULL, NULL, 'NEW
         obs = d1(probe["verify_probe"])[0]
         ok(obs["observed"] == "0", "the probe passes once the worker is clean: " + repr(obs))
         ok(run_d1(d1, root).get("workers_bp_audit") == "ok", "run_d1 reports ok")
+    # GENERATED-BUNDLE-AUDIT-1 (issue 2758): a worker.js built from src/ by build.mjs is judged by its src/ files, the way the CI guard does it
+    cfg = 'name = "x"\ncompatibility_date = "2026-08-01"\n[observability]\nenabled = true\nhead_sampling_rate = 1\n[observability.traces]\nenabled = true\n[limits]\ncpu_ms = 1000\n'
+    gen = 'var VERSION = "0.1.0"; // x bundle, generated from src/ by build.mjs (npm ci && npm run build). Edit src/, never this file.\n'
+    vendored = 'var tok = Math.random().toString(36).slice(2); try { y(); } catch (e) {}\nexport default {};\n'  # what a minified SDK bundle carries
+    with tempfile.TemporaryDirectory() as t:
+        root = pathlib.Path(t)
+
+        def mk(name, worker_js, build=True, src=None):
+            (root / name).mkdir(); (root / name / "wrangler.toml").write_text(cfg.replace('"x"', '"%s"' % name))
+            (root / name / "worker.js").write_text(worker_js)
+            if build: (root / name / "build.mjs").write_text("// esbuild\n")
+            if src is not None:
+                (root / name / "src").mkdir()
+                for fn, body in src.items(): (root / name / "src" / fn).write_text(body)
+        mk("bundle", gen + vendored, src={"index.ts": "export default {};\n", "lib.js": "export const a = 1;\n"})  # vendored Math.random, clean source
+        mk("bundlebad", gen + vendored, src={"index.ts": "export default {};\n", "lib.js": "export const a = 1;\nconst id = Math.random().toString(36).slice(2);\n"})
+        mk("hand", 'var VERSION = "0.1.0";\n' + vendored, src={"index.ts": "export default {};\n"})  # build.mjs and src/, but no generated line
+        mk("nobuild", gen + vendored, build=False, src={"index.ts": "export default {};\n"})  # generated line, but no build.mjs
+        mk("nosrc", gen + vendored)  # generated line and build.mjs, but no src/ directory
+        ok(generated_bundle(root / "bundle") and generated_bundle(root / "bundlebad"), "build.mjs + src/ + the generated first line is a generated bundle")
+        ok(not (generated_bundle(root / "hand") or generated_bundle(root / "nobuild") or generated_bundle(root / "nosrc")), "each of the three markers is required")
+        ok(bundle_sources(root / "bundlebad") == [root / "bundlebad/src/index.ts", root / "bundlebad/src/lib.js"], "src/ files are listed: " + repr(bundle_sources(root / "bundlebad")))
+        res, _fleet, total = scan_all(root)
+        by = {r["worker"]: r for r in res}
+        fr = rows(res)
+
+        def fl(w, sev="fail"): return sorted((r[1], r[3], r[4]) for r in fr if r[0] == w and r[2] == sev)
+        ok(fl("bundle") == [] and fl("bundle", "advisory") == [], "the vendored bundle lines of a clean-source bundle are not findings: " + repr(by["bundle"]["code"]))
+        ok(fl("bundlebad") == [("math-random-token", "bundlebad/src/lib.js", 2)], "a real violation in src/ is still reported, labelled with its src path: " + repr(fl("bundlebad")))
+        ok(fl("hand") == [("math-random-token", "hand/worker.js", 2)] and fl("nobuild") == [("math-random-token", "nobuild/worker.js", 2)]
+           and fl("nosrc") == [("math-random-token", "nosrc/worker.js", 2)], "a worker.js that is not a generated bundle is scanned as before: " + repr((fl("hand"), fl("nobuild"), fl("nosrc"))))
+        ok(any(r[1] == "swallowed-catch" and r[3] == "hand/worker.js" for r in fr) and not any(r[1] == "swallowed-catch" and r[0] == "bundle" for r in fr), "advisory findings follow the same rule")
+        desc = issue_text("bundlebad", [r for r in fr if r[0] == "bundlebad"], root, "abc")
+        ok("code-task: repo=qnfo-workers path=bundlebad/src/lib.js" in desc and "code-anchor: const id = Math.random().toString(36).slice(2);" in desc and "worker.js" not in desc.split("code-task:")[1],
+           "the code loop is pointed at the source, not the bundle: " + desc[-260:])
+        (root / "bundlebad/src/lib.js").write_text("export const a = 1;\nconst id = Math.random().toString(36).slice(2); // standards-ok: display only\n")
+        res, _fleet, total = scan_all(root); fr = rows(res)
+        ok(fl("bundlebad") == [], "a `standards-ok:` mark in src/ is honoured: " + repr(fl("bundlebad")))
+        (root / "bundlebad/src/index.ts").write_text("export default {};\nconst nonce = Math.random().toString(36);\n")
+        res, _fleet, total = scan_all(root); fr = rows(res)
+        ok(fl("bundlebad") == [("math-random-token", "bundlebad/src/index.ts", 2)], "a TypeScript source file is scanned too: " + repr(fl("bundlebad")))
     print("fleet_best_practices_audit: %s" % ("FAILED %d" % fails if fails else "all passed"))
     return 1 if fails else 0
 
