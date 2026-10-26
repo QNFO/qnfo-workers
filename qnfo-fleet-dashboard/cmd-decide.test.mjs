@@ -21,6 +21,9 @@
 // only, computed per request and never inside the cached public document or /api/status (T24); the hand-off is never longer than the 1800 characters the issue
 // body keeps, with a dozen long items too (T25); a repeat approve files no second hand-off and a decline of an approved item says it was already handed to the
 // fleet and is not undone (T26); 'why 2026 papers were pulled?' is not a diagnosis of agent_issues 2026 (T27). T14 and T18 read /classic, which keeps the old page.
+// Follow-up (1.70.1, two reviewers of the merged head): a receipt card ('Closed for you', human_actions.source owner-request-issue) is a receipt on the typed path
+// and the server path too, whatever its title says (T28); the hard-marker gate FAILS CLOSED, so with default_approve_markers unreadable or empty no card that asks
+// for a decision offers Approve or Decline, for each of the 73 live patterns (T29, T18h).
 // Run: node qnfo-fleet-dashboard/cmd-decide.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -49,7 +52,7 @@ const DESC = [
   "TRIAGE: owner qnfo-ops; doer is the revision and errata path (REVISION-LOOP-1, qnfo-research-exec)."
 ].join("\n");
 
-// the live hard markers of DEFAULT-APPROVE-1 (default_approve_markers kind 'hard', read 2026-10-26)
+// the live hard markers of DEFAULT-APPROVE-1 (default_approve_markers kind 'hard': 73 rows, SELECTed live 2026-10-26 and compared with this array: identical)
 const HARD = ["% payment %", "% payments %", "%payment decision%", "%invoice%", "%bank %", "%credit card%", "%billing account%", "%billing plan%", "%billing project%", "%purchase%", "%wire transfer%", "%top up%", "%top-up%", "% fund %", "%prepaid%", "%subscri%", "% pay %", "% paid %", "% fee %", "% fees %", "%renew%", "%registrar%", "%refund%", "%wallet%", "%$_%", "% legal %", "% signature %", "%signing%", "% sign the %", "%patent applic%", "% dpa %", "% dpa,%", "%irreversible%", "%delete%", "%wipe%", "%erase%", "%truncate%", "%drop table%", "%destroy%", "%unbacked%", "%api key%", "%oauth%", "%sign in to%", "%sign-in%", "%log in to%", "%login link%", "%login code%", "%password%", "%credential%", "%rotate%", "%secret%", "%token%", "%grant access%", "%your name%", "%owner's name%", "%mailbox%", "%email from%", "%send an email%", "%send email%", "%@_%._%", "%visibility%", "%make public%", "%be public%", "%one-time code%", "%verification code%", "%privacy of %", "%gdpr%", "%personal data%", "%suppress%", "%opt-out%", "%opt out%", "%unsubscribe%", "%consent%"];
 function mk(extra = {}) {
   const db = new DatabaseSync(":memory:");
@@ -68,11 +71,13 @@ function mk(extra = {}) {
   CREATE TABLE goals (id INTEGER PRIMARY KEY, goal_type TEXT, status TEXT, created_at TEXT, statement TEXT, alignment TEXT, updated_at TEXT);
   CREATE TABLE default_approve_markers (kind TEXT NOT NULL, pattern TEXT NOT NULL, note TEXT, added_at TEXT, PRIMARY KEY (kind, pattern));
   CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
+  CREATE TABLE breach_diagnoses (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER NOT NULL, case_key TEXT, family TEXT, rule_id TEXT, rule_version INTEGER DEFAULT 1, cause_class TEXT, facts_json TEXT, action_kind TEXT DEFAULT 'none', action_ref TEXT, state TEXT DEFAULT 'diagnosed', mode TEXT DEFAULT 'on', attempts INTEGER DEFAULT 0, verify_passes INTEGER DEFAULT 0, error_code TEXT, diagnosed_at TEXT, applied_at TEXT, verified_at TEXT);
+  CREATE VIEW v_breach_diagnosis_current AS SELECT d.* FROM breach_diagnoses d WHERE d.id = (SELECT MAX(x.id) FROM breach_diagnoses x WHERE x.issue_id = d.issue_id);
   CREATE TABLE breach_selfheal_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), check_class TEXT, subject TEXT NOT NULL, action TEXT, revert TEXT, evidence TEXT);
   CREATE TABLE v_issue_age_ladder (id INTEGER, title TEXT, priority TEXT, source TEXT, age_h REAL, doer TEXT, plan_outcome TEXT, planned_at TEXT, plan_reason TEXT, rung TEXT, breach INTEGER);
   CREATE VIEW v_issue_queue AS SELECT ROW_NUMBER() OVER (ORDER BY q.prank, q.id) AS pos, q.* FROM (SELECT a.id, CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END AS prank, a.priority, a.title, a.category, a.source, t.owner, t.triage_state, CASE WHEN COALESCE(a.description,'') LIKE '%code-task:%' THEN 1 ELSE 0 END AS has_code_task, CASE WHEN EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status = 'active') THEN 1 ELSE 0 END AS has_contract, a.linked_session, a.created_at, a.updated_at FROM agent_issues a LEFT JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = 'open') q;`);
   if (extra.noMarkers) db.exec("DROP TABLE default_approve_markers");
-  else for (const pat of HARD) db.prepare("INSERT INTO default_approve_markers (kind, pattern, note) VALUES ('hard', ?, 'live')").run(pat);
+  else if (!extra.emptyMarkers) for (const pat of HARD) db.prepare("INSERT INTO default_approve_markers (kind, pattern, note) VALUES ('hard', ?, 'live')").run(pat);
   db.prepare("INSERT INTO fleet_dashboard_state VALUES (1,?,?,1)").run(new Date().toISOString(), JSON.stringify(STATE));
   if (!extra.noCard) db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES (?,?,?,?,?,?)").run(SLUG, "UIA-SOURCE-FIDELITY-1: approve or decline the seven fixes to the Ignorance Audit papers", "IDENTITY-BOUND: edits to the author's own paper bodies (authorship attribution and wording); loops never rewrite owner-authored papers.", "The papers stay as published.", "Approve or decline each of the seven fixes in agent_issues 100140. On approval the fleet applies them through the owner-document edit path and the issue closes on its own probe.", "claude-session");
   if (extra.second) db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES ('pick-pricing-model','Pick one pricing model for the API','The owner chooses; no loop can.','The current model stays.','Approve: model A (flat) or model B (metered).','claude-session')").run();
@@ -84,6 +89,13 @@ function mk(extra = {}) {
     ins.run("approve-logo-refresh", "Approve the refreshed logo", "The owner picks the brand; no loop can.", "The current logo stays.", "Approve the refreshed logo shown on the brand page, or decline it.", "claude-session");
   }
   if (extra.plain) db.prepare("INSERT INTO human_actions (slug,title,why,action,source) VALUES ('orcid-link-works','Add the selected works to ORCID','issue 1001 found the gap','act','owner-only:x')").run();
+  // OWNER-REQUEST-RECEIPT-1: the card the close trigger writes when an owner-request issue ends ('Closed for you'); its title can hold the word Approve
+  if (extra.receipt) {
+    db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES ('issue-1000100',?,?,?,?,'owner-request-issue')").run("OWNER-TASK-op-mvln7t9l2192: Approve the refreshed logo", "Your request (issue 1000100) was closed by the fleet with evidence.", "Nothing is waiting on you.", "Open fleet.qnfo.org and decide or dismiss this card.");
+    db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,status,created_at,updated_at) VALUES (1000100,'OWNER-TASK-op-mvln7t9l2192: Approve the refreshed logo','Approve the refreshed logo.','owner','medium','closed',1791217360000,1791217360000)").run();
+  }
+  for (const [slug, title, why, action] of extra.cards || []) db.prepare("INSERT INTO human_actions (slug,title,why,action,source) VALUES (?,?,?,?,'claude-session')").run(slug, title, why, action);
+  if (extra.noSource) db.exec("ALTER TABLE human_actions DROP COLUMN source");
   db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (100140,'UIA-SOURCE-FIDELITY-1: fix factual inconsistencies in the Ignorance Audit papers found while red-teaming the poster',?,'pipeline','medium',1791217360000,1791217360000)").run(DESC);
   db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (1001,'METRIC-TRIGGER-7: pageviews low','The lever is X.','analytics','medium',1791217360000,1791217360000)").run();
   db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (1002,'CRIT thing','nothing','reliability','critical',1791217360000,1791217360000)").run();
@@ -345,6 +357,21 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
   ok(/Ignorance Audit papers/.test(j.text) && (j.actions || []).some((a) => a.cmd === "approve ha:" + SLUG) && (j.actions || []).some((a) => a.cmd === "decline ha:" + SLUG) && (j.actions || []).some((a) => a.cmd === "retry 100140"), "T12g the owner sees the title, Approve, Decline and Retry buttons", j);
   j = await (await cmd(e.env, "why 100140", C)).json();
   ok(/Diagnosis of #100140/.test(j.text), "T12h 'why <id>' is a diagnosis", j);
+  // T12j-m. the doctor ledger: one line from v_breach_diagnosis_current, enums and ids only, never facts_json or action_ref
+  e.db.prepare("INSERT INTO breach_diagnoses (issue_id, case_key, family, rule_id, rule_version, cause_class, facts_json, action_kind, action_ref, state, mode, verify_passes, diagnosed_at) VALUES (1001, 'k1', 'probe-needed', 'PN-R1', 2, 'probe-missing', '{\"secret\":\"FACTS-LEAK\"}', 'sql', 'REF-LEAK', 'verifying', 'on', 1, '2026-10-26T11:00:00Z')").run();
+  j = await (await cmd(e.env, "diagnose 1001")).json();
+  ok(/Breach doctor: probe-missing \(rule PN-R1 v2, probe-needed\), on mode, verifying, action sql, 1 verify pass, diagnosed 2026-10-26T11:00:00Z/.test(j.text), "T12j diagnose shows the doctor's latest diagnosis of the issue", j.text);
+  ok(!/FACTS-LEAK|REF-LEAK/.test(j.text), "T12k facts_json and action_ref are never read into the answer", j.text);
+  ok(/What this means: session_Z is working on it/.test(j.text), "T12l a live work claim still outranks the doctor in the plain-words meaning", j.text);
+  e.db.prepare("DELETE FROM work_claims").run();
+  e.db.prepare("UPDATE code_tasks SET last_error = NULL, pr_url = NULL").run();
+  j = await (await cmd(e.env, "diagnose 1001")).json();
+  ok(/What this means: The breach doctor is working on it \(rule PN-R1, verifying\)/.test(j.text), "T12m with no claim or task in the way a live on-mode diagnosis is the meaning", j.text);
+  e.db.prepare("INSERT INTO breach_diagnoses (issue_id, case_key, family, rule_id, cause_class, action_kind, state, mode, diagnosed_at) VALUES (1001, 'k1', 'probe-needed', 'playbook-gap', 'unclassified', 'none', 'diagnosed', 'measure', '2026-10-26T12:00:00Z')").run();
+  j = await (await cmd(e.env, "diagnose 1001")).json();
+  ok(/Breach doctor: unclassified \(rule playbook-gap v1, probe-needed\), measure mode, diagnosed, no playbook acts on it/.test(j.text) && !/The breach doctor is working on it/.test(j.text), "T12n the newest row wins; a measure-mode classification says no playbook acts and claims no work", j.text);
+  j = await (await cmd(e.env, "diagnose 100140")).json();
+  ok(!/Breach doctor:/.test(j.text), "T12o an issue the doctor has not diagnosed prints no doctor line", j.text);
   j = await (await cmd(e.env, "why is the sky blue")).json();
   ok(j.kind === "pending", "T12i a 'why' question about nothing the fleet holds still goes to the model", j);
   j = await (await cmd(e.env, "why is open_agent_issues 254 against < 0, and what is the smallest fix?")).json();
@@ -539,11 +566,11 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   const C2 = await signIn(e2.env, e2.db, e2.m);
   const p2 = await (await call(e2.env, "/classic", { headers: C2 })).text();
   ok(!p2.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p2.includes('data-fleet-cmd="done ha:approve-logo-refresh">Done<'), "T18g a hard marker added in D1 takes effect on the next page", p2.length);
-  // the markers cannot be read: the embedded list stands in
+  // the markers cannot be read: the gate FAILS CLOSED (the embedded list is not a copy of the live one), so the logo card is owner-only too
   const e3 = mk({ noCard: true, shapes: true, noMarkers: true });
   const C3 = await signIn(e3.env, e3.db, e3.m);
   const p3 = await (await call(e3.env, "/classic", { headers: C3 })).text();
-  ok(!p3.includes('data-fleet-cmd="approve ' + eb) && p3.includes('data-fleet-cmd="done ' + eb + '">Done<') && p3.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T18h without the markers table the embedded list still keeps the signing card to Diagnose and Done and the logo card decidable");
+  ok(!p3.includes('data-fleet-cmd="approve ' + eb) && p3.includes('data-fleet-cmd="done ' + eb + '">Done<') && !p3.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p3.includes('data-fleet-cmd="done ha:approve-logo-refresh">Done<') && p3.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T18h without the markers table every decision card (the signing card and the logo card) offers Diagnose and Done only");
   // the 100140 card (authors' papers, IDENTITY-BOUND) is not a hard card
   const e4 = mk();
   const C4 = await signIn(e4.env, e4.db, e4.m);
@@ -925,6 +952,85 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   const k = await say("diagnose 2026 papers");
   ok(/Diagnosis of #2026 /.test(k.text || ""), "T27b the explicit verb keeps its reading (diagnose <number> ...)", k);
   ok(noModel(e) === false, "T27c (control) the model was asked for the sentences above");
+}
+// T28. a receipt card ('Closed for you', human_actions.source owner-request-issue) asks for no decision even when its title says Approve: the typed path,
+// the candidate list and /api/cmd/run all treat it as a receipt (the queue excludes receipts, so decOpenCards and cmdDecide read them from human_actions)
+{
+  const RK = "ha:issue-1000100";
+  const e = mk({ receipt: true });
+  const C = await signIn(e.env, e.db, e.m);
+  const bare = await (await cmd(e.env, "approve", C)).json();
+  ok((bare.actions || []).some((a) => a.op === "approve" && a.args.key === "ha:" + SLUG) && !/Pick one/.test(bare.text || "") && !(bare.actions || []).some((a) => /1000100/.test(JSON.stringify(a))), "T28 a bare approve resolves to the single real decision card; the receipt is not offered as a second choice", bare);
+  for (const verb of ["approve", "decline"]) {
+    const j = await (await cmd(e.env, verb + " " + RK, C)).json();
+    ok(!(j.actions || []).some((a) => a.op === verb) && /asks for no decision/.test(j.text || "") && (j.actions || []).some((a) => a.op === "done" && a.args.key === RK), "T28a typing '" + verb + " " + RK + "' previews no " + verb + " button: it says the card asks for no decision and offers Done", j);
+    const k = await (await cmd(e.env, verb + " 1000100", C)).json();
+    ok(!(k.actions || []).some((a) => a.op === verb), "T28b '" + verb + " 1000100' (the issue the receipt names) offers no " + verb + " button", k);
+    const r = await run(e.env, verb, { key: RK, issue: 1000100, items: null, note: "", title: "x" }, C); const jr = await r.json();
+    ok(jr.ok === false && /asks for no decision/.test(jr.error || "") && /Mark it done/.test(jr.error || ""), "T28c /api/cmd/run " + verb + " on the receipt is refused: asks for no decision, mark it done", jr);
+  }
+  ok(one(e.db, "SELECT status FROM human_actions WHERE slug = 'issue-1000100'").status === "open" && one(e.db, "SELECT COUNT(*) n FROM human_responses").n === 0 && rows(e.db, "SELECT id FROM owner_prompts").length === 0 && one(e.db, "SELECT COUNT(*) n FROM agent_issues").n === 4 && one(e.db, "SELECT description FROM agent_issues WHERE id = 1000100").description === "Approve the refreshed logo.", "T28d nothing was resolved, recorded, stamped or handed to the fleet (no OWNER-DECISION hand-off for a request the owner merely filed)");
+  // the real card is unaffected, and Done (the receipt's own alternate) still clears the receipt
+  const real = await (await cmd(e.env, "approve 100140", C)).json();
+  ok((real.actions || []).some((a) => a.op === "approve" && a.args.items.length === 7), "T28e the real decision card still previews its approve", real);
+  const dn = await (await run(e.env, "done", { key: RK, title: "x" }, C)).json();
+  ok(dn.ok !== false && one(e.db, "SELECT status FROM human_actions WHERE slug = 'issue-1000100'").status === "resolved", "T28f Done clears the receipt", dn);
+  // a stranger: the preview is open and still offers no approve for the receipt
+  const e1 = mk({ receipt: true });
+  const s = await (await cmd(e1.env, "approve " + RK)).json();
+  ok(!(s.actions || []).some((a) => a.op === "approve"), "T28g a stranger's typed approve on the receipt previews nothing either", s);
+  // a database without the source column reads every card as a card (collectHumanActions does too): no error, and the real card is still decidable
+  const e2 = mk({ receipt: true, noSource: true });
+  const j2 = await (await cmd(e2.env, "approve 100140")).json();
+  ok(j2.kind === "answer" && (j2.actions || []).some((a) => a.op === "approve" && a.args.key === "ha:" + SLUG), "T28h without the source column the typed path still answers and the real card is decidable", j2);
+}
+// T29. the hard-marker gate FAILS CLOSED. DEC_HARD_FALLBACK_RX is not a copy of the live list ('Fund a stronger code-loop model', a text holding an e-mail
+// address, 'unbacked rows are wiped', 'enter the login code', 'use the login link' and a bare 'pay' or 'paid' are hard live and pass it), so with the markers
+// unreadable (the table dropped, as a D1 error would) or empty every card that asks for a decision offers Diagnose and Done only: page, typed verb and server.
+{
+  const sample = (pat) => pat.replace(/_/g, "x").replace(/%/g, " ");
+  const named = [["fund", "Fund a stronger code-loop model so the planner stops falling back."], ["email", "Reply to ops@example.org about the grant."], ["unbacked", "Rows with no backup: unbacked rows are wiped on Friday."], ["logincode", "To continue, enter the login code that was sent to you."], ["loginlink", "To continue, use the login link in the message."], ["pay", "Please pay now."], ["paid", "It was paid last week."]];
+  // (a) the named cases on the page (/classic shows the first eight decision cards), with the table dropped and with the table empty
+  for (const variant of [{ noMarkers: true }, { emptyMarkers: true }]) {
+    const label = variant.noMarkers ? "markers table dropped" : "markers table empty";
+    const e = mk(Object.assign({ noCard: true, cards: named.map(([k, why]) => ["hc-" + k, "Approve the hardcase", why, "Approve or decline it."]) }, variant));
+    const C = await signIn(e.env, e.db, e.m);
+    const page = await (await call(e.env, "/classic", { headers: C })).text();
+    for (const [k] of named) {
+      const key = "ha:hc-" + k;
+      ok(page.includes('data-dec="' + key + '"') && page.includes('data-fleet-cmd="diagnose ' + key + '">Diagnose<') && page.includes('data-fleet-cmd="done ' + key + '">Done<') && !page.includes('data-fleet-cmd="approve ' + key) && !page.includes('data-fleet-cmd="decline ' + key), "T29 (" + label + ") '" + k + "' shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + key + '"'), page.indexOf('data-dec="' + key + '"') + 400));
+    }
+  }
+  // (b) every one of the 73 live patterns, as card text, with the table dropped: typed verbs and /api/cmd/run refuse, nothing is written
+  const cards = HARD.map((pat, i) => ["hp-" + i, "Approve the hardcase", "Context" + sample(pat) + "end.", "Approve or decline it."]);
+  const e = mk({ noCard: true, noMarkers: true, cards });
+  const C = await signIn(e.env, e.db, e.m);
+  const ref = mk({ noCard: true, cards });
+  let sane = 0, closedN = 0;
+  for (let i = 0; i < HARD.length; i++) {
+    const key = "ha:hp-" + i, text = " approve the hardcase context" + sample(HARD[i]) + "end. approve or decline it. ";
+    if (one(ref.db, "SELECT lower(?) LIKE ? AS m", text, HARD[i]).m === 1) sane++;
+    for (const verb of ["approve", "decline"]) {
+      const j = await (await cmd(e.env, verb + " " + key, C)).json();
+      const r = await run(e.env, verb, { key, issue: null, items: null, note: "", title: "x" }, C); const jr = await r.json();
+      if (!(j.actions || []).some((a) => a.op === "approve" || a.op === "decline") && (j.actions || []).some((a) => /^diagnose /.test(a.cmd || "")) && jr.ok === false && /yours alone/.test(jr.error || "")) closedN++;
+      else ok(false, "T29a '" + HARD[i] + "' with the markers unreadable: " + verb + " must offer Diagnose/Done only and be refused by the server", { j, jr });
+    }
+  }
+  ok(sane === HARD.length, "T29b each sample text matches its own live LIKE pattern (so each is hard live)", sane);
+  ok(closedN === HARD.length * 2, "T29c all " + HARD.length + " live patterns x approve and decline fail closed with the markers unreadable", closedN);
+  ok(one(e.db, "SELECT COUNT(*) n FROM human_actions WHERE status = 'open'").n === HARD.length && one(e.db, "SELECT COUNT(*) n FROM human_responses").n === 0 && rows(e.db, "SELECT id FROM owner_prompts").length === 0, "T29d nothing was resolved, recorded or handed to the fleet");
+  const bare = await (await cmd(e.env, "approve", C)).json();
+  ok(/Nothing is waiting on a decision/.test(bare.text || "") && !(bare.actions || []).some((a) => a.op), "T29e a bare approve offers none of them", bare);
+  // (c) control: with the live markers readable the same card is hard too (the table is the authority when it can be read)
+  const Cr = await signIn(ref.env, ref.db, ref.m);
+  const live = await (await cmd(ref.env, "approve ha:hp-3", Cr)).json();
+  ok(!(live.actions || []).some((a) => a.op === "approve") && /yours alone/.test(live.text || ""), "T29f with the live markers readable the same card is hard", live);
+  // (d) a card that matches no marker is decidable when the table is readable: a readable list does not fail closed
+  const ok2 = mk({ noCard: true, shapes: true });
+  const C2 = await signIn(ok2.env, ok2.db, ok2.m);
+  const j2 = await (await cmd(ok2.env, "approve ha:approve-logo-refresh", C2)).json();
+  ok((j2.actions || []).some((a) => a.op === "approve"), "T29g with the markers readable a decision card that matches none is decidable", j2);
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

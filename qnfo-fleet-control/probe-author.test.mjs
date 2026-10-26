@@ -8,12 +8,15 @@
 // probes, with an enum reason on the existing remediation.probe-author-reject event that never carries the probe text. probe-author.fixture.json holds the live qnfo-audit sqlite_master
 // names (captured 2026-10-26, 603 tables, 194 views, names only) and the live definitions of the allowlisted views, so the allowlist constant is checked against the real schema and every live
 // object is swept: only an allowlisted one may pass the static check.
-// Review pass 2 (0.53.1): an allowlisted table still holds free text, and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id pattern, so the dry run's
+// Review pass 2 (shipped as 0.53.3): an allowlisted table still holds free text, and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id pattern, so the dry run's
 // expected AND observed must each be a number or one short token (letters, digits, _ . : + -, at most 64 characters), refused as private-table: free-text value; and a probe that reads no allowlisted
 // object in table position, calls random() or randomblob(), or shadows an object with a CTE measures nothing and is refused.
-// Review pass 3 (0.53.1): the CTE shadow gate sees every SQLite spelling of a CTE head (a column list, AS MATERIALIZED, AS NOT MATERIALIZED, any position of the WITH list, a word, quoted or string-literal
+// Review pass 3 (shipped as 0.53.3): the CTE shadow gate sees every SQLite spelling of a CTE head (a column list, AS MATERIALIZED, AS NOT MATERIALIZED, any position of the WITH list, a word, quoted or string-literal
 // name), and the release note and the worker comment state the residual as it is: the value gate runs once, on the birth dry run, the hourly engine writes a later pass's expected and observed untruncated
 // into remediation_verifications, and the shape gate is not a content gate (the table allowlist and the cloud_ops_events kind filter are the privacy boundary).
+// Review pass 4 (0.53.3): main moved to 0.53.2 while the work was in review, so the passes ship as 0.53.3 and the note is found by its "review pass" label and compared as a minimum, not pinned to one number. The residual is
+// stated with every sink the untruncated later-pass value reaches: remediation_verifications, and the runner consumer's run log, which the remediation-consumer workflow commits to main of the public repository; and
+// PROBE-REVIEW-1 is not called a privacy control (it judges the definition of done only). The sink claims are checked against scripts/remediation_consumer.py and the workflow, so the text cannot drift from the code.
 // Slices rtFlagOff, the reply reader, aiRunAttr and the probe-author block out of worker.js and runs them against an in-memory SQLite D1 and a fake env.AI.
 // Output MUST contain "0 failed" on success.   node qnfo-fleet-control/probe-author.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -635,18 +638,33 @@ const LEAK = /jane|gmail|bob|carol|dave|erin|example|grant|timeout|@/i;
   ok(v && (Number(v[1]) > 0 || Number(v[2]) > 52 || (Number(v[2]) === 52 && Number(v[3]) >= 1)), "VERSION is at least 0.52.1", v && v[0]);
   ok(hAt > 0 && hAt < vAt && /\n\/\/ 0\.52\.1 PROBE-AUTHOR-HARDEN-1 /.test(src.slice(hAt, vAt)), "the release note is a comment line between the VERSION-LINE-SPLIT-1 header and the VERSION statement");
   ok(src.slice(vAt, src.indexOf("\n", vAt)).indexOf("PROBE-AUTHOR-HARDEN-1") < 0, "the release note is not on the VERSION line");
-  ok(/\n\/\/ 0\.53\.1 PROBE-AUTHOR-HARDEN-1 review pass /.test(src.slice(hAt, vAt)) && v && (Number(v[2]) > 53 || (Number(v[2]) === 53 && Number(v[3]) >= 1)), "the review-pass note is a comment line under the header and VERSION is at least 0.53.1");
+  // the note is found by its label, whatever number a later rebase gives it, and compared as a minimum: it must sit above 0.53.2 (main's last, the doctor validator) and VERSION must be at least the note's own number
+  const rp = /\n\/\/ (\d+)\.(\d+)\.(\d+) PROBE-AUTHOR-HARDEN-1 review pass /.exec(src.slice(hAt, vAt)), key = (a, b, c) => Number(a) * 1e8 + Number(b) * 1e4 + Number(c);
+  ok(rp && v && key(rp[1], rp[2], rp[3]) >= key(0, 53, 3) && key(v[1], v[2], v[3]) >= key(rp[1], rp[2], rp[3]), "the review-pass note is a comment line under the header, above main's 0.53.2, and VERSION is at least the note's number", rp && rp[0].trim());
 }
-{ // the 0.53.1 note and the comment above RT_PROBE_AUTHOR_MAX_SQL state the residual as it is (review pass 3), and no longer claim a bound the code does not have
+{ // the review-pass note and the comment above RT_PROBE_AUTHOR_MAX_SQL state the residual as it is (review passes 3 and 4), and no longer claim a bound or a control the code does not have
   const hAt = src.indexOf("// VERSION-LINE-SPLIT-1 (agent_issues 100220)"), vAt = src.search(/var VERSION = "/);
-  const note = (src.slice(hAt, vAt).split("\n").find((l) => l.startsWith("// 0.53.1 PROBE-AUTHOR-HARDEN-1 review pass ")) || "");
-  ok(note.length > 0, "the 0.53.1 note is present");
+  const note = (src.slice(hAt, vAt).split("\n").find((l) => /^\/\/ \d+\.\d+\.\d+ PROBE-AUTHOR-HARDEN-1 review pass /.test(l)) || "");
+  ok(note.length > 0, "the review-pass note is present");
   ok(!/at most 64 characters of that token alphabet/.test(note) && !/a value is at most 64 characters/.test(note), "the note no longer says a later value is at most 64 characters");
   ok(/untruncated into remediation_verifications/.test(note) && /text of any length from an allowlisted table/.test(note), "the note says the hourly re-verification writes the first row untruncated, so a branch not taken at birth can return text of any length");
-  ok(/not a content gate/.test(note) && /hex\(\) or substr\(\)/.test(note) && /allowlist and the literal cloud_ops_events kind filter remain the privacy boundary/.test(note) && /PROBE-REVIEW-1/.test(note), "the note says the shape gate is not a content gate, names the privacy boundary and the compensating layer");
+  ok(/not a content gate/.test(note) && /hex\(\) or substr\(\)/.test(note) && /allowlist and the literal cloud_ops_events kind filter remain the privacy boundary/.test(note), "the note says the shape gate is not a content gate and names the privacy boundary");
+  ok(/PROBE-REVIEW-1/.test(note) && /no privacy criterion/.test(note) && /is not a control on this residual/.test(note) && !/compensating layer/.test(note), "the note says PROBE-REVIEW-1 has no privacy criterion and is not a control on the residual, and no longer calls it the compensating layer");
+  ok(/ci-status\/remediation-consumer\.json/.test(note) && /public QNFO\/qnfo-workers repository/.test(note) && /scripts\/remediation_consumer\.py/.test(note) && /remediation_verifications/.test(note), "the note names both sinks of the untruncated later-pass value, the public run log among them");
+  ok(/Nothing re-checks the shape of a later pass's value yet/.test(note) && /sink guard/.test(note), "the note says nothing re-checks a later pass's value yet and names the sink guard as the follow-up");
   ok(/column list, AS MATERIALIZED or AS NOT MATERIALIZED/.test(note), "the note names the CTE spellings the shadow gate covers");
   const cAt = src.indexOf("var RT_PROBE_AUTHOR_MAX_SQL = 600;"), cmt = src.slice(src.lastIndexOf("// PROBE-AUTHOR-HARDEN-1 (qnfo-fleet-control 0.52.1", cAt), cAt);
   ok(/UNTRUNCATED/.test(cmt) && !/the open verification ledger is bounded/.test(cmt) && /rtProbeAuthorCteHead/.test(cmt), "the comment above RT_PROBE_AUTHOR_MAX_SQL says the verification ledger copy is untruncated and does not call it bounded");
+  ok(/ci-status\/remediation-consumer\.json/.test(cmt) && /public QNFO\/qnfo-workers repository/.test(cmt) && /scripts\/remediation_consumer\.py/.test(cmt), "the comment names the runner consumer's public run log as a sink of the untruncated value");
+  ok(/no privacy criterion/.test(cmt) && /not a control on this residual/.test(cmt) && !/compensating layer/.test(cmt), "the comment says PROBE-REVIEW-1 has no privacy criterion and is not a control on the residual");
+}
+{ // the sink claims in the note and the comment are true of the code they describe (a claim about another file is read from that file)
+  const consumer = readFileSync(new URL("../scripts/remediation_consumer.py", import.meta.url), "utf8");
+  const wf = readFileSync(new URL("../.github/workflows/remediation-consumer.yml", import.meta.url), "utf8");
+  const d1fn = consumer.slice(consumer.indexOf("def consume_d1("), consumer.indexOf("def next_due_offset("));
+  ok(d1fn.length > 200 && /rec\["observed"\] = obs\b(?!\s*\[)/.test(d1fn) && /rec\["expected"\] = exp\b(?!\s*\[)/.test(d1fn), "the consumer's d1 path copies expected and observed into its run log with no slice");
+  ok(/due_at IS NULL OR datetime\(next_due_at\) <= datetime\('now'\)/.test(consumer) && /next_due_at = NULL/.test(src.slice(src.indexOf("async function rtAuthorLivePathProbe"))), "an authored contract has next_due_at NULL and the consumer selects a NULL next_due_at, so it is probed at once");
+  ok(/ci-status\/remediation-consumer\.json/.test(wf) && /git add ci-status\/remediation-consumer\.json/.test(wf), "the remediation-consumer workflow commits ci-status/remediation-consumer.json");
 }
 ok(mirror === src, "the deployed-current mirror is identical to worker.js");
 console.log(pass + " passed, " + fail + " failed");
