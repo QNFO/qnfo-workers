@@ -76,6 +76,7 @@ function world(init) {
   const st = Object.assign({ sent: [], violations: [], traces: [], updates: [], notices: [], ai: [], emails: {}, allow: [], policy: null, queue: [], drain: [], inserted: [] }, init || {});
   const handler = (sql, a, kind) => {
     if (/FROM ops_config WHERE key='agent_send_policy'/.test(sql)) return st.policy ? { value: st.policy } : null;
+    if (/FROM ops_config WHERE key = 'email_tier2_autosend'/.test(sql)) return st.tier2 ? { value: st.tier2 } : null;   // EMAIL-TIER2-GATE-1: the owner's switch for tier 2 (absent = off)
     if (/^SELECT id, sender FROM emails WHERE id=\?1/.test(sql)) { const r = st.emails[a[0]]; return r ? { id: a[0], sender: r.sender } : null; }
     if (/^SELECT sender, body_text FROM emails WHERE id=\?1/.test(sql)) { const r = st.emails[a[0]]; return r ? { sender: r.sender, body_text: r.body_text || "" } : null; }
     if (/FROM agent_send_allowlist/.test(sql)) return { results: st.allow.map((p) => ({ pattern: p })) };
@@ -167,7 +168,7 @@ const classifyJson = JSON.stringify({ machine_written: false, tier: 2, confident
   check("the model is tool-less: no call passes tools or functions", w.st.ai.length > 0 && w.st.ai.every((c) => c.args.tools === undefined && c.args.functions === undefined && c.args.tool_choice === undefined));
 }
 {
-  const w = world({ queue: [Object.assign({}, BENIGN)] });
+  const w = world({ queue: [Object.assign({}, BENIGN)], tier2: "on" });   // EMAIL-TIER2-GATE-1: tier 2 is cleared for auto-send only while the owner's switch is on
   w.st.aiReply = (model, args) => /^You classify/.test(sysOf(args)) ? { response: classifyJson } : { response: "Thanks for asking.\n\nThe PDF is linked in your mail.\n\nRowan" };
   const r = await L.tierReplyQueue(w.env);
   check("near miss: an honest question still gets a tier 2 draft cleared for auto-send", r.tier2 === 1 && w.st.updates.some((u) => /draft_proposed/.test(u.sql) && u.a[1] === "2" && /cleared for auto-send/.test(String(u.a[4]))), [r, w.st.updates.map((u) => u.a.slice(1, 3))]);
@@ -179,6 +180,14 @@ const classifyJson = JSON.stringify({ machine_written: false, tier: 2, confident
   check("near miss: a machine-written solicitation that also tries an injection stays tier 1 by the rules, no model and no owner notice", w.st.ai.length === 0 && r.tier1 === 1 && r.injection === undefined && !w.st.sent.some((m) => /handoff/.test(m.subject)), [r, w.st.ai.length, w.st.sent.length]);
 }
 check("near miss: an address with = + and other legal local-part characters is one plain address, and a reply to it is allowed", L.injSingleAddr("a=b+c@x.test") === "a=b+c@x.test" && L.injSendDecision({ to: "a=b+c@x.test", replyToId: 5, originalSender: "a=b+c@x.test", surface: "" }).ok && L.injSingleAddr("a b@x.test") === "");
+
+{
+  // EMAIL-TIER2-GATE-1: the same honest question with the owner's switch absent is held for the owner: tier 3, no auto-send marker, only the handoff to the owner is mailed
+  const w = world({ queue: [Object.assign({}, BENIGN)] });
+  w.st.aiReply = (model, args) => /^You classify/.test(sysOf(args)) ? { response: classifyJson } : { response: "Thanks for asking.\n\nThe PDF is linked in your mail.\n\nRowan" };
+  const r = await L.tierReplyQueue(w.env);
+  check("switch absent: an honest question is a tier 3 handoff with no auto-send marker (the owner sends in his own name)", r.tier2 === 0 && r.tier2_held === 1 && r.tier3 === 1 && w.st.updates.some((u) => /draft_proposed/.test(u.sql) && u.a[1] === "3" && !/cleared for auto-send/.test(String(u.a[4]))) && w.st.sent.length === 1 && w.st.sent[0].to === "rwnquni@outlook.com" && /^\[handoff\]/.test(w.st.sent[0].subject), [r, w.st.sent.map((m) => [m.to, m.subject]), w.st.updates.map((u) => u.a.slice(1, 3))]);
+}
 
 // ---- 7. the reply drain: the last gate before mail leaves ----
 const CLEARED = { id: 21, email_id: 70, sender: JANE, subject: "the adelic paper", draft_text: "Hi Jane,\n\nThe PDF is linked in your mail.\n\nRowan" };
