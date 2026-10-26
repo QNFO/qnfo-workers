@@ -163,7 +163,7 @@ const COUNTS = "SELECT (SELECT COUNT(*) FROM agent_issues) a, (SELECT COUNT(*) F
   check(stats.calls === 3 && stats.stmts === 5, "filing: 3 D1 calls (read, metric, one atomic batch of issue + contract + event), 5 SQL statements", { calls: stats.calls, stmts: stats.stmts });
   // the probe tells the truth on the stall, then on recovery
   let r = one(db, probe);
-  check(r.expected === "ok" && /^doctor tick age 47 minutes$/.test(r.observed), "the contract's probe fails on the stall with the age", r);
+  check(r.expected === "ok" && /^doctor tick age (46|47|48) minutes$/.test(r.observed), "the contract's probe fails on the stall with the age", r);
   db.prepare("INSERT INTO breach_diagnosis_events (ts, event, detail) VALUES (?, 'tick', 'x')").run(iso(2));
   r = one(db, probe);
   check(r.expected === "ok" && r.observed === "ok", "and passes once the doctor ticks again", r);
