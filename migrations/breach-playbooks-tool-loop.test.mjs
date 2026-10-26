@@ -150,7 +150,9 @@ const settle = async (raw) => { const r1 = await tick(raw); await tick(raw); awa
   ok(q1(raw, "SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'BREACH-PLAYBOOKS-TOOL-LOOP-1%'").n === 1 && q1(raw, "SELECT COUNT(*) n FROM capability_ledger WHERE capability = 'breach-doctor:tool-loop-playbooks'").n === 1, "one decision_log row and one capability_ledger row");
   // a replay changes nothing
   const snap = () => ["breach_playbooks", "control_registry", "failure_modes", "remediation_contracts", "capability_ledger", "decision_log"].map((t) => t + JSON.stringify(qa(raw, "SELECT * FROM " + t))).join("|");
-  const before = snap(); raw.exec(TL);
+  const before = snap();
+  // a second apply as the runner does it (scripts/apply_migrations.py): statement by statement, a duplicate column of an ADD COLUMN is the column it already added
+  { let q = false, from = 0; const b = TL.split("\n").filter((l) => !l.startsWith("--")).join("\n"); for (let i = 0; i < b.length; i++) { const c = b[i]; if (c === "'") q = !q; else if (c === ";" && !q) { const st = b.slice(from, i + 1); from = i + 1; try { raw.exec(st); } catch (e) { if (!(/^\s*ALTER TABLE \w+ ADD COLUMN/i.test(st) && /duplicate column name/.test(String(e.message)))) throw e; } } } }
   ok(before === snap(), "a second apply changes nothing");
 }
 
@@ -308,7 +310,8 @@ const settle = async (raw) => { const r1 = await tick(raw); await tick(raw); awa
   const r1 = await tick(raw);
   ok(r1.failed === 0 && r1.error === undefined, "the tick runs without a failed case", { failed: r1.failed, error: r1.error });
   const ex = qa(raw, "SELECT pattern, err_class, rationale FROM tool_error_exclusions WHERE rationale LIKE 'TOOL-CLASSIFY-2 %' ORDER BY pattern");
-  ok(ex.map((e) => e.pattern).join("|") === "GitHub 404: Not Found|GitHub 422: No commit found for SHA|repo (owner/name) required|use fleet_graph_find", "exactly the reviewed literals of fleet_graph (1) and git_op (3) were added, none for web_fetch (surge) or github_repo_read", ex.map((e) => e.pattern));
+  ok(JSON.stringify(qa(raw, "SELECT pattern p, issue_id i FROM tool_error_exclusions ORDER BY pattern").map((x) => [x.p, x.i])) === JSON.stringify([["GitHub 404: Not Found", 6004], ["GitHub 422: No commit found for SHA", 6004], ["command exited", null], ["repo (owner/name) required", 6004], ["use fleet_graph_find", 6001]]), "the migration added a nullable issue_id: the pre-existing row keeps NULL, each added row names the issue of its case", qa(raw, "SELECT pattern p, issue_id i FROM tool_error_exclusions ORDER BY pattern"));
+    ok(ex.map((e) => e.pattern).join("|") === "GitHub 404: Not Found|GitHub 422: No commit found for SHA|repo (owner/name) required|use fleet_graph_find", "exactly the reviewed literals of fleet_graph (1) and git_op (3) were added, none for web_fetch (surge) or github_repo_read", ex.map((e) => e.pattern));
   ok(ex.every((e) => /issue 6001|issue 6004/.test(e.rationale) && /^TOOL-CLASSIFY-2 \d{4}-\d\d-\d\d \(BREACH-DOCTOR-1 TL-R03-exclude, issue \d+, rule [a-z0-9-]+\): reviewed [a-z-]+ of tool [a-z_]+/.test(e.rationale) && !e.rationale.includes("7f3a"), "each row carries a rationale built from the issue id, the rule key, the class and the tool"), ex.map((e) => e.rationale));
   ok(n(raw, "tool_error_exclusions") === exBefore + 4, "four rows added, the old row untouched");
   ok(dg(raw, 6001).state === "applied" && dg(raw, 6001).rule_id === "TL-R03-exclude" && dg(raw, 6004).state === "applied", "the cases are applied");
@@ -343,7 +346,7 @@ const settle = async (raw) => { const r1 = await tick(raw); await tick(raw); awa
     .run("e" + Math.random().toString(36).slice(2), isoAgo(ageMin), tool, JSON.stringify(status === "error" ? { error: errText, resultOk: false, ms: 5 } : { resultOk: true, ms: 5 }), status);
   const many = (raw, tool, n, status, errText, ageMin) => { for (let i = 0; i < n; i++) evn(raw, tool, status, errText, ageMin + i); };
   const tools = [
-    // [issue id, tool, error text, priority]
+    // [issue id, tool, error text, priority]: the priority order of the engine is NOT the id order
     [6001, "git_op", "GitHub 404: Not Found", "low"], [6002, "github_issue_comment", "GitHub 404: Not Found", "critical"], [6003, "github_issue_get", "GitHub 404: Not Found", "high"],
     [6004, "shell_exec", "container timeout after 120s", "medium"], [6005, "container_workspace_exec", "container timeout after 120s", "low"],
     [6006, "ops_d1_query", "D1_ERROR: unrecognized token: \"@\"", "high"], [6007, "ops_d1_write", "D1_ERROR: unrecognized token: \"@\"", "medium"]
@@ -355,45 +358,61 @@ const settle = async (raw) => { const r1 = await tick(raw); await tick(raw); awa
     }
   });
   const literalsOf = (raw) => qa(raw, "SELECT pattern FROM tool_error_exclusions WHERE rationale LIKE 'TOOL-CLASSIFY-2 %' ORDER BY pattern").map((x) => x.pattern);
-  // three tools share GitHub 404: Not Found; the case of the lowest id is not the first one the tick processes (priority order: 6002 critical, 6003 high, 6001 low)
+  const dgx = (raw, id) => q1(raw, "SELECT * FROM breach_diagnoses WHERE issue_id = ? AND rule_id = 'TL-R03-exclude' ORDER BY id DESC LIMIT 1", id);   // the exclusion case (a TL-R03-close case follows it on the same issue)
+  const failedCases = (raw) => Number(q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses WHERE state = 'failed'").n);
+  // three tools share GitHub 404: Not Found. Only the tool of the lowest issue id is named while the literal is absent, whatever the engine's priority order (6002 is critical, 6001 low).
   const raw = mkShared(tools.slice(0, 3));
-  ok(JSON.stringify(hitIds(raw, "TL-R03-exclude")) === "[6001,6002,6003]", "(fixture) three tools that share a reviewed literal all hit the rule in one tick", hitIds(raw, "TL-R03-exclude"));
+  ok(JSON.stringify(hitIds(raw, "TL-R03-exclude")) === "[6001]", "REGRESSION: of three tools that share an absent reviewed literal only the one of the lowest issue id is named (the others would insert nothing and fail no-rows)", hitIds(raw, "TL-R03-exclude"));
   const r1 = await tick(raw);
-  ok(r1.failed === 0 && r1.acted === 3 && [6001, 6002, 6003].every((i) => dg(raw, i).state === "applied"), "REGRESSION: three tools sharing one literal, all with a case in one tick, are all applied (the second case used to fail no-rows)", { failed: r1.failed, acted: r1.acted, states: [6001, 6002, 6003].map((i) => dg(raw, i).state + "/" + dg(raw, i).error_code) });
-  ok(literalsOf(raw).join("|") === "GitHub 404: Not Found|GitHub 422: No commit found for SHA|repo (owner/name) required", "the shared literal is excluded once, with the rationale of the case that processed it first, and git_op's other two literals are added", literalsOf(raw));
-  ok(/issue 6002,/.test(q1(raw, "SELECT rationale r FROM tool_error_exclusions WHERE pattern = 'GitHub 404: Not Found'").r), "the first case processed (critical, 6002) wrote the row");
-  await tick(raw); const r3 = await tick(raw);
-  ok([6001, 6002, 6003].every((i) => dg(raw, i).state === "verified" && dg(raw, i).verify_passes === 2) && r3.failed === 0, "all three verify: verify reads that the tool's literals are excluded, not who wrote them", [6001, 6002, 6003].map((i) => dg(raw, i).state));
-  ok(Number(q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses WHERE state = 'failed'").n) === 0, "no case failed in four ticks, so the rule is not demoted and no self issue is filed");
-  ok(qa(raw, "SELECT 1 FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").length === 0 && pb(raw, "TL-R03-exclude").mode === "on", "no BREACH-DOCTOR-1 self issue and the rule is still on");
-  await tick(raw);
-  ok([6001, 6002, 6003].every((i) => st(raw, i).status === "closed"), "once the literals are excluded TL-R03-close closes all three issues", [6001, 6002, 6003].map((i) => st(raw, i).status));
-  // all seven tools (the rule acts on 4 a tick): no case fails over the ticks it takes, the shared literals are each excluded once, and every issue ends closed
+  ok(r1.failed === 0 && r1.acted === 1 && dgx(raw, 6001).state === "applied" && dgx(raw, 6001).rule_id === "TL-R03-exclude", "the first tick applies the one case and fails none", { failed: r1.failed, acted: r1.acted, s: dgx(raw, 6001).state });
+  ok(literalsOf(raw).join("|") === "GitHub 404: Not Found|GitHub 422: No commit found for SHA|repo (owner/name) required", "it adds all three literals of git_op, the shared one once", literalsOf(raw));
+  ok(hitIds(raw, "TL-R03-exclude").length === 0, "afterwards the sharing tools are no hit: their errors are classed by the literal that exists");
+  await tick(raw); await tick(raw); await tick(raw);
+  ok(dgx(raw, 6001).state === "verified" && failedCases(raw) === 0 && qa(raw, "SELECT 1 FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").length === 0 && pb(raw, "TL-R03-exclude").mode === "on", "the case verifies, no case failed in four ticks, no self issue is filed and the rule is still on", [dgx(raw, 6001).state, failedCases(raw)]);
+  ok([6001, 6002, 6003].every((i) => st(raw, i).status === "closed"), "TL-R03-close then closes all three issues: no unexcluded error of the three tools is left", [6001, 6002, 6003].map((i) => st(raw, i).status));
+  // a deferred tool that has a literal of its own still gets its case, one tick later, and its insert changes a row
+  const rawD = world((r) => {
+    ins(r, 6006, "TOOL-FAILURE: ops_d1_write [error]", { source: "cloud_ops_events:evt-a", priority: "low" }); many(r, "ops_d1_write", 3, "error", "D1_ERROR: unrecognized token: \"@\"", 400); many(r, "ops_d1_write", 37, "ok", "", 420);
+    ins(r, 6007, "TOOL-FAILURE: ops_d1_query [error]", { source: "cloud_ops_events:evt-b", priority: "critical" }); many(r, "ops_d1_query", 3, "error", "D1_ERROR: unrecognized token: \"@\"", 400); many(r, "ops_d1_query", 3, "error", "D1_ERROR: near x: syntax error at offset 9", 410); many(r, "ops_d1_query", 34, "ok", "", 430);
+  });
+  ok(JSON.stringify(hitIds(rawD, "TL-R03-exclude")) === "[6006]", "(fixture) the D1 tools share two absent literals: the lower id (ops_d1_write 6006) is named, ops_d1_query 6007 is deferred although it has a literal of its own", hitIds(rawD, "TL-R03-exclude"));
+  const d1 = await tick(rawD);
+  ok(d1.failed === 0 && dgx(rawD, 6006).state === "applied" && JSON.stringify(hitIds(rawD, "TL-R03-exclude")) === "[6007]", "tick 1 applies 6006; now 6007 is named for the literal only it has (the syntax error)", { failed: d1.failed, hits: hitIds(rawD, "TL-R03-exclude") });
+  const d2 = await tick(rawD);
+  ok(d2.failed === 0 && dgx(rawD, 6007).state === "applied" && dgx(rawD, 6007).rule_id === "TL-R03-exclude" && literalsOf(rawD).includes(": syntax error at offset") && q1(rawD, "SELECT issue_id i FROM tool_error_exclusions WHERE pattern = ': syntax error at offset'").i === 6007 && q1(rawD, "SELECT issue_id i FROM tool_error_exclusions WHERE pattern = 'D1_ERROR: unrecognized token'").i === 6006, "tick 2 applies 6007: its insert adds the literal it owns and leaves the shared ones to 6006", { failed: d2.failed, s: dgx(rawD, 6007).state });
+  await tick(rawD); await tick(rawD);
+  ok(dgx(rawD, 6006).state === "verified" && dgx(rawD, 6007).state === "verified" && failedCases(rawD) === 0, "both verify", [dgx(rawD, 6006).state, dgx(rawD, 6007).state]);
+  // all seven tools: three sharing groups; the first tick names the lowest id of each group, no tick fails a case, every issue ends closed
   const raw7 = mkShared(tools);
-  const r7a = await tick(raw7), r7b = await tick(raw7);
-  ok(r7a.failed === 0 && r7a.acted === 4 && r7b.failed === 0, "seven tools sharing GitHub 404, container timeout and two D1 literals: the first tick applies 4 cases (max_per_tick), neither tick fails one", { a: [r7a.acted, r7a.failed], b: [r7b.acted, r7b.failed] });
-  for (let i = 0; i < 4; i++) await tick(raw7);
-  ok(Number(q1(raw7, "SELECT COUNT(*) n FROM breach_diagnoses WHERE state = 'failed'").n) === 0 && qa(raw7, "SELECT 1 FROM breach_diagnoses WHERE rule_id = 'TL-R03-exclude' AND state = 'verified'").length >= 4, "after six ticks no case failed and every case that was applied is verified", qa(raw7, "SELECT issue_id, state, error_code FROM breach_diagnoses WHERE rule_id = 'TL-R03-exclude'"));
-  ok(["GitHub 404: Not Found", "container timeout after", "D1_ERROR: unrecognized token"].every((l) => literalsOf(raw7).filter((x) => x === l).length === 1), "each shared literal is excluded once", literalsOf(raw7));
+  ok(JSON.stringify(hitIds(raw7, "TL-R03-exclude")) === "[6001,6004,6006]", "seven tools in three sharing groups (GitHub 404, container timeout, the D1 literals): the first tick names the lowest id of each group", hitIds(raw7, "TL-R03-exclude"));
+  const r7a = await tick(raw7);
+  ok(r7a.failed === 0 && r7a.acted === 3, "and applies three cases, none failed", { a: r7a.acted, f: r7a.failed });
+  for (let i = 0; i < 5; i++) await tick(raw7);
+  ok(failedCases(raw7) === 0 && ["GitHub 404: Not Found", "container timeout after", "D1_ERROR: unrecognized token"].every((l) => literalsOf(raw7).filter((x) => x === l).length === 1), "after six ticks no case failed and each shared literal is excluded once", qa(raw7, "SELECT issue_id, state, error_code FROM breach_diagnoses WHERE rule_id = 'TL-R03-exclude'"));
   ok(tools.every(([id]) => st(raw7, id).status === "closed"), "and all seven tool issues are closed by TL-R03-close once their errors are classed", tools.map(([id]) => st(raw7, id).status));
-  // the verify is about the outcome: the literal another case added counts; a reverted literal does not
-  ok(verify(raw, "TL-R03-exclude", 6001).observed === "ok" && verify(raw, "TL-R03-exclude", 6002).observed === "ok" && verify(raw, "TL-R03-exclude", 6003).observed === "ok", "verify of every sharing tool reads ok on the literal one case wrote");
+  // the row names the issue whose case added it; the revert renames those rows only
+  const owners = () => JSON.stringify(qa(raw, "SELECT pattern p, issue_id i FROM tool_error_exclusions WHERE rationale LIKE 'TOOL-CLASSIFY-2 %' ORDER BY pattern").map((x) => [x.p, x.i]));
+  ok(owners() === JSON.stringify([["GitHub 404: Not Found", 6001], ["GitHub 422: No commit found for SHA", 6001], ["repo (owner/name) required", 6001]]), "issue_id records the case that added each row", owners());
+  ok(verify(raw, "TL-R03-exclude", 6001).observed === "ok", "verify reads ok on the literals");
+  raw.prepare("UPDATE tool_error_exclusions SET rationale = 'MANUAL: kept by a session' WHERE pattern = 'GitHub 404: Not Found'").run();
+  ok(verify(raw, "TL-R03-exclude", 6001).observed === "ok", "verify reads the outcome, not who wrote the row: a literal a session kept under its own rationale still counts");
+  raw.prepare("UPDATE tool_error_exclusions SET rationale = 'TOOL-CLASSIFY-2 2026-10-26 (BREACH-DOCTOR-1 TL-R03-exclude, issue 6001, rule gh404-git-op): reviewed' WHERE pattern = 'GitHub 404: Not Found'").run();
   revertRule(raw, "TL-R03-exclude", 6002);
-  ok(verify(raw, "TL-R03-exclude", 6002).observed === "exclusion-missing" && verify(raw, "TL-R03-exclude", 6003).observed === "exclusion-missing" && verify(raw, "TL-R03-exclude", 6001).observed === "exclusion-missing", "after the revert of the case that wrote the shared literal the sharing tools read exclusion-missing: the pattern is renamed and matches nothing");
-  // the action alone: an upsert that changes no value still counts its rows, so the engine never reads a second case of a shared literal as no-rows
-  const r = mkShared(tools.slice(3, 5));
-  await tick(r);
-  ok(dg(r, 6004).state === "applied" && dg(r, 6005).state === "applied", "(fixture) the container pair is applied in one tick", [dg(r, 6004).state, dg(r, 6005).state]);
-  r.prepare("UPDATE breach_diagnoses SET state = 'queued' WHERE issue_id IN (6004, 6005)").run();      // the state the engine runs the action in (the statement joins the case it is queued for)
-  const ch = (iss) => { let c = 0; for (const stt of JSON.parse(pb(r, "TL-R03-exclude").action_sql)) c += Number(r.prepare(stt).run(iss).changes); return c; };
-  ok(ch(6004) >= 1 && ch(6005) >= 1, "run again, the action of each case counts the rows of the literals that exist", [ch(6004), ch(6005)]);
-  ok(qa(r, "SELECT 1 FROM tool_error_exclusions WHERE rationale LIKE 'TOOL-CLASSIFY-2 %'").length === 1 && q1(r, "SELECT err_class c FROM tool_error_exclusions WHERE pattern = 'container timeout after'").c === "infra-artifact", "and rewrites nothing: still one row, same class");
-  // the surge guard still holds for a shared literal: a surge tool gets no exclusion even if a quiet tool shares the literal and was processed in the same tick
+  ok(literalsOf(raw).length === 3, "a revert bound to an issue that added nothing renames nothing (issue_id = ?1)");
+  revertRule(raw, "TL-R03-exclude", 6001);
+  ok(literalsOf(raw).length === 0 && q1(raw, "SELECT COUNT(*) n FROM tool_error_exclusions WHERE pattern LIKE 'TOOL-CLASSIFY-2-REVERTED %' AND issue_id = 6001").n === 3 && verify(raw, "TL-R03-exclude", 6001).observed === "exclusion-missing", "the revert of 6001 renames its three rows (each keeps its issue_id) and verify then reads exclusion-missing");
+  // the surge guard still holds for a shared literal
   const rawG = world((x) => {
     ins(x, 6301, "TOOL-FAILURE: git_op [error]", { source: "cloud_ops_events:evt-a" }); many(x, "git_op", 2, "error", "GitHub 404: Not Found", 400); many(x, "git_op", 38, "ok", "", 420);
     ins(x, 6302, "TOOL-FAILURE: github_issue_get [error]", { source: "cloud_ops_events:evt-b" }); many(x, "github_issue_get", 15, "error", "GitHub 404: Not Found", 60); many(x, "github_issue_get", 5, "ok", "", 80);
   });
   ok(JSON.stringify(hitIds(rawG, "TL-R03-exclude")) === "[6301]", "the surge guard is per tool: the tool in a surge (15 of 20 calls in 6 hours) is not named, the quiet tool that shares its literal is", hitIds(rawG, "TL-R03-exclude"));
+  // a surge tool does not hold back a quiet tool of a lower id by "sharing": only eligible tools defer others
+  const rawH = world((x) => {
+    ins(x, 6401, "TOOL-FAILURE: github_issue_get [error]", { source: "cloud_ops_events:evt-a" }); many(x, "github_issue_get", 15, "error", "GitHub 404: Not Found", 60); many(x, "github_issue_get", 5, "ok", "", 80);
+    ins(x, 6402, "TOOL-FAILURE: git_op [error]", { source: "cloud_ops_events:evt-b" }); many(x, "git_op", 2, "error", "GitHub 404: Not Found", 400); many(x, "git_op", 38, "ok", "", 420);
+  });
+  ok(JSON.stringify(hitIds(rawH, "TL-R03-exclude")) === "[6402]", "a tool in a surge (lower id 6401) is not eligible and so does not defer the quiet tool (6402) that shares its literal", hitIds(rawH, "TL-R03-exclude"));
 }
 
 // ---- TL-R07 secret change observed (shipped in measure: the evidence measures one clause of three)
