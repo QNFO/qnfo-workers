@@ -136,11 +136,14 @@ const guardActive = dayAgo(1) >= "2026-10-27";
   // q08 yesterday above its allowance: only judged from 2026-10-28 (the first complete day under the new budget)
   w.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, neurons) VALUES (?, 'q08-signal-engine', 'binding', 'm', 10, 70000)").run(dayAgo(1));
   const held = probe(w, 1000193);
-  if (guardActive) ok(held.observed === "lever not holding: q08 spent 70000 neurons on the last complete UTC day, allowance 60000", "from 2026-10-28 a q08 day above 60000 reads as a lever that does not hold", held);
+  if (guardActive) ok(held.observed === "lever not holding: q08 spent 70000 neurons on the last complete UTC day, allowance 66000", "from 2026-10-28 a q08 day above 66000 reads as a lever that does not hold", held);
   else ok(held.observed === gap.observed, "before 2026-10-28 the previous day (spent under the old budget) is not judged", held);
   // the same query with the date guard moved back proves the branch itself
   const early = q1(w, contract(w, 1000193).verify_probe.replace("'2026-10-27'", "'2000-01-01'"));
-  ok(early.observed === "lever not holding: q08 spent 70000 neurons on the last complete UTC day, allowance 60000", "the not-holding branch reads the day of ai_call_counters (guard date moved back)", early);
+  ok(early.observed === "lever not holding: q08 spent 70000 neurons on the last complete UTC day, allowance 66000", "the not-holding branch reads the day of ai_call_counters (guard date moved back)", early);
+  // the allowance edge of the spend: 66000 (60000 plus the 10 percent burst of the pace) passes, 66001 does not
+  const edgeProbe = (n) => { w.prepare("DELETE FROM ai_call_counters").run(); w.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, neurons) VALUES (?, 'q08-signal-engine', 'binding', 'm', 10, ?)").run(dayAgo(1), n); return q1(w, contract(w, 1000193).verify_probe.replace("'2026-10-27'", "'2000-01-01'")).observed; };
+  ok(edgeProbe(66000) === gap.observed && edgeProbe(66001).startsWith("lever not holding"), "the spend edge: 66000 on the last complete day passes, 66001 does not");
   w.prepare("DELETE FROM ai_call_counters").run();
   w.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, neurons) VALUES (?, 'q08-signal-engine', 'binding', 'm', 10, 55000)").run(dayAgo(1));
   w.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, neurons) VALUES (?, 'qnfo-ops', 'binding', 'm', 10, 900000)").run(dayAgo(1));
