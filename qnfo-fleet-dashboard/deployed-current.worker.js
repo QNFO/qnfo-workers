@@ -7269,7 +7269,7 @@ async function humanView(env, st, ctx) {
     return !i.receipt;
   });
   // OWNER-QUEUE-IDENTITY-ONLY-1 (owner 2026-10-26: "Why do so many things need me? I'm not doing any of them."): a parked code task or an
-  // issue-loop dispatch is fleet work (HUMAN-ITEMS-AUTOMATIC-1; the managers' hourly tick supersedes or re-plans it, MANAGEMENT-PERSONAS-4).
+  // issue-loop dispatch is fleet work (HUMAN-ITEMS-AUTOMATIC-1; BREACH-ONE-MEANING-1 (PR 4444) returns it to the fleet as failed at birth).
   // It is listed apart as "The fleet is handling", never in the count, the banner or the area queues.
   const fleetHandling = h.items.filter(function(i) {
     return FLEET_HANDLED_SOURCES.indexOf(i.source) >= 0;
@@ -8017,7 +8017,7 @@ function humanFragment(v) {
   }
   // OWNER-QUEUE-IDENTITY-ONLY-1: fleet work the owner can read about but is never asked to do.
   if (v.fleet_handling && v.fleet_handling.count) {
-    o.push('<details class="card up" id="fleet-handling"><summary>The fleet is handling <span class="ct">' + e(v.fleet_handling.count) + '</span></summary><p class="meta">Parked code tasks and issue-loop items. The managers supersede or re-plan each one within the hour; none of these needs you.</p><ul>');
+    o.push('<details class="card up" id="fleet-handling"><summary>The fleet is handling <span class="ct">' + e(v.fleet_handling.count) + '</span></summary><p class="meta">Parked code tasks and issue-loop items. The fleet re-plans each one; none of these needs you.</p><ul>');
     for (const it of v.fleet_handling.items) o.push("<li><b>" + e(String(it.title || "").slice(0, 140)) + "</b> <span class=\"meta\">" + e(String(it.source || "")) + "</span></li>");
     o.push("</ul></details>");
   }
