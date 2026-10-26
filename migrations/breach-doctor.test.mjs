@@ -183,7 +183,10 @@ ok(wm.split("\n").filter((l) => l.startsWith("code-task: ")).join() === "code-ta
 const wmAnchor = wm.split("\n").find((l) => l.startsWith("code-anchor: ")).slice(13);
 ok(dashSrc.split(wmAnchor).length === 2, "its code-anchor occurs exactly once in qnfo-fleet-dashboard/worker.js", wmAnchor);
 const wmProbeLine = wm.split("\n").find((l) => l.startsWith("code-probe: ")).slice(12), wmProbe = JSON.parse(wmProbeLine);
-ok(wmProbe.paths.join() === "qnfo-fleet-dashboard/worker.js" && wmProbe.contains === 'key: "breach-doctor"' && !dashSrc.includes(wmProbe.contains), "its code-probe names a text main does not hold yet (the probe cannot already pass), and not a Diagnose panel that merely reads the ledger");
+// BREACH-DOCTOR-WATCHMAKER-1 landed in qnfo-fleet-dashboard 1.71.3 (agent_issues 1000398): the first form of this check required the text to be absent from main so the probe could not already pass at filing;
+// it now accepts the two states the probe can legitimately be in. Absent: the probe fails, as filed. Present: the text occurs exactly once and inside WATCHMAKER_OPS (the entry the issue asks for), never in a Diagnose panel that merely reads the ledger.
+const wmOps = dashSrc.slice(dashSrc.indexOf("var WATCHMAKER_OPS = ["), dashSrc.indexOf("function wmIso(v) {"));
+ok(wmProbe.paths.join() === "qnfo-fleet-dashboard/worker.js" && wmProbe.contains === 'key: "breach-doctor"' && (!dashSrc.includes(wmProbe.contains) || (dashSrc.split(wmProbe.contains).length === 2 && wmOps.includes(wmProbe.contains))), "its code-probe names the WATCHMAKER_OPS key text: absent from main (the probe cannot already pass) or present exactly once inside WATCHMAKER_OPS, and never a Diagnose panel that merely reads the ledger");
 const cWm = contract("WATCHMAKER");
 ok(cWm.verify_transport === "code-read" && cWm.verify_probe === wmProbeLine && cWm.status === "active" && cWm.module === "code-probe-line-v1", "its contract is the code-read contract the code-probe trigger would write, and equals the description line", cWm);
 const kw = cx.__RT_WRITE_KW;
