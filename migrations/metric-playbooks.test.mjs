@@ -26,6 +26,10 @@ const src = readFileSync(workerPath, "utf8");
 const sql = readFileSync(here("./2026-10-26-metric-playbooks.sql"), "utf8");
 const doctor = readFileSync(here("./2026-10-26-breach-doctor.sql"), "utf8");
 const doctorFix = readFileSync(here("./2026-10-26-breach-doctor-fix.sql"), "utf8");
+// MD-P1B-REANCHOR-1: a lever whose first code task merged without satisfying its probe is re-anchored by a later migration (its old anchor is then gone from the
+// worker by design). That file is read here so a re-anchored lever is not reported as an orphan; md-p1b-reanchor.test.mjs proves the new anchors.
+let reanchorSql = "";
+try { reanchorSql = readFileSync(here("./2026-10-26-md-p1b-reanchor.sql"), "utf8"); } catch (e) { reanchorSql = ""; }
 const engineTest = readFileSync(here("../qnfo-fleet-control/breach-doctor.test.mjs"), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 600))); } };
@@ -314,7 +318,9 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
     const lands = k === "contains" ? count(text) >= 1 : count(text) === 0;
     ok(anchor.length > 15 && text.length >= 8, keyOf(r) + ": the anchor is a real line and the probe text is not trivial");
     // the lever is open: the anchor is one line of the file. Once the code loop lands the edit the probe passes and the anchor may have moved, and this suite must stay green on that merge.
-    if (!process.env.BD_WORKER_PATH) ok(count(anchor) === 1 || lands, keyOf(r) + ": the code-anchor occurs exactly once in qnfo-fleet-control/worker.js (or the lever has landed and its probe passes)", count(anchor));
+    // MD-P1B-REANCHOR-1: an anchor that is gone (0 occurrences) is accepted only when a later migration names it as replaced; two or more occurrences always fail.
+    const reanchored = count(anchor) === 0 && reanchorSql.includes("'code-anchor: " + anchor + "'");
+    if (!process.env.BD_WORKER_PATH) ok(count(anchor) === 1 || lands || reanchored, keyOf(r) + ": the code-anchor occurs exactly once in qnfo-fleet-control/worker.js (or the lever has landed and its probe passes, or 2026-10-26-md-p1b-reanchor.sql re-anchored it)", count(anchor));
     const c = contract(r);
     ok(c && c.verify_transport === "code-read" && c.status === "active" && JSON.stringify(JSON.parse(c.verify_probe)) === JSON.stringify(probe), keyOf(r) + ": the code-read contract carries the probe of the issue text and is the closing probe of the code part", c);
   }
