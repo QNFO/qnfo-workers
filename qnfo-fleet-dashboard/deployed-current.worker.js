@@ -10,7 +10,8 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.62.0";
+var VERSION = "1.63.0";
+/* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
 /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
@@ -2291,7 +2292,7 @@ var AREA_REGISTRY = [
   { id: "autonomy", name: "Autonomy loop", short: "Autonomy", what: "how the fleet works on itself: issues, the code loop, remedies, dispatches, the owner queue", sources: ["v_metric_trigger_state", "metric_history", "agent_issues", "code_tasks", "human_actions"],
     rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/, star: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
     root: { key: "remedy_efficacy_30d", explains: ["fix_hold_rate_30d"] },
-    flows: ["issues", "code"], widgets: ["controls"], controls: ["owner_queue_delegated"], pages: [],
+    flows: ["issues", "code"], widgets: ["controls"], controls: ["owner_queue_delegated"], pages: [{ key: "managers", label: "Managers", href: "/managers", feed: "/api/managers" }],
     queue: { sources: ["code-loop", "issue-loop", "objectives", "register", "gtd"], rx: null } },
   { id: "reliability", name: "Reliability and security", short: "Reliability", what: "whether it stays up and honest: guards, probes, drift, cron cadence, failure modes", sources: ["v_metric_trigger_state", "metric_history", "fleet probes"],
     rx: /guard|github_app|spof|runtime_verified|probe|drift|cadence_overdue|failure_mode|roster|blocker|dangling|cron_|deploy_|false_stops|security|sla_breach/, star: { key: "guard_rcs", label: "Guards failing", unit: "", good: "down" },
@@ -2445,6 +2446,7 @@ var API_INDEX = [
   { path: "/api/attention", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "attention/v1", cache: "public 15s, ETag", freshness: "the daily attention scorecard", what: "Human attention per channel, verdicts, shares and graded decisions." },
   { path: "/api/kpi", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-kpi/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "qnfo-audit read at request time", what: "The Metrics tab: issues, reach, posts, Buffer, subscribers." },
   { path: "/api/architecture", area: "platform", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "fleet-architecture/v1", cache: "public 15s, ETag (5 min in isolate memory)", freshness: "the fleet code and live topology graph (qnfo-graph), the service registry, the heartbeats and the cron table, read at request time", what: "The fleet's model of itself: workers, layers, bindings, schedules, who reads and writes what, how a change ships, who may do what, and what the model cannot see. /api/architecture/worker/<name>, /table/<name> and /impact/<worker> answer one thing; ?q=<text> searches." },
+  { path: "/api/managers", area: "autonomy", source: "live", lag_s: 3600, method: "GET", auth: "open", schema_version: "fleet-managers/v1", cache: "public 15s, ETag", freshness: "the hourly management-personas tick (:35); read live from D1", what: "What the portfolio manager and each program manager decided this hour: focus slots per program, the constraint, each program's focus issues, doer gaps and the focus moves of the last 24 hours." },
   { path: "/api/content", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "content-pipeline/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "v_content_pipeline, living-paper, q08-signal", what: "The content production line end to end." },
   { path: "/api/changelog", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
   { path: "/api/ga4", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
@@ -2916,6 +2918,12 @@ if (path === "/health") {
       return { error: reachErr(e) };
     });
     return json(rP);
+  }
+  // MANAGEMENT-PERSONAS-1 (1.63.0): the portfolio and program manager decisions, open and read-only (OPEN-ACCESS-1).
+  if ((path === "/managers" || path === "/managers/" || path === "/api/managers") && request.method === "GET") {
+    const mv = await managersView(env);
+    if (path === "/api/managers") return rtRead(request, url, mv, { schema: "fleet-managers/v1" });
+    return new Response(managersHtml(mv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
   }
   if (path === "/api/portfolio/latest") {
     const notesL = await d1all(env.AUDIT, "SELECT day, program_code, manager_persona, verdict, risk_score, top_actions, narrative, roadmap_now, roadmap_next, roadmap_later, goals_adopted, goals_completed FROM program_review_notes ORDER BY day DESC, program_code LIMIT 12").catch(function() { return []; });
@@ -14186,6 +14194,76 @@ async function psrReview(env, day) {
   }), decisions, needs, narrative_allowed: narrativeAllowed };
 }
 __name(psrReview, "psrReview");
+
+// ==== MANAGEMENT-PERSONAS-1 (1.63.0, 2026-10-26): the managers page ====
+// The decisions are made in D1 by the hourly fleet_tasks workflow management-personas (migrations/2026-10-26-management-personas.sql):
+// the portfolio manager splits the focus slots across programs (portfolio_allocations), each program manager picks its focus issues
+// (program_focus) and moves them to the front of the code loop's queue, and each persona writes a plain brief (persona_briefs).
+// This page only reads them. A table that cannot be read is named in `unavailable`, never shown as an empty decision.
+async function managersView(env) {
+  const out = { ok: true, schema_version: "fleet-managers/v1", tick: null, portfolio: null, programs: [], focus_moves_24h: [], history: [], unavailable: [] };
+  const read = async function(name, sql, params) {
+    try {
+      return await d1all(env.AUDIT, sql, params || []);
+    } catch (e) {
+      out.unavailable.push(name);
+      return [];
+    }
+  };
+  const t = await read("portfolio_allocations", "SELECT MAX(tick) AS tick FROM portfolio_allocations");
+  out.tick = t[0] && t[0].tick || null;
+  if (!out.tick) return out;
+  const briefs = await read("persona_briefs", "SELECT persona_key, level, scope, verdict, decision, summary FROM persona_briefs WHERE tick = ?1", [out.tick]);
+  const alloc = await read("portfolio_allocations", "SELECT program_code, manager_persona, verdict, risk_score, risk_24h, open_issues, slots, decision, reason FROM portfolio_allocations WHERE tick = ?1 ORDER BY risk_score DESC, program_code", [out.tick]);
+  const focus = await read("program_focus", "SELECT f.program_code, f.issue_id, f.rank, f.reason, f.has_doer, f.entered_at, i.title, i.priority FROM program_focus f LEFT JOIN agent_issues i ON i.id = f.issue_id ORDER BY f.program_code, f.rank");
+  out.focus_moves_24h = await read("program_focus_log", "SELECT ts, program_code, issue_id, action, reason FROM program_focus_log WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 40");
+  out.history = await read("portfolio_allocations", "SELECT tick, program_code, verdict, risk_score, slots, decision FROM portfolio_allocations WHERE tick >= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY tick DESC, program_code");
+  const pb = briefs.find(function(b) { return b.level === "portfolio"; });
+  out.portfolio = pb ? { persona: pb.persona_key, verdict: pb.verdict, summary: pb.summary } : null;
+  for (const a of alloc) {
+    const b = briefs.find(function(x) { return x.scope === a.program_code && x.level === "program"; });
+    out.programs.push({
+      program_code: a.program_code, persona: a.manager_persona, verdict: a.verdict, risk: a.risk_score, risk_24h: a.risk_24h,
+      open_issues: a.open_issues, slots: a.slots, decision: a.decision, reason: a.reason, brief: b ? b.summary : null,
+      focus: focus.filter(function(f) { return f.program_code === a.program_code; }).map(function(f) {
+        return { issue_id: f.issue_id, rank: f.rank, title: f.title, priority: f.priority, why: f.reason, has_doer: f.has_doer === 1, since: f.entered_at };
+      })
+    });
+  }
+  out.unavailable = out.unavailable.filter(function(x, i, arr) { return arr.indexOf(x) === i; });
+  return out;
+}
+__name(managersView, "managersView");
+
+function managersHtml(v, holder) {
+  const vcls = function(x) { return x === "RED" ? "bad" : x === "AMBER" ? "warn" : "good"; };
+  const css = "<style>.mg-hero{font-size:15.5px;line-height:1.6;max-width:95ch;margin:0 0 18px}.mg-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}.mg-p h2{font-size:18px;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mg-p .mg-why{font-size:13.5px;color:var(--muted);margin:0 0 10px}.mg-p ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.5}.mg-p li{margin:0 0 4px}.mg-nd{color:var(--red);font-weight:600}.mg-b{font-size:13px;line-height:1.55;color:var(--muted);margin:10px 0 0}.mg-t{width:100%;border-collapse:collapse;font-size:13px}.mg-t td,.mg-t th{padding:4px 8px;border-bottom:1px solid var(--rule);text-align:left}.good{color:var(--teal)}.warn{color:#b7791f}.bad{color:var(--red)}</style>";
+  const head = fleetHead("Portfolio and program managers") + css + fleetTop("managers", false, holder);
+  let body = '<main class="wrap fl" style="max-width:1180px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Portfolio and program managers</h1>';
+  body += '<p class="meta" style="margin:0 0 14px;max-width:95ch">Every hour the portfolio manager decides how the fleet\'s attention is split across the five programs and which one is the constraint; each program manager then picks its focus issues inside that share and moves them to the front of the code loop\'s queue. This page shows what they decided' + (v.tick ? ' at <b>' + esc(v.tick) + '</b>' : '') + '. Feed: <a href="/api/managers">/api/managers</a>.</p>';
+  if (v.unavailable && v.unavailable.length) body += '<p class="bad">Could not read: ' + esc(v.unavailable.join(", ")) + '.</p>';
+  if (!v.tick) return head + body + '<p>The first management tick has not run yet (hourly at :35).</p></main></body></html>';
+  if (v.portfolio) body += '<section class="card mg-hero"><h2 style="margin:0 0 6px">Portfolio manager <span class="tag ' + vcls(v.portfolio.verdict) + '">' + esc(v.portfolio.verdict) + '</span></h2>' + esc(v.portfolio.summary) + '</section>';
+  body += '<div class="mg-grid">';
+  for (const p of v.programs) {
+    const items = p.focus.map(function(f) {
+      return '<li><b>#' + esc(String(f.issue_id)) + '</b> ' + esc(f.title || "(issue not readable)") + ' <span class="meta">' + esc(f.priority || "") + ', ' + esc(f.why || "") + '</span>' + (f.has_doer ? '' : ' <span class="mg-nd">no doer yet</span>') + '</li>';
+    }).join("");
+    body += '<section class="card mg-p"><h2>' + esc(p.program_code) + ' <span class="tag ' + vcls(p.verdict) + '">' + esc(p.verdict) + '</span><span class="tag">' + esc(p.decision) + '</span><span class="tag">' + esc(String(p.slots)) + ' focus</span></h2>';
+    body += '<p class="mg-why">Risk ' + esc(String(p.risk)) + (p.risk_24h != null ? ' (24 h ago ' + esc(String(p.risk_24h)) + ')' : '') + ', ' + esc(String(p.open_issues)) + ' open. ' + esc(p.reason || "") + '</p>';
+    body += items ? '<ol>' + items + '</ol>' : '<p class="meta">No focus issues.</p>';
+    if (p.brief) body += '<p class="mg-b">' + esc(p.brief) + '</p>';
+    body += '</section>';
+  }
+  body += '</div>';
+  if (v.focus_moves_24h.length) {
+    body += '<section class="card" style="margin-top:16px"><h2 style="font-size:18px;margin:0 0 8px">Focus moves, last 24 hours</h2><table class="mg-t"><tr><th>When</th><th>Program</th><th>Issue</th><th>Move</th><th>Why</th></tr>';
+    for (const m of v.focus_moves_24h) body += '<tr><td>' + esc(String(m.ts || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(m.program_code) + '</td><td>#' + esc(String(m.issue_id)) + '</td><td>' + esc(m.action) + '</td><td>' + esc(m.reason || "") + '</td></tr>';
+    body += '</table></section>';
+  }
+  return head + body + '</main></body></html>';
+}
+__name(managersHtml, "managersHtml");
 
 async function portfolioStrategicRun(env, opts) {
   opts = opts || {};
