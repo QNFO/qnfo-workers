@@ -1347,7 +1347,7 @@ async function psRoadmap(env, out, projects) {
       /* Out of scope and still not done in D1: not a verification, so no completed close and no evidence block. */
       await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Closed by PORTFOLIO-NOT-ISSUES-1: roadmap item " + tsRedact(l.item) + " (source `" + tsRedact(l.source) + "`) is a catalogue, twin or registry entry, not work that closing can finish. It stays in qnfo-audit.roadmap_implementation (the roadmap, the Projects board and the public /roadmap tree) and is tracked there; metric breaches are tracked by their METRIC-TRIGGER issue. This is not a verification." });
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: "not_planned" });
-      if (r.status === 200) { out.roadmap_closed++; out.roadmap_scoped_closed = (out.roadmap_scoped_closed || 0) + 1; }
+      if (r.status >= 200 && r.status < 300) { out.roadmap_closed++; out.roadmap_scoped_closed = (out.roadmap_scoped_closed || 0) + 1; }
     } else {
       await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Verified in qnfo-audit (roadmap " + tsRedact(l.item) + ": status **" + l.status + "**). Evidence:\n\n" + tsFence(l.evidence || "(none recorded)", 3000) });
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "retired" ? "not_planned" : "completed" });
