@@ -33,6 +33,12 @@ Live state (read 2026-10-05): `qnfo-identity.owner_client_keys` has one `active`
 (issued 2026-10-04 09:14-09:15Z, verified 200 the same minute) and ideas; the earlier rows are `superseded`.
 Without a key, `ai.qnfo.org` and `me.q08.org` (formerly `personal.qnfo.org`) answer 401 and `fleet.qnfo.org/api/owner/keys` answers 403.
 
+Read again 2026-10-26 (agent_issues 1000068, one request per route, no key sent): `me.q08.org/v1/chat/completions` answers 401 and its `/v1/models` lists
+only the model id `personal`; `ideas.qnfo.org/api/intake` answers 401; `fleet.qnfo.org/api/owner/keys` answers 403. **`ai.qnfo.org/v1/chat/completions`
+no longer answers 401: a keyless request gets 200 in the public read mode (response header `x-ops-access: public-read`, the mode `ops.qnfo.org` documents),**
+so the sentence above holds only for `me.q08.org`. That is consistent with OPEN-ACCESS-1 (reads are open; public AI use is capped per anonymous visitor and
+globally); the caps were not tested here.
+
 ### See your current keys
 
 Sign in on https://fleet.qnfo.org (type `login` in the command line, enter the emailed code), then open
