@@ -1041,6 +1041,11 @@ jobs:
           if [ "$EVENT" = "pull_request" ]; then BASE="origin/$BASE_REF"; else BASE="HEAD^"; fi
           files=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- 'migrations/*.sql' 2>/dev/null || true)
           if [ -n "$files" ]; then python3 scripts/apply_migrations.py --check --base "$BASE" $files; else echo "no migration changed"; fi
+      # FIRST-PASS-CLOSE-1 (2026-10-26, remediation session rem-a4): the consumer stamps the contract before it writes the pass row, so the autoclose
+      # trigger reads the pass on the first round. The offline test pins that order and ran in no workflow (agent_issues 1000500 family).
+      - name: FIRST-PASS-CLOSE-1 offline suite (scripts/remediation_consumer.py pass-row order)
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: python3 scripts/remediation_consumer_first_pass_test.py
       # BREACH-TICKET-COVERAGE-1 (2026-10-18): v_breaches_without_ticket is the second path for "a live breach must
       # have an open ticket". If its predicate is wrong the alarm reads 0 while a gap exists, so the cases that must and
       # must not alarm are asserted on synthetic rows, with the view SQL read out of the migration itself.
