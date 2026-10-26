@@ -28,6 +28,7 @@ const mk = (opts = {}) => {
     CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT);
     CREATE UNIQUE INDEX idx_agent_issues_open_title_ci ON agent_issues (lower(title)) WHERE status = 'open';
     CREATE TABLE fleet_tick (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), source TEXT);
+    CREATE TABLE fleet_tick_heavy (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), source TEXT);
     CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, status TEXT, text TEXT, job TEXT);
     CREATE TABLE fixer_marks (n INTEGER);
     INSERT INTO agent_issues (title, status) VALUES ('same title', 'open'), ('same title', 'closed');
@@ -47,6 +48,16 @@ const quiet = async (fn) => { const e = console.error; console.error = () => {};
   const { db, env } = mk({ healthy: true });
   await lib.feedFleetTick(env);
   ok(ticks(db).join() === "cron:qnfo-code-orchestrator" && marks(db) === 1 && errs(db).length === 0, "a healthy tick is written once under the old source with no error", { t: ticks(db), e: errs(db) });
+  ok(db.prepare("SELECT COUNT(*) n FROM fleet_tick_heavy").get().n === 1, "FLEET-TICK-SPLIT-1: the heavy heartbeat is written as its own statement");
+  await lib.feedFleetTick(env);
+  ok(db.prepare("SELECT COUNT(*) n FROM fleet_tick_heavy").get().n === 1, "a heavy tick younger than 9 minutes is not duplicated");
+}
+{ // FLEET-TICK-SPLIT-1: a failing heavy trigger is logged and never rolls back fleet_tick (the 2026-10-26 04:42Z-06:12Z outage shape)
+  const { db, env } = mk({ healthy: true });
+  db.exec("CREATE TRIGGER heavy_fails AFTER INSERT ON fleet_tick_heavy BEGIN SELECT RAISE(ABORT, 'out of memory: SQLITE_NOMEM'); END;");
+  await quiet(() => lib.feedFleetTick(env));
+  ok(ticks(db).join() === "cron:qnfo-code-orchestrator" && marks(db) === 1, "fleet_tick and its fixers land while the heavy step fails", ticks(db));
+  ok(errs(db).length === 1 && /^fleet_tick_heavy: .*SQLITE_NOMEM/.test(errs(db)[0]), "the heavy failure is logged as fleet-cron-tick-error", errs(db));
 }
 { // the 2026-10-18 shape: one trigger violates the unique index
   const { db, env } = mk();
