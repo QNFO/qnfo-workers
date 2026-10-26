@@ -9,8 +9,8 @@ contradicted. The chain of gates that passed it, with the event ids and timestam
 ## The detector
 
 `qnfo-cloud-ops/degenerate-text.mjs` is the source. Its block between `DEGENERATE-TEXT-BEGIN` and `DEGENERATE-TEXT-END` is copied
-byte for byte into `qnfo-cloud-ops/worker.js` (`degenerate-text.test.mjs` fails when they differ) and, by the code task
-`DEGENERATE-TEXT-PRODUCER-1`, into `qnfo-research-exec/worker.js` (`degenerate-wiring.test.mjs` reads PENDING until it is there).
+byte for byte into `qnfo-cloud-ops/worker.js` (`degenerate-text.test.mjs` fails when they differ) and, since qnfo-research-exec 0.39.0
+(`DEGENERATE-TEXT-PRODUCER-1`), into `qnfo-research-exec/worker.js` (`degenerate-wiring.test.mjs` holds the two equal).
 
 It reads markdown with fenced code, display and inline math and table rows blanked, split on whitespace. A region is degenerate when
 
@@ -36,17 +36,21 @@ about 70 million characters, all statuses): one paper flagged, this one; no fals
 * Failure-mode detector `fm-degenerate-text-published`: a published non-owner paper whose `release_gate_reason` names
   `quality:degenerate-text`.
 
-## What still has to land in the producer
+## The producer (qnfo-research-exec 0.39.0)
 
-`DEGENERATE-TEXT-PRODUCER-1`, `REVIEW-TRIAGE-CLAIM-1`, `VERIFY-AUTOCORRECT-PRECISION-1` (all `qnfo-research-exec/worker.js`): reconcile
-strips or rejects a looping draft or output instead of keeping anything over 10,000 characters; `finalGates` and `releaseGateVerdict`
-read repetition and text ahead of the first heading; publish refuses a degenerate body; the fallback title comes from `ideaTitle`,
-not the idea cut at 140 characters; review triage counts the reviewer's `claim` as the quote it is (eight true findings were
-demoted as drift); the verify autocorrection keeps the precision of the derivation it corrects. Closing probes read the markers
-`DEGENERATE-TEXT-BEGIN`, `REVIEW-TRIAGE-CLAIM-1` and `VERIFY-AUTOCORRECT-PRECISION-1` in that file.
+`DEGENERATE-TEXT-PRODUCER-1`, `REVIEW-TRIAGE-CLAIM-1` and `VERIFY-AUTOCORRECT-PRECISION-1` (agent_issues 1000535, 1000536, 1000537; all `qnfo-research-exec/worker.js`) landed together:
 
-## Re-measuring
+* The DEGENERATE-TEXT block is embedded byte for byte before `releaseGateVerdict` (`degenerate-wiring.test.mjs` is the acceptance suite). `releaseGateVerdict` gives the sweep's verdict;
+  `finalGates` raises a HARD `gate-degenerate` fix for a loop and for more than `DEGEN_PREHEADING_MAX` characters ahead of the first heading.
+* `stageReconcile` reads every writer draft and the model output (and its retry) with the detector: a loop is stripped when it is at most `DEGEN_REJECT_SHARE` (10 percent) of the text and
+  6,000 characters (draft) or 10,000 (output) remain; otherwise the draft is dropped, or the output is taken for empty so the best-leg path runs. Event `reconcile-degenerate`; when every
+  draft is a loop the row re-runs from ground ("reconcile: every writer draft is a model loop").
+* `publishStageV2` and `publishV2` refuse a degenerate body (`markError`, or `gate-blocked` with a `gov_gate_log` BLOCK row for DEGENERATE-TEXT-1); `ensurePaperRow` titles from
+  `ideaTitle`, the idea's first sentence, never the idea cut at 140 characters; `RESIDUE_PATTERNS` gain `TOPIC COMPLEXITY ASSESSMENT` and `An exceptional synthesis of your work`.
+* Review triage counts the reviewer's `claim` as the quote it is (`reviewQuotedSpans`, `reviewNorm`, `REVIEW_CLAIM_WINDOW`): a finding whose sentence is still in the paper blocks (up to
+  `REVIEW_TRIAGE_CAP`, the rest over-cap) and is never demoted as drift; a sentence edited out of the paper is still drift. `review-converge.test.mjs` replays the 8 findings of cycle 391
+  (6 block, 2 over-cap).
+* `autoCorrectNumeric` writes the computed value at the stated value's significant digits and notation, and skips a correction that moves the result of a displayed derivation by more than
+  one unit of its last digit (`1 - 0.528 = 0.472` is left for revise). The `verify-autocorrect` event records `stated_sig` and `computed_sig`. `autocorrect-precision.test.mjs`.
 
-The calibration ran in the Cloudflare API sandbox against `living-paper` (paged `SELECT ... body_md`, the detector inline). To re-run it
-after a threshold change, page `papers` by rowid four at a time and report `found`, `withdraw`, `longest` and `share` per paper; the
-detector module is pure and has no imports.
+Closing probes read the markers `DEGENERATE-TEXT-BEGIN`, `REVIEW-TRIAGE-CLAIM-1` and `VERIFY-AUTOCORRECT-PRECISION-1` in that file.

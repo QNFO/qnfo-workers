@@ -74,7 +74,19 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // stops it), the review prompt compares the Abstract and Introduction with the body (item 11), the dead 5-a-day cap of publishStage is gone, the park sweep leaves an hourly
 // park-rearm-heartbeat event and the verify stage logs verify-claims-skipped. research-cluster.test.mjs. No gate, cap or model order changes; None is added to the VERSION line below (VERSION-LINE-NOTES-1).
 // DAILY-BUDGET-SCHEDULE-1 (2026-10-25, agent_issues 100622, critical): spent=216310 vs pace=201000 held every stage from 10:11 to 12:00 UTC while two proposals and three revisions sat researching. The prorated pace now only reports; the hold is the hard daily budget. A per-round re-check stops one concurrent round from crossing the cap. The pace remains in GET /budget and the event text.
-var VERSION = "0.38.2-codeagent"; /* 0.36.7 PARK-REARM-CAP-1 (2026-10-26, agent_issues 100615 and 1000029, pillar research; patch): parkRearmTick counted a re-arm in research_queue.context.parkRearm, which the revise, review and verify stages rewrite without that key, so a revision row that parked again was re-armed again (rem-rev-b9f3a431 parked 15 times in 2880 minutes, revise-noop rounds on the same rows for days). The count is now research_queue.terminal_rearms, shared with PARKED-REGROUND-1 (TERMINAL_RECOVERY_MAX recoveries in all); after the last one the row stays parked with its reason plus PARK-REARM-EXHAUSTED-1 and one park-rearm-exhausted event. No gate, review depth or publication rule changes (the revise waiver proposed in 1000029 stays declined: a paper whose HARD findings no edit resolved is not advanced). park-rearm-cap.test.mjs. */ /* 0.36.1 PUB-ARTIFACT-SOURCE-1 (2026-10-26, pillar research, agent_issues 1000282): the RECONCILE prompt no longer requires "## Appendix A. Divergence report" and "## Appendix B. Claim attribution" (the divergence record stays in R2 as divergence-report.json) and tells the editor to name no draft and no appendix; stripInternalAppendices removes either section from the reconciled text, from the text the complete stage reads, from the draft row and from a version-queue body before publication; the reader-facing changelog no longer lists them as new sections; the review treats an appendix on the divergence or claim attribution as a HARD internal artifact. 0.36.0  RESEARCH-COST-FIRST-1 (2026-10-26, agent_issues 100211, pillar cost; minor: the worker now picks its first model by cost on its own and reverts on its own): glm-5.3-flash runs first in every stage while ops_config research_primary_model is auto, gpt-oss-120b answers an empty or rate-limited glm call, and 10 such fallbacks in 60 minutes put gpt-oss-120b back first for the hour. Measured 2026-10-26: 8 papers for 381k neurons (gpt-oss-120b 252k of the stage spend at about 740 a call) against 13k a paper on 10-09..12 with glm first. Gates unchanged. */ /* 0.35.1 PAPER-LEDGER-ATTRIBUTION-2 (2026-10-26, pillars research and autonomy): every statement of this worker that changes a column living-paper paper_change_ledger tracks (body, status, version, title, abstract, slug, doi) now sets papers.change_actor ("qnfo-research-exec:<stage>:<slug>:<clock>") and papers.change_reason in the same UPDATE or INSERT, so the ledger no longer files its edits as unattributed: the DOI reconcile, the publish paths, the version queue, the abstract fill, the draft writer, the errata correction (inlined member, errata-hub kept in step), and the claim-integrity and revision-loop restores. paper-writer.test.mjs scans every papers statement of the host and the member and fails on a new writer that skips it. 0.35.0 REPO-DEPOSIT-1 + RESEARCH-PROVENANCE-1 (2026-10-26, pillar research; minor: the worker now keeps the research record complete on its own): a run and its paper are one Git Data API commit in QNFO/qnfo-research (runs/cycle-N/<slug>/ + papers/<slug>/ with a provenance.json), retried on the new head after a refused ref update, with a blob-integrity check and a manifest read-back, so a deposit is ok only when it landed; the manifest is v2 (run id, configured models, paper hash, UTF-8 byte counts) with an RO-Crate beside it; every attempt is a research_run_ledger row; a failed deposit is retried by the 10-minute sync tick, which also restores the gaps listed in the repository's provenance/known-gaps.json (run files from R2 only if the hash equals the manifest's; paper text from living-paper) and compares a few published papers per tick with their git copy (research_repo_sync_batch). Closes: 97 of 400 deposits logged ok with an HTTP 409, 154 manifest-listed files missing from 47 runs, 48 runs without a manifest, 201 pipeline papers with no papers/<slug>/paper.md, revisions that never reached git (PUT without sha, HTTP 422), and unquoted SQL (datetime(now)) in an empty catch that left publication_artifacts at 0 GitHub rows. Until QNFO/qnfo-research carries provenance/IMPORT.json a run still goes to the legacy repository (atomically) and paper text is not written. ops_config research_repo_target / research_repo_sync / research_repo_restore switch it off without a deploy. repo-deposit.test.mjs (27 cases on a fake Git Data API). repoCatchupTick finishes the consolidation on its own: while the legacy repository has cycles that runs/ lacks, or its history is not an ancestor of main (the repository merges squash-only, which drops the imported commits), it dispatches the qnfo-research workflow ensemble-catchup.yml (at most every 6 hours) and, once none are missing, the history is linked and 3 consolidated deposits are ledgered, files one PORTFOLIO-ARCHIVE-1 request for the legacy repository (research_repo_archive = off stops it). GET /repo-ledger. */ /* 0.34.0 ERRATA-CONFIRM-COST-1 (2026-10-26, agent_issues 1000032/1000035, pillar cost; minor: the confirm rate is now a setting the fleet tunes on its own): the internal-errata confirm checks PAPER-LEARN-1 findings with deepseek-v4-flash first and kimi-k2.6 second (kimi was 33% of the shared research budget on 2026-10-25), reads a 24k-char excerpt instead of 48k, takes ops_config errata_confirm_max rows per tick (default 12, at most 48; BREACH-SELFHEAL-1 tunes it) and records which model settled each row. */ /* 0.33.3 BROKEN-BINDING-PAPERS-1 + BROKEN-BINDING-BIBLIOGRAPHY-1 (2026-10-25, remediation sweep; pillar reliability): reconcileDOIBatch read and wrote papers through env.QNFO_AUDIT, but qnfo-audit has no papers table (living-paper owns it, bound here as LIVING_PAPER), so every reconcile pass threw and DOI reconciliation had never run. The citation cross-check then queried a bibliography table that exists in neither database, raising D1_ERROR for every reference; it now probes once per run and follows RESEARCH-THROUGHPUT-1's documented skip path (logged, deterministic release gate unchanged). Found by the fleet graph sql-table-missing findings, which were real. */ /* 0.33.2 FLOOR-REARM-NOOP-1 (2026-10-25, remediation sweep of the dashboard's 59 metric breaches; pillar reliability): floorRearmTick probes sqlite_master for bak_20261019_research_parked before querying it, so the missing migration is the no-op its contract already promised instead of a D1_ERROR on every 10-minute tick (134 scheduled exceptions/day, the worker's only error class and one of the two workers behind the dashboard's "errors in the last 3h" finding). */ /* 0.32.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): publish, revision and errata SQL write and read doi only (the registrar columns are no longer touched); dead DOIs are recognised by the 10.5281 prefix. */ /* 0.31.0 COST-SUSTAIN-1 (2026-10-21, owner directive: research and publication <= $300/month all-in, quality must not drop; pillar cost): a hard daily neuron budget (ops_config research_daily_neurons, default 360000 = $3.96/day at $0.011/1k; 2026-10-09..12 ran 252-345k/day for 22-31 papers/day) paced across the UTC day (spent <= budget x (hour+1)/24 + 10% burst) gates every model-spending path of this worker and its folded members (stages, revision loop, claim-integrity sweep, reviser and thin-prior-work members): work over the pace waits for the next tick, nothing is skipped, gates and review depth are unchanged. Root cause it closes: every earlier cost control was soft (width, model order) and a throughput config raise (research_parallel 96, 2026-10-18) tripled spend to 3.5-4.2M neurons/day with nothing to stop it. Event research-budget; GET /budget. */ /* 0.29.0 RESEARCH-TERMINAL-REARMED-1 + PARKED-REGROUND-1 + NOTICE-REPAIR-SKIP-BLOCKED-1 (2026-10-20, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100026, 100043, 100049, 100051, 100153, 100165, 100274; pillar autonomy; minor: a recovery it now takes on its own): (a) every RESEARCH-TERMINAL issue gets a self-closing contract, whatever the reason: resolved when the row has left the terminal state (re-armed and back in the pipeline, or published), or parked for a content reason with the queue advancing, or when every automatic recovery is spent (terminal_rearms >= 2); a reason that can be a pipeline fault closes only on the first or last of these; markError dedupes the issue against open issues only (a row that went terminal again after its issue closed filed nothing) and upserts the contract on its class; (b) PARKED-REGROUND-1: the hourly park sweep returns up to 2 rows parked for a content or convergence failure to ground with a fresh draft, once per recovery, rows with an open issue first (park_rearm = off stops it); (d) VERIFY-ZERO-CLAIMS-1: a verify pass whose extraction found no claim in a paper with 6 or more numeric equalities logs a verify-zero-claims event (the pass itself is unchanged), measured by the fm-verify-zero-claims-quantitative detector (PAPER-LEARN-1 learning, issue 100234); (c) noticeRepairTick counts repairs, not attempts: eight papers the living-paper publish floor refuses (retracted -> published under 20,000 chars) held the batch of 8 for ever and the restorable ones behind them were never tried; a refused paper is reported as blocked and the loop goes on. terminal-rearmed.test.mjs, poison-park.test.mjs. */ /* 0.28.7 RESEARCH-TERMINAL-HARD-REVIEW-SELFCLOSE-1 (2026-10-20, agent_issues 100294 lever 1, 100290; pillar autonomy; patch): a row parked because the review found HARD findings the revise cycles did not resolve ("review: N HARD findings unresolved after M revise cycles") is the integrity gate withholding the paper, like a verify mismatch with every gate passing; its RESEARCH-TERMINAL issue now gets the same self-closing contract (parked row with its reason, queue advancing) instead of waiting for a person (14 of the last 15 closed by hand after about 54 h). "revise: no applicable edit" and every other terminal reason keep no contract and stay open for a fix, since they can be a pipeline fault. poison-park.test.mjs. */ /* 0.28.1 PROPORTIONATE-NOTICE-2 (2026-10-19): papers_fabricated_claims_open counts flags on published pipeline papers only; four flags left on the owner's papers before 0.28.0 held the metric above 0. */ /* 0.28.0 PROPORTIONATE-NOTICE-1 (2026-10-19, owner: corrections "overly aggressive ... a warning notice about trivial semantics that seems to nullify the who
+// 0.39.0 DEGENERATE-TEXT-PRODUCER-1 + REVIEW-TRIAGE-CLAIM-1 + VERIFY-AUTOCORRECT-PRECISION-1 (2026-10-26, agent_issues 1000535, 1000536 and 1000537, pillar
+// research; minor: the producer now refuses what qnfo-cloud-ops 1.41.0 withdraws): paper qnf-d66c40b5 was public with an 8,122-token model loop (the reconcile model
+// looped, its 24,586-character output passed the shorter-than-10,000-characters test, no gate read repetition and the release gate scored the loop 100), eight true
+// HARD review findings recorded as drift, and a verify autocorrection that broke a displayed derivation (1 - 0.528 = 0.46909446). The DEGENERATE-TEXT block of
+// qnfo-cloud-ops/degenerate-text.mjs is embedded byte for byte; releaseGateVerdict gives the sweep's verdict, finalGates raises gate-degenerate (HARD) for a loop
+// and for more than DEGEN_PREHEADING_MAX characters ahead of the first heading, stageReconcile strips or drops a looping writer draft or model output (event
+// reconcile-degenerate; every draft a loop re-runs from ground), publishStageV2 and publishV2 refuse a degenerate body, ensurePaperRow titles a paper from ideaTitle
+// and not from the idea cut at 140 characters, and RESIDUE_PATTERNS gain two assistant openings. The reviewer's claim counts as the quote in review triage, so a
+// finding whose sentence is still in the paper blocks (up to REVIEW_TRIAGE_CAP) and is never demoted as drift. autoCorrectNumeric writes the computed value at the
+// stated precision and skips a correction beside a displayed derivation that moves the stated value by more than one unit of its last digit. No other gate, cap or
+// budget changes. degenerate-wiring.test.mjs, review-converge.test.mjs, autocorrect-precision.test.mjs. None is added to the VERSION line below
+// (VERSION-LINE-NOTES-1).
+var VERSION = "0.39.0-codeagent"; /* 0.36.7 PARK-REARM-CAP-1 (2026-10-26, agent_issues 100615 and 1000029, pillar research; patch): parkRearmTick counted a re-arm in research_queue.context.parkRearm, which the revise, review and verify stages rewrite without that key, so a revision row that parked again was re-armed again (rem-rev-b9f3a431 parked 15 times in 2880 minutes, revise-noop rounds on the same rows for days). The count is now research_queue.terminal_rearms, shared with PARKED-REGROUND-1 (TERMINAL_RECOVERY_MAX recoveries in all); after the last one the row stays parked with its reason plus PARK-REARM-EXHAUSTED-1 and one park-rearm-exhausted event. No gate, review depth or publication rule changes (the revise waiver proposed in 1000029 stays declined: a paper whose HARD findings no edit resolved is not advanced). park-rearm-cap.test.mjs. */ /* 0.36.1 PUB-ARTIFACT-SOURCE-1 (2026-10-26, pillar research, agent_issues 1000282): the RECONCILE prompt no longer requires "## Appendix A. Divergence report" and "## Appendix B. Claim attribution" (the divergence record stays in R2 as divergence-report.json) and tells the editor to name no draft and no appendix; stripInternalAppendices removes either section from the reconciled text, from the text the complete stage reads, from the draft row and from a version-queue body before publication; the reader-facing changelog no longer lists them as new sections; the review treats an appendix on the divergence or claim attribution as a HARD internal artifact. 0.36.0  RESEARCH-COST-FIRST-1 (2026-10-26, agent_issues 100211, pillar cost; minor: the worker now picks its first model by cost on its own and reverts on its own): glm-5.3-flash runs first in every stage while ops_config research_primary_model is auto, gpt-oss-120b answers an empty or rate-limited glm call, and 10 such fallbacks in 60 minutes put gpt-oss-120b back first for the hour. Measured 2026-10-26: 8 papers for 381k neurons (gpt-oss-120b 252k of the stage spend at about 740 a call) against 13k a paper on 10-09..12 with glm first. Gates unchanged. */ /* 0.35.1 PAPER-LEDGER-ATTRIBUTION-2 (2026-10-26, pillars research and autonomy): every statement of this worker that changes a column living-paper paper_change_ledger tracks (body, status, version, title, abstract, slug, doi) now sets papers.change_actor ("qnfo-research-exec:<stage>:<slug>:<clock>") and papers.change_reason in the same UPDATE or INSERT, so the ledger no longer files its edits as unattributed: the DOI reconcile, the publish paths, the version queue, the abstract fill, the draft writer, the errata correction (inlined member, errata-hub kept in step), and the claim-integrity and revision-loop restores. paper-writer.test.mjs scans every papers statement of the host and the member and fails on a new writer that skips it. 0.35.0 REPO-DEPOSIT-1 + RESEARCH-PROVENANCE-1 (2026-10-26, pillar research; minor: the worker now keeps the research record complete on its own): a run and its paper are one Git Data API commit in QNFO/qnfo-research (runs/cycle-N/<slug>/ + papers/<slug>/ with a provenance.json), retried on the new head after a refused ref update, with a blob-integrity check and a manifest read-back, so a deposit is ok only when it landed; the manifest is v2 (run id, configured models, paper hash, UTF-8 byte counts) with an RO-Crate beside it; every attempt is a research_run_ledger row; a failed deposit is retried by the 10-minute sync tick, which also restores the gaps listed in the repository's provenance/known-gaps.json (run files from R2 only if the hash equals the manifest's; paper text from living-paper) and compares a few published papers per tick with their git copy (research_repo_sync_batch). Closes: 97 of 400 deposits logged ok with an HTTP 409, 154 manifest-listed files missing from 47 runs, 48 runs without a manifest, 201 pipeline papers with no papers/<slug>/paper.md, revisions that never reached git (PUT without sha, HTTP 422), and unquoted SQL (datetime(now)) in an empty catch that left publication_artifacts at 0 GitHub rows. Until QNFO/qnfo-research carries provenance/IMPORT.json a run still goes to the legacy repository (atomically) and paper text is not written. ops_config research_repo_target / research_repo_sync / research_repo_restore switch it off without a deploy. repo-deposit.test.mjs (27 cases on a fake Git Data API). repoCatchupTick finishes the consolidation on its own: while the legacy repository has cycles that runs/ lacks, or its history is not an ancestor of main (the repository merges squash-only, which drops the imported commits), it dispatches the qnfo-research workflow ensemble-catchup.yml (at most every 6 hours) and, once none are missing, the history is linked and 3 consolidated deposits are ledgered, files one PORTFOLIO-ARCHIVE-1 request for the legacy repository (research_repo_archive = off stops it). GET /repo-ledger. */ /* 0.34.0 ERRATA-CONFIRM-COST-1 (2026-10-26, agent_issues 1000032/1000035, pillar cost; minor: the confirm rate is now a setting the fleet tunes on its own): the internal-errata confirm checks PAPER-LEARN-1 findings with deepseek-v4-flash first and kimi-k2.6 second (kimi was 33% of the shared research budget on 2026-10-25), reads a 24k-char excerpt instead of 48k, takes ops_config errata_confirm_max rows per tick (default 12, at most 48; BREACH-SELFHEAL-1 tunes it) and records which model settled each row. */ /* 0.33.3 BROKEN-BINDING-PAPERS-1 + BROKEN-BINDING-BIBLIOGRAPHY-1 (2026-10-25, remediation sweep; pillar reliability): reconcileDOIBatch read and wrote papers through env.QNFO_AUDIT, but qnfo-audit has no papers table (living-paper owns it, bound here as LIVING_PAPER), so every reconcile pass threw and DOI reconciliation had never run. The citation cross-check then queried a bibliography table that exists in neither database, raising D1_ERROR for every reference; it now probes once per run and follows RESEARCH-THROUGHPUT-1's documented skip path (logged, deterministic release gate unchanged). Found by the fleet graph sql-table-missing findings, which were real. */ /* 0.33.2 FLOOR-REARM-NOOP-1 (2026-10-25, remediation sweep of the dashboard's 59 metric breaches; pillar reliability): floorRearmTick probes sqlite_master for bak_20261019_research_parked before querying it, so the missing migration is the no-op its contract already promised instead of a D1_ERROR on every 10-minute tick (134 scheduled exceptions/day, the worker's only error class and one of the two workers behind the dashboard's "errors in the last 3h" finding). */ /* 0.32.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): publish, revision and errata SQL write and read doi only (the registrar columns are no longer touched); dead DOIs are recognised by the 10.5281 prefix. */ /* 0.31.0 COST-SUSTAIN-1 (2026-10-21, owner directive: research and publication <= $300/month all-in, quality must not drop; pillar cost): a hard daily neuron budget (ops_config research_daily_neurons, default 360000 = $3.96/day at $0.011/1k; 2026-10-09..12 ran 252-345k/day for 22-31 papers/day) paced across the UTC day (spent <= budget x (hour+1)/24 + 10% burst) gates every model-spending path of this worker and its folded members (stages, revision loop, claim-integrity sweep, reviser and thin-prior-work members): work over the pace waits for the next tick, nothing is skipped, gates and review depth are unchanged. Root cause it closes: every earlier cost control was soft (width, model order) and a throughput config raise (research_parallel 96, 2026-10-18) tripled spend to 3.5-4.2M neurons/day with nothing to stop it. Event research-budget; GET /budget. */ /* 0.29.0 RESEARCH-TERMINAL-REARMED-1 + PARKED-REGROUND-1 + NOTICE-REPAIR-SKIP-BLOCKED-1 (2026-10-20, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100026, 100043, 100049, 100051, 100153, 100165, 100274; pillar autonomy; minor: a recovery it now takes on its own): (a) every RESEARCH-TERMINAL issue gets a self-closing contract, whatever the reason: resolved when the row has left the terminal state (re-armed and back in the pipeline, or published), or parked for a content reason with the queue advancing, or when every automatic recovery is spent (terminal_rearms >= 2); a reason that can be a pipeline fault closes only on the first or last of these; markError dedupes the issue against open issues only (a row that went terminal again after its issue closed filed nothing) and upserts the contract on its class; (b) PARKED-REGROUND-1: the hourly park sweep returns up to 2 rows parked for a content or convergence failure to ground with a fresh draft, once per recovery, rows with an open issue first (park_rearm = off stops it); (d) VERIFY-ZERO-CLAIMS-1: a verify pass whose extraction found no claim in a paper with 6 or more numeric equalities logs a verify-zero-claims event (the pass itself is unchanged), measured by the fm-verify-zero-claims-quantitative detector (PAPER-LEARN-1 learning, issue 100234); (c) noticeRepairTick counts repairs, not attempts: eight papers the living-paper publish floor refuses (retracted -> published under 20,000 chars) held the batch of 8 for ever and the restorable ones behind them were never tried; a refused paper is reported as blocked and the loop goes on. terminal-rearmed.test.mjs, poison-park.test.mjs. */ /* 0.28.7 RESEARCH-TERMINAL-HARD-REVIEW-SELFCLOSE-1 (2026-10-20, agent_issues 100294 lever 1, 100290; pillar autonomy; patch): a row parked because the review found HARD findings the revise cycles did not resolve ("review: N HARD findings unresolved after M revise cycles") is the integrity gate withholding the paper, like a verify mismatch with every gate passing; its RESEARCH-TERMINAL issue now gets the same self-closing contract (parked row with its reason, queue advancing) instead of waiting for a person (14 of the last 15 closed by hand after about 54 h). "revise: no applicable edit" and every other terminal reason keep no contract and stay open for a fix, since they can be a pipeline fault. poison-park.test.mjs. */ /* 0.28.1 PROPORTIONATE-NOTICE-2 (2026-10-19): papers_fabricated_claims_open counts flags on published pipeline papers only; four flags left on the owner's papers before 0.28.0 held the metric above 0. */ /* 0.28.0 PROPORTIONATE-NOTICE-1 (2026-10-19, owner: corrections "overly aggressive ... a warning notice about trivial semantics that seems to nullify the who
 // Ensure errata remediation rows are never claimed
 if (typeof claimRows === "function") {
   const _origClaimRows = claimRows;
@@ -512,6 +524,26 @@ __name22(cleanTitle, "cleanTitle");
 __name222(cleanTitle, "cleanTitle");
 __name2222(cleanTitle, "cleanTitle");
 __name22222(cleanTitle, "cleanTitle");
+// DEGENERATE-TEXT-PRODUCER-1 (0.39.0, agent_issues 1000535): a research idea reads "Title. Claim: ..." or "Title. The author conjectures ..." (a title sentence, then the claim), so a title made by cutting the
+// idea at 140 characters carried the Claim clause and stopped mid-word (paper qnf-d66c40b5). The title is the idea's first sentence: it stops at a full stop that opens the next sentence (". Claim:" included),
+// at a question or exclamation mark followed by a capital, or at an em dash, never contains "Claim:", is at most 140 characters cut at a word boundary, and is never empty.
+function ideaTitle(idea) {
+  var s = String(idea == null ? "" : idea).replace(/\s+/g, " ").trim();
+  var cm = /\bclaim\s*:\s*/i.exec(s);
+  if (cm) s = cm.index === 0 ? s.slice(cm[0].length) : s.slice(0, cm.index).trim();
+  var re = /([.!?])\s+(?=[A-Z0-9“"'(\[])|\s*—\s*/g, m, title = s;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index >= 12) { title = s.slice(0, m.index) + (m[1] === "?" || m[1] === "!" ? m[1] : ""); break; }
+  }
+  var trim = function(t) { return t.replace(/^[\s.,;:\-–—"'()\[\]]+/, "").replace(/[\s.,;:\-–—(\[]+$/, ""); };
+  title = trim(title);
+  if (title.length > 140) {
+    var head = title.slice(0, 141), sp = head.lastIndexOf(" ");
+    title = trim(sp >= 40 ? head.slice(0, sp) : title.slice(0, 140));
+  }
+  return title || "QNFO research paper";
+}
+__name(ideaTitle, "ideaTitle");
 function cleanAbstract(md) {
   // ABSTRACT-BACKFILL-1: the abstract ends at the next heading or rule (the old 2000-char slice ran on into the Introduction).
   const m = String(md || "").match(/##\s*Abstract\s*\n\s*([\s\S]{60,2000}?)(?=\n#{1,4}\s|\n---\s*\n|\n\*\*Keywords|$)/i);
@@ -851,6 +883,143 @@ function stripInternalAppendices(md) {
   if (!removed) return text;
   return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + "\n";
 }
+// DEGENERATE-TEXT-BEGIN
+// DEGENERATE-TEXT-1 (2026-10-26, pillar research): deterministic detector for degenerate model output (a token or phrase repeated back to back, a
+// near-periodic low-entropy loop), for text ahead of the first heading and for fragment titles. Copy of qnfo-cloud-ops/degenerate-text.mjs.
+var DEGEN_RUN_MIN = 16;
+var DEGEN_GRAM_MAX = 12;
+var DEGEN_GRAM_REPS = 6;
+var DEGEN_GRAM_SPAN = 36;
+var DEGEN_WINDOW = 160;
+var DEGEN_WINDOW_DISTINCT = 14;
+var DEGEN_WITHDRAW_SPAN = 200;
+var DEGEN_WITHDRAW_SHARE = 0.05;
+var DEGEN_PREHEADING_MAX = 1500;
+function degenBlank(md) {
+  var NLc = String.fromCharCode(10);
+  var blank = function(m) { return m.replace(/[^\n]/g, " "); };
+  var s = String(md == null ? "" : md).replace(/```[\s\S]*?```/g, blank).replace(/~~~[\s\S]*?~~~/g, blank).replace(/\$\$[\s\S]*?\$\$/g, blank).replace(/\\\[[\s\S]*?\\\]/g, blank).replace(/\\\([\s\S]*?\\\)/g, blank).replace(/\$[^$\n]{1,400}\$/g, blank);
+  return s.split(NLc).map(function(line) { return /^\s*\|/.test(line) ? line.replace(/[^\n]/g, " ") : line; }).join(NLc);
+}
+function degenTokens(s) {
+  var re = /\S+/g, m, out = [];
+  while ((m = re.exec(s)) !== null) {
+    var t = m[0].toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    out.push({ t: t, a: /\p{L}/u.test(t), s: m.index, e: m.index + m[0].length });
+  }
+  return out;
+}
+function degenMerge(spans) {
+  spans.sort(function(x, y) { return x[0] - y[0] || x[1] - y[1]; });
+  var out = [];
+  for (var i = 0; i < spans.length; i++) {
+    var last = out.length ? out[out.length - 1] : null;
+    if (last && spans[i][0] <= last[1]) { if (spans[i][1] > last[1]) last[1] = spans[i][1]; }
+    else out.push([spans[i][0], spans[i][1]]);
+  }
+  return out;
+}
+function degenRuns(tok) {
+  var T = tok.length, spans = [];
+  for (var n = 1; n <= DEGEN_GRAM_MAX; n++) {
+    var i = 0;
+    while (i + n < T) {
+      if (tok[i].t !== tok[i + n].t) { i++; continue; }
+      var j = i;
+      while (j + n < T && tok[j].t === tok[j + n].t) j++;
+      var span = j - i + n, reps = Math.floor(span / n), alpha = 0, seen = Object.create(null), distinct = 0;
+      for (var k = i; k < i + n; k++) {
+        if (tok[k].a) alpha++;
+        if (!seen[tok[k].t]) { seen[tok[k].t] = 1; distinct++; }
+      }
+      var hit = n === 1 ? (span >= DEGEN_RUN_MIN && alpha === 1) : (reps >= DEGEN_GRAM_REPS && span >= DEGEN_GRAM_SPAN && alpha >= 1 && distinct >= 2);
+      if (hit) spans.push([i, j + n]);
+      i = j + 1;
+    }
+  }
+  return spans;
+}
+function degenWindows(tok) {
+  var A = [], spans = [];
+  for (var i = 0; i < tok.length; i++) if (tok[i].a) A.push(i);
+  if (A.length < DEGEN_WINDOW) return spans;
+  var cnt = Object.create(null), distinct = 0;
+  for (var k = 0; k < A.length; k++) {
+    var t = tok[A[k]].t;
+    if (!cnt[t]) { cnt[t] = 1; distinct++; } else cnt[t]++;
+    if (k >= DEGEN_WINDOW) { var o = tok[A[k - DEGEN_WINDOW]].t; cnt[o]--; if (cnt[o] === 0) distinct--; }
+    if (k >= DEGEN_WINDOW - 1 && distinct <= DEGEN_WINDOW_DISTINCT) spans.push([A[k - DEGEN_WINDOW + 1], A[k] + 1]);
+  }
+  return spans;
+}
+function degenTrim(tok, span) {
+  // A window region reaches up to DEGEN_WINDOW_DISTINCT real tokens past a loop's edge. The loop's own vocabulary is the tokens that occur four
+  // times or more inside the region; its extent is the first to the last run of eight alphabetic tokens that all belong to that vocabulary.
+  var a = span[0], b = span[1], cnt = Object.create(null), pos = [], k;
+  for (k = a; k < b; k++) if (tok[k].a) { cnt[tok[k].t] = (cnt[tok[k].t] || 0) + 1; pos.push(k); }
+  var inV = pos.map(function(p) { return cnt[tok[p].t] >= 4; });
+  var firstBlock = -1, lastBlock = -1, run = 0;
+  for (k = 0; k < pos.length; k++) {
+    run = inV[k] ? run + 1 : 0;
+    if (run >= 8) { if (firstBlock < 0) firstBlock = k - 7; lastBlock = k; }
+  }
+  if (firstBlock < 0) return span;
+  var lo = firstBlock, hi = lastBlock;
+  while (lo > 0 && inV[lo - 1]) lo--;
+  while (hi + 1 < pos.length && inV[hi + 1]) hi++;
+  return [pos[lo], pos[hi] + 1];
+}
+function degenerateTextScan(md) {
+  var tok = degenTokens(degenBlank(md));
+  var wins = degenMerge(degenWindows(tok)).map(function(w) { return degenTrim(tok, w); });
+  var merged = degenMerge(degenRuns(tok).concat(wins)), T = tok.length, covered = 0, longest = 0, cuts = [];
+  for (var i = 0; i < merged.length; i++) {
+    var len = merged[i][1] - merged[i][0];
+    covered += len;
+    if (len > longest) longest = len;
+    cuts.push([tok[merged[i][0]].s, tok[merged[i][1] - 1].e]);
+  }
+  var share = T ? covered / T : 0;
+  var found = merged.length > 0;
+  var withdraw = found && (longest >= DEGEN_WITHDRAW_SPAN || share >= DEGEN_WITHDRAW_SHARE);
+  var sample = found ? String(md).slice(cuts[0][0], Math.min(cuts[0][1], cuts[0][0] + 40)).replace(/\s+/g, " ").trim() : "";
+  var reason = found ? "degenerate-text " + covered + " of " + T + " tokens repeat (" + Math.round(share * 1000) / 10 + "%), longest " + longest + ", from \"" + sample + "\"" : "";
+  return { found: found, withdraw: withdraw, tokens: T, degenerateTokens: covered, longest: longest, share: share, regions: merged.length, cuts: cuts, reason: reason };
+}
+function degenerateTextStrip(md) {
+  var src = String(md == null ? "" : md);
+  var scan = degenerateTextScan(src);
+  if (!scan.found) return { text: src, removedChars: 0, scan: scan };
+  var out = "", pos = 0;
+  for (var i = 0; i < scan.cuts.length; i++) {
+    var from = scan.cuts[i][0], to = scan.cuts[i][1];
+    // a loop that fills its line (nine tenths or more) takes the few words ahead of it and after it on that line
+    var ls = src.lastIndexOf("\n", from - 1) + 1, le = src.indexOf("\n", to);
+    if (le < 0) le = src.length;
+    if ((to - from) >= 0.9 * (le - ls)) { from = ls; to = le; }
+    if (from < pos) from = pos;
+    out += src.slice(pos, from);
+    pos = to;
+  }
+  out += src.slice(pos);
+  out = out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  return { text: out, removedChars: src.length - out.length, scan: scan };
+}
+function preHeadingText(md) {
+  var s = String(md == null ? "" : md).replace(/^\uFEFF/, "");
+  var fm = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(s);
+  var from = fm ? fm[0].length : 0;
+  var h = /^#{1,6}[ \t]+\S/m.exec(s.slice(from));
+  var pre = h ? s.slice(from, from + h.index).trim() : "";
+  return { chars: pre.length, head: pre.slice(0, 80), hasHeading: !!h };
+}
+function titleDefects(title) {
+  var t = String(title == null ? "" : title).trim(), out = [];
+  if (/[.!?]\s+claim\s*:\s/i.test(t)) out.push("claim-prefix");
+  if (t.length > 100 && /\s[a-z]$/.test(t)) out.push("single-letter-tail");
+  return out;
+}
+// DEGENERATE-TEXT-END
 function releaseGateVerdict(md) {
   const NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
   const litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review)", "i");
@@ -858,6 +1027,11 @@ function releaseGateVerdict(md) {
   const axRe = new RegExp("(?:arxiv[.]org/|arXiv:[" + NLc + TBc + " ]*[0-9]{4}[.][0-9]{4,5})", "gi");
   const tableRe = new RegExp("^[" + NLc + TBc + " ]*[|][-:| ]+[|]", "m");
   md = String(md || "");
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): the length term below counts a model loop as text (the 2026-10-26 "Te Te Te" paper scored 100), so repetition is read first and
+  // the verdict equals the one qnfo-cloud-ops pub-gate-v5-degenerate gives (fail-closed.test.mjs holds the parity): a withdrawal-class region fails the gate with its reason, a shorter stutter is repetition.
+  const dgScan = degenerateTextScan(md);
+  if (dgScan.withdraw) return { pass: 0, reason: ("quality:" + dgScan.reason).slice(0, 220) };
+  if (dgScan.found) return { pass: 0, reason: ("quality:repetition " + dgScan.degenerateTokens + " of " + dgScan.tokens + " tokens in " + dgScan.regions + " region(s), longest " + dgScan.longest).slice(0, 220) };
   const len = md.length;
   const lit = litRe.test(md) ? 1 : 0;
   const refs = (md.match(doiRe) || []).length + (md.match(axRe) || []).length;
@@ -2345,6 +2519,16 @@ async function publishV2(env, row) {
     } catch (eSg) {
     }
     return { ok: false, stage: "gate", error: sGate.reason };
+  }
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): a revision or first deposit whose body scans degenerate (a model loop) is blocked before any publication path, like a malformed one.
+  var dGate = degenerateTextScan(String(row.corrected_md || ""));
+  if (dGate.found) {
+    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'degenerate-text-gate', 'BLOCK', ?, 'DEGENERATE-TEXT-1', 'qnfo-research-exec', 'P1')").bind(String(dGate.reason).slice(0, 300)).run();
+    } catch (eDg) {
+    }
+    return { ok: false, stage: "gate", error: String(dGate.reason).slice(0, 300) };
   }
   if (String(env.QUALITY_GATE_OFF || "") !== "1") {
     var gate = qualityGate(row, minLen, minRefs);
@@ -5229,7 +5413,10 @@ var RESIDUE_PATTERNS = [
   /\bHere(?:'s| is) (?:the|a|your) (?:revised|reconciled|updated|full|complete|final|rewritten) (?:paper|version|draft|manuscript)\b/i,
   /\bI (?:have|'ve) (?:revised|rewritten|updated|corrected) the (?:paper|draft|manuscript)\b/i,
   /\bmy (?:knowledge|training) cut-?off\b/i,
-  /\blet me know if you\b/i
+  /\blet me know if you\b/i,
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): two published papers carried assistant text ahead of the first heading (a-unified-framework-for-superdeterminism-neurobiology-and-the-mechanics-of-human-meaning, psychogenic-doctrine-of-geopolitical-conflict).
+  /^\s*\*{0,2}TOPIC COMPLEXITY ASSESSMENT\b/im,
+  /\bAn exceptional synthesis of your work\b/i
 ];
 function chatbotResidue(paper) {
   var s = String(paper || "");
@@ -5404,6 +5591,12 @@ function reviewBibliography(grounding) {
 // calls as it needs, so reconcile now passes on a draft that is long enough to be a paper and leaves the finishing to it. Only a
 // draft shorter than RECONCILE_MIN_DRAFT_CHARS (a thin answer, not a cut paper) is still refused.
 var RECONCILE_MIN_DRAFT_CHARS = 8e3;
+// DEGENERATE-TEXT-PRODUCER-1 (0.39.0, agent_issues 1000535, pillar research): the reconcile model of paper qnf-d66c40b5 looped ("Te Te Te", 24,586 characters) and the test above ("shorter than
+// 10,000 characters") kept it as the paper, because a loop is long. A writer draft or the model output that scans degenerate is stripped (degenerateTextStrip) and kept when the loop is at most
+// DEGEN_REJECT_SHARE of it and DEGEN_DRAFT_MIN_CHARS (draft) or DEGEN_OUTPUT_MIN_CHARS (model output) remain; otherwise it is dropped and the existing paths run: the next draft, the best leg, a re-run from ground.
+var DEGEN_REJECT_SHARE = 0.1;
+var DEGEN_DRAFT_MIN_CHARS = 6e3;
+var DEGEN_OUTPUT_MIN_CHARS = 1e4;
 function reconcileDraftGate(contract) {
   if (contract && contract.complete) return { proceed: true, incomplete: false };
   if (contract && Number(contract.bodyChars || 0) >= RECONCILE_MIN_DRAFT_CHARS) return { proceed: true, incomplete: true };
@@ -5442,15 +5635,28 @@ if (draftGate.incomplete) {
   // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
   // join. A draft joins only when its grounding fingerprint (draft-N.fp) matches draft-0's; a draft with no sidecar is kept.
   const fp0 = String(await r2Get(env, String(row.id) + "/draft-0.fp") || "").trim();
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): every writer draft and the model output pass through this one reader before anything is kept (see DEGEN_REJECT_SHARE).
+  let dgRejected = 0;
+  const dgClean = async function(label, text, minKeep) {
+    const src = String(text == null ? "" : text);
+    if (!degenerateTextScan(src).found) return { text: src, action: "clean" };
+    const cut = degenerateTextStrip(src);
+    const share = src.length ? cut.removedChars / src.length : 0;
+    const reject = share > DEGEN_REJECT_SHARE || cut.text.length < minKeep;
+    await logEvent(env, "reconcile-degenerate", "row=" + row.id + " " + label + " " + (reject ? "rejected" : "stripped") + ", " + src.length + " -> " + (reject ? 0 : cut.text.length) + " chars, loop " + Math.round(share * 1000) / 10 + "% of it: " + cut.scan.reason, "warn");
+    return { text: reject ? "" : cut.text, action: reject ? "rejected" : "stripped" };
+  };
   for (let i = 0; i < 3; i++) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
     if (!d) continue;
     const fpi = String(await r2Get(env, String(row.id) + "/draft-" + i + ".fp") || "").trim();
     if (i > 0 && fp0 && fpi && fpi !== fp0) continue;
-    parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d);
+    const dg = await dgClean("draft-" + i, d, DEGEN_DRAFT_MIN_CHARS);
+    if (dg.action === "rejected") { dgRejected++; continue; }
+    parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + dg.text);
   }
   if (parts.length < 1) {
-    await markError(env, row, "reconcile: drafts missing");
+    await markError(env, row, dgRejected ? "reconcile: every writer draft is a model loop" : "reconcile: drafts missing");
     return { ok: false, stage: "reconcile" };
   }
   // CLAIM-LEDGER-1: align per-writer claim ledgers; single-source claims are flagged for verify, not voted away.
@@ -5472,11 +5678,15 @@ if (draftGate.incomplete) {
     const ledgerNote = "CLAIM LEDGER READER: the following quantitative claim ledger was extracted from the writer drafts. Single-source claims (seen in only one draft) must either be dropped, rewritten with citation support, or survive into the reconciled paper to be verified separately. Prefer consensus claims and flag retained single-source claims.\n" + JSON.stringify(ledger, null, 2).slice(0, 4e3);
     const _rc0 = Date.now();
     let reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + ledgerNote + "\n\n" + parts.join("\n\n"), 3e4);
+    // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): a model loop is long, so it passed the length test below as a reconciled paper; a looping output is stripped or, past DEGEN_REJECT_SHARE or under
+    // DEGEN_OUTPUT_MIN_CHARS left, taken for empty, which sends the stage to the retry and then the best leg.
+    reconciled = (await dgClean("model output", reconciled, DEGEN_OUTPUT_MIN_CHARS)).text;
     // REVISE-WALL-1: a first attempt that ran past 120 s hit the timeout class (Workers AI 3046 at about 240 s, or the gateway's
     // 240 s abort); an identical retry would too and costs the stage's wall budget, so degrade to the best leg directly.
     if ((!reconciled || reconciled.length < 1e4) && Date.now() - _rc0 < 12e4) {
       // RECONCILE-RETRY-1 (2026-09-29): one bounded retry before the best-leg degrade.
       let _rc2 = await gwCall(env, RECONCILE_PROMPT + "\n\n" + ledgerNote + "\n\n" + parts.join("\n\n") + "\n\nIMPORTANT: output the COMPLETE reconciled paper in full. Do not summarize and do not truncate.", 3e4);
+      _rc2 = (await dgClean("retry output", _rc2, DEGEN_OUTPUT_MIN_CHARS)).text;
       if (_rc2 && _rc2.length > (reconciled ? reconciled.length : 0)) reconciled = _rc2;
     }
     if (!reconciled || reconciled.length < 1e4) {
@@ -5538,26 +5748,47 @@ __name2222(stageReconcile, "stageReconcile");
 // text edit (more experiments, more data, wider scope) because the patch reviser can never apply it.
 // ops_config research_review_triage = off restores the previous behaviour without a deploy.
 var REVIEW_TRIAGE_CAP = 6;
+// REVIEW-TRIAGE-CLAIM-1 (0.39.0, agent_issues 1000536, pillar research): the review prompt makes the reviewer put the offending sentence in `claim`, verbatim and without quote marks, but reviewStillPresent
+// only looked for spans between quote marks (in the claim and the reason), so a finding whose reason held no quote had nothing to find, counted as gone, and was demoted as drift from cycle 1 on: the 8 true HARD
+// findings of paper qnf-d66c40b5 (cycle 391: a stated gap of 2 x 10^4 against 92 in Equation 5, a 75 percent claim its own analysis contradicts, five citations used without their full text) were recorded as SOFT
+// while each sentence was still in the paper, and it published. Now the claim itself counts as the quote (16 characters or more), the comparison ignores what a model changes when it copies a sentence (case, spacing,
+// Unicode hyphens U+2010 to U+2015 and the minus sign, curly quotes, doubled LaTeX backslashes, markdown emphasis marks and dollar signs), and a window of REVIEW_CLAIM_WINDOW characters of a longer claim also counts
+// (the reviewer may add a location before the sentence or write its mathematics another way). A finding whose claim is still in the paper blocks, up to REVIEW_TRIAGE_CAP, and the rest are over-cap, never drift;
+// a claim that was edited out of the paper is still demoted as drift, so the review keeps converging.
+var REVIEW_CLAIM_WINDOW = 60;
+function reviewNorm(s) {
+  return String(s == null ? "" : s).replace(/[\u2010-\u2015\u2212]/g, "-").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\\\\/g, "\\").replace(/[*_~$]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+__name(reviewNorm, "reviewNorm");
 function reviewFindingSig(f) {
   const q = String(f && (f.claim || f.reason) || "").replace(/[\`"'\u201c\u201d\u2018\u2019]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
   return String(f && f.id || "?") + "|" + q.slice(0, 140);
 }
 __name(reviewFindingSig, "reviewFindingSig");
 function reviewQuotedSpans(f) {
-  const t = String(f && (f.claim || "") || "") + " " + String(f && f.reason || "");
+  const claim = String(f && (f.claim || "") || "");
+  const t = claim + " " + String(f && f.reason || "");
   const out = [];
   const re = /["\u201c\`']([^"\u201d\`']{16,400})["\u201d\`']/g;
   let m;
   while ((m = re.exec(t)) !== null) out.push(m[1]);
+  // REVIEW-TRIAGE-CLAIM-1: the claim is the verbatim sentence, so it is a quote in its own right.
+  if (claim.trim().length >= 16) out.push(claim);
   return out;
 }
 __name(reviewQuotedSpans, "reviewQuotedSpans");
 function reviewStillPresent(f, paper) {
   const spans = reviewQuotedSpans(f);
-  const body = String(paper || "").replace(/\s+/g, " ");
+  const body = reviewNorm(paper);
   for (let i = 0; i < spans.length; i++) {
-    const q = spans[i].replace(/\s+/g, " ").trim();
-    if (q.length >= 16 && body.indexOf(q) >= 0) return true;
+    const q = reviewNorm(spans[i]);
+    if (q.length < 16) continue;
+    if (body.indexOf(q) >= 0) return true;
+    // REVIEW-TRIAGE-CLAIM-1: a claim longer than the window is also present when any window of it (the first 600 characters, every 12) is in the paper.
+    for (let k = 0; q.length > REVIEW_CLAIM_WINDOW && k + REVIEW_CLAIM_WINDOW <= Math.min(q.length, 600 + REVIEW_CLAIM_WINDOW); k += 12) {
+      if (body.indexOf(q.slice(k, k + REVIEW_CLAIM_WINDOW)) >= 0) return true;
+    }
+    if (q.length > REVIEW_CLAIM_WINDOW && body.indexOf(q.slice(-REVIEW_CLAIM_WINDOW)) >= 0) return true;
   }
   return false;
 }
@@ -6130,6 +6361,12 @@ function adjudicationMd(adj) {
 // string (plain scientific notation) or as an unambiguous bare mantissa (LaTeX/\times 10^N notation, with the
 // exponent required to match the computed value's). Anything ambiguous is skipped and left to the existing revise
 // path. Every correction is logged as a verify-autocorrect event and appended to verification.md for audit.
+// VERIFY-AUTOCORRECT-PRECISION-1 (0.39.0, agent_issues 1000537, pillar research): the correction wrote the script's value at full precision wherever the stated value was unique, whatever stood beside it. Paper qnf-d66c40b5
+// derived 0.99^63 as 0.528 and stated "1 - 0.528 = 0.472"; the script's 0.46909446 replaced the result only, so the published line read "1 - 0.528 = 0.46909446", false on its face (verify-autocorrect of
+// 2026-10-26T02:43:00Z, claim Q14), and four more corrections in 72 hours added four or more digits (2.60 to 2.617914). Now the replacement is the computed value written with the significant digits and the notation
+// of the stated one (the precision the adjudication already compares at), and when the stated value is the result of a displayed derivation (an equals sign touches it and numbers stand on its other side) a correction that moves it by more than
+// one unit of its last digit is skipped as ambiguous: the numbers shown beside it would contradict it by more than their own rounding, so the mismatch goes to revise, which can change the derivation as well.
+// Each applied correction records the precision of both values (stated_sig, computed_sig).
 function autoCorrectNumeric(paper, adj, claims) {
   const out = { changed: false, paper: String(paper || ""), applied: [], skipped: [] };
   if (!adj || !Array.isArray(adj.rows)) return out;
@@ -6138,6 +6375,48 @@ function autoCorrectNumeric(paper, adj, claims) {
     if (!m) return null;
     const ip = m[2] || "0", fp = m[3] || "";
     return { mant: (fp ? ip + "." + fp : ip), exp: m[4] || "0" };
+  };
+  // The computed value written with the significant digits and the notation of the stated one; null when that cannot be done.
+  const atStated = function(computed, stated) {
+    const cl = numLit(computed), sl = numLit(stated);
+    if (!cl || !sl || !sl.value || !cl.value || Math.abs(cl.value) >= 1e21) return null;
+    if (/e/i.test(String(stated))) {
+      const t = cl.value.toExponential(Math.max(sl.sig - 1, 0));
+      return /e\+/i.test(String(stated)) ? t : t.replace("e+", "e");
+    }
+    const dec = Math.max(0, sl.sig - 1 - Math.floor(Math.log10(Math.abs(cl.value))));
+    return dec > 20 ? null : cl.value.toFixed(dec);
+  };
+  // The quantities of the displayed derivation the stated value at [a, b) is the result of: the numbers on the other side of an equals or approximately-equals sign that touches it, in its sentence. [] when the
+  // value is not written as the result of one (a sentence that only mentions other inputs is not a derivation). Numbers that only label something (an equation, a section, a citation, a year, a list item) and
+  // exponents and subscripts are not quantities.
+  const derivationOf = function(text, a, b) {
+    const ls = text.lastIndexOf("\n", a - 1) + 1;
+    let le = text.indexOf("\n", b);
+    if (le < 0) le = text.length;
+    let left = text.slice(ls, a), right = text.slice(b, le);
+    const s0 = Math.max(left.lastIndexOf(". "), left.lastIndexOf("; "), left.lastIndexOf("? "), left.lastIndexOf("! "));
+    if (s0 >= 0) left = left.slice(s0 + 2);
+    const r0 = right.search(/[.;?!]\s/);
+    if (r0 >= 0) right = right.slice(0, r0);
+    const quantities = function(s) {
+      return s.replace(/^\s*(?:#{1,6}\s+)?\d+(?:\.\d+)*[.)]?\s+/, " ").replace(/\b(?:Eqs?\.?|Equations?|Sections?|Sec\.|Tables?|Figures?|Fig\.|Appendix|Theorem|Lemma|Proposition|Corollary|Step)\s*\(?\d+(?:\.\d+)*\)?/gi, " ").replace(/\[[\d,\s–-]+\]/g, " ").replace(/[\^_]\s*\{?\s*[+-]?\d+(?:\.\d+)?\s*\}?/g, " ").replace(/(?<![\w.])(?:19|20)\d\d(?![\w.])/g, " ").match(/(?<![\w.])\d+(?:\.\d+)?/g) || [];
+    };
+    const before = /(?:=|≈|≃|≅|\\approx|\\simeq)[\s$]*$/.exec(left), after = /^[\s$]*(?:=|≈|≃|≅|\\approx|\\simeq)/.exec(right);
+    return (before ? quantities(left.slice(0, before.index)) : []).concat(after ? quantities(right.slice(after[0].length)) : []);
+  };
+  // The replacement for the stated value at [a, b) of the paper, or null (with the reason in out.skipped) when the correction is not safe.
+  const corrected = function(id, computed, stated, a, b) {
+    const to = atStated(computed, stated);
+    if (!to) { out.skipped.push({ id: id, reason: "cannot write the computed value at the stated precision" }); return null; }
+    if (to === String(stated)) { out.skipped.push({ id: id, reason: "no change at the stated precision" }); return null; }
+    const others = derivationOf(out.paper, a, b);
+    if (others.length) {
+      const sl = numLit(stated), unit = Math.pow(10, Math.floor(Math.log10(Math.abs(sl.value))) - (sl.sig - 1));
+      const k = Math.round(Math.abs(numLit(to).value - sl.value) / unit);
+      if (k > 1) { out.skipped.push({ id: id, reason: "displayed derivation (" + others.slice(0, 4).join(", ") + "): " + to + " moves the stated " + stated + " by " + k + " units of its last digit" }); return null; }
+    }
+    return { to: to, sig: numLit(stated).sig, computedSig: numLit(computed).sig, derivation: others.length };
   };
   for (const r of adj.rows) {
     if (!r || !r.decided || r.match) continue;
@@ -6149,8 +6428,11 @@ function autoCorrectNumeric(paper, adj, claims) {
         out.skipped.push({ id: r.id, reason: "stated value appears multiple times" });
         continue;
       }
-      out.paper = out.paper.replace(verbatim, String(r.computed));
-      out.applied.push({ id: r.id, from: verbatim, to: String(r.computed) });
+      const va = out.paper.indexOf(verbatim);
+      const vfix = corrected(r.id, r.computed, verbatim, va, va + verbatim.length);
+      if (!vfix) continue;
+      out.paper = out.paper.slice(0, va) + vfix.to + out.paper.slice(va + verbatim.length);
+      out.applied.push({ id: r.id, from: verbatim, to: vfix.to, sig: vfix.sig, computedSig: vfix.computedSig, derivation: vfix.derivation });
       continue;
     }
     const es = splitNum(r.expected), cs = splitNum(r.computed);
@@ -6162,8 +6444,10 @@ function autoCorrectNumeric(paper, adj, claims) {
     const before = idx > 0 ? out.paper[idx - 1] : "";
     const after = idx + es.mant.length < out.paper.length ? out.paper[idx + es.mant.length] : "";
     if (/[\d.]/.test(before) || /[\d.]/.test(after)) { out.skipped.push({ id: r.id, reason: "mantissa inside a larger number" }); continue; }
-    out.paper = out.paper.slice(0, idx) + cs.mant + out.paper.slice(idx + es.mant.length);
-    out.applied.push({ id: r.id, from: es.mant, to: cs.mant });
+    const mfix = corrected(r.id, cs.mant, es.mant, idx, idx + es.mant.length);
+    if (!mfix) continue;
+    out.paper = out.paper.slice(0, idx) + mfix.to + out.paper.slice(idx + es.mant.length);
+    out.applied.push({ id: r.id, from: es.mant, to: mfix.to, sig: mfix.sig, computedSig: mfix.computedSig, derivation: mfix.derivation });
   }
   out.changed = out.applied.length > 0;
   return out;
@@ -6224,6 +6508,12 @@ function finalGates(paper, opts) {
   const _res = chatbotResidue(paper);
   if (_res.length) fixes.push({ id: "gate-residue", severity: "HARD", claim: "assistant residue or placeholder text: " + _res.join(" | "), reason: "GATE-RESIDUE-1: conversational assistant text, placeholders or unfinished markers in a published paper", fix: "Delete each quoted fragment; where it stands in for content, write that content from what the paper already derives." });
   if (/(Let me|The user|I'll|I need to|Okay,|Alright,|Here's what)/i.test(String(paper).slice(0, 500))) fixes.push({ id: "gate-preamble", severity: "HARD", claim: "reasoning preamble", reason: "meta text at body start", fix: "Remove all thinking/planning text; output only the paper." });
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): no review or gate read repetition, so a model loop and a wall of text ahead of the Abstract passed verify (paper qnf-d66c40b5, 8,122 "Te" tokens).
+  // Both are HARD; the revise fix names what to cut. The publish stages refuse such a body outright (publishStageV2, publishV2) and qnfo-cloud-ops withdraws one that slips through.
+  const _dgScan = degenerateTextScan(paper);
+  if (_dgScan.found) fixes.push({ id: "gate-degenerate", severity: "HARD", claim: "repeated text (a model loop): " + _dgScan.reason, reason: "DEGENERATE-TEXT-1: " + _dgScan.degenerateTokens + " of " + _dgScan.tokens + " tokens repeat back to back in " + _dgScan.regions + " region(s); a paper that stutters is not a paper", fix: "Remove the repeated passage entirely, then write the missing content from what the paper already derives; keep nothing of the loop." });
+  const _dgPre = preHeadingText(paper);
+  if (_dgPre.chars > DEGEN_PREHEADING_MAX) fixes.push({ id: "gate-degenerate", severity: "HARD", claim: _dgPre.chars + " characters of text ahead of the first heading", reason: "DEGENERATE-TEXT-1: a paper starts at its title heading; text ahead of it (more than " + DEGEN_PREHEADING_MAX + " characters, beginning \"" + _dgPre.head.replace(/\s+/g, " ") + "\") is model output that is not the paper", fix: "Remove the text ahead of the first heading, then write the missing content from what the paper already derives." });
   return { ok: fixes.length === 0, fixes, reason: fixes.map(function(f) {
     return f.id;
   }).join(",") };
@@ -6661,7 +6951,7 @@ async function stageVerify(env, row) {
     if (ac.changed) {
       paper = ac.paper;
       await r2Put(env, String(row.id) + "/reconciled.md", paper);
-      for (const a of ac.applied) await logEvent(env, "verify-autocorrect", "row=" + row.id + " claim=" + a.id + " from=" + a.from + " to=" + a.to, "ok");
+      for (const a of ac.applied) await logEvent(env, "verify-autocorrect", "row=" + row.id + " claim=" + a.id + " from=" + a.from + " to=" + a.to + " stated_sig=" + a.sig + " computed_sig=" + a.computedSig + (a.derivation ? " derivation=" + a.derivation : ""), "ok");
       for (const s of ac.skipped) await logEvent(env, "verify-autocorrect-skip", "row=" + row.id + " claim=" + s.id + " reason=" + s.reason, "warn");
       const _ids = new Set(ac.applied.map(function(a) { return String(a.id).toLowerCase(); }));
       for (const r of adj.rows) if (_ids.has(String(r.id).toLowerCase())) { r.match = true; r.decided = true; }
@@ -6824,7 +7114,8 @@ async function ensurePaperRow(env, row) {
   const md = await r2Get(env, String(row.id) + "/reconciled.md");
   if (!md) return { error: "reconciled.md missing" };
   const body = stripInternalAppendices(String(md).trim()).trim();
-  const title = cleanTitle(body) || extractTitle(body, "") || String(row.idea || "QNFO research paper").slice(0, 140);
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): the fallback title is the idea's title sentence, not the idea cut at 140 characters (paper qnf-d66c40b5 was titled "... Codes. Claim: encoding quantum information on Bruhat-Tits trees ...").
+  const title = cleanTitle(body) || extractTitle(body, "") || ideaTitle(row.idea);
   const abstract = cleanAbstract(body) || clipSentence(corpusSummary(null, body), 1200) || title;
   const identifier = "qnf-" + String(row.id);
   let slug = row.paper_slug || slugify(title);
@@ -7409,6 +7700,13 @@ async function publishStageV2(env, row) {
   if (row.source !== "remediation" && String(paper.body_md || "").trim().length < PUBLISH_FLOOR_CHARS) {
     await markError(env, row, "publish: body " + String(paper.body_md || "").trim().length + " chars < publish floor " + PUBLISH_FLOOR_CHARS);
     return { ok: false, stage: "publish" };
+  }
+  // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): a body that scans degenerate (a model loop, 8,122 "Te" tokens on paper qnf-d66c40b5) is never published, whatever its length and score; the row re-runs from ground.
+  const _dgPub = degenerateTextScan(paper.body_md);
+  if (_dgPub.found) {
+    await logEvent(env, "publish-degenerate", "row=" + row.id + " slug=" + slug + " refused: " + _dgPub.reason, "warn");
+    await markError(env, row, ("publish: degenerate text (DEGENERATE-TEXT-1) " + _dgPub.reason).slice(0, 220));
+    return { ok: false, stage: "publish", withheld: "degenerate-text" };
   }
   let _pctx = {};
   try {
@@ -32497,6 +32795,7 @@ export {
   noticeRepairTick,
   rlRegression,
   rlBrief,
+  ideaTitle,
   rlRefCount,
   rlRefFloor,
   rlIsRevision,
