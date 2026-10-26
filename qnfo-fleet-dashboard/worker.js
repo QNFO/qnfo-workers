@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.68.0";
-/* 1.68.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
+/* 1.68.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
 /* 1.67.2-codeagent FLEET-TICK-HEAVY-SECOND-PRODUCER-1 (2026-10-26, issue 1000271, patch): the scheduled tick also inserts a guarded fleet_tick_heavy row (one per 9 minutes), so heavy D1 steps keep running when qnfo-code-orchestrator is down. */
 /* 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. */
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
@@ -5925,7 +5925,7 @@ async function askVisitor(request) {
   const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "unknown";
   return (await sha256hex(ip + "|" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "|fleet-ask")).slice(0, 16);
 }
-async function ownerRequestIssue(env, title, body) {
+async function ownerRequestIssue(env, title, body, opts) {
   // OWNER-PROMPT-TWIN-LINK-1: if an OPEN owner-request ticket already has the same prompt, return it and count the refile.
   const now = Date.now();
   const colon = title.indexOf(": ");
@@ -5935,7 +5935,9 @@ async function ownerRequestIssue(env, title, body) {
   } catch (e) {
     console.error(JSON.stringify({ scope: "OWNER-PROMPT-TWIN-LINK-1", step: "agent_issue_refiles-create", error: String(e && e.message || e) }));
   }
-  const twin = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE status = 'open' AND source = 'qnfo-fleet-dashboard:owner-request' AND lower(trim(substr(title, instr(title, ': ') + 2))) = ?1 ORDER BY id LIMIT 1", [newPrompt]))[0];
+  // DASH-OWNER-ACTIONS-1: the server's own approval hand-off (opts.noTwin) is one ticket per owner_prompts row. Its retry is recognised by ownerTaskFile (reuse),
+  // and two decisions must never share a ticket whatever the title keeps of their text (T22).
+  const twin = opts && opts.noTwin ? void 0 : (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE status = 'open' AND source = 'qnfo-fleet-dashboard:owner-request' AND lower(trim(substr(title, instr(title, ': ') + 2))) = ?1 ORDER BY id LIMIT 1", [newPrompt]))[0];
   if (twin) {
     await env.AUDIT.prepare("INSERT INTO agent_issue_refiles (issue_id, refiles, last_at, last_source) VALUES (?1, 1, ?2, ?3) ON CONFLICT(issue_id) DO UPDATE SET refiles = refiles + 1, last_at = ?2, last_source = ?3").bind(twin.id, now, "qnfo-fleet-dashboard:owner-request").run();
     return Number(twin.id);
@@ -5993,9 +5995,9 @@ async function ownerNotesRoute(env) {
       out.notes++;
     }
   }
-  const tasks = await d1all(env.AUDIT, "SELECT id, prompt FROM owner_prompts WHERE mode = 'task' AND issue_id IS NULL ORDER BY ts LIMIT 20");
+  const tasks = await d1all(env.AUDIT, "SELECT id, prompt, visitor FROM owner_prompts WHERE mode = 'task' AND issue_id IS NULL ORDER BY ts LIMIT 20");
   for (const r of tasks) {
-    const id = await ownerRequestIssue(env, ("OWNER-TASK-" + r.id + ": " + String(r.prompt || "").replace(/\s+/g, " ")).slice(0, 180), "The owner queued this task on fleet.qnfo.org (owner_prompts " + r.id + "): " + String(r.prompt || "").slice(0, 1800) + dod);
+    const id = await ownerRequestIssue(env, ("OWNER-TASK-" + r.id + ": " + String(r.prompt || "").replace(/\s+/g, " ")).slice(0, 180), "The owner queued this task on fleet.qnfo.org (owner_prompts " + r.id + "): " + String(r.prompt || "").slice(0, 1800) + dod, { noTwin: r.visitor === OWNER_HANDOFF_VISITOR });
     if (id) {
       await env.AUDIT.prepare("UPDATE owner_prompts SET issue_id = ?1 WHERE id = ?2").bind(id, r.id).run();
       out.tasks++;
@@ -12988,6 +12990,11 @@ async function conExec(env, owner, op, args) {
 // 1.68.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
 // stranger's Ask that starts "OWNER-DECISION from" still counts; (6) decIssueIds skips "#NNN" after PR, run, workflow or commit (decGithubNumber,
 // shared with decRefs): agent_issues ids pass 100,000, so a PR number is usually also a real, unrelated issue row.
+// 1.68.0 review round 3: (7) OWNER-PROMPT-TWIN-LINK-1 (main) links a new owner-request ticket to an open one whose title text after the first ': ' is equal and
+// the title keeps ~152 prompt characters, so a hand-off that opened with 150 characters of fixed wording filed a second card's approval under the first
+// card's ticket: the hand-off now opens with the approved items, the card key and the decision number (decHandoffText) and ownerNotesRoute never twin-links a
+// row carrying the server's hand-off marker (ownerRequestIssue opts.noTwin); (8) decResolve reads a card of any status (resolved, dismissed, rerouted) by
+// its key only for the signed-in owner or a token holder, so a stranger's key answers "Nothing matches" unless the card is open on the page.
 var DEC_NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 var DEC_STOP = /^(approve|authori[sz]e|accept|ratify|decline|refuse|reject|deny|diagnose|investigate|retry|resolve|please|each|every|all|everything|the|of|in|on|to|for|from|and|with|fixes|fix|items?|issues?|agent_issues|card|cards|that|this|these|those|them|it|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|only|except|now|just|can|you|could|would|will|ok|okay|yes|go|ahead|why|because|reason|what|about|them|are|was|were|has|have|been|then|than|also|here|there)$/i;
 var DEC_VERB_RX = /^(approve|authori[sz]e|ratify|decline|refuse|reject|resolve|retry)\b[\s:,.\-]*([\s\S]*)$/i;
@@ -13269,7 +13276,9 @@ async function decResolve(env, c, text, refsOnly, minWords) {
         return cd.key.toLowerCase() === r.key.toLowerCase();
       });
       if (hit) return { card: hit, rest };
-      if (/^ha:/i.test(r.key)) {
+      // A card in any status (resolved, dismissed, rerouted at birth) is read only for the signed-in owner or a token holder: the text of a card that
+      // was never on the page is not a stranger's to read. A stranger resolves a key against the open cards above and gets "Nothing matches" otherwise.
+      if (/^ha:/i.test(r.key) && c && c.holder) {
         const row = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status FROM human_actions WHERE slug = ?1").bind(r.key.slice(3)).first().catch(function() {
           return null;
         });
@@ -13506,12 +13515,15 @@ async function conDecide(env, text, c, owner) {
 function decClip(x, n) {
   return String(x || "").replace(/\s+/g, " ").trim().slice(0, n);
 }
+// The first line puts what tells one decision from another first (the approved items, then the card key, then the decision number): the ticket
+// title keeps only about 152 characters of this text and OWNER-PROMPT-TWIN-LINK-1 compares them, so boilerplate ahead of the key made two cards'
+// hand-offs equal (T22). The 'OWNER-DECISION from ' prefix and 'owner card <key>' are what the closing probes and detectors match.
 // The one task an approval hands to the fleet. It must stand alone: the card's title, what it asks and why (when no issue holds the
 // brief), the approved items, the owner's chosen option, the doer and the closing probe. The text is the same for the same decision (no
 // clock in it, a decision number instead), so filing it again after the decision could not be recorded finds the first one. It is read
 // from owner_prompts into an issue body clipped at 1800 characters, so the items share what the fixed lines leave.
 function decHandoffText(card, issue, items, sel, others, paper, choice, round) {
-  const L = ["OWNER-DECISION from fleet.qnfo.org (owner session, approval code in the last 15 minutes, decision " + round + "): the owner APPROVED " + (sel ? "item" + (sel.length === 1 ? " " : "s ") + decFmtRange(sel) + " of " + items.length : "the decision") + " on owner card " + card.key + (issue ? " (issue " + issue.id + ": " + decClip(issue.title, 90) + ")" : "") + "."];
+  const L = ["OWNER-DECISION from fleet.qnfo.org: the owner APPROVED " + (sel ? "item" + (sel.length === 1 ? " " : "s ") + decFmtRange(sel) + " of " + items.length : "the decision") + " on owner card " + card.key + " (decision " + round + (issue ? ", issue " + issue.id + ": " + decClip(issue.title, 90) : "") + "; owner session, approval code in the last 15 minutes)."];
   L.push("Card: " + decClip(card.title, 130));
   if (card.action) L.push("Asked: " + decClip(card.action, issue ? 200 : 320));
   if (card.why) L.push("Why: " + decClip(card.why, issue ? 140 : 260));

@@ -15,6 +15,8 @@
 // verb belongs to the model, and retry runs unasked only for 'retry <reference>' (T20).
 // Review round 2 (1.68.0): the Ask cap exempts only the server's own hand-off marker, never text a stranger controls (T17h-l); a PR, run or
 // commit number in a card's text is never an issue id (T21).
+// Review round 3 (1.68.0): two approvals are two tasks under main's OWNER-PROMPT-TWIN-LINK-1 twin check, because the hand-off opens with what tells decisions apart and
+// is never twin-linked (T22); a card in any status other than open is read by key only by the signed-in owner or a token holder, never by a stranger (T23).
 // Run: node qnfo-fleet-dashboard/cmd-decide.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -652,6 +654,97 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   const j3 = await (await cmd(e3.env, "approve ha:approve-both", C3)).json();
   const a3 = (j3.actions || []).find((x) => x.op === "approve");
   ok(a3 && a3.args.issue === 100140, "T21f '#100140' still counts as an issue, and 'PR #1001' does not displace it", a3 && a3.args);
+}
+// T22. two approvals are two tasks. OWNER-PROMPT-TWIN-LINK-1 (bec42c88): ownerRequestIssue returns an OPEN owner-request ticket whose title text after
+// the first ': ' is equal, and ownerNotesRoute keeps about 152 characters of the prompt there, so a hand-off whose first 152 characters match
+// another's was silently attached to the first one's ticket ("Handed to the fleet as ONE task (issue N)" twice, one OWNER-TASK issue). What tells
+// two decisions apart is now at the start of the text, and the server's own hand-off is never linked to a twin at all.
+{
+  const approveVia = async (e, C, line) => {
+    const j = await (await cmd(e.env, line, C)).json();
+    const a = (j.actions || []).find((x) => x.op === "approve");
+    return a ? await (await run(e.env, "approve", a.args, C)).json() : { ok: false, preview: j };
+  };
+  const win = (title) => String(title).slice(String(title).indexOf(": ") + 2);
+  const card = (db, slug, title, action) => db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES (?,?,?,?,?,?)").run(slug, title, "The owner decides; no loop can.", "The current state stays.", action, "claude-session");
+  const check = (e, keys, tag, replies) => {
+    const issues = rows(e.db, "SELECT id, title FROM agent_issues WHERE title LIKE 'OWNER-TASK-%' ORDER BY id");
+    const tasks = rows(e.db, "SELECT prompt, issue_id FROM owner_prompts WHERE mode = 'task' ORDER BY ts, rowid");
+    ok(issues.length === keys.length && new Set(issues.map((x) => x.id)).size === keys.length, tag + " one OWNER-TASK issue per approval (" + keys.length + ")", issues);
+    ok(tasks.length === keys.length && new Set(tasks.map((x) => x.issue_id)).size === keys.length && tasks.every((x) => x.issue_id), tag + "a every hand-off row carries its own issue id", tasks.map((x) => x.issue_id));
+    const ids = replies.map((j) => (/Handed to the fleet as ONE task \(issue (\d+)\)/.exec(j.text || "") || [])[1]);
+    ok(ids.every(Boolean) && new Set(ids).size === keys.length && !replies.some((j) => /already queued/.test(j.text || "")), tag + "b each reply names a different issue and none says the task was already queued", ids);
+    ok(tasks.every((x, i) => { const at = x.prompt.indexOf("owner card " + keys[i]); return at >= 0 && at + ("owner card " + keys[i]).length <= 120; }), tag + "c the card key lies within the first 120 characters of each hand-off (independent of the twin check)", tasks.map((x) => x.prompt.slice(0, 130)));
+    ok(issues.every((x, i) => win(x.title).indexOf("owner card " + keys[i]) >= 0) && new Set(issues.map((x) => win(x.title).toLowerCase())).size === keys.length, tag + "d the text the twin check compares (after the first ': ' of the ticket title) names its own card and differs between approvals", issues.map((x) => win(x.title)));
+  };
+  // a. decisions with no items: slugs that share their first letters, and the pair a reviewer proved collapsing
+  for (const pair of [["approve-site-banner-refresh", "approve-site-footer-refresh"], ["brand-colour-choice", "brand-voice-guide"]]) {
+    const e = mk({ noCard: true });
+    for (const slug of pair) card(e.db, slug, "Approve the " + slug.replace(/-/g, " "), "Approve the " + slug.replace(/-/g, " ") + " shown on the site, or decline it.");
+    const C = await signIn(e.env, e.db, e.m);
+    const replies = [];
+    for (const slug of pair) replies.push(await approveVia(e, C, "approve ha:" + slug));
+    ok(replies.every((j) => j.ok), "T22 both approvals (" + pair[0] + ", " + pair[1] + ") run", replies);
+    check(e, pair.map((s) => "ha:" + s), "T22 " + pair[0].slice(0, 12), replies);
+  }
+  // b. one item approved on each of two cards that name an issue of seven items each: the same 'item 1 of 7' on both
+  {
+    const e = mk();
+    e.db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (100150,'UIA-SOURCE-FIDELITY-2: fix factual inconsistencies in the second set of papers',?,'pipeline','medium',1791217360000,1791217360000)").run(DESC);
+    card(e.db, "uia-source-fidelity-100150", "UIA-SOURCE-FIDELITY-2: approve or decline the seven fixes to the second set of papers", "Approve or decline each of the seven fixes in agent_issues 100150.");
+    const C = await signIn(e.env, e.db, e.m);
+    const r1 = await approveVia(e, C, "approve 100140 1");
+    const r2 = await approveVia(e, C, "approve 100150 1");
+    ok(r1.ok && r2.ok, "T22e one item approved on each of two cards", [r1, r2]);
+    check(e, ["ha:" + SLUG, "ha:uia-source-fidelity-100150"], "T22f", [r1, r2]);
+    const r3 = await approveVia(e, C, "approve 100140 2");
+    ok(r3.ok && rows(e.db, "SELECT id FROM agent_issues WHERE title LIKE 'OWNER-TASK-%'").length === 3 && /decision 2/.test(rows(e.db, "SELECT prompt FROM owner_prompts WHERE mode = 'task' ORDER BY ts, rowid")[2].prompt), "T22g a second approval on the same card (item 2) is a third task and says it is decision 2", r3);
+  }
+}
+// T23. a stranger reads only the open cards. A card in any other status (rerouted at birth by the AFTER INSERT triggers, resolved, dismissed) was never on
+// the page, so a key typed into diagnose, approve or an Ask sentence answers "Nothing matches" with no title, why, action or default; the signed-in owner
+// (and a token holder) still read it.
+{
+  const PRIVATE = ["private reasoning text", "do the private action", "private default text", "Vendor exit plan", "Rotation schedule"];
+  const mkp = (extra) => {
+    const x = mk(extra);
+    const ins = x.db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source,status) VALUES (?,?,?,?,?,?,?)");
+    ins.run("secret-rerouted", "Vendor exit plan for the Q3 contract", "IDENTITY-BOUND: private reasoning text for the owner only.", "private default text", "Approve: do the private action, or decline it.", "claude-session", "rerouted");
+    ins.run("old-resolved-card", "Rotation schedule for the staging keys", "old why text", "old default", "Approve the old schedule or decline it.", "claude-session", "resolved");
+    ins.run("old-dismissed-card", "Rotation schedule for the prod keys", "old dismissed why", "old default", "Approve the schedule or decline it.", "claude-session", "dismissed");
+    return x;
+  };
+  const e = mkp();
+  const leaks = (t) => PRIVATE.filter((w) => String(t || "").indexOf(w) >= 0);
+  for (const line of ["diagnose ha:secret-rerouted", "approve ha:old-resolved-card", "decline ha:old-dismissed-card", "diagnose ha:old-resolved-card", "Diagnose HA:Secret-Rerouted", "retry ha:secret-rerouted", "resolve ha:old-resolved-card"]) {
+    const j = await (await cmd(e.env, line)).json();
+    ok(/Nothing matches/.test(j.text || "") && leaks(JSON.stringify(j)).length === 0 && !(j.actions || []).some((x) => x.op), "T23 a stranger's '" + line + "' answers Nothing matches and carries no card text", j);
+  }
+  // an Ask sentence that merely contains the key: the quick buttons and the model-down fallback read the same lookup
+  const sentence = "Could you please diagnose ha:secret-rerouted and approve ha:old-resolved-card for me?";
+  const q = await (await cmd(e.env, sentence, { "CF-Connecting-IP": "198.51.100.7" })).json();
+  ok(q.quick === undefined && leaks(JSON.stringify(q)).length === 0, "T23a a stranger's Ask sentence naming those keys gets no quick buttons and no card text", q);
+  const d = mkp({ ai: async () => new Response("{}", { status: 504 }) });
+  const jd = await (await cmd(d.env, sentence)).json();
+  await flush();
+  const bd = await (await call(d.env, "/api/cmd/job/" + jd.id)).json();
+  ok(bd.status === "fallback" && leaks(JSON.stringify(bd)).length === 0 && !(bd.actions || []).some((x) => /ha:(secret-rerouted|old-resolved-card)/.test(x.cmd || "")), "T23b the model-down fallback for that sentence names none of them either", bd);
+  // the open card is still read by anyone: the page lists it
+  let j = await (await cmd(e.env, "diagnose ha:" + SLUG)).json();
+  ok(/Diagnosis of the owner card ha:uia-source-fidelity-100140/.test(j.text || "") && /Why it is yours/.test(j.text || ""), "T23c an open card (on the page) is still diagnosed for a stranger", j);
+  j = await (await cmd(e.env, "diagnose ha:no-such-card")).json();
+  ok(/Nothing matches/.test(j.text || ""), "T23d a key that matches no card says so", j);
+  // the signed-in owner and a token holder still read a card in any status
+  const C = await signIn(e.env, e.db, e.m);
+  for (const [who, H] of [["owner", C], ["token holder", { "x-loop-token": LOOP }]]) {
+    j = await (await cmd(e.env, "diagnose ha:secret-rerouted", H)).json();
+    ok(/Why it is yours: IDENTITY-BOUND: private reasoning text/.test(j.text || "") && /To do: Approve: do the private action/.test(j.text || "") && /If you wait: private default text/.test(j.text || ""), "T23e the " + who + " still reads the rerouted card's text", j);
+  }
+  j = await (await cmd(e.env, "approve ha:old-resolved-card", C)).json();
+  ok(/Rotation schedule for the staging keys' is already resolved/.test(j.text || "") && !(j.actions || []).some((x) => x.op), "T23f the owner's approve of a resolved card says it is already resolved, with its title", j);
+  j = await (await cmd(e.env, "approve ha:secret-rerouted", C)).json();
+  ok(/is already rerouted; nothing to approve/.test(j.text || "") && !(j.actions || []).some((x) => x.op), "T23g and of a rerouted one", j);
+  ok(rows(e.db, "SELECT * FROM human_responses").length === 0 && rows(e.db, "SELECT id FROM owner_prompts").length === 0, "T23h none of it recorded or filed anything");
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

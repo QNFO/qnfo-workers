@@ -17,6 +17,10 @@
 --    forms the grammar must answer in code (the verb alone, or the verb and one id, #id, ha: key, UPPER-DASH keyword or slug).
 --  * two failure modes the review found get detectors: an approval recorded with no hand-off task, and an approval or decline recorded for a card that
 --    default_approve_markers keeps to the owner (money, legal, signing, credential, account).
+--  * OWNER-PROMPT-TWIN-LINK-1 (main, after the first build) linked an open owner-request ticket to any new one whose first 152 prompt characters matched, and the
+--    hand-off opened with 150 characters of fixed wording, so a second card's approval was filed under the first card's ticket: the hand-off now opens with the
+--    approved items, the card key and the decision number and is never twin-linked, and fm-owner-approval-without-handoff also counts approval tasks that share
+--    one issue id (owner_prompts.visitor = owner-decision, the marker only the server writes).
 -- No DELETE or DROP runs here (the DELETE statements belong to the Rollback line, which removes only rows this file inserts), so no BACKUP is taken.
 
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius)
@@ -33,8 +37,8 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
 VALUES ('owner-approval-without-handoff',
   'an approval of an owner card is recorded (card resolved, OWNER-DECISION stamped) but the task that tells the fleet to act on it was never filed, so the approval changes nothing and cannot be re-tapped',
   'cmdDecide wrote the decision first and filed the hand-off afterwards through /api/owner/prompt, which shares the 40 a day owner_prompts cap with Ask; at the cap the hand-off failed after the card was already resolved and nothing read the OWNER-DECISION line',
-  'DASH-OWNER-ACTIONS-1 (1.68.0): the hand-off is filed first, directly (ownerTaskFile, no Ask cap, and not counted by it); when it cannot be filed nothing is recorded and the card stays open; a retry after a failed write finds the same task',
-  'remediation_contracts fm-owner-approval-without-handoff (d1-query: approve rows from the owner session whose card has no OWNER-DECISION task in owner_prompts; qnfo-fleet-dashboard/cmd-decide.test.mjs T17)',
+  'DASH-OWNER-ACTIONS-1 (1.68.0): the hand-off is filed first, directly (ownerTaskFile, no Ask cap, and not counted by it); when it cannot be filed nothing is recorded and the card stays open; a retry after a failed write finds the same task; the first line of the task carries the approved items, the card key and the decision number, and the task is never linked to a twin ticket (OWNER-PROMPT-TWIN-LINK-1 compares the first 152 characters of a prompt), so two decisions are two tasks',
+  'remediation_contracts fm-owner-approval-without-handoff (d1-query: approve rows from the owner session whose card has no OWNER-DECISION task in owner_prompts, plus approval tasks that share one issue id with another; qnfo-fleet-dashboard/cmd-decide.test.mjs T17, T22)',
   'fm-owner-approval-without-handoff', '2026-10-26', 100360, NULL,
   'review of the first DASH-OWNER-ACTIONS-1 build: with OWNER_PROMPTS_DAILY_CAP=1 the card ended resolved and no task existed; live D1 held 35 task rows on 2026-10-24 and 22 on 2026-10-25 against the cap of 40',
   'an approval the owner made is lost: the card leaves the queue, nothing acts on it, and every later tap answers that it is already resolved');
@@ -59,8 +63,8 @@ VALUES ('fm-cmd-owner-verb-unparsed', NULL,
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)
 VALUES ('fm-owner-approval-without-handoff', NULL,
   'qnfo-fleet-dashboard 1.68.0 or later is deployed',
-  'an approval with no hand-off task: read the human_responses row (kind approve, credential owner-session), file the OWNER-DECISION task for its card by hand through the owner task route, and fix the order of writes in cmdDecide in qnfo-fleet-dashboard/worker.js with a case in cmd-decide.test.mjs T17',
-  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM human_responses h WHERE h.kind = ''approve'' AND h.credential = ''owner-session'' AND h.key LIKE ''ha:%'' AND NOT EXISTS (SELECT 1 FROM owner_prompts p WHERE p.mode = ''task'' AND p.prompt LIKE ''OWNER-DECISION from %'' AND instr(p.prompt, ''owner card '' || h.key) > 0)) AS TEXT) AS observed',
+  'an approval with no hand-off task, or two approval tasks filed under one issue: read the human_responses row (kind approve, credential owner-session) and the owner_prompts rows (visitor owner-decision), file the OWNER-DECISION task for the card by hand through the owner task route, and fix the order of writes in cmdDecide or the first line of decHandoffText in qnfo-fleet-dashboard/worker.js with a case in cmd-decide.test.mjs T17 or T22',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM human_responses h WHERE h.kind = ''approve'' AND h.credential = ''owner-session'' AND h.key LIKE ''ha:%'' AND NOT EXISTS (SELECT 1 FROM owner_prompts p WHERE p.mode = ''task'' AND p.prompt LIKE ''OWNER-DECISION from %'' AND instr(p.prompt, ''owner card '' || h.key) > 0)) + (SELECT COUNT(*) FROM owner_prompts p WHERE p.mode = ''task'' AND p.visitor = ''owner-decision'' AND p.issue_id IS NOT NULL AND EXISTS (SELECT 1 FROM owner_prompts q WHERE q.mode = ''task'' AND q.visitor = ''owner-decision'' AND q.issue_id = p.issue_id AND q.id <> p.id)) AS TEXT) AS observed',
   'd1-query', 3, 'qnfo-fleet-dashboard', 1, 'active', 'failure-mode', datetime('now', '+60 minutes'));
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)

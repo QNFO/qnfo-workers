@@ -4,7 +4,8 @@
 //  * fm-cmd-owner-verb-unparsed counts only the STRICT forms the grammar must answer in code (the verb alone, or the verb and one id, #id, ha: key,
 //    UPPER-DASH keyword or slug) that reached the AI path 60 minutes after the migration ran, and stays at 0 for ordinary sentences that start with a verb
 //    ('resolved issues today?', 'Resolve next fleet open item and deploy', 'Approve the Living Papers launch post', 'Retry the failed deploy of PR #1001 ...');
-//  * fm-owner-approval-without-handoff counts an owner-session approve whose card never had an OWNER-DECISION task, and nothing else;
+//  * fm-owner-approval-without-handoff counts an owner-session approve whose card never had an OWNER-DECISION task, and two approval tasks filed under one issue
+//    (the server's hand-off marker, owner_prompts.visitor = owner-decision), and nothing else;
 //  * fm-owner-decision-on-hard-card counts an approve or decline of a card whose text matches a default_approve_markers hard pattern, and nothing else;
 //  * the live issue-100360 contract (a probe for a table named owner_decisions that the change never creates, 299 failed attempts) is repointed, guarded, to a
 //    probe that FAILS today and passes only after a real approve (human_responses kind approve, credential owner-session, plus the hand-off task);
@@ -132,6 +133,19 @@ resp("ha:card-d", "note");
 task("an Ask about ha:card-e that is not a hand-off");
 resp("ha:card-e", "approve");
 ok(read(H).observed === "1", "a repeated approve of a handed-off card, a decline, another credential, a note and an ordinary task do not count; an approve whose only task is not a hand-off does", read(H));
+// two approval tasks under one ticket: OWNER-PROMPT-TWIN-LINK-1 once linked the second card's hand-off to the first's issue and the reply still said it was filed
+const handoff = (text, issue, visitor = "owner-decision") => db.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, issue_id, visitor) VALUES (?, 'task', ?, 'queued', ?, ?)").run("ho-" + (++k), text, issue, visitor);
+const base = Number(read(H).observed);
+handoff("OWNER-DECISION from fleet.qnfo.org: the owner APPROVED the decision on owner card ha:x1 (decision 1)", 100141);
+handoff("OWNER-DECISION from fleet.qnfo.org: the owner APPROVED the decision on owner card ha:x2 (decision 1)", 100142);
+ok(Number(read(H).observed) === base, "approval tasks that each have their own issue do not count", read(H));
+handoff("OWNER-DECISION from fleet.qnfo.org: the owner APPROVED the decision on owner card ha:x3 (decision 1)", 100141);
+ok(Number(read(H).observed) === base + 2, "two approval tasks under one issue count (both rows), the one under its own issue does not", read(H));
+handoff("an ordinary task twin-linked to 100143", 100143, null); handoff("the same ordinary task", 100143, null);
+handoff("OWNER-DECISION from fleet.qnfo.org: not filed yet", null); handoff("OWNER-DECISION from fleet.qnfo.org: not filed yet either", null);
+ok(Number(read(H).observed) === base + 2, "ordinary tasks that share an issue (the twin link they are meant to have) and approval tasks with no issue yet are not counted", read(H));
+db.exec("DELETE FROM owner_prompts WHERE id LIKE 'ho-%'");
+ok(Number(read(H).observed) === base, "and the count returns to its base when those rows go", read(H));
 
 // detector 3: a decision on a card the hard markers keep to the owner
 const D = "fm-owner-decision-on-hard-card";
