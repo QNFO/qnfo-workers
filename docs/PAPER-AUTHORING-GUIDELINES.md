@@ -70,3 +70,42 @@ FROM plain_summary s JOIN papers p ON p.slug = s.slug WHERE p.status = 'publishe
    rewritten to fix its summary.
 
 A change to a number in this file (a grade, a count, a sentence limit) lands by pull request with the audit re-run in the description.
+
+## The plain-language article (PLAIN-ARTICLE-1, 2026-10-26)
+
+Owner directive 2026-10-26: for each and every paper, the Quick Read rewrites the paper entirely in plain, simple language, without jargon,
+complex numeric or mathematical expressions, or domain-specific terminology; a brief plain-language summary links to it and encourages readers to
+click through to a deeper non-technical version (like Simple English Wikipedia), with links to external resources in plain language.
+
+What a reader gets, in order: the paper page's "In plain language" box (the short version, two or three sentences) with a link "Read the
+plain-language version (about N min, no jargon, no mathematics)"; `/papers/<slug>/quickread`, which opens with the plain article (plain title,
+the short version, four to seven plain sections in the paper's order, the words used, "Learn more in plain language" links, a pointer on to the
+paper) and keeps the extractive digest below it, folded, for specialists. A paper without an article shows the digest and says that the
+plain-language version is not ready yet.
+
+| Rule | Checked by |
+|---|---|
+| R5 No mathematics: no formulas, symbols, Greek-letter names, equals signs, percentages or letter-and-number labels; at most a handful of numbers, rounded or in words | `articleProblems`: hard for a symbol, a label, a Greek-letter name in a paper that has mathematics; soft for more than four numbers or the word "equals" more than once |
+| R6 Everyday words, short sentences, every unavoidable specialist term explained in the sentence that uses it | grade 9 or below (never stored above 12), at most three sentences over 28 words; the verifier (gpt-oss-120b, another family than the writer) lists unexplained words and any math-like text, and the writer repairs once |
+| R7 The whole paper, in its order, with its limits stated; nothing the paper does not say | the writer reads up to 36000 characters (reference list and appendices cut); a capitalised name the paper never uses is dropped with its sentence; no link, DOI, citation marker or "et al" |
+| R8 Links are real: Simple English Wikipedia first, English Wikipedia (labelled more technical) when no simple page exists | each link is confirmed against the Wikipedia API at build time and is not a disambiguation page; title and a label only, no text of the page is copied |
+
+Pipeline: writer kimi-k2.6 (reasoning off), deterministic gate, verifier gpt-oss-120b, one repair, store; a text that still breaks a hard rule is not
+stored (status failed, retried three times six hours apart). Built by the gateway's hourly cron, 15 papers a run, three at a time, newest first, never
+on a reader's GET. Measured 2026-10-26 on a paper about anyon condensation, the hardest kind: llama-3.3-70b wrote 323 vague words, gpt-oss-120b came out
+at grade 11.5 with 14 symbols, kimi-k2.6 at grade 7 to 8 with the content intact (388 neurons; verifier 55; repair 195).
+
+Measured by (qnfo-audit, published hourly by the gateway into `analytics_dash_meta`): `plain_article_coverage_pct` (target 95, trigger 90, empty for the
+first 72 hours of the backfill), `plain_article_hard_violations` (target 0), `plain_article_failed_final` (at most 35). Read-only counts and the grade
+distribution: `GET https://papers.qnfo.org/_audit/quick-read`, key `plain_articles`.
+
+```sql
+-- living-paper, read only
+SELECT status, COUNT(*) AS papers, ROUND(AVG(grade), 1) AS mean_grade, SUM(grade > 9) AS above_9, SUM(grade > 12) AS above_12 FROM plain_article GROUP BY status;
+SELECT slug, attempts, note FROM plain_article WHERE status = 'failed' ORDER BY attempts DESC LIMIT 20;
+```
+
+Gap, stated rather than hidden (OUTPUT-QUALITY-LEDGER-1): coverage and grade are proxies. The reader outcome (readers who open the box and go on to the
+article, and how many then stay) is not measured: the fleet has path-level data for crawlers only. The measure to add when human page views by path
+exist is the share of paper-page views followed by a Quick Read view within the session. Until then a faulty article is found by a reader's report
+(select the passage on the paper page, choose Report) or by the verifier's counts in `plain_article.verdict`.
