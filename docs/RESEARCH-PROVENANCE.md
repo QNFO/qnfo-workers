@@ -53,5 +53,5 @@ Every write is a git commit: a bad one is reverted with `git revert` on `QNFO/qn
 * The restore tick accepts a run file only if its sha256 equals the one the old manifest recorded. A file R2 holds in another version is
   recorded `unrecoverable` with that reason, not written.
 * Archiving the old repository is the worker's request and the portfolio loop's act (`PORTFOLIO-ARCHIVE-1`, reversible: GitHub unarchive);
-  `research_repo_archive = off` stops the request. Asking Software Heritage to archive the new repository is outward and one-way, so it is a
-  separate fleet issue with a closing probe, not something the worker does on its own.
+  `research_repo_archive = off` stops the request. Software Heritage needs no request: it visits `QNFO/qnfo-research` on its own (full visits
+  2026-08-17, 2026-10-21) and has never seen the legacy repository, which is why the archive request waits for the history to be linked into `main`.
