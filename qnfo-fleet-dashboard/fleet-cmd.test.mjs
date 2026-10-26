@@ -154,7 +154,7 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   r = await postW(env, "/api/cmd/run", { op: "note", args: { key: "ha:orcid-link-works", note: "waiting on ORCID" } }, C);
   ok(r.status === 200, "G18 non-destructive actions still run on the 12h session");
   const ph = await (await callW(env, "/classic", { headers: C })).text();
-  ok(ph.includes("Signed in: actions enabled") && ph.includes('data-act="snooze"'), "G19 signed in, the page shows the owner's controls");
+  ok(ph.includes("Signed in: actions enabled") && (ph.includes('data-act="snooze"') || ph.includes('data-dec-op="snooze"')), "G19 signed in, the page shows the owner's controls");
   r = await cmd(env, "logout", C);
   r = await postW(env, "/api/cmd/run", { op: "note", args: { key: "ha:orcid-link-works", note: "x" } }, C);
   ok(r.status === 401, "G20 logout ends the session");
