@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 11:04:14",
+  "audited_at": "2026-10-26 11:33:49",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -545,7 +545,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.43.3-reviewer-hygiene",
+        "version": "1.43.4-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -585,7 +585,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.38.1-codeagent",
+        "version": "1.39.0",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -615,12 +615,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.52.0-breach-doctor",
+        "version": "0.53.0-breach-doctor-fix",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.69.2",
+        "version": "1.70.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.57.4",
+        "version": "2.57.5-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -957,9 +957,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.43.3-reviewer-hygiene",
+      "before": "1.43.4-codeagent",
       "http": 200,
-      "live": "1.43.3-reviewer-hygiene",
+      "live": "1.43.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1201,9 +1201,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.38.1-codeagent",
+      "before": "1.39.0",
       "http": 200,
-      "live": "1.38.1-codeagent",
+      "live": "1.39.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1348,17 +1348,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.52.0-breach-doctor",
+      "before": "0.53.0-breach-doctor-fix",
       "http": 200,
-      "live": "0.52.0-breach-doctor",
+      "live": "0.53.0-breach-doctor-fix",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.69.2",
+      "before": "1.70.0",
       "http": 200,
-      "live": "1.69.2",
+      "live": "1.70.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1508,9 +1508,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.57.4",
+      "before": "2.57.5-codeagent",
       "http": 200,
-      "live": "2.57.4",
+      "live": "2.57.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
