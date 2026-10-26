@@ -6,8 +6,11 @@
 --   * migration_runs.bookmark and migration_runs.bookmark_source: the D1 Time Travel restore point of each applied migration. scripts/apply_migrations.py does not capture one at apply time
 --     (the file is under another session's work claim until 21:05Z; the apply-time capture is a code-task), so the runner records it afterwards from Time Travel at applied_at minus 120 seconds,
 --     which stays possible for 30 days; bookmark_source says which way each one was taken.
---   * credential_registry: external credentials by NAME (never a value), the worker that holds each, and the way its expiry can be known. Only the Cloudflare repository token has one the
+--   * bp26_credential_registry: external credentials by NAME (never a value), the worker that holds each, and the way its expiry can be known. Only the Cloudflare repository token has one the
 --     fleet reads (cf-token-verify). The others are registered as no-expiry-mechanism: the registry says the fleet cannot see their expiry, which the metric note repeats every run.
+--     The name is bp26_credential_registry because qnfo-audit already holds a credential_registry (slug, expires_on, rotate_before; one Workers AI token, monitored by qnfo-infra /cred/status):
+--     another producer's table, left alone. The first apply of this file failed at its INSERT (migration_runs 753: that table has no column named credential); the collector now reads
+--     both tables, so the dated Workers AI token is covered as well.
 --   * d1_restore_drills: the ledger a restore drill writes; d1_restore_drill_age_days is unknown (no row) until a drill passes. A measured age is never invented.
 --   * the real source_of_truth of the eight metrics (the [BP26] tag stays: the framework writes only tagged metrics).
 -- MEASURED 2026-10-26T19:5xZ by dry runs of the collectors against live data (read-only): observability_enabled_share 0.9714 (34 of 35 deployed Workers; the root stub qnfo-workers is the one
@@ -15,16 +18,17 @@
 -- (qnfo-ops opsPublicGate keeps a per-visitor hourly counter in KV with get then put); secrets_in_repo 0 of 3183 tracked text files; d1_db_size_pct 0.0982 (qnfo-audit 982 MB).
 -- Revert: the Rollback line drops the two tables and the two columns and returns the eight metrics to their earlier source_of_truth text; the metrics then read their last values until a
 -- later producer overwrites them (the framework writes only what a collector measured).
+-- REAPPLY-OK: the first apply never completed (migration_runs 753 error at statement 4, a name collision with the existing credential_registry); its two ADD COLUMN statements applied and the runner treats a duplicate column as done
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TABLE IF EXISTS d1_restore_drills; DROP TABLE IF EXISTS credential_registry; ALTER TABLE migration_runs DROP COLUMN bookmark_source; ALTER TABLE migration_runs DROP COLUMN bookmark; UPDATE metric_registry SET source_of_truth = CASE metric WHEN 'workers_with_source_maps' THEN 'repository wrangler.toml scan (to compute) [BP26]' WHEN 'observability_enabled_share' THEN 'repository wrangler.toml scan (to compute) [BP26]' WHEN 'kv_used_for_locking' THEN 'repository scan (to build) [BP26]' WHEN 'secrets_in_repo' THEN 'CI secret scan (to build or wire) [BP26]' WHEN 'secret_expiry_warnings_open' THEN 'credential expiry probe (to build) [BP26]' WHEN 'd1_db_size_pct' THEN 'Cloudflare D1 API (to poll) [BP26]' WHEN 'd1_restore_drill_age_days' THEN 'restore drill ledger (to build) [BP26]' ELSE 'qnfo-audit.migration_runs (to extend) [BP26]' END WHERE metric IN ('workers_with_source_maps', 'observability_enabled_share', 'kv_used_for_locking', 'secrets_in_repo', 'secret_expiry_warnings_open', 'd1_db_size_pct', 'd1_restore_drill_age_days', 'pre_migration_bookmark_recorded');
+-- Rollback: DROP TABLE IF EXISTS d1_restore_drills; DROP TABLE IF EXISTS bp26_credential_registry; ALTER TABLE migration_runs DROP COLUMN bookmark_source; ALTER TABLE migration_runs DROP COLUMN bookmark; UPDATE metric_registry SET source_of_truth = CASE metric WHEN 'workers_with_source_maps' THEN 'repository wrangler.toml scan (to compute) [BP26]' WHEN 'observability_enabled_share' THEN 'repository wrangler.toml scan (to compute) [BP26]' WHEN 'kv_used_for_locking' THEN 'repository scan (to build) [BP26]' WHEN 'secrets_in_repo' THEN 'CI secret scan (to build or wire) [BP26]' WHEN 'secret_expiry_warnings_open' THEN 'credential expiry probe (to build) [BP26]' WHEN 'd1_db_size_pct' THEN 'Cloudflare D1 API (to poll) [BP26]' WHEN 'd1_restore_drill_age_days' THEN 'restore drill ledger (to build) [BP26]' ELSE 'qnfo-audit.migration_runs (to extend) [BP26]' END WHERE metric IN ('workers_with_source_maps', 'observability_enabled_share', 'kv_used_for_locking', 'secrets_in_repo', 'secret_expiry_warnings_open', 'd1_db_size_pct', 'd1_restore_drill_age_days', 'pre_migration_bookmark_recorded');
 -- spof-review: the collectors run in the remediation-consumer job (qnfo-cloud-ops dispatches it when idle 60 minutes; pushes and workflow_run also start it); a missed run delays these metrics only, and metric_staleness_breach_rec records the gap. No new cron, no new worker.
 
 ALTER TABLE migration_runs ADD COLUMN bookmark TEXT;
 
 ALTER TABLE migration_runs ADD COLUMN bookmark_source TEXT;
 
-CREATE TABLE IF NOT EXISTS credential_registry (
+CREATE TABLE IF NOT EXISTS bp26_credential_registry (
   credential TEXT PRIMARY KEY,
   holder_worker TEXT NOT NULL,
   provider TEXT,
@@ -35,7 +39,7 @@ CREATE TABLE IF NOT EXISTS credential_registry (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
-INSERT OR IGNORE INTO credential_registry (credential, holder_worker, provider, expiry_mechanism, expires_at, renewal_issue_id, note) VALUES
+INSERT OR IGNORE INTO bp26_credential_registry (credential, holder_worker, provider, expiry_mechanism, expires_at, renewal_issue_id, note) VALUES
  ('CLOUDFLARE_API_TOKEN', 'github-actions (repository secret: deploys, migrations, runner reads)', 'Cloudflare', 'cf-token-verify', NULL, NULL, 'read every consumer run: metrics cloudflare_token_ok and cloudflare_token_expires_in_min (999999 means the token carries no expiry date), scripts/remediation_consumer.py cf_token_watch'),
  ('CF_API_TOKEN', 'qnfo-ops, qnfo-fleet-control and other workers (worker secret, 78 references in worker.js files)', 'Cloudflare', 'no-expiry-mechanism', NULL, NULL, 'the value is not readable from the runner, so its expiry date is not known; a holder worker calling the token verify route would read it (code-task)'),
  ('GITHUB_TOKEN', 'qnfo-github-steward, qnfo-ops, qnfo-code-orchestrator and other workers (worker secret)', 'GitHub', 'no-expiry-mechanism', NULL, NULL, 'a fine-grained token reports its expiry in the github-authentication-token-expiration response header; no loop reads it yet'),
@@ -65,7 +69,7 @@ UPDATE metric_registry SET source_of_truth = 'static scan of the live worker.js 
   WHERE metric = 'kv_used_for_locking';
 UPDATE metric_registry SET source_of_truth = 'pattern scan of the tracked files, allowlist scripts/secret-scan-allowlist.txt: scripts/bp26_repo.py collect_secrets_in_repo, runner [BP26]'
   WHERE metric = 'secrets_in_repo';
-UPDATE metric_registry SET source_of_truth = 'qnfo-audit.credential_registry (credential names and how their expiry can be known) with metric cloudflare_token_expires_in_min: scripts/bp26_repo.py collect_credential_expiry, runner [BP26]'
+UPDATE metric_registry SET source_of_truth = 'qnfo-audit.bp26_credential_registry (credential names and how their expiry can be known) plus the dated rows of qnfo-audit.credential_registry, with metric cloudflare_token_expires_in_min: scripts/bp26_repo.py collect_credential_expiry, runner [BP26]'
   WHERE metric = 'secret_expiry_warnings_open';
 UPDATE metric_registry SET source_of_truth = 'Cloudflare API D1 database list (file_size of the largest database over 10 x 10^9 bytes): scripts/bp26_repo.py collect_d1_size_and_drill, runner [BP26]'
   WHERE metric = 'd1_db_size_pct';
@@ -77,7 +81,7 @@ UPDATE metric_registry SET source_of_truth = 'qnfo-audit.migration_runs.bookmark
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session-rem-a8-repo',
   'a Time Travel bookmark for a past timestamp is a real restore point for 30 days, so recording it afterwards is the same safety as capturing it at apply time while scripts/apply_migrations.py is claimed by another session; a credential whose expiry the fleet cannot read must be listed as such, not counted as fine',
-  'BP26-REPO-1: scripts/bp26_repo.py (six collectors for eight metrics), migration_runs.bookmark and bookmark_source, credential_registry, d1_restore_drills, the real source_of_truth of the eight metrics, observability on the root stub',
+  'BP26-REPO-1: scripts/bp26_repo.py (six collectors for eight metrics), migration_runs.bookmark and bookmark_source, bp26_credential_registry, d1_restore_drills, the real source_of_truth of the eight metrics, observability on the root stub',
   'Cloudflare API 2026-10-26T19:5xZ: 35 deployed scripts, 34 with observability enabled (qnfo-workers, the repository root stub, is off); D1 list: qnfo-audit 981483520 bytes; time_travel/bookmark?timestamp= answered for 2026-10-26 and refused 2026-09-01 as too old; qnfo-ops/worker.js has no source-map upload code; opsPublicGate keeps a KV hit counter',
   'applied by migration; the collectors run on the next remediation-consumer run after merge', 'two columns on migration_runs, two new tables, eight metric source texts, one root wrangler.toml observability block; the collectors only read, and write migration_runs.bookmark',
   'the Rollback line', 'eight BP26 metrics measured from the real checkout, API and ledger; a restore point recorded for every applied migration',
