@@ -657,7 +657,11 @@ SETTLE_TRIAGE_SQL = ("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at,
                      "SELECT ?1, 'CONFLICT-REPAIR-SETTLE-1', 'conflict-repair', datetime('now'), ?2 "
                      "WHERE NOT EXISTS (SELECT 1 FROM issue_triage WHERE issue_id = ?1)")
 SETTLE_EVIDENCE_SQL = "UPDATE issue_triage SET close_evidence = ?2 WHERE issue_id = ?1"
-SETTLE_CLOSE_SQL = "UPDATE agent_issues SET status = 'closed', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE id = ?1 AND status = 'open'"
+# CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): a close with no close_channel cannot be attributed to a fix, a probe or a sweep. This
+# close wrote none, so four settled repair issues (1000254, 1000256, 1000270, 100422) and, after them, 1000365 carried NULL.
+SETTLE_CLOSE_CHANNEL = "auto:conflict-repair-settle"
+SETTLE_CLOSE_SQL = ("UPDATE agent_issues SET status = 'closed', close_channel = '" + SETTLE_CLOSE_CHANNEL + "', "
+                    "updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE id = ?1 AND status = 'open'")
 
 
 def settle_issue(number, evidence):

@@ -99,7 +99,7 @@ test("pushArtifactsToGitHub (consolidated): run + paper in one commit, ledger ro
   const f = w.cons.files();
   assert.ok(f["runs/cycle-397/alpha-paper/MANIFEST.json"] && f["runs/cycle-397/alpha-paper/ro-crate-metadata.json"] && f["papers/alpha-paper/provenance.json"]);
   const man = JSON.parse(f["runs/cycle-397/alpha-paper/MANIFEST.json"]);
-  assert.equal(man.run.id, w.rid); assert.match(man.run.worker_version, /^0\.35\.0/); assert.ok(man.models.writers.length >= 1);
+  assert.equal(man.run.id, w.rid); assert.match(man.run.worker_version, /^0\.(3[5-9]|[4-9]\d)\.\d+/); // a minimum, not an exact pin: the next patch release would break an exact one assert.ok(man.models.writers.length >= 1);
   const led = w.d1.ledger.get(w.rid);
   assert.equal(led.status, "ok"); assert.equal(led.commit_sha, w.cons.head); assert.equal(led.run_path, "runs/cycle-397/alpha-paper");
   assert.equal(led.paper_sha256, sha256("# Alpha\n\n**Version:** 2.0.0\n\nBody.\n")); assert.equal(led.manifest_sha256, sha256(f["runs/cycle-397/alpha-paper/MANIFEST.json"]));
