@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.0"; // 0.37.0 BP26-AI-LABEL-1 (2026-10-26): visible AI-generated label, see the note below.
+var VERSION = "0.37.1-codeagent"; // 0.37.0 BP26-AI-LABEL-1 (2026-10-26): visible AI-generated label, see the note below.
 /* 0.37.0 BP26-AI-LABEL-1 (2026-10-26, charter pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every piece page carries a visible "AI-generated" label linked to the published method note and JSON-LD creditText; HTML responses add nosniff, HSTS (no includeSubDomains) and X-Frame-Options SAMEORIGIN. */
 // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
 
@@ -3897,7 +3897,9 @@ function renderShare(p) {
   var links = [["Bluesky", "https://bsky.app/intent/compose?text=" + encodeURIComponent(t + " " + u)], ["X", "https://twitter.com/intent/tweet?text=" + et + "&url=" + eu], ["LinkedIn", "https://www.linkedin.com/sharing/share-offsite/?url=" + eu], ["Mastodon", "https://mastodon.social/share?text=" + encodeURIComponent(t + " " + u)], ["Hacker News", "https://news.ycombinator.com/submitlink?u=" + eu + "&t=" + et], ["Reddit", "https://www.reddit.com/submit?url=" + eu + "&title=" + et], ["Email", "mailto:?subject=" + et + "&body=" + encodeURIComponent(t + "\n" + u)]];
   var yr = (p.published_at || "").slice(0, 4);
   var cite = "q08. (" + yr + "). " + q08Plain(p.title) + ". q08.org. " + u;
-  return '<section class="q08-share" aria-label="Share and cite" style="margin:28px 0"><p class="q-meta" style="margin:0 0 8px">Pass it on: ' +
+  var nativeBtn = '<button class="q-native-share" style="margin:0 0 8px" onclick="if(navigator.share){navigator.share({title:' + JSON.stringify(t) + ',text:' + JSON.stringify(t) + ',url:' + JSON.stringify(u) + '})}">Share</button>';
+return '<section class="q08-share" aria-label="Share and cite" style="margin:28px 0">' + nativeBtn +
+  '<p class="q-meta" style="margin:0 0 8px">Pass it on: ' +
     links.map(function (l) { return '<a href="' + escHtml(l[1]) + '" rel="noopener" target="_blank">' + l[0] + "</a>"; }).join(" \u00b7 ") + "</p>" +
     (p.kind === "forecast" ? '<p class="q-meta" style="margin:0 0 8px">Disagree? Post your own probability for the claim and link this page; q08 settles it in public on the stated date.</p>' : "") +
     '<p class="q-meta" style="margin:0 0 8px">Download citation: <a href="/p/' + escHtml(p.slug) + '.bib">BibTeX</a> \u00b7 <a href="/p/' + escHtml(p.slug) + '.ris">RIS</a></p>' +
