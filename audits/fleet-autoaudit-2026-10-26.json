@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 12:42:11",
+  "audited_at": "2026-10-26 13:24:04",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -565,7 +565,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.39.11-codeagent",
+        "version": "5.40.0",
         "worker": "qnfo-ai"
       },
       {
@@ -615,7 +615,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.53.2-breach-doctor-gate-2",
+        "version": "0.54.0-probe-author-values",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.57.5-codeagent",
+        "version": "2.57.6",
         "worker": "qnfo-ops"
       },
       {
@@ -1052,9 +1052,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.39.11-codeagent",
+      "before": "5.40.0",
       "http": 200,
-      "live": "5.39.11-codeagent",
+      "live": "5.40.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1348,9 +1348,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.53.2-breach-doctor-gate-2",
+      "before": "0.54.0-probe-author-values",
       "http": 200,
-      "live": "0.53.2-breach-doctor-gate-2",
+      "live": "0.54.0-probe-author-values",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1508,9 +1508,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.57.5-codeagent",
+      "before": "2.57.6",
       "http": 200,
-      "live": "2.57.5-codeagent",
+      "live": "2.57.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
