@@ -254,6 +254,25 @@ test("repoCatchupTick: nothing missing but the legacy history is not yet an ance
   assert.equal(r.archive, "requested"); assert.equal(w.d1.portfolio.length, 1);
 });
 
+test("repoLedgerStatus: healthy only with 3 consolidated ok deposits and no failure", async () => {
+  const w = world();
+  w.d1.prepare = ((orig) => (sql) => {
+    const st = orig(sql);
+    if (/FROM research_run_ledger GROUP BY status/.test(sql)) return { bind: st.bind, all: async () => ({ results: [{ status: "ok", n: w.d1.ledger.size }] }) };
+    if (/FROM research_run_ledger ORDER BY updated_at/.test(sql)) return { bind: st.bind, all: async () => ({ results: [] }) };
+    if (/FROM v_research_run_deposit_failures/.test(sql)) return { bind: st.bind, first: async () => ({ n: w.failures || 0 }) };
+    return st;
+  })(w.d1.prepare.bind(w.d1));
+  let r = await W.repoLedgerStatus(w.env);
+  assert.equal(r.healthy, false); assert.equal(r.consolidated_ok, 0);
+  for (let i = 0; i < 3; i++) w.d1.ledger.set("ok" + i, { run_id: "ok" + i, slug: "s" + i, repo: "QNFO/qnfo-research", status: "ok", attempts: 1 });
+  r = await W.repoLedgerStatus(w.env);
+  assert.equal(r.healthy, true); assert.equal(r.consolidated_ok, 3); assert.equal(r.repo_deposit_version, "1.0.0");
+  w.failures = 1;
+  r = await W.repoLedgerStatus(w.env);
+  assert.equal(r.healthy, false, "one failing deposit means not healthy");
+});
+
 test("repoCatchupTick does nothing in the legacy layout", async () => {
   const w = world({ consolidated: false });
   assert.equal(await W.repoCatchupTick(w.env, { layout: "legacy" }), null);

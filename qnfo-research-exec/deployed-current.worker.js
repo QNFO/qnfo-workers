@@ -2135,7 +2135,10 @@ async function repoLedgerStatus(env) {
   var by = (await env.QNFO_AUDIT.prepare("SELECT status, COUNT(*) AS n, MAX(updated_at) AS latest FROM research_run_ledger GROUP BY status").all()).results || [];
   var recent = (await env.QNFO_AUDIT.prepare("SELECT run_id, slug, repo, run_path, status, commit_sha, updated_at FROM research_run_ledger ORDER BY updated_at DESC LIMIT 10").all()).results || [];
   var failing = (await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM v_research_run_deposit_failures").first());
-  return { by_status: by, recent: recent, deposit_failures: failing ? failing.n : null, repo_deposit_version: REPO_DEPOSIT.REPO_DEPOSIT_VERSION || "1.0.0" };
+  var cons = (await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_run_ledger WHERE status = 'ok' AND repo = 'QNFO/qnfo-research'").first());
+  var nf = failing ? Number(failing.n) : null, nc = cons ? Number(cons.n) : 0;
+  // healthy = the new deposit has worked in production: three consolidated deposits ledgered and no failure (issue RESEARCH-PROVENANCE-LIVE-1 closes on it)
+  return { by_status: by, recent: recent, deposit_failures: nf, consolidated_ok: nc, healthy: nc >= 3 && nf === 0, repo_deposit_version: REPO_DEPOSIT.REPO_DEPOSIT_VERSION };
 }
 __name(depositToGithub, "depositToGithub");
 __name2(depositToGithub, "depositToGithub");
