@@ -64,6 +64,7 @@ for (let i = 0; i < 12; i++) issue("ops filler " + i, "QNFO.OPS");
 run("INSERT INTO fleet_tasks (id, name, type, definition, version) VALUES ('portfolio-autopilot', 'ap', 'workflow', ?, 4)", JSON.stringify({ steps: [{ type: "sql", name: "file-no-mapped-work-umbrella", db: "AUDIT", sql: "INSERT INTO x SELECT 1 FROM (SELECT entity FROM portfolio_gaps WHERE status='open' AND kind='no-mapped-work' ORDER BY entity LIMIT 20) WHERE 1" }] }));
 db.exec("CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT); ALTER TABLE remediation_contracts ADD COLUMN precondition TEXT; ALTER TABLE remediation_contracts ADD COLUMN action TEXT; ALTER TABLE remediation_contracts ADD COLUMN verify_probe TEXT; ALTER TABLE remediation_contracts ADD COLUMN verify_transport TEXT; ALTER TABLE remediation_contracts ADD COLUMN max_attempts INTEGER; ALTER TABLE remediation_contracts ADD COLUMN escalate_to TEXT; ALTER TABLE remediation_contracts ADD COLUMN expected_cadence_h INTEGER;");
 db.exec("CREATE VIEW v_output_quality_headline AS SELECT 6 AS better, 0 AS worse, 1 AS flat, 2 AS unmeasured, 'ask,papers' AS gaps, 'improving_with_gaps' AS verdict");
+db.exec("CREATE TABLE cf_agent_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, requester TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'run', prompt TEXT, code TEXT, cron TEXT, delay_s INTEGER, instance TEXT, priority TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0, run_id TEXT, result TEXT, error TEXT, created_at TEXT, started_at TEXT, finished_at TEXT)");
 db.exec(sql1); db.exec(sql2); db.exec(sql3);
 const ap = one("SELECT definition, version FROM fleet_tasks WHERE id = 'portfolio-autopilot'");
 ok(JSON.parse(ap.definition).steps[0].sql.includes("kind='no-mapped-work' AND entity NOT LIKE 'QNFO.INFRA.%' ORDER BY entity LIMIT 20") && ap.version === 5, "the umbrella filer uses the closing probe's condition", ap);
@@ -94,7 +95,15 @@ ok(/Outputs \(readers, reviewers and probes, per surface\): improving_with_gaps,
 ok(/Quality: 83\.3 of 100/.test(pb) && /Most recurring: /.test(pb) && /root-cause issues 2/.test(pb), "the portfolio brief carries quality and recurrence", pb);
 ok(/Quality 75(\.0)? of 100/.test(one("SELECT summary FROM persona_briefs WHERE persona_key = 'program-manager:QNFO.OPS'").summary), "a program brief carries its index");
 
+const reqs = q("SELECT requester, instance, prompt FROM cf_agent_requests WHERE instance LIKE 'root-cause-%'");
+ok(reqs.length === 2 && reqs.every((r) => /Find the root cause/.test(r.prompt)), "each root-cause issue gets one Cloudflare agent diagnosis request", reqs);
+ok(one("SELECT COUNT(*) AS n FROM persona_actions WHERE kind = 'agent-diagnose' AND to_value = 'requested'").n === 2, "the requests are logged");
+ok(q("SELECT instance FROM cf_agent_requests WHERE instance LIKE 'program-review-%'").length === one("SELECT COUNT(*) AS n FROM portfolio_allocations WHERE verdict = 'RED' AND tick = (SELECT MAX(tick) FROM portfolio_allocations)").n, "each RED program gets one review request a day");
+run("UPDATE cf_agent_requests SET status = 'done', result = 'producer: x step; probe: y; fix: z', finished_at = '2026-10-26T08:00:00Z' WHERE instance = ?", "root-cause-" + rc("FLAPPY-1").id);
 tick();
+ok(/Root-cause diagnosis by the Cloudflare agent .*producer: x step/.test(one("SELECT description FROM agent_issues WHERE id = ?", rc("FLAPPY-1").id).description), "the agent's answer is appended to the issue");
+ok(one("SELECT to_value FROM persona_actions WHERE kind = 'agent-diagnose' AND issue_id = ?", rc("FLAPPY-1").id).to_value === "reported", "and the request is marked reported");
+ok(q("SELECT * FROM cf_agent_requests").length === reqs.length + q("SELECT instance FROM cf_agent_requests WHERE instance LIKE 'program-review-%'").length, "no request is filed twice");
 ok(one("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'ROOT-CAUSE-1:%'").n === 2, "a second tick files no duplicate");
 ok(one("SELECT COUNT(*) AS n FROM persona_actions WHERE kind = 'root-cause'").n === 2, "and logs no second filing");
 
