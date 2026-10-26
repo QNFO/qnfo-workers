@@ -446,6 +446,18 @@ because each one was broken at least once; the linked issue holds the evidence.
   (a flagship-version metric read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
+## Output quality outranks metric count (OUTPUT-QUALITY-LEDGER-1)
+- Owner directive 2026-10-26, verbatim: "DO NOT LOSE SIGHT OF CONTINUED DRIVE TO BETTER QUALITY OUTPUTS OF ALL KINDS (PAPERS/POSTS/PUBLICATIONS/PROMOTION/CODE/ETC).
+  IS THE FLEET ACTUALLY GETTING 'BETTER' AND HOW WOULD WE KNOW?" It binds every session and loop; `docs/OUTPUT-QUALITY-LEDGER.md` has the detail.
+- Whether outputs got better is read from `SELECT * FROM v_output_quality_by_surface; SELECT * FROM v_output_quality_headline;` (outcome measures only, now against
+  seven days earlier; `improving_with_gaps` means a surface has no measured outcome). Clearing breaches, closing issues and raising a gate pass rate are not quality.
+- A pool mean is not evidence: compare the same items a week apart, or items made after a change against items made before (the paper score's mean rose 64 to 73
+  while the same 464 papers fell 64.3 to 61.4). A gate or a rule-based score is a proxy: it is labelled `proxy` in `output_quality_measures`, never a target, and
+  never counted toward the verdict. A measure that cannot move any more (81% of new papers score 95 or more) is a `validity` finding, not good news.
+- A worker that produces output outsiders read (paper, essay, post, reply, code) names its outcome measure in `output_quality_measures` (role `outcome`, polarity, a
+  tolerance) in the PR that adds it, or is listed as a gap in the doc. A worse outcome is fixed at its producer; no measure is added to the outcome list to dilute it.
+- Do not close or reject findings (errata, retractions, reader reports) to lower a quality count; closure needs the reason or the fix.
+
 ## Writing that outsiders read (ENSEMBLE-POLICY-1)
 - Read `docs/ENSEMBLE-POLICY.md` before adding or changing a worker that writes prose for readers outside the fleet. LLM errors are
   correlated (a 9-judge, 7-family panel is worth about 2.2 votes), so layers must come from disjoint model families, stay few and
