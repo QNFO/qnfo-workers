@@ -66,5 +66,15 @@ p = parse("cfagent sandbox async () => 1 + 1");
 ok(p && p.auto && p.actions[0].op === "cfagentbox", "cfagent sandbox runs code at once");
 ok(parse("cfagent") && !parse("cfagent").actions, "bare cfagent answers usage");
 ok(parse("agent hello") === null, "the older agent command is untouched");
+// FM7-PARITY-MANAGERS-1: the qnfo-ops deploy guard's /health parity scan, run on this file. A literal "version:" after "ok: true"
+// makes /ops/deploy refuse the worker, and the code-only second path then ships it without new bindings (SVC_QNFO_AGENTS).
+{
+  const vc = src.match(/(?:var|const|let)\s+VERSION\s*=\s*["'][^"']+["']/g) || [];
+  const vv = vc.length === 1 ? vc[0].match(/["']([^"']+)["']/)[1] : null;
+  const rx = /(?:ok:\s*true|status:\s*["']ok["'])[^}]{0,800}?version:\s*["']([^"']+)["']/g;
+  const bad = []; let m;
+  while ((m = rx.exec(src)) !== null) if (m[1] !== vv) bad.push(m[1]);
+  ok(vc.length === 1 && bad.length === 0, "FM7 parity: no hardcoded version literal after ok: true " + JSON.stringify(bad));
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
