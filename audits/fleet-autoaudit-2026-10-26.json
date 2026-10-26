@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-26 19:46:42",
+  "audited_at": "2026-10-26 20:19:50",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-ops"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -558,7 +551,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.43.4-codeagent",
+        "version": "1.43.5-edge-headers",
         "worker": "personal-companion"
       },
       {
@@ -653,7 +646,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.19.0-ai-disclosure",
+        "version": "3.19.1-ab-cookieless",
         "worker": "qnfo-ipatent"
       },
       {
@@ -678,7 +671,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.59.4-canonical-refresh",
+        "version": "2.59.5-issue-repo-args",
         "worker": "qnfo-ops"
       },
       {
@@ -693,7 +686,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.19.4-learner-anchor",
+        "version": "0.20.0-automation-marker",
         "worker": "qnfo-social"
       },
       {
@@ -965,9 +958,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.43.4-codeagent",
+      "before": "1.43.5-edge-headers",
       "http": 200,
-      "live": "1.43.4-codeagent",
+      "live": "1.43.5-edge-headers",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1459,9 +1452,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.19.0-ai-disclosure",
+      "before": "3.19.1-ab-cookieless",
       "http": 200,
-      "live": "3.19.0-ai-disclosure",
+      "live": "3.19.1-ab-cookieless",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1517,9 +1510,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.59.4-canonical-refresh",
+      "before": "2.59.5-issue-repo-args",
       "http": 200,
-      "live": "2.59.4-canonical-refresh",
+      "live": "2.59.5-issue-repo-args",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1667,9 +1660,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.19.4-learner-anchor",
+      "before": "0.20.0-automation-marker",
       "http": 200,
-      "live": "0.19.4-learner-anchor",
+      "live": "0.20.0-automation-marker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
