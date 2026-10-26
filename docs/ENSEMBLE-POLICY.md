@@ -2,6 +2,7 @@
 
 Charter pillar: **reach** (quality of what the fleet publishes), constrained by **cost**. Owner directive 2026-10-03: all writing
 across q08 and qnfo gets multiple uncorrelated models and writing / review / edit levels, as in a diversified portfolio.
+What a paper and its plain-language summary must read like (owner request 2026-10-25): `docs/PAPER-AUTHORING-GUIDELINES.md`.
 
 ## The premise needs one correction
 
