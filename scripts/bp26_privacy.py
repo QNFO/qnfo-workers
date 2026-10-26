@@ -6,8 +6,9 @@ cannot measure returns None and writes nothing (unknown is never a value). No ad
 
   collect_review_docs          ropa_last_reviewed_days, dpia_current
         GitHub commits API on docs/ROPA.md and docs/dpia/{email-agent,personal-twin,ipatent}.md (path filter, newest commit on main). The consume job checkout is shallow, so git log
-        cannot answer; a 403, 429 or network error is None, never a guess. These two measure that the record is kept and was changed recently, NOT that it is adequate: the documents
-        are drafts for the owner to review (their own status line says so).
+        cannot answer. The consume job sends no GitHub token, so a shared runner address can be rate limited (403 or 429): then the document's OWN newest review date (a Review log
+        row or the Status line, read from the raw file on main) is used and the note and rows say so; when that fails too the value is None, never a guess. These two measure that the
+        record is kept and was changed recently, NOT that it is adequate: the documents are drafts for the owner to review (their own status line says so).
   collect_consent_proof        subscribers_with_consent_proof
         Aggregates only: confirmed subscribers with a stored consent timestamp / all confirmed, over qnfo-audit.subscribers (status subscribed, confirmed_at) and q08-signal.subscribers
         (status confirmed, confirmed_at). The companion list (personal-life.companion_subscribers) is the personal plane: this collector does not read it, and says so in its note.
@@ -75,21 +76,49 @@ def gh_last_commit(ctx, path):
     return (d, None) if d else (None, "commit without a date")
 
 
+REVIEW_DATE_RX = re.compile(r"^(?:\|\s*|Status:\s*\*\*[A-Z]+,\s*)(20\d\d-\d\d-\d\d)(?![0-9])", re.M)
+
+
+def raw_review_date(ctx, path):
+    """The newest review date written in the document itself (a Review log row or the Status line), read from the raw file on main: used only when the GitHub commits API
+    cannot answer (a shared runner address can be rate limited). (iso date | None when the file is not on main, error token | None)."""
+    r = ctx.http("https://raw.githubusercontent.com/%s/main/%s" % (REPO, path), external=True, timeout=20, max_bytes=262144)
+    if r.error or r.status not in (200, 404):
+        return None, (r.error or "http %s" % r.status)
+    if r.status == 404:
+        return None, None
+    dates = REVIEW_DATE_RX.findall(r.text)
+    if not dates:
+        return None, "no review date in the file"
+    return max(dates) + "T00:00:00Z", None
+
+
+def last_change(ctx, path):
+    """(iso date | None when the file is not on main, how it was read, error | None): the commits API first, the document's own review date when the API is unavailable."""
+    d, err = gh_last_commit(ctx, path)
+    if not err:
+        return d, "newest commit on main (GitHub commits API)", None
+    d2, err2 = raw_review_date(ctx, path)
+    if err2:
+        return None, "", "%s; raw file: %s" % (err, err2)
+    return d2, "the document's own review date (commits API unavailable: %s)" % err, None
+
+
 def collect_review_docs(ctx):
     out = []
     # ROPA: days since the last change on main.
-    d, err = gh_last_commit(ctx, ROPA)
+    d, how, err = last_change(ctx, ROPA)
     if err:
-        out.append(Result("ropa_last_reviewed_days", None, "GitHub commits API for %s: %s; kept unknown" % (ROPA, err), [(ROPA, None, err)]))
+        out.append(Result("ropa_last_reviewed_days", None, "%s: %s; kept unknown" % (ROPA, err), [(ROPA, None, err)]))
     elif d is None:
         out.append(Result("ropa_last_reviewed_days", None, "%s has no commit on main: no record to age" % ROPA, [(ROPA, 0, "not on main")]))
     else:
         days = max(0, int((ctx.now - _epoch(d)) // 86400))
-        out.append(Result("ropa_last_reviewed_days", days, "%s last changed %s (%d days ago), newest commit on main by the GitHub commits API; measures that the record is kept, not that it is adequate" % (ROPA, d, days), [(ROPA, 1 if days <= 180 else 0, "last change %s, %d days" % (d, days))]))
+        out.append(Result("ropa_last_reviewed_days", days, "%s last changed %s (%d days ago), read from %s; measures that the record is kept, not that it is adequate" % (ROPA, d, days, how), [(ROPA, 1 if days <= 180 else 0, "last change %s, %d days, %s" % (d, days, how))]))
     # DPIAs: files changed in the last 365 days / 3.
     rows, unknown, current = [], [], 0
     for p in DPIAS:
-        d, err = gh_last_commit(ctx, p)
+        d, how, err = last_change(ctx, p)
         if err:
             unknown.append(p)
             rows.append((p, None, err))
@@ -99,10 +128,10 @@ def collect_review_docs(ctx):
             age = int((ctx.now - _epoch(d)) // 86400)
             good = age <= DPIA_MAX_AGE_DAYS
             current += 1 if good else 0
-            rows.append((p, 1 if good else 0, "last change %s, %d days" % (d, age)))
+            rows.append((p, 1 if good else 0, "last change %s, %d days, %s" % (d, age, how)))
     if unknown:
         why = "; ".join("%s (%s)" % (r[0], r[2]) for r in rows if r[1] is None)
-        out.append(Result("dpia_current", None, "GitHub commits API failed for %s; a ratio with an unknown numerator is not written" % why, rows))
+        out.append(Result("dpia_current", None, "GitHub could not be read for %s; a ratio with an unknown numerator is not written" % why, rows))
     else:
         out.append(Result("dpia_current", round(current / float(len(DPIAS)), 4), "%d of %d DPIA files changed in the last %d days (email agent, personal twin, ipatent); measures existence and recency of the review file, not its adequacy" % (current, len(DPIAS), DPIA_MAX_AGE_DAYS), rows))
     return out
@@ -239,8 +268,15 @@ def selftest():
 
     # ---- review docs
     pages = {}
+    raw = {}  # path -> (status, text) served by the raw-file fallback; absent means the raw host is down too
 
     def http(url, **kw):
+        if "raw.githubusercontent.com" in url:
+            path = url.split("/main/", 1)[1]
+            if path not in raw:
+                return P.Resp(0, {}, [], "", url, 1, [], "timeout")
+            st, text = raw[path]
+            return P.Resp(st, {}, [], text, url, 1, [], None)
         p = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["path"][0]
         v = pages.get(p, "none")
         if v == "403":
@@ -252,18 +288,31 @@ def selftest():
     mk = lambda **k: P.Ctx(now=now, http=http, **k)  # noqa: E731
     pages.update({ROPA: iso(3), DPIAS[0]: iso(1), DPIAS[1]: iso(400), DPIAS[2]: "none"})
     r = {x.metric: x for x in collect_review_docs(mk())}
-    ok(r["ropa_last_reviewed_days"].value == 3, "ROPA last changed 3 days ago reads 3: %r" % (r["ropa_last_reviewed_days"],))
+    ok(r["ropa_last_reviewed_days"].value == 3 and "GitHub commits API" in r["ropa_last_reviewed_days"].note, "ROPA last changed 3 days ago reads 3, from the commits API: %r" % (r["ropa_last_reviewed_days"],))
     ok(r["dpia_current"].value == round(1 / 3.0, 4) and [x[1] for x in r["dpia_current"].rows] == [1, 0, 0], "one of three DPIA files is current (one 400 days old, one not on main): %r" % (r["dpia_current"],))
     pages.update({ROPA: "403", DPIAS[0]: iso(1), DPIAS[1]: iso(2), DPIAS[2]: iso(3)})
     r = {x.metric: x for x in collect_review_docs(mk())}
-    ok(r["ropa_last_reviewed_days"].value is None and "http 403" in r["ropa_last_reviewed_days"].note, "a 403 from GitHub is unknown, not a guess")
+    ok(r["ropa_last_reviewed_days"].value is None and "http 403" in r["ropa_last_reviewed_days"].note and "raw file" in r["ropa_last_reviewed_days"].note, "a 403 from GitHub with the raw host down too is unknown, not a guess")
     ok(r["dpia_current"].value == 1.0, "three current DPIA files read 1.0")
     pages.update({DPIAS[2]: "err"})
     r = {x.metric: x for x in collect_review_docs(mk())}
-    ok(r["dpia_current"].value is None and "timeout" in r["dpia_current"].note, "a failed read of one DPIA file leaves the ratio unknown")
+    ok(r["dpia_current"].value is None and "timeout" in r["dpia_current"].note, "a failed read of one DPIA file (API and raw both down) leaves the ratio unknown")
     pages.update({ROPA: "none"})
     r = {x.metric: x for x in collect_review_docs(mk())}
     ok(r["ropa_last_reviewed_days"].value is None and "no commit on main" in r["ropa_last_reviewed_days"].note, "a missing ROPA file has no age")
+    # the labelled fallback: the commits API is rate limited, the raw file carries its own review date
+    day6 = time.strftime("%Y-%m-%d", time.gmtime(now - 6 * 86400))
+    pages.update({ROPA: "403", DPIAS[0]: "403", DPIAS[1]: "403", DPIAS[2]: "403"})
+    ropa_text = "\n".join(["# Record", "", "Status: **DRAFT, 2026-01-01.** text", "", "| Date | Change |", "|---|---|", "| 2026-02-02 | first |", "| %s | second |" % day6, ""])
+    raw.update({ROPA: (200, ropa_text), DPIAS[0]: (200, "Status: **DRAFT, %s** (x)\n" % day6), DPIAS[1]: (200, "Status: **DRAFT, 2020-01-01** (old)\n"), DPIAS[2]: (404, "")})
+    r = {x.metric: x for x in collect_review_docs(mk())}
+    ok(r["ropa_last_reviewed_days"].value == 6 and "own review date" in r["ropa_last_reviewed_days"].note and "http 403" in r["ropa_last_reviewed_days"].note, "with the API refused the newest review date in the file is used and labelled: %r" % (r["ropa_last_reviewed_days"],))
+    ok(r["dpia_current"].value == round(1 / 3.0, 4) and [x[1] for x in r["dpia_current"].rows] == [1, 0, 0], "fallback: a recent review date counts, a 2020 date and a file not on main do not: %r" % (r["dpia_current"].rows,))
+    raw.update({ROPA: (200, "no dates here")})
+    r = {x.metric: x for x in collect_review_docs(mk())}
+    ok(r["ropa_last_reviewed_days"].value is None and "no review date" in r["ropa_last_reviewed_days"].note, "a file without a review date is unknown, not today")
+    raw.clear()
+    pages.clear()
 
     # ---- consent proof
     c = sqlite3.connect(":memory:")
