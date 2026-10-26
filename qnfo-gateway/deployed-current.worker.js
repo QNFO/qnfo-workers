@@ -1,4 +1,5 @@
-var VERSION="3.43.2-plain-residue-like";
+var VERSION="3.43.3-daily-slot";
+// 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
 // 3.43.2 PLAIN-RESIDUE-LIKE-1: the residue gate SQL uses instr (a 54-byte LIKE pattern made D1 refuse every plain-summary fill and paper-page fill from 2026-10-25 19:50); a paper page with no summary builds that one paper only, never the 12-paper hourly batch.
 // 3.42.1 PLAIN-RESIDUE-GATE-1 hides prompt residue and refreshes only flagged summaries; ROOT-PAPER-API-1 serves root-host WebMCP paper APIs.
 // 3.41.1 FEED-SUMMARY-DISCLOSURE-1: feed summaries carry the publisher classification and explicit review status, including for clients that ignore custom metadata fields.
@@ -3097,17 +3098,22 @@ function renderWorkWithMeHTML() {
 function handleWorkWithMe() {
   return new Response(renderWorkWithMeHTML(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
 }
-async function collectPaperUrls(env, recentDays) {
+// GATEWAY-DAILY-SLOT-1 (3.43.3): recentMinutes selects a DELTA of papers created in the last N minutes and returns only their
+// paper URLs (no '/' or '/papers' base pages), so the hourly fire can ping fresh papers without re-sending the 7-day window.
+async function collectPaperUrls(env, recentDays, recentMinutes) {
   // WS-A1 (2026-09-26): the scheduled cron submits ONLY recently-changed papers. A full 460-URL
   // submit (ok on the first, operator-side run) exceeds the IndexNow per-key rate budget when
   // repeated daily and returns 429 from the Cloudflare egress IP (FM2). The full set remains
   // available via /api/indexnow?full=1; the cron stays inside the budget.
   var sql = "SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
-  if (recentDays) sql += " AND created_at >= datetime('now','-" + Number(recentDays) + " days')";
+  const delta = Number(recentMinutes) > 0;
+  if (delta) sql += " AND created_at >= datetime('now','-" + Math.floor(Number(recentMinutes)) + " minutes')";
+  else if (recentDays) sql += " AND created_at >= datetime('now','-" + Number(recentDays) + " days')";
   sql += " ORDER BY created_at DESC";
   const res = await env.LIVING_PAPER.prepare(sql).all();
   const base = "https://papers.qnfo.org";
-  return [base + "/", base + "/papers"].concat(res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug)));
+  const paperUrls = res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug));
+  return delta ? paperUrls : [base + "/", base + "/papers"].concat(paperUrls);
 }
 __name(collectPaperUrls, "collectPaperUrls");
 async function indexNowSubmit(urls, host) {
@@ -7013,6 +7019,31 @@ async function handlePaperMarkdown(env, slug, host) {
 // launch and slowly becoming fiction. Every value below is a count over the evidence rows, not a cached summary: an
 // engine that stops accepting, a corpus the sitemap drops, or a week with no Googlebot fetch all move.
 var SEO_PAPER_HUB_COUNT = 5;
+// Distinct IndexNow endpoints that answered 200..399 across a list of indexnow_log detail strings.
+// TRUNCATED-DETAIL-1: counting accepted engines used to depend entirely on JSON.parse. A stored detail longer than the
+// column budget fails to parse and the old catch assigned 0 - which is not "unknown", it asserts every engine refused,
+// and it fired a false outage. The raw-text count runs per row whenever its parse fails OR yields nothing, so the metric
+// can under-report reach only by finding no acceptance at all. unknown is true only when nothing was accepted anywhere
+// AND at least one detail could not be parsed (so a zero would be an assertion the data does not support).
+function indexNowEnginesAccepted(details) {
+  var seen = {}, unparsed = 0;
+  (details || []).forEach(function (raw) {
+    var det = String(raw || "");
+    if (!det) return;
+    var rowSeen = {}, parsed = true;
+    try {
+      (JSON.parse(det) || []).forEach(function (c) { (c.eps || []).forEach(function (e) { var st = Number(e.status); if (st > 0 && st < 400) rowSeen[e.ep] = 1; }); });
+    } catch (e) { parsed = false; }
+    if (!Object.keys(rowSeen).length) {
+      var mm, reAcc = /"ep":"([^"]+)","status":(?:200|202)/g;
+      while ((mm = reAcc.exec(det))) rowSeen[mm[1]] = 1;
+    }
+    if (!Object.keys(rowSeen).length && !parsed) unparsed++;
+    Object.keys(rowSeen).forEach(function (k) { seen[k] = 1; });
+  });
+  var count = Object.keys(seen).length;
+  return { count: count, unknown: count === 0 && unparsed > 0 };
+}
 async function seoPublishMetrics(env) {
   if (!env.AUDIT || !env.LIVING_PAPER) return { ok: false, error: "bindings missing" };
   var vals = {};
@@ -7029,24 +7060,19 @@ async function seoPublishMetrics(env) {
     vals.seo_crawl_googlebot_7d = covered ? String(Number((g && g.g) || 0)) : "";
     vals.seo_crawl_bingbot_7d = covered ? String(Number((g && g.b) || 0)) : "";
     vals.seo_crawl_coverage_days = String(covDays);
-    var ix = await env.LIVING_PAPER.prepare("SELECT detail FROM indexnow_log ORDER BY ts DESC LIMIT 1").first();
-    var engines = 0;
-    var det = String((ix && ix.detail) || "");
-    // TRUNCATED-DETAIL-1: counting accepted engines used to depend entirely on JSON.parse. A stored detail longer than
-    // the column budget fails to parse and the old catch assigned 0 - which is not "unknown", it asserts every engine
-    // refused, and it fired a false outage. The raw-text count runs whenever a parse fails OR yields nothing, so the
-    // metric can under-report reach only by finding no acceptance at all.
-    try {
-      var seen = {};
-      (JSON.parse(det || "[]") || []).forEach(function (c) { (c.eps || []).forEach(function (e) { var st = Number(e.status); if (st > 0 && st < 400) seen[e.ep] = 1; }); });
-      engines = Object.keys(seen).length;
-    } catch (e) { engines = 0; }
-    if (!engines) {
-      var seenRaw = {}, mm, reAcc = /"ep":"([^"]+)","status":(?:200|202)/g;
-      while ((mm = reAcc.exec(det))) seenRaw[mm[1]] = 1;
-      engines = Object.keys(seenRaw).length;
+    // GATEWAY-DAILY-SLOT-1 (3.43.3): the metric used to read the single newest indexnow_log row, so one throttled run (a
+    // 429 from a shared relay or from Seznam) flipped it 3 -> 2 for an hour. It now counts the distinct endpoints that
+    // answered 200..399 in ANY submission of the last 26 hours (the daily 06:00 pass plus the hourly deltas); with no row
+    // in that window it falls back to the newest row, as before.
+    var ixr = await env.LIVING_PAPER.prepare("SELECT detail FROM indexnow_log WHERE ts >= datetime('now','-26 hours') ORDER BY ts DESC LIMIT 60").all();
+    var ixd = ((ixr && ixr.results) || []).map(function (r) { return r && r.detail; });
+    if (!ixd.length) {
+      var ix = await env.LIVING_PAPER.prepare("SELECT detail FROM indexnow_log ORDER BY ts DESC LIMIT 1").first();
+      ixd = ix ? [ix.detail] : [];
     }
-    vals.seo_indexnow_engines_ok = String(engines);
+    var ixe = indexNowEnginesAccepted(ixd);
+    // An unparseable detail with no recoverable acceptance is "unknown", not "every engine refused": publish no value.
+    vals.seo_indexnow_engines_ok = ixe.unknown ? "" : String(ixe.count);
     var sm = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE slug IS NOT NULL AND status IN " + LP_PUBLIC).first();
     // SEO_PAPER_HUB_COUNT must equal the static entry count in the papers-host sitemap list (seo-index.test.mjs asserts
     // they agree). It is named because the previous inline 6 silently over-counted the moment a hub was removed, which
@@ -7310,9 +7336,28 @@ var gateway_worker_default = {
     return;
   }
 };
+// GATEWAY-DAILY-SLOT-1 (3.43.3, 2026-10-26, pillar reach): CRON_GRID_CFG lists two jobs, "0 6 * * *" (daily) and "0 * * * *"
+// (hourly), and both call this one runner. Since the hourly trigger replaced the daily one on 2026-10-20 the work below
+// that is designed to run once a day at 06:00 ran every hour: papers.qnfo.org IndexNow got 38 runs and 11,174 URLs on
+// 2026-10-26 (it was 77 to 89 URLs once a day before), and because it is a Monday the weekly 711-URL full pass fired
+// hourly too, so api.indexnow.org, bing.com and often seznam answered http 429; the render-health sweep re-rendered and
+// UPDATEd every public paper hourly, and the Browser Run math sample loaded five pages hourly. The runner now reads
+// which job fired it: the hourly job (event.cron exactly "0 * * * *") does the hourly work plus an IndexNow delta of the
+// papers created in the last 90 minutes; the 06:00 job, its retries and any manual fire do the daily work as before.
+var GATEWAY_HOURLY_CRON = "0 * * * *";
+var GATEWAY_DELTA_MINUTES = 90;
 async function gatewayDaily(event, env, ctx) {
     var cronOk = true;
+    var hourlyOnly = String(event && event.cron || "") === GATEWAY_HOURLY_CRON;
     try {
+      if (hourlyOnly) {
+        // Fresh papers are pinged within the hour; with none in the window nothing is submitted and no log row is written.
+        const du = await collectPaperUrls(env, null, GATEWAY_DELTA_MINUTES);
+        if (du.length) {
+          const dr = await indexNowSubmit(du, "papers.qnfo.org");
+          await indexNowLog(env, "papers.qnfo.org", dr);
+        }
+      } else {
       // DISCOVERY-1 (2026-10-06): every submission is logged (living-paper indexnow_log) so search reach is measurable,
       // and on Mondays the qnfo.org core pages are submitted on their own host (key file now served there too).
       const pr = await indexNowSubmit(await collectPaperUrls(env, 7), "papers.qnfo.org");
@@ -7332,6 +7377,7 @@ async function gatewayDaily(event, env, ctx) {
       // SEO-INDEX-1: 90 days of crawl rows is enough to tell a crawl drought from a crawl wave; older rows are pruned so
       // the table stays a signal rather than a log.
       try { await env.LIVING_PAPER.prepare("DELETE FROM seo_crawl_log WHERE day < date('now','-90 days')").run(); } catch (e) {}
+      }
     } catch (e) {
       console.log("DISCOVERY-1 indexnow failed: " + String(e && e.message || e).slice(0, 200));
       cronOk = false;
@@ -7352,15 +7398,18 @@ async function gatewayDaily(event, env, ctx) {
     } catch (e) {
       console.log("PLAIN-FILL-1 fill failed: " + String(e && e.message || e).slice(0, 200));
     }
-    try {
-      await renderHealthSweep(env);
-    } catch (e) {
-      console.log("RENDER-HEALTH-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
-    }
-    try {
-      await browserMathSample(env);
-    } catch (e) {
-      console.log("MATH-BROWSER-2 sample failed: " + String(e && e.message || e).slice(0, 200));
+    // GATEWAY-DAILY-SLOT-1: both are once-a-day steps of the 06:00 job (no throttle of their own), not hourly ones.
+    if (!hourlyOnly) {
+      try {
+        await renderHealthSweep(env);
+      } catch (e) {
+        console.log("RENDER-HEALTH-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
+      }
+      try {
+        await browserMathSample(env);
+      } catch (e) {
+        console.log("MATH-BROWSER-2 sample failed: " + String(e && e.message || e).slice(0, 200));
+      }
     }
     // PAPER-AUDIENCE-CATEGORIES-1: shelf the papers published since the last run. Without this, a new paper
     // falls back to the keyword classifier and the shelves drift; with it, every paper has a shelf within a day.
