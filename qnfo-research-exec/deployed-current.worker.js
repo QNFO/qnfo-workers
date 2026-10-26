@@ -2006,7 +2006,7 @@ async function recordRunLedger(env, row, slug, t, res, info) {
       .bind(String(row.id), slug, t ? t.owner + "/" + t.repo : null, res.runPath || null, res.cycle || null, res.paperPath || null, info && info.version || null, info && info.body ? await REPO_DEPOSIT.sha256Hex(info.body) : null, res.manifestSha256 || null, res.commit || null, res.status || (res.ok ? "ok" : "error"), res.error ? String(res.error).slice(0, 300) : null, VERSION, res.ok || res.status === "landed-unverified" ? nowIso() : null).run();
   } catch (e) {
     console.error(JSON.stringify({ worker: WORKER, where: "run-ledger", slug: slug, error: String(e && e.message || e).slice(0, 200) }));
-    try { await logEvent(env, "repo-ledger", "insert failed slug=" + slug + " " + String(e && e.message || e).slice(0, 200), "error"); } catch (e2) {}
+    try { await logEvent(env, "repo-ledger", "insert failed slug=" + slug + " " + String(e && e.message || e).slice(0, 200), "error"); } catch (e2) { console.error(JSON.stringify({ worker: WORKER, where: "run-ledger-event", slug: slug, error: String(e2 && e2.message || e2).slice(0, 200) })); }
   }
 }
 // The paper side of publishV2 (version_queue drain) and of the claim-integrity writer. Consolidated layout only; the sync tick covers the rest.
