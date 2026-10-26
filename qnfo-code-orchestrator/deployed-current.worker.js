@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.27.1-codeagent"; // CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+var VERSION = "0.28.0-codeagent"; // FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -3747,6 +3747,18 @@ async function feedFleetTick(env) {
     } catch (e2) {
       await logTickError(env, "fleet_tick-isolated", e2);
     }
+  }
+  await feedHeavyTick(env);
+}
+// FLEET-TICK-SPLIT-1 (0.28.0, 2026-10-26): every fleet_tick trigger runs inside the one statement above, and a 53rd heavy trigger
+// (breach_selfheal_tick) pushed it to SQLITE_NOMEM from 04:42Z to 06:12Z, so no fixer ran. Heavy steps hang off fleet_tick_heavy, a second
+// heartbeat written here as its own statement (same 9-minute guard; a second producer is agent_issues FLEET-TICK-HEAVY-SECOND-PRODUCER-1): a failure there is
+// logged and never touches fleet_tick.
+async function feedHeavyTick(env) {
+  try {
+    await env.AUDIT.prepare("INSERT INTO fleet_tick_heavy (source) SELECT 'cron:qnfo-code-orchestrator' WHERE NOT EXISTS (SELECT 1 FROM fleet_tick_heavy WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))").run();
+  } catch (e) {
+    await logTickError(env, "fleet_tick_heavy", e);
   }
 }
 async function logTickError(env, step, e) {
