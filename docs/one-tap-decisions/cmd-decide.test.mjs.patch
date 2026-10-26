@@ -1,0 +1,267 @@
+--- qnfo-fleet-dashboard/cmd-decide.test.mjs	2026-10-26 12:35:32.862078763 +0000
++++ qnfo-fleet-dashboard/cmd-decide.test.mjs	2026-10-26 12:45:22.197276640 +0000
+@@ -132,6 +132,10 @@
+ const rows = (db, sql, ...a) => db.prepare(sql).all(...a);
+ const one = (db, sql, ...a) => db.prepare(sql).get(...a);
+ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
++// ONE-TAP-DECISIONS-1 (1.71.0): Approve and Decline are one-tap buttons (data-dec-op, data-dec-args) that run at the tap; tap() is the attribute string of one
++const tap = (op, key, items) => 'data-dec-op="' + op + '" data-dec-args="' + JSON.stringify(items ? { key, items } : { key }).replace(/"/g, "&quot;") + '"';
++// the buttons of a rendered page as { label, op, args }, read the way the browser script reads them
++const taps = (html) => [...html.matchAll(/<button type="button" class="[^"]*" data-dec-op="(approve|decline)" data-dec-args="([^"]*)">([^<]*)</g)].map((m) => ({ op: m[1], args: JSON.parse(m[2].replace(/&quot;/g, '"')), label: m[3] }));
+ 
+ // T1. the five lines the owner typed (and the long sentence) are commands: no model call, one approve button, destructive
+ {
+@@ -409,30 +413,30 @@
+   const C = await signIn(e.env, e.db, e.m);
+   const owner = await (await call(e.env, "/classic", { headers: C })).text();
+   ok(/<div class="dec" data-dec="ha:uia-source-fidelity-100140">/.test(owner), "T14b the signed-in owner sees the decision block on the owner-gated card", owner.slice(0, 200));
+-  for (let n = 1; n <= 7; n++) ok(owner.includes('data-fleet-cmd="approve ha:' + SLUG + " " + n + '">Approve ' + n + "<") && owner.includes('data-fleet-cmd="decline ha:' + SLUG + " " + n + '">Decline ' + n + "<"), "T14c item " + n + " has its own Approve and Decline");
+-  ok(owner.includes('data-fleet-cmd="approve ha:' + SLUG + '">Approve all 7<') && owner.includes('data-fleet-cmd="diagnose ha:' + SLUG + '">Diagnose<') && /Decide each part: 0 of 7 decided/.test(owner), "T14d Approve all, Decline all and Diagnose are on the card", owner.slice(0, 100));
++  for (let n = 1; n <= 7; n++) ok(owner.includes(tap("approve", "ha:" + SLUG, [n]) + ">Approve " + n + "<") && owner.includes(tap("decline", "ha:" + SLUG, [n]) + ">Decline " + n + "<"), "T14c item " + n + " has its own Approve and Decline");
++  ok(owner.includes(tap("approve", "ha:" + SLUG) + ">Approve all 7<") && owner.includes(tap("decline", "ha:" + SLUG) + ">Decline all<") && owner.includes('data-fleet-cmd="diagnose ha:' + SLUG + '">Diagnose<') && /Decide each part: 0 of 7 decided/.test(owner), "T14d Approve all, Decline all and Diagnose are on the card", owner.slice(0, 100));
+   ok(!/data-dec="ha:orcid-link-works"/.test(owner), "T14e a plain action card gets no decision block");
+   ok(/\.dec button\{min-height:44px;min-width:44px/.test(owner) && /\.dec-i\{display:flex;flex-wrap:wrap/.test(owner) && /\.dec-t\{flex:1 1 240px;min-width:0/.test(owner) && /@media \(max-width:420px\)\{\.dec-b,\.dec-all\{width:100%\}/.test(owner), "T14f 44 px targets, wrapping rows and a 360 px rule are in the page CSS");
+   ok(!/\.dec[^{]*:hover/.test(owner), "T14g nothing depends on hover");
+   ok(/document\.addEventListener\('click',function\(e\)\{var t=e\.target&&e\.target\.closest&&e\.target\.closest\('\[data-fleet-cmd\]'\)/.test(owner), "T14h the click handler is delegated on document, so the refreshed #live fragment keeps working buttons");
+   const frag = await (await call(e.env, "/?frag=1", { headers: C })).text();
+-  ok(frag.includes('data-fleet-cmd="approve ha:' + SLUG + ' 3"'), "T14i the 15 s fragment carries the same buttons", frag.length);
++  ok(frag.includes(tap("approve", "ha:" + SLUG, [3])), "T14i the 15 s fragment carries the same buttons", frag.length);
+   const cs = /<script>(\(function\(\)\{var f=document\.getElementById\('cform'\)[\s\S]*?)<\/script>/.exec(owner);
+   let parsed = true; try { new Function(cs[1]); } catch (err) { parsed = String(err); }
+   ok(cs && parsed === true && /function acts\(p,list,c\)/.test(cs[1]) && /if\(j\.quick\)quick\(c,j\.quick\)/.test(cs[1]), "T14j the command-line script still parses and shows j.quick while the model thinks", parsed);
+   await run(e.env, "decline", { key: "ha:" + SLUG, issue: 100140, items: [2], note: "" }, C);
+   const after = await (await call(e.env, "/classic", { headers: C })).text();
+-  ok(/Decide each part: 1 of 7 decided/.test(after) && /&#10007; declined/.test(after) && after.includes('data-fleet-cmd="approve ha:' + SLUG + ' 1, 3-7">Approve the 6 left<'), "T14k a decided item shows its state and the card offers the undecided rest", after.slice(after.indexOf('class="dec"'), after.indexOf('class="dec"') + 1800));
++  ok(/Decide each part: 1 of 7 decided/.test(after) && /&#10007; declined/.test(after) && after.includes(tap("approve", "ha:" + SLUG, [1, 3, 4, 5, 6, 7]) + ">Approve the 6 left<"), "T14k a decided item shows its state and the card offers the undecided rest", after.slice(after.indexOf('class="dec"'), after.indexOf('class="dec"') + 1800));
+   const left = await (await cmd(e.env, "approve ha:" + SLUG + " 1, 3-7", C)).json();
+   ok(left.actions.find((x) => x.op === "approve").args.items.join() === "1,3,4,5,6,7" && /Already decided: 2 decline/.test(left.text), "T14k2 the button's own command parses to the six undecided items", left);
+   const single = mk({ noCard: true, second: true });
+   const C3 = await signIn(single.env, single.db, single.m);
+   const sp = await (await call(single.env, "/classic", { headers: C3 })).text();
+-  ok(sp.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && !sp.includes('data-fleet-cmd="approve ha:pick-pricing-model">') && sp.includes('data-fleet-cmd="decline ha:pick-pricing-model">Decline<'), "T14l a pick-one card gets 'Approve an option' (it fills the command line), Decline and Diagnose, never a bare Approve", sp.slice(0, 80));
++  ok(sp.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && !sp.includes(tap("approve", "ha:pick-pricing-model")) && sp.includes(tap("decline", "ha:pick-pricing-model") + ">Decline<"), "T14l a pick-one card gets 'Approve an option' (it fills the command line), Decline and Diagnose, never a bare Approve", sp.slice(0, 80));
+   const plainDec = mk({ noCard: true, shapes: true });
+   const C4 = await signIn(plainDec.env, plainDec.db, plainDec.m);
+   const pp = await (await call(plainDec.env, "/classic", { headers: C4 })).text();
+-  ok(pp.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<') && pp.includes('data-fleet-cmd="decline ha:approve-logo-refresh">Decline<') && pp.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T14m a card that asks to be approved gets plain Approve, Decline and Diagnose", pp.slice(0, 80));
++  ok(pp.includes(tap("approve", "ha:approve-logo-refresh") + ">Approve<") && pp.includes(tap("decline", "ha:approve-logo-refresh") + ">Decline<") && pp.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T14m a card that asks to be approved gets plain Approve, Decline and Diagnose", pp.slice(0, 80));
+ }
+ // T15. retry
+ {
+@@ -547,8 +551,8 @@
+   const page = await (await call(e.env, "/classic", { headers: C })).text();
+   ok(!page.includes('data-dec="ha:tilburg-dis-phd-inquiry-send"') && !page.includes('data-dec="ha:domain-renewal-qnfo"'), "T18 an IDENTITY-BOUND card that asks for no decision (send an e-mail, renew a domain) gets no decision block");
+   const eb = 'ha:eb1a-statement-email984';
+-  ok(page.includes('data-dec="' + eb + '"') && page.includes('data-fleet-cmd="diagnose ' + eb + '">Diagnose<') && page.includes('data-fleet-cmd="done ' + eb + '">Done<') && !page.includes('data-fleet-cmd="approve ' + eb) && !page.includes('data-fleet-cmd="decline ' + eb) && /Only you can take this step/.test(page), "T18a the signing card (it says 'decline') shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + eb + '"'), page.indexOf('data-dec="' + eb + '"') + 600));
+-  ok(page.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T18b a plain decision card still has its Approve");
++  ok(page.includes('data-dec="' + eb + '"') && page.includes('data-fleet-cmd="diagnose ' + eb + '">Diagnose<') && page.includes(tap("done", eb) + ">Done<") && !page.includes('data-fleet-cmd="approve ' + eb) && !page.includes('data-fleet-cmd="decline ' + eb) && /Only you can take this step/.test(page), "T18a the signing card (it says 'decline') shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + eb + '"'), page.indexOf('data-dec="' + eb + '"') + 600));
++  ok(page.includes(tap("approve", "ha:approve-logo-refresh") + ">Approve<"), "T18b a plain decision card still has its Approve");
+   for (const k of ["eb1a-statement-email984", "tilburg-dis-phd-inquiry-send", "domain-renewal-qnfo"]) {
+     for (const verb of ["approve", "decline"]) {
+       const j = await (await cmd(e.env, verb + " ha:" + k, C)).json();
+@@ -565,17 +569,17 @@
+   e2.db.prepare("INSERT INTO default_approve_markers (kind, pattern) VALUES ('hard', '%brand page%')").run();
+   const C2 = await signIn(e2.env, e2.db, e2.m);
+   const p2 = await (await call(e2.env, "/classic", { headers: C2 })).text();
+-  ok(!p2.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p2.includes('data-fleet-cmd="done ha:approve-logo-refresh">Done<'), "T18g a hard marker added in D1 takes effect on the next page", p2.length);
++  ok(!p2.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p2.includes(tap("done", "ha:approve-logo-refresh") + ">Done<"), "T18g a hard marker added in D1 takes effect on the next page", p2.length);
+   // the markers cannot be read: the gate FAILS CLOSED (the embedded list is not a copy of the live one), so the logo card is owner-only too
+   const e3 = mk({ noCard: true, shapes: true, noMarkers: true });
+   const C3 = await signIn(e3.env, e3.db, e3.m);
+   const p3 = await (await call(e3.env, "/classic", { headers: C3 })).text();
+-  ok(!p3.includes('data-fleet-cmd="approve ' + eb) && p3.includes('data-fleet-cmd="done ' + eb + '">Done<') && !p3.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p3.includes('data-fleet-cmd="done ha:approve-logo-refresh">Done<') && p3.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T18h without the markers table every decision card (the signing card and the logo card) offers Diagnose and Done only");
++  ok(!p3.includes('data-fleet-cmd="approve ' + eb) && p3.includes(tap("done", eb) + ">Done<") && !p3.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p3.includes(tap("done", "ha:approve-logo-refresh") + ">Done<") && p3.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T18h without the markers table every decision card (the signing card and the logo card) offers Diagnose and Done only");
+   // the 100140 card (authors' papers, IDENTITY-BOUND) is not a hard card
+   const e4 = mk();
+   const C4 = await signIn(e4.env, e4.db, e4.m);
+   const p4 = await (await call(e4.env, "/classic", { headers: C4 })).text();
+-  ok(p4.includes('data-fleet-cmd="approve ha:' + SLUG + ' 3">Approve 3<'), "T18i the seven-fix paper card keeps its buttons");
++  ok(p4.includes(tap("approve", "ha:" + SLUG, [3]) + ">Approve 3<"), "T18i the seven-fix paper card keeps its buttons");
+   // the alternate path of the gate (control_registry dash-owner-decision-hard-marker-gate): the owner's own step is closed with Done, which Approve never did
+   const dn = await (await run(e.env, "done", { key: eb, title: "Sign or decline the EB-1A statement" }, C)).json();
+   ok(dn.ok !== false && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", "eb1a-statement-email984").status === "resolved" && rows(e.db, "SELECT id FROM owner_prompts").length === 0, "T18j Done on the signing card resolves it and files nothing for the fleet (the gate's alternate path works)", dn);
+@@ -842,11 +846,11 @@
+   const C = await signIn(e.env, e.db, e.m);
+   const own = await (await call(e.env, "/", { headers: C })).text();
+   ok(/<div class="dec" data-dec="ha:uia-source-fidelity-100140">/.test(own) && /Decide each part: 0 of 7 decided/.test(own), "T24a the signed-in owner's home page carries the decision block on the owner-gated card", own.length);
+-  for (let n = 1; n <= 7; n++) ok(own.includes('data-fleet-cmd="approve ha:' + SLUG + " " + n + '">Approve ' + n + "<") && own.includes('data-fleet-cmd="decline ha:' + SLUG + " " + n + '">Decline ' + n + "<"), "T24b item " + n + " has its own Approve and Decline on the home page");
+-  ok(own.includes('data-fleet-cmd="approve ha:' + SLUG + '">Approve all 7<') && own.includes('data-fleet-cmd="diagnose ha:' + SLUG + '">Diagnose<') && own.includes(ITEM), "T24c Approve all, Diagnose and the item text are on the owner's card");
+-  ok(own.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && own.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T24d a pick-one card fills the command line and a plain decision card has Approve");
++  for (let n = 1; n <= 7; n++) ok(own.includes(tap("approve", "ha:" + SLUG, [n]) + ">Approve " + n + "<") && own.includes(tap("decline", "ha:" + SLUG, [n]) + ">Decline " + n + "<"), "T24b item " + n + " has its own Approve and Decline on the home page");
++  ok(own.includes(tap("approve", "ha:" + SLUG) + ">Approve all 7<") && own.includes('data-fleet-cmd="diagnose ha:' + SLUG + '">Diagnose<') && own.includes(ITEM), "T24c Approve all, Diagnose and the item text are on the owner's card");
++  ok(own.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && own.includes(tap("approve", "ha:approve-logo-refresh") + ">Approve<"), "T24d a pick-one card fills the command line and a plain decision card has Approve");
+   const hard = "ha:eb1a-statement-email984";
+-  ok(own.includes('data-dec="' + hard + '"') && own.includes('data-fleet-cmd="done ' + hard + '">Done<') && own.includes('data-fleet-cmd="diagnose ' + hard + '">Diagnose<') && !own.includes('data-fleet-cmd="approve ' + hard) && !own.includes('data-fleet-cmd="decline ' + hard), "T24e a signing card on the home page offers Diagnose and Done only");
++  ok(own.includes('data-dec="' + hard + '"') && own.includes(tap("done", hard) + ">Done<") && own.includes('data-fleet-cmd="diagnose ' + hard + '">Diagnose<') && !own.includes('data-fleet-cmd="approve ' + hard) && !own.includes('data-fleet-cmd="decline ' + hard), "T24e a signing card on the home page offers Diagnose and Done only");
+   ok(!own.includes('data-dec="ha:domain-renewal-qnfo"') && !own.includes('data-dec="ha:tilburg-dis-phd-inquiry-send"') && !own.includes('data-dec="ha:orcid-link-works"'), "T24f cards that ask for no decision get no block");
+   const ownScript = /<script>\(function\(\)\{function swap\(d,id\)[\s\S]*?<\/script>/.exec(own);
+   let parsed = true; try { new Function(ownScript[0].replace(/^<script>|<\/script>$/g, "")); } catch (err) { parsed = String(err); }
+@@ -861,7 +865,7 @@
+   // a decided item shows on the owner's home page; the stranger's page is the same as before
+   await run(e.env, "decline", { key: "ha:" + SLUG, issue: 100140, items: [2], note: "" }, C);
+   const after = await (await call(e.env, "/", { headers: C })).text();
+-  ok(/Decide each part: 1 of 7 decided/.test(after) && /&#10007; declined/.test(after) && after.includes('data-fleet-cmd="approve ha:' + SLUG + ' 1, 3-7">Approve the 6 left<'), "T24l a decided item shows its state on the home page and the card offers the undecided rest");
++  ok(/Decide each part: 1 of 7 decided/.test(after) && /&#10007; declined/.test(after) && after.includes(tap("approve", "ha:" + SLUG, [1, 3, 4, 5, 6, 7]) + ">Approve the 6 left<"), "T24l a decided item shows its state on the home page and the card offers the undecided rest");
+   // a card closed since the cached document was built: the owner is told, and offered no button for it
+   const rr = await run(e.env, "approve", { key: "ha:" + SLUG, issue: 100140, items: [1, 3, 4, 5, 6, 7], note: "" }, C);
+   ok((await rr.json()).ok && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved", "T24m (setup) the last six items are approved and the card resolves");
+@@ -869,13 +873,13 @@
+   ok(closed.includes("Decided: this card leaves the list within a minute.") && !closed.includes('data-dec="ha:' + SLUG + '"') && !closed.includes('data-fleet-cmd="approve ha:' + SLUG), "T24n a card that closed while the document was cached reads 'Decided' with no button", closed.length);
+   const s2 = await strangerPage();
+   ok(JSON.stringify(leak(s2)) === JSON.stringify(none) && !s2.includes("Decided: this card leaves"), "T24o and the stranger's page never shows the owner's note", leak(s2));
+-  // an owner whose decision read fails keeps the page: the cards fall back to 'Act on it'
++  // an owner whose decision read fails keeps the page: the cards keep their buttons and Details
+   const f = mkStatus();
+   const Cf = await signIn(f.env, f.db, f.m);
+   f.db.exec("DROP TABLE agent_issues");
+   const fp = await call(f.env, "/", { headers: Cf });
+   const ft = await fp.text();
+-  ok(fp.status === 200 && ft.includes('href="/classic#queue">Act on it<') && ft.includes('data-dec="ha:' + SLUG + '"') && !ft.includes(ITEM), "T24p without the issue table the page still renders, the card keeps Approve and Decline for the whole card and no item text appears", fp.status);
++  ok(fp.status === 200 && ft.includes('data-fleet-cmd="info ha:' + SLUG + '">Details<') && ft.includes('data-dec="ha:' + SLUG + '"') && !ft.includes(ITEM), "T24p without the issue table the page still renders, the card keeps Approve and Decline for the whole card and no item text appears", fp.status);
+   ok(noModel(e) && noModel(f), "T24q no model was called");
+ }
+ // T25. the hand-off text is never longer than the 1800 characters the issue body keeps (ownerNotesRoute), whatever the items: its first line (the card key)
+@@ -998,7 +1002,7 @@
+     const page = await (await call(e.env, "/classic", { headers: C })).text();
+     for (const [k] of named) {
+       const key = "ha:hc-" + k;
+-      ok(page.includes('data-dec="' + key + '"') && page.includes('data-fleet-cmd="diagnose ' + key + '">Diagnose<') && page.includes('data-fleet-cmd="done ' + key + '">Done<') && !page.includes('data-fleet-cmd="approve ' + key) && !page.includes('data-fleet-cmd="decline ' + key), "T29 (" + label + ") '" + k + "' shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + key + '"'), page.indexOf('data-dec="' + key + '"') + 400));
++      ok(page.includes('data-dec="' + key + '"') && page.includes('data-fleet-cmd="diagnose ' + key + '">Diagnose<') && page.includes(tap("done", key) + ">Done<") && !page.includes('data-fleet-cmd="approve ' + key) && !page.includes('data-fleet-cmd="decline ' + key), "T29 (" + label + ") '" + k + "' shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + key + '"'), page.indexOf('data-dec="' + key + '"') + 400));
+     }
+   }
+   // (b) every one of the 73 live patterns, as card text, with the table dropped: typed verbs and /api/cmd/run refuse, nothing is written
+@@ -1032,5 +1036,134 @@
+   const j2 = await (await cmd(ok2.env, "approve ha:approve-logo-refresh", C2)).json();
+   ok((j2.actions || []).some((a) => a.op === "approve"), "T29g with the markers readable a decision card that matches none is decidable", j2);
+ }
++
++// ---- ONE-TAP-DECISIONS-1 (1.71.0, owner request 2026-10-26: "I need one click/tap actions: approve, etc ... action oriented, at a glance, one tap").
++// Before: a signed-out phone showed only Details, and a signed-in tap on Approve only previewed (a second tap confirmed, a fresh code stood behind it).
++// T30. the buttons run at the tap: the markup the page renders, read the way the browser script reads it, is executed through /api/cmd/run
++{
++  const e = mk({ plain: true });
++  const C = await signIn(e.env, e.db, e.m);
++  const page = await (await call(e.env, "/classic", { headers: C })).text();
++  const t = taps(page).filter((x) => x.args.key === "ha:" + SLUG);
++  ok(t.length === 2 + 14 && t[0].op === "approve" && t[0].label === "Approve all 7" && t[1].op === "decline" && t[1].label === "Decline all", "T30 the card opens with Approve all and Decline all, then the per-item buttons", t.slice(0, 3));
++  const before = rows(e.db, "SELECT * FROM human_responses").length;
++  const r = await run(e.env, t[0].op, t[0].args, C); const jr = await r.json();
++  ok(r.status === 200 && jr.ok === true, "T30a one tap on Approve all runs: no preview, no confirm", jr);
++  ok(rows(e.db, "SELECT * FROM human_responses WHERE kind = 'approve' AND credential = 'owner-session'").length >= 1 && rows(e.db, "SELECT * FROM human_responses").length > before && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved", "T30b the approval is recorded as the owner session's own and the card resolves");
++  ok(rows(e.db, "SELECT * FROM owner_prompts WHERE visitor = 'owner-decision'").length === 1 && /OWNER-DECISION from fleet\.qnfo\.org/.test(rows(e.db, "SELECT prompt FROM owner_prompts WHERE visitor = 'owner-decision'")[0].prompt), "T30c exactly one hand-off task reaches the fleet");
++  const again = await (await run(e.env, t[0].op, t[0].args, C)).json();
++  ok(again.ok === true && rows(e.db, "SELECT * FROM owner_prompts WHERE visitor = 'owner-decision'").length === 1, "T30d a second tap files no second task", again);
++  ok(noModel(e), "T30e no model was called");
++}
++// T31. a single item taps through too (the item buttons carry their number), and a decline is one tap and writes its row
++{
++  const e = mk({ plain: true });
++  const C = await signIn(e.env, e.db, e.m);
++  const page = await (await call(e.env, "/classic", { headers: C })).text();
++  const t = taps(page).filter((x) => x.args.key === "ha:" + SLUG);
++  const d3 = t.find((x) => x.op === "decline" && x.args.items && x.args.items[0] === 3);
++  const r = await run(e.env, d3.op, d3.args, C); const jr = await r.json();
++  ok(r.status === 200 && jr.ok === true && rows(e.db, "SELECT * FROM human_responses WHERE kind = 'decline' AND credential = 'owner-session'").length === 1, "T31 Decline 3 is one tap and writes one decline row", jr);
++  ok(one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "open", "T31a the card stays open until every item is decided");
++  const after = await (await call(e.env, "/classic", { headers: C })).text();
++  const rest = taps(after).find((x) => x.op === "approve" && x.label === "Approve the 6 left");
++  ok(rest && rest.args.items.join() === "1,2,4,5,6,7", "T31b the card then offers the six undecided items in one tap", rest);
++  const r2 = await run(e.env, rest.op, rest.args, C);
++  ok(r2.status === 200 && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved", "T31c and that tap resolves it");
++}
++// T32. the fresh-code rule stands behind the button: a stale step-up answers need: stepup (the page asks for the code in place and repeats the tap), a
++// stranger's tap needs the code, the loop token cannot make the decision, and nothing is written in any of the three
++{
++  const e = mk({ plain: true });
++  const C = await signIn(e.env, e.db, e.m);
++  const t = taps(await (await call(e.env, "/classic", { headers: C })).text()).find((x) => x.op === "approve" && x.label === "Approve all 7");
++  e.db.prepare("UPDATE owner_sessions SET verified_ms = verified_ms - 20 * 60000").run();
++  let r = await run(e.env, t.op, t.args, C), jr = await r.json();
++  ok(r.status === 401 && jr.need === "stepup", "T32 a tap after 20 minutes asks for the code in place (need: stepup)", jr);
++  r = await run(e.env, t.op, t.args); jr = await r.json();
++  ok(r.status === 401 && jr.need === "code", "T32a a signed-out tap asks for the code (need: code)", jr);
++  r = await run(e.env, t.op, t.args, { "x-loop-token": LOOP });
++  ok(r.status === 400 && (await r.json()).ok === false, "T32b the loop token cannot tap it");
++  ok(rows(e.db, "SELECT * FROM human_responses").length === 0 && rows(e.db, "SELECT * FROM owner_prompts").length === 0 && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "open", "T32c nothing was written");
++}
++// T33. at a glance: for the signed-in owner a decision card shows its buttons BEFORE its reading and folds the reading; a card that asks for a step only the owner can
++// take keeps its reading open (the instruction is the point); a stranger gets ONE sign-in button, no decision button, no item text and no owner script
++{
++  const e = mk({ plain: true });
++  const C = await signIn(e.env, e.db, e.m);
++  const page = await (await call(e.env, "/classic", { headers: C })).text();
++  const at = page.indexOf('data-dec="ha:' + SLUG + '"');
++  const card = page.slice(page.lastIndexOf("<article", at), page.indexOf("</article>", at));
++  ok(card.indexOf("Approve all 7") > 0 && card.indexOf("Approve all 7") < card.indexOf("Why you") && /<details class="it-more"><summary>Why, what if you wait, what to do<\/summary>/.test(card), "T33 the owner's decision card has its buttons before the reading, and the reading is folded", card.slice(0, 200));
++  ok(/<details class="dec-det"><summary class="dec-h">Decide each part: 0 of 7 decided<\/summary>/.test(card), "T33a the seven parts are folded under one summary, so the card is short on a phone");
++  const strangerPage = await (await call(e.env, "/classic")).text();
++  ok(strangerPage.includes('data-dec-signin>Email me a code to decide<') && !/Sign in|sign out/i.test(strangerPage) && !/data-dec-op=/.test(strangerPage) && strangerPage.indexOf("names the wrong analysed paper") < 0 && strangerPage.indexOf("window.fleetTick=function") < 0, "T33b a stranger gets 'Email me a code to decide' and no decision button, no item text, no owner script");
++  const hard = strangerPage.indexOf('data-dec-signin') > 0;
++  ok(hard, "T33c (the sign-in button is on the cards that ask for a decision)");
++  const home = await (await call(e.env, "/")).text();
++  ok(!/data-dec-op=/.test(home) && home.indexOf("names the wrong analysed paper") < 0, "T33d the stranger's home page carries no decision button and no item text");
++}
++// T34. the one-tap script parses, posts to /api/cmd/run, asks for the emailed code in place and is on every page that carries the command line
++{
++  const e = mk({ plain: true });
++  const stranger = await (await call(e.env, "/classic")).text();
++  const scripts = [...stranger.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
++  const js = scripts.find((x) => x.indexOf("data-dec-op") >= 0 && x.indexOf("/api/cmd/run") >= 0);
++  let parsed = false; try { new vm.Script(js); parsed = true; } catch (err) { parsed = String(err); }
++  ok(js && parsed === true, "T34 the one-tap script parses", parsed);
++  ok(/post\('\/api\/cmd\/run',\{op:op,args:args\}\)/.test(js) && /j\.need/.test(js) && /\/api\/cmd\/code/.test(js) && /\/api\/cmd\/verify/.test(js) && /x-fleet-ui/.test(js) && /ev\.target\.closest/.test(js), "T34a it posts op and args, shows the code step in place and uses the same headers as the command line");
++  ok(/location\.reload/.test(js) && /window\.fleetTick/.test(js), "T34b a signed-in page refreshes through the poll, and a page without one reloads");
++  const home = await (await call(e.env, "/")).text();
++  ok(home.indexOf("data-dec-op") >= 0 && home.indexOf("data-dec-signin") >= 0, "T34c the home page carries the same script");
++  ok(/\.dec button\{min-height:44px/.test(stranger) && /\.dec \.dec-main \.dec-y/.test(stranger) && /min-height:52px/.test(stranger), "T34d the main buttons are 52 px tall on a phone");
++}
++
++// ---- ONE-TAP-ACTIONS-1 (1.71.0): the owner's home page. A card that is not a decision (or a derived item) carries one-tap Done / Snooze / Not doing instead of a link
++// to /classic, what can be decided in one tap comes first, and the heading says how the list splits.
++// T35. quick actions run at the tap through /api/cmd/run
++{
++  const x = mk({ plain: true, shapes: true, second: true });
++  x.db.exec("CREATE TABLE v_fleet_metrics (metric TEXT, title TEXT, operator TEXT, threshold REAL, value REAL, breach INTEGER, priority INTEGER, kind TEXT, measured_at TEXT, program_code TEXT, good TEXT, value_7d_ago REAL)");
++  x.db.prepare("INSERT INTO v_fleet_metrics VALUES ('m1', 'Metric one', 'gt', 0, 0, 0, 1, 'target', ?, 'QNFO.OPS', 'down', 0)").run(new Date().toISOString());
++  const C = await signIn(x.env, x.db, x.m);
++  const home = await (await call(x.env, "/", { headers: C })).text();
++  const orcid = home.slice(home.indexOf("Add the selected works to ORCID"), home.indexOf("Add the selected works to ORCID") + 1800);
++  ok(orcid.includes(tap("done", "ha:orcid-link-works") + ">Done<") && orcid.includes(tap("snooze", "ha:orcid-link-works").replace('{&quot;key&quot;:&quot;ha:orcid-link-works&quot;}', '{&quot;key&quot;:&quot;ha:orcid-link-works&quot;,&quot;days&quot;:3}') + ">Snooze 3 days<") && orcid.includes(tap("dismiss", "ha:orcid-link-works") + ">Not doing<"), "T35 a card that is not a decision has Done, Snooze 3 days and Not doing at the tap", orcid.slice(0, 160));
++  ok(orcid.includes('data-fleet-cmd="info ha:orcid-link-works">Details<') && !/Act on it/.test(home), "T35a the owner's cards say Details, not 'Act on it' (a link to another page)");
++  const bs = taps(home);
++  ok(bs.every((b) => b.op === "approve" || b.op === "decline"), "T35b (taps() reads approve and decline only)", bs.length);
++  // run what the Done button carries
++  const done = [...home.matchAll(/data-dec-op="done" data-dec-args="([^"]*)"/g)].map((m) => JSON.parse(m[1].replace(/&quot;/g, '"')));
++  const d = done.find((a) => a.key === "ha:orcid-link-works");
++  const r = await run(x.env, "done", d, C); const jr = await r.json();
++  ok(r.status === 200 && jr.ok === true && one(x.db, "SELECT status FROM human_actions WHERE slug = 'orcid-link-works'").status === "resolved", "T35c one tap on Done resolves the card through /api/cmd/run", jr);
++  const sn = [...home.matchAll(/data-dec-op="snooze" data-dec-args="([^"]*)"/g)].map((m) => JSON.parse(m[1].replace(/&quot;/g, '"')));
++  const s1 = sn.find((a) => a.key && a.days === 3);
++  const r2 = await run(x.env, "snooze", s1, C); const j2 = await r2.json();
++  ok(r2.status === 200 && j2.ok === true && rows(x.db, "SELECT * FROM human_responses WHERE kind = 'snooze'").length === 1, "T35d one tap on Snooze 3 days snoozes", j2);
++  // a stranger is told nothing new: the old link, no quick button
++  const strangerHome = await (await call(x.env, "/")).text();
++  ok(/Act on it/.test(strangerHome) && !/data-dec-op=/.test(strangerHome.replace(/<script>[\s\S]*?<\/script>/g, "")), "T35e a stranger keeps 'Act on it' and gets no quick button");
++  const order = [...home.matchAll(/<article class="card item[^"]*">[\s\S]*?<h2>([^<]*)<\/h2>/g)].map((m) => m[1]);
++  const iUia = order.findIndex((t) => /UIA-SOURCE/.test(t)), iOrcid = order.findIndex((t) => /ORCID/.test(t));
++  ok(iUia >= 0 && iOrcid >= 0 && iUia < iOrcid, "T35f the card that can be decided in one tap comes before the card that is yours to do", order);
++  ok(/class="meta st-split">\d+ to decide in one tap/.test(home), "T35g the heading says how many are one tap", home.slice(home.indexOf("st-split") - 20, home.indexOf("st-split") + 120));
++}
++
++// T36. the classic page (/classic, the page the owner reads on a phone): the same one-tap Done / Snooze / Not doing on a card that is not a decision, no confirm dialog
++{
++  const e = mk({ plain: true });
++  const C = await signIn(e.env, e.db, e.m);
++  const page = await (await call(e.env, "/classic", { headers: C })).text();
++  const at = page.indexOf("Add the selected works to ORCID");
++  const card = page.slice(at, page.indexOf("</article>", at));
++  ok(card.includes(tap("done", "ha:orcid-link-works") + ">Done<") && card.includes(tap("dismiss", "ha:orcid-link-works") + ">Not doing<") && card.includes('data-fleet-cmd="info ha:orcid-link-works">Details<') && card.includes('data-act="note">Add note<'), "T36 the classic card has Done, Not doing, Details and Add note", card.slice(0, 200));
++  ok(!card.includes('data-act="done"') && !card.includes('data-act="snooze"'), "T36a and no old confirm-dialog button for Done or Snooze on it");
++  const d = JSON.parse(/data-dec-op="done" data-dec-args="([^"]*)"/.exec(card)[1].replace(/&quot;/g, '"'));
++  const r = await run(e.env, "done", d, C);
++  ok(r.status === 200 && one(e.db, "SELECT status FROM human_actions WHERE slug = 'orcid-link-works'").status === "resolved", "T36b one tap on Done resolves it", await r.text());
++  const stranger = await (await call(e.env, "/classic")).text();
++  ok(!/data-dec-op=/.test(stranger) && !stranger.includes('data-act="done"'), "T36c a stranger still sees no control that changes the fleet");
++}
+ console.log(pass + " passed, " + fail + " failed");
+ if (fail) process.exit(1);
