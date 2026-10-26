@@ -42,7 +42,7 @@ const gout = gsb.__g.groundBody("A part is called folded when no test can tell i
 ok(/called folded/.test(gout.text) && /like a copy of the base part/.test(gout.text), "a supported sentence and an analogy the excerpt itself makes are kept", gout.text);
 ok(!/tiny things|Think of it|crowd/.test(gout.text) && gout.removed === 3, "an analogy, an invitation to think of it and an invitation to imagine, none in an excerpt, are removed", gout);
 const bmsg = src.slice(src.indexOf("function buildMessages"), src.indexOf("function splitFollowups"));
-ok(/no analogy, no general definition of a term, no background/.test(bmsg) && /gloss each one from the excerpt that defines it/.test(bmsg), "the explain instruction forbids analogy, general definitions and background");
+ok(/no analogy, no general definition of a term, no background/.test(bmsg) && /with the same technical terms and that excerpt's citation/.test(bmsg), "the explain instruction forbids analogy, general definitions and background");
 
 // ---- the pure functions ----
 const a = src.indexOf("// ---- ASK-PLAIN-BEGIN"), b = src.indexOf("// ---- ASK-PLAIN-END ----");
@@ -71,7 +71,7 @@ const body = [
   "",
   "## 1. Introduction",
   "Widget merging is a familiar idea: " + T + ", and the result is a child assembly whose parts are fewer than the parent's parts [2].",
-  "A widget is called merged when it can no longer be told apart from the base part by any test.",
+  "A widget is called merged when it can no longer be told apart from the base part by any test [3].",
   "The remaining widgets, those that pass every test, are called survivors and form the child assembly.",
   "Costs were measured on a bench with many different settings, as reported later in the text.",
   abs,
@@ -88,6 +88,7 @@ ok(/can no longer be told apart/.test(defs) && /are called survivors/.test(defs)
 ok(/Consider two widgets/.test(defs), "a worked case under a Case heading is listed", defs);
 ok(!/familiar idea/.test(defs) && !/subset of widgets/.test(defs), "the wording's own sentence is left out", defs);
 ok(!/Widgets merge into one when a rule fires/.test(defs) && !/skipped as the abstract/.test(defs), "the abstract and the abstract section are left out", defs);
+ok(!/older merging paper/.test(defs) && !/Costs were measured/.test(defs), "a sentence that only holds some of the terms, with no definition or case, is not listed", defs);
 ok(!/x = 1/.test(defs) && !/older merging paper/.test(defs) && !/Costs were measured/.test(defs), "formula fragments, the reference list and sentences that do not touch the terms are left out", defs);
 ok(defs.split("\n").length <= 4 && defs.length <= 1800 && defs.split("\n").every((l) => l.startsWith("- ")), "at most four '- ' lines, 1800 characters");
 ok(X.definitionPassages(body, "zzz qqq yyy", abs) === "", "no matching terms: nothing is listed");
@@ -173,8 +174,8 @@ ok(sse(t, "token").length === 1 && /folded into the base part/.test(sent) && !/r
 const first = calls[0], user1 = first[first.length - 1].content;
 ok(user1.indexOf("Passages that define, restate or give an example") > 0 && /can no longer be told apart/.test(user1) && /are called survivors/.test(user1), "the writer's excerpt lists the sentences that define the terms", user1.slice(0, 900));
 ok(!/Widget merging is a familiar idea: a subset of widgets in a parent assembly merges, and the result is a child assembly[^\n]*\n\n- /.test(user1.split("Passages that define")[1] || ""), "the defining list does not repeat the wording's sentence");
-ok(!/parent's parts \[2\]/.test(user1) && /parent's parts\./.test(user1), "the paper's own reference marker [2] is removed from the excerpt");
-ok(/The visitor wants this wording explained/.test(user1) && /### In plain words/.test(user1) && /at most five|no run of more than five words/.test(user1), "the question says which text is the wording and the answer order", user1.slice(-900));
+ok(!/any test \[3\]/.test(user1) && /by any test\./.test(user1), "the paper's own reference marker [3] is removed from the excerpt");
+ok(/The visitor wants this wording explained/.test(user1) && /three to five short bullet sentences, each restating one passage from the list/.test(user1) && /last line starting "In short:"/.test(user1) && /use none of the wording's own phrase/.test(user1), "the question says which text is the wording and asks for bullets that restate the listed passages, then an In short line", user1.slice(-900));
 const second = calls[1];
 ok(second.length === first.length + 2 && second[second.length - 2].role === "assistant" && /That draft copied 6 or more words/.test(second[second.length - 1].content), "the rewrite call carries the draft and names the defects", second.slice(-2).map((m) => m.content.slice(0, 120)));
 const d1 = sse(t, "done")[0];
@@ -223,6 +224,6 @@ ok(mv && Number(mv.last_value) === Math.round((1 - total.bad / total.n) * 1e4) /
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
-ok(/var ANSWER_REV = "r4-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+ok(/var ANSWER_REV = "r5-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
