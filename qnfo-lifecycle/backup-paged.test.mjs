@@ -43,6 +43,15 @@ function mkBucket() { const objs = new Map(); return { objs, async put(key, body
 const stripRowid = (rows) => rows.map((r) => { const { rowid, ...rest } = r; return rest; });
 const DAY = "2026-10-27";
 
+{ // short rows page wider: 5,401 audit_sessions rows at 10 a page would be 541 reads; a table sets its own page size
+  const rows = mkTable(450, 40);
+  const log = [], bucket = mkBucket();
+  const n = await mod.__backupTable({ BACKUP_BUCKET: bucket }, "qnfo-audit", mkD1(rows, log), "audit_sessions", DAY, 200);
+  ok(n === 450 && log.length === 3 && log.every((q) => (q.returned || 0) <= 200) && Math.max(...log.map((q) => q.returned || 0)) === 200, "a 200-row page reads 450 rows in 3 reads", log.map((q) => q.returned));
+  ok(bucket.objs.has("qnfo-audit/audit_sessions-" + DAY + ".json") && JSON.parse(bucket.objs.get("qnfo-audit/audit_sessions-" + DAY + ".json").body).length === 450, "and still writes the single object with every row");
+  const dflt = []; await mod.__backupTable({ BACKUP_BUCKET: mkBucket() }, "x", mkD1(mkTable(25, 40), dflt), "t", DAY);
+  ok(dflt.length === 3, "no page size keeps the default 10-row page", dflt.length);
+}
 { // a large table: bounded reads, bounded objects, exact reassembly
   const rows = mkTable(120, 200000); // about 24 MB, like a slice of living-paper.papers
   const log = [], bucket = mkBucket();

@@ -1186,15 +1186,15 @@ async function runBackup(env) {
   var results = {};
   try {
     var tables = [
-      { db: env.PORTFOLIO_STATE, name: "portfolio-state", table: "resources" },
-      { db: env.QNFO_AUDIT, name: "qnfo-audit", table: "audit_sessions" },
+      { db: env.PORTFOLIO_STATE, name: "portfolio-state", table: "resources", pageRows: 50 },
+      { db: env.QNFO_AUDIT, name: "qnfo-audit", table: "audit_sessions", pageRows: 200 }, // 5,401 short rows: 10 a page would be 541 reads of the 1,000-subrequest budget
       { db: env.LIVING_PAPER, name: "living-paper", table: "papers" },
       { db: env.IPATENT_DB, name: "ipatent-db", table: "submissions" }
     ];
     for (var i = 0; i < tables.length; i++) {
       var t = tables[i];
       try {
-        results[t.name] = await backupTable(env, t.name, t.db, t.table, dateStamp);
+        results[t.name] = await backupTable(env, t.name, t.db, t.table, dateStamp, t.pageRows);
       } catch (e) {
         results[t.name] = "error: " + e.message;
       }
@@ -1214,7 +1214,8 @@ async function runBackup(env) {
 // order) plus <db>/<table>-<date>.manifest.json that lists the parts. Peak memory is one page plus one part, whatever the table size.
 var BACKUP_PAGE_ROWS = 10;
 var BACKUP_PART_BYTES = 4 * 1024 * 1024;
-async function backupTable(env, name, db, table, dateStamp) {
+async function backupTable(env, name, db, table, dateStamp, pageRows) {
+  var pr = pageRows > 0 ? pageRows : BACKUP_PAGE_ROWS;
   var base = name + "/" + table + "-" + dateStamp;
   var put = function (key, body) { return env.BACKUP_BUCKET.put(key, body, { httpMetadata: { contentType: "application/json" } }); };
   var last = null, total = 0, parts = [], buf = [], bufChars = 0;
@@ -1227,8 +1228,8 @@ async function backupTable(env, name, db, table, dateStamp) {
   };
   for (;;) {
     var stmt = last === null
-      ? db.prepare("SELECT rowid AS _bk_rowid, * FROM " + table + " ORDER BY rowid LIMIT ?1").bind(BACKUP_PAGE_ROWS)
-      : db.prepare("SELECT rowid AS _bk_rowid, * FROM " + table + " WHERE rowid > ?1 ORDER BY rowid LIMIT ?2").bind(last, BACKUP_PAGE_ROWS);
+      ? db.prepare("SELECT rowid AS _bk_rowid, * FROM " + table + " ORDER BY rowid LIMIT ?1").bind(pr)
+      : db.prepare("SELECT rowid AS _bk_rowid, * FROM " + table + " WHERE rowid > ?1 ORDER BY rowid LIMIT ?2").bind(last, pr);
     var page = await stmt.all();
     var batch = (page && page.results) || [];
     for (var k = 0; k < batch.length; k++) {
@@ -1241,7 +1242,7 @@ async function backupTable(env, name, db, table, dateStamp) {
       total++;
       if (bufChars >= BACKUP_PART_BYTES) await flush();
     }
-    if (batch.length < BACKUP_PAGE_ROWS) break;
+    if (batch.length < pr) break;
   }
   if (!parts.length) {
     await put(base + ".json", "[" + buf.join(",") + "]");
