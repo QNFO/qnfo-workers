@@ -8,6 +8,9 @@
 // probes, with an enum reason on the existing remediation.probe-author-reject event that never carries the probe text. probe-author.fixture.json holds the live qnfo-audit sqlite_master
 // names (captured 2026-10-26, 603 tables, 194 views, names only) and the live definitions of the allowlisted views, so the allowlist constant is checked against the real schema and every live
 // object is swept: only an allowlisted one may pass the static check.
+// Review pass 2 (same version): an allowlisted table still holds free text, and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id pattern, so the dry run's
+// expected AND observed must each be a number or one short token (letters, digits, _ . : + -, at most 64 characters), refused as private-table: free-text value; and a probe that reads no allowlisted
+// object in table position, calls random() or randomblob(), or shadows an object with a CTE measures nothing and is refused.
 // Slices rtFlagOff, the reply reader, aiRunAttr and the probe-author block out of worker.js and runs them against an in-memory SQLite D1 and a fake env.AI.
 // Output MUST contain "0 failed" on success.   node qnfo-fleet-control/probe-author.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -94,7 +97,7 @@ const events = (db, kind) => db.prepare("SELECT * FROM cloud_ops_events WHERE ki
 }
 { // rejections are recorded, once per issue per hour
   const { db, h } = mk(); const o = orphan(db); setTick(5);
-  const vac = { AI: { run: async () => chat("SELECT 1 AS expected, 1 AS observed") }, AUDIT: h };
+  const vac = { AI: { run: async () => chat("SELECT 1 AS expected, 1 AS observed FROM portfolio_gaps LIMIT 1") }, AUDIT: h };
   ok((await rtAuthorLivePathProbe(h, vac, o)) === false, "a vacuous probe is rejected");
   setTick(6); await rtAuthorLivePathProbe(h, vac, o);
   const ev = events(db, "remediation.probe-author-reject");
@@ -315,8 +318,8 @@ const forms = (X) => [
 
 // end to end: the fake model answers a probe, the real function decides
 let tickN = 100;
-async function attempt(sql, { id = 4242, live = true } = {}) {
-  const { db, h } = mk(live); const o = orphan(db, id); setTick(++tickN);
+async function attempt(sql, { id = 4242, live = true, setup } = {}) {
+  const { db, h } = mk(live); if (setup) setup(db); const o = orphan(db, id); setTick(++tickN);
   const seen = [];
   const env = { AI: { run: async (model, input) => { seen.push(input); return chat(sql); } }, AUDIT: h };
   const done = await rtAuthorLivePathProbe(h, env, o);
@@ -382,7 +385,7 @@ const refused = (r, code) => r.done === false && !r.contract && r.authored.lengt
     const r = await attempt(sql);
     ok(refused(r, "deferral-shape"), "deferral shape refused: " + label, [r.done, r.rejects.map((e) => e.text), r.contract]);
   }
-  const fine = await attempt("SELECT 'ok' AS expected, CASE WHEN COUNT(*) = 0 THEN 'ok' ELSE COUNT(*) || ' gaps open' END AS observed FROM portfolio_gaps WHERE status = 'open'");
+  const fine = await attempt("SELECT 'ok' AS expected, CASE WHEN COUNT(*) = 0 THEN 'ok' ELSE COUNT(*) END AS observed FROM portfolio_gaps WHERE status = 'open'");
   ok(fine.done === true && fine.contract && fine.rejects.length === 0, "a probe that reads a count against ok (no pending text) is accepted", fine.rejects.map((e) => e.text));
   const word = await attempt("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status = 'pending'");
   ok(word.done === false && word.rejects.length === 1 && !/deferral-shape/.test(word.rejects[0].text) && /vacuous/.test(word.rejects[0].text), "the literal 'pending' in a WHERE clause is not the observed value (here the vacuity gate, not the shape gate, answers)", word.rejects.map((e) => e.text));
@@ -397,10 +400,136 @@ const refused = (r, code) => r.done === false && !r.contract && r.authored.lengt
   ok(over.length === 601, "the long probe is 601 characters", over.length);
   const r601 = await attempt(over);
   ok(refused(r601, "too-long") && r601.rejects[0].text.indexOf("xxxx") < 0, "a probe of 601 characters is refused as too-long, without its text", r601.rejects.map((e) => e.text));
-  const longObs = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(201) + "' AS observed FROM portfolio_gaps LIMIT 1");
-  ok(refused(longObs, "too-long") && longObs.rejects[0].text.indexOf("yyyy") < 0, "an observed value over 200 characters is refused as too-long, without the value", longObs.rejects.map((e) => e.text));
-  const okObs = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(200) + "' AS observed FROM portfolio_gaps LIMIT 1");
-  ok(okObs.done === true && okObs.log.length === 1 && okObs.log[0].evidence.indexOf("y".repeat(200)) > 0 && okObs.log[0].evidence.indexOf("y".repeat(201)) < 0, "an observed value of 200 characters is accepted and stored whole, never longer", okObs.rejects.map((e) => e.text));
+  const longObs = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(65) + "' AS observed FROM portfolio_gaps LIMIT 1");
+  ok(refused(longObs, "too-long") && longObs.rejects[0].text.indexOf("yyyy") < 0, "an observed value over 64 characters is refused as too-long, without the value", longObs.rejects.map((e) => e.text));
+  const long201 = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(201) + "' AS observed FROM portfolio_gaps LIMIT 1");
+  ok(refused(long201, "too-long") && long201.rejects[0].text.indexOf("yyyy") < 0, "an observed value of 201 characters is refused as too-long, without the value", long201.rejects.map((e) => e.text));
+  const longExp = await attempt("SELECT '" + "y".repeat(65) + "' AS expected, COUNT(*) AS observed FROM portfolio_gaps");
+  ok(refused(longExp, "too-long") && longExp.rejects[0].text.indexOf("yyyy") < 0, "an expected value over 64 characters is refused as too-long, without the value", longExp.rejects.map((e) => e.text));
+  const okObs = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(64) + "' AS observed FROM portfolio_gaps LIMIT 1");
+  ok(okObs.done === true && okObs.log.length === 1 && okObs.log[0].evidence.indexOf("y".repeat(64)) > 0 && okObs.log[0].evidence.indexOf("y".repeat(65)) < 0, "an observed value of 64 characters is accepted and stored whole, never longer", okObs.rejects.map((e) => e.text));
+  ok(api.RT_PROBE_AUTHOR_MAX_OBSERVED === 64, "the value limit is 64 characters", api.RT_PROBE_AUTHOR_MAX_OBSERVED);
+}
+// ---- PROBE-AUTHOR-HARDEN-1, second pass (review findings): free text out of allowlisted tables, and probes that measure nothing ----
+// An allowlisted table still holds free text. These rows are what a live cloud_ops_events, code_tasks, research_queue and fleet_improvements hold (an outreach event with an address in it, an error with another).
+const seedText = (db) => db.exec(`
+CREATE TABLE code_tasks (id INTEGER PRIMARY KEY, goal TEXT, last_error TEXT, model TEXT);
+CREATE TABLE research_queue (id INTEGER PRIMARY KEY, idea TEXT, summary TEXT, context TEXT);
+CREATE TABLE fleet_improvements (id INTEGER PRIMARY KEY, title TEXT);
+INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES
+ ('seed-1', '2026-10-26T09:00:00.000Z', 'workflow.failed', 'job build failed with a timeout', 'x', 'warn'),
+ ('tok-seed', '2026-10-26T09:30:00.000Z', 'note', 'jane.doe@gmail.com', 'x', 'ok'),
+ ('outr-seed', '2026-10-26T10:00:00.000Z', 'outreach', 'sent to jane.doe@gmail.com about the grant', 'qnfo-outreach', 'ok');
+INSERT INTO code_tasks (id, goal, last_error, model) VALUES (1, 'email jane.doe@gmail.com the draft', 'smtp refused for bob@example.org after a retry', 'm');
+INSERT INTO research_queue (id, idea, summary, context) VALUES (1, 'ask carol@example.net about the grant', 'carol wrote back about the grant', 'thread with carol@example.net and dave@example.com');
+INSERT INTO fleet_improvements (id, title) VALUES (1, 'call dave@example.com on Friday'), (2, 'ping erin@example.com');`);
+const LEAK = /jane|gmail|bob|carol|dave|erin|example|grant|timeout|@/i;
+{ // (4) FREE TEXT: every dodge of the review is refused after the dry run as private-table: free-text value, with no contract, no authored event, no decision_log row, and no value in the reject event
+  const dodges = {
+    "latest event text, unfiltered": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events ORDER BY ts DESC LIMIT 1) AS observed",
+    "event text with a LIKE '%@%' filter": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events WHERE text LIKE '%@%' ORDER BY ts DESC LIMIT 1) AS observed",
+    "kind LIKE 'out%'": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events WHERE kind LIKE 'out%' ORDER BY ts DESC LIMIT 1) AS observed",
+    "kind built by concatenation": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events WHERE kind='out'||'reach' ORDER BY ts DESC LIMIT 1) AS observed",
+    "kind built by char()": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events WHERE kind=char(111,117,116,114,101,97,99,104) ORDER BY ts DESC LIMIT 1) AS observed",
+    "id LIKE 'outr%'": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events WHERE id LIKE 'outr%' LIMIT 1) AS observed",
+    "an address that is the whole text (a token with an @)": "SELECT 'none' AS expected,(SELECT text FROM cloud_ops_events WHERE id = 'tok-seed') AS observed",
+    "group_concat of fleet_improvements.title": "SELECT 'none' AS expected,(SELECT group_concat(title,' | ') FROM fleet_improvements) AS observed",
+    "code_tasks.goal": "SELECT 'none' AS expected,(SELECT goal FROM code_tasks LIMIT 1) AS observed",
+    "code_tasks.last_error": "SELECT 'none' AS expected,(SELECT last_error FROM code_tasks LIMIT 1) AS observed",
+    "research_queue.idea": "SELECT 'none' AS expected,(SELECT idea FROM research_queue LIMIT 1) AS observed",
+    "research_queue.summary": "SELECT 'none' AS expected,(SELECT summary FROM research_queue LIMIT 1) AS observed",
+    "research_queue.context": "SELECT 'none' AS expected,(SELECT context FROM research_queue LIMIT 1) AS observed",
+    "a JSON object built from a row": "SELECT 'none' AS expected,(SELECT json_object('t', text) FROM cloud_ops_events WHERE id = 'outr-seed') AS observed",
+    "two columns joined with a comma": "SELECT 'none' AS expected,(SELECT kind || ',' || job FROM cloud_ops_events WHERE id = 'outr-seed') AS observed",
+  };
+  { // the dodges are real: in plain SQLite each of the cloud_ops_events and table ones returns the address, so refusing them is not a fiction
+    const { db } = mk(false); seedText(db);
+    const leaking = Object.entries(dodges).filter(([label]) => !/token|json|comma|group_concat|context|summary/.test(label)).filter(([, sql]) => !LEAK.test(String(db.prepare(sql).get().observed))).map(([label]) => label);
+    ok(leaking.length === 0, "each text dodge returns an address or a sentence in plain SQLite", leaking);
+  }
+  const missed = [], leaked = [];
+  for (const [label, sql] of Object.entries(dodges)) {
+    const r = await attempt(sql, { live: false, setup: seedText });
+    if (!(refused(r, "private-table") && /private-table: free-text value in observed$/.test(r.rejects[0].text))) missed.push([label, r.done, r.rejects.map((e) => e.text), !!r.contract]);
+    if (r.rejects.length && LEAK.test(r.rejects[0].text)) leaked.push([label, r.rejects[0].text]);
+  }
+  ok(missed.length === 0, "every free-text dodge (" + Object.keys(dodges).length + ") is refused as private-table: free-text value, with no contract, event or decision_log row", missed.slice(0, 4));
+  ok(leaked.length === 0, "no reject event carries the seeded text", leaked.slice(0, 3));
+  // the expected column is a value too
+  const exp1 = await attempt("SELECT (SELECT text FROM cloud_ops_events LIMIT 1) AS expected, 0 AS observed", { live: false, setup: seedText });
+  ok(refused(exp1, "private-table") && /free-text value in expected$/.test(exp1.rejects[0].text) && !LEAK.test(exp1.rejects[0].text), "free text in the expected column is refused as private-table, without the value", exp1.rejects.map((e) => e.text));
+  const exp2 = await attempt("SELECT (SELECT goal FROM code_tasks LIMIT 1) AS expected, COUNT(*) AS observed FROM portfolio_gaps", { live: false, setup: seedText });
+  ok(refused(exp2, "private-table") && /free-text value in expected$/.test(exp2.rejects[0].text), "free text in expected beside a count is refused too", exp2.rejects.map((e) => e.text));
+  // short values that are not a number or a token are free text too
+  for (const [label, obs] of [["a short phrase", "COUNT(*) || ' gaps open'"], ["a comma", "'a,b'"], ["a JSON object", "'{\"a\":1}'"], ["an @", "'a@b'"], ["a slash", "'a/b'"], ["a newline", "'a' || char(10) || 'b'"], ["a double quote", "'a\"b'"], ["a percent sign", "'50%'"], ["a leading space is trimmed but an inner one is not", "' a b'"]]) {
+    const r = await attempt("SELECT 'ok' AS expected, " + obs + " AS observed FROM portfolio_gaps LIMIT 1");
+    ok(refused(r, "private-table") && /free-text value in observed$/.test(r.rejects[0].text), "a value with " + label + " is refused as free text", r.rejects.map((e) => e.text));
+  }
+  // numbers and tokens pass: a count, a negative decimal, an ok token, a timestamp, a version, a short id
+  const goodValues = { "a count": "COUNT(*)", "a negative decimal": "COUNT(*) - 2.5", "a float": "COUNT(*) / 3.0", "an ok token": "'done'", "a timestamp": "(SELECT MAX(ts) FROM cloud_ops_events)", "a status token": "(SELECT status FROM cloud_ops_events LIMIT 1)", "a version": "'0.52.1-patch'", "a plus and a colon": "'a+b:c_d.e'" };
+  for (const [label, obs] of Object.entries(goodValues)) {
+    const r = await attempt("SELECT 'ok' AS expected, " + obs + " AS observed FROM portfolio_gaps LIMIT 1", { live: false, setup: seedText });
+    ok(r.done === true && r.contract && r.contract.status === "active" && r.rejects.length === 0, "a value that is " + label + " is accepted", r.rejects.map((e) => e.text));
+  }
+  const ts = await attempt("SELECT 'ok' AS expected, MAX(ts) AS observed FROM cloud_ops_events", { live: false, setup: seedText });
+  ok(ts.done === true && ts.log.length === 1 && ts.log[0].evidence.indexOf("(observed: 2026-10-26T10:00:00.000Z)") > 0 && !LEAK.test(ts.log[0].evidence.replace(/^model \S+/, "")), "the decision_log evidence holds the bounded token and the objects read, never a text value", ts.log[0] && ts.log[0].evidence);
+  ok(ts.log.length === 1 && /static check passed \(reads cloud_ops_events, operational objects on the allowlist\)/.test(ts.log[0].evidence), "the decision_log evidence names what the probe reads", ts.log[0] && ts.log[0].evidence);
+  const nul = await attempt("SELECT NULL AS expected, COUNT(*) AS observed FROM portfolio_gaps");
+  ok(refused(nul, "deferral-shape") && /expected is empty$/.test(nul.rejects[0].text), "an empty expected value is a deferral shape", nul.rejects.map((e) => e.text));
+  // the number-or-token shape applies to the stored probe's first row only: what a later pass reads is the same read-only SQL on the same allowlisted tables (the residual named in the worker's comment)
+  ok(/RT_PROBE_AUTHOR_VALUE_RE/.test(src) && api.RT_PROBE_AUTHOR_MAX_OBSERVED === 64, "the value rule is a named constant of 64 characters");
+}
+{ // (5) MEASURES NOTHING: a probe that reads no allowlisted object in table position, flips on random(), or shadows an object with a CTE can pass a later hourly verification with no measurement
+  const reviewer = {
+    "random() alone": "SELECT 'ok' AS expected,CASE WHEN random()%2=0 THEN 'ok' ELSE 'no' END AS observed",
+    "the clock alone": "SELECT 'ok' AS expected,CASE WHEN CAST(strftime('%s','now') AS INTEGER)%2=0 THEN 'ok' ELSE 'no' END AS observed",
+    "two constants": "SELECT 0 AS expected,1 AS observed",
+    "a CTE of constants": "WITH t AS (SELECT 5 AS n) SELECT 0 AS expected, n AS observed FROM t",
+    "a table name only inside a string literal": "SELECT 0 AS expected, CASE WHEN 'portfolio_gaps' = 'x' THEN 0 ELSE 1 END AS observed",
+    "a table name only as a column alias": "SELECT 0 AS expected, 1 AS portfolio_gaps, 2 AS observed",
+  };
+  const missed = [];
+  for (const [label, sql] of Object.entries(reviewer)) {
+    const bad = await check(sql), r = await attempt(sql);
+    if (!(reasonOf(bad) === "not-allowlisted" && /reads no operational table/.test(bad))) missed.push([label, "static", bad]);
+    if (!(refused(r, "not-allowlisted") && /reads no operational table$/.test(r.rejects[0].text))) missed.push([label, "e2e", r.done, r.rejects.map((e) => e.text)]);
+  }
+  ok(missed.length === 0, "a probe that reads no operational table is refused as not-allowlisted: reads no operational table (" + Object.keys(reviewer).length + " shapes, static and end to end)", missed.slice(0, 4));
+  const rnd = {
+    "random() with a table": "SELECT 'ok' AS expected, CASE WHEN random() % 2 = 0 THEN 'ok' ELSE 'no' END AS observed FROM portfolio_gaps LIMIT 1",
+    "RANDOM () spaced and upper case": "SELECT 'ok' AS expected, CASE WHEN RANDOM () % 2 = 0 THEN 'ok' ELSE 'no' END AS observed FROM portfolio_gaps LIMIT 1",
+    "randomblob()": "SELECT 'ok' AS expected, CASE WHEN hex(randomblob(1)) < '80' THEN 'ok' ELSE 'no' END AS observed FROM portfolio_gaps LIMIT 1",
+    "random() in a subquery": "SELECT 0 AS expected, (SELECT COUNT(*) FROM portfolio_gaps WHERE id > abs(random()) % 5) AS observed",
+    "random() with a comment before the parenthesis": "SELECT 'ok' AS expected, CASE WHEN random /* x */ () % 2 = 0 THEN 'ok' ELSE 'no' END AS observed FROM portfolio_gaps LIMIT 1",
+  };
+  const rmiss = [];
+  for (const [label, sql] of Object.entries(rnd)) {
+    const bad = await check(sql), r = await attempt(sql);
+    if (!(reasonOf(bad) === "self-confirming" && /random/.test(bad))) rmiss.push([label, "static", bad]);
+    if (!refused(r, "self-confirming")) rmiss.push([label, "e2e", r.done, r.rejects.map((e) => e.text)]);
+  }
+  ok(rmiss.length === 0, "a probe that calls random() or randomblob() is refused as self-confirming (" + Object.keys(rnd).length + " shapes, static and end to end)", rmiss.slice(0, 4));
+  const shadow = await check("WITH portfolio_gaps AS (SELECT 1 AS id) SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps");
+  ok(reasonOf(shadow) === "not-allowlisted" && /shadows/.test(shadow), "a CTE named like a real object does not count as a read of it", shadow);
+  const shadowE2E = await attempt("WITH portfolio_gaps AS (SELECT 1 AS id) SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps");
+  ok(refused(shadowE2E, "not-allowlisted"), "the CTE shadow is refused end to end", shadowE2E.rejects.map((e) => e.text));
+  // none of these is a call or a constant-only probe
+  const fine = [
+    "SELECT 1 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status LIKE '%random(%'",
+    "SELECT 1 AS expected, COUNT(*) AS random FROM portfolio_gaps",
+    "SELECT 0 AS expected, (SELECT COUNT(*) FROM portfolio_gaps WHERE status = 'open') AS observed",
+    "WITH t AS (SELECT COUNT(*) AS n FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM t",
+    "SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps g JOIN metric_registry m ON m.rowid = g.id",
+    "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hour')",
+  ];
+  const wrong = [];
+  for (const sql of fine) { const bad = await check(sql); if (bad !== null) wrong.push([sql.slice(0, 60), bad]); }
+  ok(wrong.length === 0, "random( inside a string literal, a column named random, a read in a subquery, a CTE over a table, a join and a clock window are not refused", wrong);
+  // what the probe reads is reported to the caller
+  const info = {}; const v = await valid(live1.h, "SELECT 0 AS expected, (SELECT COUNT(*) FROM portfolio_gaps) + (SELECT COUNT(*) FROM pr_sla_state) AS observed FROM portfolio_gaps", 4242, info);
+  ok(v === null && JSON.stringify(info.reads) === JSON.stringify(["portfolio_gaps", "pr_sla_state"]), "the validator reports the allowlisted objects a passing probe reads", [v, info]);
+  const info2 = {}; await valid(live1.h, "SELECT 0 AS expected, 1 AS observed", 4242, info2);
+  ok(info2.reads === undefined, "a refused probe reports no reads", info2);
 }
 { // every new reject is the existing event kind, with a code from the enum, once, and the fast static checks still answer their own way
   const outcomes = [];

@@ -1098,7 +1098,7 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-// 0.52.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class) and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 and the observed value at 200 characters. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call.
+// 0.52.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class), one that reads no allowlisted object in FROM or JOIN position, calls random() or randomblob(), or shadows an object name with a CTE (a constant, the clock alone or a coin flip can pass a later hourly verification and close the issue with no measurement), and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 characters. Free text from an allowlisted table (cloud_ops_events.text, code_tasks.goal, research_queue.idea and the like) cannot be fenced by table name or by an event-kind filter, so the dry run's expected AND observed must each be a number or one token of letters, digits and _ . : + - (at most 64 characters, no space, no @): anything else is refused as private-table and only that bounded token is written to decision_log. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text or the value. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call.
 // 0.52.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. The generic playbook-gap row is seeded in measure and files no issue (a gap issue carries no anchor the code loop can edit); the self issue after 3 failed cases is the only issue the doctor files by itself, and migrations/2026-10-26-breach-doctor-trust.sql makes the planner read its BREACH-DOCTOR-1: title as trusted. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
@@ -12117,10 +12117,18 @@ function rtProbeAuthorStrip(s) {
 // bookkeeping (the issue ledger and its views, decision_log, remediation_*, closure and verification tables, work_claims), cloud_ops_events rows of the
 // remediation.* kinds, the author's own module name, or the target's own contract class, because those flip to ok because of the author's own writes.
 // (3) deferral-shape: a dry run whose observed value is empty or starts with pending (any case) is a deferral to rtIsDeferral, so the contract could never
-// fail or pass. A probe is at most RT_PROBE_AUTHOR_MAX_SQL (600) characters and its observed value at most RT_PROBE_AUTHOR_MAX_OBSERVED (200), so what reaches
-// remediation_contracts, cloud_ops_events, the append-only decision_log and the open verification ledger is bounded. rt_probe_author = off still stops it.
+// fail or pass. (4) free text (doctrine section 9, privacy): the table gate is by name, but an allowlisted table still holds free text (cloud_ops_events.text, code_tasks.goal and
+// last_error, research_queue.idea, summary and context, fleet_improvements.title), and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id
+// pattern. So the gate is also on the value: the dry run's expected AND observed must each be a number or one short token (RT_PROBE_AUTHOR_VALUE_RE: letters, digits and _ . : + -, no
+// space, no @, at most RT_PROBE_AUTHOR_MAX_OBSERVED characters), refused as private-table: free-text value, and only that bounded token is ever copied into decision_log. (5) measures
+// nothing: a probe whose rows come from no allowlisted object in FROM or JOIN position (a constant, the clock alone), one that calls random() or randomblob(), and one whose CTE shadows a
+// real object name, can flip to ok on a later hourly pass with no measurement, so they are refused (not-allowlisted: reads no operational table, self-confirming). A probe is at most
+// RT_PROBE_AUTHOR_MAX_SQL (600) characters and its values at most RT_PROBE_AUTHOR_MAX_OBSERVED (64), so what reaches remediation_contracts, cloud_ops_events, the append-only decision_log
+// and the open verification ledger is bounded. The value gate runs on the birth dry run; a probe whose first row is a token at birth and free text later is the residual (hourly re-verification
+// re-runs the same read-only SQL on the same allowlisted tables), and a clock-dependent filter next to a real table read is not decidable statically. rt_probe_author = off still stops it.
 var RT_PROBE_AUTHOR_MAX_SQL = 600;
-var RT_PROBE_AUTHOR_MAX_OBSERVED = 200;
+var RT_PROBE_AUTHOR_MAX_OBSERVED = 64;
+var RT_PROBE_AUTHOR_VALUE_RE = /^[A-Za-z0-9_.:+-]+$/;
 var RT_PROBE_AUTHOR_REASONS = ["private-table", "self-confirming", "deferral-shape", "not-allowlisted", "too-long"];
 // Operational objects only (verified against live qnfo-audit sqlite_master on 2026-10-26 and drawn from what the active d1-query contracts already probe).
 // Never add a table that holds mail, identity, contact, subscriber, credential, chat or owner text; probe-author.test.mjs fails if one is named.
@@ -12224,7 +12232,8 @@ function rtProbeAuthorCode(bad) {
   var m = /^(private-table|self-confirming|deferral-shape|not-allowlisted|too-long)\b/.exec(String(bad || ""));
   return m ? m[1] : "static-reject";
 }
-async function rtProbeAuthorValidSql(db, sql, id) {
+// info (optional) receives reads: the allowlisted objects the statement reads in FROM or JOIN position, for the decision_log evidence.
+async function rtProbeAuthorValidSql(db, sql, id, info) {
   var q = rtProbeAuthorStrip(sql);
   if (!q) return "empty";
   if (q.length > RT_PROBE_AUTHOR_MAX_SQL) return "too-long: probe " + q.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_SQL;
@@ -12249,6 +12258,8 @@ async function rtProbeAuthorValidSql(db, sql, id) {
   for (k = 0; k < names.length; k++) {
     nm = names[k];
     if (scan.cte[nm] && !have[nm]) continue;
+    // a CTE named like a real object would make "FROM <object>" read the CTE, so the object count below would be a fiction
+    if (scan.cte[nm] && have[nm] && !notal) notal = "not-allowlisted: a CTE shadows the object name " + nm.slice(0, 60);
     fam = rtProbeAuthorFamily(nm);
     if (fam) { if (!priv) priv = "private-table: family=" + fam + (have[nm] ? " object=" + nm : ""); continue; }
     if (RT_PROBE_AUTHOR_SELF_RE.test(nm)) { if (!selfc) selfc = "self-confirming: " + (have[nm] ? "reads the loop's own bookkeeping, object=" + nm : "reads the loop's own bookkeeping"); continue; }
@@ -12274,6 +12285,19 @@ async function rtProbeAuthorValidSql(db, sql, id) {
   if (RT_PROBE_AUTHOR_SELF_LITERAL_RE.test(low)) return "self-confirming: names a remediation event kind or the author's own module";
   for (k = 0; k < toks.length; k++) if (toks[k].k === "s" && RT_PROBE_AUTHOR_SELF_TEXT_RE.test(String(toks[k].v).toLowerCase())) return "self-confirming: matches the loop's own event text or ids";
   if (new RegExp("issue[-_ ]?" + Number(id) + "(?![0-9])").test(low)) return "self-confirming: names the target's own contract class";
+  // the rows must come from at least one real operational object in table position (FROM, JOIN, a comma of a FROM list): a constant or the clock alone is not a measurement
+  var reads = [], seenR = Object.create(null);
+  for (k = 0; k < scan.refs.length; k++) {
+    nm = scan.refs[k];
+    if (seenR[nm] || scan.cte[nm] || RT_PROBE_AUTHOR_ALLOW_SET[nm] !== 1 || !have[nm]) continue;
+    seenR[nm] = 1; reads.push(nm);
+  }
+  if (!reads.length) return "not-allowlisted: reads no operational table";
+  // random() and randomblob() give a value that measures nothing: a probe on them passes on a later hourly verification and closes its issue with no measurement
+  for (k = 0; k < toks.length; k++) {
+    if ((toks[k].k === "w" || toks[k].k === "q") && (String(toks[k].v).toLowerCase() === "random" || String(toks[k].v).toLowerCase() === "randomblob") && toks[k + 1] && toks[k + 1].k === "p" && toks[k + 1].v === "(") return "self-confirming: calls random() or randomblob(), a value that measures nothing";
+  }
+  if (info) info.reads = reads;
   return null;
 }
 // One event per issue per hour for a probe the author could not write, so the reason is readable from D1 and a loop that never succeeds is visible (before, it was console.error only).
@@ -12297,7 +12321,7 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     var made = await db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'remediation.probe-authored' AND ts > ?1").bind(new Date(Date.now() - 864e5).toISOString()).first();
     if ((made ? Number(made.n) || 0 : 0) >= RT_LIVEPATH_MAX_PER_DAY) return false;
   } catch (eC) { return false; }
-  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done: expected is the value that means done (for example 0 or 'ok') and observed is a measured count or value that differs from expected while the defect stands and equals it once the defect is fixed. observed must never be empty and must never start with the word pending. Read only these operational tables and views, and no other: " + RT_PROBE_AUTHOR_ALLOW.join(", ") + ". Do not read the loop's own bookkeeping (issue, decision, remediation or verification tables, rows whose kind starts with remediation., issue " + id + " itself). It must be a single SELECT or WITH of at most " + RT_PROBE_AUTHOR_MAX_SQL + " characters, must not write, and must not mention needs-machine-probe. Reply with the SQL only.";
+  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done: expected is the value that means done (for example 0 or 'ok') and observed is a measured count or value that differs from expected while the defect stands and equals it once the defect is fixed. observed must never be empty and must never start with the word pending. expected and observed must each be a number or one short token of letters, digits and the characters _ . : + - only (at most " + RT_PROBE_AUTHOR_MAX_OBSERVED + " characters, no space, no @, never a text column, a list or a sentence), for example 0, 17 or ok. The statement must read at least one of the tables or views below with FROM or JOIN, and must not call random(). Read only these operational tables and views, and no other: " + RT_PROBE_AUTHOR_ALLOW.join(", ") + ". Do not read the loop's own bookkeeping (issue, decision, remediation or verification tables, rows whose kind starts with remediation., issue " + id + " itself). It must be a single SELECT or WITH of at most " + RT_PROBE_AUTHOR_MAX_SQL + " characters, must not write, and must not mention needs-machine-probe. Reply with the SQL only.";
   var r, input = { messages: [{ role: "user", content: prompt }], max_tokens: 1500 };
   try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, Object.assign({ reasoning_effort: CM_REVIEW_EFFORT[RT_PROBE_AUTHOR_MODEL] || "low" }, input)); }
   catch (eR) {
@@ -12310,7 +12334,8 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
   var text = String(rep.text || "").trim();
   if (!text) { await rtProbeAuthorNote(db, id, "empty", "finish=" + rep.finish + " tokens=" + rep.tokens); return false; }
   var probe = rtProbeAuthorStrip(text);
-  var bad = await rtProbeAuthorValidSql(db, probe, id);
+  var info = {};
+  var bad = await rtProbeAuthorValidSql(db, probe, id, info);
   if (bad) {
     // a PROBE-AUTHOR-HARDEN-1 code is the reason of its own event; the detail never repeats the probe text
     var code = rtProbeAuthorCode(bad);
@@ -12323,12 +12348,18 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
   var row0 = dry && dry.results && dry.results[0];
   if (!row0) { await rtProbeAuthorNote(db, id, "no-row", "the dry run returned no row"); return false; }
   // deferral-shape: rtIsDeferral reads an empty or pending observation as "not measured yet", so such a contract could never fail or pass
-  var obs = row0.observed == null ? "" : String(row0.observed).trim();
   if (!("expected" in row0) || !("observed" in row0)) { await rtProbeAuthorNote(db, id, "deferral-shape", "the probe has no expected and observed columns"); return false; }
+  var exp0 = row0.expected == null ? "" : String(row0.expected).trim(), obs = row0.observed == null ? "" : String(row0.observed).trim();
+  if (!exp0) { await rtProbeAuthorNote(db, id, "deferral-shape", "expected is empty"); return false; }
   if (!obs) { await rtProbeAuthorNote(db, id, "deferral-shape", "observed is empty"); return false; }
   if (/^pending/i.test(obs)) { await rtProbeAuthorNote(db, id, "deferral-shape", "observed starts with pending"); return false; }
+  // free text (doctrine section 9): an allowlisted table still holds free text and the table gate cannot see which column a probe returns, so BOTH values must be a number or one short token.
+  // The event names the column and the code, never the value; decision_log is append-only and the verification ledger re-copies observed every pass.
+  if (!RT_PROBE_AUTHOR_VALUE_RE.test(exp0)) { await rtProbeAuthorNote(db, id, "private-table", "free-text value in expected"); return false; }
+  if (!RT_PROBE_AUTHOR_VALUE_RE.test(obs)) { await rtProbeAuthorNote(db, id, "private-table", "free-text value in observed"); return false; }
+  if (exp0.length > RT_PROBE_AUTHOR_MAX_OBSERVED) { await rtProbeAuthorNote(db, id, "too-long", "expected " + exp0.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_OBSERVED); return false; }
   if (obs.length > RT_PROBE_AUTHOR_MAX_OBSERVED) { await rtProbeAuthorNote(db, id, "too-long", "observed " + obs.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_OBSERVED); return false; }
-  if (String(row0.expected) === String(row0.observed)) { await rtProbeAuthorNote(db, id, "vacuous", "expected equals observed at birth"); return false; }
+  if (exp0 === obs) { await rtProbeAuthorNote(db, id, "vacuous", "expected equals observed at birth"); return false; }
   var cid = "issue-" + id;
   var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "probe-author-1 wrote the probe that measures issue " + id;
   var u = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'probe-author-1' WHERE class = ?1").bind(cid, probe).run();
@@ -12342,7 +12373,7 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     await db.prepare("INSERT INTO decision_log (ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'qnfo-fleet-control:probe-author-1', ?1, ?2, ?3, ?4, ?5, ?6, 'a probe written for an orphan issue without a session', ?7)").bind(
       "Issue " + id + " is open with no contract that can judge it; a read-only d1-query probe that is not vacuous at birth and passes a static check is a safe way to give it one.",
       "PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id,
-      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed (operational tables only); the dry run returned expected <> observed (observed: " + obs.slice(0, RT_PROBE_AUTHOR_MAX_OBSERVED) + "); probe: " + probe.slice(0, RT_PROBE_AUTHOR_MAX_SQL),
+      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed (reads " + (info.reads || []).join(", ").slice(0, 200) + ", operational objects on the allowlist); the dry run returned expected <> observed, both a number or a short token (observed: " + obs.slice(0, RT_PROBE_AUTHOR_MAX_OBSERVED) + "); probe: " + probe.slice(0, RT_PROBE_AUTHOR_MAX_SQL),
       "contract issue-" + id + " is active with module probe-author-1",
       "one remediation_contracts row; qnfo-cloud-ops PROBE-REVIEW-1 re-judges it with disjoint models",
       "UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'",
