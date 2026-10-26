@@ -79,7 +79,7 @@ ok(!/\b(ai|model|llm)\.run\(|aiRunAttr|env\.AI\b/.test(codeOnly), "v1 makes no m
   ];
   for (const [sql, why] of review) ok(wr(sql) === why, "review statement refused (" + why + "): " + sql.slice(0, 70), wr(sql));
   ok(wr("UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor' AND id = ?1") === "table-not-allowed" && wr("UPDATE human_actions SET status = 'resolved' WHERE id = ?1") === "table-not-allowed", "ops_config and human_actions are refused even with an id predicate: no playbook writes the kill switch, the trust list or an owner card");
-  ok(!/\bBD_WRITE_TABLES = \[[^\]]*"(ops_config|human_actions)"/.test(src) && /\bBD_WRITE_TABLES = \["issue_triage", "agent_issues", "remediation_contracts", "issue_plans", "tool_error_exclusions", "goals", "paper_learnings"\];/.test(src), "BD_WRITE_TABLES holds the four engine tables plus the three of the tool-loop playbooks (migrations/2026-10-26-breach-playbooks-tool-loop.sql) and neither ops_config nor human_actions");
+  ok(!/\bBD_WRITE_TABLES = \[[^\]]*"(ops_config|human_actions)"/.test(src) && /\bBD_WRITE_TABLES = \["issue_triage", "agent_issues", "remediation_contracts", "issue_plans", "tool_error_exclusions"\];/.test(src), "BD_WRITE_TABLES holds the four engine tables plus tool_error_exclusions, the one table the tool playbooks (migrations/2026-10-26-breach-playbooks-tool-loop.sql) add, and neither ops_config, human_actions, goals nor paper_learnings");
   const bad = [
     ["UPDATE issue_triage SET a = 1 WHERE issue_id = ?1; DELETE FROM agent_issues", "semicolon"],
     ["DELETE FROM issue_triage WHERE issue_id = ?1", "forbidden-keyword"],
@@ -220,6 +220,36 @@ const status = (raw, id) => q1(raw, "SELECT status, close_channel FROM agent_iss
 const diag = (raw, id) => q1(raw, "SELECT * FROM breach_diagnoses WHERE issue_id = ? ORDER BY id DESC LIMIT 1", id);
 const snapshot = (raw) => ["agent_issues", "issue_triage", "breach_diagnoses", "breach_diagnosis_events", "breach_playbooks", "decision_log", "metric_registry", "loop_lock", "human_actions", "remediation_contracts", "ops_config"].map((t) => t + ":" + JSON.stringify(raw.prepare("SELECT * FROM " + t + " ORDER BY 1").all())).join("|");
 const metric = (raw, m) => (q1(raw, "SELECT last_value v FROM metric_registry WHERE metric = ?", m) || {}).v;
+// The live owner queue (REVIEW 2026-10-26: the doctor's card was closed at birth by human_actions_default_adopt_ai on live D1 and the suite had no such trigger): the objects are read from the
+// migrations that define them, not copied: v_human_action_gate (2026-10-20-human-items-automatic), default_approve_markers, v_human_action_decision and the three human_actions AFTER INSERT
+// triggers (2026-10-19-default-approve). A migration that changes one of them changes this fixture with it.
+const sqlOf = (file) => readFileSync(here("../migrations/" + file), "utf8");
+function ddlOf(file, kind, name) {
+  const t = sqlOf(file), at = t.search(new RegExp("^CREATE " + kind + "(?: IF NOT EXISTS)? " + name + "\\b", "m"));
+  if (at < 0) throw new Error(name + " not found in " + file);
+  if (kind === "TRIGGER") return t.slice(at, t.indexOf("\nEND;", at) + 5);
+  let q = false, i = at;
+  for (; i < t.length; i++) { const c = t[i]; if (c === "'") q = !q; else if (c === ";" && !q) break; }
+  return t.slice(at, i + 1);
+}
+function stmtOf(file, head) {
+  const t = sqlOf(file), at = t.indexOf(head);
+  if (at < 0) throw new Error(head + " not found in " + file);
+  let q = false, i = at;
+  for (; i < t.length; i++) { const c = t[i]; if (c === "'") q = !q; else if (c === ";" && !q) break; }
+  return t.slice(at, i + 1);
+}
+function liveOwnerQueue(raw) {
+  raw.exec("CREATE TABLE autonomy_reroute_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, human_action_id INTEGER NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, category TEXT, priority TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), drained_at TEXT, issue_id INTEGER);");
+  raw.exec(ddlOf("2026-10-20-human-items-automatic.sql", "VIEW", "v_human_action_gate"));
+  raw.exec(stmtOf("2026-10-19-default-approve.sql", "CREATE TABLE IF NOT EXISTS default_approve_markers"));
+  raw.exec(stmtOf("2026-10-19-default-approve.sql", "INSERT OR IGNORE INTO default_approve_markers"));
+  raw.exec(ddlOf("2026-10-19-default-approve.sql", "VIEW", "v_human_action_decision"));
+  for (const t of ["human_actions_default_adopt_ai", "human_actions_autonomy_first_ai", "human_actions_default_approve_ai"]) raw.exec(ddlOf("2026-10-19-default-approve.sql", "TRIGGER", t));
+  raw.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('default_adopt_gate', 'on')").run();
+  raw.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('autonomy_first_gate', 'on')").run();
+  raw.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('default_approve_gate', 'on')").run();
+}
 
 // ---- kill switch: off writes nothing at all
 {
@@ -636,7 +666,7 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
 
 // ---- action kinds: owner-card and file-issue
 {
-  const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
+  const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run(); liveOwnerQueue(raw);
   raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-CARD', 'TEST', 'owner-bound', 'owner-card', ?, '[]', '[]', 'SELECT ''ok'' AS expected, ''ok'' AS observed', 3, 12, 1, 'on')")
     .run("SELECT 913 AS issue_id, 'credential' AS subject, json_object('reason', 'credential') AS facts_json UNION ALL SELECT 912, 'bad-reason', json_object('reason', 'banana')");
   raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-FILE', 'TEST', 'test-cause', 'file-issue', ?, '[]', '[]', 'SELECT ''closed'' AS expected, COALESCE((SELECT status FROM agent_issues WHERE id = ?1), ''missing'') AS observed', 3, 12, 1, 'on')")
@@ -644,7 +674,9 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
   old(raw);
   const r = await tick(raw);
   const card = q1(raw, "SELECT * FROM human_actions WHERE slug = 'breach-doctor-t-card-913'");
-  ok(card && card.status === "open" && card.why.startsWith("IDENTITY-BOUND: credential") && card.default_in_effect && card.default_in_effect.length > 20 && /Closing probe/.test(card.why) && !/claude\.ai|anthropic\.com/.test(JSON.stringify(card)) && !card.why.includes("PAYLOAD"), "owner-card: an IDENTITY-BOUND card with a default in effect and a closing probe, from an enum reason", card);
+  ok(card && card.status === "open" && card.resolution === null && card.why.startsWith("IDENTITY-BOUND: credential") && /\nDefault in effect: issue 913 stays open/.test(card.why) && /Closing probe/.test(card.why) && !/claude\.ai|anthropic\.com/.test(JSON.stringify(card)) && !card.why.includes("PAYLOAD"), "owner-card: an IDENTITY-BOUND card with its default in the text and a closing probe, from an enum reason, and still OPEN with the live owner-queue triggers on the table", card);
+  ok(card.default_in_effect === "", "the card carries an empty default_in_effect: human_actions_default_adopt_ai (live) resolves an open card with a non-empty default at birth unless it is decision-shaped", card.default_in_effect);
+  ok(q1(raw, "SELECT gate FROM v_human_action_gate WHERE id = ?", card.id).gate === "owner" && q1(raw, "SELECT approve + held n FROM v_human_action_decision WHERE id = ?", card.id).n === 0 && q1(raw, "SELECT COUNT(*) n FROM autonomy_reroute_queue").n === 0, "the live gate grades it owner (the IDENTITY-BOUND: line), it is not a decision card and no reroute was queued");
   ok(diag(raw, 913).state === "handed-owner" && diag(raw, 913).action_kind === "owner-card" && diag(raw, 913).action_ref === "breach-doctor-t-card-913", "the case is handed-owner with the card slug");
   ok(q1(raw, "SELECT owner_kind k FROM v_breach_owner WHERE issue_id = 913").k === "owner card (identity-bound)", "v_breach_owner reports the owner card apart");
   ok(!q1(raw, "SELECT 1 FROM human_actions WHERE slug = 'breach-doctor-t-card-912'") && r.taint_dropped >= 1, "a reason outside the enum makes no card (taint-drop)");
@@ -654,9 +686,78 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
   ok(q1(raw, "SELECT status FROM remediation_contracts WHERE class = ?", "issue-" + fi.id).status === "active", "the filed issue carries its closing contract");
   await tick(raw);
   ok(q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title = 'BREACH-DOCTOR-1: T-FILE dash-405'").n === 1 && !diag(raw, fi.id), "a second tick files no duplicate and does not diagnose the issue it filed");
-  raw.prepare("UPDATE human_actions SET status = 'resolved' WHERE slug = 'breach-doctor-t-card-913'").run();
+  // a card a trigger closed is no owner step taken: the case stays handed-owner; a card the owner resolved verifies it
+  for (const auto of ["DEFAULT-ADOPTED-1: closed at birth on its stated default (owner directive 2026-10-12). Reopen with status=open.", "DEFAULT-APPROVE-1: queued for the fleet to execute the recommended option", "AUTONOMY-FIRST-1: queued for the fleet as an agent_issue"]) {
+    raw.prepare("UPDATE human_actions SET status = 'resolved', resolution = ? WHERE slug = 'breach-doctor-t-card-913'").run(auto);
+    const rA = await tick(raw);
+    ok(diag(raw, 913).state === "handed-owner" && rA.verified === 0, "a card closed by " + auto.split(":")[0] + " does not verify the handed-owner case", diag(raw, 913).state);
+  }
+  raw.prepare("UPDATE human_actions SET status = 'resolved', resolution = 'owner: done from the dashboard' WHERE slug = 'breach-doctor-t-card-913'").run();
   const r3 = await tick(raw);
-  ok(diag(raw, 913).state === "verified" && r3.verified >= 1, "a resolved card verifies the handed-owner case");
+  ok(diag(raw, 913).state === "verified" && r3.verified >= 1, "a card the owner resolved verifies the handed-owner case");
+}
+// the card survives the live default-adopt trigger for every owner reason (hard markers such as credential, payment or legal make a decision-shaped title useless: only the empty default is robust)
+{
+  const reasons = ["credential", "money", "legal-signing", "owner-account", "personal-data"];
+  const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run(); liveOwnerQueue(raw);
+  raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-CARDS', 'TEST', 'owner-bound', 'owner-card', ?, '[]', '[]', 'SELECT ''ok'' AS expected, ''ok'' AS observed', 5, 12, 1, 'on')")
+    .run("SELECT 913 AS issue_id, 'a' AS subject, json_object('reason', 'credential') AS facts_json UNION ALL SELECT 912, 'b', json_object('reason', 'money') UNION ALL SELECT 77, 'c', json_object('reason', 'legal-signing') UNION ALL SELECT 1000179, 'd', json_object('reason', 'owner-account') UNION ALL SELECT 100500, 'e', json_object('reason', 'personal-data')");
+  old(raw);
+  raw.prepare("UPDATE ops_config SET value = '20' WHERE key = 'breach_doctor_max_actions'").run();
+  await tick(raw);
+  const cards = qa(raw, "SELECT slug, status, default_in_effect d, why FROM human_actions WHERE slug LIKE 'breach-doctor-t-cards-%' ORDER BY slug");
+  ok(cards.length === 5 && cards.every((c) => c.status === "open" && c.d === ""), "all five owner reasons make a card that stays open", cards.map((c) => [c.slug, c.status]));
+  ok(reasons.every((r) => cards.some((c) => c.why.startsWith("IDENTITY-BOUND: " + r + "\n"))), "one card per reason, each with its IDENTITY-BOUND: line");
+  // control: the pre-fix shape (a non-empty default_in_effect) is closed at birth by the fixture's live trigger, so the fixture does carry the defect the review reproduced
+  raw.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, source) VALUES ('old-shape', 'Owner step needed for issue 1 (X)', 'IDENTITY-BOUND: owner-account\nIssue 1 needs the owner''s own account.', 'Issue 1 stays open and the fleet takes no further action on it until this card is resolved.', 'Take the step, then resolve this card on https://fleet.qnfo.org/owner.', '/owner', 'normal', 'qnfo-fleet-control BREACH-DOCTOR-1')").run();
+  const oldShape = q1(raw, "SELECT status, resolution FROM human_actions WHERE slug = 'old-shape'");
+  ok(oldShape.status === "resolved" && /^DEFAULT-ADOPTED-1/.test(oldShape.resolution), "control: the same card with the old non-empty default is resolved at birth by DEFAULT-ADOPTED-1 on the live trigger", oldShape);
+}
+
+// ---- verify that waits (PENDING-VERIFY-1): an effect another loop produces
+{
+  const mk = () => {
+    const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
+    raw.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('t_pending', 'wait')").run();
+    raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-PEND', 'TEST', 'test-cause', 'sql', ?, ?, ?, ?, 3, 12, 1, 'on')")
+      .run("SELECT 77 AS issue_id, 's' AS subject, '{}' AS facts_json UNION ALL SELECT 912, 's', '{}'",
+        JSON.stringify(["UPDATE issue_triage SET sla_due_at = '2026-10-02' WHERE issue_id = ?1"]), JSON.stringify(["UPDATE issue_triage SET sla_due_at = '2026-10-01' WHERE issue_id = ?1"]),
+        "SELECT 'ok' AS expected, CASE (SELECT value FROM ops_config WHERE key = 't_pending') WHEN 'done' THEN 'ok' WHEN 'wait' THEN 'pending-effect' ELSE 'regressed' END AS observed");
+    old(raw);
+    return raw;
+  };
+  const setPending = (raw, v) => raw.prepare("UPDATE ops_config SET value = ? WHERE key = 't_pending'").run(v);
+  const raw = mk();
+  const r1 = await tick(raw);
+  ok(r1.acted === 2 && diag(raw, 77).state === "applied" && diag(raw, 912).state === "applied", "(fixture) two applied cases whose effect is another loop's to produce", { acted: r1.acted });
+  const r2 = await tick(raw), r3 = await tick(raw);
+  ok(diag(raw, 77).state === "applied" && diag(raw, 912).state === "applied" && r2.failed === 0 && r3.failed === 0 && r2.verify_pending === 2 && r2.verified === 0, "a verify that reads pending-<reason> keeps an applied case open tick after tick: not verified, not failed", { r2: [r2.failed, r2.verify_pending, r2.verified], s: diag(raw, 77).state });
+  ok(q1(raw, "SELECT verify_passes v FROM breach_diagnoses WHERE issue_id = 77").v === 0 && !qa(raw, "SELECT 1 FROM breach_diagnosis_events WHERE issue_id = 77 AND event IN ('fail', 'renew')").length, "waiting counts no pass and writes no event (a quiet case costs one read a tick)");
+  // the effect arrives: two ok passes verify it
+  setPending(raw, "done");
+  await tick(raw);
+  ok(diag(raw, 77).state === "verifying" && diag(raw, 77).verify_passes === 1, "when the effect arrives the first ok pass starts the two-pass verify");
+  const r5 = await tick(raw);
+  ok(diag(raw, 77).state === "verified" && diag(raw, 912).state === "verified" && r5.verified === 2, "and the second verifies the case");
+  // the wait ends with the lease: lease-expired, as for any case
+  const rawL = mk(); await tick(rawL); await tick(rawL);
+  rawL.prepare("UPDATE breach_diagnoses SET lease_until = '2026-01-01T00:00:00Z' WHERE issue_id = 77").run();
+  const rL = await tick(rawL);
+  ok(diag(rawL, 77).state === "failed" && diag(rawL, 77).error_code === "lease-expired" && diag(rawL, 912).state === "applied" && rL.failed === 1, "a case still pending when its lease ends is failed lease-expired (the other case still waits)", [diag(rawL, 77).state, diag(rawL, 77).error_code]);
+  // the issue closes while the case waits: superseded, never verified, never failed
+  const rawC = mk(); await tick(rawC);
+  rawC.prepare("UPDATE issue_triage SET triage_state = 'closed', close_evidence = 'closed by a session while the case waited' WHERE issue_id = 912").run();
+  const rC = await tick(rawC);
+  ok(status(rawC, 912).status === "closed" && diag(rawC, 912).state === "superseded" && diag(rawC, 77).state === "applied" && rC.failed === 0 && rC.verified === 0 && rC.superseded >= 1, "an issue that closed while its case waited supersedes the case: not verified (the doctor did not resolve it), not failed", [diag(rawC, 912).state, rC.superseded]);
+  ok(qa(raw, "SELECT detail FROM breach_diagnosis_events WHERE event = 'supersede'").length === 0 && qa(rawC, "SELECT detail FROM breach_diagnosis_events WHERE event = 'supersede' AND issue_id = 912").some((e) => e.detail === "rule=T-PEND why=closed-while-pending"), "the event names the reason");
+  // after one ok pass a pending read is a regression, not a wait
+  const rawR = mk(); await tick(rawR); setPending(rawR, "done"); await tick(rawR); ok(diag(rawR, 77).state === "verifying", "(fixture) one ok pass"); setPending(rawR, "wait");
+  const rR = await tick(rawR);
+  ok(diag(rawR, 77).state === "failed" && diag(rawR, 77).error_code === "verify-failed" && rR.failed === 2, "a pending read after one ok pass fails the case (verify-failed): only an applied case waits", [diag(rawR, 77).state, diag(rawR, 77).error_code]);
+  // only the word pending waits: any other observed value is a failed verify, as before
+  const rawX = mk(); await tick(rawX); setPending(rawX, "regressed");
+  const rX = await tick(rawX);
+  ok(diag(rawX, 77).state === "failed" && diag(rawX, 77).error_code === "verify-failed" && rX.failed === 2, "any value that does not start with pending is a failed verify", [diag(rawX, 77).state]);
 }
 
 // ---- playbook gap: seeded in measure (no issue filed), then switched on with one UPDATE
