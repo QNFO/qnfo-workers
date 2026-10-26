@@ -63,6 +63,7 @@ for (let i = 0; i < 12; i++) issue("ops filler " + i, "QNFO.OPS");
 
 run("INSERT INTO fleet_tasks (id, name, type, definition, version) VALUES ('portfolio-autopilot', 'ap', 'workflow', ?, 4)", JSON.stringify({ steps: [{ type: "sql", name: "file-no-mapped-work-umbrella", db: "AUDIT", sql: "INSERT INTO x SELECT 1 FROM (SELECT entity FROM portfolio_gaps WHERE status='open' AND kind='no-mapped-work' ORDER BY entity LIMIT 20) WHERE 1" }] }));
 db.exec("CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT); ALTER TABLE remediation_contracts ADD COLUMN precondition TEXT; ALTER TABLE remediation_contracts ADD COLUMN action TEXT; ALTER TABLE remediation_contracts ADD COLUMN verify_probe TEXT; ALTER TABLE remediation_contracts ADD COLUMN verify_transport TEXT; ALTER TABLE remediation_contracts ADD COLUMN max_attempts INTEGER; ALTER TABLE remediation_contracts ADD COLUMN escalate_to TEXT; ALTER TABLE remediation_contracts ADD COLUMN expected_cadence_h INTEGER;");
+db.exec("CREATE VIEW v_output_quality_headline AS SELECT 6 AS better, 0 AS worse, 1 AS flat, 2 AS unmeasured, 'ask,papers' AS gaps, 'improving_with_gaps' AS verdict");
 db.exec(sql1); db.exec(sql2); db.exec(sql3);
 const ap = one("SELECT definition, version FROM fleet_tasks WHERE id = 'portfolio-autopilot'");
 ok(JSON.parse(ap.definition).steps[0].sql.includes("kind='no-mapped-work' AND entity NOT LIKE 'QNFO.INFRA.%' ORDER BY entity LIMIT 20") && ap.version === 5, "the umbrella filer uses the closing probe's condition", ap);
@@ -89,6 +90,7 @@ ok(qt["QNFO.OPS"].quality_index === 75 && qt["QNFO.RSCH"].quality_index === 100,
 ok(one("SELECT last_value FROM metric_registry WHERE metric = 'fleet_quality_index'").last_value === "83.3", "fleet_quality_index is written");
 ok(Number(one("SELECT last_value FROM metric_registry WHERE metric = 'issue_reopens_7d'").last_value) === 19, "issue_reopens_7d counts the 7-day reopens");
 const pb = one("SELECT summary FROM persona_briefs WHERE persona_key = 'portfolio-manager'").summary;
+ok(/Outputs \(readers, reviewers and probes, per surface\): improving_with_gaps, 6 better, 0 worse, 1 flat, unmeasured: ask,papers\./.test(pb), "the portfolio brief carries the output-quality verdict", pb);
 ok(/Quality: 83\.3 of 100/.test(pb) && /Most recurring: /.test(pb) && /root-cause issues 2/.test(pb), "the portfolio brief carries quality and recurrence", pb);
 ok(/Quality 75(\.0)? of 100/.test(one("SELECT summary FROM persona_briefs WHERE persona_key = 'program-manager:QNFO.OPS'").summary), "a program brief carries its index");
 
