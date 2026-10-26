@@ -8794,7 +8794,7 @@ function reviserMemberCall(ctx) { var p = ctx && ctx.props; return !!(p && p.mem
 // BROWSER and SEND_EMAIL are the host's own. Its three jobs keep their minutes on this */15 tick (:00 watch,
 // :15 respond, :30 publish), each awaited. Public: GET /errata-hub/health. Every other route of it answers only a service
 // binding whose props name the member (props.member = "errata-hub", props.caller = qnfo-*), in place of ERRATA_TOKEN.
-var ERRATA_VERSION = "1.9.0-folded";
+var ERRATA_VERSION = "1.9.1-folded";
 var ERRATA_MEMBER = "errata-hub";
 var errataMod = (function () {
 var Buffer2 = __ErrataBuffer, Buffer3 = __ErrataBuffer;
@@ -30759,12 +30759,22 @@ async function settleInternalErratum(env, row, status, note) {
       .bind(status, ("\nERRATA-INTERNAL-CONFIRM-1 " + now + " (" + status + "): " + note).slice(0, 1200), now, row.subject).run();
   }
 }
+// ERRATA-DEFER-SINK-1 (1.9.1, 2026-10-26, agent_issues 100449): the selector is oldest-first by updated_at (it was RANDOM(), so a six-day-old row waited like any
+// other), and a row that defers is touched (updated_at = now) so it sinks behind every row not yet tried instead of holding a slot for good. Each defer is still a
+// cloud_ops_events row (logConfirmDefer). A defer for a missing binding is not touched: it is no property of the row.
+async function touchDeferredErratum(env, row) {
+  try {
+    await env.WATCH_DB.prepare("UPDATE errata_queue SET updated_at = datetime('now') WHERE id = ?1 AND status = 'internal-open'").bind(row.id).run();
+  } catch (e) {
+    console.error("[errata-hub] internal confirm: defer touch failed:", String(e && e.message || e).slice(0, 160));
+  }
+}
 async function confirmInternalErrata(env) {
   const max = await internalConfirmMax(env);
   const out = { ok: true, max: max, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [], models: {} };
   let rows = [];
   try {
-    rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY RANDOM() LIMIT ?2")
+    rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY updated_at ASC, id ASC LIMIT ?2")
       .bind(INTERNAL_CONFIRM_MIN_AGE, max).all()).results || [];
   } catch (e) {
     out.ok = false;
@@ -30802,6 +30812,7 @@ async function confirmInternalErrata(env) {
       if (!String(paper.body_md || "").trim()) {
         out.deferred++;
         console.error("[errata-hub] internal confirm: paper " + paper.slug + " has no body; queue row " + row.id + " waits");
+        await touchDeferredErratum(env, row);
         continue;
       }
       let v = null, model = "", lastErr = "";
@@ -30820,6 +30831,7 @@ async function confirmInternalErrata(env) {
         out.deferred++;
         console.error("[errata-hub] internal confirm: no verdict for queue row " + row.id + " (" + lastErr + ")");
         await logConfirmDefer(env, row, lastErr);
+        await touchDeferredErratum(env, row);
         continue;
       }
       const status = v.confirmed ? "detected" : "rejected";
@@ -30832,6 +30844,7 @@ async function confirmInternalErrata(env) {
       out.ok = false;
       out.deferred++;
       console.error("[errata-hub] internal confirm: queue row " + row.id + " failed:", String(e && e.message || e).slice(0, 200));
+      await touchDeferredErratum(env, row);
     }
   }
   return out;
