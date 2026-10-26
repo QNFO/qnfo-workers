@@ -271,7 +271,7 @@ ok(rbLine.length > 1000 && !/\n/.test(rbLine), "the Rollback header is one line 
 ok(/^-- spof-review: .{12,}/m.test(mig), "header carries its spof-review answer");
 ok(!/claude\.ai/i.test(mig) && !/#\d{2,}/.test(mig) && !/skip[ -]?ci/i.test(mig), "no claude.ai link, no bare issue number, no skip-CI token");
 {
-  const py = spawnSync("python3", ["-I", fileURLToPath(new URL("../scripts/apply_migrations.py", import.meta.url)), "--check", fileURLToPath(MIG_URL)], { encoding: "utf8" });
+  const py = spawnSync("python3", ["-I", fileURLToPath(new URL("../scripts/apply_migrations.py", import.meta.url)), "--check", "--history", fileURLToPath(MIG_URL)], { encoding: "utf8" });
   if (py.error) console.log("note: python3 not available, apply_migrations --check skipped");
   else ok(py.status === 0 && /"ok": true/.test(py.stdout), "scripts/apply_migrations.py --check accepts the file", (py.stdout + py.stderr).slice(0, 300));
 }

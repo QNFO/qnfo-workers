@@ -74,7 +74,7 @@ const ni = w.prepare("SELECT * FROM agent_issues WHERE title LIKE 'EMAIL-TIER2-G
 ok(ni.length === 1 && ni[0].status === "open" && ni[0].source === "claude-session:rem-a7-f1" && ni[0].priority === "high", "EMAIL-TIER2-GATE-1 is filed once, open, from a trusted session source", ni.length);
 const d = ni[0].description;
 const probeLine = (/\ncode-probe: (\{.*\})\n/.exec(d) || [])[1] || "";
-ok(codeProbe(probeLine, { "qnfo-email/worker.js": emailSrc }) === "missing-marker:qnfo-email/worker.js", "its code probe fails on the real qnfo-email/worker.js today (the switch does not exist yet) and passes once the text exists");
+ok(codeProbe(probeLine, { "qnfo-email/worker.js": emailSrc }) === (emailSrc.includes(JSON.parse(probeLine).contains) ? "ok" : "missing-marker:qnfo-email/worker.js"), "its code probe reads the real qnfo-email/worker.js: missing-marker before the switch exists, ok once the text exists (state-independent: the switch landed in qnfo-email 2.12.2)");
 ok(codeProbe(probeLine, { "qnfo-email/worker.js": emailSrc + "\n// email_tier2_autosend" }) === "ok", "and passes once the worker carries the switch");
 const anchor = (/\ncode-anchor: (.*)$/.exec(d) || [])[1] || "";
 ok(anchor.length > 20 && emailSrc.split(anchor).length - 1 === 1, "its code-anchor occurs exactly once in qnfo-email/worker.js");
