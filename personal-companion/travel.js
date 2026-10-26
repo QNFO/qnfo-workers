@@ -820,11 +820,13 @@ const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;-
   ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.75rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
   "pre.draft{white-space:pre-wrap;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:.5rem;padding:.5rem;margin:.4rem 0}" +
   ".ed{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.ed label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.ed input{font:inherit;font-size:.92rem;padding:.3rem .4rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);max-width:11rem}" +
+  ".pillar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.45rem 0 0}.pillar .pl{font-weight:600;font-size:.85rem;min-width:3.2rem}" +
   "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}";
 
-const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"trip\" aria-pressed=\"false\">Trip</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
+const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
-  "<section class=\"tab\" id=\"trip\" hidden><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
+  "<section class=\"tab\" id=\"places\" hidden><p class=\"muted\">Where to go, where to sleep, what to eat and what to do, stop by stop. Tap a question and the chat answers it.</p><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p></section>" +
+  "<section class=\"tab\" id=\"moving\" hidden><p class=\"muted\">How to get from one stop to the next, then every day with its weather.</p><h2>Moves</h2><div id=\"moves\"></div><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
   "<section class=\"tab\" id=\"imp\" hidden><h2>Import a booking</h2><p class=\"muted\">Paste a confirmation email or any booking text. I pick out the stays and journeys and add them to your trips.</p><p id=\"fwd\" class=\"muted\"></p><textarea id=\"imptext\" aria-label=\"Booking text\"></textarea><p><button class=\"primary\" type=\"button\" id=\"impgo\">Import</button></p><div id=\"impout\"></div></section>" +
   "<footer><form id=\"f\"><textarea id=\"t\" rows=\"1\" placeholder=\"Where to, or react to an idea...\" aria-label=\"Message\"></textarea><button class=\"primary\" id=\"send\">Send</button></form>" +
   "<details id=\"settings\"><summary>Settings and what I know</summary><p>Model: <select id=\"model\"></select> <span id=\"modelnote\"></span></p><p>What I use to plan (remove anything wrong):</p><ul id=\"known\"></ul>" +
@@ -975,14 +977,35 @@ function renderTrip(t) {
     c.appendChild(row); ck.appendChild(c);
   }
   const st = $("#stops"); st.innerHTML = "";
-  if (!t.stops.length) st.appendChild(el("p", "muted", "No stops planned yet. Add one, or ask in the chat."));
-  for (const s of t.stops) {
+  if (!t.places.length) st.appendChild(el("p", "muted", "No stops planned yet. Add one, or ask in the chat."));
+  for (const p of t.places) {
+    const s = t.stops.find((x) => x.id === p.id) || p;
     const c = el("div", "card");
-    c.appendChild(el("strong", "", s.city + (s.country_name ? ", " + s.country_name : "")));
-    c.appendChild(el("div", "muted", fmtDay(s.start_date) + " to " + fmtDay(s.end_date) + (s.note ? " · " + s.note : "") + (s.lat == null ? " · no weather (place not found)" : "")));
+    c.appendChild(el("strong", "", p.city + (p.country_name ? ", " + p.country_name : "")));
+    c.appendChild(el("div", "muted", fmtDay(p.start_date) + " to " + fmtDay(p.end_date) + " · " + p.nights + " night" + (p.nights === 1 ? "" : "s") + (p.weather ? " · " + p.weather.low + "° to " + p.weather.high + "°" + (p.weather.kind === "lastyear" ? " last year" : "") : "") + (p.note ? " · " + p.note : "")));
+    if (p.fog) c.appendChild(el("div", "flag", "Fog season: plan moves for late morning."));
+    const sl = el("div", "pillar"); sl.appendChild(el("span", "pl", "Sleep"));
+    sl.appendChild(el("span", "", p.sleep.booked.length ? "Booked: " + p.sleep.booked.join(", ") + (p.sleep.nights_open > 0 ? " (" + p.sleep.nights_open + " night" + (p.sleep.nights_open === 1 ? "" : "s") + " still open)" : "") : "Not booked yet"));
+    const stays = el("a", "btn", "Find a stay"); stays.href = p.sleep.search; stays.target = "_blank"; stays.rel = "noopener noreferrer"; sl.appendChild(stays);
+    sl.appendChild(btn("Ideas", () => ask(p.ask.sleep)));
+    c.appendChild(sl);
+    const ea = el("div", "pillar"); ea.appendChild(el("span", "pl", "Eat")); ea.appendChild(btn("Where to eat", () => ask(p.ask.eat))); c.appendChild(ea);
+    const dd = el("div", "pillar"); dd.appendChild(el("span", "pl", "Do")); dd.appendChild(btn("What to do", () => ask(p.ask.do))); c.appendChild(dd);
     let open = null;
-    c.appendChild(btn("Edit", () => { if (open) { open.remove(); open = null; return; } open = editor(STOP_FIELDS, s, (x) => api("/travel/api/stop", { ...x, id: s.id }), () => api("/travel/api/stop", { id: s.id, delete: true })); c.appendChild(open); }));
+    c.appendChild(btn("Edit stop", () => { if (open) { open.remove(); open = null; return; } open = editor(STOP_FIELDS, s, (x) => api("/travel/api/stop", { ...x, id: p.id }), () => api("/travel/api/stop", { id: p.id, delete: true })); c.appendChild(open); }));
     st.appendChild(c);
+  }
+  const mv = $("#moves"); mv.innerHTML = "";
+  if (!t.moves.length) mv.appendChild(el("p", "muted", "No moves between stops yet."));
+  for (const m of t.moves) {
+    const c = el("div", "card" + (m.fog ? " warn" : ""));
+    c.appendChild(el("strong", "", fmtDay(m.day) + ": " + m.from + " to " + m.to));
+    c.appendChild(el("div", "muted", (m.booked.length ? "Booked: " + m.booked.join(", ") : "Not booked yet") + (m.cross ? " · border crossing" : "")));
+    if (m.fog) c.appendChild(el("div", "flag", "Fog season where you leave from: morning departures are often delayed. Leave after late morning."));
+    const row = el("div", "row");
+    const tr = el("a", "btn", "Routes and times"); tr.href = m.transit; tr.target = "_blank"; tr.rel = "noopener noreferrer"; row.appendChild(tr);
+    row.appendChild(btn("Best way", () => ask(m.ask)));
+    c.appendChild(row); mv.appendChild(c);
   }
   const dl = $("#days"); dl.innerHTML = "";
   for (const d of t.days) {
@@ -1016,13 +1039,14 @@ $("#impgo").onclick = async () => {
   } catch (e) { out.textContent = "Could not import: " + e.message; }
   $("#impgo").disabled = false;
 };
-document.querySelectorAll("nav.tabs button").forEach((b) => b.onclick = () => {
-  const tab = b.dataset.tab;
-  document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+function showTab(tab) {
+  document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.tab === tab)));
   $("#log").hidden = tab !== "chat"; document.querySelector("footer").hidden = tab !== "chat";
-  $("#trip").hidden = tab !== "trip"; $("#imp").hidden = tab !== "imp";
-  if (tab === "trip" || tab === "imp") loadTrip();
-});
+  $("#places").hidden = tab !== "places"; $("#moving").hidden = tab !== "moving"; $("#imp").hidden = tab !== "imp";
+  if (tab !== "chat") loadTrip();
+}
+function ask(q) { showTab("chat"); send(q); }
+document.querySelectorAll("nav.tabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 $("#f").onsubmit = (e) => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ""; send(v); };
 ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#f").requestSubmit(); } });
 $("#fresh").onclick = async () => { await api("/travel/api/reset", {}); log.innerHTML = ""; send("", true); };
@@ -1443,13 +1467,64 @@ async function checkinCards(db, c, today) {
   return out;
 }
 
+// TRAVEL-PILLARS-1 (2026-10-26, owner: "where to go, where to sleep, what to eat, how to get around, and what to do ... it's
+// basically only two"). The page groups the plan into two pillars. Places: each stop with where to sleep (the booked stay
+// covering its nights, or a stay search), what to eat and what to do (one tap asks the chat for 2-3 specific picks), and its
+// weather. Getting around: each move between stops with its booked journey, a transit search and travel-day fog notes,
+// then the day-by-day list.
+export function placeCards(stops, today, wx, lodging, c) {
+  return (stops || []).filter((s) => isoDay(s.start_date) && isoDay(s.end_date) && s.end_date > s.start_date && s.end_date >= today)
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : 1))
+    .map((s) => {
+      const nights = daysBetween(s.start_date, s.end_date);
+      const stays = (lodging || []).filter((e) => e.start_date < s.end_date && e.end_date > s.start_date && (!e.city || !s.city || norm(e.city).includes(norm(s.city).split(" ")[0]) || norm(s.city).includes(norm(e.city))));
+      const covered = new Set();
+      for (const e of stays) for (let d = e.start_date; d < e.end_date; d = addDays(d, 1)) if (d >= s.start_date && d < s.end_date) covered.add(d);
+      const w = wx && wx[s.id] ? Object.values(wx[s.id]) : [];
+      const hi = w.map((x) => x.tmax).filter((x) => x != null), lo = w.map((x) => x.tmin).filter((x) => x != null);
+      const where = s.city + (s.country ? ", " + countryName(s.country) : "");
+      const span = s.start_date + " to " + s.end_date;
+      return {
+        id: s.id, city: s.city, country: s.country, country_name: countryName(s.country), start_date: s.start_date, end_date: s.end_date, nights, note: s.note || "",
+        sleep: { booked: stays.map((e) => e.title || e.city), nights_open: nights - covered.size,
+          search: bookingLink({ city: s.city, country: countryName(s.country), checkin: s.start_date, nights, maxPerNight: c.max_per_night, currency: c.currency, adults: c.adults }) },
+        weather: hi.length ? { high: Math.round(Math.max(...hi)), low: Math.round(Math.min(...lo)), kind: w.some((x) => x.kind === "forecast") ? "forecast" : "lastyear" } : null,
+        fog: fogSeason(s.lat, s.lon, s.start_date) || fogSeason(s.lat, s.lon, addDays(s.end_date, -1)),
+        ask: {
+          sleep: "Where should we stay in " + where + " (" + span + ")? Two or three specific places that fit us, with the area for each.",
+          eat: "What should we eat in " + where + " (" + span + ")? Two or three specific places or dishes, and why they fit us.",
+          do: "What should we do in " + where + " (" + span + ")? Two or three specific things that fit us, not the generic circuit."
+        }
+      };
+    });
+}
+
+export function moveCards(stops, today, travel) {
+  const list = (stops || []).filter((s) => isoDay(s.start_date) && isoDay(s.end_date)).sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
+  const out = [];
+  for (let i = 1; i < list.length; i++) {
+    const a = list[i - 1], b = list[i];
+    const day = b.start_date;
+    if (day < today || norm(a.city) === norm(b.city)) continue;
+    const from = a.city + (a.country ? ", " + countryName(a.country) : ""), to = b.city + (b.country ? ", " + countryName(b.country) : "");
+    const booked = (travel || []).filter((t) => t.start_date === day || (t.start_date === addDays(day, -1) && t.end_date === day)).map((t) => t.title || t.city);
+    out.push({ day, from: a.city, to: b.city, cross: (a.country || "") !== (b.country || ""), booked, transit: transitLink(from, to),
+      fog: fogSeason(a.lat, a.lon, day),
+      ask: "How should we get from " + from + " to " + to + " on " + day + "? Compare train, bus and flight on door-to-door time and cost, and say which to book." });
+  }
+  return out;
+}
+
 export async function planState(db, c, nowMs, deps) {
   const today = localParts(nowMs, c.tz).day;
   const { stops, permits } = await tripRows(db, today);
   const lodging = await many(db, "SELECT title, city, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ?", today);
+  const travel = await many(db, "SELECT title, city, start_date, end_date FROM events WHERE category = 'travel' AND start_date >= ?", addDays(today, -1));
   const wx = await weatherFor(db, stops, today, deps || {}, nowMs);
   return {
     today,
+    places: placeCards(stops, today, wx, lodging, c),
+    moves: moveCards(stops, today, travel),
     stops: stops.map((s) => ({ ...s, country_name: countryName(s.country) })),
     visa: visaStatus(permits, (await many(db, "SELECT city, country, start_date, end_date FROM travel_stops")), today),
     days: dayPlan(stops, today, wx, lodging),
