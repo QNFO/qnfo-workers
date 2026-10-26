@@ -59,7 +59,7 @@ CREATE VIEW v_human_action_gate AS SELECT 'x' AS source;
 CREATE VIEW v_human_action_decision AS SELECT 'x' AS source;
 ` + viewSql("v_control_alternate_status") + viewSql("v_control_alternate_untested");
 
-const TRIGGER_MD4 = "WITH oi AS (SELECT 1) , st AS (SELECT 1 AS tid, 1 AS streak_at WHERE (julianday('now') - julianday(0)) * 1440 >= 120) SELECT 1";
+const TRIGGER_MD4 = "WITH oi AS (SELECT 1) , st AS (SELECT 1 AS tid, 1 AS streak_at WHERE 1 = 1 AND (julianday('now') - julianday(0)) * 1440 >= 120 AND s.hit = 0) SELECT 1";
 const PN_R2_TRIGGER = "SELECT p.id FROM agent_issues p WHERE p.title LIKE 'PROBE-NEEDED-1: issue-%' AND NOT EXISTS (SELECT 1 FROM agent_issues lv WHERE lv.title = 'BREACH-DOCTOR-1: PN-R2 qnfo-fleet-control')";
 const PLAYBOOKS = [
   ["CM-R1", "sql", "on", "SELECT 1", '["UPDATE agent_issues SET status = \'closed\' WHERE id = ?1"]', '["UPDATE agent_issues SET status = \'open\' WHERE id = ?1"]', "SELECT 1", 12, 40],
@@ -212,6 +212,13 @@ const CASES = {
     bad(1, "an action sets control_registry", newPb("X6", "sql", '["UPDATE control_registry SET disposition = 1 WHERE issue_id = ?1"]', "[]"), /writes a table the write allowlist refuses/),
     bad(1, "an action sets metric_registry", newPb("X7", "sql", '["UPDATE metric_registry SET last_value = 1 WHERE rowid = ?1"]', "[]"), /writes a table the write allowlist refuses/),
     bad(1, "a revert sets breach_playbooks", newPb("X8", "sql", '["UPDATE agent_issues SET status = 1 WHERE id = ?1"]', '["UPDATE breach_playbooks SET mode = \'on\' WHERE ?1 > 0"]'), /writes a table the write allowlist refuses/),
+    // every refused table, in both write forms, in an action and in a revert (so no one of the 32 patterns can be dropped unseen)
+    ...["ops_config", "human_actions", "decision_log", "fleet_tasks", "fleet_crons", "control_registry", "metric_registry", "breach_playbooks"].flatMap((t, i) => [
+      bad(1, "an action inserts into " + t, newPb("Y" + i + "a", "sql", '["INSERT INTO ' + t + ' (x) SELECT ?1"]', "[]"), /writes a table the write allowlist refuses/),
+      bad(1, "an action sets " + t, newPb("Y" + i + "b", "sql", '["UPDATE ' + t + ' SET x = 1 WHERE id = ?1"]', "[]"), /writes a table the write allowlist refuses/),
+      bad(1, "a revert inserts into " + t, newPb("Y" + i + "c", "sql", '["UPDATE agent_issues SET status = 1 WHERE id = ?1"]', '["INSERT INTO ' + t + ' (x) SELECT ?1"]'), /writes a table the write allowlist refuses/),
+      bad(1, "a revert sets " + t, newPb("Y" + i + "d", "sql", '["UPDATE agent_issues SET status = 1 WHERE id = ?1"]', '["UPDATE ' + t + ' SET x = 1 WHERE id = ?1"]'), /writes a table the write allowlist refuses/)
+    ]),
     bad(2, "an action statement has no id predicate", newPb("X9", "sql", '["UPDATE agent_issues SET status = 1"]', "[]"), /no \?1 id predicate/),
     good(0, "a read of ops_config and metric_registry inside an allowed write", newPb("X10", "sql", '["INSERT INTO issue_triage (issue_id) SELECT ?1 WHERE (SELECT value FROM ops_config WHERE key = \'k\') = \'on\' AND EXISTS (SELECT 1 FROM metric_registry)"]', "[]")),
     good(0, "a disabled playbook that writes ops_config", newPb("X11", "sql", '["INSERT INTO ops_config (key) SELECT ?1"]', "[]", 0)),
@@ -294,7 +301,8 @@ const CASES = {
     bad(2, "a rule was demoted 5 hours ago", "UPDATE breach_playbooks SET mode = 'measure', note = 'demoted " + iso(300) + " x' WHERE rule_id = 'MD-4';", /stayed demoted to measure for over 120 minutes/),
     bad(3, "every rule is held in measure", "UPDATE breach_playbooks SET mode = 'measure';", /no enabled playbook is in mode on/),
     good(0, "a rule demoted 119 minutes ago", "UPDATE breach_playbooks SET mode = 'measure', note = 'demoted " + iso(119) + " x' WHERE rule_id = 'CM-R1';"),
-    good(0, "a disabled rule with an old demotion note", "UPDATE breach_playbooks SET mode = 'measure', enabled = 0, note = 'demoted " + iso(900) + " x' WHERE rule_id = 'CM-R1';"),
+    good(0, "a rule whose note starts with demoted and a count, not a time", "UPDATE breach_playbooks SET mode = 'measure', note = 'demoted 2 times in a row, kept in measure' WHERE rule_id = 'CM-R1';"),
+    good(0, "a disabled rule with an old demotion note","UPDATE breach_playbooks SET mode = 'measure', enabled = 0, note = 'demoted " + iso(900) + " x' WHERE rule_id = 'CM-R1';"),
     good(0, "a released rule (mode on) that still carries the old note", "UPDATE breach_playbooks SET note = 'demoted " + iso(900) + " x' WHERE rule_id = 'CM-R1';")
   ],
   "breach-doctor-age-gate": [
@@ -344,6 +352,8 @@ const CASES = {
   ],
   "metric-playbook-recovery-hold": [
     bad(1, "the MD-4 gate is 1440 minutes", "UPDATE breach_playbooks SET trigger_sql = replace(trigger_sql, '>= 120', '>= 1440') WHERE rule_id = 'MD-4';", /gate is no longer 120 minutes/),
+    bad(1, "the MD-4 gate is 1200 minutes (the old probe matched this by prefix)", "UPDATE breach_playbooks SET trigger_sql = replace(trigger_sql, '>= 120 AND', '>= 1200 AND') WHERE rule_id = 'MD-4';", /gate is no longer 120 minutes/),
+    bad(1, "the MD-4 gate is 12 minutes", "UPDATE breach_playbooks SET trigger_sql = replace(trigger_sql, '>= 120 AND', '>= 12 AND') WHERE rule_id = 'MD-4';", /gate is no longer 120 minutes/),
     bad(1, "the MD-4 rule is disabled", "UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = 'MD-4';", /gate is no longer 120 minutes/),
     bad(1, "the MD-4 rule is missing", "DELETE FROM breach_playbooks WHERE rule_id = 'MD-4';", /gate is no longer 120 minutes/),
     bad(2, "breach_doctor holds maybe", cfgSet("breach_doctor", "maybe"), /breach_doctor holds a value other than on, measure or off/),
