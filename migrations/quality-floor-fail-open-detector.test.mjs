@@ -1,0 +1,62 @@
+// QUALITY-FLOOR-RECORD-1 offline suite: migrations/2026-10-26-quality-floor-fail-open-detector.sql registers the failure mode, its d1-query detector and one decision row, idempotently, and the detector
+// reads the counter rows qnfo-ai 5.40.1 writes (purpose quality-floor-read, errors on a failed read): it passes with no rows, with healthy reads and with a few failures among many reads, and fails when
+// at least three reads failed today and failures outnumber the successes. Replayed in node:sqlite against the real probe text.
+// Run: node --no-warnings migrations/quality-floor-fail-open-detector.test.mjs   -> prints "N passed, 0 failed"
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+const sql = readFileSync(new URL("./2026-10-26-quality-floor-fail-open-detector.sql", import.meta.url), "utf8");
+const worker = readFileSync(new URL("../qnfo-ai/worker.js", import.meta.url), "utf8");
+let pass = 0, fail = 0;
+const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 300))); } };
+const db = new DatabaseSync(":memory:");
+db.exec(`CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT, module TEXT, budget_ms INTEGER, max_items INTEGER, requires_container INTEGER, next_due_at TEXT);
+CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
+CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, UNIQUE (day, worker, purpose, model));`);
+const n = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
+ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql) && /^-- Rollback: .+$/m.test(sql), "the file carries the three migration headers");
+ok(!/\b(DELETE|DROP)\b/i.test(sql.replace(/^--.*$/gm, "")), "the body runs no DELETE or DROP");
+db.exec(sql); db.exec(sql);
+ok(n("failure_modes") === 1 && n("remediation_contracts") === 1 && n("decision_log") === 1, "applied twice: one failure mode, one detector contract, one decision row", [n("failure_modes"), n("remediation_contracts"), n("decision_log")]);
+const c = db.prepare("SELECT * FROM remediation_contracts").get();
+ok(c.verify_transport === "d1-query" && c.status === "active" && c.issue_id === null && c.module === "failure-mode", "the detector is an active d1-query failure-mode contract", c);
+const fm = db.prepare("SELECT * FROM failure_modes").get();
+ok(fm.probe_class === c.class && fm.issue_id === 1000408, "the failure mode names its detector class and issue", fm);
+const observe = () => { const r = db.prepare(c.verify_probe).all(); return r.length === 1 ? [r[0].expected, r[0].observed] : r; };
+const put = (day, purpose, calls, errors, model = "v_output_quality_headline") => db.prepare("INSERT OR REPLACE INTO ai_call_counters (day, worker, purpose, model, calls, errors) VALUES (?1, 'qnfo-ai', ?2, ?3, ?4, ?5)").run(day, purpose, model, calls, errors);
+const today = new Date().toISOString().slice(0, 10), yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+ok(JSON.stringify(observe()) === '["0","0"]', "no counter rows (before the qnfo-ai deploy): the detector passes", observe());
+put(today, "quality-floor-read", 24, 0);
+ok(JSON.stringify(observe()) === '["0","0"]', "24 healthy reads: the detector passes", observe());
+put(today, "quality-floor-read", 24, 2);
+ok(JSON.stringify(observe()) === '["0","0"]', "two failures are under the count of three: the detector passes", observe());
+put(today, "quality-floor-read", 30, 5);
+ok(JSON.stringify(observe()) === '["0","0"]', "five failures among 30 reads (a minority): the detector passes", observe());
+put(today, "quality-floor-read", 10, 5);
+ok(JSON.stringify(observe()) === '["0","0"]', "failures exactly half of the reads are not more than half: the detector passes", observe());
+put(today, "quality-floor-read", 10, 6);
+ok(JSON.stringify(observe()) === '["0","1"]', "six failures among 10 reads (a majority, at least three): the detector fails", observe());
+put(today, "quality-floor-read", 3, 3);
+ok(JSON.stringify(observe()) === '["0","1"]', "three reads, all failed: the detector fails", observe());
+put(today, "quality-floor-read", 2, 2);
+ok(JSON.stringify(observe()) === '["0","0"]', "two reads, both failed: under three, the detector passes", observe());
+put(today, "quality-floor-read", 288, 288);
+put(yesterday, "quality-floor-read", 24, 0);
+ok(JSON.stringify(observe()) === '["0","1"]', "a day of failed reads fails the detector although yesterday was healthy", observe());
+db.exec("DELETE FROM ai_call_counters");
+put(yesterday, "quality-floor-read", 288, 288);
+ok(JSON.stringify(observe()) === '["0","0"]', "failures of yesterday alone do not fail today's probe", observe());
+db.exec("DELETE FROM ai_call_counters");
+put(today, "quality-floor-lift:spendGovern", 40, 40, "deepseek-v4-pro");
+put(today, "fleet-cap-steer", 9, 9, "deepseek-v4-pro");
+ok(JSON.stringify(observe()) === '["0","0"]', "lift rows and other purposes are not read reads", observe());
+db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors) VALUES (?1, 'other-worker', 'quality-floor-read', 'x', 9, 9)").run(today);
+ok(JSON.stringify(observe()) === '["0","0"]', "another worker's rows are not read", observe());
+// the probe's counter vocabulary is the one qnfo-ai 5.40.1 writes
+ok(worker.includes('var QUALITY_FLOOR_PURPOSE = "quality-floor";') && worker.includes('QUALITY_FLOOR_PURPOSE + "-read"') && worker.includes("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors) VALUES (?1, 'qnfo-ai', ?2, ?3, 1, ?4)"), "qnfo-ai/worker.js writes the quality-floor-read rows the detector reads (worker qnfo-ai, purpose quality-floor-read, errors on failure)");
+ok(db.prepare("SELECT predicted_outcome FROM decision_log").get().predicted_outcome.indexOf(" within ") === -1, "the decision row's predicted outcome holds no ' within ' (the live prediction parser would read it)");
+const down = /^-- Rollback: (.*)$/m.exec(sql)[1];
+db.exec(down);
+ok(n("failure_modes") === 0 && n("remediation_contracts") === 0 && n("decision_log") === 1, "the Rollback line removes the failure mode and the detector and leaves the append-only decision row");
+console.log(`${pass} passed, ${fail} failed`);
+if (fail) process.exit(1);

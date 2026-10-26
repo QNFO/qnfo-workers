@@ -44,7 +44,7 @@ function fakeDb(o) {
         if (/FROM fleet_budget/.test(sql)) return { results: o.budget || [] };
         return { results: [] };
       },
-      run: async () => { writes.push({ sql, args }); return { success: true }; },
+      run: async () => { if (o.runThrows && /ai_call_counters/.test(sql)) throw new Error("counter write refused"); writes.push({ sql, args }); return { success: true }; },
     };
     return s;
   };
@@ -152,13 +152,53 @@ const ledgerDowngrades = (db) => db.writes.filter((w) => /INSERT INTO ai_spend_l
   ok(r.calls.join() === GLM && out.choices[0].message.content === "glm", "worse > 0: the requested model answers and the twin is not called", r.calls);
   ok(env.__fleetSteers.length === 0, "worse > 0: no switch is recorded", env.__fleetSteers);
   ok(env.__qualityLifts.length === 1 && env.__qualityLifts[0].point === "fleetSteerRun" && env.__qualityLifts[0].model === GLM && new RegExp(FLASH).test(env.__qualityLifts[0].reason), "worse > 0: the lift names the point, the model and the unused twin", env.__qualityLifts);
-  ok(!db.writes.some((w) => /INSERT INTO ai_call_counters/.test(w.sql)), "worse > 0: no steer outcome is counted", db.writes.map((w) => w.sql.slice(0, 40)));
+  ok(!db.writes.some((w) => /INSERT INTO ai_call_counters/.test(w.sql) && w.args[1] === "fleet-cap-steer"), "worse > 0: no steer outcome is counted", db.writes.map((w) => w.args));
 
   reset();
   db = fakeDb({ budget: [{ node_class: "ai_spend:workers-ai", cap: 95, current: 80 }], worse: 2 });
   r = runner();
   await X.fleetSteerRun(mkEnv(db), GLM, false, r.run);
   ok(r.calls.join() === GLM && db.reads.quality === 0, "under the fleet cap there is no switch to lift and no quality read", { calls: r.calls, reads: db.reads });
+}
+
+// 3b. Every lift and every read leaves a counter row (QUALITY-FLOOR-RECORD-1, 5.40.1).
+{
+  const counters = (db) => db.writes.filter((w) => /INSERT INTO ai_call_counters/.test(w.sql)).map((w) => ({ purpose: w.args[1], model: w.args[2], failed: w.args[3] }));
+  reset();
+  let db = fakeDb({ spend: { "workers-ai": 40 }, worse: 2 });
+  await X.spendGovern(mkEnv(db), "workers-ai", PREMIUM, false);
+  let c = counters(db);
+  ok(c.some((x) => x.purpose === "quality-floor-lift:spendGovern" && x.model === PREMIUM && x.failed === 0), "a lift at spendGovern is counted by point and requested model", c);
+  ok(c.filter((x) => x.purpose === "quality-floor-read").length === 1 && c.find((x) => x.purpose === "quality-floor-read").failed === 0 && c.find((x) => x.purpose === "quality-floor-read").model === "v_output_quality_headline", "the read is counted once, without an error", c);
+  reset();
+  db = fakeDb({ spend: { "workers-ai": 40 }, worse: 2 });
+  await X.spendGovernWA(mkEnv(db), PREMIUM);
+  ok(counters(db).some((x) => x.purpose === "quality-floor-lift:spendGovernWA" && x.model === PREMIUM), "a lift at spendGovernWA is counted", counters(db));
+  reset();
+  db = fakeDb({ budget: [{ node_class: "ai_spend:workers-ai", cap: 95, current: 113.07 }], worse: 2 });
+  await X.fleetSteerRun(mkEnv(db), "@cf/zai-org/glm-5.3", false, async () => ({ choices: [{ message: { content: "x" } }] }));
+  ok(counters(db).some((x) => x.purpose === "quality-floor-lift:fleetSteerRun" && x.model === "@cf/zai-org/glm-5.3"), "a lift at fleetSteerRun is counted", counters(db));
+  reset();
+  db = fakeDb({ spend: { "workers-ai": 40 }, worse: 0 });
+  await X.spendGovernWA(mkEnv(db), PREMIUM);
+  ok(!counters(db).some((x) => /^quality-floor-lift/.test(x.purpose)), "a downgrade that is not lifted is not counted as a lift", counters(db));
+  reset();
+  db = fakeDb({ qThrows: true });
+  await X.spendQualityBlock(mkEnv(db));
+  ok(counters(db).length === 1 && counters(db)[0].purpose === "quality-floor-read" && counters(db)[0].failed === 1, "a failed read is counted with an error (the signal a detector reads)", counters(db));
+  // the counter write is off the request path and fail-soft
+  reset();
+  db = fakeDb({ spend: { "workers-ai": 40 }, worse: 2, runThrows: true });
+  const waits = [];
+  const m = await X.spendGovernWA(mkEnv(db, { __spendCtx: { waitUntil: (p) => waits.push(p) } }), PREMIUM);
+  await Promise.all(waits);
+  ok(m === PREMIUM && waits.length >= 1, "a refused counter write changes nothing: the requested model is served, the write is handed to waitUntil", { m, waits: waits.length });
+  ok(logs.some((l) => l[0] === "error" && /quality-floor-count-failed/.test(l[1])), "and is logged", logs);
+  reset();
+  const noDb = mkEnv(null);
+  noDb.QNFO_AUDIT = undefined;
+  let threw = null; try { await X.spendGovernWA(noDb, PREMIUM); } catch (e) { threw = e; }
+  ok(!threw, "no binding: nothing to count, nothing thrown");
 }
 
 // 4. The shared check: caching, failure, missing binding.
@@ -199,6 +239,28 @@ const ledgerDowngrades = (db) => db.writes.filter((w) => /INSERT INTO ai_spend_l
   reset();
   const bad2 = fakeDb({ qThrows: true });
   ok((await X.spendQualityBlock(mkEnv(bad2))) === false, "a first read that fails blocks nothing (the cheaper path stays the default)");
+  // a failed read followed by a good one: the error is cleared and the new value used (the review of 5.40.0 found this path untested)
+  reset();
+  db = fakeDb({ worse: 3 }); env = mkEnv(db);
+  await X.spendQualityBlock(env);
+  const down = fakeDb({ qThrows: true });
+  expire();
+  await X.spendQualityBlock(mkEnv(down));
+  ok(floor().err && floor().worse === 3, "a failed read sets the error and keeps the last value", floor());
+  vm.runInContext("__qualityFloor.at = Date.now() - " + (X.QUALITY_FLOOR_RETRY_MS + 1000) + ";", sb);
+  const back = fakeDb({ worse: 0 });
+  ok((await X.spendQualityBlock(mkEnv(back))) === false && floor().err === null && floor().worse === 0 && back.reads.quality === 1, "the retry after the window succeeds: error cleared, the new value (0) used, block released", floor());
+  // the windows are the ones the version note states (an hour for a good read, five minutes after a failure)
+  ok(X.QUALITY_FLOOR_TTL_MS === 36e5 && X.QUALITY_FLOOR_RETRY_MS === 3e5, "TTL is one hour and the retry window five minutes", [X.QUALITY_FLOOR_TTL_MS, X.QUALITY_FLOOR_RETRY_MS]);
+  // the lift record is capped at 8 a request, and an env without the array is served the requested model without throwing
+  reset();
+  db = fakeDb({ spend: { "workers-ai": 40 }, worse: 2 });
+  env = mkEnv(db);
+  for (let i = 0; i < 12; i++) await X.spendGovernWA(env, PREMIUM);
+  ok(env.__qualityLifts.length === 8, "twelve lifts in one request keep eight entries in _router.quality_floor", env.__qualityLifts.length);
+  const bare = mkEnv(fakeDb({ spend: { "workers-ai": 40 }, worse: 2 }));
+  delete bare.__qualityLifts;
+  ok((await X.spendGovernWA(bare, PREMIUM)) === PREMIUM, "an env without a lift array is served the requested model and does not throw");
   // no binding, no row
   reset();
   ok((await X.spendQualityBlock({})) === false && (await X.spendQualityBlock(null)) === false && (await X.spendQualityBlock(undefined)) === false, "no QNFO_AUDIT binding blocks nothing and does not throw");
@@ -221,7 +283,8 @@ const ledgerDowngrades = (db) => db.writes.filter((w) => /INSERT INTO ai_spend_l
 // 6. Release bookkeeping.
 {
   const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
-  ok(v && (+v[1] > 5 || (+v[1] === 5 && +v[2] >= 40)), "VERSION is at least 5.40.0 (a new decision the router takes on its own is a minor)", v && v[0]);
+  ok(v && (+v[1] > 5 || (+v[1] === 5 && (+v[2] > 40 || (+v[2] === 40 && +v[3] >= 1)))), "VERSION is at least 5.40.1 (QUALITY-FLOOR-RECORD-1)", v && v[0]);
+  ok(/QUALITY-FLOOR-RECORD-1/.test(src.slice(0, src.indexOf("\n", src.indexOf("var VERSION")))) && /which is only the in-memory decision/.test(src.slice(0, src.indexOf("\n", src.indexOf("var VERSION")))), "the VERSION line carries the record note and the correction of the ledger-reason claim");
   ok(/COST-QUALITY-FLOOR-ENFORCE-1/.test(src.slice(0, src.indexOf("\n", src.indexOf("var VERSION")))), "the VERSION line carries the COST-QUALITY-FLOOR-ENFORCE-1 note");
   ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 }
