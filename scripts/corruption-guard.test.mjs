@@ -132,7 +132,10 @@ for (const p of targets) {
   const ph = placeholderHit(text);
   ok(ph === null, "scan: no placeholder in " + rel, ph || undefined);
   let bad = null;
-  for (const c of commentBodies(text)) { bad = duplicateRun(c); if (bad) break; }
+  // GENERATED-BUNDLE-1 (CF-AGENTS-1): a minified bundle built from src/ (qnfo-agents) has no comments of its own; a "/*" inside
+  // a vendored string or regex opens a false comment span over minified code. Its prose lives in src/, which a person edits.
+  const generated = /generated from src\/ by build\.mjs/.test(text.slice(0, 300));
+  if (!generated) for (const c of commentBodies(text)) { bad = duplicateRun(c); if (bad) break; }
   ok(bad === null, "scan: no adjacent duplicated run in comments of " + rel, bad || undefined);
 }
 
