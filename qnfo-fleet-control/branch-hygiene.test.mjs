@@ -221,6 +221,35 @@ const scenario = () => ({
   eq(out.closed_prs, [], "a live code task's PR is kept even when idle");
 }
 
+{ // BH-MERGED-SUCCESSOR-1 (0.56.0, agent_issues 1000018): a code-agent PR whose [issue #N] tag a merged PR also carries is closed on this tick, however recently it was touched
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const sc = {
+    branches: [br("main", 0, true)],
+    pulls: [
+      { number: 41, state: "open", updated_at: hAgo(1), title: "code-task: [issue #100211] [retry 2] RESEARCH-MODEL-COST-1: qnfo-research-exec", head: { ref: "codeagent-retry2", sha: sha(40), repo: R } },
+      { number: 42, state: "closed", merged_at: hAgo(30), title: "code-task: [issue #100211] RESEARCH-MODEL-COST-1: qnfo-research-exec", head: { ref: "codeagent-first", sha: sha(41), repo: R } },
+      { number: 43, state: "open", updated_at: hAgo(1), title: "feat: [issue #555] a session pull request", head: { ref: "claude/session", sha: sha(42), repo: R } },
+      { number: 44, state: "closed", merged_at: hAgo(30), title: "[issue #555] earlier fix", head: { ref: "claude/other", sha: sha(43), repo: R } },
+      { number: 45, state: "open", updated_at: hAgo(1), title: "code-task: [issue #777] first of two open siblings", head: { ref: "codeagent-seven", sha: sha(44), repo: R } },
+      { number: 46, state: "open", updated_at: hAgo(1), title: "code-task: [issue #777] second of two open siblings", head: { ref: "codeagent-seven-b", sha: sha(45), repo: R } },
+      { number: 47, state: "open", updated_at: hAgo(1), title: "code-task: [issue #888] no merged sibling", head: { ref: "codeagent-eight", sha: sha(46), repo: R } },
+      { number: 48, state: "open", updated_at: hAgo(1), draft: true, title: "code-task: [issue #4848] a draft", head: { ref: "codeagent-draft", sha: sha(47), repo: R } },
+      { number: 49, state: "open", updated_at: hAgo(1), title: "code-task: [issue #999] live task", head: { ref: "codeagent-live-one", sha: sha(48), repo: R } },
+      { number: 50, state: "closed", merged_at: hAgo(30), title: "code-task: [issue #999] earlier", head: { ref: "codeagent-prior", sha: sha(49), repo: R } }
+    ],
+    liveTasks: ["codeagent-live-one"],
+    compare: {}
+  };
+  const { out, calls, d1 } = await run(sc);
+  eq(out.closed_prs, [41], "only the code-agent PR with a merged successor is closed (a session PR, open siblings, a PR without a merged sibling, a draft and a live code task are kept)");
+  eq(calls.some((c) => c === "POST /git/refs"), true, "its tip is archived first");
+  eq(calls.some((c) => c === "POST /issues/41/comments"), true, "a comment names the successor on the closed PR");
+  eq(calls.some((c) => c === "PATCH /pulls/41"), true, "it is closed through REST PATCH");
+  eq(calls.filter((c) => /^PATCH \/pulls\/(43|45|46|47|48|49|50)$/.test(c)).length, 0, "no other PR is closed");
+  const lg = d1.db.prepare("SELECT pr, ok, why FROM branch_hygiene_log WHERE action='close-stale-pr'").all();
+  eq(lg.length === 1 && lg[0].pr === 41 && lg[0].ok === 1 && /superseded by merged pull request #42 \(issue #100211\)/.test(lg[0].why), true, "the close is logged with the successor's number");
+}
+
 // ---- STALE-PR-MERGE-FIRST-1: a quiet, green, clean session PR is merged before the closer would close it ----
 {
   const R = { full_name: "QNFO/qnfo-workers" };
