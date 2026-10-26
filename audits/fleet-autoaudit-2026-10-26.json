@@ -1,7 +1,12 @@
 {
-  "audited_at": "2026-10-26 20:48:25",
-  "d1_write_failures": [],
-  "d1_writes_ok": 123,
+  "audited_at": "2026-10-26 21:02:59",
+  "d1_write_failures": [
+    [
+      "qnfo-model-eval",
+      "HTTP 401: b'{\"result\":null,\"success\":false,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}],\"messages\":[]}'"
+    ]
+  ],
+  "d1_writes_ok": 122,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -586,7 +591,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.40.2-codeagent",
+        "version": "1.41.1-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -1203,9 +1208,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.40.2-codeagent",
+      "before": "1.41.1-codeagent",
       "http": 200,
-      "live": "1.40.2-codeagent",
+      "live": "1.41.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1778,5 +1783,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 2
 }
