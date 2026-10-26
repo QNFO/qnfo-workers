@@ -14,7 +14,7 @@
 //        and the control plane can only be opened to the loop (T1.8) once its PRs run the full set (T5.4).
 // USAGE  node scripts/run-suites.mjs --all | --changed-file /tmp/changed.txt [--jobs 4] [--timeout 180] [--list]
 //        Exit 1 when any selected suite fails or times out. No network, no secrets; suites are run with node.
-import { readdirSync, existsSync, readFileSync, statSync, mkdtempSync, copyFileSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync, statSync, mkdtempSync, copyFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
@@ -226,6 +226,10 @@ async function main() {
     syn = syntaxTargets(root, changed, false);
   }
   console.log("SUITE-RUNNER-1: " + sel.suites.length + " of " + all.length + " suites (" + sel.reason + ")");
+  // PR-GATE-SPEED-1 (2026-10-26): tell the workflow whether every discovered suite is about to run. deploy-gate has 56 named steps that each run
+  // one discovered suite again, 150+ seconds of a 376-second gate (median of 30 green pull request runs); they now run only when this says scoped.
+  // Written before any suite runs, so a runner that fails midway still reports the set it started; when the output file is missing the steps run.
+  if (process.env.GITHUB_OUTPUT) { try { appendFileSync(process.env.GITHUB_OUTPUT, "mode=" + (sel.suites.length === all.length ? "full" : "scoped") + "\n"); } catch { /* the workflow then treats the mode as unknown and runs the named steps */ } }
   if (argv.includes("--list")) { sel.suites.forEach((s) => console.log("  " + s)); return; }
   const jobs = Math.max(1, Number(arg("--jobs", 4)) || 4), timeoutS = Math.max(10, Number(arg("--timeout", 180)) || 180);
   const queue = sel.suites.slice(), results = [];
