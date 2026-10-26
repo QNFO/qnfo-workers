@@ -22,6 +22,8 @@ const sb = {
   console, Math, Number, String, Object, JSON, isFinite,
   __AI_ATTR_RATES: { "@cf/moonshotai/kimi-k2.6": [100000, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455] },
   spendLoad: async () => {}, __spendState: {},
+  // COST-QUALITY-FLOOR-ENFORCE-1 (5.40.0): the quality floor lives in the FLEET-CAP-STEER block; here output quality holds, so no downgrade is lifted (quality-floor.test.mjs covers the floor itself).
+  spendQualityBlock: async () => false, spendQualityLift: () => {}, __qualityFloor: { worse: 0 },
   spendBy: () => ({ "workers-ai": 410.84, deepseek: 0.83, gateway: 0 }),
   spendCaps: () => ({ "workers-ai": 95, deepseek: 50, gateway: 60, total: 150 }),
   spendSoft: () => 0.8, spendCritical: () => ({}),
