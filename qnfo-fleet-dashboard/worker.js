@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.62.0";
+var VERSION = "1.63.0";
 /* 1.62.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
@@ -9927,6 +9927,15 @@ var OWNER_LOGIN_WINDOW_MS = 10 * 60 * 1e3;
 // (routed by qnfo-ai to deepseek-v4-flash, 2.0-2.2s in ai_queries) answered: 16s total. glm-5.3-flash stays as the fallback.
 var ASK_MODELS = ["glm-5.3-flash", "deepseek-v4-flash-wa", "gpt-oss-120b"];
 var ASK_HEDGE_MS = 4e3;
+// CMD-DIRECT-LEG-1 (1.62.0, 2026-10-26, owner: "FIX" on a CONTINUE that timed out). Measured: while the fleet spend cap is
+// breached qnfo-ai serves every leg of the race with glm-5.3-flash (BUDGET-SOFT-ROUTE-1), so the three router legs were one
+// model three times. glm-5.3-flash, shared with the paper writers, averaged 46.7 s with 16 of 83 calls ending in
+// router_timeout since 2026-10-24, while deepseek-v4-flash averaged 3.3 s with none (ai_queries). Every /cmd fallback in
+// cmd_log from 2026-10-24 to 10-25 shows three router_timeout legs and no other path. Now the race also runs these models
+// on this worker's own AI binding, outside the router, from ASK_DIRECT_HEDGE_MS on; they are small Workers AI models
+// (cents per thousand answers), and one starts only when the router has not answered.
+var ASK_DIRECT_LEGS = ["deepseek-v4-flash-wa", "gpt-oss-120b"];
+var ASK_DIRECT_HEDGE_MS = 5e3;
 async function sha256hex(s) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
   return Array.from(new Uint8Array(d)).map(function(b) {
@@ -11232,14 +11241,42 @@ async function cmdDirectModel(env, model, messages, why, t0, timeoutMs) {
 async function cmdRaceModels(env, messages, budgetMs, ctx, conversationId) {
   const t0 = Date.now();
   const errs = [];
+  const direct = env && env.AI ? ASK_DIRECT_LEGS.slice() : [];
   return await new Promise(function(resolve) {
-    let done = false, started = 0, pending = 0, timer = null;
+    let done = false, started = 0, pending = 0, timer = null, dtimer = null;
     function finish(r) {
       if (done) return;
       done = true;
       if (timer) clearTimeout(timer);
+      if (dtimer) clearTimeout(dtimer);
       resolve(r);
     }
+    function settle() {
+      if (!done && !pending && started >= ASK_MODELS.length && !direct.length) finish({ ok: false, error: errs.join(" | ") || "no model" });
+    }
+    // CMD-DIRECT-LEG-1: the second transport. One direct leg at a time; a failed one hands over to the next.
+    function launchDirect() {
+      dtimer = null;
+      if (done || !direct.length) return;
+      const left = budgetMs - (Date.now() - t0);
+      if (left < 3e3) {
+        direct.length = 0;
+        settle();
+        return;
+      }
+      const model = direct.shift();
+      pending++;
+      cmdDirectModel(env, model, messages, "direct leg", Date.now(), left).then(function(r) {
+        pending--;
+        if (r.ok) finish(r);
+        else {
+          errs.push(r.error);
+          launchDirect();
+          settle();
+        }
+      });
+    }
+    if (direct.length) dtimer = setTimeout(launchDirect, Math.min(ASK_DIRECT_HEDGE_MS, Math.max(0, budgetMs - 4e3)));
     function launch() {
       if (done) return;
       if (timer) {
@@ -11248,7 +11285,12 @@ async function cmdRaceModels(env, messages, budgetMs, ctx, conversationId) {
       }
       const left = budgetMs - (Date.now() - t0);
       if (started >= ASK_MODELS.length || left < 3e3) {
-        if (!pending) finish({ ok: false, error: errs.join(" | ") || "no model" });
+        started = ASK_MODELS.length;
+        if (!pending && !direct.length) finish({ ok: false, error: errs.join(" | ") || "no model" });
+        else if (!pending && dtimer) {
+          clearTimeout(dtimer);
+          launchDirect();
+        }
         return;
       }
       const model = ASK_MODELS[started++];
