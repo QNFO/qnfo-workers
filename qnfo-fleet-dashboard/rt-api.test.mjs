@@ -185,7 +185,7 @@ const etagOf = (r) => r.headers.get("ETag");
   const f3 = await call(env, "/?frag=1&rev=" + encodeURIComponent(ftag));
   ok(f3.status === 204 && (await f3.text()) === "", "C7 ?rev=<revision> answers 204 with no body");
   ok(f3.headers.get("X-Content-Revision") === ftag, "C8 the revision travels in a header the edge keeps");
-  const page = await (await call(env, "/")).text();
+  const page = await (await call(env, "/classic")).text();
   ok(page.includes("If-None-Match") && page.includes("&rev=") && page.includes("setInterval(tick,15000)"), "C9 the overview poll revalidates every 15 s with both the header and the param");
   ok(page.includes("r.status===304||r.status===204"), "C10 the poll treats 304 and 204 the same (no re-render)");
 }

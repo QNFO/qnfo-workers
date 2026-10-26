@@ -98,7 +98,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   ok(/^1\. #1002 \[critical\]/.test(j.text) && /2\. #1001 \[medium\]/.test(j.text), "A5 backlog is the priority queue, critical first, with ids", j.text);
   j = await (await cmd(env, "info orcid")).json();
   ok(/human_actions #1/.test(j.text) && j.actions.some((a) => a.cmd === "issue 1001"), "A6 info on a queue card shows the card row and links the issue it names", j);
-  const h = await (await call(env, "/")).text();
+  const h = await (await call(env, "/classic")).text();
   ok(h.includes('data-fleet-cmd="info ha:orcid-link-works"') && h.includes("[data-fleet-cmd]"), "A7 every queue card has a Details button wired to the pinned command line");
   j = await (await cmd(env, "pr 42")).json();
   ok(/Checks: 1 total, 1 failing/.test(j.text) && j.actions.some((a) => a.op === "rerun" && a.args.run === 123456789) && j.actions.some((a) => a.op === "merge" && a.destructive), "A8 pr <n> shows failing checks with re-run and merge buttons", j);
