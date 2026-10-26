@@ -77,7 +77,7 @@ ok(/^# EXPIRES: \d{4}-\d{2}-\d{2}/m.test(allow), "the allowlist still parses its
 const PY = ["python3", "python"].find((c) => { const r = spawnSync(c, ["-I", "-c", "print(1)"], { encoding: "utf8" }); return r.status === 0; });
 ok(!!PY, "a python 3 interpreter is available");
 const files = readdirSync(here).filter((f) => f.endsWith(".sql")).sort().map((f) => join("migrations", f));
-const out = spawnSync(PY, [join(root, "scripts", "apply_migrations.py"), "--check", ...files], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const out = spawnSync(PY, [join(root, "scripts", "apply_migrations.py"), "--check", "--history", ...files], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const recs = out.stdout.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
 ok(out.status === 0 && !recs.some((r) => r.refused), "apply_migrations.py --check over every migration refuses nothing", { status: out.status, refused: recs.filter((r) => r.refused).slice(0, 2) });
 const declared = recs.filter((r) => r.declared);

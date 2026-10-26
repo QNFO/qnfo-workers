@@ -43,7 +43,7 @@ ok(!/skip ci|ci skip/i.test(sql), "no skip-CI token");
   const big = Math.max(...stmts.map((s) => s.length));
   ok(big < 40000, "no single statement is near the 100 KB D1 limit (largest " + big + " bytes)", big);
   if (existsSync(sqlPath) && sql.length > 100) {
-    const r = spawnSync("python3", [fileURLToPath(here("../scripts/apply_migrations.py")), "--check", sqlPath], { encoding: "utf8" });
+    const r = spawnSync("python3", [fileURLToPath(here("../scripts/apply_migrations.py")), "--check", "--history", sqlPath], { encoding: "utf8" });
     ok(r.status === 0 && /"ok": true/.test(r.stdout), "scripts/apply_migrations.py --check accepts the file", (r.stdout + r.stderr).slice(0, 300));
   }
 }

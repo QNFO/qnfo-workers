@@ -74,7 +74,7 @@ ok(dl.length === 1 && /^MODEL-HEALTH-SWEEP-1: /.test(dl[0].action) && /^[a-z_0-9
 const rb = mig.split("\n").find((l) => l.startsWith("-- Rollback: ")).slice("-- Rollback: ".length);
 db.exec(rb);
 ok(db.prepare("SELECT COUNT(*) AS n FROM control_registry").get().n === 0 && db.prepare("SELECT COUNT(*) AS n FROM failure_modes").get().n === 0 && db.prepare("SELECT COUNT(*) AS n FROM remediation_contracts").get().n === 0, "the Rollback header removes the three registry rows");
-const chk = spawnSync("python3", [fileURLToPath(new URL("../scripts/apply_migrations.py", import.meta.url)), "--check", fileURLToPath(new URL("./2026-10-19-model-health-sweep.sql", import.meta.url))], { encoding: "utf8" });
+const chk = spawnSync("python3", [fileURLToPath(new URL("../scripts/apply_migrations.py", import.meta.url)), "--check", "--history", fileURLToPath(new URL("./2026-10-19-model-health-sweep.sql", import.meta.url))], { encoding: "utf8" });
 ok(chk.status === 0 && /"ok": true/.test(chk.stdout), "the file passes scripts/apply_migrations.py --check", chk.stdout + chk.stderr);
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

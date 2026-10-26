@@ -98,7 +98,7 @@ ok(JSON.stringify(counts(rb)) === JSON.stringify({ fm: 2, rc: 2, cr: 2, dl: 1 })
 
 // ---- 5. the migration check
 if (PY) {
-  const r = spawnSync(PY, [join(root, "scripts", "apply_migrations.py"), "--check", join(here, "2026-10-26-pr-merge-sla-10m-conflict.sql")], { encoding: "utf8", cwd: root });
+  const r = spawnSync(PY, [join(root, "scripts", "apply_migrations.py"), "--check", "--history", join(here, "2026-10-26-pr-merge-sla-10m-conflict.sql")], { encoding: "utf8", cwd: root });
   ok(r.status === 0 && /"ok": true/.test(r.stdout), "scripts/apply_migrations.py --check passes", String(r.stdout || r.stderr).slice(0, 300));
 }
 console.log(`pr-merge-sla-conflict: ${pass} pass, ${fail} fail`);

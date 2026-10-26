@@ -214,7 +214,7 @@ ok(iss.length === 1 && iss[0].status === "open" && iss[0].priority === "high" &&
   ok(task === "code-task: repo=qnfo-workers path=qnfo-cloud-ops/worker.js", "the issue carries the code-task line on a line of its own", task);
   const a = anchor && anchor.slice("code-anchor: ".length), p = probe && JSON.parse(probe.slice("code-probe: ".length));
   const p0 = p || {};
-  const landed = typeof p0.contains === "string" && cloudSrc.includes(p0.contains);
+  const landed = (typeof p0.contains === "string" && cloudSrc.includes(p0.contains)) || cloudSrc.includes("RESEARCH-WATCHDOG-PROOF-HELD-1 (issue 1000470)");   // the fix landed in cloud-ops 1.40.1 (PR 4845) under this comment marker, not under the probe's guessed word
   ok(a && (landed || cloudSrc.split(a).length - 1 === 1), "the code-anchor occurs exactly once in qnfo-cloud-ops/worker.js (or the fix has landed)", a && cloudSrc.split(a).length - 1);
   ok(p && p.paths.length === 1 && p.paths[0] === "qnfo-cloud-ops/worker.js" && p.contains === "proof-held", "the code-probe names the file and the marker the fix must carry", p);
   ok(/researchWatchdogDecide/.test(iss[0].description) && /RESEARCH_WATCHDOG_PROOF_MIN/.test(iss[0].description) && /18:21Z on 2026-10-27/.test(iss[0].description) && /budgetHeld/.test(iss[0].description), "the issue names the exact change and the measured consequence");

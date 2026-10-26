@@ -58,7 +58,7 @@ ok(c1.status === "active" && c1.verify_transport === "code-read" && c1.module ==
 let spec = null;
 try { spec = JSON.parse(c1.verify_probe); } catch (e) { spec = null; }
 ok(spec && spec.paths.length === 1 && spec.paths[0] === "qnfo-email/worker.js" && spec.contains === "email_tier2_autosend" && Object.keys(spec).every((k) => ["paths", "contains", "absent"].includes(k)), "the probe is valid JSON in the shape the consumer accepts", c1.verify_probe);
-ok(codeProbe(c1.verify_probe, { "qnfo-email/worker.js": emailSrc }) === "missing-marker:qnfo-email/worker.js", "it fails on the real qnfo-email/worker.js today (the owner switch does not exist yet)");
+ok(codeProbe(c1.verify_probe, { "qnfo-email/worker.js": emailSrc }) === (emailSrc.includes(spec.contains) ? "ok" : "missing-marker:qnfo-email/worker.js"), "it reads the real qnfo-email/worker.js: missing-marker before the owner switch exists, ok once it does (state-independent: the switch landed in qnfo-email 2.12.2)");
 ok(codeProbe(c1.verify_probe, { "qnfo-email/worker.js": emailSrc + "\nvar SW = 'email_tier2_autosend';" }) === "ok", "and passes once the worker carries the switch");
 const c2 = q1(w, "SELECT * FROM remediation_contracts WHERE class = 'issue-1000470'");
 ok(c2.status === "superseded" && c2.verify_probe === BORN(1000470), "another issue's contract is not touched");
