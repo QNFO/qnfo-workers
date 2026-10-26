@@ -83,8 +83,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   and `fm-default-approve-issue-unexecuted`, `ops_config default_approve_gate = off` restores the old paths). The `hard` markers
   (`default_approve_markers`, add one by INSERT with a note) are money, a legal or signing act, destroying data, the owner's accounts,
   credentials, mailbox and name (IC-GATE-001), and the security and privacy limits (one-time codes, privacy, personal data, suppression,
-  opt-out, consent); such a card keeps its old path. A decision card that carries an `IDENTITY-BOUND:` line and no hard marker is held
-  open for the owner and its stated default is not adopted: a writer who labels a card so says it truly needs the owner.
+  opt-out, consent); such a card keeps its old path unless it carries an `IDENTITY-BOUND:` line. Any card that carries an `IDENTITY-BOUND:`
+  line is held open for the owner and its stated default is not adopted, whatever its wording and whatever `hard` marker it matches
+  (IB-HELD-1, migrations/2026-10-26-rem-a4-owner-queue.sql, detector `fm-ib-card-closed-at-birth`): a writer who labels a card so says it truly
+  needs the owner, and `hard` only bars a card from fleet approval.
 - Owner directive 2026-10-20 (HUMAN-ITEMS-AUTOMATIC-1), verbatim: "These items/issues shall always be handled automatically by the system." It covers needs_human code tasks,
   owner-task cards (INTENT-TASK, OWNER-TASK) and the issues that mirror them: the fleet is the doer and closes them with evidence; only an item that is irreversible and
   identity-bound stays with the owner, and says so with an `IDENTITY-BOUND:` line and a closing probe. `v_human_action_gate` grades an INTENT-TASK or OWNER-TASK card `fleet`
