@@ -72,13 +72,35 @@ ok(threw && wm().value === "4", "an upsert failure throws and the watermark stay
 r = await mod.__index(env);
 ok(r.indexed === 2 && r.last_id === 6 && upserts.some((v) => v.id === "handoff:5:0") && upserts.some((v) => v.id === "handoff:6:0"), "the retry indexes both rows that failed", r);
 
-// a backlog drains 100 rows per run, in id order, with the behind count falling
-for (let i = 7; i < 7 + 250; i++) add(i * 10, { summary: "backlog " + i });
+// a backlog drains in catch-up batches of 300 rows (HANDOFFS-VZ-CATCHUP-1; 100 rows an hour left 707 rows unindexed on 2026-10-26), in id order, with the behind count falling
+for (let i = 7; i < 7 + 650; i++) add(i, { summary: "backlog " + i });
 const runs = [];
 for (let k = 0; k < 4; k++) runs.push(await mod.__index(env));
-ok(runs[0].indexed === 100 && runs[0].behind === 150 && runs[1].indexed === 100 && runs[1].behind === 50 && runs[2].indexed === 50 && runs[2].behind === 0 && runs[3].indexed === 0, "250 backlog rows drain 100, 100, 50, 0 with behind 150, 50, 0", runs);
-ok(wm().value === "2560", "the watermark is the highest id", wm());
-ok(upserts.filter((v) => v.id.endsWith(":0")).length === 6 + 250, "every handoff has exactly one first-chunk vector", upserts.filter((v) => v.id.endsWith(":0")).length);
+ok(runs[0].indexed === 300 && runs[0].behind === 350 && runs[1].indexed === 300 && runs[1].behind === 50 && runs[2].indexed === 50 && runs[2].behind === 0 && runs[3].indexed === 0, "650 backlog rows drain 300, 300, 50, 0 with behind 350, 50, 0", runs);
+ok(wm().value === "656", "the watermark is the highest id", wm());
+ok(upserts.filter((v) => v.id.endsWith(":0")).length === 6 + 650, "every handoff has exactly one first-chunk vector", upserts.filter((v) => v.id.endsWith(":0")).length);
+// one normal batch waiting is a normal batch; after a failed run (the note says so) the next run is the normal batch again, not the catch-up batch
+for (let i = 700; i < 800; i++) add(i, { summary: "steady " + i });
+r = await mod.__index(env);
+ok(r.indexed === 100 && r.behind === 0, "exactly one normal batch waiting is a batch of 100", r);
+for (let i = 900; i < 1050; i++) add(i, { summary: "after failure " + i });
+db.prepare("UPDATE ops_config SET note = 'HANDOFFS-VZ-PRODUCER-1: FAILED 2026-10-26T00:00:00Z AI 5xx' WHERE key = 'handoffs_vz_last_id'").run();
+r = await mod.__index(env);
+ok(r.indexed === 100 && r.behind === 50, "after a failed run the next run takes the normal batch of 100, not the catch-up batch of 300", r);
+r = await mod.__index(env);
+ok(r.indexed === 50 && r.behind === 0 && !/FAILED/.test(wm().note), "the success clears the note and the next run takes the rest", { r, note: wm().note });
+for (let i = 1100; i < 1500; i++) add(i, { summary: "second backlog " + i });
+r = await mod.__index(env);
+ok(r.indexed === 300 && r.behind === 100, "a new backlog is taken in a catch-up batch again once the note is clear", r);
+r = await mod.__index(env);
+ok(r.indexed === 100 && r.behind === 0, "and its last 100 rows are one normal batch", r);
+r = await mod.__index(env, { limit: 7 });
+ok(r.indexed === 0, "nothing left");
+for (let i = 1600; i < 1900; i++) add(i, { summary: "explicit " + i });
+r = await mod.__index(env, { limit: 7 });
+ok(r.indexed === 7 && r.behind === 293, "an explicit limit is honoured whatever waits", r);
+r = await mod.__index(env);
+ok(r.indexed === 293 && r.behind === 0, "the next fire takes the rest in one batch", r);
 
 // personal/research separation: a personal-plane handoff is never embedded, the watermark moves past it, and the note counts it
 const personalCases = [
