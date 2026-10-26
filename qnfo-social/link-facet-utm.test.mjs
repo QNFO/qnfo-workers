@@ -23,7 +23,9 @@ globalThis.fetch = async (url, init) => {
 };
 const res = await mod.postText({ did: 'did:plc:x', accessJwt: 'j' }, draft, null, { campaign: 'living-papers', utmSource: 'bluesky' });
 const rec = sent[0].record;
-assert.equal(rec.text, draft); ok('public text equals the drafted text, prose in full');
+// BP26-SOCIAL-AUTOMATION-1: the automation marker ends the post when it fits the 290 limit; the drafted prose and link are untouched.
+const withMarker = Array.from(draft).length + mod.AUTOMATION_MARKER.length <= 290 ? draft + mod.AUTOMATION_MARKER : draft;
+assert.equal(rec.text, withMarker); ok('public text equals the drafted text (plus the automation marker when it fits), prose in full');
 assert.ok(rec.text.includes(prose)); ok('prose not truncated');
 assert.ok(!/utm_/.test(rec.text)); ok('no tracking characters in the visible text');
 assert.equal(rec.facets.length, 1);
