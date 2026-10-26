@@ -16,8 +16,9 @@ run-name: github-settings-actions ${{ inputs.action }} ${{ inputs.mode }}
 #                               identity-guard; pull request required; admin role and the fleet's apps bypass). It refuses while a
 #                               required check would never report.
 #   4. action secret-scanning   mode live: secret scanning, push protection, validity checks, non-provider patterns.
-#   5. action delete-stuck-runs  DELETE-STUCK-RUNS-1: dry lists queued or in-progress runs older than 24 h with no job running now; live deletes
-#                               at most 25 and stops at the first refusal (the session token and the GitHub connector get 409 on cancel).
+#   5. action delete-stuck-runs  DELETE-STUCK-RUNS-1/-2: dry lists queued or in-progress runs older than 24 h with no job running now; live force-cancels
+#                               each (GitHub deletes only a completed run: run 40290472819 got 403 on the delete), reads it until completed, then deletes it,
+#                               at most 25, and stops at the first refusal (the session token and the GitHub connector get 409 on cancel).
 #   Revert: action ruleset-main-revert, mode live (deletes only the ruleset named main-gate).
 # Dispatch only (GitHub schedule never fires on this repo). Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
 
