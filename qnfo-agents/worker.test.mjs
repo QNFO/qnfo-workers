@@ -2,7 +2,7 @@
 // ADVERSARIAL: the helpers are tested directly; the bundle is checked by shape (it needs the Workers runtime to run). The live proof
 // is GET https://agents.qnfo.org/health answering this VERSION, a public POST /run answering 403, and a console turn reaching done.
 import { readFileSync } from "node:fs";
-import { callerOf, scopeOf, opsToolAllowed, readOnlySql, repoPathOk, codeTaskText, scheduleWhen, safeToolName, sliceLines, OPS_READ_ONLY, validateRequest, loopInstance, requesterOk, DRAIN_PER_TICK } from "./src/lib.js";
+import { callerOf, scopeOf, opsToolAllowed, readOnlySql, repoPathOk, codeTaskText, scheduleWhen, safeToolName, sliceLines, OPS_READ_ONLY, validateRequest, loopInstance, requesterOk, DRAIN_PER_TICK, EMPTY_TEXT, lastStepText, toolTranscript } from "./src/lib.js";
 const here = (p) => new URL(p, import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
@@ -77,6 +77,16 @@ ok(/path === "\/requests\/drain" && request\.method === "POST"/.test(src), "POST
 ok(/scope: "loop"/.test(src) && /if \(c\.scope !== "write"\) return t;\n    t\.mcp_connect/.test(src), "loop turns get schedules but never MCP connections");
 const mig = readFileSync(new URL("../migrations/2026-10-26-cf-agent-requests.sql", import.meta.url), "utf8");
 ok(/CREATE TABLE IF NOT EXISTS cf_agent_requests/.test(mig) && /INSERT OR IGNORE INTO queue_sla/.test(mig) && /analytics_metric_triggers/.test(mig), "the queue ships with its SLA row and metric trigger");
+
+// EMPTY-TURN-ANSWER-1: a turn that ends on a tool step still answers.
+ok(lastStepText([{ text: "first finding" }, { text: "", toolCalls: [{}] }]) === "first finding", "the last step that wrote text is the answer");
+ok(lastStepText([{ text: "" }, { text: "  " }]) === "" && lastStepText(undefined) === "", "no text anywhere reads empty");
+const tt = toolTranscript([{ toolResults: [{ toolName: "fleet_sql", input: { sql: "SELECT 1" }, output: { ok: true, rows: 1 } }] }, { toolResults: [{ toolName: "repo_read_file", args: { path: "a" }, result: "x".repeat(5000) }] }], 3000);
+ok(tt.length <= 3000 && /repo_read_file/.test(tt), "the transcript keeps the newest tool results within its budget", tt.slice(0, 120));
+ok(/tool fleet_sql \{"sql":"SELECT 1"\} -> \{"ok":true,"rows":1\}/.test(toolTranscript([{ toolResults: [{ toolName: "fleet_sql", input: { sql: "SELECT 1" }, output: { ok: true, rows: 1 } }] }], 9000)), "a tool result reads as name, input and output");
+const ts = readFileSync(here("./src/index.ts"), "utf8");
+ok(/result = String\(out\.text \|\| ""\)\.trim\(\) \|\| lastStepText\(out\.steps\);/.test(ts) && /if \(!result\) \{[\s\S]{0,200}generateText\(\{ model: m\.model[^\n]*FINAL_ANSWER_ASK, abortSignal/.test(ts), "an empty turn gets one more call, without tools");
+ok(/result = result \|\| EMPTY_TEXT;/.test(ts) && EMPTY_TEXT === "(the model returned no text)", "an answer that stays empty still says so");
 
 console.log("qnfo-agents worker.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
