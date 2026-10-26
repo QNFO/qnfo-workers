@@ -101,13 +101,13 @@ async function referenceUnpagedSweep(env) {
     const passN = judged.filter((j) => j.v.pass === 1).length;
     const scoredN = judged.length;
     const reviseN = judged.filter((j) => j.v.decision === "revise").length;
-    const notes = { scanned: list.length, scored: scoredN, score_snapshots_written: wrote, pass: passN, revise: reviseN, quarantined: 0, restored, restore_refused: restoreRefused, verdicts_changed: changed, mode, gate_version: PUB_GATE_VERSION };
+    const notes = { scanned: list.length, scored: scoredN, score_snapshots_written: wrote, pass: passN, revise: reviseN, quarantined: 0, withdrawn: 0, withdraw_cap_held: 0, withdraw_refused: 0, withdraw_off_held: 0, degenerate_text_withdraw: "on", restored, restore_refused: restoreRefused, restore_held: 0, verdicts_changed: changed, mode, gate_version: PUB_GATE_VERSION };
     let status = "ok", reason = "";
     if (scoredN < list.length) {
       status = "degraded";
       reason = "scored " + scoredN + " of " + list.length + " published papers";
     }
-    await recordEvent(env, "quality-score", "qs-" + Date.now().toString(36), "quality sweep: scanned=" + list.length + " snapshots=" + wrote + " quarantine_candidates=" + flagged + " gate=" + mode + " gate_version=" + PUB_GATE_VERSION + " pass=" + passN + " revise=" + reviseN + " restored=" + restored + " changed=" + changed, { job: "quality-score", run_id: runId });
+    await recordEvent(env, "quality-score", "qs-" + Date.now().toString(36), "quality sweep: scanned=" + list.length + " snapshots=" + wrote + " quarantine_candidates=" + flagged + " gate=" + mode + " gate_version=" + PUB_GATE_VERSION + " pass=" + passN + " revise=" + reviseN + " withdrawn=0 restored=" + restored + " restore_held=0 changed=" + changed, { job: "quality-score", run_id: runId });
     return { status, reason, notes, scanned: list.length, rows: scoredN, quarantine_candidates: flagged };
   } catch (e) {
     return { status: "error", reason: String(e).slice(0, 200), error: String(e).slice(0, 200) };
