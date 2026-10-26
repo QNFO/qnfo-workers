@@ -117,6 +117,25 @@ for (const [name, v] of [["empty", ""], ["blank", "   "], ["null", null], ["miss
   ok(JSON.stringify(rows(d)) === before && nDecisions(d) === 0, "a " + name + " code_merge_trusted_sources row is left alone: no backup, no append, no decision_log row", rows(d).filter((r) => r.key === KEY || r.key === BAK));
 }
 
+// ---- the prediction of the decision row: scored only when its metric is registered at the time (decision_predictions_parse), which the header states
+{
+  const PRED_DDL = `CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT, kind TEXT);
+CREATE TABLE decision_predictions (id INTEGER PRIMARY KEY AUTOINCREMENT, decision_id INTEGER NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('metric', 'issue')), subject TEXT NOT NULL, op TEXT NOT NULL CHECK (op IN ('<', '<=', '>', '>=', '=', 'between', 'closed')), value REAL, value2 REAL, due_at TEXT NOT NULL, origin TEXT NOT NULL CHECK (origin IN ('parsed', 'seeded')), created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), scored_at TEXT, observed TEXT, matched INTEGER, UNIQUE (decision_id, subject, op));
+CREATE TRIGGER decision_predictions_parse AFTER INSERT ON decision_log WHEN instr(COALESCE(NEW.predicted_outcome, ''), ' within ') > 0 BEGIN
+  INSERT OR IGNORE INTO decision_predictions (decision_id, kind, subject, op, value, due_at, origin)
+    SELECT NEW.id, 'metric', t.tok1, t.tok2, CAST(t.tok3 AS REAL), strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+' || CAST(t.after AS INTEGER) || CASE WHEN instr(t.after, ' d') > 0 THEN ' days' ELSE ' hours' END), 'parsed'
+    FROM (SELECT u.tok1, u.tok2, CASE WHEN instr(u.rest2, ' ') > 0 THEN substr(u.rest2, 1, instr(u.rest2, ' ') - 1) ELSE u.rest2 END AS tok3, u.after
+      FROM (SELECT v.tok1, CASE WHEN instr(v.rest1, ' ') > 0 THEN substr(v.rest1, 1, instr(v.rest1, ' ') - 1) ELSE v.rest1 END AS tok2, CASE WHEN instr(v.rest1, ' ') > 0 THEN ltrim(substr(v.rest1, instr(v.rest1, ' ') + 1)) ELSE '' END AS rest2, v.after
+        FROM (SELECT substr(w.p, 1, instr(w.p, ' ') - 1) AS tok1, ltrim(substr(w.p, instr(w.p, ' ') + 1)) AS rest1, ltrim(substr(w.p, instr(w.p, ' within ') + 8)) AS after FROM (SELECT trim(NEW.predicted_outcome) AS p) w) v) u) t
+    WHERE t.tok1 IN (SELECT metric FROM metric_registry) AND t.tok2 IN ('<', '<=', '>', '>=', '=') AND t.tok3 GLOB '[0-9]*' AND CAST(t.after AS INTEGER) > 0;
+END;`;
+  const without = world(LIVE); without.exec(PRED_DDL); without.exec(sql);
+  ok(without.prepare("SELECT COUNT(*) n FROM decision_predictions").get().n === 0 && nDecisions(without) === 1, "applied before doctor_taint_violations_24h is registered (file-name order in one push) the row is written and no prediction is scored, as the header says");
+  const withMetric = world(LIVE); withMetric.exec(PRED_DDL); withMetric.exec("INSERT INTO metric_registry (metric, layer, kind) VALUES ('doctor_taint_violations_24h', 'operational', 'guard')"); withMetric.exec(sql);
+  const pr = withMetric.prepare("SELECT subject, op, value FROM decision_predictions").all();
+  ok(pr.length === 1 && pr[0].subject === "doctor_taint_violations_24h" && pr[0].op === "=" && pr[0].value === 0, "applied later, the prediction doctor_taint_violations_24h = 0 within 24 h is scored", pr);
+}
+
 // ---- the trust grammar of the planner and the engine reads the pair for the doctor's title and for no other source
 {
   const a = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:BEGIN ----"), b = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:END ----");

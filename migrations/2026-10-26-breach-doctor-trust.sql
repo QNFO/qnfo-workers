@@ -8,6 +8,9 @@
 -- same row; the planner's deny list and the merge runner's checks apply to a doctor issue exactly as to any other. Live value read 2026-10-26 10:00Z (SELECT only): the pair was absent.
 -- The previous value is kept in ops_config under the backup key below, and the Rollback line restores it. A replay changes nothing: the append is guarded by instr, the backup by its key.
 -- A missing or empty row is left alone (an append would shrink the planner's list to this one pair): the file then writes no backup, no append and no decision_log row.
+-- Order: the runner applies a push's files in file-name order, and '-' sorts before '.', so this file runs before migrations/2026-10-26-breach-doctor.sql when both land in one push. It depends on nothing in
+-- that file. The one effect: decision_predictions_parse scores the prediction of the decision_log row below only when doctor_taint_violations_24h is already in metric_registry, so in that push the row
+-- keeps its text and no scored prediction is made; applied on its own later, it is scored.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: UPDATE ops_config SET value = (SELECT value FROM ops_config WHERE key = 'code_merge_trusted_sources--bak-20261026T0800Z'), updated_at = datetime('now') WHERE key = 'code_merge_trusted_sources' AND EXISTS (SELECT 1 FROM ops_config WHERE key = 'code_merge_trusted_sources--bak-20261026T0800Z');
