@@ -1,5 +1,12 @@
-// q08-mind — mind.q08.org  (2.2.0)
+// q08-mind — mind.q08.org  (2.2.1)
 // A reading list for the inside. Primary sources, one question each, and a probe.
+//
+// MIND-DOI-FIX-1 (2.2.1, 2026-10-26, pillar personal; patch: data only). Two source links pointed at the wrong or a missing
+// record, found by a Crossref lookup (issues 100467, 100468; their twins 1000150, 1000151, filed again when the code loop's
+// raw read of the old mind/ path returned 404). doris-situationism: 10.1017/CBO9780511613292 has no Crossref record, the
+// monograph is 10.1017/cbo9781139878364 ("Lack of Character", John M. Doris). neff-compassion: 10.1037/0022-3514.84.4.822 is
+// Brown and Ryan on mindfulness; the entry cites Neff's scale paper, 10.1080/15298860309027 (Self and Identity 2(3), 223-250).
+// q08-mind/entries-doi.test.mjs pins both against the Crossref title and author, so a link cannot drift from its citation.
 //
 // MIND-BOOKS-1 (2.2.0, 2026-10-26, pillar personal; minor: new pages and a new data product). The owner asked (2026-10-21) for
 // "another subdomain of Q08 that really helps me understand myself better ... I'm not really into New Age or guru type shit ...
@@ -21,7 +28,7 @@ import A from "./data/entries-a.json";
 import B from "./data/entries-b.json";
 import BOOKS from "./data/books.json";
 
-var VERSION = "2.2.0";
+var VERSION = "2.2.1";
 const BUILT = "2026-10-26";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));
