@@ -1484,6 +1484,55 @@ __name2(depositToGithub, "depositToGithub");
 __name22(depositToGithub, "depositToGithub");
 __name222(depositToGithub, "depositToGithub");
 __name2222(depositToGithub, "depositToGithub");
+function structuralGate(md) {
+  var m = String(md || "");
+  var heads = [];
+  var lines = m.split(/\r?\n/);
+  for (var i = 0; i < lines.length; i++) {
+    var hm = lines[i].match(/^(#{1,4})\s+(.+?)\s*$/);
+    if (hm) heads.push({ level: hm[1].length, text: hm[2], line: i });
+  }
+  var problems = [];
+  // Generation-instruction residue (PUB-STRUCTURE-ORDER-1): no drafting directives may survive into a published body.
+  if (/(?:^|\n)\s*(?:[-*]\s*)?\/\/\s*(?:TODO|NOTE|FIXME)|<\|(?:SUPPORT|ASSISTANT|SYSTEM)\|>|as an ai language model|\bdo not publish\b/i.test(m)) {
+    problems.push("generation-instruction residue");
+  }
+  var seen = {};
+  var nums = [];
+  var firstAppendix = -1, lastMain = -1;
+  for (var h = 0; h < heads.length; h++) {
+    var t = heads[h].text.toLowerCase();
+    var key = t.replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+    if (seen[key] && heads[h].level <= 2) problems.push("duplicate section: " + heads[h].text);
+    seen[key] = true;
+    var nm = heads[h].text.match(/^(\d+)(?:\.\d+)*\.?\s+/);
+    if (nm) {
+      var top = Number(nm[1]);
+      if (nums.length && top > 0 && top <= nums[nums.length - 1]) problems.push("non-increasing section number " + top + " at " + heads[h].text);
+      nums.push(top);
+    }
+    if (/^appendix/i.test(t)) { if (firstAppendix < 0) firstAppendix = h; }
+    else if (heads[h].level <= 2) lastMain = h;
+  }
+  if (firstAppendix >= 0 && lastMain > firstAppendix) problems.push("appendix before main section");
+  // Semantic order: introduction before methods before results before conclusion before references.
+  var orderNames = [["introduction|intro|background|prior work|related work|literature review"], ["method|approach|framework|theory|model"], ["result|experiment|analysis|evaluation|discussion"], ["conclusion|concluding remarks"], ["references|bibliography"]];
+  var lastIdx = -1;
+  for (var o = 0; o < orderNames.length; o++) {
+    var found = -1;
+    for (var h2 = 0; h2 < heads.length; h2++) {
+      if (heads[h2].level <= 2 && (new RegExp("^(" + orderNames[o][0] + ")\\b", "i")).test(heads[h2].text)) { found = h2; break; }
+    }
+    if (found >= 0) {
+      if (found < lastIdx) problems.push("section order violation near: " + heads[found].text);
+      lastIdx = Math.max(lastIdx, found);
+    }
+  }
+  if (!problems.length) return { ok: true };
+  return { ok: false, reason: "structure gate: " + problems.slice(0, 5).join("; ") };
+}
+__name(structuralGate, "structuralGate");
+__name2(structuralGate, "structuralGate");
 function programFor(slug) {
   var x = String(slug || "");
   if (x.indexOf("jpcub") >= 0 || x.indexOf("joules-per") >= 0 || x.indexOf("joules") >= 0) return "joules-per-compute-benchmark";
@@ -1505,6 +1554,17 @@ async function publishV2(env, row) {
   var slug = row.slug || "paper";
   var minLen = Number(env.QUALITY_MIN_LEN || 8e3);
   var minRefs = Number(env.QUALITY_MIN_REFS || 5);
+  // PUB-STRUCTURE-ORDER-1: a malformed body (skipped/duplicate numbering, appendix before a main section, broken semantic
+  // section order, or generation-instruction residue) is blocked before any publication path is taken.
+  var sGate = structuralGate(String(row.corrected_md || ""));
+  if (!sGate.ok) {
+    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'structure-gate', 'BLOCK', ?, 'PUB-STRUCTURE-ORDER-1', 'qnfo-research-exec', 'P1')").bind(String(sGate.reason).slice(0, 300)).run();
+    } catch (eSg) {
+    }
+    return { ok: false, stage: "gate", error: sGate.reason };
+  }
   if (String(env.QUALITY_GATE_OFF || "") !== "1") {
     var gate = qualityGate(row, minLen, minRefs);
     if (!gate.ok && gate.reason.indexOf("no_verification_marker") >= 0) {
