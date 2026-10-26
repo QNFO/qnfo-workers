@@ -60,6 +60,18 @@ WHERE NOT EXISTS (SELECT 1 FROM failure_modes WHERE fm_key = 'tool-issue-no-prob
 INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, max_attempts, expected_cadence_h, status, precondition, action, escalate_to)
 SELECT 'fm-tool-issue-no-probe', NULL, 'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM v_tool_issue_probe v JOIN agent_issues a ON a.id = v.issue_id WHERE a.status = ''open'' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.class = ''issue-'' || v.issue_id AND c.status IN (''active'', ''monitoring'', ''holding''))) AS TEXT) AS observed', 'd1-query', 3, 1, 'active', 'TOOL-ISSUE-SELFCLOSE-1', 'failure-mode detector', 'qnfo-fleet-control'
 WHERE NOT EXISTS (SELECT 1 FROM remediation_contracts WHERE class = 'fm-tool-issue-no-probe');
+-- EMPTY-REPLY-NOTHINK-1 (qnfo-code-orchestrator 0.28.1, same PR): the code loop's most repeated failure gets a failure mode and a detector,
+-- so a recurrence after the retry ships is seen within the hour (4 or more empty-reply failures in 6 h).
+INSERT INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius)
+SELECT 'code-loop-empty-reply', 'a code-loop rung answers with no content, the attempt is lost and the task ends CODE-LOOP-EXHAUSTED-1',
+  'kimi-k2.7-code spends its whole output budget on reasoning (26 empty replies in 36 h on 2026-10-25/26)',
+  'qnfo-code-orchestrator 0.28.1 asks an empty kimi reply once more in the same call with chat_template_kwargs.thinking false (event code-task.empty-retry)',
+  'fm-code-loop-empty-reply', 'fm-code-loop-empty-reply', '2026-10-26', NULL,
+  '4 or more code-task.fail events reading "the reply was empty" in 6 h', 'NO-PROGRESS-CEILING-1 and FAIL-SIGNATURE-STOP-1 end tasks after empty replies', 'every code task, so every issue the code loop is the doer for'
+WHERE NOT EXISTS (SELECT 1 FROM failure_modes WHERE fm_key = 'code-loop-empty-reply');
+INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, max_attempts, expected_cadence_h, status, precondition, action, escalate_to)
+SELECT 'fm-code-loop-empty-reply', NULL, 'SELECT ''0'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.fail'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-6 hours'') AND instr(text, ''the reply was empty'') > 0) >= 4 THEN ''1'' ELSE ''0'' END AS observed', 'd1-query', 3, 1, 'active', 'EMPTY-REPLY-NOTHINK-1', 'failure-mode detector', 'qnfo-code-orchestrator'
+WHERE NOT EXISTS (SELECT 1 FROM remediation_contracts WHERE class = 'fm-code-loop-empty-reply');
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, surfaces_tested)
 SELECT 'session_01RdDA76KLvqYHYBjL9C2be5', 'a tool-failure issue is resolved when the tool''s recent error share is low',
   'every tool-failure issue gets a probe on its tool''s 24 h error share, now and whenever its birth contract is superseded (TOOL-ISSUE-SELFCLOSE-1)',
