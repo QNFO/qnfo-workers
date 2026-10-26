@@ -19,7 +19,9 @@ WHAT
     deploy-coherence   repo VERSION on main == live /health version == qnfo-ops /registry version, per live worker
                        (a commit younger than DEPLOY_GRACE_MIN is "deploying", not a failure)
     binding-census     qnfo-ops /fleet crosses its service bindings to each worker; any healthy=false fails, healthy=null
-                       (the census cannot see the worker) is reported as blind and fails above BLIND_MAX
+                       (the census cannot see the worker) is reported as blind and fails above BLIND_MAX. Before the journeys run,
+                       external_heartbeat (CENSUS-EXTERNAL-HEARTBEAT-1) probes each blind or 410 census row from the runner and, for one it
+                       reached (HTTP 2xx, or the documented retired stub), upserts its fleet_heartbeat so qnfo-ops reads it healthy
     lock-roundtrip     qnfo-deploy-guard acquire -> /work-locks lists it -> release -> /work-locks no longer lists it
                        (worker + KV lease + D1 work_claims, written and read back by the public API)
     papers-path        papers.qnfo.org /api/papers -> the item's page -> /feed.json -> OAI-PMH GetRecord for the same id
@@ -243,6 +245,42 @@ def j_deploy_coherence(h, repo=None, commit_age=commit_age_min, main_ver=main_ve
         if name in regv and regv[name] and regv[name] != live:
             j.check("%s registry == live" % name, False, "registry %s, live %s" % (regv[name], live))
     return j
+
+
+def external_heartbeat(d1, h, now=None):
+    """CENSUS-EXTERNAL-HEARTBEAT-1 (agent_issues 100166, 2026-10-26). qnfo-ops /fleet judges a worker by a service binding or by its
+    workers.dev URL; a worker with no binding is answered cf-1042 from inside the account (healthy null, "blind"), and the repository-root
+    stub qnfo-workers (a deliberate HTTP 410 that Cloudflare Workers Builds redeploys on every push) reads healthy false. qnfo-ops already
+    judges such a worker by its fleet_heartbeat row when fresh (CRON-ONLY-HEARTBEAT-1, under 2 h). This runner is outside the account, so
+    it can reach those hosts: for each census row that is blind (or a 410), it probes /health itself and, only when it saw HTTP 2xx or the
+    documented retired stub (410 with {"status": "retired"}), upserts the worker's heartbeat. A worker that answers an error stays
+    unhealthy; a row that is healthy:false for any other reason is never touched. Returns the names written."""
+    st, d = h.json("GET", OPS + "/fleet")
+    rows = (d or {}).get("fleet") or []
+    if st != 200 or not rows:
+        return []
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now or time.time()))
+    wrote = []
+    for r in rows:
+        name = r.get("name")
+        if not name or r.get("healthy") is True:
+            continue
+        blind = r.get("healthy") is None or "1042" in str(r.get("error") or "")
+        if not (blind or r.get("http") == 410):
+            continue
+        status, text = h.req("GET", "https://%s.q08.workers.dev/health" % name)
+        try:
+            body = json.loads(text)
+        except Exception:  # noqa: BLE001
+            body = None
+        retired = status == 410 and isinstance(body, dict) and body.get("status") == "retired"
+        if not (200 <= status < 300 or retired):
+            continue
+        version = "retired-stub" if retired else str((body or {}).get("version") or (body or {}).get("VERSION") or "")[:40] if isinstance(body, dict) else ""
+        d1("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, 1) ON CONFLICT(worker) DO UPDATE SET version = excluded.version, ts = excluded.ts, ok = 1",
+           [name, version, at])
+        wrote.append(name)
+    return wrote
 
 
 def j_binding_census(h):
@@ -490,8 +528,14 @@ def record(d1, results, verifier, now=None):
 def run(d1, verifier, h=None, force=False):
     if not force and not due(d1):
         return {"skipped": "ran within %d min" % JOURNEY_EVERY_MIN}
+    h = h or Http()
+    try:
+        heartbeats = external_heartbeat(d1, h)
+    except Exception as e:  # noqa: BLE001 - the census journey then reports the blind worker, as before
+        heartbeats = "error %s: %s" % (type(e).__name__, str(e)[:120])
     results = run_all(h)
     out = record(d1, results, verifier)
+    out["heartbeats"] = heartbeats
     out["results"] = [{"journey": r["journey"], "ok": r["ok"], "ms": r["ms"], "failed": [s["step"] for s in r["failed"]]} for r in results]
     return out
 
@@ -574,6 +618,36 @@ def selftest():
     expect("deploy mismatch with main unreadable fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: None).ok)
     expect("census passes", run_one(j_binding_census).ok)
     expect("census blind fails", not run_one(j_binding_census, "blind").ok)
+
+    # CENSUS-EXTERNAL-HEARTBEAT-1: the runner attests the workers qnfo-ops cannot probe, and only those it reached.
+    hb_rows = [{"name": "w1", "healthy": True},
+               {"name": "blind-ok", "healthy": None, "error": "cf-1042-no-published-route (probe blocked; target state unknown)"},
+               {"name": "stub", "healthy": False, "http": 410},
+               {"name": "blind-down", "healthy": None},
+               {"name": "real-down", "healthy": False, "http": 500, "error": "boom"},
+               {"name": "gone410", "healthy": False, "http": 410}]
+
+    def hb_opener(method, url, body, headers):
+        if url == OPS + "/fleet":
+            return 200, json.dumps({"fleet": hb_rows})
+        if url == "https://blind-ok.q08.workers.dev/health":
+            return 200, json.dumps({"ok": True, "version": "3.1.4"})
+        if url == "https://stub.q08.workers.dev/health":
+            return 410, json.dumps({"status": "retired", "reason": "x"})
+        if url == "https://blind-down.q08.workers.dev/health":
+            return 503, "{}"
+        if url == "https://gone410.q08.workers.dev/health":
+            return 410, json.dumps({"error": "gone"})
+        return 500, ""
+
+    hb_http, hb_sql = Http(hb_opener), []
+    hb_wrote = external_heartbeat(lambda sql, p=None: hb_sql.append((sql, p)) or [], hb_http, now=now)
+    expect("heartbeat: a blind worker the runner reaches and the retired stub are attested", hb_wrote == ["blind-ok", "stub"])
+    expect("heartbeat: the version is recorded and the stub is marked retired-stub", [(p[0], p[1]) for _s, p in hb_sql] == [("blind-ok", "3.1.4"), ("stub", "retired-stub")])
+    expect("heartbeat: a blind worker that answers 503, a real failure and a plain 410 are not masked",
+           not {"blind-down", "real-down", "gone410"} & set(hb_wrote))
+    expect("heartbeat: a row that is already healthy is never probed", not [u for (_m, u, _s, _ms) in hb_http.calls if "w1." in u])
+    expect("heartbeat: an unreadable census writes nothing", external_heartbeat(lambda sql, p=None: hb_sql.append(1) or [], Http(lambda m, u, b, hd: (500, ""))) == [])
     expect("lock passes", run_one(j_lock_roundtrip).ok)
     expect("lock left behind fails", not run_one(j_lock_roundtrip, "release").ok)
     expect("papers passes", run_one(j_papers_path).ok)
