@@ -90,5 +90,10 @@ ok(/result = result \|\| EMPTY_TEXT;/.test(ts) && EMPTY_TEXT === "(the model ret
 
 ok(/INSERT OR REPLACE INTO fleet_heartbeat \(worker, version, ts, ok\)/.test(ts) && /return beat\(1\)/.test(ts) && /return beat\(0\)/.test(ts), "every cron tick writes fleet_heartbeat, ok or not (CRON-HEARTBEAT-1)");
 
+// ALARM-TIMEOUT-1: a hung model step is bounded, and nothing started from the alarm can reject out of it.
+ok(/const STEP_TIMEOUT_MS = 3 \* 60 \* 1000;/.test(ts) && /timeout: \{ totalMs: TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS \}/.test(ts), "each model step has its own timeout inside the turn timeout");
+ok(/void this\.runFiber\("turn:" \+ id[^\n]*\.catch\(\(e\) => logErr\("fiber-recover", e\)\)/.test(ts), "the recovery fiber started from the alarm cannot reject out of it");
+ok(/try \{ await this\.startRun\(\{ text: payload\.text[^\n]*catch \(e\) \{ logErr\("scheduled-turn", e\); \}/.test(ts), "a scheduled turn that throws is logged, not retried by the alarm");
+
 console.log("qnfo-agents worker.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
