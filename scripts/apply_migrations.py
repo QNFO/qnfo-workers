@@ -48,7 +48,11 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-DATABASES = {"qnfo-audit": "35e2e573-92f3-46ac-83c6-22f6429fc5e5"}
+DATABASES = {"qnfo-audit": "35e2e573-92f3-46ac-83c6-22f6429fc5e5", "living-paper": "70a58cb3-b2cd-498d-877f-ecca86859a22"}
+# MIGRATION-LIVING-PAPER-1 (2026-10-26): living-paper (papers.qnfo.org) had no CI path, so its guard triggers could only change by hand or
+# from a worker lifting its own guard (migrations/2026-10-20-research-cluster-b.sql recorded that dead end for the publish floor).
+# A file with '-- DB: living-paper' runs its statements there; migration_runs, failure issues and the ledger stay in qnfo-audit.
+LEDGER_DB = "qnfo-audit"
 # D1 caps a LIKE/GLOB pattern at 50 bytes and rejects longer ones at run time ("LIKE or GLOB pattern too complex",
 # MIGRATION-APPLY-FAILED-1, issue 2046). --check catches it in the PR; use instr(col, 'text') = 0 / > 0 instead.
 LIKE_MAX_BYTES = 50
@@ -788,9 +792,10 @@ def apply_file(path, text, acct, token, commit, emit=print):
         emit(json.dumps({"file": path, "refused": problems}))
         return 1
     db_id = DATABASES[info["db"]]
+    ledger_id = DATABASES[LEDGER_DB]
     sha = hashlib.sha256(text.encode()).hexdigest()
-    d1(acct, token, db_id, LEDGER_DDL)
-    done = d1(acct, token, db_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'ok' LIMIT 1", [path, sha])
+    d1(acct, token, ledger_id, LEDGER_DDL)
+    done = d1(acct, token, ledger_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'ok' LIMIT 1", [path, sha])
     if done:
         emit(json.dumps({"file": path, "already_applied": True, "sha256": sha[:12]}))
         return 0
@@ -799,7 +804,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
     # MIGRATION-APPLY-FAILED-1 issue for a file that main holds applied: migration_runs 248 (commit 03b9dcd, 03:54:20Z) replayed the
     # fleet-journeys content refused as run 244 after run 246 had applied its repair, and the issue was reopened. Such a content is
     # skipped as superseded, with no error row and no issue; a content that never failed, or one with no newer ok row, runs as before.
-    stale = d1(acct, token, db_id, "SELECT e.id AS err_id, o.id AS ok_id, o.sha256 AS ok_sha FROM migration_runs e JOIN migration_runs o "
+    stale = d1(acct, token, ledger_id, "SELECT e.id AS err_id, o.id AS ok_id, o.sha256 AS ok_sha FROM migration_runs e JOIN migration_runs o "
                "ON o.file = e.file AND o.status = 'ok' AND o.sha256 <> e.sha256 AND o.id > e.id "
                "WHERE e.file = ?1 AND e.sha256 = ?2 AND e.status = 'error' ORDER BY o.id DESC LIMIT 1", [path, sha])
     if stale:
@@ -812,7 +817,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
     # writes through that table fail for those seconds, and an old trigger the file dropped first stays gone. migration_runs
     # 225, 227 and 228 (one sha256, 21:56-22:02Z) were this: three short insert outages on cloud_ops_events. Such a file
     # runs again only when its content changes (a new sha256).
-    depth = d1(acct, token, db_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'error' "
+    depth = d1(acct, token, ledger_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'error' "
                "AND instr(COALESCE(error, ''), 'D1-TRIGGER-DEPTH-1') > 0 ORDER BY id DESC LIMIT 1", [path, sha])
     if depth:
         emit(json.dumps({"file": path, "ok": False, "refused": "D1-TRIGGER-DEPTH-RETRY-1: this content was refused by the depth "
@@ -832,7 +837,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
     if info["backup"] and not info.get("creates_backup"):
         why = backup_missing()
         if why:
-            return record_failure(path, sha, commit, info, acct, token, db_id, why, emit)
+            return record_failure(path, sha, commit, info, acct, token, ledger_id, why, emit)
         checked = True
     done_n = 0
     # D1-TRIGGER-DEPTH-RESTORE-1 (2026-10-18, migration_runs 292): snapshot every trigger definition BEFORE the file runs, so
@@ -851,7 +856,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
         if not checked and DESTRUCTIVE.match(body(s)):
             why = backup_missing()
             if why:
-                return record_failure(path, sha, commit, info, acct, token, db_id, why + " (checked before statement " + str(done_n + 1) + ")", emit, done_n)
+                return record_failure(path, sha, commit, info, acct, token, ledger_id, why + " (checked before statement " + str(done_n + 1) + ")", emit, done_n)
             checked = True
         # D1-TRIGGER-DEPTH-RESTORE-1: the definition this statement may replace, captured before the file ran.
         tm = TRIGGER_ON.match(body(s))
@@ -864,11 +869,11 @@ def apply_file(path, text, acct, token, commit, emit=print):
             if ADD_COLUMN.match(body(s)) and "duplicate column name" in str(e):
                 done_n += 1
                 continue
-            if applied_by_other(acct, token, db_id, path, sha, e):
+            if applied_by_other(acct, token, ledger_id, path, sha, e):
                 emit(json.dumps({"file": path, "already_applied": True, "concurrent": True, "sha256": sha[:12], "note": "MIGRATION-CONCURRENT-APPLY-1: statement "
                                  + str(done_n + 1) + " met an object another runner created; that runner recorded this content ok, so nothing failed"}))
                 return 0
-            return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n + 1) + ": " + str(e)[:400], emit, done_n)
+            return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n + 1) + ": " + str(e)[:400], emit, done_n)
         tm = TRIGGER_ON.match(body(s))
         if tm:
             refused = depth_canary(acct, token, db_id, tm.group(2), advisories)
@@ -884,11 +889,11 @@ def apply_file(path, text, acct, token, commit, emit=print):
                         restored = " The definition this file replaced was restored, so the table is as it was."
                     except Exception as e:  # noqa: BLE001
                         restored = " RESTORE FAILED, the table is without this trigger: " + str(e)[:120]
-                return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
+                return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
                                       "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
-    d1(acct, token, db_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
+    d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
        [path, sha, commit or "", info["db"], str(done_n)])
-    resolve_failure(path, sha, acct, token, db_id, done_n)
+    resolve_failure(path, sha, acct, token, ledger_id, done_n)
     applied = {"file": path, "ok": True, "statements": done_n, "sha256": sha[:12]}
     if advisories:
         # TRIGGER-DEPTH-INSERT-ADVISORY-1: the change applied, but a zero-row INSERT probe upstream of a trigger it creates
