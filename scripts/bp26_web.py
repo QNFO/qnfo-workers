@@ -106,8 +106,9 @@ SOCIAL_MARKER_RX = re.compile(r"(?:\U0001F916|\bautomated (?:post|account)\b|#bo
 TURNSTILE_RX = re.compile(r"cf-turnstile|challenges\.cloudflare\.com/turnstile|turnstile\.render", re.I)
 FORM_RX = re.compile(r"<form\b([^>]*)>(.*?)</form>", re.S | re.I)
 CITATION_REQUIRED = ("citation_title", "citation_author", "citation_publication_date")
-# (worker source, regex of the Set-Cookie construction, cookie name, host): non-essential cookies given to human visitors only
-CODE_COOKIES = (("qnfo-ipatent/worker.js", r"ipatent_ab=", "ipatent_ab", "ipatent.qnfo.org"),)
+# (worker source, regex of the Set-Cookie CONSTRUCTION with a value, cookie name, host): non-essential cookies given to human visitors only. The regex must not match a reader of the
+# cookie or the header that deletes it (qnfo-ipatent 3.19.1 keeps both: `ipatent_ab=([12])` and `AB_COOKIE + "=; ... Max-Age=0`), only the code that sets it with a value.
+CODE_COOKIES = (("qnfo-ipatent/worker.js", r"AB_COOKIE\s*\+\s*\"=\"\s*\+", "ipatent_ab", "ipatent.qnfo.org"),)
 
 
 # ---------------------------------------------------------------- pure parsers
@@ -668,6 +669,9 @@ def selftest():
     forms = submitting_forms(_page(body=fm))
     ok([k for k, _m in forms] == ["/subscribe", "ld-sub-form"], "data-collecting forms are found, dialog and search are not: %r" % forms)
     ok(cookie_names(good._replace(set_cookies=["ipatent_ab=1; Path=/", "__cf_bm=zz; Path=/"])) == ["ipatent_ab", "__cf_bm"], "cookie names")
+    crx = re.compile(CODE_COOKIES[0][1])
+    ok(crx.search('const cookie = fresh ? AB_COOKIE + "=" + arm + "; Path=/; Max-Age=2592000; SameSite=Lax; Secure" : null;') is not None, "the code that sets ipatent_ab with a value is found")
+    ok(crx.search('const m = /(?:^|;\\s*)ipatent_ab=([12])(?:;|$)/.exec(c); const cookie = x ? AB_COOKIE + "=; Path=/; Max-Age=0; SameSite=Lax; Secure" : null;') is None, "a reader of the cookie and the header that deletes it are not the cookie being set")
     # the whole collector over fake pages
     hsts = "max-age=31536000; includeSubDomains"
 
