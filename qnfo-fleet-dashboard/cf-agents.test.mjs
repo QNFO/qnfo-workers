@@ -43,6 +43,9 @@ ok(!r.ok && /SVC_QNFO_AGENTS/.test(r.error), "a missing binding answers an error
 r = await conCfAgent({ SVC_QNFO_AGENTS: { fetch: async () => { throw new Error("boom"); } } }, "cfagent", { text: "x" });
 ok(!r.ok && /boom/.test(r.error), "a thrown fetch answers an error");
 
+r = await conCfAgent(env({ ok: true, requests: [{ id: 7, status: "done", kind: "run", requester: "portfolio-manager", request: "review", result: "fine" }] }), "cfagentget", { path: "/requests" });
+ok(r.ok && /#7 done run portfolio-manager/.test(r.text), "loop requests are listed");
+
 // conParse's cfagent block, executed.
 const pb0 = src.indexOf("    if (/^cf-?agents?\\b/i.test(at)) {");
 const pb1 = src.indexOf("\n    }\n", pb0) + 6;
@@ -65,6 +68,8 @@ ok(p && p.actions[0].op === "cfagentset" && p.actions[0].args.body.url === "http
 p = parse("cfagent sandbox async () => 1 + 1");
 ok(p && p.auto && p.actions[0].op === "cfagentbox", "cfagent sandbox runs code at once");
 ok(parse("cfagent") && !parse("cfagent").actions, "bare cfagent answers usage");
+p = parse("cfagent requests program-manager:research");
+ok(p && p.auto && p.actions[0].args.path === "/requests?requester=program-manager:research", "cfagent requests reads the loops' queue");
 ok(parse("agent hello") === null, "the older agent command is untouched");
 // FM7-PARITY-MANAGERS-1: the qnfo-ops deploy guard's /health parity scan, run on this file. A literal "version:" after "ok: true"
 // makes /ops/deploy refuse the worker, and the code-only second path then ships it without new bindings (SVC_QNFO_AGENTS).

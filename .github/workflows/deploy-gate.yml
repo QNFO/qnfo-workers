@@ -121,6 +121,19 @@ jobs:
       # than once every 10 minutes, nor more than 144 times in any 24-hour period.
       # Runs on EVERY push over ALL worker dirs -- a cron regression must fail CI even when
       # the edited worker is not the one carrying the offending cron.
+      # AUDIT-SELFTEST-PR-1 (2026-10-26, AUDIT-CRASH-FIX-1): the fleet self-audit and the drift guard it reads were exercised only inside
+      # fleet-autodeploy, after the merge. Three code-loop pull requests (4201, 4221, 4226) changed scripts/fleet-autoaudit.py, passed every
+      # check here and then crashed every audit run for nine hours (`TypeError: 'bool' object is not iterable`): worker_live_audit froze, four
+      # runner merges stayed 'deployed' and held their workers busy, and five green research-exec pull requests were deferred. Both selftests are
+      # offline and take a second; the audit one replays the guard's real output (scripts/deploy-drift-guard-output.fixture.json), so a
+      # consumer that cannot read the producer's shape fails here, before the merge.
+      - name: AUDIT-SELFTEST-PR-1 (fleet self-audit and drift guard selftests, guard's real output)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          bash scripts/stop-commands.sh python3 scripts/fleet-autoaudit-selftest.py
+          python3 scripts/deploy-drift-guard-selftest.py
+
       - name: CRON-RATE-CEILING-1 sweep (all worker dirs)
         if: ${{ !cancelled() }}
         run: python3 scripts/cron_rate_guard.py --root .

@@ -473,3 +473,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   (a live measurement, not "deployed").
 - GitHub `schedule` triggers fire rarely and late on this repository (95 schedule runs in total by 2026-10-02; mirror-autosync
   ran 9 times), so no periodic work may depend on one; periodic work belongs in worker crons.
+- Issue hygiene (ISSUE-HYGIENE-1 and PORTFOLIO-NOT-ISSUES-1, 2026-10-26; owner question "why are there over 800 GitHub issues?"): GitHub Issues carry work that
+  finishing the work closes. `roadmap_mirror_scope` (qnfo-audit) names the roadmap sources that are not issues (projects, metric-breach twins of a METRIC-TRIGGER ticket,
+  failure-mode registry rows): they stay in `roadmap_implementation`, on the Projects board and in `/roadmap`, qnfo-github-steward closes their mirrors `not_planned` and never
+  reopens them, and a source set to `mirrored = 1` is mirrored again with no deploy. A ticket about another record (PROBE-NEEDED-1, CODE-MERGE-REFUSED-1, CODE-LOOP-EXHAUSTED-1,
+  a self-heal ledger copy, a repeated owner prompt) closes with the fact that resolved it: the hourly D1 workflow `issue-meta-fold` (fleet_tasks, :20) saves the before-state in
+  `issue_fold_ledger` and closes through the triage row with "moot: ..." or "superseded by <id> ..." evidence. A new filer of such tickets gets a rule in that workflow and in
+  `migrations/issue-hygiene.test.mjs`; never a trigger on `agent_issues` (AGENT-ISSUES-TRIGGER-DEPTH-1: D1 refuses writes whose trigger programs nest more than 10 levels).

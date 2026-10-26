@@ -300,6 +300,17 @@ def _w(it):
     return it
 
 
+def _listy(d, key):
+    """The list under `key`, or [] when it is absent or not a list.
+
+    AUDIT-CRASH-FIX-1 (2026-10-26): `cf_script_list` is a BOOLEAN in the guard's output, and main() iterated it
+    (`for entry in d.get("cf_script_list", [])`: TypeError, 27 failed fleet-autodeploy runs, worker_live_audit frozen at
+    2026-10-25 21:03Z). A class the guard emits as a flag, a null or a count must degrade to "no entries", never raise.
+    """
+    v = d.get(key)
+    return v if isinstance(v, (list, tuple)) else []
+
+
 def classify(d):
     """One dict per worker: the class, live version, repo version, match flag.
 
@@ -322,29 +333,29 @@ def classify(d):
         rows[worker] = {"worker": worker, "http": http, "live": live,
                         "before": before, "match": match, "note": note}
 
-    for it in d.get("sync_workers", []):
+    for it in _listy(d, "sync_workers"):
         # SYNC-VERSION-CAPTURE-1 (issue 1509): sync_workers now carries the version.
         # Accept both the object form and the legacy bare-string form so an older guard
         # cannot crash this consumer.
         _v = it.get("version") if isinstance(it, dict) else None
         put(_w(it), 200, _v, _v, 1, "SYNC")
-    for it in d.get("drift", []):
+    for it in _listy(d, "drift"):
         put(it["worker"], 200, it.get("live"), it.get("repo"), 0, "DRIFT")
-    for it in d.get("content_drift", []):
+    for it in _listy(d, "content_drift"):
         put(it["worker"], 200, None, it.get("repo_sha"), 0, "CONTENT_DRIFT")
-    for it in d.get("no_repo_version", []):
+    for it in _listy(d, "no_repo_version"):
         put(it["worker"], 200, it.get("live"), None, 0, "NO_REPO_VERSION")
-    for it in d.get("no_live_version", []):
+    for it in _listy(d, "no_live_version"):
         put(it["worker"], 200, None, it.get("repo"), 0, "NO_LIVE_VERSION")
     # NO_HEALTH_ROUTE-1: deployed per the CF script list, but workers.dev /health 404s.
     # NOT the same as NOT_DEPLOYED; conflating them hid live workers from every check.
-    for it in d.get("no_health_route", []):
+    for it in _listy(d, "no_health_route"):
         put(_w(it), 404, None, None, 0, "NO_HEALTH_ROUTE")
-    for it in d.get("live_err", []):
+    for it in _listy(d, "live_err"):
         put(_w(it), 0, None, None, 0, "LIVE_ERR")
     # NOT-DEPLOYED-KEYED-BY-DIR-1: keyed by the RESOLVED worker name like every other
     # class, not by the repo directory. Legacy bare strings are still accepted.
-    for it in d.get("not_deployed_workers", []):
+    for it in _listy(d, "not_deployed_workers"):
         put(_w(it), 404, None, None, 0, "NOT_DEPLOYED")
         # AUTOAUDIT-ACTIONABLE-1: the D1 note stays NOT_DEPLOYED (fleet-control, observability and a D1 trigger key on
         # it); the marker only tells the report and the issue state that this absence is a retirement, not a defect.
@@ -352,7 +363,7 @@ def classify(d):
             rows[_w(it)]["retired"] = it["marker"]
     # NOT-DEPLOYED-NONWORKER-NOISE-1: a directory with no worker config and no artifact is
     # not a worker. Written in its own class so it cannot inflate NOT_DEPLOYED.
-    for it in d.get("not_a_worker", []):
+    for it in _listy(d, "not_a_worker"):
         put(_w(it), 404, None, None, 0, "NOT_A_WORKER")
     # CRON-ONLY-CONSUMER-1: deploy-drift-guard.py emits `cron_only` (deployed, cron-triggered
     # workers with no fetch route, so no /health to probe) deliberately OUTSIDE its exit-code
@@ -361,22 +372,21 @@ def classify(d):
     # worker_live_audit although both are live with registered crons. http is NULL because
     # nothing was probed; match stays 0 because the version is unverified, not because it
     # differs (same convention as NO_HEALTH_ROUTE).
-    for it in d.get("cron_only", []):
+    for it in _listy(d, "cron_only"):
         put(_w(it), None, None, None, 0, "CRON_ONLY")
     # RETIRED-PRESENT-1 (#272): a FOLDED/RETIRED directory whose script exists in the account. Appended to the
     # worker's existing note (CRON_ONLY, NO_HEALTH_ROUTE, ...) so it is visible whatever the health probe returned;
     # match is forced to 0 by put() because a retired worker that exists is by definition not in sync.
-    for it in d.get("retired_present", []):
+    for it in _listy(d, "retired_present"):
         put(_w(it), None, None, None, 0, "RETIRED_PRESENT")
-    # UNMANAGED-PROBE-1: handle workers that are live but have no repo directory.
-    # The guard emits them in the `unmanaged_workers` class. Accept both dicts
-    # (with explicit fields) and legacy bare‑string entries.
-    for it in d.get("unmanaged_workers", []):
+    # UNMANAGED-PROBE-1: a script that is live in the account and has no repo directory. The guard probes /health and emits
+    # {worker, http, version} in `unmanaged_workers` (a 410 tombstone is counted there, never listed); this is the only reader.
+    # 200 is an expected state (UNMANAGED_OK: visible in the universe, not a finding); 404 and any other answer are findings.
+    for it in _listy(d, "unmanaged_workers"):
         http = it.get("http") if isinstance(it, dict) else 200
-        live = it.get("live") if isinstance(it, dict) else None
-        if live is None and isinstance(it, dict):
-            live = it.get("version")
-        put(_w(it), http, live, None, 0, "UNMANAGED")
+        live = (it.get("version") or it.get("live")) if isinstance(it, dict) else None
+        note = "UNMANAGED_OK" if http == 200 else "UNMANAGED_NO_HEALTH" if http == 404 else "UNMANAGED_ERR"
+        put(_w(it), http, live, None, 0, note)
     return rows
 
 
@@ -459,7 +469,7 @@ def actionable(d, rows, failed, purge_err):
     out += [f"D1 write failure `{w}`: {e}" for w, e in failed]
     if purge_err:
         out.append(f"stale-row purge failed: {purge_err}")
-    out += [f"repo-ahead `{it['worker']}` repo `{it['repo']}` > live `{it['live']}`" for it in d.get("ahead", [])]
+    out += [f"repo-ahead `{it['worker']}` repo `{it['repo']}` > live `{it['live']}`" for it in _listy(d, "ahead")]
     return out
 
 
@@ -484,7 +494,7 @@ def summary_md(d, rows, ok, failed, now, purged=None, purge_err=None):
             lines.append(f"\n- stale-row purge: **FAILED** ({purge_err})")
         else:
             lines.append(f"\n- stale-row purge: **{purged}** rows removed (probed_at <> this run)")
-    ahead = d.get("ahead", [])
+    ahead = _listy(d, "ahead")
     lines += ["", f"## Repo-ahead (safe to auto-deploy): {len(ahead)}", ""]
     if ahead:
         for it in ahead:
@@ -666,7 +676,7 @@ def apply_ahead(d=None):
         if not os.path.isfile(STATE):
             die("no audit state; run --audit first")
         d = json.load(open(STATE))
-    ahead = d.get("ahead", [])
+    ahead = _listy(d, "ahead")
     print(f"auto-deploy candidates (repo strictly ahead): {len(ahead)}")
     applied, failed = [], []
     container_skips = []
@@ -731,48 +741,6 @@ def main():
     mode = "--apply" if "--apply" in sys.argv else "--audit"
     d = run_guard()
     rows = classify(d)
-    # UNMANAGED-PROBE-1: probe live workers without a repo directory.
-    # Get list of all workers (CF script list) from guard data.
-    # Build a set of worker names from the guard's CF script list.
-    # The list may contain plain strings or dicts with the name under a key such as "script", "name", or "worker".
-    raw_cf_list = d.get("cf_script_list", [])
-    all_workers = set()
-    for entry in raw_cf_list:
-        if isinstance(entry, dict):
-            # Prefer common keys; fall back to any string value.
-            for key in ("script", "name", "worker"):
-                if key in entry and isinstance(entry[key], str):
-                    all_workers.add(entry[key])
-                    break
-            else:
-                # If no known key, add the first string value found.
-                for v in entry.values():
-                    if isinstance(v, str):
-                        all_workers.add(v)
-                        break
-        elif isinstance(entry, str):
-            all_workers.add(entry)
-    known_workers = set(rows.keys())
-    # Optional per-worker health URL overrides via JSON env var.
-    health_overrides = {}
-    env_json = os.getenv("UNMANAGED_HEALTH_OVERRIDES")
-    if env_json:
-        try:
-            health_overrides = json.loads(env_json)
-        except Exception:
-            pass
-    for w in sorted(all_workers - known_workers):
-        health_url = health_overrides.get(w, f"https://{w}.q08.workers.dev/health")
-        try:
-            req = urllib.request.Request(health_url, headers={"User-Agent": "qnfo-fleet-autoaudit"})
-            with urllib.request.urlopen(req, timeout=20) as r:
-                code = r.getcode()
-        except urllib.error.HTTPError as e:
-            code = e.code
-        except Exception:
-            code = 0
-        note = "UNMANAGED_OK" if code == 200 else "UNMANAGED_NO_HEALTH" if code == 404 else "UNMANAGED_ERR"
-        rows[w] = {"worker": w, "http": code, "live": None, "before": None, "match": 0, "note": note}
     ok, failed, now = write_audit_rows(rows)
     purged, purge_err = (None, None)
     if d.get("scope") == "all":

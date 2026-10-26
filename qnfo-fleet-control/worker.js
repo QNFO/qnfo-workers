@@ -1100,7 +1100,7 @@ __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.47.0-remediation-budget-metric"; /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.48.0-deployed-unblock"; /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -3352,10 +3352,26 @@ var CM_TRUSTED_SOURCES = "qnfo-fleet-dashboard:owner-request|OWNER-TASK-,qnfo-fl
 // SLA-120M-7 (0.31.2): both waits are SLAs and at most 120 minutes (owner directive 2026-10-14); they were 3 h.
 var CM_CHECKS_WAIT_MIN = 120;
 var CM_DEPLOY_WAIT_MIN = 120;
+// MERGE-DEPLOYED-UNBLOCK-1 (0.48.0, 2026-10-26): a runner merge in merge_state 'deployed' waits for a worker_live_audit row newer than its
+// deploy, and every other green pull request on the same worker waited behind it ("merge deferred, <worker> has a change in flight").
+// The audit writer (fleet-autodeploy's fleet-autoaudit.py) crashed from 2026-10-25T20:21Z, no row arrived, and four tasks (research-exec,
+// ai, gateway, deploy-guard) stayed 'deployed' for 9 hours while five green research-exec pull requests (4275, 4276, 4277, 4282, 4283)
+// aged past the 120-minute close. The wait is now bounded: a deployed task holds its worker for CM_DEPLOYED_BUSY_MIN (5) minutes (ticks are
+// 10 minutes apart, so this covers a deploy the tick has only just seen; a later deploy of the same worker is read as "superseded" by
+// evLiveCheck, so verification does not need the worker to stay quiet) and becomes 'unverifiable' (never reverted on a missing probe) after
+// CM_LIVE_AUDIT_WAIT_MIN, the same disposition a cron-only worker gets.
+var CM_LIVE_AUDIT_WAIT_MIN = 30;
+var CM_DEPLOYED_BUSY_MIN = 5;
+// ISO ('T', 'Z') and SQLite ('YYYY-MM-DD HH:MM:SS', UTC) timestamps both read as epoch ms; NaN when unreadable.
+function cmMs(v) { var x = String(v || ""); return Date.parse(x.replace(" ", "T") + (/[zZ]$|[+-]\d\d:?\d\d$/.test(x) ? "" : "Z")); }
 var CM_MAX_CANDIDATES = 5;
 var CM_MAX_MERGES = 1;
-var CM_MERGEABLE_READS = 3;
-var CM_MERGEABLE_WAIT_MS = 2000;
+// MERGEABLE-POLL-LONGER-1 (0.48.0, 2026-10-26): main takes a commit every 1.2 minutes (median, 363 in 24 h, 170 of them bot status snapshots), and each
+// one drops GitHub's cached mergeability for every open pull request. At 06:10Z four of five green research-exec pull requests read
+// mergeable=null on the tick ("GitHub is still computing mergeability") because 3 reads 2 s apart (6 s) ended before GitHub finished. 6 reads
+// 5 s apart give it 25 s; the wait is wall-clock only and a tick handles at most CM_MAX_CANDIDATES (5) pull requests.
+var CM_MERGEABLE_READS = 6;
+var CM_MERGEABLE_WAIT_MS = 5000;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
 var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
@@ -4338,7 +4354,15 @@ async function cmAdvance(env, cx, t) {
   }
   if (t.merge_state === "deployed") {
     var lc = await cmLiveCheck(env, sc.worker, t.version_to, t.deployed_at || t.merged_at, cx.now);
-    if (lc.state === "waiting") return { id: t.id, merge_state: "deployed", note: "waiting on a live audit after deploy" };
+    if (lc.state === "waiting") {
+      var depMs = cmMs(t.deployed_at || t.merged_at);
+      if (isFinite(depMs) && cx.now - depMs > CM_LIVE_AUDIT_WAIT_MIN * 6e4) {
+        await cmSave(env, cx, t.id, { merge_state: "unverifiable", merge_note: "deployed " + (t.deployed_at || "") + "; no worker_live_audit row newer than the deploy within " + CM_LIVE_AUDIT_WAIT_MIN + " minutes, so the live state cannot be read (the live-audit writer is stale; not reverted on a missing probe)" }, { touch: true });
+        await cmEvent(env, cx, "unverifiable", t, sc.worker + " " + t.version_to + " deployed; no live audit within " + CM_LIVE_AUDIT_WAIT_MIN + " minutes, so it is not verified (MERGE-DEPLOYED-UNBLOCK-1)", "error");
+        return { id: t.id, merge_state: "unverifiable", note: "no live audit within " + CM_LIVE_AUDIT_WAIT_MIN + " minutes" };
+      }
+      return { id: t.id, merge_state: "deployed", note: "waiting on a live audit after deploy" };
+    }
     if (lc.state === "unverifiable") {
       await cmSave(env, cx, t.id, { merge_state: "unverifiable", merge_note: "deployed " + (t.deployed_at || "") + "; a cron-only worker with no fleet_heartbeat row after the deploy, so the live state cannot be read (not reverted on a missing HTTP probe)" }, { touch: true });
       await cmEvent(env, cx, "unverifiable", t, sc.worker + " " + t.version_to + " deployed; cron-only, no heartbeat to verify it", "error");
@@ -4743,7 +4767,7 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
   var res = { id: t.id, pr: num, action: d.action, why: d.why };
   var cmLimit = out.maxMerges || CM_MAX_MERGES;
   if (d.action === "merge" && (out.merges >= cmLimit || (d.worker && busy[d.worker]))) {
-    d = { action: "wait", green: true, why: "green; merge deferred (" + (out.merges >= cmLimit ? (cmLimit === 1 ? "one merge per tick" : cmLimit + " merges per tick") : d.worker + " has a change in flight") + ")" };
+    d = { action: "wait", green: true, why: "green; merge deferred (" + (out.merges >= cmLimit ? (cmLimit === 1 ? "one merge per tick" : cmLimit + " merges per tick") : d.worker + " has a change in flight: " + busy[d.worker]) + ")" };
     res.action = "wait"; res.why = d.why;
   }
   var greenSince = d.green ? (t.green_since || cx.iso) : null;
@@ -4788,7 +4812,7 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     var mg = await evMergePr(env, num, head2, title, msg);
     if (mg.ok) {
       out.merges++;
-      if (d.worker) busy[d.worker] = 1;
+      if (d.worker) busy[d.worker] = t.id + " merged this tick";
       await cmSave(env, cx, t.id, { status: "merged", merged_by: CM_RUNNER, merged_sha: (mg.j && mg.j.sha) || null, merged_at: cx.iso, merge_state: d.kind === "worker" ? "deploying" : "verified", version_to: d.version_to, merge_note: d.why + (d.kind === "worker" ? "; waiting on canonical deploy" : "; no deploy target"), merge_checked_at: cx.iso }, { touch: true });
       await evApi(env, "DELETE", "/git/refs/heads/" + t.branch);
       await cmEvent(env, cx, "merged", t, t.pr_url + " merged by " + CM_RUNNER + " (" + d.why + ")", "ok", { sha: mg.j && mg.j.sha, files: names, version_to: d.version_to, origin: g.provenance.origin });
@@ -5031,7 +5055,11 @@ async function codeMergeTick(env, opts) {
     for (var i = 0; i < inflight.length; i++) out.advanced.push(await cmAdvance(env, cx, inflight[i]));
   }
   var busy = {};
-  (await all("SELECT path FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) { var s = cmScope(r.path); if (s.worker) busy[s.worker] = 1; });
+  // MERGE-DEPLOYED-UNBLOCK-1: 'deployed' holds its worker only for CM_DEPLOYED_BUSY_MIN minutes; deploying and reverting hold it until they end.
+  (await all("SELECT id, path, merge_state, deployed_at, merged_at FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) {
+    if (r.merge_state === "deployed") { var dm = cmMs(r.deployed_at || r.merged_at); if (isFinite(dm) && nowMs - dm > CM_DEPLOYED_BUSY_MIN * 6e4) return; }
+    var s = cmScope(r.path); if (s.worker) busy[s.worker] = r.id + " " + r.merge_state;
+  });
   try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:codeMergeTick:caught", error: String(e && e.message) })); }
   // Pushed branches first: open their PRs (CI then starts by itself; they are merge candidates from the next tick).
   var pushed = await all("SELECT * FROM code_tasks WHERE repo IN ('qnfo-workers', 'QNFO/qnfo-workers') AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);

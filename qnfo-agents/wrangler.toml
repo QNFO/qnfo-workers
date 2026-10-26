@@ -9,7 +9,8 @@
 # WRANGLER-ONLY: a new Durable Object class needs a wrangler migration, which the canonical /content deploy cannot send, so
 # .github/workflows/deploy-qnfo-agents.yml deploys this directory (deploy-guard lock, fleet_deploys ledger, /health canary).
 # No secrets: callers are authenticated by service-binding props (ctx.props.caller), which only a deploy of the caller can set.
-# No wrangler cron: the agent's own schedules (Durable Object alarms) drive scheduled turns.
+# The agent's own schedules (Durable Object alarms) drive scheduled turns. The one wrangler cron (CF-AGENTS-LOOPS-1) drains the
+# fleet loops' request queue, D1 cf_agent_requests, every 5 minutes.
 name = "qnfo-agents"
 main = "worker.js"
 compatibility_date = "2026-10-20"
@@ -28,6 +29,9 @@ head_sampling_rate = 1
 [observability.traces]
 enabled = true
 head_sampling_rate = 1
+
+[triggers]
+crons = ["*/5 * * * *"]
 
 [ai]
 binding = "AI"

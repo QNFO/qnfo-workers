@@ -1163,5 +1163,73 @@ row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(gh.merges.length === 3 && row.status === "published" && /merge HTTP 405/.test(row.merge_note) && gh.calls.filter((c) => /update-branch/.test(c)).length === 1, "after the retries are spent the branch is brought up to date once, as before", [gh.merges.length, row.status, row.merge_note]);
 sandbox.aiRunAttr = async () => null;
 
+// ================================================================ 9. MERGE-DEPLOYED-UNBLOCK-1 (0.48.0, 2026-10-26)
+// The audit writer crashed at 2026-10-25T20:21Z; four runner merges stayed 'deployed' ("waiting on a live audit after deploy") for 9 hours
+// and each held its worker busy, so five green research-exec pull requests were deferred ("has a change in flight") until they aged out.
+{
+  const STUCK = "ct_stuckdeployed1";
+  const minAgo = (m) => new Date(NOW - m * 6e4).toISOString();
+  // A green candidate on qnfo-demo, plus an earlier runner merge of the same worker in `state`, deployed `deployedMinAgo` minutes ago.
+  const setup = async (state, deployedMinAgo, fmt) => {
+    freshDb(); freshGh();
+    db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+    seedTask();
+    seedWorkerPr(401, BRANCH, "h1");
+    gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+    gh.down = true; await W.codeMergeTick(env, { now: NOW }); gh.down = false;   // adds the code_tasks columns, merges nothing
+    await W.evSchema(env);
+    seedTask({ id: STUCK, branch: "codeagent-stuckdeploy", pr_url: "https://github.com/QNFO/qnfo-workers/pull/399", status: "merged" });
+    const at = fmt === "sqlite" ? minAgo(deployedMinAgo).replace("T", " ").slice(0, 19) : minAgo(deployedMinAgo);
+    db.prepare("UPDATE code_tasks SET merged_by = 'qnfo-fleet-control', merged_at = ?, merge_state = ?, deployed_at = ?, version_to = '1.2.0-codeagent' WHERE id = ?").run(minAgo(deployedMinAgo + 3), state, at, STUCK);
+  };
+
+  await setup("deployed", 3);
+  let r9 = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(r9.decided[0].action === "wait" && gh.merges.length === 0 && /has a change in flight: ct_stuckdeployed1 deployed/.test(r9.decided[0].why), "a task deployed 3 minutes ago still holds its worker, and the deferral names the task holding it", r9.decided);
+  ok(r9.advanced[0].merge_state === "deployed", "inside the wait the task stays deployed", r9.advanced);
+
+  await setup("deployed", 8);
+  r9 = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(gh.merges.length === 1 && gh.merges[0].pr === 401, "a task deployed 8 minutes ago (live audit still pending) no longer holds its worker: the green pull request merges", r9.decided);
+  ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", STUCK).merge_state === "deployed", "...and the earlier task is still waiting for its audit, not reverted or dropped");
+
+  await setup("deployed", 45);
+  r9 = J(await W.codeMergeTick(env, { now: NOW }));
+  const stuck = one("SELECT merge_state, merge_note FROM code_tasks WHERE id = ?", STUCK);
+  ok(stuck.merge_state === "unverifiable" && /no worker_live_audit row newer than the deploy within 30 minutes/.test(stuck.merge_note), "no live audit 45 minutes after the deploy: unverifiable, with the reason", stuck);
+  ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.unverifiable' AND status = 'error'").n === 1, "the unverifiable disposition is an error event, so the stale audit writer is visible");
+  ok(one("SELECT COUNT(*) n FROM evolve_candidates WHERE kind = 'revert'").n === 0 && gh.merges.length === 1, "it is never reverted on a missing probe, and the waiting pull request merges in the same tick", gh.merges);
+
+  await setup("deployed", 45, "sqlite");
+  r9 = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", STUCK).merge_state === "unverifiable" && gh.merges.length === 1, "a SQLite-format deployed_at (YYYY-MM-DD HH:MM:SS) is read as UTC, not skipped", r9.advanced);
+
+  await setup("deployed", 45);
+  db.prepare("INSERT INTO fleet_deploys (worker, to_sha, ok, ts) VALUES ('qnfo-demo', '1.2.0-codeagent', 1, ?)").run(minAgo(45));
+  db.prepare("INSERT INTO worker_live_audit (worker, http, live_version, probed_at) VALUES ('qnfo-demo', 200, '1.2.0-codeagent', ?)").run(minAgo(10).replace("T", " ").slice(0, 19));
+  r9 = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", STUCK).merge_state === "verified", "a live audit after the deploy still verifies it, whatever its age (the bound only applies when no audit arrives)", r9.advanced);
+
+  await setup("deploying", 60);
+  r9 = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(r9.decided[0].action === "wait" && gh.merges.length === 0 && /has a change in flight: ct_stuckdeployed1 deploying/.test(r9.decided[0].why), "a deploy still in progress holds the worker for as long as it is deploying", r9.decided);
+}
+
+// ---- MERGEABLE-POLL-LONGER-1 (0.48.0): mergeable=null on the first reads, resolved on a later one, still merges in the same tick
+{
+  freshDb(); freshGh();
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+  seedTask();
+  seedWorkerPr(401, BRANCH, "h1");
+  gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+  sandbox.setTimeout = (fn) => { fn(); return 0; };   // the sandbox has no timers; the 5 s waits run instantly here
+  const realGet = gh.pulls[401];
+  let reads = 0;
+  Object.defineProperty(gh.pulls, 401, { get() { reads++; return reads <= 4 ? Object.assign({}, realGet, { mergeable: null, mergeable_state: "unknown" }) : realGet; }, configurable: true });
+  const rt = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(reads >= 5 && gh.merges.length === 1, "mergeability null for four reads and known on the fifth: the runner keeps reading (25 s) and merges in the same tick", { reads, decided: rt.decided });
+  delete sandbox.setTimeout;
+}
+
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

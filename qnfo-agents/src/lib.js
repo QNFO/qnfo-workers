@@ -23,7 +23,7 @@ export const OPS_READ_ONLY = ["fleet_status", "ops_issues_list", "ops_d1_query",
 
 export function opsToolAllowed(name, scope) {
   if (scope === "write") return true;
-  if (scope === "read") return OPS_READ_ONLY.indexOf(String(name)) >= 0;
+  if (scope === "read" || scope === "loop") return OPS_READ_ONLY.indexOf(String(name)) >= 0;
   return false;
 }
 
@@ -101,4 +101,37 @@ export function runId() {
   const b = new Uint8Array(6);
   crypto.getRandomValues(b);
   return "run_" + Date.now().toString(36) + "_" + Array.from(b, function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+}
+
+// CF-AGENTS-LOOPS-1: a cf_agent_requests row a fleet loop wrote. The loop scope is read plus fleet issues, code-task proposals and
+// loop-scope schedules on the requester's own instance; it never gets mutating ops tools or MCP connections.
+export const REQUEST_KINDS = ["run", "sandbox", "schedule"];
+export const DRAIN_PER_TICK = 3;
+
+export function requesterOk(s) {
+  return /^[A-Za-z0-9][A-Za-z0-9:._-]{1,79}$/.test(String(s || ""));
+}
+
+// The agent instance a request runs on: its own instance name when valid, else one per requester (loop-<requester>).
+export function loopInstance(requester, instance) {
+  const own = String(instance || "").toLowerCase();
+  if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(own)) return own;
+  const r = String(requester || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 35);
+  return "loop-" + (r || "fleet");
+}
+
+export function validateRequest(row) {
+  const kind = String(row && row.kind || "run");
+  if (REQUEST_KINDS.indexOf(kind) < 0) return { error: "kind must be run, sandbox or schedule" };
+  if (!requesterOk(row && row.requester)) return { error: "requester must name the loop (letters, digits, : . _ -)" };
+  if (kind === "sandbox") {
+    if (String(row.code || "").trim().length < 5) return { error: "a sandbox request needs code" };
+    return { kind };
+  }
+  if (String(row.prompt || "").trim().length < 8) return { error: "a " + kind + " request needs a prompt of 8+ characters" };
+  if (kind === "schedule") {
+    const w = scheduleWhen({ cron: row.cron, delay_s: row.delay_s });
+    if (w.error) return { error: w.error };
+  }
+  return { kind };
 }
