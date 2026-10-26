@@ -59,3 +59,19 @@ it on a push to main (it rebuilds the bundle and fails when the committed one di
 `fleet_deploys`, and fails closed unless `/health` answers the VERSION, `/tools` lists the tools and a public `POST /run` answers 403).
 
 `node worker.test.mjs` is the offline suite.
+
+## Fleet loops (CF-AGENTS-LOOPS-1, 0.2.0)
+
+Any loop that writes `qnfo-audit` reaches the agent without a binding or a secret. Examples are a worker, a fleet-exec workflow's `sql` step, the hourly portfolio and program manager workflow, or the code loop. It inserts a row:
+
+```sql
+INSERT INTO cf_agent_requests (requester, kind, prompt) VALUES ('program-manager:research', 'run', 'Read v_program_focus for research and file an issue for each focus item with no doer.');
+INSERT INTO cf_agent_requests (requester, kind, code) VALUES ('portfolio-manager', 'sandbox', 'async () => (await codemode.fleet_sql({sql: "SELECT * FROM v_program_risk"}))');
+INSERT INTO cf_agent_requests (requester, kind, prompt, cron) VALUES ('portfolio-manager', 'schedule', 'Review allocations; file issues for slipping programs.', '35 * * * *');
+```
+
+The 5-minute cron drains up to 3 rows per tick, critical first, and writes `status`, `run_id`, `result` and `error` back to each row. Each requester runs on its own agent instance (`loop-<requester>`, or `instance` when given), so its schedules and history stay its own.
+
+The loop scope gives a request the read-only ops tools, D1 reads, the repository, Code Mode, and the MCP tools of servers the console connected. It can also file fleet issues (source `qnfo-agents`), propose code tasks (returned in `result`) and create schedules on its own instance. It has no mutating ops tools and cannot connect MCP servers.
+
+`v_cf_agent_requests_health`, `queue_sla` row `cf-agent-request` and metric `cf_agent_requests_over_120m` watch the queue. `cfagent requests [requester]` lists the queue in `/cmd`.
