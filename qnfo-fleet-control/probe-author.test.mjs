@@ -8,7 +8,7 @@
 // probes, with an enum reason on the existing remediation.probe-author-reject event that never carries the probe text. probe-author.fixture.json holds the live qnfo-audit sqlite_master
 // names (captured 2026-10-26, 603 tables, 194 views, names only) and the live definitions of the allowlisted views, so the allowlist constant is checked against the real schema and every live
 // object is swept: only an allowlisted one may pass the static check.
-// Review pass 2 (same version): an allowlisted table still holds free text, and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id pattern, so the dry run's
+// Review pass 2 (0.53.1): an allowlisted table still holds free text, and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id pattern, so the dry run's
 // expected AND observed must each be a number or one short token (letters, digits, _ . : + -, at most 64 characters), refused as private-table: free-text value; and a probe that reads no allowlisted
 // object in table position, calls random() or randomblob(), or shadows an object with a CTE measures nothing and is refused.
 // Slices rtFlagOff, the reply reader, aiRunAttr and the probe-author block out of worker.js and runs them against an in-memory SQLite D1 and a fake env.AI.
@@ -554,6 +554,7 @@ const LEAK = /jane|gmail|bob|carol|dave|erin|example|grant|timeout|@/i;
   ok(v && (Number(v[1]) > 0 || Number(v[2]) > 52 || (Number(v[2]) === 52 && Number(v[3]) >= 1)), "VERSION is at least 0.52.1", v && v[0]);
   ok(hAt > 0 && hAt < vAt && /\n\/\/ 0\.52\.1 PROBE-AUTHOR-HARDEN-1 /.test(src.slice(hAt, vAt)), "the release note is a comment line between the VERSION-LINE-SPLIT-1 header and the VERSION statement");
   ok(src.slice(vAt, src.indexOf("\n", vAt)).indexOf("PROBE-AUTHOR-HARDEN-1") < 0, "the release note is not on the VERSION line");
+  ok(/\n\/\/ 0\.53\.1 PROBE-AUTHOR-HARDEN-1 review pass /.test(src.slice(hAt, vAt)) && v && (Number(v[2]) > 53 || (Number(v[2]) === 53 && Number(v[3]) >= 1)), "the review-pass note is a comment line under the header and VERSION is at least 0.53.1");
 }
 ok(mirror === src, "the deployed-current mirror is identical to worker.js");
 console.log(pass + " passed, " + fail + " failed");
