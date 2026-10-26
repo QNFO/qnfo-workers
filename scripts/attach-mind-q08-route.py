@@ -31,6 +31,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from secret_lock import SecretLockError, secret_lock  # noqa: E402
+
 API = "https://api.cloudflare.com/client/v4"
 HOST = "mind.q08.org"
 SERVICE = "q08-mind"
@@ -132,32 +135,19 @@ def public_get(url, timeout=20):
         return 0, None
 
 
-def _acquire_secret_lock():
-    """Acquire a secret‑lock for workers/scripts mutations."""
-    lock_body = {"resource": "workers/scripts", "account_id": ACCT}
-    st, _ = req("POST", "/secret-lock/acquire", lock_body, retries=1)
-    return st == 200
-
-
-def _release_secret_lock():
-    """Release the secret‑lock for workers/scripts mutations."""
-    lock_body = {"resource": "workers/scripts", "account_id": ACCT}
-    # We ignore the result; best‑effort release.
-    req("POST", "/secret-lock/release", lock_body, retries=1)
-
-
 def req_with_secret_lock(method, path, body=None, timeout=25, retries=2):
-    """
-    Perform a mutation that touches workers/scripts while holding the secret‑lock.
-    The lock is always released (try/finally). If the lock cannot be acquired,
-    a (0, {"error": "..."} ) tuple is returned to indicate failure.
-    """
-    if not _acquire_secret_lock():
-        return 0, {"error": "failed to acquire secret lock"}
+    """ATTACH-MIND-LOCK-1: a mutation of the script's settings holds the qnfo-deploy-guard lease secrets:<SERVICE>.
+
+    The earlier wrapper posted {"resource", "account_id"} to the Cloudflare API host, so qnfo-deploy-guard never saw
+    it and the lease was never granted; every call returned (0, ...) and the workers.dev PUT never ran.
+    scripts/secret_lock.py is the one client (worker + owner, token release, try/finally). A lease another session
+    holds (SecretLockError) returns (0, {...}) like any failed call, so the caller treats PATH C as unavailable; an
+    unreachable lock service degrades to a warning and the mutation proceeds, the helper's documented behaviour."""
     try:
-        return req(method, path, body, timeout=timeout, retries=retries)
-    finally:
-        _release_secret_lock()
+        with secret_lock(SERVICE, ttl_sec=300, owner="ci/attach-mind-q08-route"):
+            return req(method, path, body, timeout=timeout, retries=retries)
+    except SecretLockError as e:
+        return 0, {"error": str(e)[:300], "secret_lock": "denied"}
 
 
 def script_exists():
