@@ -11,6 +11,9 @@
 // Review pass 2 (0.53.1): an allowlisted table still holds free text, and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id pattern, so the dry run's
 // expected AND observed must each be a number or one short token (letters, digits, _ . : + -, at most 64 characters), refused as private-table: free-text value; and a probe that reads no allowlisted
 // object in table position, calls random() or randomblob(), or shadows an object with a CTE measures nothing and is refused.
+// Review pass 3 (0.53.1): the CTE shadow gate sees every SQLite spelling of a CTE head (a column list, AS MATERIALIZED, AS NOT MATERIALIZED, any position of the WITH list, a word, quoted or string-literal
+// name), and the release note and the worker comment state the residual as it is: the value gate runs once, on the birth dry run, the hourly engine writes a later pass's expected and observed untruncated
+// into remediation_verifications, and the shape gate is not a content gate (the table allowlist and the cloud_ops_events kind filter are the privacy boundary).
 // Slices rtFlagOff, the reply reader, aiRunAttr and the probe-author block out of worker.js and runs them against an in-memory SQLite D1 and a fake env.AI.
 // Output MUST contain "0 failed" on success.   node qnfo-fleet-control/probe-author.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -476,8 +479,24 @@ const LEAK = /jane|gmail|bob|carol|dave|erin|example|grant|timeout|@/i;
   ok(ts.log.length === 1 && /static check passed \(reads cloud_ops_events, operational objects on the allowlist\)/.test(ts.log[0].evidence), "the decision_log evidence names what the probe reads", ts.log[0] && ts.log[0].evidence);
   const nul = await attempt("SELECT NULL AS expected, COUNT(*) AS observed FROM portfolio_gaps");
   ok(refused(nul, "deferral-shape") && /expected is empty$/.test(nul.rejects[0].text), "an empty expected value is a deferral shape", nul.rejects.map((e) => e.text));
-  // the number-or-token shape applies to the stored probe's first row only: what a later pass reads is the same read-only SQL on the same allowlisted tables (the residual named in the worker's comment)
+  // the number-or-token shape applies to the birth dry run's first row only; a later pass re-runs the same read-only SQL and writes the first row untruncated (the residual the worker's note and comment state)
   ok(/RT_PROBE_AUTHOR_VALUE_RE/.test(src) && api.RT_PROBE_AUTHOR_MAX_OBSERVED === 64, "the value rule is a named constant of 64 characters");
+  { // the residual is real, so the note must say it: a branch not taken at birth returns free text of any length from an allowlisted table, and the shape gate lets a 64-character slice of a text column through
+    const branch = "SELECT 'done' AS expected, CASE WHEN (SELECT COUNT(*) FROM portfolio_gaps) > 100 THEN (SELECT text FROM cloud_ops_events WHERE id = 'outr-seed') ELSE 'open' END AS observed";
+    const r = await attempt(branch, { live: false, setup: seedText });
+    ok(r.done === true && r.contract && r.contract.verify_probe === branch && r.log.length === 1 && r.log[0].evidence.indexOf("(observed: open)") > 0, "residual (a): a probe whose untaken branch reads event text is accepted at birth (the value gate saw 'open')", r.rejects.map((e) => e.text));
+    for (let i = 10; i < 130; i++) r.db.prepare("INSERT INTO portfolio_gaps VALUES (?, 'open')").run(i);
+    const later = r.db.prepare(r.contract.verify_probe).get();
+    ok(String(later.observed).length > 40 && /jane\.doe@gmail\.com/.test(String(later.observed)), "residual (a): on a later pass the stored SQL returns the event text, which the engine copies as it is", later);
+    const hexed = await attempt("SELECT 'done' AS expected, hex(substr((SELECT text FROM cloud_ops_events WHERE id = 'tok-seed'), 1, 8)) AS observed FROM portfolio_gaps LIMIT 1", { live: false, setup: seedText });
+    const subbed = await attempt("SELECT 'done' AS expected, substr((SELECT text FROM cloud_ops_events WHERE id = 'tok-seed'), 1, 8) AS observed FROM portfolio_gaps LIMIT 1", { live: false, setup: seedText });
+    ok(hexed.done === true && subbed.done === true && subbed.log[0].evidence.indexOf("(observed: jane.doe)") > 0, "residual (b): hex() or substr() of a text column is a token of at most 64 characters that passes the shape gate, so the shape gate is not a content gate", [hexed.rejects.map((e) => e.text), subbed.rejects.map((e) => e.text)]);
+  }
+  { // the engine's d1-query branch is what the note describes: the first row, expected and observed written whole
+    const eng = src.slice(src.indexOf("var r = await qdb.prepare(q).first();"), src.indexOf("var r = await qdb.prepare(q).first();") + 900);
+    ok(/qdb\.prepare\(q\)\.first\(\)/.test(eng) && /es = exp == null \? "" : String\(exp\)\.trim\(\); os = obs == null \? "" : String\(obs\)\.trim\(\);/.test(eng) && !/\.slice\(|\.substr/.test(eng), "the hourly engine reads the first row and keeps expected and observed whole (no slice), as the note states", eng.slice(0, 200));
+    ok(/INSERT INTO remediation_verifications \([^)]*\) VALUES \(\?1, \?2, \?3, \?4, \?5, \?6, \?7, \?8\)"\)\.bind\(c\.issue_id, c\.class, probeUrl, transport, es, os, passed,/.test(src), "the engine binds es and os, not a truncated copy, into remediation_verifications");
+  }
 }
 { // (5) MEASURES NOTHING: a probe that reads no allowlisted object in table position, flips on random(), or shadows an object with a CTE can pass a later hourly verification with no measurement
   const reviewer = {
@@ -513,6 +532,68 @@ const LEAK = /jane|gmail|bob|carol|dave|erin|example|grant|timeout|@/i;
   ok(reasonOf(shadow) === "not-allowlisted" && /shadows/.test(shadow), "a CTE named like a real object does not count as a read of it", shadow);
   const shadowE2E = await attempt("WITH portfolio_gaps AS (SELECT 1 AS id) SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps");
   ok(refused(shadowE2E, "not-allowlisted"), "the CTE shadow is refused end to end", shadowE2E.rejects.map((e) => e.text));
+  { // review pass 3: every spelling SQLite gives a CTE head shadows the object just the same. The body is the clock (3 + epoch % 3), so expected 9 never equals observed and the vacuity gate cannot catch it.
+    const clk = "3 + CAST(strftime('%s','now') AS INTEGER) % 3", tail = " SELECT 9 AS expected, n AS observed FROM portfolio_gaps";
+    const spellings = {
+      "a column list": `WITH portfolio_gaps(n) AS (SELECT ${clk})${tail}`,
+      "a column list with a space before it": `WITH portfolio_gaps (n) AS (SELECT ${clk})${tail}`,
+      "AS MATERIALIZED": `WITH portfolio_gaps AS MATERIALIZED (SELECT ${clk} AS n)${tail}`,
+      "AS NOT MATERIALIZED": `WITH portfolio_gaps AS NOT MATERIALIZED (SELECT ${clk} AS n)${tail}`,
+      "a column list and AS MATERIALIZED": `WITH portfolio_gaps(n) AS MATERIALIZED (SELECT ${clk})${tail}`,
+      "a column list and AS NOT MATERIALIZED": `WITH portfolio_gaps(n) AS NOT MATERIALIZED (SELECT ${clk})${tail}`,
+      "two names in the column list": `WITH portfolio_gaps(a, n) AS (SELECT 1, ${clk})${tail}`,
+      "second in a list": `WITH a AS (SELECT 1 AS id), portfolio_gaps AS (SELECT ${clk} AS n)${tail}`,
+      "second in a list with a column list": `WITH a(id) AS (SELECT 1), portfolio_gaps(n) AS (SELECT ${clk})${tail}`,
+      "second in a list with MATERIALIZED": `WITH a AS (SELECT 1 AS id), portfolio_gaps(n) AS MATERIALIZED (SELECT ${clk})${tail}`,
+      "WITH RECURSIVE and a column list": `WITH RECURSIVE portfolio_gaps(n) AS (SELECT ${clk})${tail}`,
+      "a double-quoted name and a column list": `WITH "portfolio_gaps"(n) AS (SELECT ${clk})${tail}`,
+      "a bracketed name and a column list": `WITH [portfolio_gaps](n) AS (SELECT ${clk})${tail}`,
+      "a backtick name and MATERIALIZED": "WITH `portfolio_gaps` AS MATERIALIZED (SELECT " + clk + " AS n)" + tail,
+      "a string-literal name": `WITH 'portfolio_gaps' AS (SELECT ${clk} AS n)${tail}`,
+      "a string-literal name and a column list": `WITH 'portfolio_gaps'(n) AS (SELECT ${clk})${tail}`,
+      "upper case": `WITH PORTFOLIO_GAPS(N) AS NOT MATERIALIZED (SELECT ${clk})${tail}`,
+      "comments between the tokens": `WITH portfolio_gaps /* c */ (n) /* d */ AS /* e */ NOT /* f */ MATERIALIZED /* g */ (SELECT ${clk})${tail}`,
+    };
+    const run = new DatabaseSync(":memory:"); run.exec("CREATE TABLE portfolio_gaps (id INTEGER PRIMARY KEY, status TEXT); INSERT INTO portfolio_gaps VALUES (1, 'open'), (2, 'open'), (3, 'closed');");
+    const fake = [], smiss = [];
+    for (const [label, sql] of Object.entries(spellings)) {
+      let row = null; try { row = run.prepare(sql).get(); } catch (e) { row = String(e && e.message); }
+      // the bypass is real: SQLite runs the statement, the CTE wins the name, and the table is never read (observed is the clock value 3 to 5, expected 9)
+      if (!(row && typeof row === "object" && row.expected === 9 && row.observed >= 3 && row.observed <= 5)) fake.push([label, row]);
+      const bad = await check(sql), r = await attempt(sql);
+      if (!(reasonOf(bad) === "not-allowlisted" && /a CTE shadows the object name portfolio_gaps/.test(bad))) smiss.push([label, "static", bad]);
+      if (!(refused(r, "not-allowlisted") && /a CTE shadows the object name portfolio_gaps$/.test(r.rejects[0].text))) smiss.push([label, "e2e", r.done, r.rejects.map((e) => e.text)]);
+    }
+    ok(fake.length === 0, "each shadow spelling is real SQLite that returns the clock value and never reads the table (" + Object.keys(spellings).length + " spellings)", fake.slice(0, 4));
+    ok(smiss.length === 0, "a CTE head with a column list, AS [NOT] MATERIALIZED, a second position, a quoted or string name shadows the object and is refused as not-allowlisted, static and end to end (" + Object.keys(spellings).length + " spellings)", smiss.slice(0, 4));
+    // the same spellings over a real read are accepted, and so is a column-list CTE whose name only looks private
+    const legitCte = {
+      "a column list": "WITH t(n) AS (SELECT COUNT(*) FROM portfolio_gaps WHERE status = 'open') SELECT 0 AS expected, n AS observed FROM t",
+      "a column list over the plain count of the review": "WITH t(n) AS (SELECT COUNT(*) FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM t",
+      "AS MATERIALIZED": "WITH t AS MATERIALIZED (SELECT COUNT(*) AS n FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM t",
+      "AS NOT MATERIALIZED": "WITH t AS NOT MATERIALIZED (SELECT COUNT(*) AS n FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM t",
+      "a column list and AS NOT MATERIALIZED": "WITH t(n) AS NOT MATERIALIZED (SELECT COUNT(*) FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM t",
+      "two CTEs, each with a column list": "WITH a(n) AS (SELECT COUNT(*) FROM portfolio_gaps), b(m) AS (SELECT COUNT(*) FROM pr_sla_state) SELECT 0 AS expected, n + m AS observed FROM a, b",
+      "a column-list CTE named like a private family": "WITH mail_counts(n) AS (SELECT COUNT(*) FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM mail_counts",
+      "WITH RECURSIVE with a column list": "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 3) SELECT 0 AS expected, (SELECT COUNT(*) FROM portfolio_gaps) + n AS observed FROM t WHERE n = 3",
+    };
+    const lmiss = [];
+    for (const [label, sql] of Object.entries(legitCte)) {
+      const bad = await check(sql), r = await attempt(sql);
+      if (bad !== null) lmiss.push([label, "static", bad]);
+      if (!(r.done === true && r.contract && r.contract.status === "active" && r.rejects.length === 0)) lmiss.push([label, "e2e", r.done, r.rejects.map((e) => e.text)]);
+    }
+    ok(lmiss.length === 0, "a CTE with a column list or AS [NOT] MATERIALIZED over a real read is accepted, and its name is no table (" + Object.keys(legitCte).length + " forms)", lmiss.slice(0, 4));
+    // the body of a column-list CTE is still scanned, and a private name inside it is still private
+    const body = await check("WITH mail_counts(n) AS (SELECT COUNT(*) FROM emails) SELECT 0 AS expected, n AS observed FROM mail_counts");
+    const body2 = await check("WITH t(n) AS MATERIALIZED (SELECT COUNT(*) FROM decision_log) SELECT 0 AS expected, n AS observed FROM t");
+    const body3 = await check("WITH t(n) AS NOT MATERIALIZED (SELECT COUNT(*) FROM ops_config) SELECT 0 AS expected, n AS observed FROM t");
+    ok(reasonOf(body) === "private-table" && reasonOf(body2) === "self-confirming" && reasonOf(body3) === "not-allowlisted", "the body of a column-list or MATERIALIZED CTE is still scanned", [body, body2, body3]);
+    // a function call or a CAST in front of AS ( is no CTE head: the name stays a table
+    const castLike = await check("SELECT 0 AS expected, CAST(COUNT(*) AS INTEGER) AS observed FROM portfolio_gaps");
+    const castParen = await check("SELECT 0 AS expected, CAST(COUNT(*) AS VARCHAR(10)) AS observed FROM portfolio_gaps");
+    ok(castLike === null && castParen === null, "CAST(x AS type) and CAST(x AS type(n)) register no CTE", [castLike, castParen]);
+  }
   // none of these is a call or a constant-only probe
   const fine = [
     "SELECT 1 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status LIKE '%random(%'",
@@ -555,6 +636,17 @@ const LEAK = /jane|gmail|bob|carol|dave|erin|example|grant|timeout|@/i;
   ok(hAt > 0 && hAt < vAt && /\n\/\/ 0\.52\.1 PROBE-AUTHOR-HARDEN-1 /.test(src.slice(hAt, vAt)), "the release note is a comment line between the VERSION-LINE-SPLIT-1 header and the VERSION statement");
   ok(src.slice(vAt, src.indexOf("\n", vAt)).indexOf("PROBE-AUTHOR-HARDEN-1") < 0, "the release note is not on the VERSION line");
   ok(/\n\/\/ 0\.53\.1 PROBE-AUTHOR-HARDEN-1 review pass /.test(src.slice(hAt, vAt)) && v && (Number(v[2]) > 53 || (Number(v[2]) === 53 && Number(v[3]) >= 1)), "the review-pass note is a comment line under the header and VERSION is at least 0.53.1");
+}
+{ // the 0.53.1 note and the comment above RT_PROBE_AUTHOR_MAX_SQL state the residual as it is (review pass 3), and no longer claim a bound the code does not have
+  const hAt = src.indexOf("// VERSION-LINE-SPLIT-1 (agent_issues 100220)"), vAt = src.search(/var VERSION = "/);
+  const note = (src.slice(hAt, vAt).split("\n").find((l) => l.startsWith("// 0.53.1 PROBE-AUTHOR-HARDEN-1 review pass ")) || "");
+  ok(note.length > 0, "the 0.53.1 note is present");
+  ok(!/at most 64 characters of that token alphabet/.test(note) && !/a value is at most 64 characters/.test(note), "the note no longer says a later value is at most 64 characters");
+  ok(/untruncated into remediation_verifications/.test(note) && /text of any length from an allowlisted table/.test(note), "the note says the hourly re-verification writes the first row untruncated, so a branch not taken at birth can return text of any length");
+  ok(/not a content gate/.test(note) && /hex\(\) or substr\(\)/.test(note) && /allowlist and the literal cloud_ops_events kind filter remain the privacy boundary/.test(note) && /PROBE-REVIEW-1/.test(note), "the note says the shape gate is not a content gate, names the privacy boundary and the compensating layer");
+  ok(/column list, AS MATERIALIZED or AS NOT MATERIALIZED/.test(note), "the note names the CTE spellings the shadow gate covers");
+  const cAt = src.indexOf("var RT_PROBE_AUTHOR_MAX_SQL = 600;"), cmt = src.slice(src.lastIndexOf("// PROBE-AUTHOR-HARDEN-1 (qnfo-fleet-control 0.52.1", cAt), cAt);
+  ok(/UNTRUNCATED/.test(cmt) && !/the open verification ledger is bounded/.test(cmt) && /rtProbeAuthorCteHead/.test(cmt), "the comment above RT_PROBE_AUTHOR_MAX_SQL says the verification ledger copy is untruncated and does not call it bounded");
 }
 ok(mirror === src, "the deployed-current mirror is identical to worker.js");
 console.log(pass + " passed, " + fail + " failed");

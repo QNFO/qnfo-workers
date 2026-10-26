@@ -1098,7 +1098,7 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-// 0.53.1 PROBE-AUTHOR-HARDEN-1 review pass (2026-10-26, agent_issues 1000266, pillar security; patch: two gaps in the 0.52.1 probe author found by review): (1) free text: the table gate is by name and the cloud_ops_events kind filter is dodged by a wildcard, a concatenation, char() or an id pattern, while an allowlisted table still holds free text (cloud_ops_events.text, code_tasks.goal and last_error, research_queue.idea, summary and context, fleet_improvements.title), and decision_log is append-only and the hourly verification ledger re-copies observed; so after the dry run BOTH expected and observed must be a number or one token of letters, digits and _ . : + - (RT_PROBE_AUTHOR_VALUE_RE, at most 64 characters, was 200, no space, no @); anything else is refused as private-table: free-text value, over 64 characters as too-long, an empty expected as deferral-shape, the reject event names the column and never the value, and only that bounded token is written to decision_log, whose evidence now lists the objects the probe reads. (2) measures nothing: a probe that reads no allowlisted object in FROM or JOIN position (a constant, the clock alone), calls random() or randomblob(), or shadows an object name with a CTE can pass a later hourly verification and close its issue with no measurement, so it is refused (not-allowlisted: reads no operational table, self-confirming). Residual, stated: the value gate runs on the birth dry run, so a probe whose first row is a token at birth and free text later is not caught by it (the hourly re-verification re-runs the same read-only SQL on the same allowlisted tables, and a value is at most 64 characters of that token alphabet), and a clock-dependent filter beside a real table read is not decidable statically. probe-author.test.mjs (226 checks, 24 of them fail on 0.53.0).
+// 0.53.1 PROBE-AUTHOR-HARDEN-1 review pass (2026-10-26, agent_issues 1000266, pillar security; patch: two gaps in the 0.52.1 probe author found by review): (1) free text: the table gate is by name and the cloud_ops_events kind filter is dodged by a wildcard, a concatenation, char() or an id pattern, while an allowlisted table still holds free text (cloud_ops_events.text, code_tasks.goal and last_error, research_queue.idea, summary and context, fleet_improvements.title), and decision_log is append-only and the hourly verification ledger re-copies observed; so on the birth dry run BOTH expected and observed must be a number or one token of letters, digits and _ . : + - (RT_PROBE_AUTHOR_VALUE_RE, at most 64 characters, was 200, no space, no @); anything else is refused as private-table: free-text value, over 64 characters as too-long, an empty expected as deferral-shape, the reject event names the column and never the value, and only that bounded token is written to decision_log, whose evidence now lists the objects the probe reads. (2) measures nothing: a probe that reads no allowlisted object in FROM or JOIN position (a constant, the clock alone), calls random() or randomblob(), or shadows an object name with a CTE (plain, with a column list, AS MATERIALIZED or AS NOT MATERIALIZED, in any position of the WITH list, under a word, quoted or string-literal name: rtProbeAuthorCteHead) can pass a later hourly verification and close its issue with no measurement, so it is refused (not-allowlisted: reads no operational table or a CTE shadows the object name, self-confirming). Residuals, stated: (a) the value gate runs once, on the birth dry run. The hourly re-verification (rtRemediationTick, d1-query) re-runs the same read-only SQL, reads the first row and writes expected and observed untruncated into remediation_verifications (remediation_evidence on the fallback path), so a branch not taken at birth can return text of any length from an allowlisted table on a later pass. (b) The shape gate is not a content gate: a free-text column passed through hex() or substr() yields a token of up to 64 characters that passes, so the table allowlist and the literal cloud_ops_events kind filter remain the privacy boundary, and PROBE-REVIEW-1 (qnfo-cloud-ops, a disjoint-model re-judge of every active d1-query probe) is the compensating layer; nothing re-checks the shape of a later pass's value yet, and a detector over the remediation_verifications rows of probe-author-1 contracts is the follow-up. The identifiers text and meta of cloud_ops_events stay readable because the fleet's own active probes filter on them (31 of 57 active d1-query contracts that read cloud_ops_events, measured 2026-10-26). (c) A clock-dependent filter or a decoy read beside a real table read (WHERE EXISTS (SELECT 1 FROM t) next to a clock value, a dead CASE branch) is not decidable statically. probe-author.test.mjs (242 checks, 31 of them fail on 0.53.0).
 // 0.53.0 BREACH-DOCTOR-FIX-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): review of 0.52.0. (1) bdWriteWhy enforces what the ledger asserts: every action and revert statement carries a top-level id = ?1 / issue_id = ?1 predicate and no OR beside it (no-id-predicate, or-widens), and ops_config and human_actions are off BD_WRITE_TABLES, so a playbook can no longer reach the kill switch or the trust list. (2) A demotion is a pause with a release: after BD_RELEASE_MIN (60) minutes the rule runs again as a trial of one case a tick, a failed trial case demotes it again, a verified one lifts the cap, and failures count from the rule's last change of standing; an action that changes no row on an issue closed meanwhile supersedes the case instead of failing it. (3) breaches_undiagnosed_over_60m flags at min(120, breach_doctor_min_age_min + 60) minutes and the age gate defaults to 60 (migrations/2026-10-26-breach-doctor-fix.sql sets it), so no threshold exceeds 120 minutes. breach-doctor.test.mjs, migrations/breach-doctor-fix.test.mjs.
 // 0.52.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class) and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 and the observed value at 200 characters. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call.
 // 0.52.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. The generic playbook-gap row is seeded in measure and files no issue (a gap issue carries no anchor the code loop can edit); the self issue after 3 failed cases is the only issue the doctor files by itself, and migrations/2026-10-26-breach-doctor-trust.sql makes the planner read its BREACH-DOCTOR-1: title as trusted. No model call, no D1 trigger. breach-doctor.test.mjs.
@@ -12122,12 +12122,15 @@ function rtProbeAuthorStrip(s) {
 // fail or pass. (4) free text (doctrine section 9, privacy): the table gate is by name, but an allowlisted table still holds free text (cloud_ops_events.text, code_tasks.goal and
 // last_error, research_queue.idea, summary and context, fleet_improvements.title), and a filter on cloud_ops_events kind is dodged by a wildcard, a concatenation, char() or an id
 // pattern. So the gate is also on the value: the dry run's expected AND observed must each be a number or one short token (RT_PROBE_AUTHOR_VALUE_RE: letters, digits and _ . : + -, no
-// space, no @, at most RT_PROBE_AUTHOR_MAX_OBSERVED characters), refused as private-table: free-text value, and only that bounded token is ever copied into decision_log. (5) measures
+// space, no @, at most RT_PROBE_AUTHOR_MAX_OBSERVED characters), refused as private-table: free-text value, and only that bounded token is ever copied into decision_log by the author. (5) measures
 // nothing: a probe whose rows come from no allowlisted object in FROM or JOIN position (a constant, the clock alone), one that calls random() or randomblob(), and one whose CTE shadows a
-// real object name, can flip to ok on a later hourly pass with no measurement, so they are refused (not-allowlisted: reads no operational table, self-confirming). A probe is at most
-// RT_PROBE_AUTHOR_MAX_SQL (600) characters and its values at most RT_PROBE_AUTHOR_MAX_OBSERVED (64), so what reaches remediation_contracts, cloud_ops_events, the append-only decision_log
-// and the open verification ledger is bounded. The value gate runs on the birth dry run; a probe whose first row is a token at birth and free text later is the residual (hourly re-verification
-// re-runs the same read-only SQL on the same allowlisted tables), and a clock-dependent filter next to a real table read is not decidable statically. rt_probe_author = off still stops it.
+// real object name (rtProbeAuthorCteHead: plain, with a column list, AS [NOT] MATERIALIZED, in any position of the WITH list, word, quoted or string name), can flip to ok on a later hourly pass
+// with no measurement, so they are refused (not-allowlisted: reads no operational table or a CTE shadows the object name, self-confirming). A probe is at most RT_PROBE_AUTHOR_MAX_SQL (600)
+// characters and its values at birth at most RT_PROBE_AUTHOR_MAX_OBSERVED (64), so what the author writes into remediation_contracts, cloud_ops_events and the append-only decision_log is bounded.
+// What the hourly re-verification writes is not: rtRemediationTick re-runs the stored SQL, reads the first row and inserts expected and observed UNTRUNCATED into remediation_verifications
+// (remediation_evidence on the fallback path), so the value gate, which runs once on the birth dry run, does not bound a branch the dry run did not take, and it is a shape gate, not a content gate (a
+// free-text column through hex() or substr() is a 64-character token that passes). The table allowlist and the literal cloud_ops_events kind filter are the privacy boundary; PROBE-REVIEW-1 in
+// qnfo-cloud-ops is the compensating layer. A clock-dependent filter or a decoy read next to a real table read is not decidable statically. rt_probe_author = off still stops it.
 var RT_PROBE_AUTHOR_MAX_SQL = 600;
 var RT_PROBE_AUTHOR_MAX_OBSERVED = 64;
 var RT_PROBE_AUTHOR_VALUE_RE = /^[A-Za-z0-9_.:+-]+$/;
@@ -12198,8 +12201,31 @@ function rtProbeAuthorLex(q) {
   }
   return toks;
 }
+// True when toks[j...] is the rest of a CTE head after its name: [ ( column list ) ] AS [ [NOT] MATERIALIZED ] (. The spellings are SQLite's own (cte ::= nm eidlist_opt wqas ( select ),
+// wqas ::= AS | AS MATERIALIZED | AS NOT MATERIALIZED), and a name that is a word, a quoted identifier or a string literal shadows an object alike, so the caller does not look at the name's kind.
+function rtProbeAuthorCteHead(toks, j) {
+  var t = toks[j], d = 0, m = null;
+  if (t && t.k === "p" && t.v === "(") {
+    for (; j < toks.length; j++) {
+      t = toks[j];
+      if (t.k !== "p") continue;
+      if (t.v === "(") d++;
+      else if (t.v === ")" && --d === 0) break;
+    }
+    if (j >= toks.length) return false;
+    j++;
+  }
+  t = toks[j];
+  if (!t || t.k !== "w" || t.v !== "as") return false;
+  j++;
+  t = toks[j]; m = toks[j + 1];
+  if (t && t.k === "w" && t.v === "not" && m && m.k === "w" && m.v === "materialized") j += 2;
+  else if (t && t.k === "w" && t.v === "materialized") j++;
+  t = toks[j];
+  return !!t && t.k === "p" && t.v === "(";
+}
 // refs: the names in table position (after FROM or JOIN, after a comma of a FROM list, schema-qualified or not); idents: every word, quoted or string token, lower case;
-// cte: names defined as name AS (. null on unbalanced parentheses.
+// cte: names defined as name [(columns)] AS [[NOT] MATERIALIZED] ( (rtProbeAuthorCteHead). null on unbalanced parentheses.
 function rtProbeAuthorScan(toks) {
   var refs = [], cte = Object.create(null), idents = [], depth = 0, inFrom = [false], expect = false, i, t, v, n1, n2;
   for (i = 0; i < toks.length; i++) {
@@ -12214,7 +12240,7 @@ function rtProbeAuthorScan(toks) {
     v = String(t.v).toLowerCase();
     idents.push(v);
     n1 = toks[i + 1]; n2 = toks[i + 2];
-    if (t.k !== "s" && n1 && n1.k === "w" && n1.v === "as" && n2 && n2.k === "p" && n2.v === "(") cte[v] = 1;
+    if (rtProbeAuthorCteHead(toks, i + 1)) cte[v] = 1;
     if (t.k === "w") {
       if (v === "from" && i > 0 && toks[i - 1].k === "w" && toks[i - 1].v === "distinct") continue;   // x IS [NOT] DISTINCT FROM y is no table list
       if (v === "from" || v === "join") { expect = true; if (v === "from") inFrom[depth] = true; continue; }
