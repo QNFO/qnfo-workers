@@ -46,7 +46,15 @@ DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 VERSION_LINE = re.compile(r'^(var VERSION ?= ?)"([^"\n]*)"(;?.*)$', re.M)  # group 1 keeps the file's own spacing (qnfo-gateway writes var VERSION="x")
 NOTE_BLOCK = re.compile(r"/\*.*?\*/", re.S)
 HOLD_RE = re.compile(r"(^|[\s\[(])(wip|do[\s-]*not[\s-]*merge|hold)([\s:\])]|$)", re.I)
-DIRTY_QUIET_MIN = 10  # a pull request whose newest commit is younger is still being worked on
+# PR-MERGE-SLA-10M-1 (2026-10-26, owner directive: every pull request merges within 10 minutes of opening): a person's branch waited the full ten
+# minutes of quiet before a repair, which alone is the whole SLA. The repair is a fast-forward merge of main into the branch, never forced, so an
+# author's concurrent push wins and the next main push tries again; 3 minutes matches the merge lane's quiet window (qnfo-fleet-control
+# stale_pr_merge_idle_min).
+DIRTY_QUIET_MIN = 3  # a pull request whose newest commit is younger is still being worked on
+# PR-MERGE-SLA-10M-1: the harness opens every session pull request as a draft, so skipping drafts left them conflicting until their author came back.
+# A draft that asks to wait (WIP, hold, do-not-merge in the title, labels or body) is still left alone (asks_to_wait). Switch: CONFLICT_REPAIR_DRAFTS=off
+# restores the old refusal, mirroring ops_config stale_pr_merge_drafts on the merge lane.
+DRAFTS = (os.environ.get("CONFLICT_REPAIR_DRAFTS") or "on").strip().lower() not in ("0", "off", "false", "no", "disabled")
 # CONFLICT-REPAIR-BOT-QUIET-1 (2026-10-26): a code-loop branch (codeagent-*) has no author mid-edit, so waiting ten minutes only adds latency.
 # Each merge to a hot worker (qnfo-research-exec took six queued code tasks at once on 2026-10-26) makes every other pull request on it
 # conflict, and the wait is paid once per merge: 5 pull requests x 10 minutes of quiet = 50 minutes of a 120-minute SLA. A repair is
@@ -270,16 +278,33 @@ def asks_to_wait(pr):
     return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or re.search(r"\bdo[\s-]*not[\s-]*merge\b", str(pr.get("body") or ""), re.I))
 
 
-def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.sleep):
+def merge_tree_conflicts(number, cwd=None):
+    """PR-MERGE-SLA-10M-1: True when the pull request's head conflicts with origin/main, False when it merges cleanly, None when that cannot
+    be told. GitHub leaves `mergeable` null for as long as main keeps moving (every 1 to 5 minutes here), so a conflicting pull request read
+    as `unknown` was never repaired. git computes it locally: `git merge-tree --write-tree` exits 1 on a conflict and 0 on a clean merge."""
+    try:
+        git(["fetch", "-q", "origin", "main"], cwd)
+        git(["fetch", "-q", "origin", "+refs/pull/%d/head:refs/remotes/origin/pr-%d" % (number, number)], cwd)
+        r = sh(["git", "merge-tree", "--write-tree", "--name-only", "origin/main", "refs/remotes/origin/pr-%d" % number], cwd, check=False, timeout=120)
+    except Exception:  # a failed fetch or a git older than 2.38 is "cannot tell", never a conflict
+        return None
+    if r.returncode == 1:
+        return True
+    return False if r.returncode == 0 else None
+
+
+def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.sleep, mtf=None):
     """Open pull requests GitHub reports as conflicting with main (mergeable_state dirty), oldest-quiet first, up to limit: any author,
     any branch except repair/*, a draft, a hold or a fork. A pull request whose newest commit is younger than quiet_min minutes
-    is left to its author. GitHub computes mergeability on the first read, so a null is read again a few times."""
+    is left to its author. GitHub computes mergeability on the first read, so a null is read again a few times; a pull request still null
+    after that is tested with git (merge_tree_conflicts) instead of being skipped. A draft is taken unless it asks to wait (DRAFTS)."""
     ghf = ghf or gh
+    mtf = mtf or merge_tree_conflicts
     now = time.time() if now is None else now
     found = []
     for p in ghf("repos/%s/pulls?state=open&per_page=100" % REPO) or []:
         n, ref = p.get("number"), str((p.get("head") or {}).get("ref") or "")
-        if not n or p.get("draft") or ref.startswith("repair/") or asks_to_wait(p):
+        if not n or (p.get("draft") and not DRAFTS) or ref.startswith("repair/") or asks_to_wait(p):
             continue
         full = None
         for tries in range(3):
@@ -287,7 +312,12 @@ def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.s
             if not isinstance(full, dict) or full.get("mergeable") is not None:
                 break
             sleep(5)
-        if not isinstance(full, dict) or eligible(full) or full.get("mergeable") is not False or full.get("mergeable_state") != "dirty":
+        if not isinstance(full, dict) or eligible(full):
+            continue
+        conflicting = full.get("mergeable") is False and full.get("mergeable_state") == "dirty"
+        if not conflicting and full.get("mergeable") is None:
+            conflicting = mtf(n) is True
+        if not conflicting:
             continue
         c = ghf("repos/%s/commits/%s" % (REPO, full["head"]["sha"])) or {}
         stamp = ((c.get("commit") or {}).get("committer") or {}).get("date") or ""
@@ -307,8 +337,10 @@ def eligible(pr):
         return "the pull request could not be read"
     if pr.get("state") != "open":
         return "the pull request is " + str(pr.get("state"))
-    if pr.get("draft"):
+    if pr.get("draft") and not DRAFTS:
         return "the pull request is a draft"
+    if pr.get("draft") and asks_to_wait(pr):
+        return "the pull request is a draft that asks to wait"
     head = pr.get("head") or {}
     if ((head.get("repo") or {}).get("full_name") or "") != ((pr.get("base") or {}).get("repo") or {}).get("full_name"):
         return "the head is a fork"
@@ -790,8 +822,14 @@ def selftest():
     ok(resolve_version_only(conflict + '<<<<<<< HEAD\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> pr\n') is None, "a second hunk that is code makes the file a semantic overlap")
     ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1.0.0";\nconst x = 1;\n=======\nvar VERSION = "1.0.1";\n>>>>>>> pr\n') is None and resolve_version_only("no markers") is None and resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n') is None, "a hunk with more than the VERSION line, no hunk, or an unterminated hunk is refused")
     base_pr = {"number": 7, "state": "open", "draft": False, "mergeable": False, "title": "fix x", "body": "why", "head": {"sha": "abcdef1234", "ref": "fix/x", "repo": {"full_name": "o/r"}}, "base": {"repo": {"full_name": "o/r"}}}
-    ok(eligible(base_pr) is None and "closed" in eligible(dict(base_pr, state="closed")) and "draft" in eligible(dict(base_pr, draft=True)) and "fork" in eligible(dict(base_pr, head=dict(base_pr["head"], repo={"full_name": "x/r"})))
-       and "does not conflict" in eligible(dict(base_pr, mergeable=True)) and "itself a repair" in eligible(dict(base_pr, head=dict(base_pr["head"], ref="repair/pr-1-abc"))) and eligible(None), "eligible: open, same repository, not a draft, conflicting, not a repair")
+    ok(eligible(base_pr) is None and "closed" in eligible(dict(base_pr, state="closed")) and eligible(dict(base_pr, draft=True)) is None and "asks to wait" in eligible(dict(base_pr, draft=True, title="WIP: x")) and "fork" in eligible(dict(base_pr, head=dict(base_pr["head"], repo={"full_name": "x/r"})))
+       and "does not conflict" in eligible(dict(base_pr, mergeable=True)) and "itself a repair" in eligible(dict(base_pr, head=dict(base_pr["head"], ref="repair/pr-1-abc"))) and eligible(None), "eligible: open, same repository, conflicting, not a repair; a draft is taken unless it asks to wait")
+    global DRAFTS
+    saved_drafts, DRAFTS = DRAFTS, False
+    try:
+        ok("draft" in eligible(dict(base_pr, draft=True)) and eligible(base_pr) is None, "PR-MERGE-SLA-10M-1: CONFLICT_REPAIR_DRAFTS=off restores the refusal of a draft")
+    finally:
+        DRAFTS = saved_drafts
     ok(branch_name(base_pr) == "repair/pr-7-abcdef1", "the branch names the pull request and its head")
     ok("mirror-guard.yml" in DISPATCHABLE and len(set(DISPATCHABLE)) == len(DISPATCHABLE), "PR-GUARD-FIXES-1: mirror-guard, a check the merge lane requires, is dispatched on a repaired head, each workflow once")
     t, b = replacement_text(base_pr, [("w", "1.0.0", "1.0.2")], [("suites", True)])
@@ -873,8 +911,17 @@ def selftest():
         mm = re.search(r"/commits/(\w+)$", path)
         return {"commit": {"committer": {"date": stamp(4000 - ages[mm.group(1)])}}} if mm else None
     got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
-    ok(got == [2, 1], "dirty_prs: conflicting quiet pull requests, longest quiet first; a clean one, a repair branch, a hold, a draft and one committed 30 s ago are left; a null mergeability is read again", got)
-    ok(dirty_prs(1, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None) == [2], "dirty_prs: the limit is honoured")
+    ok(got == [7, 2, 1], "dirty_prs: conflicting quiet pull requests, longest quiet first, a draft included; a clean one, a repair branch, a hold and one committed 30 s ago are left; a null mergeability is read again", got)
+    ok(dirty_prs(1, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None) == [7], "dirty_prs: the limit is honoured")
+    DRAFTS = False
+    try:
+        got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
+    finally:
+        DRAFTS = saved_drafts
+    ok(got == [2, 1], "dirty_prs: CONFLICT_REPAIR_DRAFTS=off leaves a draft alone again", got)
+    prs[7]["title"] = "hold: waiting for the owner"
+    ok(7 not in dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None), "dirty_prs: a draft that asks to wait is left")
+    prs[7]["title"] = "fix x"
     # CONFLICT-REPAIR-BOT-QUIET-1: a codeagent-* branch waits 3 minutes, a person's branch still waits the full ten
     saved_ages = dict(ages)
     ages["a1"], ages["a2"] = 240, 240
@@ -883,6 +930,43 @@ def selftest():
     ages["a1"] = 120
     ok(1 not in dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None), "dirty_prs: a code-loop branch committed 2 minutes ago is still left (it may be mid-push)")
     ages.clear(); ages.update(saved_ages)
+    # PR-MERGE-SLA-10M-1: the default quiet window is 3 minutes, so a person's branch committed 4 minutes ago is taken and one committed 2 minutes ago is left
+    ages["a2"], ages["a6"] = 240, 120
+    got = dirty_prs(5, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
+    ok(DIRTY_QUIET_MIN == 3 and 2 in got and 6 not in got, "dirty_prs: the default quiet window is 3 minutes (a person's branch committed 4 minutes ago is taken, 2 minutes ago is left)", got)
+    ages.clear(); ages.update(saved_ages)
+    # PR-MERGE-SLA-10M-1: a pull request GitHub never computes (mergeable stays null while main moves) is tested with git, not skipped
+    for n, sha in ((8, "a8"), (9, "a9"), (10, "a10")):
+        prs[n] = dict(base_pr, number=n, mergeable=None, mergeable_state="unknown", head=dict(base_pr["head"], sha=sha, ref="fix/n%d" % n))
+        ages[sha] = 99999
+    tested = []
+    def fake_mt(n):
+        tested.append(n)
+        return {8: True, 9: False, 10: None}[n]
+    got = dirty_prs(9, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None, mtf=fake_mt)
+    ok(8 in got and 9 not in got and 10 not in got and sorted(tested) == [8, 9, 10] and 2 in got and 3 not in got, "dirty_prs: a null mergeability that git says conflicts is taken; clean and cannot-tell are left; a pull request GitHub did compute is not re-tested", (got, tested))
+    for n in (8, 9, 10):
+        del prs[n]
+    ages.clear(); ages.update(saved_ages)
+    # PR-MERGE-SLA-10M-1: merge_tree_conflicts against a real remote that serves refs/pull/N/head (what GitHub does)
+    with tempfile.TemporaryDirectory() as d:
+        bare, work = os.path.join(d, "origin.git"), os.path.join(d, "work")
+        def g(cwd, *a):
+            return git(list(a), cwd)
+        os.mkdir(bare); g(bare, "init", "-q", "--bare", "-b", "main")
+        os.mkdir(work); g(work, "init", "-q", "-b", "main"); g(work, "config", "user.email", "a@b.c"); g(work, "config", "user.name", "t")
+        g(work, "remote", "add", "origin", bare)
+        open(os.path.join(work, "f.txt"), "w").write("one\ntwo\nthree\n"); open(os.path.join(work, "g.txt"), "w").write("g\n")
+        g(work, "add", "-A"); g(work, "commit", "-qm", "base"); base = g(work, "rev-parse", "HEAD").strip()
+        g(work, "checkout", "-q", "-b", "pr5"); open(os.path.join(work, "f.txt"), "w").write("one\nTWO-pr\nthree\n"); g(work, "commit", "-qam", "pr edit")
+        g(work, "push", "-q", "origin", "pr5:refs/pull/5/head")
+        g(work, "checkout", "-q", "-b", "pr6", base); open(os.path.join(work, "g.txt"), "w").write("g-pr\n"); g(work, "commit", "-qam", "pr edit g")
+        g(work, "push", "-q", "origin", "pr6:refs/pull/6/head")
+        g(work, "checkout", "-q", "main"); open(os.path.join(work, "f.txt"), "w").write("one\nTWO-main\nthree\n"); g(work, "commit", "-qam", "main edit")
+        g(work, "push", "-q", "origin", "main")
+        ok(merge_tree_conflicts(5, work) is True, "merge_tree_conflicts: a head editing the line main also edited conflicts")
+        ok(merge_tree_conflicts(6, work) is False, "merge_tree_conflicts: a head editing another file merges cleanly")
+        ok(merge_tree_conflicts(77, work) is None, "merge_tree_conflicts: a pull request ref the remote lacks is 'cannot tell', never a conflict")
     # in-place: main is merged into the pull request's own branch; the pull request keeps its commits and gets main's
     with tempfile.TemporaryDirectory() as d:
         def g(*a):

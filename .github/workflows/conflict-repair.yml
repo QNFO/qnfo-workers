@@ -22,6 +22,11 @@ name: conflict-repair
 # sides kept; VERSION raised above main and the other open claims; suites and guards run first), then dispatches the check workflows on it.
 # A cheap probe step skips the whole job when nothing conflicts, so a push to main costs a few API reads.
 #
+# PR-MERGE-SLA-10M-1 (2026-10-26, owner directive: every pull request merges within 10 minutes of opening; agent_issues 1000291): the doer now takes
+# a draft that does not ask to wait (CONFLICT_REPAIR_DRAFTS=off restores the old skip), waits 3 minutes of quiet instead of 10, and decides a pull request
+# GitHub has not computed (mergeable null while main keeps moving) with git merge-tree instead of skipping it. Before this a conflicting session pull
+# request, always a draft, was never repaired, and a conflicting one GitHub left unknown was not either.
+#
 # SECRETS: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID for the ledger rows (cloud_ops_events kind
 # conflict-repair-reapplied, branch_hygiene_log), as remediation-consumer uses them; nothing new.
 # A pull request opened with GITHUB_TOKEN starts no pull_request workflow, so the script dispatches the check workflows
@@ -64,6 +69,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       INPUT_PR: ${{ github.event.inputs.pr }}
+      # PR-MERGE-SLA-10M-1: the repository variable CONFLICT_REPAIR_DRAFTS = off restores the old skip of drafts without a deploy; unset means on.
+      CONFLICT_REPAIR_DRAFTS: ${{ vars.CONFLICT_REPAIR_DRAFTS }}
       INPUT_PUSH: ${{ github.event.inputs.push }}
       # CONFLICT-REPAIR-INPLACE-1: the first push-triggered run (2026-10-19, PR 2753) stopped with "Committer identity unknown" in a git step
       # that does not take -c; the runner has no global identity, so every git command here gets one from the environment.
@@ -82,15 +89,21 @@ jobs:
           dirty=0
           for try in 1 2 3; do
             dirty=0; unknown=0
-            for n in $(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --jq '.[]|select(.draft==false)|.number'); do
+            # PR-MERGE-SLA-10M-1: drafts are taken (the harness opens every session pull request as a draft); a title that asks to wait and a
+            # repair branch are not.
+            for n in $(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --jq '.[]|select((.head.ref|startswith("repair/"))|not)|select((.title|test("(^|[\\s\\[(])(wip|do[\\s-]*not[\\s-]*merge|hold)([\\s:\\])]|$)";"i"))|not)|.number'); do
               st=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$n" --jq '"\(.mergeable) \(.mergeable_state)"' 2>/dev/null || echo "null unknown")
               case "$st" in "false dirty") dirty=$((dirty+1));; "null "*) unknown=$((unknown+1));; esac
             done
             [ "$unknown" -eq 0 ] && break
             sleep 15
           done
+          # PR-MERGE-SLA-10M-1: GitHub leaves mergeable null for as long as main keeps moving (every 1 to 5 minutes here), and a pull request it never
+          # computes was counted as clean, so it was never repaired. A pull request still unknown after the retries makes the job run; the script
+          # then decides it with git merge-tree (scripts/conflict_repair.py merge_tree_conflicts).
+          dirty=$((dirty+unknown))
           echo "dirty=$dirty" >> "$GITHUB_OUTPUT"
-          echo "open pull requests conflicting with main: $dirty"
+          echo "open pull requests conflicting with main or not yet computed by GitHub: $dirty (unknown: $unknown)"
 
       # A workflow_run checks out the trigger's SHA, which can be stale; the repair is cut from the CURRENT main.
       - if: steps.probe.outputs.dirty != '0'
