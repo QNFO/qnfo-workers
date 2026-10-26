@@ -1,0 +1,46 @@
+{
+  "schema": "qnfo-paper-provenance/1",
+  "slug": "parity-paper",
+  "paper": {
+    "path": "papers/parity-paper/paper.md",
+    "title": "Parity Paper",
+    "url": "https://papers.qnfo.org/papers/parity-paper"
+  },
+  "declared": {
+    "version": "2.0.0",
+    "license": "QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)",
+    "dois": [
+      {
+        "doi": "10.5281/zenodo.123456",
+        "source": "README.md"
+      },
+      {
+        "doi": "10.5281/zenodo.123456",
+        "source": "paper.md"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "path": "runs/cycle-7/parity-paper",
+      "relation": "produced-by",
+      "match": "slug-exact",
+      "manifest_sha256": "b3d47838322a34d9ecf94752e7c4b7b9bef0c71498cc7fbf408aa239dab393be"
+    }
+  ],
+  "identifiers": {
+    "research_queue_ids": [],
+    "living_paper_slug": "parity-paper"
+  },
+  "snapshots": [
+    {
+      "sha256": "52e82f07cb32b3080f947d9d27d372d6d861e904ff3770747424b8721a7b78da",
+      "bytes": 92,
+      "recorded_at": "2026-10-26",
+      "basis": "backfill",
+      "version": "2.0.0",
+      "git_commit": null
+    }
+  ],
+  "events": []
+}
