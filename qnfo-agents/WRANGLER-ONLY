@@ -1,0 +1,2 @@
+qnfo-agents declares a new Durable Object class (FleetCodeAgent, migration v1), a worker loader and a service binding with props; the canonical /content deploy cannot send a migration, so .github/workflows/deploy-qnfo-agents.yml deploys it with wrangler (deploy-guard lock, fleet_deploys ledger, /health canary with revert).
+Keep this file: removing it would make canonical-deploy.yml upload the bundle without the migration.
