@@ -1,4 +1,5 @@
-var VERSION="3.44.1-codeagent";
+var VERSION="3.44.2-frame-policy";
+// 3.44.2 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): the apex qnfo.org answered HTML pages with no frame protection (measured 2026-10-26: the *.qnfo.org hosts get X-Frame-Options DENY from a zone rule whose expression is the wildcard *.qnfo.org, which does not match the apex). withPagePolicy now adds X-Frame-Options DENY to every HTML response that has none, on every host, so the apex no longer depends on the zone rule; a handler's own value is kept.
 // 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
 // 3.43.2 PLAIN-RESIDUE-LIKE-1: the residue gate SQL uses instr (a 54-byte LIKE pattern made D1 refuse every plain-summary fill and paper-page fill from 2026-10-25 19:50); a paper page with no summary builds that one paper only, never the 12-paper hourly batch.
 // 3.42.1 PLAIN-RESIDUE-GATE-1 hides prompt residue and refreshes only flagged summaries; ROOT-PAPER-API-1 serves root-host WebMCP paper APIs.
@@ -6452,6 +6453,7 @@ function withPagePolicy(res, request) {
     var r = new Response(res.body, res);
     if (!r.headers.has("Referrer-Policy")) r.headers.set("Referrer-Policy", token ? "no-referrer" : PP_REFERRER);
     if (!r.headers.has("Permissions-Policy")) r.headers.set("Permissions-Policy", PP_PERMISSIONS);
+    if (!r.headers.has("X-Frame-Options")) r.headers.set("X-Frame-Options", "DENY"); // BP26-EDGE-SECURITY-1: the apex is outside the zone rule's *.qnfo.org wildcard
     if (!r.headers.has("Cache-Control")) {
       var m = String(request.method || "GET").toUpperCase();
       var p = u.pathname.replace(/\/+$/, "") || "/";

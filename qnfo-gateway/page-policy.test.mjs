@@ -32,6 +32,10 @@ const req = (url, method) => new Request(url, { method: method || "GET" });
 let r = P(html(200, { "Cache-Control": "public, max-age=3600" }), req("https://papers.qnfo.org/papers/a-paper"));
 ok(r.headers.get("Referrer-Policy") === REF, "paper page: Referrer-Policy " + REF, r.headers.get("Referrer-Policy"));
 ok(r.headers.get("Permissions-Policy") === PERM, "paper page: Permissions-Policy " + PERM, r.headers.get("Permissions-Policy"));
+ok(r.headers.get("X-Frame-Options") === "DENY", "paper page: X-Frame-Options DENY (BP26-EDGE-SECURITY-1)", r.headers.get("X-Frame-Options"));
+ok(P(html(200), req("https://qnfo.org/")).headers.get("X-Frame-Options") === "DENY", "the apex qnfo.org page gets X-Frame-Options DENY, which the *.qnfo.org zone rule does not give it");
+ok(P(html(200, { "X-Frame-Options": "SAMEORIGIN" }), req("https://qnfo.org/embed")).headers.get("X-Frame-Options") === "SAMEORIGIN", "a handler's own X-Frame-Options is kept");
+ok(!P(new Response("{}", { headers: { "Content-Type": "application/json" } }), req("https://qnfo.org/stats")).headers.get("X-Frame-Options"), "a JSON response gets no frame header");
 ok(r.headers.get("Cache-Control") === "public, max-age=3600", "paper page: the handler's own Cache-Control is kept", r.headers.get("Cache-Control"));
 ok(r.status === 200 && /<body>x<\/body>/.test(await r.text()), "status and body pass through unchanged");
 
