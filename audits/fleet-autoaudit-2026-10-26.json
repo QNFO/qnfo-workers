@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-26 06:39:02",
+  "audited_at": "2026-10-26 07:10:21",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-cloud-ops"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -560,7 +567,7 @@
       },
       {
         "dir": "qnfo-agents",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "worker": "qnfo-agents"
       },
       {
@@ -585,12 +592,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.35.0",
+        "version": "1.36.1",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.28.0-codeagent",
+        "version": "0.28.1-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -615,12 +622,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.48.0-deployed-unblock",
+        "version": "0.48.1-version-ahead",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.64.1",
+        "version": "1.65.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -630,7 +637,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.7.6-fleet-pr-share",
+        "version": "0.8.0-roadmap-scope",
         "worker": "qnfo-github-steward"
       },
       {
@@ -665,12 +672,12 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.5.2-errata-draining-1",
+        "version": "1.5.3-ledger-fingerprint",
         "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.57.0",
+        "version": "2.57.1",
         "worker": "qnfo-ops"
       },
       {
@@ -680,7 +687,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.34.0-errata-confirm-cost",
+        "version": "0.34.2-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1044,9 +1051,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-agents": {
-      "before": "0.1.0",
+      "before": "0.2.0",
       "http": 200,
-      "live": "0.1.0",
+      "live": "0.2.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-agents"
@@ -1201,9 +1208,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.35.0",
+      "before": "1.36.1",
       "http": 200,
-      "live": "1.35.0",
+      "live": "1.36.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1218,9 +1225,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.28.0-codeagent",
+      "before": "0.28.1-codeagent",
       "http": 200,
-      "live": "0.28.0-codeagent",
+      "live": "0.28.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1348,17 +1355,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.48.0-deployed-unblock",
+      "before": "0.48.1-version-ahead",
       "http": 200,
-      "live": "0.48.0-deployed-unblock",
+      "live": "0.48.1-version-ahead",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.64.1",
+      "before": "1.65.0",
       "http": 200,
-      "live": "1.64.1",
+      "live": "1.65.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1390,9 +1397,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.7.6-fleet-pr-share",
+      "before": "0.8.0-roadmap-scope",
       "http": 200,
-      "live": "0.7.6-fleet-pr-share",
+      "live": "0.8.0-roadmap-scope",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1500,17 +1507,17 @@
       "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
-      "before": "1.5.2-errata-draining-1",
+      "before": "1.5.3-ledger-fingerprint",
       "http": 200,
-      "live": "1.5.2-errata-draining-1",
+      "live": "1.5.3-ledger-fingerprint",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.57.0",
+      "before": "2.57.1",
       "http": 200,
-      "live": "2.57.0",
+      "live": "2.57.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1596,9 +1603,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.34.0-errata-confirm-cost",
+      "before": "0.34.2-codeagent",
       "http": 200,
-      "live": "0.34.0-errata-confirm-cost",
+      "live": "0.34.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
