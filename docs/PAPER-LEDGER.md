@@ -22,7 +22,7 @@ SELECT body_md FROM paper_change_bodies WHERE seq = <seq>;               -- the 
 
 A writer sets `papers.change_actor` (`<worker>:<run id>`) and `papers.change_reason` in the same UPDATE. Use text that differs for each change: the same pair twice in a
 row reads as unattributed. A change that does not set them is recorded as `unattributed` (`v_paper_ledger_health.unattributed_24h`). Adopted so far: this session's
-repairs. Open: PAPER-LEDGER-ATTRIBUTION-1 (qnfo-cloud-ops) and PAPER-LEDGER-ATTRIBUTION-2 (qnfo-research-exec and qnfo-errata-publish).
+repairs and qnfo-cloud-ops 1.37.0 (the publication gate's restore from quarantine, `qnfo-cloud-ops:<run id>`; its verdict-only writes touch `release_gate_*` alone, which the ledger does not record, because `publication_gate_audit` holds them). Open: PAPER-LEDGER-ATTRIBUTION-2 (qnfo-research-exec and qnfo-errata-publish).
 
 ## Nothing disappears en masse
 

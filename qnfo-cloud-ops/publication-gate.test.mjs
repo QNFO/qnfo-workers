@@ -16,7 +16,7 @@ const patched = src.replace(IMPORT, "var connect = function () { throw new Error
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
-const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };
+const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 1400) : "")); } };
 
 function stmtOn(dbx, sql) {
   let args = [];
@@ -75,13 +75,19 @@ const malformedSections = "# T\n\n" + [
 ].join("\n\n") + "\n\n" + "x".repeat(5000) + "\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n10.1000/abc 10.1000/def 10.1000/ghi arXiv:2401.12345\n";
 const promptResidue = "# T\n\n## In plain language\n\nUse everyday words and active voice. We must restate ONE research paper. Hard rules: every specific number must already appear below.\n\n" + "x".repeat(5000) + "\n\n## Related work\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n10.1000/abc 10.1000/def 10.1000/ghi\n";
 
-function freshEnv({ papers, mode }) {
+function freshEnv({ papers, mode, ledger }) {
   const audit = new DatabaseSync(":memory:");
   audit.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);");
   if (mode) audit.prepare("INSERT INTO ops_config VALUES ('publication_gate_mode', ?)").run(mode);
   const living = new DatabaseSync(":memory:");
-  living.exec(`CREATE TABLE papers (identifier TEXT PRIMARY KEY, slug TEXT, status TEXT, body_md TEXT, updated_at TEXT, release_gate_pass INTEGER DEFAULT 0, release_gate_at TEXT, release_gate_reason TEXT);
+  // PAPER-LEDGER-1 (1.37.0): the gate sets papers.change_actor and papers.change_reason on every write. Plain mode adds the two columns the migration would add;
+  // ledger mode loads the real migration (columns, immutable ledger tables, writer triggers, withdrawal guard) over a production-shaped papers table.
+  living.exec(`CREATE TABLE papers (identifier TEXT PRIMARY KEY, title TEXT DEFAULT '', authors TEXT DEFAULT '[]', abstract TEXT, doi TEXT, version TEXT DEFAULT '1.0.0', subtitle TEXT, license TEXT, keywords TEXT, journal TEXT, paper_type TEXT, zenodo_doi TEXT, categories TEXT, "references" TEXT,
+      slug TEXT, status TEXT, body_md TEXT, updated_at TEXT, release_gate_pass INTEGER DEFAULT 0, release_gate_at TEXT, release_gate_reason TEXT);
+    CREATE TABLE paper_body_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, version TEXT, status TEXT, title TEXT, body_md TEXT NOT NULL, captured_at TEXT NOT NULL, reason TEXT);
     CREATE TABLE publication_gate_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, run_at TEXT DEFAULT (datetime('now')), slug TEXT, status TEXT, mode TEXT, decision TEXT, reason TEXT, score INTEGER, quality_flag TEXT, body_len INTEGER, has_abstract INTEGER, refs INTEGER, gate_version TEXT);`);
+  if (ledger) living.exec(readFileSync(new URL("../migrations/living-paper/2026-10-26-paper-change-ledger.sql", import.meta.url), "utf8"));
+  else living.exec("ALTER TABLE papers ADD COLUMN change_actor TEXT; ALTER TABLE papers ADD COLUMN change_reason TEXT;");
   const ins = living.prepare("INSERT INTO papers (identifier, slug, status, body_md) VALUES (?, ?, ?, ?)");
   for (const [slug, status, body, ident] of papers) ins.run(ident || slug, slug, status, body);
   const counter = { batches: 0, maxBatch: 0 };
@@ -178,12 +184,45 @@ for (const mode of ["enforce", "shadow"]) {
   ok(st("bad") === "published" && r2.notes.restored === 0, mode + ": the next run keeps them published", r2.notes);
 }
 
+// 4b. PAPER-LEDGER-1 (1.37.0): the one gate write the ledger records, a restore from quarantine, arrives attributed to the run; verdict-only writes are not ledger events.
+{
+  const papers = [["lg-good", "published", good], ["lg-thin", "published", thin], ["lg-q", "quarantined", thin]];
+  const { env, living } = freshEnv({ papers, ledger: true });
+  living.exec("UPDATE papers SET release_gate_reason = 'quality:internal-artifact' WHERE slug = 'lg-q'");
+  const before = living.prepare("SELECT COUNT(*) n FROM paper_change_ledger").get().n;
+  const r = await mod.__job(env);
+  const rows = living.prepare("SELECT slug, kind, fields_changed, actor, reason, status_before, status_after, withdrawal FROM paper_change_ledger WHERE seq > ? ORDER BY seq").all(before);
+  ok(r.status === "ok" && r.notes.verdicts_changed === 2 && r.notes.restored === 1 && rows.length === 1 && rows[0].slug === "lg-q", "a sweep that flips two verdicts and restores one paper writes one ledger row, the restore", { notes: r.notes, rows: JSON.stringify(rows) });
+  const restore = rows[0] || {};
+  ok(/^qnfo-cloud-ops:pg-\d{4}-\d{2}-\d{2}-/.test(restore.actor), "the restore names the qnfo-cloud-ops run that wrote it, it is not unattributed", restore);
+  ok(restore.status_before === "quarantined" && restore.status_after === "published" && restore.withdrawal === 0 && /restore of a quality quarantine: quality:internal-artifact/.test(restore.reason), "the restore says which quarantine it undoes and is not a withdrawal", restore);
+  const r2 = await mod.__job(env);
+  ok(r2.notes.verdicts_changed === 0 && living.prepare("SELECT COUNT(*) n FROM paper_change_ledger").get().n === before + 1, "an unchanged second run adds no ledger rows", r2.notes);
+  // a later verdict flip (revised body, written by another writer) is the body edit's row alone: the gate adds no second row for the flip
+  living.prepare("UPDATE papers SET body_md = ?, change_actor = 'qnfo-research-exec:test', change_reason = 'revised for the test' WHERE slug = 'lg-thin'").run(good);
+  const r3 = await mod.__job(env);
+  const rev = living.prepare("SELECT actor, fields_changed FROM paper_change_ledger WHERE slug = 'lg-thin' AND kind = 'update' ORDER BY seq").all();
+  ok(r3.notes.verdicts_changed === 1 && rev.length === 1 && rev[0].actor === "qnfo-research-exec:test" && rev[0].fields_changed === "body_md", "a verdict flip after a revision leaves the revision's own attributed row as the only entry", { n: r3.notes, rev });
+  const w = living.prepare("SELECT COUNT(*) n FROM paper_change_ledger WHERE withdrawal = 1").get().n;
+  ok(w === 0, "no sweep produced a withdrawal row", w);
+}
+// 4c. "1.0 Introduction" is section 1 written with a decimal, not a subsection of a section that was never opened.
+{
+  const dec = ["# T", "## 1.0 Introduction", "## 2.0 Methods", "## 3.0 Results", "## 4.0 Conclusion"].join("\n\n") + "\n";
+  const st = mod.__structure(dec);
+  ok(st.ok && !st.soft.length, "decimal-zero section headings are sections in sequence", st);
+  const skip = mod.__structure(["# T", "## 1.0 Introduction", "## 3.0 Results"].join("\n\n"));
+  ok(!skip.ok && skip.issues.includes("section-sequence-2-to-3"), "a skipped decimal-zero section still fails the sequence check", skip);
+  const sub = mod.__structure(["# T", "## 1.0 Introduction", "## 1.1 Scope", "## 2. Methods"].join("\n\n"));
+  ok(sub.ok && !sub.soft.length, "1.1 under 1.0 is an ordinary subsection", sub);
+}
+
 // 5. Wiring: hourly quality enforcement, daily topic metric, no new Worker cron trigger.
 ok(mod.__jobs["quality-score"] === mod.__job, "quality-score dispatches to the gated sweep");
 ok(mod.__sched["quality-score"] && mod.__sched["quality-score"].days === "*" && mod.__sched["quality-score"].times.length === 24 && mod.__sched["quality-score"].times.every((t, i) => t === String(i).padStart(2, "0") + ":20"), "publication gate runs every hour");
 ok(mod.__sched["idea-topic-metric"] && mod.__sched["idea-topic-metric"].times.join() === "06:25" && !(mod.__comp["quality-score"] || []).includes("idea-topic-metric"), "idea-topic metric retains its daily cadence outside the hourly companion slot");
 const [maj, min] = String(mod.__version).split(/[.-]/).map(Number);
-ok(maj > 1 || (maj === 1 && min >= 36), "VERSION is at least 1.36 (minor bump: the gate no longer withdraws papers and restores what it quarantined)", mod.__version);
+ok(maj > 1 || (maj === 1 && min >= 37), "VERSION is at least 1.37 (minor bump: the gate attributes its writes in the paper revision ledger)", mod.__version);
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
