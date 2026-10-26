@@ -53,7 +53,7 @@ ok(!/\bfetch\(|claude\.ai|anthropic\.com/i.test(block), "the block makes no netw
 const ver = (src.match(/^var VERSION = "([^"]*)"/m) || [])[1] || "";
 const vn = ver.split("-")[0].split(".").map(Number);
 ok(vn[0] > 0 || vn[1] >= 55, "VERSION is at least 0.55.0 (a new route and a decision the worker takes for another worker: a minor bump)", ver);
-ok(/^\/\/ 0\.54\.0 BREACH-DOCTOR-WATCH-2 /m.test(src) && src.indexOf("// 0.55.0 BREACH-DOCTOR-WATCH-2 ") < src.indexOf("// 0.53.2 BREACH-DOCTOR-GATE-2") && !/^var VERSION = "[^"]*"; \/\* 0\.54\.0/m.test(src), "the 0.55.0 note is the first line under the VERSION-LINE-SPLIT-1 comment, none on the VERSION line");
+ok(/^\/\/ 0\.55\.0 BREACH-DOCTOR-WATCH-2 /m.test(src) && src.indexOf("// 0.55.0 BREACH-DOCTOR-WATCH-2 ") < src.indexOf("// 0.53.2 BREACH-DOCTOR-GATE-2") && !/^var VERSION = "[^"]*"; \/\* 0\.55\.0/m.test(src), "the 0.55.0 note is the first line under the VERSION-LINE-SPLIT-1 comment, none on the VERSION line");
 if (!process.env.BDR_WORKER_PATH) ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 
 // ---- the world
