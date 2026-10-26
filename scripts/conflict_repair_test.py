@@ -38,7 +38,7 @@ def check(cond, msg, extra=None):
 
 # Live definitions, copied from sqlite_master of qnfo-audit.
 SCHEMA = """
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT NOT NULL DEFAULT 'open', updated_at INTEGER);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT NOT NULL DEFAULT 'open', updated_at INTEGER, close_channel TEXT);
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, triaged_at TEXT DEFAULT (datetime('now')), remediation TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE remediation_contracts (id INTEGER PRIMARY KEY, issue_id INTEGER, status TEXT, last_verdict TEXT);
 CREATE TRIGGER issue_close_evidence_weak_predicate_upd BEFORE UPDATE OF close_evidence ON issue_triage WHEN NEW.close_evidence IS NOT NULL AND NEW.close_evidence LIKE '%present in%' AND NEW.close_evidence LIKE '%directory listing%' BEGIN SELECT RAISE(ABORT,'CLOSE-EVIDENCE-WEAK-PREDICATE-1: file presence is not defect resolution (issue 1698)'); END;
@@ -85,6 +85,10 @@ def state(db, iid):
     return db.execute("SELECT a.status, t.close_evidence, t.rc FROM agent_issues a LEFT JOIN issue_triage t ON t.issue_id = a.id WHERE a.id = ?1", [iid]).fetchone()
 
 
+def channel(db, iid):
+    return db.execute("SELECT close_channel FROM agent_issues WHERE id = ?1", [iid]).fetchone()[0]
+
+
 EV = cr.settled_evidence({"number": 2144, "state": "closed", "merged_at": None, "closed_at": "2026-10-19T01:00:00Z"})
 db = fresh()
 apply_migrations.d1 = fake_d1(db)
@@ -104,6 +108,8 @@ add_issue(db, 10, 2144)
 check(cr.settle_issue(2144, EV) is True, "settle_issue returns True for an issue with a triage row")
 st = state(db, 10)
 check(st == ("closed", EV, "AUTOTRIAGE-1"), "the issue is closed with the GitHub read as evidence and its triage row kept", st)
+# CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the close names its channel; 1000254, 1000256, 1000270, 1000365 and 100422 closed with NULL.
+check(channel(db, 10) == "auto:conflict-repair-settle", "the settle close writes close_channel 'auto:conflict-repair-settle' (a NULL channel cannot be attributed to a fix, a probe or a sweep)", channel(db, 10))
 
 # 2. an issue with no triage row: the guarded INSERT supplies every NOT NULL column.
 add_issue(db, 11, 2589, triage=False)
@@ -111,15 +117,18 @@ check(cr.settle_issue(2589, EV) is True, "settle_issue returns True for an issue
 st = state(db, 11)
 check(st == ("closed", EV, "CONFLICT-REPAIR-SETTLE-1"), "a missing triage row is created with sla_due_at and the issue closes", st)
 check(db.execute("SELECT sla_due_at FROM issue_triage WHERE issue_id = 11").fetchone()[0] is not None, "the created row has sla_due_at")
+check(channel(db, 11) == "auto:conflict-repair-settle", "an issue that had no triage row is closed with the channel too", channel(db, 11))
 
 # 3. CLOSE-BINDS-TO-PROBE-1 is not bypassed: a failing active contract keeps the issue open and the refusal is reported.
 add_issue(db, 12, 2629, contract="fail")
 check(cr.settle_issue(2629, EV) is False, "settle_issue returns False when a failing contract refuses the close")
 check(state(db, 12)[0] == "open", "the issue stays open while its contract fails", state(db, 12))
+check(channel(db, 12) is None, "a refused close leaves no close_channel behind", channel(db, 12))
 
 # 4. only the open issue of the named pull request is touched; a second run is a no-op.
 add_issue(db, 13, 91)
 check(cr.settle_issue(2144, EV) is True and state(db, 13)[0] == "open", "another pull request's issue is untouched, a second run is a no-op")
+check(channel(db, 13) is None and channel(db, 10) == "auto:conflict-repair-settle", "and a second run neither stamps the open issue nor rewrites the closed one's channel")
 
 # 5. repair() reports the settle honestly.
 orig_gh, orig_elig, orig_settle = cr.gh, cr.eligible, cr.settle_issue
@@ -189,6 +198,22 @@ check([c[3] for c in runs] == cr.DISPATCHABLE and "mirror-guard.yml" in [c[3] fo
 check(all(c[c.index("--ref") + 1] == "repair/pr-5-abcdef1" for c in runs), "replacement: each dispatch targets the repair branch", runs)
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conflict_repair.py"), encoding="utf-8").read()
 check("starts no pull_request workflow" not in src and "starts none by itself" not in src, "the comments no longer say a GITHUB_TOKEN push starts no pull_request workflow (it starts runs that never get a job)")
+
+# 7. CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): every statement in the three scripts of this family that sets an issue closed, resolved or
+# wontfix also sets close_channel. A new closing site that forgets it fails here, not in the 48 h NULL count.
+HERE = os.path.dirname(os.path.abspath(__file__))
+closers = {}
+for script in ("conflict_repair.py", "apply_migrations.py", "canary_revert.py"):
+    text = open(os.path.join(HERE, script), encoding="utf-8").read()
+    for m in re.finditer(r"UPDATE\s+agent_issues\s+SET\b", text, re.I):
+        set_part = text[m.end(): m.end() + 900]
+        w = re.search(r"\bWHERE\b", set_part, re.I)
+        set_part = set_part[: w.start()] if w else set_part[:400]
+        if re.search(r"\bstatus\s*=\s*'(closed|resolved|wontfix)'", set_part, re.I):
+            closers.setdefault(script, []).append("close_channel" in set_part)
+check(closers.get("conflict_repair.py") == [True] and closers.get("apply_migrations.py") == [True], "every closing UPDATE agent_issues in conflict_repair.py and apply_migrations.py sets close_channel (one closing site each)", closers)
+check(all(all(v) for v in closers.values()), "no closing statement in the scripts omits close_channel", closers)
+check("close_channel = 'auto:conflict-repair-settle'" in cr.SETTLE_CLOSE_SQL and "close_channel = 'auto:migration-apply-resolve'" in apply_migrations.RESOLVE_CLOSE_SQL, "the two channels are the named values the closing probe counts", (cr.SETTLE_CLOSE_SQL, apply_migrations.RESOLVE_CLOSE_SQL))
 
 print("FAILS=%d" % fails)
 sys.exit(1 if fails else 0)
