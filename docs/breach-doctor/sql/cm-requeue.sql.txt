@@ -1,0 +1,38 @@
+-- CM-R6 step 1: keep the row's revert text, the way EVOLVE-1 WIP-RECOVERY-1 does (ops_config key code_tasks--bak-<id>-<yyyymmdd>)
+WITH c AS (
+  SELECT t.id, t.path, t.status, t.step, t.attempts, t.lease_until, t.goal,
+         substr(t.last_error, instr(t.last_error,'Identifier ''')+12, instr(substr(t.last_error, instr(t.last_error,'Identifier ''')+12), '''')-1) ident,
+         CASE WHEN t.goal LIKE '[issue #%' THEN CAST(substr(t.goal, 9, instr(t.goal,']')-9) AS INTEGER) WHEN t.id LIKE 'ct_im%' THEN CAST(substr(t.id, 6) AS INTEGER) END parent_id
+  FROM code_tasks t
+  WHERE t.status = 'failed' AND t.step = 'verify' AND t.last_error LIKE 'verify failed: SyntaxError: Identifier ''%'' has already been declared%'
+    AND json_extract(t.ctx,'$.doctor_requeues') IS NULL)
+INSERT OR IGNORE INTO ops_config (key, value, note, updated_at)
+SELECT 'code_tasks--bak-' || c.id || '-' || strftime('%Y%m%d','now'),
+       json_object('id', c.id, 'status', c.status, 'step', c.step, 'attempts', c.attempts, 'lease_until', c.lease_until, 'goal', c.goal),
+       'BREACH-DOCTOR CM-R6 backup before requeue of ' || c.id || '; restore: UPDATE code_tasks SET status=''failed'', step=''' || c.step || ''', attempts=' || c.attempts || ' WHERE id=''' || c.id || '''; the goal is in value',
+       datetime('now')
+FROM c JOIN agent_issues pa ON pa.id = c.parent_id AND pa.status = 'open'
+WHERE c.ident NOT GLOB '*[^A-Za-z0-9_$]*' AND length(c.ident) BETWEEN 1 AND 64
+  AND c.id = (SELECT x.id FROM code_tasks x WHERE x.id = 'ct_im' || c.parent_id OR x.goal LIKE '[issue #' || c.parent_id || ']%' ORDER BY datetime(x.created_at) DESC LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM code_tasks x WHERE x.id <> c.id AND x.status IN ('queued','branch_pushed','published','ready_to_publish','pr_open') AND (x.id = 'ct_im' || c.parent_id OR x.goal LIKE '[issue #' || c.parent_id || ']%'))
+  AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') AND (w.path = 'file:' || c.path OR w.path = 'issue:' || c.parent_id));
+
+-- CM-R6 step 2: one requeue per task (ctx.doctor_requeues = 1 is the once-only mark), with a constraint built only from the verifier's own error
+WITH c AS (
+  SELECT t.id, t.path,
+         substr(t.last_error, instr(t.last_error,'Identifier ''')+12, instr(substr(t.last_error, instr(t.last_error,'Identifier ''')+12), '''')-1) ident,
+         CASE WHEN t.goal LIKE '[issue #%' THEN CAST(substr(t.goal, 9, instr(t.goal,']')-9) AS INTEGER) WHEN t.id LIKE 'ct_im%' THEN CAST(substr(t.id, 6) AS INTEGER) END parent_id
+  FROM code_tasks t
+  WHERE t.status = 'failed' AND t.step = 'verify' AND t.last_error LIKE 'verify failed: SyntaxError: Identifier ''%'' has already been declared%'
+    AND json_extract(t.ctx,'$.doctor_requeues') IS NULL)
+UPDATE code_tasks SET
+  status = 'queued', step = 'read', attempts = 0, lease_until = NULL, last_error = NULL,
+  goal = substr(goal, 1, 5300) || char(10) || 'DOCTOR-CONSTRAINT CM-R6 (taken from the verifier error, identifier checked against [A-Za-z0-9_$]): ' || (SELECT ident FROM c WHERE c.id = code_tasks.id) || ' is already declared in ' || path || ' on main. Do not declare it again; call the existing one. Change only what the code-anchor names.',
+  merge_note = 'CM-R6 requeue 1 of 1: the previous attempt re-declared an identifier that already exists on main',
+  ctx = json_set(COALESCE(ctx,'{}'), '$.doctor_requeues', 1),
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE id IN (SELECT c.id FROM c JOIN agent_issues pa ON pa.id = c.parent_id AND pa.status = 'open'
+             WHERE c.ident NOT GLOB '*[^A-Za-z0-9_$]*' AND length(c.ident) BETWEEN 1 AND 64
+               AND c.id = (SELECT x.id FROM code_tasks x WHERE x.id = 'ct_im' || c.parent_id OR x.goal LIKE '[issue #' || c.parent_id || ']%' ORDER BY datetime(x.created_at) DESC LIMIT 1)
+               AND NOT EXISTS (SELECT 1 FROM code_tasks x WHERE x.id <> c.id AND x.status IN ('queued','branch_pushed','published','ready_to_publish','pr_open') AND (x.id = 'ct_im' || c.parent_id OR x.goal LIKE '[issue #' || c.parent_id || ']%'))
+               AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') AND (w.path = 'file:' || c.path OR w.path = 'issue:' || c.parent_id)));

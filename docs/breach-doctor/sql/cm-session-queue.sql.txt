@@ -1,0 +1,28 @@
+-- CM-R10: the session-only queue. A read model over rows the doctor handed over; no new table.
+-- Marker conventions already in force: a "session-task:" line in agent_issues.description and issue_triage.owner LIKE 'session%'
+-- (both counted by v_autonomy_first_audit.session_dependent_issues_open). The doctor adds the exact blocker in issue_triage.remediation.
+CREATE VIEW IF NOT EXISTS v_session_queue AS
+SELECT a.id AS issue_id,
+       a.priority,
+       ROUND((CAST(strftime('%s','now') AS INTEGER) * 1000 - a.created_at) / 3600000.0, 1) AS age_h,
+       t.remediation AS blocker,
+       substr(a.description, instr(a.description, 'session-task:'), 160) AS session_task_line,
+       (SELECT w.holder FROM work_claims w WHERE w.path = 'issue:' || a.id AND w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') LIMIT 1) AS claimed_by
+FROM agent_issues a
+JOIN issue_triage t ON t.issue_id = a.id
+WHERE a.status = 'open' AND t.owner = 'session' AND t.remediation LIKE 'BLOCKER %'
+ORDER BY CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, a.created_at;
+
+-- hand-over of issue 100498 (EXHAUSTED ct_im100350); parameters are constants the rule derived from structured facts
+UPDATE issue_triage SET owner = 'session',
+  remediation = 'BLOCKER class=SCOPE-DENY-WORKFLOW rule=cmScope(qnfo-fleet-control/worker.js:3380) + CM_COMPANION_DENY(:3605) path=.github/workflows/cf-ops-actions.yml why=action input is type: choice, a new action needs its option; .github/workflows/** never auto-merges loop_part=scripts/cf_ops_actions.py after def noz_scrub_bodies probe={"paths":["scripts/cf_ops_actions.py"],"contains":"living-paper-floor-restore"} claim=file:.github/workflows/cf-ops-actions.yml,file:scripts/cf_ops_actions.py doctor_rule=CM-R10'
+WHERE issue_id = 100498 AND owner <> 'session';
+UPDATE agent_issues SET description = description || char(10) || 'session-task: repo=qnfo-workers path=.github/workflows/cf-ops-actions.yml' || char(10) || '(breach-doctor CM-R10: see issue_triage.remediation for the exact blocker and the closing probe)', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE id = 100498 AND status = 'open' AND instr(description, 'session-task: repo=qnfo-workers path=.github/workflows/cf-ops-actions.yml') = 0;
+INSERT INTO blocker_redteam (target, claim, attempt, verdict, evidence, actor, ts)
+SELECT 'issue:100498', 'LIVING-PAPER-RESTORE-FLOOR-1 needs a session: the change adds a cf-ops-actions action whose option list lives in a denied workflow file',
+       'tried the loop path: ct_im100350 ended failed after 9 attempts (SEARCH text occurs 0 times); tried the scope path: cmScope refuses .github/ and workflows never auto-merge',
+       'confirmed-with-evidence',
+       'surfaces: code loop SEARCH/REPLACE on a 120k-char python file; cmScope/mergeScopeWhy allowlists; CM_COMPANION_DENY; cf-ops-actions.yml type: choice options; free-text inputs of the workflow (model/target are strings but the action name is a choice). refusal: path .github/workflows/cf-ops-actions.yml is outside the merge runner auto-merge scope',
+       'breach-doctor', strftime('%Y-%m-%dT%H:%M:%SZ','now')
+WHERE NOT EXISTS (SELECT 1 FROM blocker_redteam WHERE target = 'issue:100498' AND actor = 'breach-doctor');

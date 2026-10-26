@@ -1,0 +1,73 @@
+-- CM-R1: CODE-MERGE-REFUSED-1 whose code task has since merged (10 open on 2026-10-26)
+INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence)
+SELECT a.id, 'breach-doctor:CM-R1', 'closed', 'breach-doctor', datetime('now'),
+  'DoD met: code task ' || t.id || ' status=merged (' || COALESCE('PR #' || l.pr_number || ' ' || l.pr_state, 'PR ' || COALESCE(t.pr_url,'?')) || ', merged_at ' || t.merged_at || ', merge sha ' || substr(t.merged_sha,1,7) || ', merged_by ' || COALESCE(t.merged_by,'?') || '). The merge runner refused the pull request on a required check before this merge; the refusal no longer applies. Closed by breach-doctor rule CM-R1 from code_tasks and code_task_pr_links facts only.'
+FROM agent_issues a
+JOIN code_tasks t ON t.id = substr(substr(a.title, instr(a.title,'code task ')+10), 1, instr(substr(a.title, instr(a.title,'code task ')+10),' ')-1)
+LEFT JOIN code_task_pr_links l ON l.task_id = t.id
+WHERE a.status = 'open' AND a.title LIKE 'CODE-MERGE-REFUSED-1: code task ct_%'
+  AND t.status = 'merged' AND t.merged_sha IS NOT NULL AND t.merged_at IS NOT NULL AND COALESCE(l.pr_state,'merged') = 'merged'
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN ('active','holding') AND COALESCE(c.last_verdict,'') IN ('fail','vacuous-probe-result','probe-error','probe-not-machine-executable','probe-same-account-host')) AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.path = 'issue:' || a.id AND w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = 'closed', owner = 'breach-doctor', close_evidence = excluded.close_evidence;
+
+-- CM-R2: CODE-LOOP-EXHAUSTED-1 whose source issue is closed with its own evidence (6 open on 2026-10-26)
+WITH e AS (
+  SELECT a.id issue_id, a.title,
+         substr(substr(a.title, instr(a.title,'CODE-LOOP-EXHAUSTED-1: ')+23), 1, instr(substr(a.title, instr(a.title,'CODE-LOOP-EXHAUSTED-1: ')+23),' ')-1) task_id
+  FROM agent_issues a WHERE a.status = 'open' AND a.title LIKE 'CODE-LOOP-EXHAUSTED-1: ct_% %'),
+p AS (
+  SELECT e.issue_id, t.id task_id, t.status tstatus, t.step, t.attempts,
+         CASE WHEN t.goal LIKE '[issue #%' THEN CAST(substr(t.goal, 9, instr(t.goal,']')-9) AS INTEGER)
+              WHEN t.id LIKE 'ct_im%' THEN CAST(substr(t.id, 6) AS INTEGER) END parent_id
+  FROM e JOIN code_tasks t ON t.id = e.task_id)
+INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence)
+SELECT p.issue_id, 'breach-doctor:CM-R2', 'closed', 'breach-doctor', datetime('now'),
+  'DoD moot: the task''s source issue #' || pa.id || ' is ' || pa.status || ' (close_channel ' || COALESCE(pa.close_channel,'none') || ', at ' || datetime(pa.updated_at/1000,'unixepoch') || 'Z) and carries its own close evidence' ||
+  COALESCE(' (' || CASE WHEN pt.close_evidence GLOB 'remediation_verifications#[0-9]*' THEN substr(pt.close_evidence, 1, instr(pt.close_evidence || ' ', ' ') - 1) END || ')', '') ||
+  '. Code task ' || p.task_id || ' ended ' || p.tstatus || ' at step ' || p.step || ' after ' || p.attempts || ' attempts with no change of its own to land. Closed by breach-doctor rule CM-R2 from agent_issues, issue_triage and code_tasks facts only.'
+FROM p JOIN agent_issues pa ON pa.id = p.parent_id
+JOIN issue_triage pt ON pt.issue_id = pa.id
+WHERE pa.status IN ('closed','resolved') AND TRIM(COALESCE(pt.close_evidence,'')) <> ''
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = p.issue_id AND c.status IN ('active','holding') AND COALESCE(c.last_verdict,'') IN ('fail','vacuous-probe-result','probe-error','probe-not-machine-executable','probe-same-account-host')) AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.path = 'issue:' || p.issue_id AND w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = 'closed', owner = 'breach-doctor', close_evidence = excluded.close_evidence;
+
+-- CM-R3: two CODE-LOOP-EXHAUSTED-1 issues for one source issue: the newest carries the work, the older is superseded by its id (1 open on 2026-10-26: 100382 -> 100392)
+WITH e AS (
+  SELECT a.id issue_id,
+         substr(substr(a.title, instr(a.title,'CODE-LOOP-EXHAUSTED-1: ')+23), 1, instr(substr(a.title, instr(a.title,'CODE-LOOP-EXHAUSTED-1: ')+23),' ')-1) task_id
+  FROM agent_issues a WHERE a.status = 'open' AND a.title LIKE 'CODE-LOOP-EXHAUSTED-1: ct_% %'),
+p AS (
+  SELECT e.issue_id, t.id task_id,
+         CASE WHEN t.goal LIKE '[issue #%' THEN CAST(substr(t.goal, 9, instr(t.goal,']')-9) AS INTEGER)
+              WHEN t.id LIKE 'ct_im%' THEN CAST(substr(t.id, 6) AS INTEGER) END parent_id
+  FROM e JOIN code_tasks t ON t.id = e.task_id),
+g AS (SELECT p.*, MAX(p.issue_id) OVER (PARTITION BY p.parent_id) newest FROM p WHERE p.parent_id IS NOT NULL)
+INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence)
+SELECT g.issue_id, 'breach-doctor:CM-R3', 'closed', 'breach-doctor', datetime('now'),
+  'SUPERSEDED BY #' || g.newest || ': both issues report the exhausted code loop for the same source issue #' || g.parent_id || ' (tasks ' || g.task_id || ' and ' || nt.task_id || '); #' || g.newest || ' stays open and carries the work. Closed by breach-doctor rule CM-R3 from agent_issues and code_tasks facts only.'
+FROM g JOIN p nt ON nt.issue_id = g.newest
+WHERE g.issue_id <> g.newest
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = g.issue_id AND c.status IN ('active','holding') AND COALESCE(c.last_verdict,'') IN ('fail','vacuous-probe-result','probe-error','probe-not-machine-executable','probe-same-account-host')) AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.path = 'issue:' || g.issue_id AND w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = 'closed', owner = 'breach-doctor', close_evidence = excluded.close_evidence;
+
+-- CM-R5: the exhausted task has a sibling for the same source issue that reached merged after it began (2 open on 2026-10-26: 100549, 100361; 100361 is also CM-R2)
+WITH e AS (
+  SELECT a.id issue_id,
+         substr(substr(a.title, instr(a.title,'CODE-LOOP-EXHAUSTED-1: ')+23), 1, instr(substr(a.title, instr(a.title,'CODE-LOOP-EXHAUSTED-1: ')+23),' ')-1) task_id
+  FROM agent_issues a WHERE a.status = 'open' AND a.title LIKE 'CODE-LOOP-EXHAUSTED-1: ct_% %'),
+p AS (
+  SELECT e.issue_id, t.id task_id, t.created_at tcreated,
+         CASE WHEN t.goal LIKE '[issue #%' THEN CAST(substr(t.goal, 9, instr(t.goal,']')-9) AS INTEGER)
+              WHEN t.id LIKE 'ct_im%' THEN CAST(substr(t.id, 6) AS INTEGER) END parent_id
+  FROM e JOIN code_tasks t ON t.id = e.task_id)
+INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence)
+SELECT p.issue_id, 'breach-doctor:CM-R5', 'closed', 'breach-doctor', datetime('now'),
+  'DoD met by a replacement task: ' || s.id || ' (same source issue #' || p.parent_id || ', path ' || s.path || ') reached merged (' || COALESCE('PR #' || l.pr_number, 'PR ' || COALESCE(s.pr_url,'?')) || ' at ' || s.merged_at || ', merge sha ' || substr(s.merged_sha,1,7) || ') after ' || p.task_id || ' began; ' || p.task_id || ' was a superseded retry. The source issue #' || p.parent_id || ' stays open on its own contract. Closed by breach-doctor rule CM-R5 from code_tasks and code_task_pr_links facts only.'
+FROM p JOIN code_tasks s ON s.id <> p.task_id AND s.status = 'merged' AND s.merged_at IS NOT NULL AND s.merged_sha IS NOT NULL
+   AND (s.id = 'ct_im' || p.parent_id OR s.goal LIKE '[issue #' || p.parent_id || ']%' OR s.goal LIKE '%-- issue #' || p.parent_id || ' (RED-DRAIN-1%')
+LEFT JOIN code_task_pr_links l ON l.task_id = s.id
+WHERE p.parent_id IS NOT NULL AND datetime(s.merged_at) >= datetime(p.tcreated)
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = p.issue_id AND c.status IN ('active','holding') AND COALESCE(c.last_verdict,'') IN ('fail','vacuous-probe-result','probe-error','probe-not-machine-executable','probe-same-account-host'))
+  AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.path = 'issue:' || p.issue_id AND w.released_at IS NULL AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+GROUP BY p.issue_id
+ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = 'closed', owner = 'breach-doctor', close_evidence = excluded.close_evidence;
