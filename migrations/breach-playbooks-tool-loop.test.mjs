@@ -518,8 +518,12 @@ const settle = async (raw) => { const r1 = await tick(raw); await tick(raw); awa
     ok(sd.source === "qnfo-fleet-control" && sd.status === "open" && sd.category === "reliability" && sd.title.startsWith("BREACH-DOCTOR-1: "), sd.title + ": source qnfo-fleet-control, the trusted BREACH-DOCTOR-1: prefix, open");
     ok(one("code-task: ").length === 1 && one("code-anchor: ").length === 1 && one("code-probe: ").length === 1 && /^Charter pillar: autonomy/.test(lines[0]), sd.title + ": one code-task, one code-anchor, one code-probe line, the charter pillar");
     const path = one("code-task: ")[0].replace(/^code-task: repo=qnfo-workers path=/, ""), anchor = one("code-anchor: ")[0].slice("code-anchor: ".length), probe = JSON.parse(one("code-probe: ")[0].slice("code-probe: ".length));
-    ok(files[path] && files[path].split(anchor).length - 1 === 1, sd.title + ": the anchor occurs exactly once in " + path + " on main", files[path] && files[path].split(anchor).length - 1);
-    ok(probe.paths.join() === path && files[path].split(probe.contains).length - 1 === 0, sd.title + ": the code-probe marker (" + probe.contains + ") is not on main yet, so the probe cannot already pass");
+    // These two checks were written for the day the issues were filed (anchor present once, marker absent) and went red on main the moment each edit landed: PLAN-FIRST-TIME-FIRST-1 rewrote the
+    // anchor line of R2-PLAN-FIRST (qnfo-code-orchestrator 0.29.3, agent_issues 1000428) and D1-CALLER-REJECT-2 added the marker of TD-D1Q-REJECT (qnfo-ops 2.58.4, agent_issues 1000427). What stays true
+    // before and after the edit: the anchor occurs exactly once, or the edit that consumed it has landed (the marker is present); and the probe names the file of the code-task line and one marker token.
+    const nAnchor = files[path] ? files[path].split(anchor).length - 1 : -1, nMarker = files[path] && typeof probe.contains === "string" ? files[path].split(probe.contains).length - 1 : -1;
+    ok(nAnchor === 1 || (nAnchor === 0 && nMarker >= 1), sd.title + ": the anchor occurs exactly once in " + path + " on main, or the edit that consumed it has landed (the marker is present)", { nAnchor, nMarker });
+    ok(probe.paths.join() === path && typeof probe.contains === "string" && /^[A-Z0-9][A-Z0-9-]{6,}$/.test(probe.contains), sd.title + ": the code-probe names the file of the code-task line and one marker token (" + probe.contains + ")");
     deny.lastIndex = 0;
     ok(!deny.test(sd.title + "\n" + sd.description), sd.title + ": the planner's deny text (secrets, caps, deletions) is not in the issue");
     ok(!/claude\.ai|anthropic\.com/i.test(sd.description) && !sd.description.includes(PAYLOAD), sd.title + ": no claude.ai link, no outside text");
