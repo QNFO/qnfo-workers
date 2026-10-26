@@ -10,7 +10,7 @@ import {
   promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile,
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
-  shiftYear, planText, chatContext
+  shiftYear, planText, chatContext, placeCards, moveCards
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -455,7 +455,7 @@ console.log("\n[trip: visa counter, plan, weather, fog, check-in, import]");
   raw.prepare("INSERT INTO events (id, category, title, city, start_date, end_date, ingested_at) VALUES ('h1', 'lodging', 'Lake Inn', 'Lakes', '2026-11-04', '2026-11-06', 'x')").run();
   const httpWx = async (url) => /geocoding/.test(url) ? http(url) : { daily: { time: ["2026-11-03"], weather_code: [2], temperature_2m_max: [21], temperature_2m_min: [9], precipitation_sum: [0] } };
   const tr = await (await handleTravel(new Request(H + "/travel/api/trip", { headers: cookie }), envK, { now: NOW, http: httpWx })).json();
-  ok("trip view: stops, visa lines, days with weather, check-in drafts", tr.ok && tr.stops.length === 1 && tr.visa.length === 1 && tr.days[0].wx && tr.days[0].wx.text === "partly cloudy" && tr.checkins.length === 1 && /early check-in/.test(tr.checkins[0].draft), tr);
+  ok("trip view: stops, places, moves, visa lines, days with weather, check-in drafts", tr.ok && tr.stops.length === 1 && tr.places.length === 1 && Array.isArray(tr.moves) && tr.visa.length === 1 && tr.days[0].wx && tr.days[0].wx.text === "partly cloudy" && tr.checkins.length === 1 && /early check-in/.test(tr.checkins[0].draft), tr);
   ok("weather is cached by request", raw.prepare("SELECT COUNT(*) n FROM travel_weather").get().n === 1);
   ok("mark as sent records it and sends nothing", (await (await jp("/travel/api/checkin-sent", { id: "h1" })).json()).ok && raw.prepare("SELECT COUNT(*) n FROM travel_notices WHERE kind = 'checkin-sent'").get().n === 1);
   ok("the trip view needs sign-in", (await handleTravel(new Request(H + "/travel/api/trip"), envK, { now: NOW })).status === 401);
@@ -473,6 +473,40 @@ console.log("\n[trip: visa counter, plan, weather, fog, check-in, import]");
   await travelTick(env, tdeps);
   const vm = sent.filter((m) => /^Visa:/.test(m.sub));
   ok("the tick mails a visa overstay once", vm.length === 1 && /overstays Nepal/.test(vm[0].sub) && /travel\.q08\.org/.test(vm[0].b), sent.map((m) => m.sub));
+}
+
+console.log("\n[pillars: places and getting around]");
+{
+  const stops = [
+    { id: "a", city: "Valley", country: "NP", lat: 27.7, lon: 85.3, start_date: "2026-12-10", end_date: "2026-12-14" },
+    { id: "b", city: "Riverside", country: "IN", lat: 25.3, lon: 83.0, start_date: "2026-12-14", end_date: "2026-12-18" },
+    { id: "c", city: "Coast", country: "IN", lat: 15.5, lon: 73.8, start_date: "2026-12-18", end_date: "2026-12-25" }
+  ];
+  const lodging = [{ title: "River Inn", city: "Riverside", start_date: "2026-12-14", end_date: "2026-12-16" }];
+  const wx = { b: { "2026-12-14": { kind: "forecast", tmax: 21.4, tmin: 7.6 }, "2026-12-15": { kind: "forecast", tmax: 19, tmin: 6 } } };
+  const pc = placeCards(stops, "2026-12-01", wx, lodging, { ...C, adults: "2" });
+  const r = pc.find((x) => x.id === "b");
+  ok("places: one card per stop with nights", pc.length === 3 && r.nights === 4);
+  ok("places: sleep shows the booked stay and the nights still open", r.sleep.booked[0] === "River Inn" && r.sleep.nights_open === 2 && /group_adults=2/.test(r.sleep.search), r.sleep);
+  ok("places: weather range and fog season", r.weather && r.weather.low === 6 && r.weather.high === 21 && r.fog === true && pc[2].fog === false);
+  ok("places: eat, do and sleep questions name the place and dates", /eat in Riverside, India \(2026-12-14 to 2026-12-18\)/.test(r.ask.eat) && /do in Riverside/.test(r.ask.do) && /stay in Riverside/.test(r.ask.sleep));
+  const mc = moveCards(stops, "2026-12-01", [{ title: "Flight to Riverside", city: "Riverside", start_date: "2026-12-14", end_date: "2026-12-14" }]);
+  ok("getting around: one move per change of place, with the booked journey", mc.length === 2 && mc[0].from === "Valley" && mc[0].to === "Riverside" && mc[0].booked[0] === "Flight to Riverside" && mc[0].cross === true && mc[1].booked.length === 0);
+  ok("getting around: fog from the place being left, transit link and a question", mc[1].fog === true && /google\.com\/maps\/dir/.test(mc[1].transit) && /Riverside, India to Coast, India on 2026-12-18/.test(mc[1].ask));
+  ok("getting around: past moves are dropped", moveCards(stops, "2026-12-15", []).length === 1);
+}
+
+console.log("\n[sign-in mail]");
+{
+  const { raw, env } = freshEnv();
+  const got = [];
+  const deps = { now: NOW, key: "k", send: async () => ({ ok: false, error: "companion e-mail is off (wellbeing_config email_mode)" }), sendCode: async (s, b) => { got.push(s); return { ok: true }; } };
+  const r = await handleTravel(new Request("https://travel.q08.org/travel/login", { method: "POST" }), env, deps);
+  ok("the code goes through the sign-in sender even when travel mail is off", r.status === 200 && got.length === 1 && /^Travel planner code: \d{6}$/.test(got[0]), got);
+  const bad = await handleTravel(new Request("https://travel.q08.org/travel/login", { method: "POST" }), env, { now: NOW, key: "k", sendCode: async () => ({ ok: false, error: "companion e-mail is off (wellbeing_config email_mode)" }) });
+  const html = await bad.text();
+  ok("a failed send shows plain words, not a config key", /the code didn.t go out/.test(html) && !/wellbeing_config|email_mode/.test(html), html.slice(0, 300));
+  ok("a failed send leaves no live code behind", raw.prepare("SELECT COUNT(*) n FROM travel_logins").get().n === 1);
 }
 
 console.log("\n[repository hygiene]");

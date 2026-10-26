@@ -1,5 +1,14 @@
-// q08-mind — mind.q08.org  (2.1.0)
+// q08-mind — mind.q08.org  (2.2.0)
 // A reading list for the inside. Primary sources, one question each, and a probe.
+//
+// MIND-BOOKS-1 (2.2.0, 2026-10-26, pillar personal; minor: new pages and a new data product). The owner asked (2026-10-21) for
+// "another subdomain of Q08 that really helps me understand myself better ... I'm not really into New Age or guru type shit ...
+// figure out what I can read that will help me understand myself and my own perceived condition and place in life". The 2.1.0
+// corpus answered with papers and scale validations: right as evidence, wrong as reading. 2.2.0 puts a reading list first
+// (data/books.json: books, memoir and essays under his three questions, each with why, an honest caveat and a lane), keeps the
+// papers as "the evidence underneath", and adds /now, today's pick in a lane. The companion at me.q08.org links to
+// /now?lane=gentle|steady|deep chosen from his own mood record; only the lane name arrives here, nothing is stored, and the
+// pick is a pure function of the date and the lane, so this worker stays binding-free.
 // Binding-free by design: no D1/KV/R2/AI/service bindings, no outbound fetches,
 // no client-side JavaScript. The corpus is data (data/entries-*.json), so a wrong
 // entry is fixed by editing JSON, never by editing rendering code.
@@ -10,12 +19,36 @@
 
 import A from "./data/entries-a.json";
 import B from "./data/entries-b.json";
+import BOOKS from "./data/books.json";
 
-var VERSION = "2.1.0";
-const BUILT = "2026-10-21";
+var VERSION = "2.2.0";
+const BUILT = "2026-10-26";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));
-const CAPABILITIES = ["reading-list", "evidence-graded-corpus", "shelves", "entry-pages", "json-api", "rss-feed", "sitemap"];
+const CAPABILITIES = ["reading-list", "evidence-graded-corpus", "shelves", "entry-pages", "json-api", "rss-feed", "sitemap", "book-list", "daily-pick"];
+const BOOK_BY_SLUG = new Map(BOOKS.map((b) => [b.s, b]));
+const QUESTIONS = [
+  { id: "mind", label: "How my mind works", blurb: "What a brain is doing when you feel, think and remember, and why looking inward gives unreliable answers." },
+  { id: "condition", label: "What I'm going through", blurb: "Low mood and anxiety from the inside, by people who lived it, and the few self-help books that were actually tested." },
+  { id: "place", label: "Where I fit", blurb: "Time, meaning and how to live, from philosophers who were honest about doubt." },
+];
+const LANES = {
+  gentle: ["Gentle", "Short, warm and practical. Fine for a heavy day."],
+  steady: ["Steady", "Real substance at a normal pace. Some deal frankly with hard experiences."],
+  deep: ["Deep", "Longer or harder going. For a week with some room in it."],
+};
+const LEN = { short: "short read", medium: "a few weeks of evenings", long: "long; dip in" };
+const DAY_MS = 864e5;
+// The pick is a pure function of the day and the lane: the question rotates by day, and within it the lane's books take turns.
+function pickFor(lane, atMs) {
+  const l = LANES[lane] ? lane : "steady";
+  const day = Math.floor((atMs + 36e5) / DAY_MS); // Amsterdam is UTC+1 or +2; a fixed +1 h keeps the flip near midnight
+  const pool = BOOKS.filter((b) => b.lane === l);
+  const q = QUESTIONS[day % QUESTIONS.length].id;
+  const inQ = pool.filter((b) => b.q === q);
+  const list = inQ.length ? inQ : pool;
+  return { lane: l, book: list[Math.floor(day / QUESTIONS.length) % list.length] };
+}
 const LIMITATIONS = ["static, read-only content with no accounts or tracking", "no model inference, data bindings, or outbound requests"];
 
 const SHELVES = [
@@ -37,7 +70,8 @@ const GRADES = {
   P: ["Argument, not measurement", "A philosophical or primary text. It can be right and still be untested."],
 };
 
-const START = ["killingsworth-wandering", "nisbett-wilson", "vazire-soka", "gollwitzer-plans", "osc-2015"];
+// MIND-BOOKS-1: two of the five slugs named entries that never existed, so the start page showed three.
+const START = ["killingsworth-gilbert", "nisbett-wilson", "vazire-soka", "gollwitzer-implementation-intentions", "osc-2015"];
 
 const esc = (s) =>
   String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -76,12 +110,17 @@ ul.plain li:last-child{border-bottom:0}
 .badge{display:inline-block;font:600 .68rem/1.5 ui-sans-serif,system-ui,sans-serif;letter-spacing:.03em;padding:.05rem .38rem;border:1px solid var(--line);border-radius:3px;color:var(--mut);vertical-align:middle;white-space:nowrap}
 .g-A{color:#2f6b3a;border-color:#2f6b3a55}.g-B{color:#3a5d7a;border-color:#3a5d7a55}
 .g-C{color:#8a5a12;border-color:#8a5a1255}.g-D{color:#8f2f2f;border-color:#8f2f2f55}.g-P{color:var(--mut)}
+.book{padding:.9rem 0;border-bottom:1px solid var(--line)}.book:last-child{border-bottom:0}
+.lane{display:inline-block;font:600 .68rem/1.5 ui-sans-serif,system-ui,sans-serif;letter-spacing:.03em;padding:.05rem .38rem;border:1px solid var(--line);border-radius:3px;color:var(--mut)}
+.note{color:var(--mut);font-size:.9rem}
+.pick{border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0 2rem}
+.pick h2{margin-top:0}
 .probe{border-left:2px solid var(--acc);padding:.1rem 0 .1rem .9rem;margin:1.2rem 0;color:var(--fg)}
 .probe b{display:block;font:600 .72rem/1.6 ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:.25rem}
 footer{margin-top:3.4rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--mut);font-size:.8rem}
 code{font:.85em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--fg) 7%,transparent);padding:.05rem .25rem;border-radius:3px}
 </style></head><body><main>${body}
-<footer>mind · <a href="/method">method</a> · <a href="/outside">outside view</a> · <a href="/record">record</a> · <a href="/api/entries.json">api</a> · <a href="/feed.xml">rss</a><br>No tracking, no accounts, no data plane. ${esc(VERSION)}</footer>
+<footer>mind · <a href="/">reading list</a> · <a href="/now">today</a> · <a href="/how">how it chooses</a> · <a href="/evidence">the evidence underneath</a> · <a href="/method">method</a> · <a href="/outside">outside view</a> · <a href="/record">record</a> · <a href="/api/entries.json">api</a> · <a href="/feed.xml">rss</a><br>No tracking and no accounts. Nothing about you is stored here. ${esc(VERSION)}</footer>
 </main></body></html>`;
 }
 
@@ -90,8 +129,72 @@ function entryList(list) {
 <div class="meta">${esc(e.a)}${e.y ? ` · ${esc(e.y)}` : ""} · ${badge(e.e)}</div></li>`).join("")}</ul>`;
 }
 
-function home() {
-  const body = `<h1>A reading list for the inside.</h1>
+function bookLine(b, full) {
+  const rel = b.x && BY_SLUG.get(b.x);
+  return `<div class="book"><a class="q" href="/b/${esc(b.s)}">${esc(b.t)}</a>
+<div class="meta">${esc(b.a)} · ${esc(b.y)} · ${esc(b.k)} · ${esc(LEN[b.len] || b.len)} · <span class="lane">${esc((LANES[b.lane] || [b.lane])[0])}</span></div>
+${full ? `<p style="margin-top:.5rem">${esc(b.w)}</p><p class="note"><b>Worth knowing:</b> ${esc(b.h)}</p>${b.r ? `<p class="note"><b>How to start:</b> ${esc(b.r)}</p>` : ""}<p class="note"><a href="${esc(b.l)}" rel="noopener">Find a copy</a>${b.pd ? ` · <a href="${esc(b.pd)}" rel="noopener">free online (public domain)</a>` : ""}${rel ? ` · the research behind it: <a href="/q/${esc(rel.s)}">${esc(rel.q)}</a>` : ""}</p>` : ""}</div>`;
+}
+
+function pickBox(lane, atMs, heading) {
+  const { lane: l, book } = pickFor(lane, atMs);
+  if (!book) return "";
+  return `<div class="pick"><h2>${esc(heading)}</h2>${bookLine(book, true)}
+<p class="meta">Lane: ${esc(LANES[l][0])}. ${esc(LANES[l][1])} Other lanes today: ${Object.keys(LANES).filter((k) => k !== l).map((k) => `<a href="/now?lane=${k}">${esc(LANES[k][0].toLowerCase())}</a>`).join(", ")}.</p></div>`;
+}
+
+function home(atMs) {
+  const body = `<h1>Reading to understand yourself</h1>
+<p class="sub">Books, memoirs and essays about how your mind works, what you might be going through, and where you fit. Chosen from psychology, neuroscience, philosophy and honest first-person writing. No gurus, no personality types, no promises. Each one says plainly what it is good for and what to be careful about.</p>
+${pickBox("gentle", atMs, "Today's pick")}
+${QUESTIONS.map((q) => `<h2 id="${q.id}">${esc(q.label)}</h2><p class="note">${esc(q.blurb)}</p>${BOOKS.filter((b) => b.q === q.id).map((b) => bookLine(b, false)).join("")}`).join("")}
+<h2>How to use this</h2>
+<p>Read one thing at a time, slowly, and stop whenever a book is making you feel worse rather than clearer. Notice what you recognise and what you don't; both tell you something. If a passage makes you think of something you log in your companion, write a line about it there. If something comes up that you want to talk through, a book is a good thing to bring to your huisarts or a therapist.</p>
+<p class="note"><a href="/how">How the pick is chosen</a> · <a href="/evidence">The evidence underneath</a>: the papers and measurements these books rest on, each graded by how well it has held up.</p>
+<p class="note">If reading pulls you somewhere dark: in the Netherlands, 113 Zelfmoordpreventie answers on 113 or 0800-0113, day and night, and chats at 113.nl. In an emergency, call 112.</p>`;
+  return page("Reading to understand yourself — mind", body);
+}
+
+function nowPage(lane, atMs) {
+  const l = LANES[lane] ? lane : "steady";
+  const body = `<h1>Something to read today</h1>
+<p class="sub">${esc(l === "gentle" ? "Something short and kind. Stop whenever you like." : l === "deep" ? "One that asks a little more of you." : "Today's pick from the reading list.")}</p>
+${pickBox(l, atMs, "Today")}
+<p class="note"><a href="/">The whole list</a> · <a href="/how">How this is chosen</a></p>`;
+  return page("Today — mind", body);
+}
+
+function bookPage(slug, atMs) {
+  const b = BOOK_BY_SLUG.get(slug);
+  if (!b) return null;
+  const q = QUESTIONS.find((x) => x.id === b.q);
+  const same = BOOKS.filter((x) => x.q === b.q && x.s !== b.s && x.lane === b.lane).slice(0, 3);
+  const body = `<h1>${esc(b.t)}</h1>
+<p class="sub">${esc(b.a)} · ${esc(b.y)}</p>
+${bookLine(b, true).replace(/^<div class="book"><a class="q"[^>]*>[^<]*<\/a>/, '<div class="book">')}
+<p class="meta">Part of: <a href="/#${esc(b.q)}">${esc(q ? q.label : b.q)}</a></p>
+${same.length ? `<h2>Next, in the same spirit</h2>${same.map((x) => bookLine(x, false)).join("")}` : ""}`;
+  return page(`${b.t} — mind`, body);
+}
+
+function howPage() {
+  const body = `<h1>How it chooses</h1>
+<p class="sub">Plainly, so you can trust it or ignore it.</p>
+<h2>What is on the list</h2>
+<p>Books, memoirs and essays that are well regarded by people who study the mind or who write honestly about their own. Every entry says what it is good for and what to watch out for: a finding that did not replicate, a theory that is still argued about, a memoir that describes something hard. Self-help is included only where it was tested, or where it is honest about being opinion.</p>
+<h2>Three questions</h2>
+<p>${QUESTIONS.map((q) => `<b>${esc(q.label)}</b>: ${esc(q.blurb)}`).join("<br>")}</p>
+<h2>Three lanes</h2>
+<p>${Object.values(LANES).map((v) => `<b>${esc(v[0])}</b>: ${esc(v[1])}`).join("<br>")}</p>
+<h2>Today's pick</h2>
+<p>Each day the pick moves to the next question, and within it to the next book in the lane, so over a few weeks you see the whole list without repeats. When you open it from your companion at me.q08.org, the companion chooses the lane from how you have been: gentle after a heavy day or two, deep after a steadier week, steady otherwise. Only the lane name travels in the link. Nothing about you is sent to this site or kept here.</p>
+<h2>What this is not</h2>
+<p>Not therapy and not diagnosis. A book can help you name and understand what is going on; it cannot replace a person who knows you. If things are hard, the guide at me.q08.org/guide lists who to call.</p>`;
+  return page("How it chooses — mind", body);
+}
+
+function evidenceHome() {
+  const body = `<h1>The evidence underneath</h1>
 <p class="sub">Primary sources on how attention, self-knowledge, feeling and will actually work. One question each, an evidence grade, and a probe you can run on yourself. Not therapy, not diagnosis, not a personality test.</p>
 <p><a href="/start">Start with five</a> · <a href="/method">How the grades work</a></p>
 <h2>The shelves</h2>
@@ -101,7 +204,7 @@ function home() {
   }).join("")}</ul>
 <h2>Why this shape</h2>
 <p>Most writing about the mind is a claim with no size attached. Here every entry says what kind of evidence stands behind it, and the <a href="/s/evidence">evidence shelf</a> keeps five claims that did not survive replication, because knowing the failure rate is part of knowing yourself.</p>`;
-  return page("mind — a reading list for the inside", body);
+  return page("The evidence underneath — mind", body);
 }
 
 function startPage() {
@@ -201,6 +304,9 @@ function apiJson() {
     shelves: SHELVES.map((s) => ({ id: s.id, label: s.label, count: ENTRIES.filter((e) => e.sh === s.id).length })),
     grades: Object.fromEntries(Object.entries(GRADES).map(([g, m]) => [g, { label: m[0], note: m[1] }])),
     entries: ENTRIES,
+    questions: QUESTIONS,
+    lanes: Object.fromEntries(Object.entries(LANES).map(([k, v]) => [k, { label: v[0], note: v[1] }])),
+    books: BOOKS,
   }, null, 1);
 }
 
@@ -210,12 +316,12 @@ function feed() {
 }
 
 function sitemap() {
-  const urls = ["/", "/start", "/method", "/outside", "/record", ...SHELVES.map((s) => `/s/${s.id}`), ...ENTRIES.map((e) => `/q/${e.s}`)];
+  const urls = ["/", "/how", "/evidence", ...BOOKS.map((b) => `/b/${b.s}`), "/start", "/method", "/outside", "/record", ...SHELVES.map((s) => `/s/${s.id}`), ...ENTRIES.map((e) => `/q/${e.s}`)];
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>https://mind.q08.org${u}</loc><lastmod>${BUILT}</lastmod></url>`).join("")}</urlset>`;
 }
 
-const html = (body, status = 200) =>
-  new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+const html = (body, status = 200, cache = "public, max-age=300") =>
+  new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, "referrer-policy": "no-referrer" } });
 const text = (body, type, status = 200) =>
   new Response(body, { status, headers: { "content-type": type, "cache-control": "public, max-age=300" } });
 
@@ -224,13 +330,20 @@ var __wm_default = {
     const url = new URL(request.url);
     const p = url.pathname.replace(/\/+$/, "") || "/";
 
-    if (p === "/health") return text(JSON.stringify({ ok: true, worker: "q08-mind", version: VERSION, capabilities: CAPABILITIES, limitations: LIMITATIONS, entries: ENTRIES.length, shelves: SHELVES.length, built: BUILT }), "application/json; charset=utf-8");
+    if (p === "/health") return text(JSON.stringify({ ok: true, worker: "q08-mind", version: VERSION, capabilities: CAPABILITIES, limitations: LIMITATIONS, entries: ENTRIES.length, books: BOOKS.length, shelves: SHELVES.length, built: BUILT }), "application/json; charset=utf-8");
     if (p === "/api/entries.json") return text(apiJson(), "application/json; charset=utf-8");
     if (p === "/feed.xml") return text(feed(), "application/rss+xml; charset=utf-8");
     if (p === "/sitemap.xml") return text(sitemap(), "application/xml; charset=utf-8");
     if (p === "/robots.txt") return text("User-agent: *\nAllow: /\nSitemap: https://mind.q08.org/sitemap.xml\n", "text/plain; charset=utf-8");
 
-    if (p === "/") return html(home());
+    if (p === "/") return html(home(Date.now()), 200, "public, max-age=600");
+    if (p === "/now") return html(nowPage(url.searchParams.get("lane") || "gentle", Date.now()), 200, "private, no-store");
+    if (p === "/how") return html(howPage());
+    if (p === "/evidence") return html(evidenceHome());
+    if (p.startsWith("/b/")) {
+      const out = bookPage(decodeURIComponent(p.slice(3)), Date.now());
+      return out ? html(out) : notFound();
+    }
     if (p === "/start") return html(startPage());
     if (p === "/method") return html(methodPage());
     if (p === "/outside") return html(outsidePage());
@@ -252,7 +365,7 @@ var __wm_default = {
 };
 
 function notFound() {
-  return html(page("Not found — mind", `<h1>Not found</h1><p>That page does not exist. The corpus is ${ENTRIES.length} entries across ${SHELVES.length} shelves.</p><p><a href="/">Contents</a> · <a href="/start">Start with five</a></p>`), 404);
+  return html(page("Not found — mind", `<h1>Not found</h1><p>That page does not exist.</p><p><a href="/">The reading list</a> · <a href="/evidence">The evidence underneath</a></p>`), 404);
 }
 export default __wm_default;
 

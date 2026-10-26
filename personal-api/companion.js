@@ -69,8 +69,14 @@
 //      screen, notifications, first check-in, safety plan) until each step is done or he hides it.
 //  26. The chat he already uses carries the companion: once a day, when no mood is logged, the twin asks how he is at the end of
 //      its answer and logs it; while no phone is set up for notes, it mentions me.q08.org once every three days.
+//
+// COMPANION-READING-1 (2026-10-26, owner: "another subdomain ... that really helps me understand myself better ... not New Age or
+// guru type shit"): the reading list lives at mind.q08.org (q08-mind, no data plane). The companion is what knows how he has been.
+//  27. Today shows "Something to read": one pick from mind.q08.org/now in a lane chosen from his own mood record (gentle on a low
+//      day or a low two days, deeper after a steady week, steady otherwise). Only the lane name leaves this worker, in the link;
+//      no score, date or word of his goes to the reading site.
 
-export const COMPANION_VERSION = "1.10.0";
+export const COMPANION_VERSION = "1.11.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1410,6 +1416,18 @@ export async function moodStats(env, day) {
   const avg = (xs) => xs.length ? Math.round(xs.reduce((a, b) => a + Number(b.m), 0) / xs.length * 100) / 100 : null;
   return { today: t, energy_today: e, avg7: days.length >= 3 ? avg(days) : null, avg2: days.length >= 3 ? avg(days.slice(0, 2)) : null, days7: days.length };
 }
+// Rule 27. Mood is 1-5. A missing record reads as steady, never as low.
+export const MIND_URL = "https://mind.q08.org/now";
+export function readingLane(mood, lowDay) {
+  const m = mood || {};
+  let lane = "steady", why = "Today's pick from your reading list.";
+  if (lowDay || (m.today !== null && m.today !== undefined && m.today <= 2) || (m.avg2 !== null && m.avg2 !== undefined && m.avg2 <= 2.25)) {
+    lane = "gentle"; why = "Something short and kind, since the last day or two have been heavy. Stop whenever you like.";
+  } else if (m.avg7 !== null && m.avg7 !== undefined && m.avg7 >= 3.5 && (m.today === null || m.today === undefined || m.today >= 3)) {
+    lane = "deep"; why = "A steadier week, so this one asks a little more of you.";
+  }
+  return { lane, why, url: MIND_URL + "?lane=" + lane };
+}
 export async function retiredKinds(env, cfg, atIso) {
   const rows = await all(env.PERSONAL, "SELECT kind, COUNT(*) AS fired, SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done, MAX(ts) AS last_ts FROM companion_nudges WHERE ts >= datetime('now', '-28 days') GROUP BY kind").catch(() => []);
   return retiredFrom(rows, cfg, Date.parse(atIso || nowIso()));
@@ -1807,6 +1825,7 @@ export async function today(env, deps) {
   return {
     day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: (st.mood.today !== null && st.mood.today <= 2) || st.crisisLevel24h >= 1,
+    reading: readingLane(st.mood, st.crisisLevel24h >= 1),
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
     projects, push_ready: st.pushReady, nudges_today: st.todays.length, cap: st.cfg.max_per_day,
@@ -2362,6 +2381,7 @@ table{width:100%;border-collapse:collapse;font-size:.92rem}td,th{text-align:left
 <tr><td>Midday, if the day has no shape</td><td>One small thing, picked from what has helped you before and what fits your energy</td><td>"Did it" or "Not today". Both are fine.</td></tr>
 <tr><td>Evening</td><td>One line for the day, if you want</td><td>A sentence, or nothing</td></tr>
 <tr><td>Sunday evening</td><td>Your week: how it went, what helped, one idea for next week</td><td>Read it. Nothing to do.</td></tr>
+<tr><td>When you want to read</td><td>"Something to read": one pick from <a href="https://mind.q08.org/">mind.q08.org</a>, gentler on heavy days</td><td>Read it, or don't</td></tr>
 <tr><td>Any time</td><td><b>Talk</b>: ask anything, think out loud, plan, find what's on</td><td>Whatever you need</td></tr></table>
 <p class="mute">At most three notes a day, never between 22:00 and 07:30, never during a calendar appointment, and fewer on busy days. Low day? It offers care, never tasks. Three unanswered notes in a row and it goes quiet except for "I'm here".</p></div>
 
@@ -2490,6 +2510,7 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  v.appendChild(moodCard(t));
  if(!t.push_ready&&!startShown)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
  if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);if(r.ok)rateBox(o,{action_id:t.one_thing.id})})}})]));v.appendChild(o)}
+ if(t.reading){v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to read'}),el('div',{cls:'mute',text:t.reading.why}),el('div',{cls:'row',style:'margin-top:8px'},[el('a',{href:t.reading.url,text:'Open today\u2019s pick'}),el('a',{href:'https://mind.q08.org/',text:'The whole list'})])]))}
  var info=[];if(t.sleep)info.push('Quiet overnight '+t.sleep.from+' to '+t.sleep.to+' (about '+t.sleep.hours+' h, from message times).');if(t.weather&&t.weather.weather)info.push('Weather: '+(typeof t.weather.weather==='string'?t.weather.weather:(t.weather.weather.summary||JSON.stringify(t.weather.weather))).slice(0,140));
  if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');if(t.light_day)info.push('A full day ('+t.events_today+' things on). I will keep nudges few and small.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
  v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Today'})].concat(info.map(function(x){return el('div',{cls:'mute',text:x})}))));
