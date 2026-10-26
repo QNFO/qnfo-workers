@@ -12,6 +12,8 @@ var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.definePrope
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.68.0";
 /* 1.68.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
+/* 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. */
+/* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
@@ -3196,13 +3198,16 @@ async function runRefresh(env, ctx, opts) {
     // "Worker invocation ended with exceededWallTime" (14 internalError/24h, issue class
     // from the Workers Observability API). Bound the refresh so the handler always
     // returns a state (possibly degraded) well before the platform wall limit.
-    let st;
+    let st, deadlineTimer;
     try {
+      // SUITE-IDLE-TIMER-1 (2026-10-26): the deadline timer is cleared once the race settles; it kept running for the full 90 s, so the offline architecture suite idled 90 s after its last assertion.
       st = await Promise.race([buildState(env, ctx), new Promise(function(_res, rej) {
-        setTimeout(function() {
+        deadlineTimer = setTimeout(function() {
           rej(new Error("REFRESH-DEADLINE-1: buildState exceeded 90000ms"));
         }, 9e4);
-      })]);
+      })]).finally(function() {
+        clearTimeout(deadlineTimer);
+      });
     } catch (eD) {
       const prev = await loadState(env);
       if (prev && prev.state) return prev.state;
@@ -15324,7 +15329,7 @@ __name(psrReview, "psrReview");
 // (program_focus) and moves them to the front of the code loop's queue, and each persona writes a plain brief (persona_briefs).
 // This page only reads them. A table that cannot be read is named in `unavailable`, never shown as an empty decision.
 async function managersView(env) {
-  const out = { schema_version: "fleet-managers/v1", ok: true, tick: null, portfolio: null, programs: [], focus_moves_24h: [], decisions_24h: [], decision_counts_24h: {}, history: [], unavailable: [] };
+  const out = { schema_version: "fleet-managers/v1", ok: true, tick: null, portfolio: null, programs: [], focus_moves_24h: [], decisions_24h: [], decision_counts_24h: {}, quality: null, recurring: [], root_causes: [], history: [], unavailable: [] };
   const read = async function(name, sql, params) {
     try {
       return await d1all(env.AUDIT, sql, params || []);
@@ -15342,6 +15347,11 @@ async function managersView(env) {
   out.focus_moves_24h = await read("program_focus_log", "SELECT ts, program_code, issue_id, action, reason FROM program_focus_log WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 40");
   out.decisions_24h = await read("persona_actions", "SELECT ts, persona_key, kind, issue_id, from_value, to_value, evidence, reverted_at FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 60");
   for (const c of await read("persona_actions", "SELECT kind, COUNT(*) AS n FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') GROUP BY kind")) out.decision_counts_24h[c.kind] = c.n;
+  const qrows = await read("quality_trend", "SELECT q.scope, q.quality_index, q.measured, q.in_breach, q.reopens_7d, (SELECT p.quality_index FROM quality_trend p WHERE p.scope = q.scope AND p.tick <= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY p.tick DESC LIMIT 1) AS index_24h FROM quality_trend q WHERE q.tick = (SELECT MAX(tick) FROM quality_trend)");
+  const qf = qrows.find(function(r) { return r.scope === "fleet"; });
+  if (qf) out.quality = { index: qf.quality_index, index_24h: qf.index_24h, measured: qf.measured, in_breach: qf.in_breach, reopens_7d: qf.reopens_7d, programs: qrows.filter(function(r) { return r.scope !== "fleet"; }) };
+  out.recurring = await read("issue_recurrence_now", "SELECT family, reopens_7d, issues_7d, reopens_24h, opens_24h, program_code FROM issue_recurrence_now ORDER BY reopens_7d DESC LIMIT 10");
+  out.root_causes = await read("agent_issues", "SELECT id, title, status, priority FROM agent_issues WHERE title LIKE 'ROOT-CAUSE-1:%' AND (status = 'open' OR updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 604800) * 1000) ORDER BY status = 'open' DESC, id DESC LIMIT 20");
   out.history = await read("portfolio_allocations", "SELECT tick, program_code, verdict, risk_score, slots, decision FROM portfolio_allocations WHERE tick >= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY tick DESC, program_code");
   const pb = briefs.find(function(b) { return b.level === "portfolio"; });
   out.portfolio = pb ? { persona: pb.persona_key, verdict: pb.verdict, summary: pb.summary } : null;
@@ -15369,6 +15379,18 @@ function managersHtml(v, holder) {
   if (v.unavailable && v.unavailable.length) body += '<p class="bad">Could not read: ' + esc(v.unavailable.join(", ")) + '.</p>';
   if (!v.tick) return head + body + '<p>The first management tick has not run yet (hourly at :35).</p></main></body></html>';
   if (v.portfolio) body += '<section class="card mg-hero"><h2 style="margin:0 0 6px">Portfolio manager <span class="tag ' + vcls(v.portfolio.verdict) + '">' + esc(v.portfolio.verdict) + '</span></h2>' + esc(v.portfolio.summary) + '</section>';
+  if (v.quality) {
+    const d = v.quality.index_24h == null ? "" : ' (24 hours ago ' + esc(String(v.quality.index_24h)) + ')';
+    const per = (v.quality.programs || []).map(function(r) { return esc(r.scope) + ' ' + (r.quality_index == null ? "unmeasured" : esc(String(r.quality_index))) + (r.index_24h == null || r.quality_index == null ? "" : ' (' + (r.quality_index - r.index_24h >= 0 ? "+" : "") + esc(String(Math.round((r.quality_index - r.index_24h) * 10) / 10)) + ')'); }).join(", ");
+    body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 6px">Quality: ' + esc(String(v.quality.index)) + ' of 100' + d + '</h2><p class="meta" style="margin:0 0 6px">The share of the ' + esc(String(v.quality.measured)) + ' measured fleet metrics that are on target (' + esc(String(v.quality.in_breach)) + ' in breach), and ' + esc(String(v.quality.reopens_7d)) + ' issue reopens in 7 days. A program whose quality falls 5 points in a day gets more focus. By program: ' + per + '.</p>';
+    if (v.recurring.length) {
+      body += '<table class="mg-t"><tr><th>Keeps coming back</th><th>Reopens, 7 days</th><th>Issues</th><th>Today</th><th>Program</th></tr>';
+      for (const r of v.recurring) body += '<tr><td>' + esc(r.family) + '</td><td>' + esc(String(r.reopens_7d)) + '</td><td>' + esc(String(r.issues_7d)) + '</td><td>' + esc(String(r.reopens_24h + r.opens_24h)) + '</td><td>' + esc(r.program_code || "") + '</td></tr>';
+      body += '</table>';
+    }
+    if (v.root_causes.length) body += '<p class="meta" style="margin:8px 0 0">Root-cause issues: ' + v.root_causes.map(function(r) { return '#' + esc(String(r.id)) + ' ' + esc(String(r.title).replace(/^ROOT-CAUSE-1: /, "")) + ' (' + esc(r.status) + ')'; }).join("; ") + '. Each closes once its family has been quiet for a day.</p>';
+    body += '</section>';
+  }
   body += '<div class="mg-grid">';
   for (const p of v.programs) {
     const items = p.focus.map(function(f) {

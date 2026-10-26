@@ -1,0 +1,63 @@
+name: lane-poke
+
+# PR-MERGE-SLA-10M-1 (2026-10-26, charter pillar autonomy; agent_issues 1000291). Owner directive 2026-10-26: every pull request merges within 10 minutes of opening.
+#
+# The stale-PR lane and the code-loop merge runner run on the 10-minute cron (CRON-MANDATE-1 forbids a faster one) and the signed GitHub webhook that would wake them
+# on an event has never received a delivery: its secret and its GitHub registration are owner-only steps (agent_issues 2582). This workflow is the event path that
+# needs neither. When a pull request opens or becomes ready, and when a check workflow finishes on a pull request, it sends one unsigned POST to
+# qnfo-fleet-control /gh/poke, which runs both merge ticks at once (debounced to one run a minute, switch ops_config gh_poke_enabled). A green pull request therefore
+# merges within about a minute of its last check instead of at the next tick. The poke trusts nothing it carries: it can only start a pass that the next cron tick
+# would run anyway, so a forged one costs one early tick.
+#
+# SECOND PATH: the 10-minute cron lane is unchanged. If this workflow is removed, disabled or refused, merges slow to one tick and fm-gh-poke-silent files an issue.
+# TOKEN: none. `permissions: {}` and no secret; the request carries only the event name as a hint.
+# DEBOUNCE: a poke inside the 60-second window answers {"debounced":true}; the step waits 65 seconds and pokes again (three tries at most), so the last event of a burst is
+# never the one that is dropped.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    branches: [main]
+  workflow_run:
+    workflows:
+      - deploy-gate
+      - mirror-guard
+      - version-bump-guard
+      - version-compare
+      - workflow-lint
+      - charter-guard
+      - adversarial-workers-guard
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+# One poke job runs and one waits; a newer waiting job replaces an older one, which is safe because the running job's retries and the waiting job's poke come after every event it replaced.
+concurrency:
+  group: lane-poke
+  cancel-in-progress: false
+
+jobs:
+  poke:
+    # Only a pull request's checks matter: a check workflow that finished on a push to main does not wake the lane.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
+    # RUNNER-PIN-2: ubuntu-latest becomes Ubuntu 26 by 2026-11-19; pinned like the other workflows.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      POKE_EVENT: ${{ github.event_name }}:${{ github.event.workflow_run.name || github.event.pull_request.number || 'manual' }}
+    steps:
+      - name: Poke the merge lane
+        run: |
+          set -u
+          url="https://qnfo-fleet-control.q08.workers.dev/gh/poke"
+          for try in 1 2 3; do
+            out="$(curl -sS -m 20 -X POST "$url" -H "X-Poke-Event: ${POKE_EVENT}" 2>&1)" || out="curl failed: $out"
+            echo "try ${try}: ${out}"
+            case "$out" in
+              *debounced*) sleep 65 ;;
+              *) break ;;
+            esac
+          done
+          # The cron lane is the second path: a failed poke is a slower merge, never a red run.
+          exit 0

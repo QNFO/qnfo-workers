@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.28.1-codeagent"; // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+var VERSION = "0.28.2-codeagent"; // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -2779,7 +2779,10 @@ async function intakeIssues(env, maxNew) {
     // when code_tasks cannot be read at all the issue is skipped (fail closed: an unread history must never look like none).
     let prior = null;
     for (const cols of ["id, status, last_error, merge_note, created_at, updated_at", "id, status, last_error, created_at, updated_at"]) {
-      try { prior = (await env.AUDIT_DB.prepare("SELECT " + cols + " FROM code_tasks WHERE goal LIKE ? ORDER BY created_at DESC LIMIT 10").bind(tag + "%").all()).results || []; break; } catch (e) { prior = null; }
+      // INTAKE-IM-DEDUPE-1: the RED-DRAIN-1 dispatch inserts ct_im<issue> straight into code_tasks with the issue in the middle of the goal ("-- issue #N"),
+      // never as the "[issue #N]" prefix this lookup used to match, so an issue it had already taken got a second task here (issue 1000209, PRs 4278 and 4282,
+      // 2026-10-26). The same id is how the PARKED-TASK-ISSUE-CLOSED-1 trigger links a task to its issue.
+      try { prior = (await env.AUDIT_DB.prepare("SELECT " + cols + " FROM code_tasks WHERE goal LIKE ? OR id = ? ORDER BY created_at DESC LIMIT 10").bind(tag + "%", "ct_im" + r.id).all()).results || []; break; } catch (e) { prior = null; }
     }
     if (prior === null) continue;
     const rd = intakeRetryDecision(prior, nowMs);

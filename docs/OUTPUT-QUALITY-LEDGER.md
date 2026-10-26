@@ -39,7 +39,7 @@ ask product. Clearing breaches, closing issues and passing gates measure the fle
 | Surface | Outcome measures | Proxies / validity |
 |---|---|---|
 | papers | `papers_with_open_high_errata_pct` (lower), `errata_high_net_inflow_7d` (lower) | `paper_same_paper_score_delta_7d`, `paper_new_score_saturation_14d`, `golden_run_complement_share_30d` |
-| essays (q08) | `q08_human_reads_7d`; `q08_retraction_rate_30d` once issue Q08-RETRACTION-METRIC-1 lands | `q08_panel_effective_votes_30d` |
+| essays (q08) | `q08_human_reads_7d`; `q08_retraction_rate_30d` (written by q08-signal-engine 0.36.0) | `q08_panel_effective_votes_30d` |
 | promotion | `outreach_human_clicks_7d`, `outreach_clicks_per_post_7d`, `social_engagement_rate_30d` | |
 | site | `engaged_human_sessions_28d` | |
 | code | `code_task_success_rate_30d`, `remediation_latest_pass_pct_7d` | |
@@ -76,6 +76,6 @@ The measures are written by `output_quality_heavy_tick`, a trigger on `fleet_tic
 - Errata come from a model reviewer; its errors correlate with the writers (ENSEMBLE-POLICY-1). A wider sweep raises the count without a worse paper, so read the share with the
   net inflow, and keep the belief probe `belief-paper-learn-errata-are-defects` (falsified if the fleet rejects over half of what it closes).
 - Reads include reads of retracted essays; clicks are not satisfaction. Promotion and site improving is evidence of reach, not of correctness.
-- Not yet measured: the quality of posts beyond clicks, the ask product's answers, an owner or reader verdict on papers, and the q08 retraction rate (issue Q08-RETRACTION-METRIC-1).
+- Not yet measured: the quality of posts beyond clicks, the ask product's answers, an owner or reader verdict on papers.
 - The ledger is wrong if the verdict reads `improving` while errata, retractions or reader complaints rise; that is a `validity` finding to fix in `output_quality_measures`, not a reason to
   add a measure that agrees.

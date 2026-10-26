@@ -20,6 +20,10 @@ os.environ["CLOUDFLARE_API_TOKEN"] = "tok-test"
 import apply_migrations  # noqa: E402
 import conflict_repair as cr  # noqa: E402
 
+# SUITE-IDLE-TIMER-1: repair() clears the zero-job runs of its push with the real sleep (PHANTOM_PASSES - 1 waits of PHANTOM_WAIT_S); the drive() cases
+# below call it twice and idled 2 x 16 s with no network. The passes still run; only the wait between them is dropped.
+cr.PHANTOM_WAIT_S = 0
+
 fails = 0
 
 
