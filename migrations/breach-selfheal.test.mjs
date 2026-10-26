@@ -8,6 +8,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 const sql = readFileSync(new URL("./2026-10-26-breach-selfheal.sql", import.meta.url), "utf8");
+const sqlWindow = readFileSync(new URL("./2026-10-26-breach-selfheal-post-deploy-window.sql", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 500))); } };
 const d = new DatabaseSync(":memory:");
@@ -29,6 +30,7 @@ const iso = (agoH) => new Date(now - agoH * H).toISOString();
 const dt = (agoH) => iso(agoH).slice(0, 19).replace("T", " ");
 const today = new Date(now).toISOString().slice(0, 10);
 d.exec(sql);
+d.exec(sqlWindow);
 const row = (cls, subj) => d.prepare("SELECT hit, diagnosis, evidence FROM v_breach_selfheal WHERE check_class = ? AND subject = ?").get(cls, subj);
 const cfg = (k) => (d.prepare("SELECT value FROM ops_config WHERE key = ?").get(k) || {}).value;
 const metric = (m) => (d.prepare("SELECT last_value FROM metric_registry WHERE metric = ?").get(m) || {}).last_value;
@@ -109,6 +111,12 @@ for (let i = 0; i < 30; i++) d.prepare("INSERT INTO worker_logs (script_name, ou
 ok(row("post-deploy-errors", "w-new").hit === 1 && row("post-deploy-errors", "w-new").diagnosis === "errors-after-deploy", "errors after a deploy are named", row("post-deploy-errors", "w-new"));
 ok(row("post-deploy-errors", "w-old").hit === 1 && row("post-deploy-errors", "w-old").diagnosis === "errors-sustained", "20+ errors without a deploy are sustained");
 ok(row("post-deploy-errors", "w-ok").hit === 0, "5 errors (and canceled requests) are not a breach");
+// BREACH-SELFHEAL-POST-DEPLOY-WINDOW-1: 25 errors before a deploy 30 minutes ago and none after is a fix, not a breach.
+d.prepare("INSERT INTO fleet_deploys (worker, ok, ts) VALUES ('w-fixed', 1, ?)").run(iso(0.5));
+for (let i = 0; i < 25; i++) d.prepare("INSERT INTO worker_logs (script_name, outcome, ts_ms, exceptions_json) VALUES ('w-fixed', 'exception', ?, '[]')").run(now - H);
+ok(row("post-deploy-errors", "w-fixed").hit === 0, "errors the latest deploy removed are not a breach", row("post-deploy-errors", "w-fixed"));
+d.prepare("INSERT INTO worker_logs (script_name, outcome, ts_ms, exceptions_json) VALUES ('w-fixed', 'exception', ?, '[]')").run(now - 0.1 * H);
+ok(/errors_since=1 /.test(row("post-deploy-errors", "w-fixed").evidence), "only errors after the deploy are counted", row("post-deploy-errors", "w-fixed"));
 tick();
 ok(metric("post_deploy_error_workers") === "2", "post_deploy_error_workers counts the two", metric("post_deploy_error_workers"));
 
@@ -128,6 +136,7 @@ for (const c of d.prepare("SELECT class, verify_probe FROM remediation_contracts
 }
 const before = JSON.stringify(d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get()) + JSON.stringify(d.prepare("SELECT COUNT(*) n FROM decision_log").get()) + cfg("breach_selfheal");
 d.exec(sql);
+d.exec(sqlWindow);
 ok(before === JSON.stringify(d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get()) + JSON.stringify(d.prepare("SELECT COUNT(*) n FROM decision_log").get()) + cfg("breach_selfheal"), "a second apply changes nothing");
 const rollback = sql.match(/^-- Rollback: (.*)$/m)[1];
 d.exec(rollback.replace(/; breach_selfheal_actions keeps.*$/, ";"));
