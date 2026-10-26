@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 21:09:04",
+  "audited_at": "2026-10-26 21:40:42",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -561,7 +561,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.37.5-thin-passed-over",
+        "version": "0.37.6-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -586,7 +586,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.41.1-codeagent",
+        "version": "1.42.0-gcp-inventory",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -681,7 +681,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.38.2-codeagent",
+        "version": "0.39.0-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1010,9 +1010,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.37.5-thin-passed-over",
+      "before": "0.37.6-codeagent",
       "http": 200,
-      "live": "0.37.5-thin-passed-over",
+      "live": "0.37.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1203,9 +1203,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.41.1-codeagent",
+      "before": "1.42.0-gcp-inventory",
       "http": 200,
-      "live": "1.41.1-codeagent",
+      "live": "1.42.0-gcp-inventory",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1598,9 +1598,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.38.2-codeagent",
+      "before": "0.39.0-codeagent",
       "http": 200,
-      "live": "0.38.2-codeagent",
+      "live": "0.39.0-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
