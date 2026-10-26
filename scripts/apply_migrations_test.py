@@ -429,8 +429,19 @@ ok(len(cp_m) == 1 and "ctl-3" in cp_m[0] and "and 1 more" in cp_m[0] and "ctl-0"
 cp_select = en_hdr + ("INSERT INTO control_registry (control, location, kind, disposition, disposition_state, alternate_path, evidence) "
                       "SELECT 'ctl-s', 'h', 'gate', 'keep', 'applied', 'alt', 'e' WHERE 1;\n")
 ok(cp_problems(cp_select) != [] and cp_problems(cp_select + cp_probe % "ctl-s") == [], "an INSERT ... SELECT of a control is judged too (any probe row in the file covers it)")
-ok(cp_problems(cp_one, birth=False) == [] and M.plan("migrations/cp.sql", cp_one)[1] != M.plan("migrations/cp.sql", cp_one, birth=False)[1],
-   "apply_file never refuses a merged file for it (plan birth=False), only --check does")
+ok(cp_problems(cp_one, birth=False) == [] and [p for p in M.plan("migrations/cp.sql", cp_one)[1] if "CONTROL-PROBE-AT-BIRTH-1" in p] == [] and cp_problems(cp_one) != [],
+   "plan() asks only when birth=True, so apply_file and the tests that plan() a merged file never refuse it for a missing probe")
+cp_cli = io.StringIO()
+cp_tmp = os.path.join(HERE, "_cp_gate_tmp.sql")
+open(cp_tmp, "w", encoding="utf-8", newline="\n").write(cp_one)
+try:
+    with contextlib.redirect_stdout(cp_cli):
+        rc_check = M.main(["--check", cp_tmp])
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc_hist = M.main(["--check", "--history", cp_tmp])
+finally:
+    os.remove(cp_tmp)
+ok(rc_check == 1 and "CONTROL-PROBE-AT-BIRTH-1" in cp_cli.getvalue() and rc_hist == 0, "--check refuses the file and --check --history lets it through", (rc_check, rc_hist, cp_cli.getvalue()[:120]))
 for good_file in ("2026-10-20-apply-migrations-lint.sql", "2026-10-26-control-alternate-probes4.sql", "2026-10-26-control-probe-at-birth.sql"):
     gp = os.path.join(HERE, "..", "migrations", good_file)
     ok(os.path.exists(gp) and cp_problems(open(gp, encoding="utf-8").read()) == [], "the sibling migration " + good_file + " that ships its probes passes")

@@ -657,9 +657,10 @@ def control_probe_problems(stmts, lines):
             "fm-control-alternate-undrilled files an issue); " + CONTROL_PROBE_HOW]
 
 
-def plan(path, text, birth=True):
-    """Validate one file. Returns (opted_in, problems, info). birth=False skips the checks that only guard a pull request (CONTROL-PROBE-AT-BIRTH-1):
-    a file already on main is applied as merged, never refused for a probe its author did not write."""
+def plan(path, text, birth=False):
+    """Validate one file. Returns (opted_in, problems, info). birth=True adds the checks that only guard a new or changed file in a pull request
+    (CONTROL-PROBE-AT-BIRTH-1); only --check asks for it (not --history), so a file already on main is applied as merged and never refused for a
+    probe its author did not write."""
     lines = header(text)
     by = header_value(lines, "APPLY-BY")
     if not by or by.split()[0].lower() != "ci":
@@ -853,7 +854,7 @@ def applied_by_other(acct, token, db_id, path, sha, err):
 
 
 def apply_file(path, text, acct, token, commit, emit=print):
-    ok, problems, info = plan(path, text, birth=False)
+    ok, problems, info = plan(path, text)
     if not ok:
         emit(json.dumps({"file": path, "skipped": info.get("skip")}))
         return 0
