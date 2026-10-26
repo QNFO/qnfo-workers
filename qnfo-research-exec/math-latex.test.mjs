@@ -65,7 +65,9 @@ const env = {
   AI: { async run() { throw new Error("no Workers AI call expected in this test"); } }
 };
 const bib = "## Bibliography\n" + [1, 2, 3, 4, 5].map((n) => "[" + n + "] arXiv:2401.0000" + n + " | Work " + n).join("\n") + "\n";
-const filler = "This section discusses the method in prose with no notation at all. ".repeat(130);
+// DEGENERATE-TEXT-PRODUCER-1 (0.39.0): finalGates now fails a paper that repeats one sentence back to back, which is what this filler used to be, so each sentence carries a different word.
+const lexw = (i) => { let s = "", k = i + 1; while (k > 0) { s += "abcdefghijklmnopqrstuvwxyz"[k % 26]; k = Math.floor(k / 26); } return "w" + s; };
+const filler = Array.from({ length: 130 }, (_, i) => "This section " + lexw(i) + " discusses the method in prose with no notation at all.").join(" ");
 const short = "This section states its part of the argument in plain prose without notation. ".repeat(4).trim();
 const mkPaper = (mathLine) => "# A Title\n\n## Abstract\n\n" + mathLine + "\n\n## 1. Introduction\n\n" + filler + " [1] [2] [3] [4] [5]\n\n## 2. Background and Related Work\n\n" + short + "\n\n## 3. Methods\n\n" + short + "\n\n## 4. Analysis\n\n" + short + "\n\n## 5. Results\n\n" + short + "\n\n## 6. Discussion\n\n" + short + "\n\n## 7. Practical Implications and Engineering Pathways\n\n" + short + "\n\n## 8. Conclusion\n\n" + short + "\n\n## References\n\n" + [1, 2, 3, 4, 5].map((n) => "[" + n + "] Work " + n + ". arXiv:2401.0000" + n + ".").join("\n") + "\n";
 const PSEUDO = mkPaper("We find T₁ ≈ 10⁻⁴ s and E = E_g 8 d^3 for code distance d.");

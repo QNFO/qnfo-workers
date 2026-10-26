@@ -16,10 +16,14 @@ const vars = ["THIN_BATCH", "THIN_RELATED_MAX", "THIN_RELATED_MIN", "THIN_RELATE
   const m = new RegExp("\\nvar " + c + " = ([^\\n]*;)").exec(src); if (!m) throw new Error("missing " + c); return "var " + c + " = " + m[1];
 }).join("\n");
 const fns = ["thinPaperUrl", "thinMatchQuery", "thinBump", "thinTargetText", "thinWorksBlock", "thinPrompt", "thinSectionCheck", "thinRereadPrompt", "insertPriorWork", "thinLog", "thinCandidates", "thinRelated", "thinPriorWork", "thinRun", "thinOff", "parseRereadVerdict", "parseJsonObject", "addChangelog", "applyVersionMarkers", "releaseGateVerdict"];
-const mod = new Function("aiText", vars + "\nvar __name = function(){};\nvar MODEL = 'writer-model'; var REREAD_MODEL = 'reader-model';\n" + fns.map(grab).join("\n") + "\nreturn { " + fns.join(", ") + " };");
+// DEGENERATE-TEXT-PRODUCER-1 (0.39.0): releaseGateVerdict reads the DEGENERATE-TEXT block, so the block is part of the function under test.
+const degenBlock = src.slice(src.indexOf("// DEGENERATE-TEXT-BEGIN"), src.indexOf("// DEGENERATE-TEXT-END"));
+const mod = new Function("aiText", vars + "\nvar __name = function(){};\nvar MODEL = 'writer-model'; var REREAD_MODEL = 'reader-model';\n" + degenBlock + "\n" + fns.map(grab).join("\n") + "\nreturn { " + fns.join(", ") + " };");
 console.error = () => {};
 
-const long = (n) => ("Lorem ipsum dolor sit amet, a process ontology of distinction. ").repeat(Math.ceil(n / 60)).slice(0, n);
+// The filler is varied text: a sentence repeated back to back is a model loop the release gate now fails as quality:repetition.
+const lexw = (i) => { let s = "", k = i + 1; while (k > 0) { s += "abcdefghijklmnopqrstuvwxyz"[k % 26]; k = Math.floor(k / 26); } return "w" + s; };
+const long = (n) => { let out = ""; for (let i = 0; out.length < n; i++) out += "Lorem ipsum " + lexw(i) + " sit amet, a process ontology of distinction. "; return out.slice(0, n); };
 const target = { slug: "spectral-schism", title: "The Spectral Schism in Holographic Physics", version: "1.0.0", body_md: "# The Spectral Schism\n\n" + long(9000) + "\n\n## References\n\nnone\n" };
 const rel = [
   { slug: "holographic-a", title: "Holographic Readout A", body_md: long(20000) },

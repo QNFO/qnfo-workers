@@ -12,8 +12,9 @@ let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d !== undefined ? " -- " + JSON.stringify(d).slice(0, 500) : "")); } };
 const quiet = async (fn) => { const l = console.log, e = console.error, w = console.warn; console.log = () => {}; console.error = () => {}; console.warn = () => {}; try { return await fn(); } finally { console.log = l; console.error = e; console.warn = w; } };
 
-const word = "argument ";
-const prose = (n) => (word.repeat(Math.ceil(n / word.length)).slice(0, n).trim() + ".");
+// DEGENERATE-TEXT-PRODUCER-1 (0.39.0): reconcile now strips or drops a draft that is one word repeated, which is what this fixture used to be, so the filler is varied text (every word distinct).
+const lex = (i) => { let s = "", k = i + 1; while (k > 0) { s += "abcdefghijklmnopqrstuvwxyz"[k % 26]; k = Math.floor(k / 26); } return "w" + s; };
+const prose = (n) => { let out = ""; for (let i = 0; out.length < n; i++) out += lex(i) + " "; return out.slice(0, n).trim() + "."; };
 const sec = (n, h, chars) => "## " + n + ". " + h + "\n\n" + prose(chars) + "\n";
 const head = "# A Long Paper\n\n## Abstract\n\n" + prose(500) + "\n\n";
 const refs = "\n## References\n\n[1] A work. arXiv:2401.00001.\n";
