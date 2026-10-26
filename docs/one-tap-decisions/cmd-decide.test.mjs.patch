@@ -1,5 +1,5 @@
 --- qnfo-fleet-dashboard/cmd-decide.test.mjs	2026-10-26 12:35:32.862078763 +0000
-+++ qnfo-fleet-dashboard/cmd-decide.test.mjs	2026-10-26 12:43:49.421174146 +0000
++++ qnfo-fleet-dashboard/cmd-decide.test.mjs	2026-10-26 12:45:22.197276640 +0000
 @@ -132,6 +132,10 @@
  const rows = (db, sql, ...a) => db.prepare(sql).all(...a);
  const one = (db, sql, ...a) => db.prepare(sql).get(...a);
@@ -130,7 +130,7 @@
      }
    }
    // (b) every one of the 73 live patterns, as card text, with the table dropped: typed verbs and /api/cmd/run refuse, nothing is written
-@@ -1032,5 +1036,118 @@
+@@ -1032,5 +1036,134 @@
    const j2 = await (await cmd(ok2.env, "approve ha:approve-logo-refresh", C2)).json();
    ok((j2.actions || []).some((a) => a.op === "approve"), "T29g with the markers readable a decision card that matches none is decidable", j2);
  }
@@ -246,6 +246,22 @@
 +  const iUia = order.findIndex((t) => /UIA-SOURCE/.test(t)), iOrcid = order.findIndex((t) => /ORCID/.test(t));
 +  ok(iUia >= 0 && iOrcid >= 0 && iUia < iOrcid, "T35f the card that can be decided in one tap comes before the card that is yours to do", order);
 +  ok(/class="meta st-split">\d+ to decide in one tap/.test(home), "T35g the heading says how many are one tap", home.slice(home.indexOf("st-split") - 20, home.indexOf("st-split") + 120));
++}
++
++// T36. the classic page (/classic, the page the owner reads on a phone): the same one-tap Done / Snooze / Not doing on a card that is not a decision, no confirm dialog
++{
++  const e = mk({ plain: true });
++  const C = await signIn(e.env, e.db, e.m);
++  const page = await (await call(e.env, "/classic", { headers: C })).text();
++  const at = page.indexOf("Add the selected works to ORCID");
++  const card = page.slice(at, page.indexOf("</article>", at));
++  ok(card.includes(tap("done", "ha:orcid-link-works") + ">Done<") && card.includes(tap("dismiss", "ha:orcid-link-works") + ">Not doing<") && card.includes('data-fleet-cmd="info ha:orcid-link-works">Details<') && card.includes('data-act="note">Add note<'), "T36 the classic card has Done, Not doing, Details and Add note", card.slice(0, 200));
++  ok(!card.includes('data-act="done"') && !card.includes('data-act="snooze"'), "T36a and no old confirm-dialog button for Done or Snooze on it");
++  const d = JSON.parse(/data-dec-op="done" data-dec-args="([^"]*)"/.exec(card)[1].replace(/&quot;/g, '"'));
++  const r = await run(e.env, "done", d, C);
++  ok(r.status === 200 && one(e.db, "SELECT status FROM human_actions WHERE slug = 'orcid-link-works'").status === "resolved", "T36b one tap on Done resolves it", await r.text());
++  const stranger = await (await call(e.env, "/classic")).text();
++  ok(!/data-dec-op=/.test(stranger) && !stranger.includes('data-act="done"'), "T36c a stranger still sees no control that changes the fleet");
 +}
  console.log(pass + " passed, " + fail + " failed");
  if (fail) process.exit(1);
