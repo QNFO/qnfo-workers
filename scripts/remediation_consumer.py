@@ -1121,6 +1121,24 @@ def consume_code(c, rec, out, trusted):
     out["pass" if passed == 1 else "fail"] += 1
 
 
+# PROBE-AUTHOR-SINK-GUARD-1 (2026-10-26, agent_issues 1000421, pillar security; doctrine section 9): the birth dry run of a probe the live-path author writes is gated to a number or one
+# short token, but every later pass re-runs the stored SQL and this runner recorded the first row's expected and observed untruncated in remediation_verifications and in its run log,
+# whose first 8000 characters the remediation-consumer workflow commits to main of the public repository, where git history cannot recall them. For a contract whose module is
+# probe-author-1 a pass whose expected or observed is not one short token (letters, digits and _ . : + -, 1 to 64 characters) is a probe-error with the reason free-text-value, raised
+# before anything is recorded (consume_one's handler logs the reason only, never the value). qnfo-fleet-control's remediation tick carries the same guard (rtSinkGuard).
+SINK_TOKEN_RE = re.compile(r"[A-Za-z0-9_.:+-]{1,64}")
+
+
+def sink_guard(c, exp, obs):
+    if str(c.get("module") or "") != "probe-author-1":
+        return
+    for v in (exp, obs):
+        if v is None or str(v).strip() == "":
+            continue
+        if not SINK_TOKEN_RE.fullmatch(str(v).strip()):
+            raise ValueError("free-text-value")
+
+
 def consume_d1(c, rec, out, trusted):
     """Run one d1-query (or d1-query@plane) contract: the REMEDIATION-CONSUMER-1 path, unchanged."""
     cls = c.get("class")
@@ -1142,6 +1160,7 @@ def consume_d1(c, rec, out, trusted):
     else:
         rows = d1(c["verify_probe"])
     exp, obs = extract_pair(rows)
+    sink_guard(c, exp, obs)
     passed, verdict = classify(exp, obs)
     rec["expected"] = exp
     rec["observed"] = obs
