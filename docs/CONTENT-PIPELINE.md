@@ -68,3 +68,13 @@ A gate or SLA changes only by migration, with the measurement that justifies it 
 - **Ideas:** 448 ideas sit in `triaged_hold`, and nothing re-reads a HOLD. They are shown as parked: a decision with a reason, but no expiry.
 - **Revision:** 107 papers sit at `needs-substantive-revision`, which QUALITY-GATE-1 marks as terminal. They are shown as parked so the backlog stays visible.
 - **q08.org:** 132 pieces were published and 131 retracted, 124 of them in one accuracy audit between 2026-10-10 and 2026-10-12. The grounding and fact-check gates now run before publication (`q08_audits`).
+
+## 5. What counts as past its SLA (CONTENT-PIPELINE-SLA-1, 2026-10-26)
+
+`content_items_over_stage_sla` is `SUM(over_sla)` of `v_content_pipeline`, so a row counts only when a loop can still move it, and each item counts once.
+
+- **Finished log rows leave the SLA.** `paper_revision_log` is an event log. The statuses `claim-corrected` and `integrity-restored` (published stage, done) and `claim-retracted`, `claim-withdrawn`, `thin-prior-work-rejected` and `thin-prior-work-skipped` (rejected stage, rejected) record something that already happened. `thin-prior-work-queued`, `loop-revision-queued` and `flagged` are read by a loop and still wait. A new outcome status is mapped here, in the same migration that makes the writer emit it (detector `fm-content-sla-misattributed`).
+- **One erratum, one SLA.** An `internal_errata` row (flow `internal-errata`) and its `errata_queue` row (flow `errata`, `subject` = the erratum id, `email_id` NULL) wait for the same event. The queue row is the one confirm, respond and route act on, so it carries the SLA; the `internal_errata` row stays listed with its state and `over_sla` 0 while the queue row exists (`idx_errata_queue_subject` keeps the lookup cheap). An `internal_errata` row without a queue row counts.
+- **One rewrite per paper.** The unstarted errata remediation rows of a paper (`research_queue` source `remediation`, `source_id` `errata:N`) are one row listing every erratum (`errata_remediation_merges` records what was merged; detector `fm-errata-remediation-duplicate`, owner issue 1000293).
+
+None of this closes, rejects or hides an erratum: the errata backlog stays in flow `errata`, and `papers_with_open_high_errata_pct` is unchanged. The step down of the metric at the apply of the migration is a correction of what is counted.
