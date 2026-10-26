@@ -83,5 +83,36 @@ console.log("\n[the chat he already uses (rule 26)]");
   c = await C.chatContext(env, deps("2026-10-30T08:30:00Z"), "hi", false);
   ok("chat: a pause silences the check-in too", !/CHECK-IN/.test(c));
 }
+
+console.log("\n[the check-in actually reaches him (COMPANION-CHECKIN-DELIVER-1)]");
+{
+  const ctxC = "COMPANION STATE\n- CHECK-IN (once today): ...";
+  const ctxS = "COMPANION STATE\n- SETUP NOTE (once): ...";
+  ok("follow-up: adds the check-in question the model left out", /how are you today, from 1 to 5\?$/.test(C.chatFollowUp(ctxC, "Tonight: jazz at the Bimhuis.")));
+  ok("follow-up: leaves a reply that already asks alone", C.chatFollowUp(ctxC, "Done. How are you feeling today, 1 to 5?") === "Done. How are you feeling today, 1 to 5?");
+  ok("follow-up: adds the me.q08.org note the model left out", /me\.q08\.org on your phone/.test(C.chatFollowUp(ctxS, "Hi Rowan.")));
+  ok("follow-up: nothing added beside a SAFETY or CARE answer", C.chatFollowUp(ctxC + "\nCARE: they sound worn down", "I'm here.") === "I'm here." && C.chatFollowUp(ctxS + "\nSAFETY: x", "I'm here.") === "I'm here.");
+  ok("follow-up: nothing added without the lines or to an empty reply", C.chatFollowUp("COMPANION STATE", "Hi.") === "Hi." && C.chatFollowUp(ctxC, "") === "");
+  const A = C.checkInAnswer;
+  ok("answer: reads 3, 4/5, '2 out of 5', '4 - tired but ok'", A("3").score === 3 && A("4/5").score === 4 && A("2 out of 5").score === 2 && A("4 - tired but ok").score === 4 && A("4 - tired but ok").note === "tired but ok");
+  ok("answer: ignores times, counts, other numbers and long messages", [null, "5 pm", "3 hours", "2 tickets", "10", "6", "3.5", "1:30", "what's on at 5 tonight", "4 " + "x".repeat(90), "2026"].every((x) => !A(x)));
+  raw.prepare("DELETE FROM cmp_mood").run();
+  raw.prepare("DELETE FROM wellbeing_config").run();
+  let c = await C.chatContext(env, deps("2026-11-02T08:30:00Z"), "hi", false);
+  ok("chat: asks first", /CHECK-IN/.test(c) && cfg("chat_checkin_day") === "2026-11-02");
+  const n0 = raw.prepare("SELECT COUNT(*) AS n FROM cmp_mood").get().n;
+  c = await C.chatContext(env, deps("2026-11-02T08:31:00Z"), "4", false);
+  const row = raw.prepare("SELECT score, source FROM cmp_mood ORDER BY ts DESC LIMIT 1").get();
+  ok("chat: his '4' after the ask is saved as today's mood", raw.prepare("SELECT COUNT(*) AS n FROM cmp_mood").get().n === n0 + 1 && row.score === 4 && /LOGGED just now/.test(c) && !/CHECK-IN/.test(c), { row, c });
+  raw.prepare("DELETE FROM cmp_mood").run();
+  raw.prepare("DELETE FROM wellbeing_config").run();
+  c = await C.chatContext(env, deps("2026-11-03T08:30:00Z"), "3", false);
+  ok("chat: a bare '3' before any ask is not taken as a mood", raw.prepare("SELECT COUNT(*) AS n FROM cmp_mood").get().n === 0 && !/LOGGED/.test(c));
+  raw.prepare("DELETE FROM wellbeing_config").run();
+  c = await C.chatContext(env, deps("2026-11-04T03:00:00Z"), "hi", false);
+  ok("chat: no setup note at 04:00", !/SETUP NOTE/.test(c));
+  const w = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  ok("worker: every chat reply path passes through chatFollowUp", (w.match(/CMP\.chatFollowUp\(companionContext, /g) || []).length === 3);
+}
 console.log("\n" + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

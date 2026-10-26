@@ -81,7 +81,7 @@
 //      day or a low two days, deeper after a steady week, steady otherwise). Only the lane name leaves this worker, in the link;
 //      no score, date or word of his goes to the reading site.
 
-export const COMPANION_VERSION = "1.11.0";
+export const COMPANION_VERSION = "1.12.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1975,6 +1975,23 @@ export function untrusted(v, n) {
     .replace(/\b(system|assistant|developer)\s*:/gi, "$1 -")
     .replace(/\s+/g, " ").trim().slice(0, n || 400);
 }
+// COMPANION-CHECKIN-DELIVER-1 (2026-10-26): the model ignored both lines (setup note 25 Oct, check-in 26 Oct) while the day was marked
+// used, so neither reached him. chatFollowUp appends them when the reply leaves them out; checkInAnswer reads a short "3" or "4/5" answer.
+export function checkInAnswer(q) {
+  const t = String(q || "").trim();
+  if (!t || t.length > 80) return null;
+  const m = t.match(/^([1-5])(?:\s*(?:\/|out of|of)\s*5)?(?![\d.:,]\d)(?:\s*[.!,;:-]*\s*)([^\d]{0,70})$/i);
+  if (!m || /^(?:am|pm|a\.m|p\.m|h|hr|hrs|hours?|min|mins|minutes?|uur|o'?clock|days?|weeks?|euros?|eur|x|times|people|persons?|tickets?|stars?)\b/i.test(m[2] || "")) return null;
+  return { score: Number(m[1]), note: m[2] ? m[2].trim().slice(0, 200) : "" };
+}
+export function chatFollowUp(ctxText, reply) {
+  let out = String(reply || "");
+  const c = String(ctxText || "");
+  if (!out.trim() || /SAFETY:|CARE:/.test(c)) return out;
+  if (c.includes("CHECK-IN (once today)") && !/\b1\s*(?:to|-|–)\s*5\b|how are you|how're you|how you are|how you're|how do you feel|how are things/i.test(out)) out = out.replace(/\s+$/, "") + "\n\nAnd how are you today, from 1 to 5?";
+  if (c.includes("SETUP NOTE (once)") && !/me\.q08\.org/i.test(out)) out = out.replace(/\s+$/, "") + "\n\n(If you open me.q08.org on your phone once, it takes two minutes and I can check in with you there too.)";
+  return out;
+}
 export async function chatContext(env, deps, q, companionMode) {
   try {
     await ensureSchema(env.PERSONAL);
@@ -1993,12 +2010,18 @@ export async function chatContext(env, deps, q, companionMode) {
     // Rule 26: the chat he already uses carries the companion (on 2026-10-20 no phone had ever been set up for notes).
     const putCfg = (k, v) => env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(k, JSON.stringify(v), nowIso()).run();
     const sig0 = crisisSignal(q);
+    // COMPANION-CHECKIN-DELIVER-1: a short numeric answer to today's check-in is saved here, not left to the model (2026-10-20..26: asked, never logged).
+    const ans = st.mood.today === null && st.cfg.chat_checkin_day === st.day && sig0.level === 0 ? checkInAnswer(q) : null;
+    if (ans) {
+      const r = await recordMood(env, deps, { score: ans.score, note: ans.note || undefined, tags: "chat" }).catch(() => null);
+      if (r && r.ok) { st.mood.today = ans.score; L.push("- LOGGED just now: they answered today's check-in with " + ans.score + "/5 and it is saved. Thank them in a few warm words and respond to how they feel; do not call cmp_mood again."); }
+    }
     if (!st.paused && st.mood.today === null && st.hour >= 8 && st.hour < 22 && st.cfg.chat_checkin_day !== st.day && sig0.level === 0 && (st.crisisLevel24h || 0) < 2) {
       L.push("- CHECK-IN (once today): their mood is not logged yet. First answer what they asked in full. Then end with one short, warm line asking how they are today, 1 to 5. When they answer with a number or a clear feeling, log it with cmp_mood. Leave it out if they are upset, rushed, or it would feel out of place.");
       await putCfg("chat_checkin_day", st.day);
     }
     const hintAge = st.cfg.chat_setup_hint_day ? (Date.parse(st.day + "T12:00:00Z") - Date.parse(String(st.cfg.chat_setup_hint_day) + "T12:00:00Z")) / 864e5 : Infinity;
-    if (!companionMode && !st.pushReady && !st.paused && hintAge >= 3 && sig0.level === 0) {
+    if (!companionMode && !st.pushReady && !st.paused && hintAge >= 3 && st.hour >= 8 && st.hour < 22 && sig0.level === 0) {
       L.push("- SETUP NOTE (once): their companion cannot send them its gentle check-ins yet, because no phone is set up for them. If it fits naturally at the end, say in one sentence that opening me.q08.org on their phone takes two minutes and lets it check in with them there. Do not press or repeat it.");
       await putCfg("chat_setup_hint_day", st.day);
     }
