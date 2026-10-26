@@ -30600,13 +30600,8 @@ async function noticeRepairTick(env, opts) {
     if (!rlEligible(p, pipe)) return !!backups[p.slug];
     return p.status !== "retracted";
   });
-  var out = { candidates: todo.length, restored: [], cleaned: [], blocked: [] };
+  var out = { candidates: todo.length, restored: [], cleaned: [], blocked: [], d1Errors: [], mirrorErrors: [] };
   var day = nowIso().slice(0, 10);
-  // NOTICE-REPAIR-SKIP-BLOCKED-1 (agent_issues 100274): the loop took the first NR_BATCH candidates of every tick, so eight papers that
-  // living-paper refuses (PUBLISH-FLOOR-BLOCKED: trg_papers_pub_floor_upd3 does not let a retracted paper go back to published under
-  // 20,000 chars) held the batch for ever and the 12 papers behind them, restorable ones among them, were never tried (candidates 20,
-  // restored [] on every tick from 18:00Z). A refused paper is recorded as blocked and the loop goes on to the next candidate; the
-  // batch counts repairs, not attempts, and a tick makes at most NR_ATTEMPTS_MAX attempts.
   var _done = 0, _tried = 0;
   for (var i = 0; i < todo.length && _done < (o.batch || NR_BATCH) && _tried < NR_ATTEMPTS_MAX; i++) {
     var p = todo[i];
@@ -30614,9 +30609,9 @@ async function noticeRepairTick(env, opts) {
     try {
       if (!rlEligible(p, pipe)) {
         var b = backups[p.slug];
-        await env.LIVING_PAPER.prepare("UPDATE papers SET title=?2, abstract=?3, body_md=?4, version=?5, status=?6, updated_at=datetime('now') WHERE slug=?1").bind(p.slug, b.title, b.abstract, b.body_md, b.version, b.status || "published").run();
+        await rlDbRun(env.LIVING_PAPER, "UPDATE papers SET title=?2, abstract=?3, body_md=?4, version=?5, status=?6, updated_at=datetime('now') WHERE slug=?1", [p.slug, b.title, b.abstract, b.body_md, b.version, b.status || "published"]);
         if (env.MIRROR) {
-          try { await env.MIRROR.put("papers/" + p.slug + ".md", b.body_md); } catch (eM) { console.error(JSON.stringify({ worker: WORKER, where: "notice-repair-mirror", error: String(eM && eM.message || eM).slice(0, 200) })); }
+          try { await mirrorPutVerified(env.MIRROR, "papers/" + p.slug + ".md", b.body_md); } catch (eM) { out.mirrorErrors.push({ slug: p.slug, error: String(eM && eM.message || eM).slice(0, 120) }); }
         }
         await ciGithubSync(env, p.slug, b.body_md);
         await env.QNFO_AUDIT.prepare("UPDATE paper_revision_log SET status='claim-withdrawn', updated_at=datetime('now') WHERE slug=?1 AND status IN ('claim-corrected','claim-retracted')").bind(p.slug).run();
@@ -30624,11 +30619,11 @@ async function noticeRepairTick(env, opts) {
         out.restored.push(p.slug);
         _done++;
       } else {
-        var full = await env.LIVING_PAPER.prepare("SELECT body_md FROM papers WHERE slug=?1").bind(p.slug).first();
+        var full = await rlDbFirst(env.LIVING_PAPER, "SELECT body_md FROM papers WHERE slug=?1", [p.slug]);
         var body = rlWithHistory(String(full && full.body_md || ""), p.version, day, await rlHistoryEntries(env, p.slug));
-        await env.LIVING_PAPER.prepare("UPDATE papers SET body_md=?2, updated_at=updated_at WHERE slug=?1").bind(p.slug, body).run();
+        await rlDbRun(env.LIVING_PAPER, "UPDATE papers SET body_md=?2, updated_at=updated_at WHERE slug=?1", [p.slug, body]);
         if (env.MIRROR) {
-          try { await env.MIRROR.put("papers/" + p.slug + ".md", body); } catch (eM2) { console.error(JSON.stringify({ worker: WORKER, where: "notice-repair-mirror", error: String(eM2 && eM2.message || eM2).slice(0, 200) })); }
+          try { await mirrorPutVerified(env.MIRROR, "papers/" + p.slug + ".md", body); } catch (eM2) { out.mirrorErrors.push({ slug: p.slug, error: String(eM2 && eM2.message || eM2).slice(0, 120) }); }
         }
         await ciGithubSync(env, p.slug, body);
         out.cleaned.push(p.slug);
@@ -30637,11 +30632,67 @@ async function noticeRepairTick(env, opts) {
     } catch (e) {
       var _em = String(e && e.message || e);
       if (_em.indexOf("PUBLISH-FLOOR-BLOCKED") >= 0) out.blocked.push(p.slug);
+      else if (isD1TransientError(_em)) { out.d1Errors.push({ slug: p.slug, error: _em.slice(0, 160), at: nowIso() }); }
       else out.error = (out.error || "") + p.slug + ": " + _em.slice(0, 120) + "; ";
     }
   }
   if (out.blocked.length) out.blockedNote = out.blocked.length + " owner paper(s) refused by the living-paper publish floor (trg_papers_pub_floor_upd3: retracted -> published needs 20,000 chars); text left as it is";
+  if (out.d1Errors.length) out.error = (out.error || "") + "D1_TRANSIENT[" + out.d1Errors.length + "]: " + out.d1Errors.map(function(x) { return x.slug; }).join(",");
+  if (out.mirrorErrors.length) out.error = (out.error || "") + "MIRROR_VERIFY_FAILED[" + out.mirrorErrors.length + "]: " + out.mirrorErrors.map(function(x) { return x.slug; }).join(",");
   return out;
+}
+
+function isD1TransientError(msg) {
+  if (!msg) return false;
+  var m = String(msg).toUpperCase();
+  return m.indexOf("D1_ERROR") >= 0 || m.indexOf("NETWORK CONNECTION LOST") >= 0 || m.indexOf("INTERNAL ERROR") >= 0 || m.indexOf("DATABASE IS LOCKED") >= 0 || m.indexOf("BUSY") >= 0;
+}
+
+async function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+async function rlDbRun(db, sql, params, retries) {
+  retries = retries || 3;
+  var lastErr;
+  for (var i = 0; i < retries; i++) {
+    try {
+      var st = db.prepare(sql);
+      return await st.bind.apply(st, params).run();
+    } catch (e) {
+      lastErr = e;
+      var _em = String(e && e.message || e);
+      if (!isD1TransientError(_em)) throw e;
+      if (i < retries - 1) await sleep(200 + i * 400);
+    }
+  }
+  throw lastErr;
+}
+
+async function rlDbFirst(db, sql, params, retries) {
+  retries = retries || 3;
+  var lastErr;
+  for (var i = 0; i < retries; i++) {
+    try {
+      var st = db.prepare(sql);
+      return await st.bind.apply(st, params).first();
+    } catch (e) {
+      lastErr = e;
+      var _em = String(e && e.message || e);
+      if (!isD1TransientError(_em)) throw e;
+      if (i < retries - 1) await sleep(200 + i * 400);
+    }
+  }
+  throw lastErr;
+}
+
+async function mirrorPutVerified(bucket, key, body) {
+  if (!bucket) return;
+  var expected = String(body || "");
+  await bucket.put(key, expected);
+  var got = await bucket.get(key);
+  if (!got) throw new Error("MIRROR_VERIFY_MISSING: " + key);
+  var txt = await got.text();
+  if (txt !== expected) throw new Error("MIRROR_VERIFY_MISMATCH: " + key + " len " + expected.length + " != " + txt.length);
+  return true;
 }
 function rlEligible(p, pipelineSlugs) {
   return /^qnf-/i.test(String(p.identifier || "")) || !!pipelineSlugs[p.slug];
