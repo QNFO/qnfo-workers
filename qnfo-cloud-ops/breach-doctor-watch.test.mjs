@@ -163,7 +163,9 @@ const COUNTS = "SELECT (SELECT COUNT(*) FROM agent_issues) a, (SELECT COUNT(*) F
   check(stats.calls === 3 && stats.stmts === 5, "filing: 3 D1 calls (read, metric, one atomic batch of issue + contract + event), 5 SQL statements", { calls: stats.calls, stmts: stats.stmts });
   // the probe tells the truth on the stall, then on recovery
   let r = one(db, probe);
-  check(r.expected === "ok" && /^doctor tick age 47 minutes$/.test(r.observed), "the contract's probe fails on the stall with the age", r);
+  // BDW-TEST-CLOCK-1 (ci-watchdog 4983, deploy-gate run 40405145348): the probe reads CAST((julianday('now') - julianday(ts)) * 1440 AS INTEGER), and the fixture tick is built exactly 47 minutes before the
+  // clock (iso(47)); when the probe runs within about a millisecond of the fixture the float difference is 46.99999 and the cast truncates to 46. The age is 47 minutes to within that rounding.
+  check(r.expected === "ok" && /^doctor tick age (46|47) minutes$/.test(r.observed), "the contract's probe fails on the stall with the age", r);
   db.prepare("INSERT INTO breach_diagnosis_events (ts, event, detail) VALUES (?, 'tick', 'x')").run(iso(2));
   r = one(db, probe);
   check(r.expected === "ok" && r.observed === "ok", "and passes once the doctor ticks again", r);
