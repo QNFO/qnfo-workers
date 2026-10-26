@@ -1101,7 +1101,7 @@ __name(secretEq, "secretEq");
 // 0.50.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.50.0-breach-doctor"; /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.50.0-breach-doctor"; /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -5187,6 +5187,9 @@ var BH_MERGE_MAX = 10; // pull requests evaluated for a merge per tick (4 GitHub
 var BH_MERGEABLE_READS = 5;
 var BH_MERGEABLE_WAIT_MS = 2000;
 var BH_HOLD_RE = /\b(do[\s-]*not[\s-]*merge|don'?t[\s-]*merge|wip|work[\s-]in[\s-]progress)\b/i;
+// PR-MERGE-SLA-10M-1 (0.49.1, review by session_01LJNL3L: the harness opens every session pull request as a draft, so an author who keeps one on purpose says so in
+// the body, and the lane now merges drafts): the body phrases that ask the lane to wait. A title or label hold stays BH_HOLD_RE.
+var BH_BODY_HOLD_RE = /\b(do[\s-]*not[\s-]*merge|don'?t[\s-]*merge|draft[\s-]+until|stays?[\s-]+(a[\s-]+)?draft|keep[\s-]+(it[\s-]+|this[\s-]+)?(as[\s-]+)?a[\s-]+draft|not[\s-]+ready[\s-]+(for[\s-]+(review|merge)|to[\s-]+merge))\b/i;
 // STALE-PR-LANE-READS-HOLDS-1 (0.20.0, agent_issues 2389, pillar autonomy): on PR 949 a review comment at 06:17Z said part 4
 // "has a problem worth fixing before this merges"; the lane merged it at 09:00Z with the defect unchanged (fixed afterwards in
 // PR 1004). bhMergeDecide read the title, labels and body but never a comment, and GitHub's REQUEST_CHANGES review is not
@@ -5323,7 +5326,7 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch: its own runner decides");
   if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
   var labels = (pr.labels || []).map(function(l) { return String(l && l.name || ""); }).join(" ");
-  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /(^|\s)(on-)?hold(\s|$)/i.test(labels) || /\bdo[\s-]*not[\s-]*merge\b/i.test(String(pr.body || ""))) return no("the pull request asks not to be merged (title, label or body)");
+  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /(^|\s)(on-)?hold(\s|$)/i.test(labels) || BH_BODY_HOLD_RE.test(String(pr.body || ""))) return no("the pull request asks not to be merged (title, label or body)");
   if (!Array.isArray(files) || !files.length || files.length >= 100) return no("its changed files could not be read (or 100+)");
   var names = files.map(function(f) { return String(f && f.filename || ""); });
   var gh = names.filter(function(n) { return /^\.github\//.test(n); });
@@ -5464,7 +5467,7 @@ function bhConflictDecide(pr, files, opts) {
   if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch");
   if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
   var labels = (pr.labels || []).map(function(l) { return String(l && l.name || ""); }).join(" ");
-  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /\bdo[\s-]*not[\s-]*merge\b/i.test(String(pr.body || ""))) return no("the pull request asks not to be merged");
+  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || BH_BODY_HOLD_RE.test(String(pr.body || ""))) return no("the pull request asks not to be merged");
   if (pr.mergeable !== false || String(pr.mergeable_state || "") !== "dirty") return no("GitHub reports mergeable " + pr.mergeable + ", mergeable_state " + pr.mergeable_state);
   var names = Array.isArray(files) ? files.map(function(f) { return String(f && f.filename || ""); }).filter(Boolean) : [];
   return { conflict: true, files: names };
@@ -5595,7 +5598,10 @@ async function branchHygieneTick(env, opts) {
   var prs = await bhPages(env, lane ? "/pulls?state=open&sort=updated&direction=desc" : "/pulls?state=all&sort=updated&direction=desc", lane ? 3 : 10);
   if (lane) out.lane_only = true;
   if (!prs.ok) { await beat("error", { pulls_http: prs.status }); return { ok: false, why: "pulls HTTP " + prs.status }; }
-  if (!dry) out.pr_age_rows = await bhRecordPrAge(env, prs.items, iso); // PR-MERGE-SLA-10M-1: the clock the 10-minute SLA is graded on
+  if (!dry) {
+    out.pr_age_rows = await bhRecordPrAge(env, prs.items, iso); // PR-MERGE-SLA-10M-1: the clock the 10-minute SLA is graded on
+    out.pr_age_resolved = await bhReconcilePrAge(env, prs.items, iso); // PR-AGE-RECONCILE-1: a pull request that left the open list was merged or closed by something else
+  }
   var byRef = {};
   prs.items.forEach(function(p) {
     if (!p || !p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) return;
@@ -5783,6 +5789,28 @@ async function bhRecordPrAge(env, items, iso) {
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhRecordPrAge:caught", error: String(e && e.message) })); return 0; }
 }
 __name(bhRecordPrAge, "bhRecordPrAge");
+// PR-AGE-RECONCILE-1 (0.49.1): the lane tick reads open pull requests only, so a pull request merged or closed by anything but the lane (the code-loop merge runner,
+// a person, a session) never left state 'open' in pr_sla_state; v_pr_merge_sla kept counting it as past 10 minutes until it aged out of its 30-minute window, and
+// merged_within_10m_24h missed it until the hourly all-states tick. Each tick reads, one request each and at most BH_AGE_RECONCILE of them, the pull requests the table
+// holds as open that are no longer in the list, and records what GitHub says. A failed read leaves the row open for the next tick.
+var BH_AGE_RECONCILE = 8;
+async function bhReconcilePrAge(env, items, iso) {
+  try {
+    var seen = {};
+    (items || []).forEach(function(p) { if (p && p.number) seen[Number(p.number)] = true; });
+    var r = await env.AUDIT.prepare("SELECT pr FROM pr_sla_state WHERE state = 'open' ORDER BY opened_at LIMIT 60").all();
+    var gone = ((r && r.results) || []).map(function(x) { return Number(x.pr); }).filter(function(n) { return n && !seen[n]; }).slice(0, BH_AGE_RECONCILE);
+    var resolved = 0;
+    for (var i = 0; i < gone.length; i++) {
+      var g = await evApi(env, "GET", "/pulls/" + gone[i]);
+      if (!g || !g.ok || !g.j || !g.j.number) continue;
+      if (!bhPrAgeRow(g.j, iso)) { await env.AUDIT.prepare("UPDATE pr_sla_state SET state = 'closed', closed_at = ?2, last_seen = ?2 WHERE pr = ?1").bind(gone[i], iso).run(); resolved++; continue; }
+      if (await bhRecordPrAge(env, [g.j], iso)) resolved++;
+    }
+    return resolved;
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhReconcilePrAge:caught", error: String(e && e.message) })); return 0; }
+}
+__name(bhReconcilePrAge, "bhReconcilePrAge");
 async function bhMarkPrMerged(env, n, iso) {
   try { await env.AUDIT.prepare("UPDATE pr_sla_state SET state = 'merged', closed_at = ?2, last_seen = ?2 WHERE pr = ?1").bind(n, iso).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhMarkPrMerged:caught", error: String(e && e.message) })); }
 }
@@ -12069,36 +12097,48 @@ async function rtProbeAuthorValidSql(db, sql, id) {
   }
   return null;
 }
+// One event per issue per hour for a probe the author could not write, so the reason is readable from D1 and a loop that never succeeds is visible (before, it was console.error only).
+async function rtProbeAuthorNote(db, id, reason, detail) {
+  console.error(JSON.stringify({ evt: "fleet-control:probe-author:" + reason, issue: id, detail: String(detail || "").slice(0, 200) }));
+  try {
+    await db.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-author-reject', ?2, 'qnfo-fleet-control', 'warn')").bind("par-" + id + "-" + new Date().toISOString().slice(0, 13), ("issue=" + id + " " + reason + ": " + String(detail || "")).slice(0, 400)).run();
+  } catch (eN) { /* the console line is the fallback */ }
+}
 async function rtAuthorLivePathProbe(db, env, orphan) {
   if (!orphan) return false;
   var id = Number(orphan.id);
   if (!(id > 0)) return false;
   if (rtProbeAuthorTickStamp !== rtProbeAuthorTickKey) { rtProbeAuthorTickStamp = rtProbeAuthorTickKey; rtProbeAuthorTickN = 0; }
   if (rtProbeAuthorTickN >= RT_PROBE_AUTHOR_MAX_PER_TICK) return false;
-  var ai = null;
-  try { ai = (env && (env["qnfo-ai"] || env.qnfo_ai)) || null; } catch (eB) { ai = null; }
-  if (!ai || typeof ai.run !== "function") return false;
+  // PROBE-AUTHOR-BINDING-1 (2026-10-26): this worker's Workers AI binding is AI ([ai] in wrangler.toml). The lookup that stood here read env["qnfo-ai"], a binding the worker has never had,
+  // so the function returned on its first test on every call: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. A missing binding is now an event.
+  if (!env || !env.AI || typeof env.AI.run !== "function") { await rtProbeAuthorNote(db, id, "no-ai-binding", "env.AI is not bound"); return false; }
   if (await rtFlagOff(db, "rt_probe_author")) return false;
   try {
     var made = await db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'remediation.probe-authored' AND ts > ?1").bind(new Date(Date.now() - 864e5).toISOString()).first();
     if ((made ? Number(made.n) || 0 : 0) >= RT_LIVEPATH_MAX_PER_DAY) return false;
   } catch (eC) { return false; }
   var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done over the tables the issue names: it reads pending while the defect stands and ok once it is fixed. It must be a single SELECT or WITH, must not write, must not read the status of issue " + id + " in agent_issues, must not mention needs-machine-probe, and must only use tables that exist. Reply with the SQL only.";
-  var r;
-  try { r = await ai.run(RT_PROBE_AUTHOR_MODEL, { messages: [{ role: "user", content: prompt }] }); }
-  catch (eR) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:model", issue: id, error: String(eR && eR.message).slice(0, 200) })); return false; }
-  var body = r ? (Array.isArray(r) ? r[0] : r) : null;
-  var text = String(body && (body.response || body.result) || "").trim();
-  if (!text) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:empty", issue: id })); return false; }
+  var r, input = { messages: [{ role: "user", content: prompt }], max_tokens: 1500 };
+  try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, Object.assign({ reasoning_effort: CM_REVIEW_EFFORT[RT_PROBE_AUTHOR_MODEL] || "low" }, input)); }
+  catch (eR) {
+    // the platform may refuse reasoning_effort for a model: one plain retry, as the code loop does after MODEL_OPT_REJECTED
+    try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, input); }
+    catch (eR2) { await rtProbeAuthorNote(db, id, "model-error", String(eR2 && eR2.message || eR2)); return false; }
+  }
+  // a chat model answers choices[0].message.content, an older one {response}: cmReviewReply reads both
+  var rep = cmReviewReply(Array.isArray(r) ? r[0] : r);
+  var text = String(rep.text || "").trim();
+  if (!text) { await rtProbeAuthorNote(db, id, "empty", "finish=" + rep.finish + " tokens=" + rep.tokens); return false; }
   var probe = rtProbeAuthorStrip(text);
   var bad = await rtProbeAuthorValidSql(db, probe, id);
-  if (bad) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:static-reject", issue: id, reason: bad })); return false; }
+  if (bad) { await rtProbeAuthorNote(db, id, "static-reject", bad); return false; }
   var dry;
   try { dry = await db.prepare(probe).all(); }
-  catch (eD) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:dry-run", issue: id, error: String(eD && eD.message).slice(0, 200) })); return false; }
+  catch (eD) { await rtProbeAuthorNote(db, id, "dry-run", String(eD && eD.message || eD)); return false; }
   var row0 = dry && dry.results && dry.results[0];
-  if (!row0) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:no-row", issue: id })); return false; }
-  if (String(row0.expected) === String(row0.observed)) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:vacuous", issue: id })); return false; }
+  if (!row0) { await rtProbeAuthorNote(db, id, "no-row", "the dry run returned no row"); return false; }
+  if (String(row0.expected) === String(row0.observed)) { await rtProbeAuthorNote(db, id, "vacuous", "expected equals observed at birth"); return false; }
   var cid = "issue-" + id;
   var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "probe-author-1 wrote the probe that measures issue " + id;
   var u = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'probe-author-1' WHERE class = ?1").bind(cid, probe).run();
@@ -12109,7 +12149,14 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-authored', ?2, 'qnfo-fleet-control', 'ok')").bind("pau-" + id + "-" + Date.now(), ("issue=" + id + " module=probe-author-1 probe=" + probe.slice(0, 240)).slice(0, 400)).run();
   } catch (eV) { /* the contract is the record; the event is a convenience */ }
   try {
-    await db.prepare("INSERT INTO decision_log (ts, decision, reason) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?1, ?2)").bind("PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id, "issue 100347: the model wrote a read-only d1-query probe for issue " + id + " (module probe-author-1); revert by UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'").run();
+    await db.prepare("INSERT INTO decision_log (ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'qnfo-fleet-control:probe-author-1', ?1, ?2, ?3, ?4, ?5, ?6, 'a probe written for an orphan issue without a session', ?7)").bind(
+      "Issue " + id + " is open with no contract that can judge it; a read-only d1-query probe that is not vacuous at birth and passes a static check is a safe way to give it one.",
+      "PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id,
+      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed; the dry run returned expected <> observed; probe: " + probe.slice(0, 300),
+      "contract issue-" + id + " is active with module probe-author-1",
+      "one remediation_contracts row; qnfo-cloud-ops PROBE-REVIEW-1 re-judges it with disjoint models",
+      "UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'",
+      "the PROBE-NEEDED-1 issue for " + id + " closes through its existing probe").run();
   } catch (eL) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:decision-log", issue: id, error: String(eL && eL.message).slice(0, 200) })); }
   rtProbeAuthorTickN++;
   return true;

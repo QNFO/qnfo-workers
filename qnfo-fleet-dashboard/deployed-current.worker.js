@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.67.0";
+var VERSION = "1.67.2-codeagent"; // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
@@ -3195,13 +3195,16 @@ async function runRefresh(env, ctx, opts) {
     // "Worker invocation ended with exceededWallTime" (14 internalError/24h, issue class
     // from the Workers Observability API). Bound the refresh so the handler always
     // returns a state (possibly degraded) well before the platform wall limit.
-    let st;
+    let st, deadlineTimer;
     try {
+      // SUITE-IDLE-TIMER-1 (2026-10-26): the deadline timer is cleared once the race settles; it kept running for the full 90 s, so the offline architecture suite idled 90 s after its last assertion.
       st = await Promise.race([buildState(env, ctx), new Promise(function(_res, rej) {
-        setTimeout(function() {
+        deadlineTimer = setTimeout(function() {
           rej(new Error("REFRESH-DEADLINE-1: buildState exceeded 90000ms"));
         }, 9e4);
-      })]);
+      })]).finally(function() {
+        clearTimeout(deadlineTimer);
+      });
     } catch (eD) {
       const prev = await loadState(env);
       if (prev && prev.state) return prev.state;
@@ -3452,6 +3455,13 @@ var worker_default = {
     // leaves no row and fm-single-heartbeat could not tell an idle fallback from a dead one. Each run now records in
     // fleet_heartbeat whether the guarded insert executed (ok 1) or threw (ok 0, the 2026-10-18 12:14Z outage shape).
     const tickOk = await feedFallbackTick(env);
+    // FLEET-TICK-HEAVY-SECOND-PRODUCER-1 (issue #1000271, RED-DRAIN-1 dispatch): qnfo-fleet-dashboard is the second producer of fleet_tick_heavy,
+    // alongside qnfo-code-orchestrator, so heavy D1 steps (BREACH-SELFHEAL-1) keep running when the primary producer is down. Guarded to one row per 9 minutes.
+    try {
+      await env.AUDIT.prepare("INSERT INTO fleet_tick_heavy (source) SELECT 'cron:qnfo-fleet-dashboard' WHERE NOT EXISTS (SELECT 1 FROM fleet_tick_heavy WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))").run();
+    } catch (e) {
+      console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_tick_heavy", note: String(e && e.message || e) }));
+    }
     try {
       await env.AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-fleet-dashboard', ?, ?, ?)").bind(VERSION, new Date().toISOString(), tickOk).run();
     } catch (e) {

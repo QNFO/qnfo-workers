@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 07:43:53",
+  "audited_at": "2026-10-26 08:12:10",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -535,7 +535,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.14.0-webmcp-1",
+        "version": "1.14.1-codeagent",
         "worker": "idea-hub"
       },
       {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.36.0",
+        "version": "0.36.1",
         "worker": "q08-signal-engine"
       },
       {
@@ -585,7 +585,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.36.1",
+        "version": "1.37.0",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -615,12 +615,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.48.1-version-ahead",
+        "version": "0.49.0-pr-merge-sla",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.67.0",
+        "version": "1.67.1",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -635,12 +635,12 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.8.5-codeagent",
+        "version": "1.9.0-handoffs-index",
         "worker": "qnfo-infra"
       },
       {
         "dir": "qnfo-intent-orchestrator",
-        "version": "1.7.0-triage-verdict",
+        "version": "1.7.1-timer-cleared",
         "worker": "qnfo-intent-orchestrator"
       },
       {
@@ -675,12 +675,12 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.7.2",
+        "version": "1.7.3",
         "worker": "qnfo-pdf"
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.34.3-codeagent",
+        "version": "0.35.0-repo-provenance",
         "worker": "qnfo-research-exec"
       },
       {
@@ -820,9 +820,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.14.0-webmcp-1",
+      "before": "1.14.1-codeagent",
       "http": 200,
-      "live": "1.14.0-webmcp-1",
+      "live": "1.14.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1009,9 +1009,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.36.0",
+      "before": "0.36.1",
       "http": 200,
-      "live": "0.36.0",
+      "live": "0.36.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1201,9 +1201,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.36.1",
+      "before": "1.37.0",
       "http": 200,
-      "live": "1.36.1",
+      "live": "1.37.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1348,17 +1348,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.48.1-version-ahead",
+      "before": "0.49.0-pr-merge-sla",
       "http": 200,
-      "live": "0.48.1-version-ahead",
+      "live": "0.49.0-pr-merge-sla",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.67.0",
+      "before": "1.67.1",
       "http": 200,
-      "live": "1.67.0",
+      "live": "1.67.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1434,17 +1434,17 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.8.5-codeagent",
+      "before": "1.9.0-handoffs-index",
       "http": 200,
-      "live": "1.8.5-codeagent",
+      "live": "1.9.0-handoffs-index",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
     },
     "qnfo-intent-orchestrator": {
-      "before": "1.7.0-triage-verdict",
+      "before": "1.7.1-timer-cleared",
       "http": 200,
-      "live": "1.7.0-triage-verdict",
+      "live": "1.7.1-timer-cleared",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-intent-orchestrator"
@@ -1552,9 +1552,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.7.2",
+      "before": "1.7.3",
       "http": 200,
-      "live": "1.7.2",
+      "live": "1.7.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1596,9 +1596,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.34.3-codeagent",
+      "before": "0.35.0-repo-provenance",
       "http": 200,
-      "live": "0.34.3-codeagent",
+      "live": "0.35.0-repo-provenance",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

@@ -11,6 +11,9 @@
 //                              live: create or update the ruleset `main-gate` (required checks, pull request required, admin role
 //                              and the fleet's apps bypass), then read /rules/branches/main back to prove it.
 //          ruleset-main-revert delete the ruleset named `main-gate`, and only that name (dry by default).
+//          delete-stuck-runs   DELETE-STUCK-RUNS-1: dry (default) lists the workflow runs that are queued or in progress, older than 24 h and
+//                              with no job running now, and the ones it skipped with the reason; live deletes at most 25 of them and stops at the
+//                              first refusal, recording its status and GitHub's text.
 //          secret-scanning     enable secret scanning, push protection, validity checks and non-provider patterns, one PATCH per
 //                              feature so a refusal of one never hides the others; the answer of each is recorded. The run is ok when
 //                              the two core protections (secret scanning, push protection) are enabled; the plan-gated extras that stay
@@ -30,7 +33,9 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const ACTIONS = ["report", "ruleset-main", "ruleset-main-revert", "secret-scanning"];
+export const ACTIONS = ["report", "ruleset-main", "ruleset-main-revert", "secret-scanning", "delete-stuck-runs"];
+export const STUCK_RUN_MIN_AGE_H = 24;
+export const STUCK_RUN_MAX_DELETES = 25;
 export const API = "https://api.github.com";
 export const CONFIG_PATH = "scripts/github-main-ruleset.json";
 const REPO_RE = /^\/repos\/QNFO\/qnfo-workers(\/|$|\?)/;
@@ -315,6 +320,67 @@ export async function actionRulesetRevert(api, cfg, mode) {
   return r;
 }
 
+// DELETE-STUCK-RUNS-1 (agent_issues 1000275, 2026-10-26): five runs sat `queued` with no jobs since 2026-10-07 and one deploy-gate run sat `in_progress`
+// since 2026-10-22 although its only job had failed. The session token and the GitHub connector both answer cancel with HTTP 409 ("Cannot cancel a workflow
+// run that has not been queued yet") and delete with 403, so the run records stay for good and distort counts. A run is a candidate only when it is queued or
+// in progress, was created more than STUCK_RUN_MIN_AGE_H hours ago, and has no job that is running now (a queued run has none; the stuck deploy-gate run has one
+// job and it concluded). Dry (default) lists the candidates and what it skipped and why; live deletes at most STUCK_RUN_MAX_DELETES runs with the admin credential
+// and stops at the first refusal, recording its status and GitHub's text: a refusal is the answer and is never retried with another credential.
+// DELETE-STUCK-RUNS-2 (2026-10-26): the first live run (run 40290472819) was answered `DELETE run 37655533507` -> 403 "Could not delete the workflow run" with the
+// repository credential too: GitHub deletes only a run that has completed, and these never completed. The documented endpoint for a run that ignores cancellation is
+// force-cancel, so each candidate is force-cancelled first (POST .../force-cancel, the same credential and the same write right as a cancel), polled until it reads
+// completed (STUCK_RUN_POLL_TRIES reads, STUCK_RUN_POLL_MS apart), and then deleted. A refusal of the force-cancel is recorded with its status and text and stops the run
+// exactly like a refused delete: that is the answer (a missing Actions write right would show as 403 here), it is not retried and not reworded.
+export const STUCK_RUN_POLL_TRIES = 6;
+export const STUCK_RUN_POLL_MS = 3000;
+export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
+  const repo = cfg.repo, r = { action: "delete-stuck-runs", repo, mode, ok: false, min_age_h: STUCK_RUN_MIN_AGE_H, candidates: [], skipped: [], deleted: [] };
+  const cutoff = (now || Date.now()) - STUCK_RUN_MIN_AGE_H * 3600000;
+  const self = env && env.GITHUB_RUN_ID ? Number(env.GITHUB_RUN_ID) : 0;
+  const runs = [], seen = {};
+  for (const status of ["queued", "in_progress"]) {
+    const l = await api.call("GET", "/repos/" + repo + "/actions/runs?status=" + status + "&per_page=100");
+    if (!l.ok) { r.refused = { call: "GET runs " + status, status: l.status, message: l.message }; return r; }
+    for (const x of (l.body && l.body.workflow_runs) || []) if (!seen[x.id]) { seen[x.id] = 1; runs.push(x); }
+  }
+  for (const x of runs) {
+    const row = { id: x.id, name: x.name, status: x.status, branch: x.head_branch, created_at: x.created_at };
+    const created = Date.parse(x.created_at) || 0;
+    if (x.id === self) { r.skipped.push({ ...row, why: "this run" }); continue; }
+    if (!created || created >= cutoff) { r.skipped.push({ ...row, why: "younger than " + STUCK_RUN_MIN_AGE_H + " h" }); continue; }
+    const jobs = await api.call("GET", "/repos/" + repo + "/actions/runs/" + x.id + "/jobs?per_page=100");
+    if (!jobs.ok) { r.skipped.push({ ...row, why: "jobs unreadable (HTTP " + jobs.status + ")" }); continue; }
+    const running = ((jobs.body && jobs.body.jobs) || []).filter((j) => j.status === "in_progress");
+    if (running.length) { r.skipped.push({ ...row, why: running.length + " job(s) running now" }); continue; }
+    r.candidates.push({ ...row, jobs: ((jobs.body && jobs.body.jobs) || []).length });
+  }
+  r.candidate_count = r.candidates.length;
+  if (mode !== "live") { r.ok = true; r.note = "dry run: nothing written; " + r.candidates.length + " stuck run(s) would be force-cancelled and then deleted (cap " + STUCK_RUN_MAX_DELETES + " per run)"; return r; }
+  const pollMs = env && env.STUCK_RUN_POLL_MS !== undefined && env.STUCK_RUN_POLL_MS !== "" ? Number(env.STUCK_RUN_POLL_MS) : STUCK_RUN_POLL_MS;
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  r.force_cancelled = []; r.not_completed = [];
+  for (const c of r.candidates.slice(0, STUCK_RUN_MAX_DELETES)) {
+    const base = "/repos/" + repo + "/actions/runs/" + c.id;
+    const f = await api.call("POST", base + "/force-cancel");
+    if (!f.ok) { r.refused = { call: "POST force-cancel run " + c.id, status: f.status, message: f.message }; break; }
+    r.force_cancelled.push(c.id);
+    let done = false;
+    for (let i = 0; i < STUCK_RUN_POLL_TRIES && !done; i++) {
+      await sleep(pollMs);
+      const g = await api.call("GET", base);
+      done = g.ok && !!g.body && g.body.status === "completed";
+    }
+    if (!done) { r.not_completed.push(c.id); continue; }
+    const d = await api.call("DELETE", base);
+    if (!d.ok) { r.refused = { call: "DELETE run " + c.id, status: d.status, message: d.message }; break; }
+    r.deleted.push(c.id);
+  }
+  r.remaining = r.candidates.length - r.deleted.length;
+  r.ok = !r.refused;
+  if (r.ok && r.remaining > 0) r.note = r.remaining + " candidate(s) stay: " + r.not_completed.length + " force-cancelled but not completed after " + STUCK_RUN_POLL_TRIES + " reads (a later run deletes them once completed is read), the rest beyond the cap of " + STUCK_RUN_MAX_DELETES;
+  return r;
+}
+
 export async function actionSecretScanning(api, cfg, mode) {
   const repo = cfg.repo, r = { action: "secret-scanning", repo, mode, ok: true, features: {} };
   const before = await api.call("GET", "/repos/" + repo);
@@ -362,6 +428,7 @@ export async function run(action, mode, root, fetchImpl, env) {
   else if (action === "report") res = await actionReport(api, cfg, root);
   else if (action === "ruleset-main") res = await actionRulesetMain(api, cfg, root, mode);
   else if (action === "ruleset-main-revert") res = await actionRulesetRevert(api, cfg, mode);
+  else if (action === "delete-stuck-runs") res = await actionDeleteStuckRuns(api, cfg, mode, Date.now(), env);
   else res = await actionSecretScanning(api, cfg, mode);
   res.credential = token === admin && admin ? "QNFO_GH_PAT" : token ? "GITHUB_TOKEN" : "none";
   res.calls = api.calls.length;
