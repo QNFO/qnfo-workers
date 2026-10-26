@@ -1,6 +1,6 @@
-// AB-SPLIT-V2-1 offline suite (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049). A human GET / without v is assigned once
-// to arm 1 (default page, counted "/") or arm 2 (302 to ?v=2, counted "/?v=2") by the ipatent_ab cookie; the cookie keeps
-// the arm; crawlers, HEAD, explicit ?v= and share 0 keep the old behaviour; other query parameters survive the redirect.
+// AB-SPLIT-V2-1 offline suite (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049) as changed by BP26-NO-TRACKING-1 (agent_issues 1000345): a human GET / without v is drawn onto arm 1
+// (default page, counted "/") or arm 2 (302 to ?v=2, counted "/?v=2") at random for EACH page load, with no cookie; a browser that still holds the retired ipatent_ab cookie gets one
+// deletion header that sets nothing; crawlers, HEAD, explicit ?v= and share 0 keep the old behaviour; other query parameters survive the redirect.
 // Run: node qnfo-ipatent/ab-split.test.mjs   (prints "N passed, 0 failed")
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const mod = await import("./worker.js");
@@ -24,13 +24,14 @@ const ON = { IPATENT_V2_SHARE: "0.5" };
 
 // abArm
 let a = await abArm(req(U), new URL(U), ON, () => 0.1);
-ok(a && a.arm === "2" && a.redirect === "/?v=2" && /^ipatent_ab=2; Path=\/; Max-Age=2592000; SameSite=Lax; Secure$/.test(a.cookie), "a low draw goes to arm 2 with a cookie", a);
+ok(a && a.arm === "2" && a.redirect === "/?v=2" && a.cookie === null, "a low draw goes to arm 2 and sets no cookie", a);
 a = await abArm(req(U), new URL(U), ON, () => 0.9);
-ok(a && a.arm === "1" && a.redirect === null && /ipatent_ab=1/.test(a.cookie), "a high draw stays on the default page with a cookie", a);
+ok(a && a.arm === "1" && a.redirect === null && a.cookie === null, "a high draw stays on the default page and sets no cookie", a);
 a = await abArm(req(U, { Cookie: "x=1; ipatent_ab=2" }), new URL(U), ON, () => 0.9);
-ok(a && a.arm === "2" && a.cookie === null && a.redirect === "/?v=2", "the cookie keeps arm 2 without a new draw", a);
+ok(a && a.arm === "1" && a.redirect === null, "a retired cookie no longer decides the arm: the draw does", a);
+ok(a && /^ipatent_ab=; Path=\/; Max-Age=0; SameSite=Lax; Secure$/.test(a.cookie), "a browser holding the retired cookie gets one deletion header", a);
 a = await abArm(req(U, { Cookie: "ipatent_ab=1" }), new URL(U), ON, () => 0.0);
-ok(a && a.arm === "1" && a.cookie === null && a.redirect === null, "the cookie keeps arm 1", a);
+ok(a && a.arm === "2" && a.redirect === "/?v=2" && /Max-Age=0/.test(a.cookie), "the draw wins over a stale arm-1 cookie", a);
 a = await abArm(req(U + "?utm_source=bsky"), new URL(U + "?utm_source=bsky"), ON, () => 0.1);
 ok(a && a.redirect === "/?utm_source=bsky&v=2", "other query parameters survive the redirect", a);
 ok(await abArm(req(U + "?v=1"), new URL(U + "?v=1"), ON, () => 0.1) === null && await abArm(req(U + "?v=2"), new URL(U + "?v=2"), ON, () => 0.1) === null, "an explicit v is never reassigned");
@@ -44,16 +45,22 @@ const stmt = (sql) => { const s = { bind(...a) { if (/INSERT INTO page_views/.te
 const env = { IPATENT_DB: { prepare: stmt }, IPATENT_V2_SHARE: "0.5" };
 const waits = [];
 const ctx = { waitUntil(p) { waits.push(p); } };
-let r = await W.fetch(req(U, { Cookie: "ipatent_ab=2" }), env, ctx);
-ok(r.status === 302 && r.headers.get("Location") === "/?v=2" && r.headers.get("Cache-Control") === "no-store" && !r.headers.get("Set-Cookie"), "arm 2 is redirected to ?v=2", [r.status, r.headers.get("Location")]);
-r = await W.fetch(req(U + "?v=2", { Cookie: "ipatent_ab=2" }), env, ctx);
+const draws = [0.1, 0.9, 0.9];
+const realRandom = Math.random;
+Math.random = () => draws.shift();
+let r = await W.fetch(req(U), env, ctx);
+ok(r.status === 302 && r.headers.get("Location") === "/?v=2" && r.headers.get("Cache-Control") === "no-store" && !r.headers.get("Set-Cookie") && !r.headers.get("Vary"), "arm 2 is redirected to ?v=2 with no cookie", [r.status, r.headers.get("Location")]);
+r = await W.fetch(req(U + "?v=2"), env, ctx);
 ok(r.status === 200 && /text\/html/.test(r.headers.get("Content-Type") || ""), "?v=2 is served");
-r = await W.fetch(req(U, { Cookie: "ipatent_ab=1" }), env, ctx);
-ok(r.status === 200 && r.headers.get("Vary") === "Cookie" && r.headers.get("Cache-Control") === "no-store", "arm 1 gets the default page, not cached across arms");
+r = await W.fetch(req(U), env, ctx);
+ok(r.status === 200 && !r.headers.get("Set-Cookie") && r.headers.get("Cache-Control") === "no-store", "arm 1 gets the default page with no cookie, not cached across arms");
+r = await W.fetch(req(U, { Cookie: "ipatent_ab=2" }), env, ctx);
+ok(r.status === 200 && /^ipatent_ab=; .*Max-Age=0/.test(r.headers.get("Set-Cookie") || ""), "a stale cookie is dropped by one deletion header on the page it still reaches");
+Math.random = realRandom;
 r = await W.fetch(req(U, { "User-Agent": "Googlebot/2.1" }), env, ctx);
 ok(r.status === 200 && !r.headers.get("Set-Cookie"), "a crawler gets the default page and no cookie");
 await Promise.all(waits);
-ok(views.join(",") === "/?v=2,/,/", "views are counted per arm: " + views.join(","), views);
+ok(views.join(",") === "/?v=2,/,/,/", "views are counted per arm: " + views.join(","), views);
 r = await W.fetch(req(U + "health"), env, ctx);
 const h = await r.json();
 ok(h.capabilities.includes("ab-split-v2") && versionAtLeast(h.version, "3.15.0"), "health names ab-split-v2", h.version);
