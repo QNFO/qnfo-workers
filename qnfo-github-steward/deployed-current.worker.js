@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.9.1-keep-catalogue-project"; // 0.9.1 PS-KEEP-CATALOGUE-PROJECT-1 (2026-10-26, agent_issues 2993, pillar autonomy; patch): psPlace keeps an open issue on an active project that is not a W.<worker> project (a catalogue project such as BP26.EDITORIAL) instead of placing it by owner onto W.<owner>; the 30 BP26 catalogue issues had all been moved to W.qnfo-ops, which left five BP26 projects with no mapped issue and the no-mapped-work detector reporting them. 0.9.0 ROADMAP-TWIN-ROWS-1 (2026-10-26, pillar autonomy; minor: a decision the worker now takes on its own): a roadmap row whose artifact_type is agent_issue is the twin of a TRACKER-SYNC-1 ticket and is never a GitHub issue, whatever source writes it; the source best-practice-2026 had doubled 31 tickets in an hour. 0.8.0 PORTFOLIO-NOT-ISSUES-1 (owner question 2026-10-26 "why are there over 800 GitHub issues?", pillar autonomy; minor: the worker now decides which roadmap sources are Issues): 181 of the 381 open roadmap issues could never close or were a second ticket (77 projects, 75 metric-breach twins of METRIC-TRIGGER issues, 29 failure_modes registry rows). Sources with mirrored = 0 in roadmap_mirror_scope (default projects, metric-breach, failure_modes while the table is absent) are no longer filed, are never placed, and an open GitHub issue for one is closed not_planned with a comment that says it is not a verification and is never reopened; the public /roadmap count skips them. // 0.7.6 FLEET-PR-SHARE-1 (agent_issues 100420): hourly fleet_authored_pr_share_7d from two GitHub search counts; CLOSE-PROVENANCE-1 also finds RED-DRAIN-1 goals. // 0.7.5 CLOSE-PROVENANCE-1: a completed close comment names the merged fleet PR, or states that no code changed. // 0.7.4 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy; patch, no behaviour change): /health declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS), so the fleet snapshot counts this worker as conforming (it was one of the two empty rows holding the metric at 0.9412). // 0.7.3 MODEL-FLOOR-GUARD-RUNS-OBJECT-1 (agent_issues 100258, pillar autonomy; patch: a read that always came back empty): the workflow-runs endpoint answers an object {workflow_runs: [...]}, and paginate() keeps only array bodies, so recordModelFloorGuardRun never created model_floor_guard_runs (the table does not exist in qnfo-audit) and modelFloorGuardVisibility (0.7.2) wrote status "empty", runs 0 on every run although the workflow has 400+ runs on main. DESIRED_REPO is the settings object, not a repository name, so both also built the path QNFO/[object Object] (the recorder returned before its first read, the visibility call would have answered 404); both now name qnfo-workers as mainRulesVisibility does. Both now read body.workflow_runs through workflowRuns(), and a non-200 answer is recorded as status http_<n> instead of reading as no runs. model-floor-guard-visibility.test.mjs. // 0.7.0 PROTECTION-VISIBLE-1 (agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security): the branch-protection step ignored every answer except 404 and 200, so a credential that cannot read protection (403 "Resource not accessible by integration") produced repos_protected 0, errors 0 and drift 0 for every run since 2026-10-17 while 55 public repositories stayed unprotected. A GET that answers anything else is now counted (result.protection_unreadable: count, status map, GitHub's own text, an example repository) and written as one limitation; and the run records the rules that apply to QNFO/qnfo-workers main (result.main_rules: status, rule types, whether required_status_checks and pull_request are among them; one public GET), so the DoD of 2927 is a number in github_steward_runs.detail on every tick. // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.10.0-issue-rollup"; // 0.10.0 ISSUE-ROLLUP-1 (owner directive 2026-10-26 "reduce open issues to <100", pillar autonomy; minor: a decision the worker now takes on its own): an agent_issues row whose priority is not in ops_config gh_individual_priorities (default critical) is no longer its own GitHub issue; its mirror is closed not_planned and D1 stays authoritative and open; one [digest] issue per program lists the rolled rows (gh_digest_links), and one lists the goals while roadmap_mirror_scope has goals at mirrored = 0. Deleting the ops_config key restores one issue per row. // 0.9.1 PS-KEEP-CATALOGUE-PROJECT-1 (2026-10-26, agent_issues 2993, pillar autonomy; patch): psPlace keeps an open issue on an active project that is not a W.<worker> project (a catalogue project such as BP26.EDITORIAL) instead of placing it by owner onto W.<owner>; the 30 BP26 catalogue issues had all been moved to W.qnfo-ops, which left five BP26 projects with no mapped issue and the no-mapped-work detector reporting them. 0.9.0 ROADMAP-TWIN-ROWS-1 (2026-10-26, pillar autonomy; minor: a decision the worker now takes on its own): a roadmap row whose artifact_type is agent_issue is the twin of a TRACKER-SYNC-1 ticket and is never a GitHub issue, whatever source writes it; the source best-practice-2026 had doubled 31 tickets in an hour. 0.8.0 PORTFOLIO-NOT-ISSUES-1 (owner question 2026-10-26 "why are there over 800 GitHub issues?", pillar autonomy; minor: the worker now decides which roadmap sources are Issues): 181 of the 381 open roadmap issues could never close or were a second ticket (77 projects, 75 metric-breach twins of METRIC-TRIGGER issues, 29 failure_modes registry rows). Sources with mirrored = 0 in roadmap_mirror_scope (default projects, metric-breach, failure_modes while the table is absent) are no longer filed, are never placed, and an open GitHub issue for one is closed not_planned with a comment that says it is not a verification and is never reopened; the public /roadmap count skips them. // 0.7.6 FLEET-PR-SHARE-1 (agent_issues 100420): hourly fleet_authored_pr_share_7d from two GitHub search counts; CLOSE-PROVENANCE-1 also finds RED-DRAIN-1 goals. // 0.7.5 CLOSE-PROVENANCE-1: a completed close comment names the merged fleet PR, or states that no code changed. // 0.7.4 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy; patch, no behaviour change): /health declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS), so the fleet snapshot counts this worker as conforming (it was one of the two empty rows holding the metric at 0.9412). // 0.7.3 MODEL-FLOOR-GUARD-RUNS-OBJECT-1 (agent_issues 100258, pillar autonomy; patch: a read that always came back empty): the workflow-runs endpoint answers an object {workflow_runs: [...]}, and paginate() keeps only array bodies, so recordModelFloorGuardRun never created model_floor_guard_runs (the table does not exist in qnfo-audit) and modelFloorGuardVisibility (0.7.2) wrote status "empty", runs 0 on every run although the workflow has 400+ runs on main. DESIRED_REPO is the settings object, not a repository name, so both also built the path QNFO/[object Object] (the recorder returned before its first read, the visibility call would have answered 404); both now name qnfo-workers as mainRulesVisibility does. Both now read body.workflow_runs through workflowRuns(), and a non-200 answer is recorded as status http_<n> instead of reading as no runs. model-floor-guard-visibility.test.mjs. // 0.7.0 PROTECTION-VISIBLE-1 (agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security): the branch-protection step ignored every answer except 404 and 200, so a credential that cannot read protection (403 "Resource not accessible by integration") produced repos_protected 0, errors 0 and drift 0 for every run since 2026-10-17 while 55 public repositories stayed unprotected. A GET that answers anything else is now counted (result.protection_unreadable: count, status map, GitHub's own text, an example repository) and written as one limitation; and the run records the rules that apply to QNFO/qnfo-workers main (result.main_rules: status, rule types, whether required_status_checks and pull_request are among them; one public GET), so the DoD of 2927 is a number in github_steward_runs.detail on every tick. // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -628,6 +628,16 @@ async function tsState(env, k, v) {
  * so it is closed as not_planned with a comment naming the live twin. Mapping it to open would put 42 duplicates beside their twins. */
 var TS_STATUS_OPEN = { open: 1 };
 var TS_STATUS_NOT_PLANNED = { wontfix: 1, monitoring: 1 };
+/* ISSUE-ROLLUP-1: priorities that stay one GitHub issue each (ops_config gh_individual_priorities, comma list). Key absent or unreadable = every priority is individual (the old behaviour). */
+var TS_INDIVIDUAL = null;
+async function tsLoadIndividual(env) {
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'gh_individual_priorities'").first();
+    var v = r && String(r.value || "").trim().toLowerCase();
+    TS_INDIVIDUAL = v ? v.split(/[,\s]+/).filter(Boolean) : null;
+  } catch (e) { TS_INDIVIDUAL = null; }
+}
+function tsIsRolled(priority) { return !!TS_INDIVIDUAL && TS_INDIVIDUAL.indexOf(String(priority || "").toLowerCase()) < 0; }
 function tsGhWant(status) {
   if (TS_STATUS_OPEN[status]) return { open: true, reason: null };
   return { open: false, reason: TS_STATUS_NOT_PLANNED[status] ? "not_planned" : "completed" };
@@ -712,6 +722,7 @@ async function tsCloseComment(env, l) {
 
 async function tsIssues(env, out) {
   var now = new Date().toISOString();
+  await tsLoadIndividual(env);
   if (ghLimited()) { out.errors.push({ scope: "tracker-issues", why: "rate limited; no state change this tick" }); return; }
   var open = await tsListAll(env, TS_REPO + "/issues?state=open&labels=" + TS_LABEL, 15);
   if (!open) { out.errors.push({ scope: "tracker-issues", why: "could not list open " + TS_LABEL + " issues; no state change this tick" }); return; }
@@ -725,14 +736,14 @@ async function tsIssues(env, out) {
 
   var hasReason = await tsHasColumn(env, "gh_issue_links", "gh_close_reason");
   var links = (await env.AUDIT.prepare(
-    "SELECT l.issue_id, l.gh_number, l.gh_state, l.d1_status, " + (hasReason ? "l.gh_close_reason" : "NULL") + " AS gh_close_reason, a.status, a.title, a.updated_at, a.close_channel, t.close_evidence FROM gh_issue_links l LEFT JOIN agent_issues a ON a.id = l.issue_id LEFT JOIN issue_triage t ON t.issue_id = l.issue_id"
+    "SELECT l.issue_id, l.gh_number, l.gh_state, l.d1_status, " + (hasReason ? "l.gh_close_reason" : "NULL") + " AS gh_close_reason, a.status, a.priority, a.title, a.updated_at, a.close_channel, t.close_evidence FROM gh_issue_links l LEFT JOIN agent_issues a ON a.id = l.issue_id LEFT JOIN issue_triage t ON t.issue_id = l.issue_id"
   ).all()).results || [];
-  var wantOpen = function (l) { return tsGhWant(l.status).open; };
+  var wantOpen = function (l) { return tsGhWant(l.status).open && !(l.status === "open" && tsIsRolled(l.priority)); };
   var changedOf = function (l) { return Number(l.updated_at) || 0; };
   var mism = links.filter(function (l) { return wantOpen(l) !== !!openNums[l.gh_number]; });
   var oldest = mism.reduce(function (m, l) { return Math.min(m, changedOf(l) || Date.now()); }, Date.now());
   /* d1_status is the status at the last agreement (refreshed every tick for links that agree): D1 changed since then, or it did not. */
-  var guard = tsGuard(mism, links.length, function (l) { return !!l.d1_status && tsGhWant(l.d1_status).open !== tsGhWant(l.status).open; });
+  var guard = tsGuard(mism, links.length, function (l) { return (l.status === "open" && tsIsRolled(l.priority)) || (!!l.d1_status && tsGhWant(l.d1_status).open !== tsGhWant(l.status).open); });
   /* A label rename or an API anomaly would make every link look closed: refuse the unexplained part of a mass flip. */
   if (guard.refused) out.errors.push({ scope: "tracker-issues", why: guard.refused + " of " + links.length + " links disagree with GitHub although D1 has not changed since the last sync; refusing a mass state flip" });
   mism = tsOrder(guard.rows, wantOpen, changedOf, function (l) { return Number(l.issue_id) || 0; });
@@ -740,7 +751,7 @@ async function tsIssues(env, out) {
   mism.forEach(function (l) { mismIds[l.issue_id] = 1; });
   var fixed = 0, tried = 0, budget = tsBudget(TS_FIX_MAX), limited = null;
   for (var i = 0; i < mism.length && budget.more(tried); i++) {
-    var l = mism[i], r, want = tsGhWant(l.status), reason = null;
+    var l = mism[i], r, rolled = l.status === "open" && tsIsRolled(l.priority), want = rolled ? { open: false, reason: "not_planned" } : tsGhWant(l.status), reason = null;
     tried++;
     if (want.open) {
       r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "open" });
@@ -749,7 +760,7 @@ async function tsIssues(env, out) {
         out.reopened++;
       }
     } else {
-      var note = await tsCloseComment(env, l);
+      var note = rolled ? "Rolled up by ISSUE-ROLLUP-1: agent_issues " + l.issue_id + " (priority " + l.priority + ") is still open in qnfo-audit, which is authoritative. It is listed in its program's [digest] issue; only priority " + TS_INDIVIDUAL.join(", ") + " keeps an issue each. This close is not a verification." : await tsCloseComment(env, l);
       if (l.status === "monitoring") budget.d1(1);
       if (note) {
         var cr = await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: note });
@@ -801,8 +812,8 @@ async function tsIssues(env, out) {
 
   /* Mirror open issues that have no GitHub issue yet, oldest first. A "[#id]" title already on GitHub is linked, not re-filed. */
   var todo = ((await env.AUDIT.prepare(
-    "SELECT a.id, a.title, a.description, a.source, a.category, a.priority, a.created_at FROM agent_issues a LEFT JOIN gh_issue_links l ON l.issue_id = a.id WHERE a.status = 'open' AND l.issue_id IS NULL ORDER BY a.id LIMIT ?"
-  ).bind(TS_CREATE_PER_TICK).all()).results) || [];
+    "SELECT a.id, a.title, a.description, a.source, a.category, a.priority, a.created_at FROM agent_issues a LEFT JOIN gh_issue_links l ON l.issue_id = a.id WHERE a.status = 'open' AND l.issue_id IS NULL" + (TS_INDIVIDUAL ? " AND lower(a.priority) IN (" + TS_INDIVIDUAL.map(function () { return "?"; }).join(",") + ")" : "") + " ORDER BY a.id LIMIT ?"
+  ).bind(...(TS_INDIVIDUAL || []), TS_CREATE_PER_TICK).all()).results) || [];
   for (var j = 0; j < todo.length; j++) {
     if (ghLimited()) break;
     var row = todo[j];
@@ -821,6 +832,61 @@ async function tsIssues(env, out) {
     }
     await env.AUDIT.prepare("INSERT OR REPLACE INTO gh_issue_links (issue_id, gh_number, gh_state, d1_status, synced_at) VALUES (?, ?, 'open', 'open', ?)").bind(row.id, num, now).run();
   }
+}
+
+
+/* ISSUE-ROLLUP-1: one [digest] issue per program lists the open agent_issues that are not individual issues, and one lists the open goals while
+ * roadmap_mirror_scope has goals at mirrored = 0. A digest is rewritten only when its body changed (gh_digest_links.body_hash), and one whose group
+ * emptied is closed. It carries the label fleet-digest, never fleet-issue or roadmap, so no other loop treats it as a mirror. */
+function tsHash(str) { var h = 5381; for (var i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return String(h); }
+function tsDigestBody(head, lines, cap) {
+  var out = head + "\n\n| ref | priority | item |\n|:--|:--|:--|\n", used = out.length, shown = 0;
+  for (var i = 0; i < lines.length; i++) {
+    if (used + lines[i].length + 1 > cap) break;
+    out += lines[i] + "\n"; used += lines[i].length + 1; shown++;
+  }
+  if (shown < lines.length) out += "\n...and " + (lines.length - shown) + " more (qnfo-audit is authoritative).\n";
+  return out;
+}
+function tsCell(s) { return String(s || "").replace(/\|/g, "/").replace(/\s+/g, " ").slice(0, 120); }
+async function tsDigest(env, out) {
+  if (!TS_INDIVIDUAL || ghLimited()) return;
+  var groups = {};
+  var inds = TS_INDIVIDUAL.map(function () { return "?"; }).join(",");
+  var rows = ((await env.AUDIT.prepare("SELECT a.id, a.title, a.priority, COALESCE(m.program_code, 'other') AS prog FROM agent_issues a LEFT JOIN issue_project_map m ON m.issue_id = a.id WHERE a.status = 'open' AND lower(a.priority) NOT IN (" + inds + ") ORDER BY CASE a.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, a.id").bind(...TS_INDIVIDUAL).all()).results) || [];
+  rows.forEach(function (r) {
+    var k = "issues:" + r.prog;
+    if (!groups[k]) groups[k] = { title: "[digest] " + r.prog + " · open issues below " + TS_INDIVIDUAL.join("/"), head: "Rolled up by ISSUE-ROLLUP-1. These agent_issues are open in `qnfo-audit.agent_issues` (authoritative; each closes there with close evidence). Only priority " + TS_INDIVIDUAL.join(", ") + " keeps an issue each.", lines: [] };
+    groups[k].lines.push("| #" + r.id + " | " + r.priority + " | " + tsCell(r.title) + " |");
+  });
+  var gs = null;
+  try { gs = await env.AUDIT.prepare("SELECT mirrored FROM roadmap_mirror_scope WHERE source = 'goals'").first(); } catch (e) { gs = null; }
+  if (gs && Number(gs.mirrored) === 0) {
+    var goals = ((await env.AUDIT.prepare("SELECT id, item, status FROM roadmap_implementation WHERE source = 'goals' ORDER BY id").all()).results) || [];
+    var open = goals.filter(function (g) { return !PS_RM_DONE[g.status]; });
+    if (open.length) groups["goals"] = { title: "[digest] open goals", head: "Rolled up by ISSUE-ROLLUP-1. Open goals with a definition of done, from `qnfo-audit.roadmap_implementation` (source goals); also in GET /roadmap and on the Projects board.", lines: open.map(function (g) { return "| RM-" + g.id + " | " + g.status + " | " + tsCell(g.item) + " |"; }) };
+  }
+  var links = ((await env.AUDIT.prepare("SELECT dkey, gh_number, body_hash FROM gh_digest_links").all()).results) || [];
+  var byKey = {}; links.forEach(function (l) { byKey[l.dkey] = l; });
+  var now = new Date().toISOString(), calls = 0, keys = Object.keys(groups), res = { groups: keys.length, written: 0, closed: 0 };
+  for (var i = 0; i < keys.length && calls < 12; i++) {
+    var k = keys[i], g = groups[k], title = g.title + " (" + g.lines.length + ")", hash = tsHash(title + "\n" + g.lines.join("\n")), l = byKey[k];
+    if (l && l.body_hash === hash) continue;
+    var body = tsDigestBody(g.head + " (" + g.lines.length + " rows, " + now.slice(0, 16) + "Z)", g.lines, 60000);
+    calls++;
+    var r = l ? await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { title: title, body: body, state: "open" }) : await gh(env, "POST", TS_REPO + "/issues", { title: title, body: body, labels: ["fleet-digest"] });
+    if (r.status >= 200 && r.status < 300 && r.body && (l || r.body.number)) {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO gh_digest_links (dkey, gh_number, body_hash, n, synced_at) VALUES (?, ?, ?, ?, ?)").bind(k, l ? l.gh_number : r.body.number, hash, g.lines.length, now).run();
+      res.written++;
+    } else { out.errors.push({ scope: "digest " + k, status: r.status, why: String(r.text).slice(0, 100) }); if (r.limited) break; }
+  }
+  for (var j = 0; j < links.length && calls < 12; j++) {
+    if (groups[links[j].dkey] || links[j].body_hash === "closed") continue;
+    calls++;
+    var c = await gh(env, "PATCH", TS_REPO + "/issues/" + links[j].gh_number, { state: "closed", state_reason: "completed" });
+    if (c.status >= 200 && c.status < 300) { await env.AUDIT.prepare("UPDATE gh_digest_links SET body_hash = 'closed', n = 0, synced_at = ? WHERE dkey = ?").bind(now, links[j].dkey).run(); res.closed++; }
+  }
+  out.digest = res;
 }
 
 function tsPrNum(url) {
@@ -998,6 +1064,7 @@ async function trackerSync(env) {
   if (!env.AUDIT || !env.GITHUB_TOKEN) { out.errors.push({ scope: "tracker", why: "AUDIT binding or GITHUB_TOKEN missing" }); return out; }
   GH_LIMIT = null; /* a new tick decides afresh; the cron is 10 minutes apart */
   try { await tsIssues(env, out); } catch (e) { out.errors.push({ scope: "tracker-issues", why: String(e && e.message || e).slice(0, 160) }); }
+  try { await tsDigest(env, out); } catch (e) { out.errors.push({ scope: "tracker-digest", why: String(e && e.message || e).slice(0, 160) }); }
   try { await tsCodeTasks(env, out); } catch (e) { out.errors.push({ scope: "tracker-prs", why: String(e && e.message || e).slice(0, 160) }); }
   /* The fleet_issue_dispatch mirror (ISSUE-SYNC-1) rides the same 10-minute grid instead of the 6-hourly reconcile. */
   var legacy = { errors: [], issue_sync: null, issue_sync_reverse: null, issue_sync_forward: null, dispatch_liveness: null };
