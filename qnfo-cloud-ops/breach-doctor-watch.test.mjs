@@ -32,7 +32,8 @@ check(P.BREACH_DOCTOR_WATCH_TITLE === TITLE, "the issue title is the spec's", P.
 check(P.BREACH_DOCTOR_WATCH_STALE_MIN === 30 && P.BREACH_DOCTOR_WATCH_LATE_MIN === 15 && P.BREACH_DOCTOR_WATCH_FILE_MIN === 120, "stall 30, healthy 15, one filing per 120 minutes");
 check(P.BREACH_DOCTOR_WATCH_STALE_MIN <= 120 && P.BREACH_DOCTOR_WATCH_FILE_MIN <= 120, "no window exceeds 120 minutes (SLA-120M-1)");
 check(!/\b\d+ ?(hours?|days?)\b/i.test(block), "no window, cadence or SLA in the block is stated in hours or days");
-check(!/env\.AI\b|embedText|recordEvent|\bfetch\(|\.run\(\s*\w+Model|aiRun/.test(block), "no model call, embedding or network call in the job");
+// BREACH-DOCTOR-WATCH-2 (1.40.0): the job may call the doctor on qnfo-fleet-control, and only through the FLEET_CONTROL service binding (binding.fetch on an https://internal URL); a bare fetch() is still a network call and stays refused.
+check(!/env\.AI\b|embedText|recordEvent|(^|[^.\w])fetch\(|\.run\(\s*\w+Model|aiRun/.test(block) && (block.match(/\bfetch\(/g) || []).length === 1 && /binding\.fetch\(BREACH_DOCTOR_WATCH_RUN_URL,/.test(block) && /var BREACH_DOCTOR_WATCH_RUN_URL = "https:\/\/internal\/breach-doctor\/run";/.test(block), "no model call, embedding or network call in the job (the one fetch is the FLEET_CONTROL service binding)");
 check(!/claude\.ai|anthropic\.com|skip[ -]ci/i.test(block), "no claude.ai or anthropic.com link and no skip-CI token in the block");
 const probe = P.BREACH_DOCTOR_WATCH_PROBE;
 const WRITE_KW = ["insert into", "update ", "delete from", "drop table", "drop index", "alter table", "create table", "create index", "create trigger", "attach ", "detach ", "pragma ", "replace into", "vacuum"];

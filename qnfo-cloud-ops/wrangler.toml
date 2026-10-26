@@ -53,6 +53,14 @@ binding = "RESEARCH_EXEC"
 service = "qnfo-research-exec"
 props = { caller = "qnfo-cloud-ops" }
 
+# BREACH-DOCTOR-WATCH-2 (1.40.0, agent_issues 1000397): the second runner of the breach doctor. When the doctor tick of qnfo-fleet-control (*/10) stalls, jobBreachDoctorWatch calls
+# POST /breach-doctor/run on this binding (and once a day as a drill). qnfo-fleet-control answers only a service binding whose ctx.props.caller is qnfo-cloud-ops; no key is involved.
+# A Worker's fetch to a workers.dev host of its own account fails (issue 1190), so the call has to be a binding. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+[[services]]
+binding = "FLEET_CONTROL"
+service = "qnfo-fleet-control"
+props = { caller = "qnfo-cloud-ops" }
+
 # secret (set via wrangler secret put): EMAIL_API_KEY
 # secret (set via wrangler secret put): GH_TOKEN
 # secret (set via wrangler secret put): GMAIL_PASS
