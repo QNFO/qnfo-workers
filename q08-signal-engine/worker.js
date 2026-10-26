@@ -37,7 +37,40 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.36.0"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+var VERSION = "0.36.1"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+
+// Register new metric key
+if (typeof Q08_METRIC_KEYS !== 'undefined') {
+  Q08_METRIC_KEYS.push(["q08_retraction_rate_30d", "retraction_rate_30d"]);
+}
+
+// Compute retraction_rate_30d metric
+async function computeRetractionRate30d(db) {
+  const now = Date.now();
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+  const rows = await db.all(
+    `SELECT id FROM published_pieces WHERE published_at >= ?`,
+    new Date(thirtyDaysAgo).toISOString()
+  );
+  const total = rows.length;
+  if (total < 10) return null;
+  const result = await db.get(
+    `SELECT COUNT(DISTINCT pp.id) AS cnt FROM published_pieces pp JOIN q08_retractions r ON r.piece_id = pp.id WHERE pp.published_at >= ?`,
+    new Date(thirtyDaysAgo).toISOString()
+  );
+  const retracted = result.cnt;
+  return retracted / total;
+}
+
+// Hook into existing 7d metrics calculation if function exists
+if (typeof getMetrics7d === 'function') {
+  const originalGetMetrics7d = getMetrics7d;
+  getMetrics7d = async function(db) {
+    const metrics = await originalGetMetrics7d.call(this, db);
+    metrics.retraction_rate_30d = await computeRetractionRate30d(db);
+    return metrics;
+  };
+}
 /* 0.36.0 PUBLICATION-GATE-AUDIT-2 (2026-10-26, pillar reach; minor: a new data product, q08_retraction_rate_30d, and a writer-order switch). Evidence: engine_runs, 14 days to 2026-10-26: 20 ok of 537 finished runs (3.7%), 517 gate failures, about 48 attempts and 0.5 published pieces a day, the daily neuron pace reached on 8 to 17 runs a day since 2026-10-21. (1) Q08-WRITER-ORDER-2: nemotron, gpt-oss, kimi, by end-to-end yield (10.2%, 1.7%, 0.9%), not by the writer-gate pass rate; ops_config q08_compose_order overrides. (2) Q08-LEDGER-TAG-FORMS-2: ledger citations in round, curly, fullwidth and lenticular brackets, with "&" or "/" between numbers, after a dagger, or as [ledger S3] are removed before any check (the cause of 38 accuracy failures that listed ledger numbers as figures and tags as names). (3) Q08-REVIEWER-HYGIENE-1: a reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), an item whose closing clause says it is supported is acquitted. (4) Q08-PRECHECK-CONTEXT-1: each flagged item carries 24 characters of context on the stage row. (5) Q08-RETRACTION-METRIC-1: q08_retraction_rate_30d. No gate was loosened: names, figures, years, the lede check, the reader panel, the two-family fact-check and the prune are unchanged. */
 /* 0.35.1 Q08-RETRY-PROGRESS-1: a repair that returns exactly a draft already rejected in the same verifyAndRevise invocation stops as an accuracy failure before spending another verification. Changed drafts still receive the full verification; no claim-count heuristic, quality threshold, reviewer family, retry ceiling or spend control changes. Run 955 spent 16 fact-check calls on multiple repairs; its log does not retain draft text, so savings on that run are not claimed. */
 /* 0.35.0 Q08-RUN-STAGE-ATTRIBUTION-1: engine_runs now records reader-panel and fact-check calls separately while preserving verify_calls as their total. The q08.org/api/runs?limit=60 evidence sample returned 20 rows (IDs 952 through 933), not 60; 13 were gate_failed and 7 deferred. No quality gate, spend policy, or generation behavior changed. */
