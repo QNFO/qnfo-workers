@@ -28,7 +28,7 @@ Every value is measured; a collector that cannot measure returns None and writes
         No Cloudflare API reports the bytes Workers Logs ingested: the run asks the two candidate endpoints and records their answers; the value stays None until one answers.
   collect_ci_gate       ci_gate_bypass_count
         Merged pull requests of the last 30 days whose required checks (scripts/github-main-ruleset.json: gate, guard, mirror-guard, identity-guard) were not all green on the head commit,
-        read from GitHub REST with a call budget per run (the consume job sends no token: 60 requests an hour) and kept in qnfo-audit.ci_gate_audit, so the audited set grows run by run.
+        read from GitHub REST with a call budget per run (the consume job sends no token: 60 requests an hour, shared with the other collectors, so one batch of 16 merges every 50 minutes) and kept in qnfo-audit.ci_gate_audit, so the audited set grows run by run.
         The value is the count among audited merges; it is None while the count is 0 and fewer than 98 percent of the window's merges are audited (a lower bound of 0 is not a measurement).
         The main-gate ruleset with those required checks is declared but NOT applied (GitHub enforces only main-safety: no deletion, no force push), and the stale-PR lane merges without
         the gate job by design: both are counted as the data shows them.
@@ -55,8 +55,9 @@ WINDOW_DAYS = 30
 FAIL_WITHIN_H = 24
 MTTR_MIN_EVENTS = 5
 DLQ_HELD_MIN = 120
-GH_CALLS_PER_RUN = 30
-CI_AUDIT_PER_RUN = 24
+GH_CALLS_PER_RUN = 24
+CI_AUDIT_PER_RUN = 16
+CI_THROTTLE_MIN = 50
 CI_COVERAGE_MIN = 0.98
 GOOD_CONCLUSIONS = ("success", "neutral", "skipped")
 _POST = None  # the offline suite replaces this; live it is remediation_consumer._req
@@ -448,6 +449,12 @@ def collect_ci_gate(ctx):
         if not ctx.dry:
             return [Result("ci_gate_bypass_count", None, "ci_gate_audit unreadable (migration not applied?): %s" % str(e)[:120], [])]
         notes.append("dry run: ci_gate_audit not readable, starting from an empty audited set")
+    try:
+        last = ctx.d1("SELECT MAX(checked_at) AS t FROM ci_gate_audit")
+        if last and last[0].get("t") and not ctx.dry and ctx.now - _epoch(last[0]["t"]) < CI_THROTTLE_MIN * 60:
+            return [Result("ci_gate_bypass_count", None, "throttled: the last audit batch ran %s, one batch every %d minutes keeps within the 60 unauthenticated GitHub requests an hour shared with the other collectors" % (last[0]["t"], CI_THROTTLE_MIN), [])]
+    except Exception:  # noqa: BLE001
+        pass
     population = None
     try:
         sr = _gh_url(ctx, "https://api.github.com/search/issues?" + urllib.parse.urlencode({"q": "repo:%s is:pr is:merged merged:>=%s" % (REPO, cutoff[:10]), "per_page": 1}), budget)
@@ -677,7 +684,9 @@ CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, created_at INTEGE
                 return json.dumps({"required_checks": ["gate", "guard", "mirror-guard", "identity-guard"]})
         out = collect_ci_gate(GC())[0]
         ok(out.value == 1 and out.note.startswith("at least 1 of 2 audited") and db.execute("SELECT COUNT(*) FROM ci_gate_audit").fetchone()[0] == 2, "a merge without the gate check is counted: %r %s" % (out.value, out.note[:100]))
-        db.execute("UPDATE ci_gate_audit SET required_state = 'green', missing = ''")
+        thr = collect_ci_gate(GC())[0]
+        ok(thr.value is None and thr.note.startswith("throttled"), "a second batch inside 50 minutes is throttled: %s" % thr.note[:60])
+        db.execute("UPDATE ci_gate_audit SET required_state = 'green', missing = '', checked_at = '2026-01-01T00:00:00Z'")
         out = collect_ci_gate(GC())[0]
         ok(out.value == 0, "full coverage and no bypass is a measured zero: %r %s" % (out.value, out.note[:100]))
         PRS.append({"number": 14, "merged_at": _iso(now - 500), "merge_commit_sha": "m14", "head": {"sha": "h14"}, "updated_at": _iso(now)})

@@ -9,7 +9,7 @@
 --   ci_gate_bypass_count                                              GitHub REST merged pull requests and commit check-runs
 -- WHAT THIS DOES: scripts/bp26_cfapi.py (collectors run by scripts/bp26_producers.py from the remediation-consumer job) measures them. Two small tables keep what the APIs forget or ration:
 -- bp26_deploy_events (the Deployments API returns only the latest 10 per script, so each run stores the new ones and the 30-day figures are computed from the table) and ci_gate_audit (GitHub allows 60
--- unauthenticated requests an hour, so each run audits up to 24 merged pull requests and the audited set grows). The runner trims both to 40 days. log_ingest_gb_month stays unmeasured on purpose:
+-- unauthenticated requests an hour shared with the other collectors, so one batch of up to 16 merged pull requests is audited every 50 minutes and the audited set grows). The runner trims both to 40 days. log_ingest_gb_month stays unmeasured on purpose:
 -- the collector asks both candidate endpoints every six hours and records their answers; unknown is never a value.
 -- MEASURED 2026-10-26T19:5xZ (live read-only dry runs before this file was written): deployments 0 of 340 gradual (35 scripts, one-step "Automatic deployment on upload"); ai_cache_hit_rate 0.0972
 -- (2159 cached of 22208 gateway requests, 7 days); gateway_coverage 0.4148 (22208 gateway requests, 31334 Workers AI inferences outside the gateway); dlq_depth 0 (2 queues, 1 DLQ qnfo-ops-jobs-dlq, backlog 0);
@@ -66,7 +66,7 @@ UPDATE metric_registry SET source_of_truth = 'qnfo-audit social_media_posts, soc
   WHERE metric = 'duplicate_side_effects';
 UPDATE metric_registry SET source_of_truth = 'no Cloudflare API reports Workers Logs ingest bytes (billing/usage/paygo answers 404, the telemetry API lists event fields without a size); scripts/bp26_cfapi.py collect_log_ingest asks both every six hours and keeps the metric unmeasured until one answers [BP26]'
   WHERE metric = 'log_ingest_gb_month';
-UPDATE metric_registry SET source_of_truth = 'GitHub REST (merged pull requests of 30 days, check-runs of each head commit) audited into qnfo-audit.ci_gate_audit against the required checks of scripts/github-main-ruleset.json; scripts/bp26_cfapi.py collect_ci_gate, 24 merges per run, a value only once a bypass is found or 98 percent of the window is audited [BP26]'
+UPDATE metric_registry SET source_of_truth = 'GitHub REST (merged pull requests of 30 days, check-runs of each head commit) audited into qnfo-audit.ci_gate_audit against the required checks of scripts/github-main-ruleset.json; scripts/bp26_cfapi.py collect_ci_gate, one batch of 16 merges every 50 minutes, a value only once a bypass is found or 98 percent of the window is audited [BP26]'
   WHERE metric = 'ci_gate_bypass_count';
 
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
