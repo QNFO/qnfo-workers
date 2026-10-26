@@ -6,8 +6,10 @@
 //    text: probe fails, a gate-opening tick reopens the issue, probe reads ok;
 //  * agent-ws-reactivation-prerequisites (1000243): the contract of the open issue, not the description line a loop rewrites (code-task -> session-task);
 //  * compat-advance-review-gate (1000285): a pending advance unsettled for 2 h, a stale exposure snapshot, or an advance that waits with no verification in 35 days; a rare event is not a rate;
-//  * v_cost_forecast (1000155): 11 columns kept in order, 4 added, identical to the COST-SUSTAIN-3 view, every reader's column present, bound 329.21 -> 296.21 with the two caps, the metric
-//    written from the view, the detector (view text + sibling metric), guards on the caps, idempotent apply, the Rollback line restores the previous state;
+//  * v_cost_forecast (1000155): 11 columns kept in order, 4 added, identical to the COST-SUSTAIN-3 view, every reader's column present, NO ops_config row written (bound 329.21 at the
+//    existing caps, so the migration does not clear the breach), the metric written from the view, the roll-off of the two windows (3 days of non-neuron cost, 7 days of the uncapped remainder)
+//    and the convergence to about 288.7 and 267.7, the detector (view text + sibling metric), idempotent apply, the Rollback line restores the previous state;
+//  * agent-ws control row: alternate_path and evidence name the sweep-applied contract (row backed up, guarded, restored by the Rollback line);
 //  * not applied, premise gone: 1000217/1000234 (the '>' operator) is fixed on main by BREACH-ONE-MEANING-1, shown here by replaying its view on the five rows.
 // SWEEP_B_MIGRATION=<path> runs the same suite against a mutated copy (the mutation checks of the PR).
 // Run: node --no-warnings migrations/sweep-probe-fixes-b.test.mjs   -> prints "N passed, 0 failed"
@@ -30,6 +32,8 @@ const OLD_AG = `SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM agent_i
 const OLD_AG_NOTE = "Read-only D1 probe verifies the server-side remediation issue and its versioned health contract remain open. It does not make the unavailable worker appear healthy or bypass the consumer, dependency, or worker-cap prerequisites.";
 const OLD_CP = `SELECT 'ok' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM deployment_history WHERE action = 'deploy' AND status = 'success' AND deployed_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) THEN 'no successful deploy in 24 h, so the gate may be withholding more than the date change' WHEN NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = 'compat-verify' AND status = 'ok' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) THEN 'no ok compat-verify event in 7 days' ELSE 'ok' END AS observed`;
 const OLD_CP_NOTE = "24 h for deploys (the gate withholds only the date, never the upload), 7 days for the compat verifier; qnfo-ops/compat-date-apply.test.mjs pins each branch";
+const OLD_ALT = "The open AGENT-WS-REACTIVATION-1 issue and its CI-applied remediation contract route the work through qnfo-code-orchestrator and canonical deployment; the read-only control probe checks that handoff remains present.";
+const OLD_EVID = "Fresh D1 read: worker_count=35 at 2026-10-25T07:02:15.614Z and no qnfo-agent-ws service_registry row. The correct worker host returned 404/code 1042; the root qnfo-workers host is a separate retired stub returning 410. The issue remains open until consumer, dependency, and cap evidence pass.";
 const OLD_RES_NOTE = "PIPELINE-FLOW-POLICY-1 (ops session 2026-10-24 14:25Z): cap 360000 -> 600000. Revert: set 360000 if the bound exceeds 300 or cost/paper does not fall once the noop cap is live.";
 const OLD_Q08_NOTE = "COST-SUSTAIN-2 2026-10-21: hard daily neuron budget for q08-signal-engine, paced over the UTC day (q08 0.33.0). 150k = USD 1.65/day. 0 disables (owner override only). Revert: delete row (code default 150000).";
 // the live recurrence_guard_tick (sqlite_master, 2026-10-26T09:15Z)
@@ -87,7 +91,7 @@ function build(o = {}) {
   db.exec(`
 CREATE TABLE spof_alternate_probes (component TEXT PRIMARY KEY, probe_sql TEXT NOT NULL, exercise TEXT, window_note TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_run_at TEXT, last_pass INTEGER, last_pass_at TEXT, last_observed TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 CREATE TABLE control_alternate_probes (control TEXT PRIMARY KEY, probe_sql TEXT NOT NULL, window_note TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_run_at TEXT, last_pass INTEGER, last_pass_at TEXT, last_observed TEXT, created_at TEXT DEFAULT (datetime('now')));
-CREATE TABLE control_registry (control TEXT PRIMARY KEY, disposition TEXT, disposition_state TEXT, issue_id INTEGER);
+CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT, kind TEXT, critical_path INTEGER, disposition TEXT, disposition_state TEXT, alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT, issue_id INTEGER, reviewed_at TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT, module TEXT, budget_ms INTEGER, max_items INTEGER, requires_container INTEGER);
 CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')));
@@ -111,7 +115,9 @@ CREATE TABLE ai_call_counters (day TEXT, worker TEXT, calls INTEGER, neurons REA
   sp.run(REL, o.rel ?? OLD_REL, OLD_REL_NOTE);
   const cp = db.prepare("INSERT INTO control_alternate_probes (control, probe_sql, window_note, enabled, last_run_at, last_pass, last_pass_at, last_observed) VALUES (?, ?, ?, 1, '2026-10-26T07:01:00.310Z', 0, '2026-10-25T18:01:00.736Z', 'old')");
   cp.run(AG, o.ag ?? OLD_AG, OLD_AG_NOTE); cp.run(CP, o.cp ?? OLD_CP, OLD_CP_NOTE);
-  db.exec(`INSERT INTO control_registry VALUES ('${AG}', 'keep', 'applied', 1000140), ('${CP}', 'keep', 'applied', NULL)`);
+  const cr = db.prepare("INSERT INTO control_registry VALUES (?, ?, ?, 0, 'keep', 'applied', ?, ?, ?, ?, ?)");
+  cr.run(AG, "qnfo-agent-ws/RETIRED and deploy-targets.txt", "hold", o.alt ?? OLD_ALT, "2026-10-25T18:01:00.736Z", OLD_EVID, 1000140, "2026-10-25T18:01:00.736Z");
+  cr.run(CP, "qnfo-ops/worker.js decideCompatAdvance + compatAdvanceGate", "gate", "the gate withholds only the date change, never the deploy", "2026-10-26T00:01:02.705Z", "qnfo-ops/compat-date-apply.test.mjs runs cfWorkerDeploy for each branch", null, null);
   // issue 1000140: the description carries session-task, not code-task (NEEDS-ANCHOR-ROUTE-1, 2026-10-25T18:53Z); its contract is intact
   db.prepare("INSERT INTO agent_issues (id, title, description, status, created_at, updated_at) VALUES (1000140, ?, ?, 'open', 1, 1)").run(AG_TITLE,
     "Doer: qnfo-code-orchestrator.\n" + AG_PROBE_LINE + "\nsession-task: repo=qnfo-workers path=qnfo-agent-ws/worker.js\ncode-anchor: const normalizedPath = ...\n(NEEDS-ANCHOR-ROUTE-1 2026-10-25T18:53Z)");
@@ -156,6 +162,7 @@ const bound = (db) => { try { return one(db, "SELECT bound_30d_usd AS b FROM v_c
 ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql) && /^-- BACKUP: bak_20261026_v_cost_forecast$/m.test(sql), "the opt-in headers and the BACKUP of the dropped view are present");
 const code = sql.replace(/^--.*$/gm, "");
 const bare = code.replace(/'(?:[^']|'')*'/g, "''");
+ok(!/\b(?:UPDATE|DELETE\s+FROM)\s+ops_config\b|\b(?:INTO|REPLACE)\s+ops_config\b/i.test(bare), "no statement of the file writes ops_config (no cap is written; the view only reads it)");
 ok(!/\bCREATE\s+TRIGGER\b/i.test(bare), "no trigger is created (none on agent_issues, none on analytics_metric_triggers, no new D1 trigger depth)");
 ok((bare.match(/\bDROP\s+\w+/gi) || []).join() === "DROP VIEW" && !/\bDELETE\s+FROM\b/i.test(bare), "the only destructive statement is DROP VIEW of v_cost_forecast (no DELETE)", bare.match(/\bDROP\s+\w+/gi));
 ok(/CREATE TABLE IF NOT EXISTS bak_20261026_v_cost_forecast AS SELECT name, sql FROM sqlite_master WHERE name = 'v_cost_forecast';[\s\S]*DROP VIEW IF EXISTS v_cost_forecast;/.test(code), "the backup table is created before the view is dropped");
@@ -186,7 +193,7 @@ const hist = all(db, "SELECT component AS k, probe_sql, window_note, enabled FRO
 ok(hist.length === 3 && hist.every((h) => h.enabled === 0), "the three old probes are kept as disabled @before-calibration-1 rows", hist.map((h) => h.k));
 const H = Object.fromEntries(hist.map((h) => [h.k, h]));
 ok(H[AG + "@before-calibration-1"].probe_sql === OLD_AG && H[AG + "@before-calibration-1"].window_note === OLD_AG_NOTE && H[CP + "@before-calibration-1"].probe_sql === OLD_CP && H[REL + "@before-calibration-1"].probe_sql === OLD_REL && H[REL + "@before-calibration-1"].window_note === OLD_REL_NOTE, "the history rows hold the exact old text and notes");
-ok(!one(db, "SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name LIKE 'bak_%' AND name <> 'bak_20261026_v_cost_forecast'"), "no other bak_ table (the fleet purges them)");
+ok(!one(db, "SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name LIKE 'bak_%' AND name NOT IN ('bak_20261026_v_cost_forecast', 'bak_20261026_control_registry_agent_ws')"), "no bak_ table beyond the two backups the file names (the view and the control row)");
 ok(one(db, "SELECT COUNT(*) AS n FROM spof_alternate_probes WHERE enabled = 1").n === 1 && one(db, "SELECT COUNT(*) AS n FROM control_alternate_probes WHERE enabled = 1").n === 2, "one enabled spof probe and two enabled control probes: the drill still reads three rows");
 ok(run(db, spof(db)) === "ok" && run(db, ctrl(db, AG)) === "ok" && run(db, ctrl(db, CP)) === "ok", "post-state: the three new probes read ok on the live-like data", [run(db, spof(db)), run(db, ctrl(db, AG)), run(db, ctrl(db, CP))]);
 ok(one(db, "SELECT last_pass AS p FROM spof_alternate_probes WHERE component = ?", REL).p === 0, "the probe rows' run columns are untouched (the drill alone writes them)");
@@ -212,6 +219,8 @@ const REL_BRANCHES = () => { const d = build(); d.exec(sql); return d; };
   ok(/^no fleet_tick insert in minutes 0 to 9 in 3 hours/.test(run(d, spof(d))), "ticks only at minutes 10-59 fire (the gate never opens)", run(d, spof(d)));
   d = REL_BRANCHES(); d.exec("DELETE FROM fleet_tick");
   ok(/^no fleet_tick insert in minutes 0 to 9/.test(run(d, spof(d))), "no tick at all fires", run(d, spof(d)));
+  d = REL_BRANCHES(); d.exec("DELETE FROM fleet_tick WHERE CAST(strftime('%M', ts) AS INTEGER) < 10"); d.prepare("INSERT INTO fleet_tick (ts, source) VALUES (?, 'cron:qnfo-code-orchestrator')").run(tickTs(3, 4));
+  ok(/^no fleet_tick insert in minutes 0 to 9 in 3 hours/.test(run(d, spof(d))), "the only gate-minute tick is 4 h old (outside the 3 hours): fires", run(d, spof(d)));
   d = REL_BRANCHES(); d.exec("DELETE FROM fleet_tick WHERE ts < '" + iso(170) + "' AND CAST(strftime('%M', ts) AS INTEGER) < 10");
   const inWin = one(d, "SELECT COUNT(*) AS n FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-3 hours') AND CAST(strftime('%M', ts) AS INTEGER) < 10").n;
   ok(inWin >= 1 ? run(d, spof(d)) === "ok" : true, "a gate-minute tick inside the 3 hours is enough");
@@ -248,8 +257,20 @@ const RELAPSE_MSG = "a closed issue failed its contract past max_attempts for ov
   ok(run(d, spof(d)) === RELAPSE_MSG, "max_attempts 2 with 2 failures fires", run(d, spof(d)));
   d = REL_BRANCHES(); relapse(d, { pass: 100 });
   ok(run(d, spof(d)) === "ok", "a pass after the failures resets the count", run(d, spof(d)));
-  d = REL_BRANCHES(); relapse(d, { closedMinAgo: 90 });
-  ok(run(d, spof(d)) === "ok", "an issue closed less than 2 h ago is out of the trigger select", run(d, spof(d)));
+  d = REL_BRANCHES(); relapse(d, { closedMinAgo: 100, fails: [95, 90, 80] });
+  ok(run(d, spof(d)) === "ok", "an issue closed 100 minutes ago with failures at 95, 90 and 80 minutes ago is out of the trigger select (the trigger waits 2 h after a closure)", run(d, spof(d)));
+  d.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
+  ok(one(d, "SELECT status AS s FROM agent_issues WHERE id = 7001").s === "closed" && one(d, "SELECT COUNT(*) AS n FROM recurrence_guard_actions").n === 0, "and the LIVE trigger text leaves it closed too (same select)");
+  d = REL_BRANCHES(); relapse(d, { cstatus: "holding" });
+  ok(run(d, spof(d)) === RELAPSE_MSG, "a contract in status holding is in the trigger select: fires", run(d, spof(d)));
+  d = REL_BRANCHES(); relapse(d); d.prepare("INSERT INTO remediation_verifications (issue_id, class, observed, pass, verified_at) VALUES (7001, 'issue-7001', 'pending: waiting for the next run', 0, ?)").run(dt(30));
+  ok(run(d, spof(d)) === "ok", "three failures followed by a final pending verification read ok (the trigger waits for a settled observation)", run(d, spof(d)));
+  d.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
+  ok(one(d, "SELECT status AS s FROM agent_issues WHERE id = 7001").s === "closed", "and the LIVE trigger text leaves it closed while the last observation is pending");
+  d = REL_BRANCHES(); relapse(d); d.exec("INSERT INTO issue_lifecycle (issue_id, event, from_status, to_status, ts) VALUES (7001, 'dispositioned', 'closed', 'in_progress', '" + iso(20) + "')");
+  ok(run(d, spof(d)) === RELAPSE_MSG, "a later lifecycle event whose to_status is not closed or resolved does not move the closure reference: fires", run(d, spof(d)));
+  d.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
+  ok(one(d, "SELECT status AS s FROM agent_issues WHERE id = 7001").s === "open", "and the LIVE trigger text reopens it (same closure reference)");
   d = REL_BRANCHES(); relapse(d, { cstatus: "superseded" });
   ok(run(d, spof(d)) === "ok", "a superseded contract is out of the select", run(d, spof(d)));
   d = REL_BRANCHES(); relapse(d, { observed: "pending: waiting" });
@@ -266,7 +287,7 @@ const RELAPSE_MSG = "a closed issue failed its contract past max_attempts for ov
 {
   const mk = () => { const d = build(); d.exec(sql); return d; };
   let d = mk();
-  const AGMSG1 = "the open AGENT-WS-REACTIVATION-1 issue or the keep disposition is missing", AGMSG2 = "the CI-applied versioned health contract of the issue is not live";
+  const AGMSG1 = "the open AGENT-WS-REACTIVATION-1 issue or the keep disposition is missing", AGMSG2 = "the sweep-applied versioned health contract of the issue is not live";
   ok(run(d, ctrl(d, AG)) === "ok" && !/code-task:/.test(one(d, "SELECT description AS x FROM agent_issues WHERE id = 1000140").x), "ok while the description holds session-task and no code-task line (the rewrite of 2026-10-25T18:53Z)");
   d.exec("UPDATE agent_issues SET description = 'no task line at all' WHERE id = 1000140");
   ok(run(d, ctrl(d, AG)) === "ok", "the description text is not part of the probe");
@@ -290,6 +311,20 @@ const RELAPSE_MSG = "a closed issue failed its contract past max_attempts for ov
   ok(run(d, ctrl(d, AG)) === AGMSG2, "a contract on another host fires", run(d, ctrl(d, AG)));
   d = mk(); d.exec("UPDATE agent_issues SET status = 'closed' WHERE id = 1000140; INSERT INTO agent_issues (id, title, description, status, created_at, updated_at) VALUES (1000999, '" + AG_TITLE + "', 'refiled', 'open', 1, 1); INSERT INTO remediation_contracts (class, issue_id, status, verify_transport, verify_probe, max_attempts) VALUES ('issue-1000999', 1000999, 'active', 'runner-https', '{\"url\": \"https://qnfo-agent-ws.q08.workers.dev/health\", \"min_version\": \"2.1.0\"}', 3)");
   ok(run(d, ctrl(d, AG)) === "ok", "an issue re-filed under a new id with its own contract is found by title, not by a fixed id", run(d, ctrl(d, AG)));
+  // the control row: alternate_path and evidence name the contract as the handoff
+  const pre = build(), post = mk();
+  const rowOf = (x, c) => one(x, "SELECT * FROM control_registry WHERE control = ?", c);
+  const cr = rowOf(post, AG);
+  ok(/sweep-applied runtime-probe contract/.test(cr.alternate_path) && /probe-line-sweep-v1/.test(cr.alternate_path) && /NEEDS-ANCHOR-ROUTE-1/.test(cr.alternate_path) && /worker stays retired/.test(cr.alternate_path) && !/CI-applied/.test(cr.alternate_path), "the alternate_path names the sweep-applied contract (module probe-line-sweep-v1), the retired worker and the withdrawn code-task route, and no longer says CI-applied", cr.alternate_path);
+  ok(cr.evidence.startsWith(OLD_EVID) && /SWEEP-PROBE-FIXES-B-1 2026-10-26/.test(cr.evidence) && !/CI-applied/.test(cr.evidence), "the evidence keeps its text and gains the reason", cr.evidence.slice(-200));
+  ok(cr.disposition === "keep" && cr.disposition_state === "applied" && cr.alternate_tested_at === "2026-10-25T18:01:00.736Z" && cr.issue_id === 1000140 && cr.location === rowOf(pre, AG).location, "disposition, tested stamp, issue and location of the control row are untouched");
+  ok(JSON.stringify(rowOf(post, CP)) === JSON.stringify(rowOf(pre, CP)), "the other control row is untouched");
+  const bk = one(post, "SELECT * FROM bak_20261026_control_registry_agent_ws");
+  ok(JSON.stringify(bk) === JSON.stringify(rowOf(pre, AG)) && one(post, "SELECT COUNT(*) AS n FROM bak_20261026_control_registry_agent_ws").n === 1, "the backup table holds the exact pre-state row of the control (and only it)");
+  const wn = one(post, "SELECT window_note AS w FROM control_alternate_probes WHERE control = ?", AG).w;
+  ok(/sweep-applied runtime-probe contract/.test(wn) && !/CI-applied/.test(wn), "the window_note says sweep-applied, not CI-applied", wn.slice(0, 200));
+  const own = build({ alt: "somebody else's text for this control" }); own.exec(sql);
+  ok(rowOf(own, AG).alternate_path === "somebody else's text for this control" && rowOf(own, AG).evidence === OLD_EVID, "an alternate_path someone has since rewritten is left alone, and so is the evidence");
 }
 
 // ============================================================ 3. compat-advance-review-gate
@@ -362,19 +397,28 @@ const RELAPSE_MSG = "a closed issue failed its contract past max_attempts for ov
   // the backup holds the clobbered text
   const bk = one(d, "SELECT name, sql FROM bak_20261026_v_cost_forecast");
   ok(bk.name === "v_cost_forecast" && norm(bk.sql) === norm(OLD_VIEW) && !/bound_30d_usd/.test(bk.sql), "the backup table holds the clobbered 11-column view text");
-  // caps
-  const rn = one(d, "SELECT value, note FROM ops_config WHERE key = 'research_daily_neurons'"), qn = one(d, "SELECT value, note FROM ops_config WHERE key = 'q08_daily_neurons'");
-  ok(rn.value === "310000" && qn.value === "100000" && one(d, "SELECT value FROM ops_config WHERE key = 'code_loop_daily_calls'").value === "140", "research_daily_neurons 310000, q08_daily_neurons 100000, code_loop_daily_calls untouched");
-  ok(rn.note.startsWith("COST-BOUND-RESTORE-1 2026-10-26") && rn.note.endsWith("\n" + OLD_RES_NOTE) && qn.note.startsWith("COST-BOUND-RESTORE-1") && qn.note.endsWith("\n" + OLD_Q08_NOTE) && /Revert: UPDATE ops_config/.test(rn.note + qn.note), "each cap note starts with the decision, names its revert and keeps the previous note after a newline");
+  // no cap is written
+  const cfg = (x) => JSON.stringify(all(x, "SELECT key, value, note, updated_at FROM ops_config ORDER BY key"));
+  ok(cfg(d) === cfg(build()) && one(d, "SELECT value FROM ops_config WHERE key = 'research_daily_neurons'").value === "360000" && one(d, "SELECT value FROM ops_config WHERE key = 'q08_daily_neurons'").value === "150000" && one(d, "SELECT value FROM ops_config WHERE key = 'code_loop_daily_calls'").value === "140", "no ops_config row changes: research_daily_neurons 360000, q08_daily_neurons 150000 and code_loop_daily_calls 140 keep their values, notes and stamps");
   const b1 = bound(d);
-  ok(Math.abs(b1 - 296.21) < 0.06 && b1 <= 300, "the bound at the new caps is USD 296.21 (<= 300)", b1);
+  ok(Math.abs(b1 - 329.21) < 0.06 && b1 > 300, "the bound at the existing caps is USD 329.21, over 300: the migration does not claim to clear the breach", b1);
   // the metric is written from the view
   const m = one(d, "SELECT last_value AS v, last_refreshed AS r, state FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'");
   ok(Math.abs(Number(m.v) - b1) < 0.006 && m.state === "MEASURED" && Date.now() - Date.parse(m.r) < 60000, "fleet_cost_bound_month_usd is written from the restored view and is fresh", m);
   ok(one(d, "SELECT last_value AS v FROM metric_registry WHERE metric = 'fleet_cost_pace_30d_usd'").v === "289.48", "the sibling metrics are not touched");
-  // the trigger of the issue reads the value: 296.21 <= 300 => no hit
-  const hit = one(d, "SELECT CAST(last_value AS REAL) > 300 AS h FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'").h;
-  ok(hit === 0, "trigger 10930 (gt 300) reads no hit on the written value");
+  ok(one(d, "SELECT CAST(last_value AS REAL) > 300 AS h FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'").h === 1, "trigger 10930 (gt 300) still reads a hit on the written value: issue 1000155 closes only when the metric converges");
+  // convergence at the existing caps: the two windows roll off
+  const win = (sqlText) => { const x = build(); x.exec(sql); x.exec(sqlText); return bound(x); };
+  ok(Math.abs(win("INSERT INTO cost_daily VALUES (date('now', '-4 days'), 'ai_gateway:deepseek', 4.0482, 'fleet')") - 329.21) < 0.06, "a one-off non-neuron day 4 days back is outside the 3-day window (the 2026-10-24 gateway day leaves on 2026-10-28)");
+  ok(win("INSERT INTO cost_daily VALUES (date('now', '-3 days'), 'ai_gateway:deepseek', 4.0482, 'fleet')") - 329.21 > 40, "and the same day 3 days back is inside it (+USD 40.5 on the bound)");
+  ok(Math.abs(win("INSERT INTO ai_call_counters VALUES (date('now', '-8 days'), 'qnfo-ops', 10, 274000)") - 329.21) < 0.06, "an uncapped-remainder day 8 days back is outside the 7-day window (the qnfo-ops spike leaves on 2026-11-02)");
+  ok(win("INSERT INTO ai_call_counters VALUES (date('now', '-7 days'), 'qnfo-ops', 10, 274000)") - 329.21 > 3, "and the same day 7 days back is inside it");
+  const c1 = build(); c1.exec(sql); c1.exec("UPDATE cost_daily SET usd = 0.3554 WHERE source = 'cloudflare_plan:daily'");
+  const b2 = bound(c1);
+  ok(Math.abs(b2 - 288.7) < 0.3 && b2 < 300, "with the one-off gateway day out of the 3-day window (USD 0.3554 a day outside neurons) the same caps read about 288.7", b2);
+  c1.exec("UPDATE ai_call_counters SET neurons = 28800 WHERE worker = 'qnfo-ops'");
+  const b3 = bound(c1);
+  ok(Math.abs(b3 - 267.7) < 0.3 && b3 < b2, "and with the qnfo-ops spike days replaced by 28,800 neurons a day they read about 267.7", b3);
   // the detector
   const fm = one(d, "SELECT fm_key, probe_class, issue_id FROM failure_modes WHERE fm_key = 'cost-forecast-view-clobbered'");
   const rc = one(d, "SELECT class, status, verify_transport, verify_probe, module FROM remediation_contracts WHERE class = 'fm-cost-forecast-view-clobbered'");
@@ -395,24 +439,19 @@ const RELAPSE_MSG = "a closed issue failed its contract past max_attempts for ov
   ok(det(d).observed === "0", "a NULL refresh stamp is not read as a stale one (an unmeasured metric has its own detectors)", det(d));
 }
 {
-  // the metric statement leaves the metric alone when the view cannot give a bound, and the caps are guarded
-  const d = build({ research: "600000", q08: "75000" }); d.exec(sql);
-  ok(one(d, "SELECT value FROM ops_config WHERE key = 'research_daily_neurons'").value === "600000" && one(d, "SELECT value FROM ops_config WHERE key = 'q08_daily_neurons'").value === "75000", "a cap someone has since changed (600000, 75000) is not overwritten");
-  ok(one(d, "SELECT note FROM ops_config WHERE key = 'research_daily_neurons'").note === OLD_RES_NOTE, "and its note is left alone");
+  // the metric statement leaves the metric alone when the view cannot give a bound
   const e = build(); e.exec("DELETE FROM cost_daily"); e.exec(sql);
   ok(one(e, "SELECT last_value AS v FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'").v === "352.76", "with no fleet cost rows the view has no bound and the metric is not overwritten by a NULL or a zero");
-  const f = build(); f.exec("DELETE FROM ops_config WHERE key IN ('research_daily_neurons', 'q08_daily_neurons')"); f.exec(sql);
-  ok(one(f, "SELECT COUNT(*) AS n FROM ops_config WHERE key IN ('research_daily_neurons', 'q08_daily_neurons')").n === 0, "absent cap rows are not created (the view and the workers fall back to their own defaults)");
 }
 
 // ============================================================ idempotent, probes someone changed are left alone, rollback
 {
-  const snap = (x) => JSON.stringify([all(x, "SELECT * FROM spof_alternate_probes ORDER BY component"), all(x, "SELECT * FROM control_alternate_probes ORDER BY control"), all(x, "SELECT key, value, note FROM ops_config ORDER BY key"), all(x, "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name"), all(x, "SELECT * FROM failure_modes"), all(x, "SELECT class, status, verify_probe FROM remediation_contracts ORDER BY class"), all(x, "SELECT * FROM decision_log"), all(x, "SELECT name, sql FROM bak_20261026_v_cost_forecast")]);
+  const snap = (x) => JSON.stringify([all(x, "SELECT * FROM spof_alternate_probes ORDER BY component"), all(x, "SELECT * FROM control_alternate_probes ORDER BY control"), all(x, "SELECT key, value, note FROM ops_config ORDER BY key"), all(x, "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name"), all(x, "SELECT * FROM failure_modes"), all(x, "SELECT class, status, verify_probe FROM remediation_contracts ORDER BY class"), all(x, "SELECT * FROM decision_log"), all(x, "SELECT name, sql FROM bak_20261026_v_cost_forecast"), all(x, "SELECT * FROM control_registry ORDER BY control"), all(x, "SELECT * FROM bak_20261026_control_registry_agent_ws")]);
   // the metric value moves with now(), so compare everything except it
   const d = build(); d.exec(sql);
   const s1 = snap(d), m1 = one(d, "SELECT last_value AS v FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'").v;
   d.exec(sql);
-  ok(snap(d) === s1 && one(d, "SELECT last_value AS v FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'").v === m1, "a second apply changes no probe, cap, view, failure mode, contract, decision or backup row");
+  ok(snap(d) === s1 && one(d, "SELECT last_value AS v FROM metric_registry WHERE metric = 'fleet_cost_bound_month_usd'").v === m1, "a second apply changes no probe, ops_config row, view, control row, failure mode, contract, decision or backup row");
   ok(one(d, "SELECT COUNT(*) AS n FROM decision_log").n === 1, "exactly one decision_log row after two applies");
   const x = build({ rel: "SELECT 'ok' AS expected, 'ok' AS observed", ag: "SELECT 'ok' AS expected, 'ok' AS observed", cp: "SELECT 'ok' AS expected, 'ok' AS observed" }); x.exec(sql);
   ok(spof(x) === "SELECT 'ok' AS expected, 'ok' AS observed" && ctrl(x, AG) === "SELECT 'ok' AS expected, 'ok' AS observed" && ctrl(x, CP) === "SELECT 'ok' AS expected, 'ok' AS observed", "a probe someone has since changed is left alone");
@@ -422,14 +461,14 @@ const RELAPSE_MSG = "a closed issue failed its contract past max_attempts for ov
 }
 {
   const d = build();
-  const pre = JSON.stringify([all(d, "SELECT * FROM spof_alternate_probes ORDER BY component"), all(d, "SELECT * FROM control_alternate_probes ORDER BY control"), all(d, "SELECT key, value, note FROM ops_config ORDER BY key"), cols(d, "v_cost_forecast")]);
+  const state = (x, probes) => JSON.stringify([all(x, "SELECT * FROM spof_alternate_probes" + (probes ? " WHERE component NOT LIKE '%@before-calibration-1'" : "") + " ORDER BY component"), all(x, "SELECT * FROM control_alternate_probes" + (probes ? " WHERE control NOT LIKE '%@before-calibration-1'" : "") + " ORDER BY control"), all(x, "SELECT key, value, note FROM ops_config ORDER BY key"), all(x, "SELECT * FROM control_registry ORDER BY control"), cols(x, "v_cost_forecast")]);
+  const pre = state(d, false);
   d.exec(sql); d.exec(rollback);
-  const post = JSON.stringify([all(d, "SELECT * FROM spof_alternate_probes WHERE component NOT LIKE '%@before-calibration-1' ORDER BY component"), all(d, "SELECT * FROM control_alternate_probes WHERE control NOT LIKE '%@before-calibration-1' ORDER BY control"), all(d, "SELECT key, value, note FROM ops_config ORDER BY key"), cols(d, "v_cost_forecast")]);
-  ok(post === pre, "the Rollback line restores the three probes with their notes, both caps with their exact notes and the 11-column view");
+  ok(state(d, true) === pre, "the Rollback line restores the three probes with their notes, the control row (alternate_path and evidence, exact) and the 11-column view");
   ok(!one(d, "SELECT 1 AS x FROM failure_modes WHERE fm_key = 'cost-forecast-view-clobbered'") && !one(d, "SELECT 1 AS x FROM remediation_contracts WHERE class = 'fm-cost-forecast-view-clobbered'"), "and removes the failure mode and its detector");
   ok(one(d, "SELECT COUNT(*) AS n FROM decision_log").n === 1, "the decision_log row stays (append-only)");
-  const e = build(); e.exec(sql); e.exec("UPDATE ops_config SET value = '420000' WHERE key = 'research_daily_neurons'"); e.exec(rollback);
-  ok(one(e, "SELECT value FROM ops_config WHERE key = 'research_daily_neurons'").value === "420000", "a cap changed after the file is not reverted by the Rollback line");
+  const e = build(); e.exec(sql); e.exec("UPDATE control_registry SET alternate_path = 'rewritten again after the file' WHERE control = '" + AG + "'"); e.exec(rollback);
+  ok(one(e, "SELECT alternate_path AS a FROM control_registry WHERE control = ?", AG).a === "rewritten again after the file", "a control row rewritten after the file is not reverted by the Rollback line");
 }
 
 // ============================================================ not applied, premise gone: 1000217 and 1000234 (operator '>' read as >=)
