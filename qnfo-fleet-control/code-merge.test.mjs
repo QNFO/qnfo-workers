@@ -204,8 +204,8 @@ ok(["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-code-orchestrat
 ok(J(W.cmScope("scripts/code-task-publish.py")).ok === true && J(W.cmScope("scripts/code-task-publish.py")).kind === "script" && !W.cmScope("scripts/code-task-publish.test.mjs").ok, "the loop's own publish script is in scope, its test is not");
 // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.20.0, agent_issues 2176): the two control-plane workers with a functional canary and an automatic revert are in scope.
 ok(["qnfo-ai", "qnfo-gateway"].every((w) => J(W.cmScope(w + "/worker.js")).ok === true && J(W.cmScope(w + "/worker.js")).kind === "worker"), "qnfo-ai and qnfo-gateway (functional canary) auto-merge");
-ok(J(W.cmRequired([PATH, MIRROR])).join(",") === "gate,mirror-guard,comparator,guard", "a worker.js needs gate, mirror-guard, comparator and guard");
-ok(J(W.cmRequired(["docs/x.md"])).join(",") === "gate,mirror-guard,comparator", "a doc needs no version-bump guard (its workflow does not run for docs)");
+ok(J(W.cmRequired([PATH, MIRROR])).join(",") === "mirror-guard,comparator,guard", "a worker.js needs mirror-guard, comparator and guard");
+ok(J(W.cmRequired(["docs/x.md"])).join(",") === "mirror-guard,comparator", "a doc needs no version-bump guard (its workflow does not run for docs)");
 ok(J(W.cmRequired(["docs/QUNIVERSE-CHARTER.md"])).indexOf("charter") >= 0 && J(W.cmRequired(["qnfo-code-orchestrator/README.md"])).indexOf("test") >= 0, "charter-guard and code-loop-test are required where they run");
 ok(W.cmTrusted("qnfo-fleet-dashboard:owner-request", "OWNER-TASK-12: x") && W.cmTrusted("claude-session-intake-smoke", "x"), "owner tasks and session-filed issues are trusted origins");
 ok(!W.cmTrusted("qnfo-fleet-dashboard:owner-request", "INTENT-TASK-3: x") && !W.cmTrusted("kaizen-ai", "x") && !W.cmTrusted("email-composer", "x"), "feed intents, model and email loops are not trusted origins");
