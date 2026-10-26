@@ -118,7 +118,7 @@ const stored = (db) => db.prepare("SELECT COUNT(*) n, COALESCE(SUM(length(CAST(b
   ok(/append-only/.test(err2), "an archive proof cannot be deleted", err2);
 }
 // wiring
-ok(/paperLedgerArchiveStep\(env\)/.test(src) && /notes\.ledger_archive = arch\.notes/.test(src), "the quality sweep calls the step in its own try and records the notes");
+ok(/paperLedgerArchiveStep\(env\)/.test(src) && /notes\.ledger_archive = arch\.notes/.test(src) && /arch\.status !== "skipped"/.test(src), "the quality sweep calls the step in its own try and records the notes");
 ok(/\[\[r2_buckets\]\]\s*\nbinding = "RELEASES"\s*\nbucket_name = "qnfo-releases"/.test(toml), "wrangler.toml binds RELEASES to qnfo-releases");
 ok(mirror === src, "the deployed-current mirror is identical to worker.js");
 const [maj, min] = String(mod.__version).split(/[.-]/).map(Number);

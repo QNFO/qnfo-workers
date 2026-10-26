@@ -3656,7 +3656,7 @@ async function jobQualityScore(env) {
     // PAPER-LEDGER-ARCHIVE-1 (1.38.0): its own try, so an archive problem never costs the sweep its verdicts; it only degrades the run and says why.
     try {
       const arch = await paperLedgerArchiveStep(env);
-      notes.ledger_archive = arch.notes;
+      if (arch.status !== "skipped") notes.ledger_archive = arch.notes;
       if (arch.status === "degraded" && status === "ok") { status = "degraded"; reason = arch.reason; }
     } catch (eArch) {
       notes.ledger_archive = { error: String(eArch && eArch.message || eArch).slice(0, 160) };
