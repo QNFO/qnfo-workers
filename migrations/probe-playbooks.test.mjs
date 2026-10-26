@@ -8,10 +8,13 @@
 // pending on the live shapes and ok when the condition is met, carry no semicolon and no write keyword, and refuse a title that tries to inject SQL; the green-at-birth form installs
 // holding with its second read 60 minutes out; a BACKFILL-1 alias is superseded only after the template is live; the real engine (breachDoctorTick) takes the PN-R3, PB-R0 and
 // template cases from diagnosed to verified in three ticks and demotes PN-R2 when the filer undoes a close; the metrics, triggers, root-cause mapping, refresher task, failure modes,
-// detectors, control row, the code-lever issue (its code-anchor occurs once in worker.js, its probe reads pending today), capability and decision row are present; a second apply changes nothing.
+// detectors, control row, the code-lever issue (its code-anchor occurs once in worker.js; its closing probe is a code-read of main that is installed through the LIVE birth and loop-owned triggers, fails today, passes on the doer's edit and cannot pass on a quiet day),
+// the two beliefs with their falsifying probes, the 120-minute detector thresholds, the PB-R0 module that keeps PROBE-REVIEW-1 in the loop, capability and decision row are present; a second apply changes nothing.
 // Run: node migrations/probe-playbooks.test.mjs     (PROBE_PLAYBOOKS_SQL=<file> runs the same checks against another file; an empty file shows the suite failing on the pre-change state)
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -58,6 +61,7 @@ const api = cx.api;
 const baseDdl = dtest.match(/const BASE_DDL = `([\s\S]*?)`;/)[1];
 const EXTRA_DDL = `
 CREATE TABLE IF NOT EXISTS loop_lock (k TEXT PRIMARY KEY, holder TEXT NOT NULL, expires_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS owner_prompts (id TEXT PRIMARY KEY, status TEXT, issue_id INTEGER);
 CREATE TABLE IF NOT EXISTS issue_plans (issue_id INTEGER PRIMARY KEY, planned_at TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT, task_id TEXT, path TEXT, model TEXT, attempts INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT NOT NULL, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE issue_lifecycle (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, event TEXT, from_status TEXT, to_status TEXT, has_evidence INTEGER, ts TEXT);
@@ -102,7 +106,7 @@ function world(o = {}) {
   // the live ops_config rows the engine reads
   raw.exec("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('breach_doctor_max_actions', '20'), ('breach_doctor_max_cases', '60')");
   if (o.before) o.before(raw);
-  if (o.apply !== false) raw.exec(sql);
+  if (o.apply !== false) raw.exec(o.sql ?? sql);
   return raw;
 }
 const q1 = (raw, s, ...p) => raw.prepare(s).get(...p);
@@ -140,6 +144,12 @@ const pbs = (raw) => Object.fromEntries(qa(raw, "SELECT * FROM breach_playbooks"
     ok(got === want, "PN-R3's probe expression equals rtLivePathProbe(" + t + ")", { got: String(got).slice(0, 120), want: want.slice(0, 120) });
   }
 }
+
+// qnfo-cloud-ops PROBE_REVIEW_SELECT, evaluated as the worker writes it (PROBE-REVIEW-1 judges these contracts and skips the rest)
+const cloudOpsSrc = readFileSync(process.env.PP_CLOUDOPS_PATH || here("../qnfo-cloud-ops/worker.js"), "utf8");
+const prm = cloudOpsSrc.match(/var PROBE_REVIEW_REFUSED = [^\n]*\nvar PROBE_REVIEW_SELECT = [\s\S]*?LIMIT 120";/);
+ok(prm, "qnfo-cloud-ops carries PROBE_REVIEW_SELECT");
+const probeReviewSelect = vm.runInNewContext(prm[0] + "\nPROBE_REVIEW_SELECT;");
 
 // ---- fixtures
 const MIN = 60000;
@@ -307,6 +317,8 @@ function lcGate(raw, minAgo) { raw.prepare("INSERT INTO issue_lifecycle (issue_i
   ok(st(raw, 7201).status === "open", "PN-R2: the target stays open as its own work item");
   const ev = q1(raw, "SELECT close_evidence e FROM issue_triage WHERE issue_id = 7301").e;
   ok(ev.startsWith("SUPERSEDED BY #7201: ") && /an OWNER-TASK item/.test(ev) && /Closed by breach-doctor rule PN-R2 from ids and enum codes only/.test(ev) && !ev.includes(";") && !/Audit|desktop/.test(ev), "PN-R2: SUPERSEDED BY the target id, built from ids and enum codes (no title text)", ev);
+  ok(/Issue 7201 was open when this rule closed the PN and stays open/.test(ev) && /belief-pn-r2-owner-outcome-unmeasured/.test(ev) && /v_issue_dead_end/.test(ev) && !/fleet-owned|worked as|HUMAN-ITEMS-AUTOMATIC/i.test(ev), "PN-R2: the evidence states what the rule read (the target was open, its id and class) and the recorded belief, and claims no doer for the item", ev);
+  ok(!/24 hours|\bhours?\b|\bdays?\b/i.test(pbs(raw)["PN-R2"].trigger_sql + pbs(raw)["PN-R2"].action_sql) && /-1440 minutes/.test(pbs(raw)["PN-R2"].trigger_sql), "PN-R2: the gate window is stated in minutes (-1440 minutes), never in hours", pbs(raw)["PN-R2"].trigger_sql.match(/'-[^']*'/g));
   ok(vfy(raw, "PN-R2", 7301).observed === "ok", "PN-R2: verify reads ok after");
   // the filer undoes the close: issue_refile_reopen reopens the PN, verify then reads pn-reopened
   raw.prepare("INSERT OR IGNORE INTO agent_issues (title, source, status, created_at, updated_at) VALUES ('PROBE-NEEDED-1: issue-7201', 'qnfo-fleet-control', 'open', ?, ?)").run(Date.now(), Date.now());
@@ -337,12 +349,20 @@ function lcGate(raw, minAgo) { raw.prepare("INSERT INTO issue_lifecycle (issue_i
   ok(vfy(raw, "PB-R0", 7501).observed === "still-superseded", "PB-R0: verify reads still-superseded before");
   ok(act(raw, "PB-R0", 7501) === 1, "PB-R0: one row changes");
   const c = ct(raw, "issue-7501");
-  ok(c.status === "active" && c.last_verdict === null && c.attempts === 0 && c.next_due_at && c.expected_cadence_h === 1 && /metric_improvement_now/.test(c.verify_probe) && c.module === "probe-template-v3-generic", "PB-R0: the contract is active with verdict NULL, attempts 0 and its own probe untouched", c);
+  ok(c.status === "active" && c.last_verdict === null && c.attempts === 0 && c.next_due_at && c.expected_cadence_h === 1 && /metric_improvement_now/.test(c.verify_probe) && c.module === "breach-doctor-restored", "PB-R0: the contract is active with verdict NULL, attempts 0, its own probe untouched and module breach-doctor-restored", c);
+  {
+    // qnfo-cloud-ops PROBE_REVIEW_SELECT (the worker's own predicate) skips module LIKE probe-template%: a restored probe must stay in the model reviewer's selection
+    const sel = () => qa(raw, probeReviewSelect).map((r) => r.class);
+    ok(!/^probe-template/.test(c.module) && sel().includes("issue-7501"), "PB-R0: the restored contract is not LIKE probe-template% and PROBE_REVIEW_SELECT of qnfo-cloud-ops selects it", sel());
+    raw.prepare("UPDATE remediation_contracts SET module = 'probe-template-v3-generic' WHERE class = 'issue-7501'").run();
+    ok(!sel().includes("issue-7501"), "PB-R0: and the same row under the module it was born with (probe-template-v3-generic) is skipped by that predicate, which is why the module is swapped");
+    raw.prepare("UPDATE remediation_contracts SET module = 'breach-doctor-restored' WHERE class = 'issue-7501'").run();
+  }
   ok(vfy(raw, "PB-R0", 7501).observed === "ok", "PB-R0: verify reads ok after");
   ok(act(raw, "PB-R0", 7501) === 0 && [7502, 7503, 7504, 7505, 7506, 7507, 7508].every((i) => act(raw, "PB-R0", i) === 0), "PB-R0: a second run and every near miss change nothing");
   ok(ct(raw, "issue-7502").status === "superseded" && ct(raw, "issue-7504").status === "superseded" && ct(raw, "issue-7505").status === "superseded", "PB-R0: the circular, live-contract and id-literal contracts stay superseded");
   rev(raw, "PB-R0", 7501);
-  ok(ct(raw, "issue-7501").status === "superseded" && /^superseded:closure-observing-probe-at-birth/.test(ct(raw, "issue-7501").last_verdict), "PB-R0: revert_sql restores the superseded status and a superseded-at-birth verdict");
+  ok(ct(raw, "issue-7501").status === "superseded" && /^superseded:closure-observing-probe-at-birth/.test(ct(raw, "issue-7501").last_verdict) && ct(raw, "issue-7501").module === "probe-template-v3-generic", "PB-R0: revert_sql restores the superseded status, a superseded-at-birth verdict and the module the contract was born with");
   act(raw, "PB-R0", 7501);
 }
 
@@ -523,13 +543,51 @@ const tick = async (raw) => cx.api.breachDoctorTick({ AUDIT_DB: mkDb(raw) }, {})
   ok(["fm-pn-probe-refused", "fm-pn-target-closed-open", "fm-born-superseded-real-probe"].every((c) => Date.parse(ct(raw, c).next_due_at.replace(" ", "T") + "Z") - Date.now() > 80 * MIN), "the three repair detectors are first read after the playbooks had time to act");
   const fmv = (cls) => raw.prepare(ct(raw, cls).verify_probe).get();
   ok(fmv("fm-pn-probe-refused").observed === "4" && fmv("fm-pn-target-closed-open").observed === "4" && fmv("fm-born-superseded-real-probe").observed === "1", "the detectors count the fixture defects (4 refused PN, 4 PN with a target closed for an hour, 1 superseded real probe: the same predicate as PB-R0)", [fmv("fm-pn-probe-refused"), fmv("fm-pn-target-closed-open"), fmv("fm-born-superseded-real-probe")]);
-  // fm-probe-author-unreachable: reads pending when PN were filed and the author left no event, ok once it did
+  // fm-probe-author-unreachable (SLA-120M-1: one 120-minute window): pending when a PN was filed in the window and the author left no event since the oldest of them, ok once it did
+  const evAt = (id, kind, minAgo) => raw.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?, ?, ?, 'x', 'qnfo-fleet-control', 'warn')").run(id, isoAgo(minAgo, true), kind);
   raw.prepare("DELETE FROM cloud_ops_events").run();
   ok(fmv("fm-probe-author-unreachable").observed === "ok", "fm-probe-author-unreachable reads ok when no PROBE-NEEDED-1 was filed");
-  for (let i = 0; i < 3; i++) raw.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?, ?, 'remediation.probe-needed-filed', 'x', 'qnfo-fleet-control', 'warn')").run("f" + i, isoAgo(30, true));
-  ok(fmv("fm-probe-author-unreachable").observed === "pending: 3 probe-needed filings and 0 author attempts in 24 hours", "and pending when 3 were filed and the author left no event (the 2026-10-26 state: 0 events against 77 filings)", fmv("fm-probe-author-unreachable"));
-  raw.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('r1', ?, 'remediation.probe-author-reject', 'x', 'qnfo-fleet-control', 'warn')").run(isoAgo(20, true));
-  ok(fmv("fm-probe-author-unreachable").observed === "ok", "and ok once the author recorded a reject");
+  evAt("fold", "remediation.probe-needed-filed", 130);
+  ok(fmv("fm-probe-author-unreachable").observed === "ok", "and ok when the only filing is 130 minutes old (the window is 120 minutes, not 24 hours)", fmv("fm-probe-author-unreachable"));
+  for (let i = 0; i < 3; i++) evAt("f" + i, "remediation.probe-needed-filed", 30);
+  ok(fmv("fm-probe-author-unreachable").observed === "pending: 3 probe-needed filings in 120 minutes and no author attempt since the first of them", "and pending when 3 were filed in the window and the author left no event (the 2026-10-26 state: 0 events against 77 filings)", fmv("fm-probe-author-unreachable"));
+  evAt("r0", "remediation.probe-author-reject", 45);
+  ok(fmv("fm-probe-author-unreachable").observed.startsWith("pending: 3 probe-needed filings"), "and still pending when the only author event (45 minutes ago) is older than the oldest filing in the window (30 minutes ago): the old 130-minute filing is outside the window", fmv("fm-probe-author-unreachable"));
+  evAt("r1", "remediation.probe-author-reject", 20);
+  ok(fmv("fm-probe-author-unreachable").observed === "ok", "and ok once the author recorded a reject after the filings", fmv("fm-probe-author-unreachable"));
+  raw.prepare("DELETE FROM cloud_ops_events").run();
+  evAt("g0", "remediation.probe-needed-filed", 100); evAt("g1", "remediation.probe-author-reject", 110);
+  ok(fmv("fm-probe-author-unreachable").observed.startsWith("pending: 1 probe-needed filings"), "and pending when the author's last event is older than the filing it should have answered (since it was filed)", fmv("fm-probe-author-unreachable"));
+  evAt("g2", "remediation.probe-authored", 20);
+  ok(fmv("fm-probe-author-unreachable").observed === "ok", "and ok once a probe was authored after the filing");
+  // every detector threshold is in minutes and none exceeds 120 (SLA-120M-1)
+  for (const cls of Object.values(FM)) {
+    const pr = ct(raw, cls).verify_probe;
+    const mins = [...pr.matchAll(/'-(\d+) minutes'/g)].map((m) => Number(m[1])), secs = [...pr.matchAll(/- (\d{3,6})\) \* 1000/g)].map((m) => Number(m[1]));
+    ok(!/\b\d+ (hours?|days?)\b/i.test(pr) && mins.every((v) => v <= 120) && secs.every((v) => v <= 7200), cls + ": every window is stated in minutes (or seconds) and none exceeds 120 minutes", { mins, secs });
+  }
+  for (const k of Object.keys(FM)) {
+    const fr = q1(raw, "SELECT remediation||' '||detector||' '||trigger_condition AS txt FROM failure_modes WHERE fm_key = ?", k).txt;
+    ok(!/\b(180|10800)\b/.test(fr) && !/\b\d+ (hours?|days?)\b/i.test(fr), "failure mode " + k + ": its remediation, detector and trigger condition state no threshold of 180 minutes or any hour/day window (root cause and symptom may quote history)", fr.match(/.{30}(180|\d+ hours?).{20}/));
+  }
+  {
+    // boundaries: a refused PN or a born-superseded real probe is counted from 120 minutes (7200 s), not 180
+    const mk = (id, title, ageMin) => raw.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (?, ?, 'qnfo-fleet-control', 'medium', 'open', ?, ?)").run(id, title, Date.now() - ageMin * 60000, Date.now());
+    const cnt = (cls) => Number(raw.prepare(ct(raw, cls).verify_probe).get().observed);
+    const b0 = cnt("fm-pn-probe-refused");
+    mk(8801, "PROBE-NEEDED-1: issue-8811", 100); raw.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status) VALUES ('issue-8801', 8801, 'p', 'a', 'SELECT 1', 'd1-query', 'x', 'probe-review-refused')").run();
+    ok(cnt("fm-pn-probe-refused") === b0, "fm-pn-probe-refused: a refused PN 100 minutes old is not yet counted");
+    mk(8802, "PROBE-NEEDED-1: issue-8812", 130); raw.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status) VALUES ('issue-8802', 8802, 'p', 'a', 'SELECT 1', 'd1-query', 'x', 'probe-review-refused')").run();
+    ok(cnt("fm-pn-probe-refused") === b0 + 1, "fm-pn-probe-refused: and one 130 minutes old is (it was 180 minutes)", cnt("fm-pn-probe-refused"));
+    const s0 = cnt("fm-born-superseded-real-probe");
+    const REALQ = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM metric_improvement_now WHERE owner = 'x') AS TEXT) AS observed";
+    const V3b = "superseded:closure-observing-probe-at-birth (CLOSE-PROBE-CIRCULAR-1: x)";
+    const sup = (id, ageMin) => { mk(id, "some orphan " + id, ageMin); raw.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, last_verdict) VALUES (?, ?, 'p', 'a', ?, 'd1-query', 'x', 'superseded', ?)").run("issue-" + id, id, REALQ, V3b); };
+    sup(8803, 100);
+    ok(cnt("fm-born-superseded-real-probe") === s0, "fm-born-superseded-real-probe: a superseded real probe 100 minutes old is not yet counted");
+    sup(8804, 130);
+    ok(cnt("fm-born-superseded-real-probe") === s0 + 1, "fm-born-superseded-real-probe: and one 130 minutes old is (it was 180 minutes)", cnt("fm-born-superseded-real-probe"));
+  }
 
   // the control row and the code lever
   const cl = q1(raw, "SELECT * FROM agent_issues WHERE title = 'BREACH-DOCTOR-1: PN-R2 qnfo-fleet-control'");
@@ -540,24 +598,169 @@ const tick = async (raw) => cx.api.breachDoctorTick({ AUDIT_DB: mkDb(raw) }, {})
   ok(workerSrc.split(anchor).length === 2, "its code-anchor occurs exactly once in qnfo-fleet-control/worker.js", workerSrc.split(anchor).length - 1);
   ok(/RT_LIVEPATH_ORPHAN_SQL = /.test(workerSrc) && workerSrc.indexOf(anchor) > workerSrc.indexOf("var RT_LIVEPATH_ORPHAN_SQL") && workerSrc.indexOf(anchor) - workerSrc.indexOf("var RT_LIVEPATH_ORPHAN_SQL") < 400, "the anchor is inside RT_LIVEPATH_ORPHAN_SQL");
   ok(!/OWNER-TASK/.test(workerSrc.slice(workerSrc.indexOf("var RT_LIVEPATH_ORPHAN_SQL"), workerSrc.indexOf("async function rtFileLivePathIssue"))), "the defect exists on main today: the filer's orphan SQL has no OWNER-TASK exclusion");
+  // the lever's contract on the fixture world (no birth or template triggers here: the live chain is replayed in its own block below)
   const clc = ct(raw, "issue-" + cl.id);
-  ok(clc.status === "active" && clc.verify_transport === "d1-query" && clc.module === "breach-doctor" && clc.verify_probe !== "needs-machine-probe", "its contract is the active d1-query outcome probe", clc);
-  ok(!/(^|[^a-z])(insert|update|delete|drop|alter|create|replace) /i.test(clc.verify_probe.replace(/'[^']*'/g, "''")) && !clc.verify_probe.includes(";"), "the outcome probe passes the runners' write-keyword guard");
-  ok(raw.prepare(clc.verify_probe).get().observed.startsWith("pending: the filer opened or reopened 2 "), "the outcome probe reads pending while the filer opened a class-C PN in the last 24 hours (it did 6 times on 2026-10-26)", raw.prepare(clc.verify_probe).get());
-  raw.prepare("DELETE FROM issue_lifecycle").run();
-  ok(raw.prepare(clc.verify_probe).get().observed === "ok", "and ok after 24 hours of quiet");
+  ok(clc.status === "active" && clc.verify_transport === "code-read" && clc.module === "breach-doctor" && clc.verify_probe !== "needs-machine-probe" && clc.last_verdict === null && clc.attempts === 0, "its contract is the active code-read closing probe", clc);
+  const jparse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+  const lineProbe = jparse((lines.find((l) => l.startsWith("code-probe: ")) || "").slice("code-probe: ".length));
+  ok(lineProbe !== null && JSON.stringify(lineProbe) === JSON.stringify(jparse(clc.verify_probe)) && lines.filter((l) => l.startsWith("code-probe: ")).length === 1, "the issue's code-probe line and the contract carry the same probe (agent_issues_code_probe_upd would install the line's text)", lineProbe);
   const ctl = q1(raw, "SELECT * FROM control_registry WHERE control = 'pn-r2-filer-quiet-gate'");
   ok(ctl && ctl.kind === "gate" && ctl.disposition === "replace" && ctl.issue_id === cl.id && /review by 2026-11-02/.test(ctl.evidence) && /issue_refile_reopen/.test(ctl.guards_against) && ctl.alternate_path, "the gate is in control_registry with its reason, its replacement (the code lever), its alternate path and a dated expiry", ctl);
   ok(q1(raw, "SELECT 1 x FROM capability_ledger WHERE capability = 'probe-playbooks:repair-closing-paths'"), "the capability is in the ledger");
+  // DOCTRINE-1 beliefs: PN-R2 and PB-T4 act on beliefs, so each has a row and a belief- probe that can falsify it
+  for (const [key, cls] of [["pn-r2-owner-outcome-unmeasured", "belief-pn-r2-owner-outcome-unmeasured"], ["pb-t4-metric-title-is-about-the-metric", "belief-pb-t4-metric-title-is-about-the-metric"]]) {
+    const br = q1(raw, "SELECT * FROM belief_registry WHERE belief_key = ?", key);
+    ok(br && br.probe_class === cls && br.confidence > 0 && br.confidence < 1 && /For: /.test(br.evidence) && /Against: /.test(br.evidence), "belief " + key + " is registered with a confidence below 1 and evidence for and against", br && br.evidence.slice(0, 80));
+    const bc = ct(raw, cls);
+    ok(bc && bc.status === "active" && bc.verify_transport === "d1-query" && bc.module === "belief" && bc.issue_id === null && !bc.verify_probe.includes(";") && !cx.__RT_WRITE_KW.some((kw) => (" " + bc.verify_probe.toLowerCase().replace(/\s+/g, " ") + " ").includes(" " + kw)), cls + ": an active d1-query belief probe, no issue, no semicolon, no write keyword", bc);
+  }
+  {
+    const ow = (id, status, prompt) => { raw.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (?, ?, 'qnfo-fleet-dashboard:owner-request', 'high', ?, ?, ?)").run(id, "OWNER-TASK-op-" + id + ": x", status, Date.now() - 30 * H, Date.now()); raw.prepare("INSERT INTO owner_prompts (id, status, issue_id) VALUES (?, ?, ?)").run("op-" + id, prompt, id); };
+    const bp = () => raw.prepare(ct(raw, "belief-pn-r2-owner-outcome-unmeasured").verify_probe).get();
+    ok(bp().observed === "holds" && bp().expected === "holds", "belief-pn-r2-owner-outcome-unmeasured holds with no closed OWNER-TASK issue", bp());
+    for (let i = 0; i < 9; i++) ow(9100 + i, "closed", "queued");
+    ow(9109, "closed", "answered"); ow(9110, "open", "answered");
+    ok(bp().observed === "holds", "and holds while 9 of 10 closed OWNER-TASK issues read queued (the live state: 131 of 135)", bp());
+    for (let i = 0; i < 9; i++) raw.prepare("UPDATE owner_prompts SET status = 'answered' WHERE issue_id = ?").run(9100 + i);
+    ok(/^falsified: 0\.0 percent of closed OWNER-TASK issues read queued$/.test(bp().observed), "and is falsified when the outcomes are recorded (every closed OWNER-TASK prompt answered)", bp());
+    // PB-T4: an issue that carries the T4 template contract and was reopened falsifies the title belief
+    const tp = () => raw.prepare(ct(raw, "belief-pb-t4-metric-title-is-about-the-metric").verify_probe).get();
+    ok(tp().expected === "0" && tp().observed === "0", "belief-pb-t4-metric-title-is-about-the-metric reads 0 before any T4 issue was reopened", tp());
+    ok(act(raw, "PB-T4", 7801) >= 1 && ct(raw, "issue-7801").module === "probe-template-v4-metric", "(T4 installs its template on a metric-titled issue)");
+    ok(tp().observed === "0", "and still 0 after the install", tp());
+    raw.prepare("INSERT INTO issue_lifecycle (issue_id, event, from_status, to_status, ts) VALUES (7801, 'reopened', 'closed', 'open', ?)").run(isoAgo(60, true));
+    ok(tp().observed === "1", "and 1 once that issue was reopened (the belief is flagged for red-team)", tp());
+    raw.prepare("UPDATE issue_lifecycle SET ts = ? WHERE issue_id = 7801 AND event = 'reopened'").run(isoAgo(10081, true));
+    ok(tp().observed === "0", "and 0 again once the reopen is older than 10080 minutes");
+  }
   const d = qa(raw, "SELECT * FROM decision_log WHERE action LIKE 'PROBE-PLAYBOOKS-1:%'");
   ok(d.length === 1 && IDS.every((id) => d[0].action.includes(id)) && d[0].predicted_outcome === "breaches_auto_remediated_24h >= 6 within 24 h", "one decision_log row names every rule and predicts an outcome the doctor has to earn", d.map((x) => x.predicted_outcome));
   if (q1(raw, "SELECT name FROM sqlite_master WHERE name = 'decision_predictions'")) ok(n(raw, "decision_predictions") >= 1 && q1(raw, "SELECT subject FROM decision_predictions ORDER BY id DESC LIMIT 1").subject === "breaches_auto_remediated_24h", "decision_predictions_parse scored the prediction on breaches_auto_remediated_24h");
 }
 
+// ---- the code lever on the LIVE trigger chain (review 2026-10-26). On live the INSERT into agent_issues fires agent_issues_birth_contract_ins, which creates the contract as needs-machine-probe, and
+// contract_probe_templates_loop_merged parks it as monitoring / probe-template-v2d-loop because qnfo-fleet-control is a live service_registry row. The fixture world has none of these, so the lever's UPDATE looked
+// installed in the first draft and matched 0 rows on live. The trigger texts below are the ones read from live qnfo-audit sqlite_master on 2026-10-26.
+const LIVE_LEVER_CHAIN = `
+CREATE TABLE IF NOT EXISTS service_registry (service TEXT, state TEXT);
+CREATE TABLE IF NOT EXISTS issue_source_hosts (source TEXT, host TEXT);
+INSERT INTO service_registry (service, state) VALUES ('qnfo-fleet-control', 'live');
+CREATE TRIGGER agent_issues_birth_contract_ins AFTER INSERT ON agent_issues WHEN NEW.status = 'open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id) BEGIN INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES ('issue-' || NEW.id, NEW.id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'); END;
+CREATE TRIGGER contract_probe_templates_loop_merged AFTER INSERT ON remediation_contracts
+WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL
+  AND (EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'
+                AND a.source NOT LIKE 'session%' AND a.source NOT LIKE 'claude%' AND a.source NOT LIKE 'chat%'
+                AND a.source NOT LIKE 'owner%' AND a.source NOT LIKE 'backlog%' AND a.source NOT LIKE 'cloud_ops_events%'
+                AND a.source NOT LIKE 'TRANSFORMATION-PROGRAM%' AND a.source NOT LIKE 'human%'
+                AND NOT EXISTS (SELECT 1 FROM issue_source_hosts m WHERE m.source = a.source))
+    OR EXISTS (SELECT 1 FROM agent_issues a JOIN issue_source_hosts m ON m.source = a.source
+                 JOIN service_registry s ON s.service = m.host AND s.state = 'live'
+                WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+    OR EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.state = 'live' AND instr(a.source, s.service || '-') = 1
+                WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+    OR EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.service = a.source AND s.state = 'live'
+                WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'))
+BEGIN
+  UPDATE remediation_contracts
+     SET status = 'monitoring', verify_transport = 'd1-query', attempts = 0,
+         last_verdict = 'monitoring:loop-owned-48h (the filing loop closes it; SLA-120M-2 escalation and the stale view report it)',
+         next_due_at = NULL,
+         action = 'LOOP-OWNED-CONTRACT-MONITORING-1: the filing loop closes this issue on recovery. This contract is parked as monitoring and is not probed, so it cannot block that close (close-while-contract-fails). The 120-minute issue SLA (issues_open_over_120m) and the stale views still report the open issue.',
+         module = CASE
+           WHEN EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'
+                     AND a.source NOT LIKE 'session%' AND a.source NOT LIKE 'claude%' AND a.source NOT LIKE 'chat%'
+                     AND a.source NOT LIKE 'owner%' AND a.source NOT LIKE 'backlog%' AND a.source NOT LIKE 'cloud_ops_events%'
+                     AND a.source NOT LIKE 'TRANSFORMATION-PROGRAM%' AND a.source NOT LIKE 'human%'
+                     AND NOT EXISTS (SELECT 1 FROM issue_source_hosts m WHERE m.source = a.source))
+             THEN 'probe-template-v2d-loop'
+           WHEN EXISTS (SELECT 1 FROM agent_issues a JOIN issue_source_hosts m ON m.source = a.source
+                          JOIN service_registry s ON s.service = m.host AND s.state = 'live'
+                         WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+             THEN 'probe-template-v2c-loop'
+           ELSE 'probe-template-v2-loop' END,
+         precondition = 'filed by a live fleet loop, which owns it for 48h (ORPHAN-GUARD-BIRTH-1)',
+         verify_probe = 'SELECT ''ok'' AS expected, CASE WHEN (SELECT status FROM agent_issues WHERE id = ' || NEW.issue_id || ') <> ''open'' THEN ''ok'' WHEN (SELECT created_at FROM agent_issues WHERE id = ' || NEW.issue_id || ') > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 172800) * 1000 THEN ''pending: filed by ' || (SELECT source FROM agent_issues WHERE id = NEW.issue_id) || ', which owns it for 48h'' ELSE ''stale: the filing loop ' || (SELECT source FROM agent_issues WHERE id = NEW.issue_id) || ' did not close it within 48h'' END AS observed'
+   WHERE class = NEW.class AND status = 'needs-machine-probe';
+END;
+CREATE TRIGGER contract_probe_templates_v3_generic AFTER INSERT ON remediation_contracts
+WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title LIKE 'METRIC-TRIGGER-%')
+  AND NOT EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.service = a.source AND s.state = 'live'
+                   WHERE a.id = NEW.issue_id)
+  AND NOT EXISTS (SELECT 1 FROM agent_issues a JOIN issue_source_hosts m ON m.source = a.source
+                    JOIN service_registry s ON s.service = m.host AND s.state = 'live'
+                   WHERE a.id = NEW.issue_id)
+BEGIN
+  UPDATE remediation_contracts
+  SET status = 'superseded', verify_transport = 'd1-query', module = 'probe-template-v3-generic', attempts = 0,
+      last_verdict = 'superseded:closure-observing-probe-at-birth (CLOSE-PROBE-CIRCULAR-1: this template observes the guarded issue status)',
+      next_due_at = NULL,
+      precondition = 'no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)',
+      action = 'VACUOUS-PROBE-V3-1: this contract measures nothing while the issue is open, so it is born superseded and never blocks the close.',
+      verify_probe = 'SELECT ''closed'' AS expected, (SELECT CASE WHEN status IN (''closed'', ''resolved'') THEN ''closed'' ELSE NULL END FROM agent_issues WHERE id = ' || NEW.issue_id || ') AS observed'
+  WHERE class = NEW.class AND status = 'needs-machine-probe';
+END;`;
+{
+  const liveWorld = (text) => world({ sql: text, before: (r) => r.exec(LIVE_LEVER_CHAIN) });
+  const leverOf = (r) => q1(r, "SELECT id, description FROM agent_issues WHERE title = 'BREACH-DOCTOR-1: PN-R2 qnfo-fleet-control' ORDER BY id DESC LIMIT 1");
+  // the first draft's guard, put back: the reproduction the review ran
+  const GUARD = "AND status IN ('needs-machine-probe', 'monitoring', 'superseded')";
+  ok(sql.split(GUARD).length === 2 || !existsSync(sqlPath) || sql.length < 100, "the lever UPDATE guards on status IN (needs-machine-probe, monitoring, superseded), once");
+  const oldGuardSql = sql.replace(GUARD, "AND status = 'needs-machine-probe'");
+  const L0 = liveWorld(oldGuardSql);
+  const c0 = ct(L0, "issue-" + leverOf(L0).id);
+  ok(oldGuardSql !== sql && c0.status === "monitoring" && c0.module === "probe-template-v2d-loop" && /^monitoring:loop-owned-48h/.test(c0.last_verdict), "reproduction: with the first draft's guard (status = needs-machine-probe) the live birth and loop-owned triggers leave the lever contract parked as monitoring / probe-template-v2d-loop and the UPDATE matched 0 rows", c0);
+
+  const L = liveWorld(sql);
+  const lev = leverOf(L), c = ct(L, "issue-" + lev.id);
+  ok(c.status === "active" && c.module === "breach-doctor" && c.verify_transport === "code-read" && c.last_verdict === null && c.attempts === 0 && c.deferred_since === null && c.max_attempts === 1000 && c.expected_cadence_h === 1, "live chain: the lever contract is active, module breach-doctor, code-read, with the monitoring verdict cleared, attempts 0 and no deferral", c);
+  const dueIn = (Date.parse(c.next_due_at.replace(" ", "T") + "Z") - Date.now()) / MIN;
+  ok(dueIn < 1 && dueIn > -2, "live chain: and due now (the first read is not 48 hours away)", dueIn);
+  ok(n(L, "remediation_contracts WHERE issue_id = " + lev.id) === 1, "live chain: the lever has exactly one contract");
+  ok(!qa(L, probeReviewSelect).some((r) => r.class === "issue-" + lev.id), "live chain: qnfo-cloud-ops PROBE-REVIEW-1 selects d1-query contracts only, so a model cannot refuse the lever's closing path");
+  const before = contractSnap(L);
+  L.exec(sql);
+  ok(contractSnap(L) === before, "live chain: a second apply changes no contract");
+
+  // the probe, run by the real consumer (scripts/remediation_consumer.py parse_code_probe and run_code_probe) over a checkout of main
+  const anchor = lev.description.split("\n").find((l) => l.startsWith("code-anchor: ")).slice("code-anchor: ".length);
+  const mark = (() => { try { return JSON.parse(c.verify_probe).contains; } catch { return null; } })();
+  const consume = (src) => {
+    const dir = mkdtempSync(join(tmpdir(), "pp-code-"));
+    try {
+      mkdirSync(join(dir, "qnfo-fleet-control"));
+      writeFileSync(join(dir, "qnfo-fleet-control", "worker.js"), src);
+      const py = "import sys, json; sys.path.insert(0, sys.argv[1]); import remediation_consumer as rc; p, why = rc.parse_code_probe(sys.argv[2]); print(json.dumps({'why': why, 'obs': rc.run_code_probe(p, sys.argv[3]) if p else None}))";
+      const r = spawnSync("python3", ["-I", "-c", py, fileURLToPath(here("../scripts")), c.verify_probe, dir], { encoding: "utf8" });
+      return r.status === 0 ? JSON.parse(r.stdout) : { why: "python-failed", obs: (r.stdout + r.stderr).slice(0, 200) };
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+  const unfixed = consume(workerSrc);
+  ok(mark && unfixed.why === null && unfixed.obs === "missing-marker:qnfo-fleet-control/worker.js" && !workerSrc.includes(mark), "the consumer parses the probe and it FAILS on today's worker.js: the exclusion is absent (missing-marker), so the defect is what keeps the issue open", unfixed);
+  const anchorLine = workerSrc.split("\n").find((l) => l.includes(anchor));
+  const addition = "  + \"AND a.title NOT LIKE 'OWNER-TASK%' AND a.title NOT LIKE 'OWNER-NOTE%' \"";
+  const fixedSrc = workerSrc.replace(anchorLine, anchorLine + "\n" + addition);
+  ok(fixedSrc !== workerSrc && consume(fixedSrc).obs === "ok", "and PASSES once the doer makes the one edit the issue describes (the line after the PROBE-NEEDED-1 exclusion)", consume(fixedSrc));
+  ok(consume(workerSrc.replace(anchorLine, anchorLine + "\n  + \"AND a.title NOT LIKE 'OWNER-TASK%' \"")).obs !== "ok", "and does not pass on half the edit (OWNER-TASK without OWNER-NOTE)");
+
+  // the edit does what the issue says: RT_LIVEPATH_ORPHAN_SQL stops returning owner items
+  const orphanSql = (src) => vm.runInNewContext(src.match(/var RT_LIVEPATH_ORPHAN_SQL = [\s\S]*?LIMIT \?3";/)[0] + "\nRT_LIVEPATH_ORPHAN_SQL;");
+  const O = world({ before: (r) => { r.exec("CREATE TABLE IF NOT EXISTS service_registry (service TEXT, state TEXT); CREATE TABLE IF NOT EXISTS issue_source_hosts (source TEXT, host TEXT);"); for (const [id, t, s] of [[9501, "OWNER-TASK-op-x: do a thing", "qnfo-fleet-dashboard:owner-request"], [9502, "OWNER-NOTE-49: a note", "qnfo-fleet-dashboard:owner-request"], [9503, "an ordinary orphan", "session"]]) r.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (?, ?, ?, 'high', 'open', ?, ?)").run(id, t, s, Date.now() - 30 * H, Date.now()); } });
+  const orphans = (src) => O.prepare(orphanSql(src)).all(60, 0, 10).map((r) => r.id).sort().join();
+  ok(orphans(workerSrc) === "9501,9502,9503" && orphans(fixedSrc) === "9503", "the filer's orphan SQL returns the owner items today and only the ordinary orphan after the edit", { today: orphans(workerSrc), after: orphans(fixedSrc) });
+
+  // the first draft's probe read ok on a quiet day with the defect present: every class-C PN already open, no class-C PN event for 24 hours
+  const Q = world({ before: (r) => { for (const [o, pn, t] of [[9601, 9701, "OWNER-TASK-op-q: a"], [9602, 9702, "OWNER-NOTE-50: b"]]) { r.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (?, ?, 'qnfo-fleet-dashboard:owner-request', 'high', 'open', ?, ?)").run(o, t, Date.now() - 80 * H, Date.now()); r.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (?, ?, 'qnfo-fleet-control', 'medium', 'open', ?, ?)").run(pn, "PROBE-NEEDED-1: issue-" + o, Date.now() - 79 * H, Date.now()); r.prepare("INSERT INTO issue_lifecycle (issue_id, event, from_status, to_status, ts) VALUES (?, 'opened', NULL, 'open', ?)").run(pn, isoAgo(79 * 60, true)); } } });
+  const PROXY = "SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(*) FROM issue_lifecycle l JOIN agent_issues q ON q.id = l.issue_id JOIN agent_issues w ON w.id = CAST(substr(q.title, 23) AS INTEGER) WHERE q.title LIKE 'PROBE-NEEDED-1: issue-%' AND l.event IN ('opened','reopened') AND l.ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours') AND (w.title LIKE 'OWNER-TASK%' OR w.title LIKE 'OWNER-NOTE%')) = 0 THEN 'ok' ELSE 'pending' END AS observed";
+  ok(Q.prepare(PROXY).get().observed === "ok" && unfixed.obs !== "ok", "quiet but unfixed (all class-C PNs already open, no event in 24 hours): the first draft's proxy probe read ok there, the code-read reads missing-marker", { proxy: Q.prepare(PROXY).get().observed, now: unfixed.obs });
+  // the lever's issue is open, so its contract is a live closing path of the orphan metric and of the PROBE-NEEDED-1 filer
+  ok(q1(L, "SELECT COUNT(*) n FROM agent_issues a WHERE a.id = ? AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN ('active','holding','monitoring','escalated') AND c.class NOT LIKE '%-BACKFILL-1' AND instr(lower(c.verify_probe), 'close_evidence') = 0)", lev.id).n === 0, "the lever counts as having a live closing path in the orphan metric's own definition");
+}
+
 // ---- idempotence
 {
   const raw = world({ before: fixtures });
-  const tables = ["breach_playbooks", "metric_registry", "analytics_metric_triggers", "metric_breach_cause", "fleet_tasks", "fleet_crons", "failure_modes", "remediation_contracts", "agent_issues", "control_registry", "capability_ledger", "decision_log", "issue_triage"];
+  const tables = ["belief_registry", "breach_playbooks", "metric_registry", "analytics_metric_triggers", "metric_breach_cause", "fleet_tasks", "fleet_crons", "failure_modes", "remediation_contracts", "agent_issues", "control_registry", "capability_ledger", "decision_log", "issue_triage"];
   const snap = () => JSON.stringify(tables.map((t) => qa(raw, "SELECT * FROM " + t + " ORDER BY 1, 2")));
   const before = snap();
   raw.exec(sql);
