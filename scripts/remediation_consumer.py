@@ -220,8 +220,37 @@ def _list_dbs():
 # at all: a green run reported verdicts that no reader could see. Path B is remediation_evidence, the trigger-free
 # sink unioned by v_remediation_evidence_all. The primary error travels with the row, so a reader never has to guess
 # which path produced it.
+# FIRST-PASS-CLOSE-1 (2026-10-26, pillar autonomy; remediation session rem-a4): the D1 triggers remediation_verification_autoclose_ins and
+# issue_close_evidence_required refuse to close an issue while a contract of it still carries a refusal verdict in last_verdict (fail, vacuous-probe-result,
+# probe-error, probe-not-machine-executable, probe-same-account-host). This runner writes the pass row first and stamps the contract afterwards (consume_one),
+# so the trigger read the verdict of the PREVIOUS run: the first passing read of a contract that had been failing never closed its issue, the next run did.
+# Measured 2026-10-26 on qnfo-audit over 3 days of trigger closes: 79 of the 212 closes of issues that had never been reopened had an earlier pass since the
+# contract's last fail, and waited 6.2 hours on average for the second read (the 45 reopened issues wait for two passes by design and are unchanged).
+# A pass now stamps the contract's refusal verdict to 'pass' immediately before its row is written, so the trigger sees the verdict this read produced;
+# consume_one stamps the same value afterwards. A fail, a deferral and a contract that is no longer active or holding are untouched, and a refused
+# stamp is logged and changes nothing (the row and the later stamp are unchanged).
+REFUSAL_VERDICTS = ("fail", "vacuous-probe-result", "probe-error", "probe-not-machine-executable", "probe-same-account-host")
+
+
+def stamp_pass_before_row(cls, passed):
+    """Move the stored refusal verdict of the contract this passing read belongs to out of the way of the close triggers."""
+    if passed != 1 or not cls:
+        return False
+    try:
+        d1(
+            "UPDATE remediation_contracts SET last_verdict = 'pass' WHERE class = ? AND status IN ('active', 'holding') "
+            "AND COALESCE(last_verdict, '') IN (%s)" % ", ".join("'%s'" % v for v in REFUSAL_VERDICTS),
+            [cls],
+        )
+        return True
+    except Exception as e:  # noqa: BLE001 - best effort: consume_one stamps the same verdict after the row
+        log("contract %s pass pre-stamp failed: %s" % (cls, e))
+        return False
+
+
 def record_verification(issue_id, cls, probe_url, transport, expected, observed, passed):
     """Write the verdict to path A; on refusal write the identical row to path B and return (path, primary_error)."""
+    stamp_pass_before_row(cls, passed)
     try:
         d1(
             "INSERT INTO remediation_verifications "
