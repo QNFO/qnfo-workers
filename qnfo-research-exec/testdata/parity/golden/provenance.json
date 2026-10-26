@@ -11,11 +11,11 @@
     "license": "QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)",
     "dois": [
       {
-        "doi": "10.5281/zenodo.123456",
+        "doi": "10.1000/parity.123456",
         "source": "README.md"
       },
       {
-        "doi": "10.5281/zenodo.123456",
+        "doi": "10.1000/parity.123456",
         "source": "paper.md"
       }
     ]
@@ -25,7 +25,7 @@
       "path": "runs/cycle-7/parity-paper",
       "relation": "produced-by",
       "match": "slug-exact",
-      "manifest_sha256": "b3d47838322a34d9ecf94752e7c4b7b9bef0c71498cc7fbf408aa239dab393be"
+      "manifest_sha256": "45e06e0366b79bc89bfb903a106899ba52dcaae5d81c3a426782a6e37d6923aa"
     }
   ],
   "identifiers": {
@@ -34,7 +34,7 @@
   },
   "snapshots": [
     {
-      "sha256": "52e82f07cb32b3080f947d9d27d372d6d861e904ff3770747424b8721a7b78da",
+      "sha256": "385287da804b9c39835fa412314c684a7b9bbf597fb1425f4b0847d4b4b6e6e2",
       "bytes": 92,
       "recorded_at": "2026-10-26",
       "basis": "backfill",

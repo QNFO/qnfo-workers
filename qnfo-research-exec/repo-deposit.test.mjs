@@ -111,11 +111,11 @@ test("the paper record is created, then appended to: snapshots and events never 
 });
 
 test("an existing README is never overwritten", async () => {
-  const gh = new FakeGitHub({ "papers/alpha-paper/README.md": "# Alpha Paper\n\nLicense: CC BY 4.0\nDOI: 10.5281/zenodo.9\n" });
+  const gh = new FakeGitHub({ "papers/alpha-paper/README.md": "# Alpha Paper\n\nLicense: CC BY 4.0\nDOI: 10.1000/legacy.9\n" });
   await RD.depositRun(ENV, mkDeps(gh), CONS, runInput());
   assert.match(gh.files()["papers/alpha-paper/README.md"], /CC BY 4\.0/);
   const rec = JSON.parse(gh.files()["papers/alpha-paper/provenance.json"]);
-  assert.equal(rec.declared.license, "CC BY 4.0"); assert.deepEqual(rec.declared.dois, [{ doi: "10.5281/zenodo.9", source: "README.md" }]);
+  assert.equal(rec.declared.license, "CC BY 4.0"); assert.deepEqual(rec.declared.dois, [{ doi: "10.1000/legacy.9", source: "README.md" }]);
 });
 
 test("legacy layout: cycle-N/<slug>, no paper files, same atomic guarantees", async () => {
@@ -330,9 +330,9 @@ test("resolveTarget: marker present -> consolidated, absent -> legacy, error -> 
 test("slug sources and declared metadata match the Python tool's rules", () => {
   assert.deepEqual(RD.sourcesOf("arXiv:2401.00001, https://arxiv.org/pdf/hep-th/9901001 and https://doi.org/10.1103/PhysRevA.1.2.").map((s) => s["@id"]),
     ["https://arxiv.org/abs/2401.00001", "https://arxiv.org/abs/hep-th/9901001", "https://doi.org/10.1103/PhysRevA.1.2"]);
-  const d = RD.declaredOf("License: CC BY 4.0\nDOI: 10.5281/zenodo.123.\n", "# T\n\n**Version:** 2.0.0\n\nsee https://doi.org/10.1000/abc;\n");
+  const d = RD.declaredOf("License: CC BY 4.0\nDOI: 10.1000/legacy.123.\n", "# T\n\n**Version:** 2.0.0\n\nsee https://doi.org/10.1000/abc;\n");
   assert.equal(d.version, "2.0.0"); assert.equal(d.license, "CC BY 4.0");
-  assert.deepEqual(d.dois.map((x) => x.doi + "|" + x.source), ["10.5281/zenodo.123|README.md", "10.1000/abc|paper.md"]);
+  assert.deepEqual(d.dois.map((x) => x.doi + "|" + x.source), ["10.1000/legacy.123|README.md", "10.1000/abc|paper.md"]);
   assert.equal(RD.roleOf("review-report-0.md"), "review"); assert.equal(RD.roleOf("writer-c/notes.md"), "draft-support");
 });
 
