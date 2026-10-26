@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.68.0";
-/* 1.68.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, not counted by it), and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
+/* 1.68.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
@@ -5921,7 +5921,11 @@ async function ownerRequestIssue(env, title, body) {
 // DASH-OWNER-ACTIONS-1: the task branch of /api/owner/prompt, shared with the approval hand-off (cmdDecide). An owner's approval is
 // filed here directly, without the daily Ask cap: that cap protects an open endpoint from abuse, and a signed-in owner's own decision
 // (behind a code from the last 15 minutes) must never be refused by it. The route counts every owner_prompts row of the day except
-// these hand-offs, so approvals do not spend an Ask either. Throws when D1 refuses; the caller decides what to do then.
+// these hand-offs, so approvals do not spend an Ask either. The hand-off is recognised by a marker only the server writes
+// (OWNER_HANDOFF_VISITOR in owner_prompts.visitor; askVisitor() is a 16-hex hash and can never equal it, and the route's own
+// task and ask inserts never set it), never by the text, which a stranger who may Ask controls. Throws when D1 refuses; the
+// caller decides what to do then.
+var OWNER_HANDOFF_VISITOR = "owner-decision";
 async function ownerTaskFile(env, text, opts) {
   await ensureOwnerTables(env);
   await ownerRequestColumns(env);
@@ -5937,7 +5941,7 @@ async function ownerTaskFile(env, text, opts) {
     if (prior) return { id: prior.id, intent_id: intentId, issue_id: prior.issue_id || null, duplicate: true };
   }
   if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
-  await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
+  await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id, visitor) VALUES (?1,'task',?2,'queued',?3,?4)").bind(id, text, intentId, opts && opts.handoff ? OWNER_HANDOFF_VISITOR : null).run();
   await ownerNotesRoute(env).catch(function() {
   });
   const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
@@ -10242,7 +10246,7 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     const cap = Math.max(1, Math.min(200, parseInt(env.OWNER_PROMPTS_DAILY_CAP || OWNER_PROMPT_CAP_DEFAULT, 10) || OWNER_PROMPT_CAP_DEFAULT));
     const today = new Date().toISOString().slice(0, 10);
     await ownerRequestColumns(env);
-    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ? AND prompt NOT LIKE 'OWNER-DECISION from %'", [today]); // an approval hand-off (ownerTaskFile) is the owner's own decision, never an Ask
+    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ? AND COALESCE(visitor, '') <> ?", [today, OWNER_HANDOFF_VISITOR]); // an approval hand-off (ownerTaskFile, marked by the server, never by its text) is the owner's own decision, never an Ask
     if (cnt.length && Number(cnt[0].n) >= cap) return ownerJson({ error: "The fleet has answered its daily limit of " + cap + " questions; reading stays open and Ask resets at 00:00 UTC." }, 429);
     const visitor = await askVisitor(request);
     if (!holder) {
@@ -12955,10 +12959,18 @@ async function conExec(env, owner, op, args) {
 // the option and the hand-off always carries the card's title, ask and why; (4) a verb is a command only when it stands alone or names its
 // target, so "Resolve next fleet open item and deploy" and "Retry the failed deploy of PR #1001" stay with the model, and retry runs unasked
 // only for "retry <reference>".
+// 1.68.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
+// stranger's Ask that starts "OWNER-DECISION from" still counts; (6) decIssueIds skips "#NNN" after PR, run, workflow or commit (decGithubNumber,
+// shared with decRefs): agent_issues ids pass 100,000, so a PR number is usually also a real, unrelated issue row.
 var DEC_NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 var DEC_STOP = /^(approve|authori[sz]e|accept|ratify|decline|refuse|reject|deny|diagnose|investigate|retry|resolve|please|each|every|all|everything|the|of|in|on|to|for|from|and|with|fixes|fix|items?|issues?|agent_issues|card|cards|that|this|these|those|them|it|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|only|except|now|just|can|you|could|would|will|ok|okay|yes|go|ahead|why|because|reason|what|about|them|are|was|were|has|have|been|then|than|also|here|there)$/i;
 var DEC_VERB_RX = /^(approve|authori[sz]e|ratify|decline|refuse|reject|resolve|retry)\b[\s:,.\-]*([\s\S]*)$/i;
 var DEC_DIAG_RX = /^(diagnose|diagnosis|investigate|why(?:\s+is)?|what(?:'s|\s+is)\s+wrong\s+with|what(?:'s|\s+is)\s+up\s+with)\b[\s:,.\-]*([\s\S]*)$/i;
+// "PR #3608", "pull request #3608", "run #123", "commit #abc": GitHub numbers share the range of the issue ids (agent_issues runs past
+// 100,000, so most PR numbers are also a real, unrelated, old issue row) and are never an issue reference. at = index of the "#".
+function decGithubNumber(s, at) {
+  return /\b(?:prs?|pull(?:\s+requests?)?|runs?|workflows?|commits?)\s*$/i.test(String(s).slice(0, at));
+}
 // Every reference a line can hold, best first: an issue id (named, #-prefixed, first on the line, or five digits or more), a
 // card or objective key, an UPPER-DASH keyword (UIA-SOURCE-FIDELITY-1) and a slug.
 function decRefs(text) {
@@ -12974,8 +12986,7 @@ function decRefs(text) {
   while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[0] });
   re = /(?:^|[\s(])#(\d{3,7})\b/g;
   while ((m = re.exec(s))) {
-    // "PR #3608", "pull request #3608", "run #123": GitHub numbers share the range of the issue ids and are not issue references
-    if (/\b(?:prs?|pull(?:\s+requests?)?|runs?|workflows?|commits?)\s*$/i.test(s.slice(0, m.index + m[0].indexOf("#")))) continue;
+    if (decGithubNumber(s, m.index + m[0].indexOf("#"))) continue;
     add({ kind: "issue", id: Number(m[1]), raw: "#" + m[1] });
   }
   if ((m = /^\s*(\d{3,7})(?=[\s.,;:!?)]|$)/.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
@@ -12991,7 +13002,8 @@ function decRefs(text) {
 }
 function decIssueIds(text) {
   const out = [];
-  String(text || "").replace(/(?:agent_issues|issues?|#)\s*#?(\d{3,7})\b/gi, function(all, d) {
+  String(text || "").replace(/(?:agent_issues|issues?|#)\s*#?(\d{3,7})\b/gi, function(all, d, at, whole) {
+    if (all.charAt(0) === "#" && decGithubNumber(whole, at)) return all;
     if (out.indexOf(Number(d)) < 0) out.push(Number(d));
     return all;
   });
@@ -13581,7 +13593,7 @@ async function cmdDecide(request, env, ctx, owner, op, args) {
     paper = /paper|ignorance|living-paper|papers\.qnfo|manuscript/i.test((card.title || "") + " " + (card.action || "") + " " + (primary ? primary.title + " " + String(primary.description || "").slice(0, 600) : ""));
     const round = (await decApprovalCount(env, key)) + 1;
     try {
-      filed = await ownerTaskFile(env, decHandoffText(cardView, primary, items, sel ? fresh : null, others, paper, choice, round), { reuse: true });
+      filed = await ownerTaskFile(env, decHandoffText(cardView, primary, items, sel ? fresh : null, others, paper, choice, round), { reuse: true, handoff: true });
     } catch (e) {
       return { ok: false, error: "The hand-off to the fleet could not be filed (" + decClip(e && e.message || e, 160) + "), so your approval was not recorded and the card is still open. Tap Approve again." };
     }
