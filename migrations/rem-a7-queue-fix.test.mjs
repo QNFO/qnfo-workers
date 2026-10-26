@@ -41,12 +41,16 @@ const ev = (w, id) => q1(w, "SELECT close_evidence e FROM issue_triage WHERE iss
 {
   const w = world();
   const b94 = ev(w, 1000094), b457 = ev(w, 1000457), b159 = ev(w, 1000159);
+  const sd = () => q1(w, "SELECT description d, status s FROM agent_issues WHERE title LIKE 'RESEARCH-ERRATA-CLAIM-1:%'");
+  const bSucc = sd().d;
   ok(b94.includes("233 implemented, which means routed") && b457.includes("the pipeline claims it when the daily neuron budget reopens at 00:00 UTC ("), "the first migration wrote the two sentences the fix replaces");
   w.exec(fix);
   const a94 = ev(w, 1000094), a457 = ev(w, 1000457);
   ok(a94.includes("234 implemented (233 internal_audit rows, which means routed, and one inbound-email row of 2026-08-28)") && !a94.includes("233 implemented, which means routed") && a94.replace("234 implemented (233 internal_audit rows, which means routed, and one inbound-email row of 2026-08-28)", "233 implemented, which means routed") === b94, "1000094 evidence carries the corrected count and is otherwise unchanged");
   ok(a457.includes("claims it in rank order, after re-armed proposals, revision rows and resumable-stage rows, while the daily neuron budget lasts (the budget reopens at 00:00 UTC; the 10-19 precedent") && !a457.includes("when the daily neuron budget reopens at 00:00 UTC ("), "1000457 evidence carries the rank-order wording");
   ok(ev(w, 1000159) === b159, "another card's evidence is untouched");
+  const aSucc = sd();
+  ok(aSucc.s === "open" && aSucc.d.startsWith(bSucc + "\nUPDATE 2026-10-26 18:45Z (REM-A7-QUEUE-2): lever (2) is live.") && aSucc.d.split("UPDATE 2026-10-26 18:45Z (REM-A7-QUEUE-2)").length === 2 && /87 duplicate errata rows/.test(aSucc.d) && /151 errata rows are waiting/.test(aSucc.d) && /0 published/.test(aSucc.d), "the open successor gets one dated line on the merged errata rows and keeps its text", aSucc.d.slice(-200));
   ok(q1(w, "SELECT status s FROM agent_issues WHERE id = 1000094").s === "closed" && q1(w, "SELECT status s FROM agent_issues WHERE id = 1000457").s === "closed", "both issues stay closed");
   const d = w.prepare("SELECT actor, action, predicted_outcome FROM decision_log ORDER BY id").all();
   ok(d.length === 2 && d[1].actor === "rem-a7-f3" && /^REM-A7-QUEUE-2:/.test(d[1].action) && /one to three budget days/.test(d[1].predicted_outcome), "one more decision_log row restates the expectation");
@@ -55,7 +59,7 @@ const ev = (w, id) => q1(w, "SELECT close_evidence e FROM issue_triage WHERE iss
   w.exec(fix);
   ok(snap() === s1v, "a replay changes nothing");
   w.exec(fix.split("\n").find((l) => l.startsWith("-- Rollback: ")).slice("-- Rollback: ".length));
-  ok(ev(w, 1000094) === b94 && ev(w, 1000457) === b457, "Rollback restores both texts");
+  ok(ev(w, 1000094) === b94 && ev(w, 1000457) === b457 && sd().d === bSucc, "Rollback restores both texts and cuts the appended description line");
 }
 {
   const w = world();
