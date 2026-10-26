@@ -10,7 +10,9 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.69.2"; // 1.69.2 WATCHMAKER-RESEARCH-REPO-SYNC-1 (2026-10-26, agent_issues 1000373, pillar autonomy; patch): WATCHMAKER_OPS counts the research record sync of qnfo-research-exec 0.35.0 (repoSyncTick every 10 minutes: failed deposits retried, ledger gaps restored, published paper text compared with git, ensemble catch-up dispatched), read from the updated_at of the ops_config research_repo_sync_cursor row, which the tick rewrites each time it advances. 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.1-codeagent (ATTENTION-STICKY-STOP-1)
+var VERSION = "1.70.0";
+/* 1.70.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them; since FLEET-STATUS-1 made the home page statusPageHtml, the Needs-you cards of / carry the same Approve / Decline / Diagnose block for the signed-in owner only (statusOwnerDecisions, read per request, never inside the cached fleetStatusData document or the public /api/status, because the numbered items are the text of an issue that can be private), a stranger's page is unchanged, and /classic keeps its own; a second approve of an approved item files no second hand-off and a decline of an approved item says it was already handed to the fleet and is not undone; "why 2026 papers were pulled?" is the model's, since a number is an issue only after issue / agent_issues / # or as the whole argument; "Investigate why the dashboard is slow" and "diagnose the stuck integration chain" are the model's too (diagnose and investigate answer in code alone, or when a reference or a scheduled worker's name opens the argument, and one title word never answers a sentence); the hand-off is never longer than the 1800 characters the issue body keeps. */
+// 1.69.2 WATCHMAKER-RESEARCH-REPO-SYNC-1 (2026-10-26, agent_issues 1000373, pillar autonomy; patch): WATCHMAKER_OPS counts the research record sync of qnfo-research-exec 0.35.0 (repoSyncTick every 10 minutes: failed deposits retried, ledger gaps restored, published paper text compared with git, ensemble catch-up dispatched), read from the updated_at of the ops_config research_repo_sync_cursor row, which the tick rewrites each time it advances. 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.1-codeagent (ATTENTION-STICKY-STOP-1)
 // 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. prior 1.67.3-codeagent // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
@@ -2895,8 +2897,44 @@ async function fleetStatusData(env, ctx) {
   if (metrics) STATUS_CACHE = { at: now, env: env, v: doc };
   return doc;
 }
+// DASH-OWNER-ACTIONS-1 (1.70.0): the decision block on the home page's Needs-you cards, for the signed-in owner only. It is computed here, per
+// request, from the cards of the status document and never put into that document: fleetStatusData is cached for everyone and /api/status is
+// public, while the numbered items of a decision card are the text of an agent_issues row, which can be private. PRECONDITION: doc is a
+// fleet-status/v1 document. POSTCONDITION: { "<card key>": decision | "closed" } for the cards that ask for a decision (ownerDecisionView's own
+// rule, hard-marker cards included, 8 at most), or null when nothing could be read; a card closed since the document was cached reads "closed",
+// so a tap on it is never offered. It throws nothing: without it the card keeps "Act on it".
+async function statusOwnerDecisions(env, doc) {
+  try {
+    const items = ((doc && doc.needs_you && doc.needs_you.items) || []).map(function(it) {
+      return { key: it.key, title: it.title, why: it.why, action: it.action, fallback: it.if_you_wait };
+    });
+    await ownerDecisionView(env, { items });
+    const out = {};
+    const keys = items.filter(function(it) {
+      return it.decision;
+    }).map(function(it) {
+      return it.key;
+    });
+    if (!keys.length) return out;
+    const open = {};
+    for (const r of await d1all(env.AUDIT, "SELECT slug FROM human_actions WHERE status = 'open' AND slug IN (" + keys.map(function(_, i) {
+      return "?" + (i + 1);
+    }).join(",") + ")", keys.map(function(k) {
+      return String(k).slice(3);
+    }))) open["ha:" + r.slug] = true;
+    for (const it of items) if (it.decision) out[it.key] = open[it.key] ? it.decision : "closed";
+    return out;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "statusOwnerDecisions", error: String(e && e.message || e).slice(0, 160) }));
+    return null;
+  }
+}
 var STATUS_CSS = ".st-hero{border-radius:var(--r-lg);padding:26px 26px 22px;background:var(--surface);border:1px solid var(--rule);border-top:4px solid var(--muted);margin:0 0 26px}.st-hero.needs_you{border-top-color:var(--red)}.st-hero.clear,.st-hero.fleet_working{border-top-color:var(--green)}.st-hero.blind{border-top-color:var(--amber)}.st-hero h1{font:500 clamp(30px,3.4vw,44px)/1.08 var(--serif);letter-spacing:-.02em;margin:10px 0 10px}.st-hero.needs_you h1{color:var(--red)}.st-hero.clear h1,.st-hero.fleet_working h1{color:var(--green)}.st-hero.blind h1{color:var(--amber)}.st-hero p{margin:0;color:var(--muted);font-size:15.5px;max-width:80ch;line-height:1.5}.st-sec{margin:0 0 30px}.st-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.st-tile{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 16px}.st-tile b{display:block;font:500 28px/1.1 var(--serif);font-variant-numeric:tabular-nums}.st-tile span{font-size:12.5px;color:var(--muted)}.st-prog{display:grid;grid-template-columns:minmax(0,1.3fr) 110px 110px minmax(0,2fr);gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--rule)}.st-prog:first-of-type{border-top:0}.st-prog .nm b{display:block;font-weight:600}.st-prog .nm span{font-size:12.5px;color:var(--muted)}.st-prog .n{font:500 22px var(--serif);font-variant-numeric:tabular-nums}.st-prog .n small{display:block;font:500 11.5px var(--sans);color:var(--muted)}.st-prog .top{font-size:13px;color:var(--muted);line-height:1.5}.st-prog details{grid-column:1/-1}.st-tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}.st-tbl th,.st-tbl td{text-align:left;padding:6px 8px;border-top:1px solid var(--rule);vertical-align:top}.st-tbl td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.tw{font-weight:600}.tw.worse{color:var(--red)}.tw.better{color:var(--green)}.tw.flat,.tw.no_history{color:var(--muted)}.st-scroll{overflow-x:auto}.st-cause{padding:12px 0;border-top:1px solid var(--rule)}.st-cause:first-child{border-top:0;padding-top:0}.st-ch{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.st-cause p{margin:6px 0 0;font-size:14px;line-height:1.5}.st-mach{font-size:13.5px;color:var(--muted)}.st-mach code{font:13px var(--mono)}@media (max-width:900px){.st-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.st-prog{grid-template-columns:1fr 1fr}.st-prog .nm,.st-prog .top{grid-column:1/-1}}@media (max-width:520px){.st-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}";
-var STATUS_POLL_JS = "<script>(function(){var rev=document.body.getAttribute('data-rev')||'';function tick(){if(document.hidden)return;fetch('/api/status?since='+encodeURIComponent(rev),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j&&!j.not_modified&&j.revision&&j.revision!==rev)location.reload()}).catch(function(e){console.debug('qnfo-fleet-dashboard: status refresh failed',e)})}setInterval(tick,15000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})()<\/script>";
+var STATUS_POLL_JS = "<script>(function(){var rev=document.body.getAttribute('data-rev')||'';function tick(){if(document.hidden)return;fetch('/api/status?since='+encodeURIComponent(rev),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j&&!j.not_modified&&j.revision&&j.revision!==rev){var o=document.getElementById('cout');if(o&&o.children.length&&window.fleetTick){rev=j.revision;window.fleetTick(true)}else location.reload()}}).catch(function(e){console.debug('qnfo-fleet-dashboard: status refresh failed',e)})}setInterval(tick,15000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})()<\/script>";
+// The signed-in owner's page: a command's answer ("Approved 3 of 7 ... handed to the fleet") must not be wiped by the reload the poll above makes when
+// the document moves, so after an executed action, and when the poll finds the document changed while an answer is on screen, only the hero and the
+// Needs-you section are fetched again and swapped. The command line calls window.fleetTick(true) after an executed op (CMD_JS).
+var STATUS_OWNER_JS = "<script>(function(){function swap(d,id){var n=d.getElementById(id),c=document.getElementById(id);if(n&&c){c.className=n.className;c.innerHTML=n.innerHTML;return true}if(c&&!n){c.parentNode.removeChild(c);return true}return !n}window.fleetTick=function(){fetch('/',{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.ok?r.text():''}).then(function(t){if(!t)return;var d=new DOMParser().parseFromString(t,'text/html');var a=swap(d,'st-hero'),b=swap(d,'st-needs');if(!a||!b)location.reload()}).catch(function(e){console.debug('qnfo-fleet-dashboard: status refresh failed',e)})}})()<\/script>";
 function statusNumText(x) {
   if (x == null) return "n/a";
   const n = Number(x);
@@ -2908,7 +2946,9 @@ function statusTrendText(b) {
   if (b.trend === "no_history") return "no 7-day history";
   return b.trend + " (was " + statusNumText(b.value_7d_ago) + ")";
 }
-function statusPageHtml(doc, rev, holder) {
+// decisions (optional, signed-in owner only, from statusOwnerDecisions): the Approve / Decline / Diagnose block of each card that asks for a decision.
+// A stranger's call passes none, so the page they get is byte for byte what the public document holds.
+function statusPageHtml(doc, rev, holder, decisions) {
   const e = esc, o = [];
   const h = doc.headline, m = doc.metrics, a = doc.activity_24h;
   const big = h.state === "needs_you" ? doc.needs_you.count + (doc.needs_you.count === 1 ? " thing needs you" : " things need you") : h.state === "blind" ? "Can't confirm" : "Nothing needs you";
@@ -2916,13 +2956,13 @@ function statusPageHtml(doc, rev, holder) {
   o.push(fleetTop("status", false, holder));
   o.push('<main class="wrap fl">');
   o.push(cmdPanelHtml(holder, "", ""));
-  o.push('<section class="st-hero ' + e(h.state) + '" aria-labelledby="st-h1"><p class="q-eyebrow">Fleet status</p><h1 id="st-h1">' + e(big) + "</h1><p>" + e(h.sentence) + "</p></section>");
+  o.push('<section class="st-hero ' + e(h.state) + '" id="st-hero" aria-labelledby="st-h1"><p class="q-eyebrow">Fleet status</p><h1 id="st-h1">' + e(big) + "</h1><p>" + e(h.sentence) + "</p></section>");
   if (doc.needs_you.count) {
-    o.push('<section class="st-sec" aria-labelledby="st-you"><h2 class="fl-h" id="st-you">Needs you <span class="ct">' + doc.needs_you.count + "</span></h2>");
+    o.push('<section class="st-sec" id="st-needs" aria-labelledby="st-you"><h2 class="fl-h" id="st-you">Needs you <span class="ct">' + doc.needs_you.count + "</span></h2>");
     for (const it of doc.needs_you.items) {
       o.push('<article class="card item' + (it.urgent ? " urgent" : "") + '"><div class="it-top"><span class="it-src">' + e(it.source) + "</span>" + (it.age_days != null ? '<span class="it-age">waiting ' + e(agoText(it.age_days).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + '</h2><div class="it-rows">' +
         (it.why ? '<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>" : "") + (it.if_you_wait ? '<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.if_you_wait) + "</span></div>" : "") +
-        (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") + '</div><div class="acts"><a class="do" href="/classic#queue">Act on it</a>' + (/^https:\/\//.test(it.url || "") ? '<a href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + "</div></article>");
+        (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") + "</div>" + (decisions && decisions[it.key] ? decisions[it.key] === "closed" ? '<div class="dec"><p class="dec-h">Decided: this card leaves the list within a minute.</p></div>' : decCardHtml({ key: it.key, decision: decisions[it.key] }, e) : "") + '<div class="acts"><a class="do" href="/classic#queue">Act on it</a>' + (/^https:\/\//.test(it.url || "") ? '<a href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + "</div></article>");
     }
     o.push("</section>");
   }
@@ -2956,7 +2996,7 @@ function statusPageHtml(doc, rev, holder) {
   }
   if (doc.blind.length) o.push('<div class="note">Could not read: ' + e(doc.blind.join("; ")) + ". Figures that depend on it are missing, not zero.</div>");
   o.push('<p class="st-mach">Machine-readable: <a href="/api/status"><code>/api/status</code></a> is this page as one JSON document (fleet-status/v1, ETag and <code>?since=</code>); <a href="/api"><code>/api</code></a> lists every feed. Detail: <a href="/classic">full overview</a>, <a href="/managers">managers</a>, ' + AREA_REGISTRY.map(function(x) { return '<a href="/area/' + x.id + '">' + e(x.short) + "</a>"; }).join(", ") + ', <a href="/cmd">command line</a>.</p>');
-  o.push('<footer class="fl-foot">v' + e(VERSION) + " &middot; generated " + e(doc.generated_at) + "</footer></main>" + cmdScript(holder) + STATUS_POLL_JS + FLEET_SHELL_JS + "</body></html>");
+  o.push('<footer class="fl-foot">v' + e(VERSION) + " &middot; generated " + e(doc.generated_at) + "</footer></main>" + cmdScript(holder) + STATUS_POLL_JS + (holder ? STATUS_OWNER_JS : "") + FLEET_SHELL_JS + "</body></html>");
   return o.join("");
 }
 /* FLEET-STATUS-1:END */
@@ -3062,7 +3102,9 @@ if (path === "/health") {
   }
   if ((path === "/" || path === "") && url.searchParams.get("frag") !== "1" && (request.method === "GET" || request.method === "HEAD")) {
     const sd = await fleetStatusData(env, ctx);
-    return new Response(statusPageHtml(sd, rtDigest(sd), !!(owner && owner.authed)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    // DASH-OWNER-ACTIONS-1 (1.70.0): the owner's decision block is read per request for the signed-in owner and never enters sd, which is cached and public.
+    const sdec = owner && owner.authed ? await statusOwnerDecisions(env, sd) : null;
+    return new Response(statusPageHtml(sd, rtDigest(sd), !!(owner && owner.authed), sdec), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
   if (path === "/" || path === "" || path === "/classic" || path === "/classic/") {
     const frag = url.searchParams.get("frag") === "1";
@@ -3075,6 +3117,7 @@ if (path === "/health") {
       v.prompts = await ownerPromptsView(env);
       v.responses = await recentResponses(env);
       ownerMailView(v);
+      await ownerDecisionView(env, v);
     }
     // RT-API-1: the 15 s poll sends the fragment's last ETag. Nothing changed -> 304 and no body, so the browser keeps the
     // DOM it already has (no re-render, no focus loss, no scroll jump). Ages are excluded from the digest on purpose.
@@ -6169,7 +6212,7 @@ async function askVisitor(request) {
   const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "unknown";
   return (await sha256hex(ip + "|" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "|fleet-ask")).slice(0, 16);
 }
-async function ownerRequestIssue(env, title, body) {
+async function ownerRequestIssue(env, title, body, opts) {
   // OWNER-PROMPT-TWIN-LINK-1: if an OPEN owner-request ticket already has the same prompt, return it and count the refile.
   const now = Date.now();
   const colon = title.indexOf(": ");
@@ -6179,7 +6222,9 @@ async function ownerRequestIssue(env, title, body) {
   } catch (e) {
     console.error(JSON.stringify({ scope: "OWNER-PROMPT-TWIN-LINK-1", step: "agent_issue_refiles-create", error: String(e && e.message || e) }));
   }
-  const twin = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE status = 'open' AND source = 'qnfo-fleet-dashboard:owner-request' AND lower(trim(substr(title, instr(title, ': ') + 2))) = ?1 ORDER BY id LIMIT 1", [newPrompt]))[0];
+  // DASH-OWNER-ACTIONS-1: the server's own approval hand-off (opts.noTwin) is one ticket per owner_prompts row. Its retry is recognised by ownerTaskFile (reuse),
+  // and two decisions must never share a ticket whatever the title keeps of their text (T22).
+  const twin = opts && opts.noTwin ? void 0 : (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE status = 'open' AND source = 'qnfo-fleet-dashboard:owner-request' AND lower(trim(substr(title, instr(title, ': ') + 2))) = ?1 ORDER BY id LIMIT 1", [newPrompt]))[0];
   if (twin) {
     await env.AUDIT.prepare("INSERT INTO agent_issue_refiles (issue_id, refiles, last_at, last_source) VALUES (?1, 1, ?2, ?3) ON CONFLICT(issue_id) DO UPDATE SET refiles = refiles + 1, last_at = ?2, last_source = ?3").bind(twin.id, now, "qnfo-fleet-dashboard:owner-request").run();
     return Number(twin.id);
@@ -6187,6 +6232,37 @@ async function ownerRequestIssue(env, title, body) {
   await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-dashboard:owner-request', 'owner-request', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1)").bind(title, body, now).run();
   const row = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
   return row ? Number(row.id) : null;
+}
+// DASH-OWNER-ACTIONS-1: the task branch of /api/owner/prompt, shared with the approval hand-off (cmdDecide). An owner's approval is
+// filed here directly, without the daily Ask cap: that cap protects an open endpoint from abuse, and a signed-in owner's own decision
+// (behind a code from the last 15 minutes) must never be refused by it. The route counts every owner_prompts row of the day except
+// these hand-offs, so approvals do not spend an Ask either. The hand-off is recognised by a marker only the server writes
+// (OWNER_HANDOFF_VISITOR in owner_prompts.visitor; askVisitor() is a 16-hex hash and can never equal it, and the route's own
+// task and ask inserts never set it), never by the text, which a stranger who may Ask controls. Throws when D1 refuses; the
+// caller decides what to do then.
+var OWNER_HANDOFF_VISITOR = "owner-decision";
+async function ownerTaskFile(env, text, opts) {
+  await ensureOwnerTables(env);
+  await ownerRequestColumns(env);
+  const id = opts && opts.promptId || "op-" + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 4);
+  const iid = "int-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
+  const dup = await d1all(env.AUDIT, "SELECT id FROM intents WHERE desire = ? AND status NOT IN ('rejected','deduped') LIMIT 1", [text]);
+  const intentId = dup.length ? dup[0].id : iid;
+  // reuse: the same text is the same hand-off (a retry after the decision could not be recorded), so it is not filed a second time
+  if (dup.length && opts && opts.reuse) {
+    const prior = (await d1all(env.AUDIT, "SELECT id, issue_id FROM owner_prompts WHERE intent_id = ? AND mode = 'task' ORDER BY ts LIMIT 1", [intentId]).catch(function() {
+      return [];
+    }))[0];
+    if (prior) return { id: prior.id, intent_id: intentId, issue_id: prior.issue_id || null, duplicate: true };
+  }
+  if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
+  await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id, visitor) VALUES (?1,'task',?2,'queued',?3,?4)").bind(id, text, intentId, opts && opts.handoff ? OWNER_HANDOFF_VISITOR : null).run();
+  await ownerNotesRoute(env).catch(function() {
+  });
+  const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
+    return [];
+  }))[0];
+  return { id, intent_id: intentId, issue_id: filed && filed.issue_id || null, duplicate: !!dup.length };
 }
 async function ownerNotesRoute(env) {
   await ensureOwnerTables(env);
@@ -6206,9 +6282,9 @@ async function ownerNotesRoute(env) {
       out.notes++;
     }
   }
-  const tasks = await d1all(env.AUDIT, "SELECT id, prompt FROM owner_prompts WHERE mode = 'task' AND issue_id IS NULL ORDER BY ts LIMIT 20");
+  const tasks = await d1all(env.AUDIT, "SELECT id, prompt, visitor FROM owner_prompts WHERE mode = 'task' AND issue_id IS NULL ORDER BY ts LIMIT 20");
   for (const r of tasks) {
-    const id = await ownerRequestIssue(env, ("OWNER-TASK-" + r.id + ": " + String(r.prompt || "").replace(/\s+/g, " ")).slice(0, 180), "The owner queued this task on fleet.qnfo.org (owner_prompts " + r.id + "): " + String(r.prompt || "").slice(0, 1800) + dod);
+    const id = await ownerRequestIssue(env, ("OWNER-TASK-" + r.id + ": " + String(r.prompt || "").replace(/\s+/g, " ")).slice(0, 180), "The owner queued this task on fleet.qnfo.org (owner_prompts " + r.id + "): " + String(r.prompt || "").slice(0, 1800) + dod, { noTwin: r.visitor === OWNER_HANDOFF_VISITOR });
     if (id) {
       await env.AUDIT.prepare("UPDATE owner_prompts SET issue_id = ?1 WHERE id = ?2").bind(id, r.id).run();
       out.tasks++;
@@ -8252,6 +8328,8 @@ function humanFragment(v) {
       for (const dd of it.detail) o.push('<div class="pr">' + (dd.plain ? "<div><b>" + e(dd.plain) + "</b></div>" : "") + '<div>#' + e(dd.id) + " " + e(dd.statement) + '</div><div class="meta">' + e(dd.why) + "</div>" + (dd.plan ? '<div class="meta"><b>' + e(dd.plan) + "</b></div>" : "") + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(dd.id) + '">' + (dd.can_ratify === false ? "" : '<button data-act="ratify" data-oid="' + e(dd.id) + '">Ratify</button>') + '<button data-act="reject" data-oid="' + e(dd.id) + '">Reject</button></div>' : "") + "</div>");
       if (!(v.owner && v.owner.authed)) o.push('<div class="meta">Ratify and reject are not on the public page: they change the live objective weights.</div>');
     }
+    // DASH-OWNER-ACTIONS-1: Approve / Decline / Diagnose on an owner-gated decision card, and per part on a numbered card (owner only).
+    if (v.owner && v.owner.authed && it.decision) o.push(decCardHtml(it, e));
     // FLEET-CONSOLE-1: Details shows everything behind the card in the pinned command line, without leaving the page.
     const mids = String(it.key).indexOf("mail:") === 0 ? (it.mail || []).map(function(m) { return Number(m.id) || 0; }).filter(Boolean) : [];
     const open = (/^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + (mids.length ? '<button type="button" data-fleet-cmd="draft a reply to message #' + Math.max.apply(null, mids) + '">Reply</button><button type="button" data-fleet-cmd="mail ' + Math.max.apply(null, mids) + '">Read</button><button type="button" data-fleet-cmd="spam ' + mids.join(" ") + '">Spam</button>' : "") + '<button type="button" data-fleet-cmd="info ' + e(it.key) + '">Details</button>';
@@ -8355,7 +8433,7 @@ function systemCardHtml(v, e) {
 // ==== AREA-MAP platform: page shell: design system, head and navigation (FLEET-UI-2) ====
 // ---- FLEET-UI-2:BEGIN (1.18.0, 2026-10-02, pillar autonomy: the owner's one decision surface) ----
 var FLEET_DS = ":root{--paper:#F5F7FB;--surface:#FFFFFF;--ink:#182042;--muted:#5A6386;--rule:#D9DEEC;--wash:#E9EDF7;--teal:#0E7C70;--teal-wash:#DDF1EE;--amber:#8A5300;--amber-wash:#FCEFD6;--red:#B42318;--red-wash:#FDECEA;--green:#157F3B;--green-wash:#E5F4EA;--violet:#5B4BB7;--violet-wash:#ECE9FA;--rust:#B5562A;--rust-wash:#FBE9E0;--serif:\"Newsreader\",Georgia,\"Times New Roman\",serif;--sans:\"Familjen Grotesk\",system-ui,-apple-system,\"Segoe UI\",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r-sm:6px;--r:10px;--r-lg:14px;--shadow:0 1px 2px rgba(24,32,66,.06),0 8px 24px -12px rgba(24,32,66,.18);color-scheme:light}@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}}:root[data-theme=\"dark\"]{--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}[hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-padding-top:84px}body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--sans);font-feature-settings:\"tnum\" 1;-webkit-font-smoothing:antialiased}a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}a:hover{color:var(--teal)}:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}button{font:inherit;color:inherit;cursor:pointer}.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.wrap{max-width:1240px;margin:0 auto;padding:0 24px}.q-top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}.q-top.scrolled{border-bottom-color:var(--rule)}.q-top .wrap{display:flex;align-items:center;gap:22px;height:64px}.q-mark{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:600;font-size:17px;letter-spacing:-.01em;white-space:nowrap}.q-mark svg{width:26px;height:26px;flex:none}.q-mark small{font-weight:400;color:var(--muted);font-size:15px}.q-nav{display:flex;gap:4px;margin-left:auto;font-size:14.5px;color:var(--muted)}.q-nav a{text-decoration:none;padding:6px 10px;border-radius:8px}.q-nav a:hover{background:var(--wash);color:var(--ink)}.q-nav a[aria-current]{color:var(--ink);background:var(--wash);font-weight:500}.q-theme{border:1px solid var(--rule);background:none;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted);flex:none}.q-theme:hover{color:var(--ink);border-color:var(--muted)}.q-theme svg{width:16px;height:16px}.q-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:8px 14px;font-weight:500;font-size:14px;text-decoration:none;color:var(--ink);white-space:nowrap;transition:border-color .15s,background .15s}.q-btn:hover{border-color:var(--muted);color:var(--ink)}.q-btn svg{width:16px;height:16px;flex:none}.q-btn.pri{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-btn.pri:hover{opacity:.9;color:var(--paper)}.q-btn.teal{background:var(--teal);border-color:var(--teal);color:var(--paper)}.q-btn.teal:hover{color:var(--paper);opacity:.92}.q-btn:disabled{opacity:.45;cursor:default}.q-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13.5px;text-decoration:none;color:var(--ink);white-space:nowrap}.q-chip:hover{border-color:var(--muted);color:var(--ink)}.q-chip[aria-pressed=\"true\"],.q-chip.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-chip b{font-weight:600;font-variant-numeric:tabular-nums;opacity:.7}.q-eyebrow{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--teal)}.q-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg)}.q-tag{display:inline-flex;align-items:center;gap:5px;font:600 11.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;padding:4px 8px;border-radius:6px;background:var(--wash);color:var(--muted)}.q-foot{border-top:1px solid var(--rule);margin-top:64px;padding:26px 0 44px;font-size:13.5px;color:var(--muted)}.q-foot .wrap{display:flex;gap:10px 22px;flex-wrap:wrap;align-items:center}.q-foot a{color:var(--muted)}.q-foot a:hover{color:var(--teal)}.q-skel{display:block;height:13px;border-radius:4px;background:linear-gradient(90deg,var(--wash),var(--rule),var(--wash));background-size:200% 100%;animation:qsk 1.4s ease infinite;margin:10px 0}@keyframes qsk{to{background-position:-200% 0}}.q-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--rule);border-top-color:var(--teal);border-radius:50%;animation:qsp .8s linear infinite;vertical-align:-1px}@keyframes qsp{to{transform:rotate(360deg)}}.q-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:all .2s;z-index:90}.q-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}.q-menu{display:none;position:relative}.q-menu summary{list-style:none;cursor:pointer;border:1px solid var(--rule);border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted)}.q-menu summary::-webkit-details-marker{display:none}.q-menu summary svg{width:16px;height:16px}.q-menu-panel{position:absolute;right:0;top:44px;z-index:50;min-width:210px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:8px;display:grid;box-shadow:var(--shadow)}.q-menu-panel a{padding:10px 12px;border-radius:8px;text-decoration:none;font-size:15px}.q-menu-panel a:hover,.q-menu-panel a[aria-current]{background:var(--wash)}@media (max-width:760px){.wrap{padding:0 16px}.q-nav{display:none}.q-menu{display:block;margin-left:auto}.q-theme{margin-left:0}.q-top .wrap{height:56px;gap:10px}}@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}@media print{.q-top,.q-foot,.q-theme,.no-print{display:none!important}body{background:#fff;color:#000}}";
-var FLEET_CSS = ".wrap{max-width:1280px}:root{--card:var(--surface);--line:var(--rule);--bg:var(--paper);--mute:var(--muted);--link:var(--teal);--act:var(--red);--actbg:var(--red-wash);--ok:var(--green);--okbg:var(--green-wash);--unk:var(--amber);--unkbg:var(--amber-wash);--warn:var(--amber)}.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap;margin-left:auto}.q-nav+.live{margin-left:12px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted)}.dot.g{background:var(--green);box-shadow:0 0 0 3px var(--green-wash)}.dot.a{background:var(--amber);box-shadow:0 0 0 3px var(--amber-wash)}.dot.r{background:var(--red);box-shadow:0 0 0 3px var(--red-wash)}#so{color:var(--muted);font-size:13px;margin-left:8px}main.fl{padding-top:18px;padding-bottom:20px}/* command bar */.cmd{background:var(--surface);border:1.5px solid var(--rule);border-radius:var(--r-lg);padding:12px 14px 10px;margin:0 0 22px;transition:border-color .15s,box-shadow .15s}.cmd:focus-within{border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-wash)}.cmd form{display:flex;gap:10px;align-items:flex-start}.cmd .pr0{font:600 18px/38px var(--mono);color:var(--teal)}#ctext{flex:1;min-width:0;resize:none;border:0;background:none;color:var(--ink);font:400 18px/1.45 var(--serif);height:38px;max-height:180px;padding:7px 2px;outline:none}#ctext:focus{outline:none}.cmd button{border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:9px;padding:7px 12px;font:500 13px var(--sans)}.cmd button.p{background:var(--ink);border-color:var(--ink);color:var(--paper);padding:9px 18px;font-size:14px;font-weight:600}.cmd .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:28px}.cmd .chips button{border-radius:99px;padding:4px 11px;font:500 12.5px var(--mono);color:var(--muted);background:none}.cmd .chips button:hover{color:var(--ink);border-color:var(--muted)}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px;padding:8px 0 0 28px;border-top:1px dashed var(--rule)}.cmeta a{color:var(--teal)}#cout:empty{display:none}#cout{margin:8px 0 0 28px}.co{border-top:1px solid var(--rule);padding:10px 0 6px}.co .q{font:13px var(--mono);color:var(--muted)}.co pre{font:13.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;margin:6px 0 0}/* hero */.fl-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:28px;align-items:stretch;margin:0 0 26px}.fl-status{border-radius:var(--r-lg);padding:24px 24px 20px;background:var(--surface);border:1px solid var(--rule);border-top:4px solid var(--muted);display:flex;flex-direction:column}.fl-hero.act .fl-status{border-top-color:var(--red)}.fl-hero.ok .fl-status{border-top-color:var(--green)}.fl-hero.unk .fl-status{border-top-color:var(--amber)}.fl-status .q-eyebrow{color:var(--muted)}.fl-status h1{font:500 clamp(30px,3.4vw,44px)/1.05 var(--serif);letter-spacing:-.02em;margin:12px 0 8px}.fl-hero.act h1{color:var(--red)}.fl-hero.ok h1{color:var(--green)}.fl-hero.unk h1{color:var(--amber)}.fl-status>p{margin:0 0 16px;color:var(--muted);font-size:15px}.fl-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);background:var(--wash);border-radius:99px;padding:4px 10px}.pill i{width:7px;height:7px;border-radius:50%;background:var(--muted)}.pill.ok i{background:var(--green)}.pill.unk i{background:var(--amber)}.pill.act i{background:var(--red)}.fl-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.kpi{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;gap:6px;min-width:0}.k-l{font-size:12.5px;color:var(--muted);font-weight:500}.k-n{font:500 32px/1 var(--serif);letter-spacing:-.02em;font-variant-numeric:tabular-nums}.k-n small{font:500 14px var(--sans);color:var(--muted);letter-spacing:0;margin-left:6px}.k-n.act{color:var(--red)}.k-n.unk{color:var(--amber)}.k-n.ok{color:var(--green)}.k-d{font-size:13px;font-weight:600;color:var(--muted)}.k-d.ok{color:var(--green)}.k-d.act{color:var(--red)}.k-s{font-size:12px;color:var(--muted);margin-top:auto}.mt{display:block;height:6px;background:var(--wash);border-radius:99px;overflow:hidden}.mt i{display:block;height:100%;border-radius:99px;background:var(--muted)}.mt i.ok{background:var(--green)}.mt i.unk{background:var(--amber)}.mt i.act{background:var(--red)}.mt i.teal{background:var(--teal)}.note{background:var(--amber-wash);color:var(--amber);border-radius:var(--r);padding:10px 14px;font-size:14px;margin:-10px 0 18px}/* grid */.fl-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}.fl-h{font:500 24px/1.2 var(--serif);margin:0 0 14px;display:flex;align-items:center;gap:10px}.ct{font:600 12.5px/1 var(--sans);background:var(--wash);color:var(--muted);border-radius:99px;padding:4px 9px}.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:12px}.item{position:relative;padding-left:24px;transition:box-shadow .15s,border-color .15s}.item::before{content:\"\";position:absolute;left:0;top:14px;bottom:14px;width:4px;border-radius:0 4px 4px 0;background:var(--rule)}.item.urgent::before{background:var(--red)}.item:hover{box-shadow:var(--shadow)}.it-top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;color:var(--muted);margin-bottom:6px}.it-src{font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:11.5px;color:var(--teal)}.it-due{color:var(--amber);font-weight:600}.item h2{font:500 21px/1.3 var(--serif);margin:0 0 12px;letter-spacing:-.005em}.it-rows{display:flex;flex-direction:column;gap:8px}.row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;font-size:14.5px;line-height:1.5;margin-top:8px}.it-rows .row{margin-top:0}.row .k{color:var(--muted);font-weight:600;font-size:13px;padding-top:1px}.do-row .v{color:var(--ink);font-weight:500}.meta{font-size:13px;color:var(--muted)}.tag{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:5px;background:var(--wash);color:var(--muted)}.tag.u{background:var(--red);color:#fff}.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}.acts button{border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:8px;padding:6px 12px;font:500 13px var(--sans)}.acts button:hover{border-color:var(--teal);color:var(--teal)}.acts button:disabled{opacity:.5;cursor:default}.do{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);border-radius:8px;padding:7px 14px;text-decoration:none;font:600 13.5px var(--sans)}.do:hover{color:var(--paper);opacity:.9}.do::after{content:\"\\2192\"}.pr{border-top:1px solid var(--rule);margin-top:12px;padding-top:10px;font-size:14px}.ans{white-space:pre-wrap;font-size:14px;margin-top:6px}details{border-radius:var(--r-lg)}summary{cursor:pointer;color:var(--muted);font-size:14px}details.more{margin:0}details.more>summary{padding:8px 2px 12px;font-weight:500;color:var(--teal)}details.up summary{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--ink)}details ul{margin:10px 0 0;padding-left:18px;font-size:14px;line-height:1.55}details li{margin-bottom:4px}.empty{display:flex;gap:14px;align-items:center;color:var(--muted)}.empty svg{width:34px;height:34px;color:var(--green);background:var(--green-wash);border-radius:50%;padding:6px;flex:none}.empty b{color:var(--ink)}/* rail */.fl-rail{position:sticky;top:84px;display:flex;flex-direction:column;gap:0}.fl-rail h3,.trend h3{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}.verdict{border-top:4px solid var(--muted)}.verdict.ok{border-top-color:var(--green)}.verdict.unk{border-top-color:var(--amber)}.verdict.act{border-top-color:var(--red)}.vtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.chip{font:700 13px var(--sans);letter-spacing:.05em;padding:5px 10px;border-radius:7px}.chip.ok{background:var(--green-wash);color:var(--green)}.chip.unk{background:var(--amber-wash);color:var(--amber)}.chip.act{background:var(--red-wash);color:var(--red)}.gate{font-size:12px;color:var(--muted);margin-left:auto}.vhead{font:500 18px/1.35 var(--serif);margin:12px 0 8px}.why{margin:0 0 4px;padding-left:18px;font-size:13.5px;color:var(--muted);line-height:1.5}.verdict .row{grid-template-columns:1fr;gap:2px;font-size:13.5px}.rule{margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--rule);font-size:12px;line-height:1.5}.sys-top{display:flex;gap:16px;align-items:center;margin-bottom:6px}.ring{width:76px;height:76px;flex:none}.ring .tr{fill:none;stroke:var(--wash);stroke-width:7}.ring .fg{fill:none;stroke-width:7;stroke-linecap:round;stroke:var(--muted)}.ring .fg.ok{stroke:var(--green)}.ring .fg.unk{stroke:var(--amber)}.ring .fg.act{stroke:var(--red)}.ring text{font:600 14px var(--sans);fill:var(--ink)}.sys-n{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:0;flex:1}.sys-n dt{font-size:11.5px;color:var(--muted)}.sys-n dd{margin:0;font:600 15px var(--sans)}.sys details{margin-top:10px;border-top:1px solid var(--rule);padding-top:10px;border-radius:0}.sys summary{font-size:13px}.links{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}.links h3{width:100%;margin-bottom:4px}.links a{color:var(--teal);text-decoration:none}.links a:hover{text-decoration:underline}/* business */.fl-biz{margin-top:30px;padding-top:26px;border-top:1px solid var(--rule)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.stat{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 16px}.stat .n{font:500 26px/1.1 var(--serif);letter-spacing:-.01em;margin-bottom:6px}.stat .l{font-size:12.5px;color:var(--muted);line-height:1.4}.bad{color:var(--red)}.good{color:var(--green)}.amber{color:var(--amber)}.trend{max-width:640px}.tr-r{display:grid;grid-template-columns:110px 1fr 120px;gap:12px;align-items:center;font-size:13.5px;margin-bottom:8px}.tr-r b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.tr-b{position:relative;height:16px;display:flex;flex-direction:column;gap:3px}.tr-b i{display:block;height:6px;border-radius:99px;background:var(--rule)}.tr-b i.now{background:var(--teal)}.fl-biz>.meta{line-height:1.6;max-width:110ch}.since{margin:-8px 0 22px;padding:12px 18px}.since summary{color:var(--ink);font-size:14.5px;list-style:none}.since summary::-webkit-details-marker{display:none}.since summary::before{content:'\\25B8';color:var(--muted);margin-right:8px;display:inline-block;transition:transform .15s}.since details[open] summary::before{transform:rotate(90deg)}.since-h{font-weight:600;margin-right:6px}.since b{font-weight:600}.since-d{margin-top:4px;max-width:900px}.since-d h3{font:600 12px var(--sans);color:var(--muted);margin:12px 0 4px}.since-d ul{margin:0;padding-left:18px;font-size:13.5px}.fl-foot{margin-top:28px;font-size:12.5px;color:var(--muted)}.fl-foot a{color:var(--muted)}@media (max-width:1100px){.fl-hero{grid-template-columns:1fr}.fl-grid{grid-template-columns:1fr}.fl-rail{position:static}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.fl-kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:12px}.k-n{font-size:24px}.row{grid-template-columns:1fr;gap:2px}.item{padding:16px 16px 16px 20px}.item h2{font-size:19px}.cmd .chips,.cmeta,#cout{padding-left:0;margin-left:0}.tr-r{grid-template-columns:84px 1fr 92px}.live span#age{display:none}.gate{margin-left:0;width:100%}}";
+var FLEET_CSS = ".wrap{max-width:1280px}:root{--card:var(--surface);--line:var(--rule);--bg:var(--paper);--mute:var(--muted);--link:var(--teal);--act:var(--red);--actbg:var(--red-wash);--ok:var(--green);--okbg:var(--green-wash);--unk:var(--amber);--unkbg:var(--amber-wash);--warn:var(--amber)}.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap;margin-left:auto}.q-nav+.live{margin-left:12px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted)}.dot.g{background:var(--green);box-shadow:0 0 0 3px var(--green-wash)}.dot.a{background:var(--amber);box-shadow:0 0 0 3px var(--amber-wash)}.dot.r{background:var(--red);box-shadow:0 0 0 3px var(--red-wash)}#so{color:var(--muted);font-size:13px;margin-left:8px}main.fl{padding-top:18px;padding-bottom:20px}/* command bar */.cmd{background:var(--surface);border:1.5px solid var(--rule);border-radius:var(--r-lg);padding:12px 14px 10px;margin:0 0 22px;transition:border-color .15s,box-shadow .15s}.cmd:focus-within{border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-wash)}.cmd form{display:flex;gap:10px;align-items:flex-start}.cmd .pr0{font:600 18px/38px var(--mono);color:var(--teal)}#ctext{flex:1;min-width:0;resize:none;border:0;background:none;color:var(--ink);font:400 18px/1.45 var(--serif);height:38px;max-height:180px;padding:7px 2px;outline:none}#ctext:focus{outline:none}.cmd button{border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:9px;padding:7px 12px;font:500 13px var(--sans)}.cmd button.p{background:var(--ink);border-color:var(--ink);color:var(--paper);padding:9px 18px;font-size:14px;font-weight:600}.cmd .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:28px}.cmd .chips button{border-radius:99px;padding:4px 11px;font:500 12.5px var(--mono);color:var(--muted);background:none}.cmd .chips button:hover{color:var(--ink);border-color:var(--muted)}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px;padding:8px 0 0 28px;border-top:1px dashed var(--rule)}.cmeta a{color:var(--teal)}#cout:empty{display:none}#cout{margin:8px 0 0 28px}.co{border-top:1px solid var(--rule);padding:10px 0 6px}.co .q{font:13px var(--mono);color:var(--muted)}.co pre{font:13.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;margin:6px 0 0}/* hero */.fl-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:28px;align-items:stretch;margin:0 0 26px}.fl-status{border-radius:var(--r-lg);padding:24px 24px 20px;background:var(--surface);border:1px solid var(--rule);border-top:4px solid var(--muted);display:flex;flex-direction:column}.fl-hero.act .fl-status{border-top-color:var(--red)}.fl-hero.ok .fl-status{border-top-color:var(--green)}.fl-hero.unk .fl-status{border-top-color:var(--amber)}.fl-status .q-eyebrow{color:var(--muted)}.fl-status h1{font:500 clamp(30px,3.4vw,44px)/1.05 var(--serif);letter-spacing:-.02em;margin:12px 0 8px}.fl-hero.act h1{color:var(--red)}.fl-hero.ok h1{color:var(--green)}.fl-hero.unk h1{color:var(--amber)}.fl-status>p{margin:0 0 16px;color:var(--muted);font-size:15px}.fl-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);background:var(--wash);border-radius:99px;padding:4px 10px}.pill i{width:7px;height:7px;border-radius:50%;background:var(--muted)}.pill.ok i{background:var(--green)}.pill.unk i{background:var(--amber)}.pill.act i{background:var(--red)}.fl-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.kpi{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;gap:6px;min-width:0}.k-l{font-size:12.5px;color:var(--muted);font-weight:500}.k-n{font:500 32px/1 var(--serif);letter-spacing:-.02em;font-variant-numeric:tabular-nums}.k-n small{font:500 14px var(--sans);color:var(--muted);letter-spacing:0;margin-left:6px}.k-n.act{color:var(--red)}.k-n.unk{color:var(--amber)}.k-n.ok{color:var(--green)}.k-d{font-size:13px;font-weight:600;color:var(--muted)}.k-d.ok{color:var(--green)}.k-d.act{color:var(--red)}.k-s{font-size:12px;color:var(--muted);margin-top:auto}.mt{display:block;height:6px;background:var(--wash);border-radius:99px;overflow:hidden}.mt i{display:block;height:100%;border-radius:99px;background:var(--muted)}.mt i.ok{background:var(--green)}.mt i.unk{background:var(--amber)}.mt i.act{background:var(--red)}.mt i.teal{background:var(--teal)}.note{background:var(--amber-wash);color:var(--amber);border-radius:var(--r);padding:10px 14px;font-size:14px;margin:-10px 0 18px}/* grid */.fl-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}.fl-h{font:500 24px/1.2 var(--serif);margin:0 0 14px;display:flex;align-items:center;gap:10px}.ct{font:600 12.5px/1 var(--sans);background:var(--wash);color:var(--muted);border-radius:99px;padding:4px 9px}.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:12px}.item{position:relative;padding-left:24px;transition:box-shadow .15s,border-color .15s}.item::before{content:\"\";position:absolute;left:0;top:14px;bottom:14px;width:4px;border-radius:0 4px 4px 0;background:var(--rule)}.item.urgent::before{background:var(--red)}.item:hover{box-shadow:var(--shadow)}.it-top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;color:var(--muted);margin-bottom:6px}.it-src{font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:11.5px;color:var(--teal)}.it-due{color:var(--amber);font-weight:600}.item h2{font:500 21px/1.3 var(--serif);margin:0 0 12px;letter-spacing:-.005em}.it-rows{display:flex;flex-direction:column;gap:8px}.row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;font-size:14.5px;line-height:1.5;margin-top:8px}.it-rows .row{margin-top:0}.row .k{color:var(--muted);font-weight:600;font-size:13px;padding-top:1px}.do-row .v{color:var(--ink);font-weight:500}.meta{font-size:13px;color:var(--muted)}.tag{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:5px;background:var(--wash);color:var(--muted)}.tag.u{background:var(--red);color:#fff}.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}.acts button{border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:8px;padding:6px 12px;font:500 13px var(--sans)}.acts button:hover{border-color:var(--teal);color:var(--teal)}.acts button:disabled{opacity:.5;cursor:default}.do{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);border-radius:8px;padding:7px 14px;text-decoration:none;font:600 13.5px var(--sans)}.do:hover{color:var(--paper);opacity:.9}.do::after{content:\"\\2192\"}.pr{border-top:1px solid var(--rule);margin-top:12px;padding-top:10px;font-size:14px}.ans{white-space:pre-wrap;font-size:14px;margin-top:6px}details{border-radius:var(--r-lg)}summary{cursor:pointer;color:var(--muted);font-size:14px}details.more{margin:0}details.more>summary{padding:8px 2px 12px;font-weight:500;color:var(--teal)}details.up summary{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--ink)}details ul{margin:10px 0 0;padding-left:18px;font-size:14px;line-height:1.55}details li{margin-bottom:4px}.empty{display:flex;gap:14px;align-items:center;color:var(--muted)}.empty svg{width:34px;height:34px;color:var(--green);background:var(--green-wash);border-radius:50%;padding:6px;flex:none}.empty b{color:var(--ink)}/* rail */.fl-rail{position:sticky;top:84px;display:flex;flex-direction:column;gap:0}.fl-rail h3,.trend h3{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}.verdict{border-top:4px solid var(--muted)}.verdict.ok{border-top-color:var(--green)}.verdict.unk{border-top-color:var(--amber)}.verdict.act{border-top-color:var(--red)}.vtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.chip{font:700 13px var(--sans);letter-spacing:.05em;padding:5px 10px;border-radius:7px}.chip.ok{background:var(--green-wash);color:var(--green)}.chip.unk{background:var(--amber-wash);color:var(--amber)}.chip.act{background:var(--red-wash);color:var(--red)}.gate{font-size:12px;color:var(--muted);margin-left:auto}.vhead{font:500 18px/1.35 var(--serif);margin:12px 0 8px}.why{margin:0 0 4px;padding-left:18px;font-size:13.5px;color:var(--muted);line-height:1.5}.verdict .row{grid-template-columns:1fr;gap:2px;font-size:13.5px}.rule{margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--rule);font-size:12px;line-height:1.5}.sys-top{display:flex;gap:16px;align-items:center;margin-bottom:6px}.ring{width:76px;height:76px;flex:none}.ring .tr{fill:none;stroke:var(--wash);stroke-width:7}.ring .fg{fill:none;stroke-width:7;stroke-linecap:round;stroke:var(--muted)}.ring .fg.ok{stroke:var(--green)}.ring .fg.unk{stroke:var(--amber)}.ring .fg.act{stroke:var(--red)}.ring text{font:600 14px var(--sans);fill:var(--ink)}.sys-n{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:0;flex:1}.sys-n dt{font-size:11.5px;color:var(--muted)}.sys-n dd{margin:0;font:600 15px var(--sans)}.sys details{margin-top:10px;border-top:1px solid var(--rule);padding-top:10px;border-radius:0}.sys summary{font-size:13px}.links{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}.links h3{width:100%;margin-bottom:4px}.links a{color:var(--teal);text-decoration:none}.links a:hover{text-decoration:underline}/* business */.fl-biz{margin-top:30px;padding-top:26px;border-top:1px solid var(--rule)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.stat{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 16px}.stat .n{font:500 26px/1.1 var(--serif);letter-spacing:-.01em;margin-bottom:6px}.stat .l{font-size:12.5px;color:var(--muted);line-height:1.4}.bad{color:var(--red)}.good{color:var(--green)}.amber{color:var(--amber)}.trend{max-width:640px}.tr-r{display:grid;grid-template-columns:110px 1fr 120px;gap:12px;align-items:center;font-size:13.5px;margin-bottom:8px}.tr-r b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.tr-b{position:relative;height:16px;display:flex;flex-direction:column;gap:3px}.tr-b i{display:block;height:6px;border-radius:99px;background:var(--rule)}.tr-b i.now{background:var(--teal)}.fl-biz>.meta{line-height:1.6;max-width:110ch}.since{margin:-8px 0 22px;padding:12px 18px}.since summary{color:var(--ink);font-size:14.5px;list-style:none}.since summary::-webkit-details-marker{display:none}.since summary::before{content:'\\25B8';color:var(--muted);margin-right:8px;display:inline-block;transition:transform .15s}.since details[open] summary::before{transform:rotate(90deg)}.since-h{font-weight:600;margin-right:6px}.since b{font-weight:600}.since-d{margin-top:4px;max-width:900px}.since-d h3{font:600 12px var(--sans);color:var(--muted);margin:12px 0 4px}.since-d ul{margin:0;padding-left:18px;font-size:13.5px}.fl-foot{margin-top:28px;font-size:12.5px;color:var(--muted)}.fl-foot a{color:var(--muted)}@media (max-width:1100px){.fl-hero{grid-template-columns:1fr}.fl-grid{grid-template-columns:1fr}.fl-rail{position:static}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.fl-kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:12px}.k-n{font-size:24px}.row{grid-template-columns:1fr;gap:2px}.item{padding:16px 16px 16px 20px}.item h2{font-size:19px}.cmd .chips,.cmeta,#cout{padding-left:0;margin-left:0}.tr-r{grid-template-columns:84px 1fr 92px}.live span#age{display:none}.gate{margin-left:0;width:100%}}.dec{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}.dec-h{margin:0 0 6px;font-weight:600;font-size:13.5px}.dec-items{list-style:none;margin:0 0 10px;padding:0}.dec-i{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 0;border-top:1px solid var(--rule)}.dec-t{flex:1 1 240px;min-width:0;font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}.dec-s{font-size:12.5px;font-weight:600;color:var(--muted)}.dec-b,.dec-all{display:flex;flex-wrap:wrap;gap:8px}.dec button{min-height:44px;min-width:44px;padding:10px 16px;border-radius:8px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);font:500 14px var(--sans);cursor:pointer;touch-action:manipulation}.dec .dec-y{border-color:var(--teal);color:var(--teal);font-weight:600}@media (max-width:420px){.dec-b,.dec-all{width:100%}.dec-b button,.dec-all button{flex:1 1 40%}}";
 var FLEET_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">';
 var FLEET_BOOT = "<script>(function(){try{var t=localStorage.getItem('qnfo-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){console.debug('qnfo-fleet-dashboard: browser storage unavailable',e)}})()<\/script>";
 var FLEET_MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6M20 8l4-4M20 24l4 4" stroke="var(--teal)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="6" cy="16" r="3" fill="var(--ink)"/></svg>';
@@ -10505,7 +10583,7 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     const cap = Math.max(1, Math.min(200, parseInt(env.OWNER_PROMPTS_DAILY_CAP || OWNER_PROMPT_CAP_DEFAULT, 10) || OWNER_PROMPT_CAP_DEFAULT));
     const today = new Date().toISOString().slice(0, 10);
     await ownerRequestColumns(env);
-    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ?", [today]);
+    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ? AND COALESCE(visitor, '') <> ?", [today, OWNER_HANDOFF_VISITOR]); // an approval hand-off (ownerTaskFile, marked by the server, never by its text) is the owner's own decision, never an Ask
     if (cnt.length && Number(cnt[0].n) >= cap) return ownerJson({ error: "The fleet has answered its daily limit of " + cap + " questions; reading stays open and Ask resets at 00:00 UTC." }, 429);
     const visitor = await askVisitor(request);
     if (!holder) {
@@ -10514,17 +10592,8 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     }
     const id = "op-" + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 4);
     if (mode === "task") {
-      const iid = "int-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
-      const dup = await d1all(env.AUDIT, "SELECT id FROM intents WHERE desire = ? AND status NOT IN ('rejected','deduped') LIMIT 1", [text]);
-      const intentId = dup.length ? dup[0].id : iid;
-      if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
-      await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
-      await ownerNotesRoute(env).catch(function() {
-      });
-      const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
-        return [];
-      }))[0];
-      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, issue_id: filed && filed.issue_id || null, duplicate: !!dup.length });
+      const t = await ownerTaskFile(env, text, { promptId: id });
+      return ownerJson({ ok: true, id: t.id, status: "queued", intent_id: t.intent_id, issue_id: t.issue_id, duplicate: t.duplicate });
     }
     await cmdSweep(env);
     await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, visitor) VALUES (?1,'ask',?2,'running',?3)").bind(id, text, visitor).run();
@@ -10613,7 +10682,7 @@ var CMD_FROM = { email: "qnfo@qnfo.org", name: "QNFO fleet" };
 var CMD_AI_TIMEOUT_MS = 13e3;
 var CMD_AI_BUDGET_MS = 24e3;
 var CMD_RUNNING_STALE_MS = 3 * 6e4;
-var CMD_OPS = { done: { destructive: true, label: "Mark done" }, dismiss: { destructive: true, label: "Not doing" }, snooze: { destructive: false, label: "Snooze" }, note: { destructive: false, label: "Add note" }, task: { destructive: false, label: "File as fleet task" }, ratify: { destructive: true, label: "Ratify" }, reject: { destructive: true, label: "Reject" }, refresh: { destructive: false, label: "Refresh fleet state", open: true }, style: { destructive: false, label: "Set editorial direction" }, verdict: { destructive: false, label: "Record verdict" } };
+var CMD_OPS = { done: { destructive: true, label: "Mark done" }, dismiss: { destructive: true, label: "Not doing" }, snooze: { destructive: false, label: "Snooze" }, note: { destructive: false, label: "Add note" }, task: { destructive: false, label: "File as fleet task" }, ratify: { destructive: true, label: "Ratify" }, reject: { destructive: true, label: "Reject" }, approve: { destructive: true, label: "Approve" }, decline: { destructive: false, label: "Decline" }, refresh: { destructive: false, label: "Refresh fleet state", open: true }, style: { destructive: false, label: "Set editorial direction" }, verdict: { destructive: false, label: "Record verdict" } };
 var CMD_DDL = [
   "CREATE TABLE IF NOT EXISTS q08_editor_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, source_url TEXT, created_ms INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS q08_owner_verdicts (slug TEXT PRIMARY KEY, signal TEXT NOT NULL, note TEXT, created_ms INTEGER NOT NULL)",
@@ -10755,6 +10824,17 @@ function cmdResolveItem(v, ref) {
   const r = String(ref || "").trim().replace(/^#/, "");
   if (!r) return { error: "Which item? Type 'queue' to list them." };
   if (/^\d{1,2}$/.test(r) && Number(r) >= 1 && Number(r) <= q.length) return { item: q[Number(r) - 1] };
+  // DASH-OWNER-ACTIONS-1: an issue id ("100140", "issue 100140", "agent_issues #100140") finds the queue card that names it.
+  const idm = /^(?:issues?\s*|agent_issues\s*)?#?(\d{3,7})$/i.exec(r);
+  if (idm) {
+    const named = q.filter(function(i) {
+      return String(i.key).indexOf("ha:") === 0 && decCardMentions({ slug: String(i.key).slice(3), title: i.title, why: i.why, action: i.action }, Number(idm[1]));
+    });
+    if (named.length === 1) return { item: named[0] };
+    if (named.length > 1) return { error: named.length + " items name issue " + idm[1] + ": " + named.slice(0, 5).map(function(i) {
+      return i.key;
+    }).join(", ") + ". Be more specific.", candidates: named.slice(0, 5) };
+  }
   const lo = r.toLowerCase();
   const exact = q.filter(function(i) {
     return String(i.key).toLowerCase() === lo || String(i.key).toLowerCase() === "ha:" + lo;
@@ -10920,7 +11000,9 @@ function cmdParse(text, c, holder) {
   if (/^(suggest|suggestions|what should i do( now)?\??|proposals?)$/.test(lo)) return cmdSuggest(c);
   if ((m = /^(done|dismiss|not doing)\s+(.+)$/.exec(lo))) {
     const res = cmdResolveItem(v, t.slice(m[1].length).trim());
-    if (res.error) return { text: res.error };
+    if (res.error) return { text: res.error, actions: (res.candidates || []).map(function(i) {
+      return conCmd((m[1] === "done" ? "done " : "dismiss ") + i.key, String(i.title || i.key).slice(0, 60));
+    }) };
     if (String(res.item.key).indexOf("ha:") !== 0) return { text: "'" + res.item.title + "' clears by itself when its source clears; snooze it instead.", actions: [cmdAction("snooze", { key: res.item.key, days: 7, title: res.item.title })] };
     return { actions: [cmdAction(m[1] === "done" ? "done" : "dismiss", { key: res.item.key, title: res.item.title })], text: (m[1] === "done" ? "Mark done: " : "Not doing: ") + res.item.title };
   }
@@ -11290,8 +11372,12 @@ function cmdModelReason(err) {
   return "it was unavailable";
 }
 // Never a bare failure: when the model does not answer, the fleet still answers from its stored data.
-function cmdFallback(c, err) {
+// DASH-OWNER-ACTIONS-1: `local` is what cmdLocalIntent matched without the model (a decision word, an issue, a card); when it matched,
+// the answer is that match and its buttons, not a summary of unrelated stored data. Self-contained on purpose: the offline suites run
+// this function alone in a vm.
+function cmdFallback(c, err, local) {
   const v = c && c.v;
+  if (local && local.matched && local.actions && local.actions.length) return ["The AI model did not answer just now (" + cmdModelReason(err) + "). These are the actions I can take without it; none has run yet, tap one to run it.", "", local.text].join("\n");
   const lines = ["The AI model did not answer just now (" + cmdModelReason(err) + "), so this answer comes from the fleet's stored data, without it. Nothing was changed."];
   if (c && c.research) lines.push("", researchFactsText(c.research));
   if (c && c.outreach) lines.push("", outreachFactsText(c.outreach)); // OUTREACH-ASK-FACTS-1
@@ -11380,7 +11466,7 @@ function cmdAiContext(c) {
   const ordered = c.research ? Object.assign({ research: c.research }, ctx) : ctx; // first, so the 9k cut never drops it
   return JSON.stringify(ordered).slice(0, 9e3);
 }
-var CMD_AI_SYS = "You are the command line of the QNFO fleet dashboard. Reply with ONE JSON object and nothing else: {\"answer\": string, \"actions\": array}. 'answer' is brief, concrete and uses only CONTEXT (say plainly when CONTEXT lacks it; state no fact, name or figure from outside CONTEXT; never invent numbers). 'actions' proposes 0-4 actions the owner can approve with one tap, each one of: {\"op\":\"snooze\",\"key\":<queue key>,\"days\":1-90}, {\"op\":\"note\",\"key\":<queue key>,\"note\":string}, {\"op\":\"done\",\"key\":<queue key starting ha:>}, {\"op\":\"dismiss\",\"key\":<queue key starting ha:>}, {\"op\":\"task\",\"text\":string}, {\"op\":\"ratify\",\"id\":number}, {\"op\":\"reject\",\"id\":number}, {\"op\":\"refresh\"}, {\"op\":\"cmd\",\"text\":<a read command: issue <id>, backlog <word>, info <queue key>, tasks <word>, prs, pr <n>, runs, locks, logs <worker>>}. Use queue keys exactly as in CONTEXT.queue_keys. A request to change, fix, build or investigate something becomes a 'task' whose text is a complete, self-contained instruction for the fleet's issue loop (include the page URL and worker when CONTEXT.page is set). Propose only what the user asked for or what clearly follows; never claim an action was taken. Each action may carry \"why\": string." + ASK_MAIL_RULE;
+var CMD_AI_SYS = "You are the command line of the QNFO fleet dashboard. Reply with ONE JSON object and nothing else: {\"answer\": string, \"actions\": array}. 'answer' is brief, concrete and uses only CONTEXT (say plainly when CONTEXT lacks it; state no fact, name or figure from outside CONTEXT; never invent numbers). 'actions' proposes 0-4 actions the owner can approve with one tap, each one of: {\"op\":\"snooze\",\"key\":<queue key>,\"days\":1-90}, {\"op\":\"note\",\"key\":<queue key>,\"note\":string}, {\"op\":\"done\",\"key\":<queue key starting ha:>}, {\"op\":\"dismiss\",\"key\":<queue key starting ha:>}, {\"op\":\"task\",\"text\":string}, {\"op\":\"ratify\",\"id\":number}, {\"op\":\"reject\",\"id\":number}, {\"op\":\"refresh\"}, {\"op\":\"cmd\",\"text\":<a command the owner confirms: issue <id>, diagnose <id>, approve <id or queue key>, decline <id or queue key>, backlog <word>, info <queue key>, tasks <word>, prs, pr <n>, runs, locks, logs <worker>>}. Use queue keys exactly as in CONTEXT.queue_keys. A request to change, fix, build or investigate something becomes a 'task' whose text is a complete, self-contained instruction for the fleet's issue loop (include the page URL and worker when CONTEXT.page is set). Propose only what the user asked for or what clearly follows; never claim an action was taken. Each action may carry \"why\": string." + ASK_MAIL_RULE;
 function cmdSalvageJson(s) {
   const m = /"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(s);
   if (!m) return null;
@@ -11902,8 +11988,16 @@ async function cmdAnswerImpl(env, text, c, ctx, conversationId) {
     return { ok: true, answer: p.answer, actions: p.actions, model: r.model };
   }
   const last = r.error;
+  // DASH-OWNER-ACTIONS-1: what the line asks for, found without the model, as tappable buttons (typed commands: the confirm step and
+  // the fresh code still apply). A failure here never hides the plain answer below.
+  let local = null;
+  try {
+    local = await cmdLocalIntent(env, text, c, "fallback");
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "cmdLocalIntent:fallback", error: String(e && e.message || e).slice(0, 160) }));
+  }
   // OWNER-SURFACE-HONESTY-1: never a bare failure; the model's error is kept in `error`, the owner reads a plain answer.
-  return { ok: false, answer: cmdFallback(c, last), actions: [], error: String(last).slice(0, 300) };
+  return { ok: false, answer: cmdFallback(c, last, local), actions: local && local.actions ? local.actions : [], error: String(last).slice(0, 300) };
 }
 async function cmdAnswer(env, text, c, ctx, conversationId) {
   if (!ctx || !ctx.tracing || typeof ctx.tracing.enterSpan !== "function") return await cmdAnswerImpl(env, text, c, ctx, conversationId);
@@ -11914,7 +12008,7 @@ async function cmdAnswer(env, text, c, ctx, conversationId) {
 async function cmdRunAi(env, id, text, c, ctx) {
   const a = await cmdAnswer(env, text, c, ctx, id);
   if (a.ok) await env.AUDIT.prepare("UPDATE cmd_log SET status='answered', answer=?1, actions_json=?2, model=?3, done_ms=?4 WHERE id=?5").bind(a.answer, JSON.stringify(a.actions), a.model, Date.now(), id).run();
-  else await env.AUDIT.prepare("UPDATE cmd_log SET status='fallback', answer=?1, error=?2, done_ms=?3 WHERE id=?4").bind(a.answer, a.error, Date.now(), id).run();
+  else await env.AUDIT.prepare("UPDATE cmd_log SET status='fallback', answer=?1, error=?2, actions_json=?3, done_ms=?4 WHERE id=?5").bind(a.answer, a.error, JSON.stringify(a.actions || []), Date.now(), id).run();
 }
 // ASK-RETRY-1 (2026-10-02, owner: "Audit and remediate 'abandoned: the worker stopped before answering'"). Audit: 3 rows
 // carry that label (owner_prompts 02:47, 02:48, 05:25Z on 2026-10-02), all asked through the old panel before FLEET-CMD-1
@@ -11971,6 +12065,7 @@ async function cmdSweep(env) {
 }
 // Execute one action through the same code the queue-card buttons use (ownerRoutes), so the rules stay in one place.
 async function cmdExec(request, env, ctx, owner, op, args) {
+  if (op === "approve" || op === "decline") return await cmdDecide(request, env, ctx, owner, op, args);
   if (CON_OPS[op]) return await conExec(env, owner, op, args);
   if (op === "refresh") {
     if (!(owner && owner.authed)) {
@@ -12225,6 +12320,24 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   }
 
   if (/^(i-?patent|patent)( usage| queries| searches| metrics| stats)?\??$/i.test(text.trim())) return ownerJson({ ok: true, kind: "answer", text: ipatentText(await ipatentUsage(env)), links: [{ label: "iPatent metrics JSON", href: "https://ipatent.qnfo.org/api/metrics" }], holder });
+  // DASH-OWNER-ACTIONS-1: three lines that used to land in the wrong path. A bare "retry" asks the last unanswered question
+  // again (here, where the text can be replaced); a bare six-digit line is a sign-in code only while a code is waiting (an issue
+  // id such as 100140 is six digits too); "reject 100140" / "ratify 100140" are an objective revision only when the id is one.
+  if (/^(retry|try again)\s*[.!]?$/i.test(text)) {
+    const last = await decLastFallback(env, holder, await askVisitor(request));
+    if (!last) return ownerJson({ ok: true, kind: "answer", text: "There is no unanswered question from the last 24 hours to ask again. 'retry <issue id>' runs an issue's closing probe now.", holder });
+    text = last;
+  }
+  if (/^\d{6}$/.test(text) && !(await decCodePending(env))) text = "issue " + text;
+  const rr = /^(ratify|reject)\s+#?(\d{1,7})$/i.exec(text);
+  if (rr && !(await decIsObjective(env, Number(rr[2])))) text = (rr[1].toLowerCase() === "ratify" ? "approve " : "decline ") + rr[2];
+  // diagnose / investigate / "why <issue>" is a read, open to everyone (titles and observed values only for the signed-in owner). It sits
+  // beside conRead, not in it, because full-access.test.mjs runs conRead alone in a vm.
+  const dgm = DEC_DIAG_RX.exec(text);
+  if (dgm) {
+    const dg = await conDiagnoseLine(env, c, dgm, owner);
+    if (dg) return ownerJson(Object.assign({ ok: dg.ok !== false, kind: "answer", holder }, dg), dg.ok === false && dg.need ? 401 : 200);
+  }
   // FLEET-CONSOLE-1: console reads first ("issue 12" would otherwise be read as an issue filter), then the console's actions.
   const cr = await conRead(env, text, c, owner);
   if (cr) return ownerJson(Object.assign({ ok: cr.ok !== false, kind: "answer", holder }, cr), cr.ok === false && cr.need ? 401 : 200);
@@ -12236,7 +12349,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     const sd = await mailSendLastDraft(env, text);
     if (sd) return ownerJson({ ok: true, kind: "answer", text: sd.text, actions: sd.actions || [], holder });
   }
-  const p = cmdParse(text, c, holder) || conParse(text);
+  const p = cmdParse(text, c, holder) || conParse(text) || await conDecide(env, text, c, owner);
   if (p && p.login) {
     const r = await cmdSendCode(env, request);
     return ownerJson(Object.assign({ kind: "code" }, r, { text: r.ok ? r.note + " Type the 6 digits here." : r.error }), r.ok ? 200 : r.status || 400);
@@ -12285,12 +12398,20 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   const g = used.length ? Number(used[0].g) : 0, mine = used.length ? Number(used[0].mine) : 0;
   if (g >= cap) return ownerJson({ ok: false, kind: "answer", error: "The fleet has answered its daily limit of " + cap + " plain-English questions; commands (type 'help') still work and the limit resets at 00:00 UTC." }, 429);
   if (!holder && mine >= ASK_VISITOR_CAP) return ownerJson({ ok: false, kind: "answer", error: "You have used today's " + ASK_VISITOR_CAP + " plain-English questions; commands (type 'help') still work. Resets 00:00 UTC." }, 429);
+  // DASH-OWNER-ACTIONS-1: a line that holds a decision word or a reference somewhere in a sentence shows its buttons at once,
+  // while the model thinks; the owner can tap them without waiting for it (every button is a typed command).
+  let quick = null;
+  try {
+    quick = await cmdLocalIntent(env, text, c, "quick");
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "cmdLocalIntent:quick", error: String(e && e.message || e).slice(0, 160) }));
+  }
   const id = "cmd-" + cmdRandHex(10);
   await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, visitor) VALUES (?1, ?2, ?3, 'ai', 'running', ?4, ?5)").bind(id, text, from || null, holder ? 1 : 0, visitor).run();
   ctx.waitUntil(cmdRunAi(env, id, text, c, ctx).catch(function(e) {
     return env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error=?1 WHERE id=?2").bind(String(e && e.message || e).slice(0, 200), id).run();
   }));
-  return ownerJson({ ok: true, kind: "pending", id, holder }, 202);
+  return ownerJson({ ok: true, kind: "pending", id, holder, quick: quick && quick.matched ? { text: quick.text, actions: quick.actions } : void 0 }, 202);
 }
 // ==== AREA-MAP platform: fleet console: reads and gated writes (DASHBOARD-FULL-ACCESS-1) ====
 // FLEET-CONSOLE-1 (2026-10-05, owner request: "full control, input and remediation from the UI ... get all information and
@@ -12346,7 +12467,8 @@ var CON_OPS = {
   closepr: { destructive: true, label: "Close PR" },
   rerun: { destructive: false, label: "Re-run failed jobs" },
   mailreply: { destructive: true, label: "Send reply" },
-  mailspam: { destructive: false, label: "Mark spam" }
+  mailspam: { destructive: false, label: "Mark spam" },
+  iretry: { destructive: false, label: "Retry the closing probe" }
 };
 for (const k in CON_OPS) CMD_OPS[k] = CON_OPS[k];
 var CON_HELP = [
@@ -12365,7 +12487,15 @@ var CON_HELP = [
   "  close <id> <evidence> / wontfix <id> <reason>   (fresh code; evidence is a live measurement)",
   "  sql! [db] <insert|update|delete|create>   (fresh code; UPDATE/DELETE rows are backed up first)",
   "  call <worker> [GET|POST|...] <path> [json]   call a fleet worker (GET: code; others: fresh code)",
-  "  dispatch <workflow.yml> [k=v ...], deploy <worker ...>, merge <pr>, closepr <pr>   (fresh code), rerun <run id> (code)"
+  "  dispatch <workflow.yml> [k=v ...], deploy <worker ...>, merge <pr>, closepr <pr>   (fresh code), rerun <run id> (code)",
+  "Decide and unblock (DASH-OWNER-ACTIONS-1; instant, never uses the AI):",
+  "  approve [<card>] [items]   approve an owner card or objective: approve 100140 / approve 100140 1-5 / approve all / approve ha:<key> (fresh code)",
+  "  decline [<card>] [items] [why <reason>]   decline it; the default stays in effect (your session). A bare approve lists what waits on you",
+  "  diagnose [<issue>]     what one issue waits on, who works it, what that means and the next step (open to everyone); bare: what is blocked",
+  "  retry [<issue>]        run an issue's closing probe now; bare: ask your last unanswered question again;  retry run <run id>",
+  "  resolve <issue> [evidence]   close an issue on its passing probe, or on evidence you type (fresh code);  resolve <card>  marks it done",
+  "  A verb names its target (an id, #id, ha:<key>, a keyword) or stands alone; a sentence that only starts with one goes to the AI. A pick-one card needs the option: approve ha:<key> <option>.",
+  "  A card for a legal, signing, money, credential or account step has no Approve or Decline (it is yours alone): diagnose it, then done ha:<key>."
 ].join("\n");
 CMD_HELP = CMD_HELP.replace("Sign in:", CON_HELP + "\nSign in:");
 var conDdlDone = /* @__PURE__ */ new WeakSet();
@@ -12985,10 +13115,25 @@ async function conExec(env, owner, op, args) {
   const now = Date.now();
   const stamp = "[owner " + new Date(now).toISOString().slice(0, 16) + "Z, fleet console]";
   try {
-    if (/^i(prio|owner|comment|codetask|reopen|close)$/.test(op)) {
+    if (/^i(prio|owner|comment|codetask|reopen|close|retry)$/.test(op)) {
       const id = Number(args.id);
       const a = Number.isInteger(id) && id > 0 ? await conIssueTouch(env, id) : null;
       if (!a) return { ok: false, error: "No issue #" + args.id + "." };
+      if (op === "iretry") {
+        // DASH-OWNER-ACTIONS-1: the closing probe is marked due now; the next remediation pass takes it (contracts are due hourly,
+        // so this says "due now", not "ran"). Attempts are untouched, and the issue carries a line saying who asked.
+        if (a.status !== "open") return { ok: false, error: "#" + id + " is " + a.status + "; there is no open issue to retry." };
+        const cs = await d1all(env.AUDIT, "SELECT class FROM remediation_contracts WHERE issue_id = ?1 AND status = 'active'", [id]);
+        if (!cs.length) return { ok: false, error: "#" + id + " has no active remediation contract to retry. 'diagnose " + id + "' says what closes it." };
+        const classes = cs.map(function(k) {
+          return k.class;
+        }).join(", ");
+        await env.AUDIT.batch([
+          env.AUDIT.prepare("UPDATE remediation_contracts SET next_due_at = datetime('now') WHERE issue_id = ?1 AND status = 'active'").bind(id),
+          env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " retry: closing probe " + classes + " marked due now.", now, id)
+        ]);
+        return { ok: true, text: "The closing probe of #" + id + " (" + classes + ") is due now. The next remediation pass runs it; it has not run yet. 'diagnose " + id + "' shows the verdict afterwards." };
+      }
       if (op === "iprio") {
         if (CON_PRIOS.indexOf(args.priority) < 0) return { ok: false, error: "Priority is critical, high, medium or low." };
         await env.AUDIT.prepare("UPDATE agent_issues SET priority = ?1, updated_at = ?2 WHERE id = ?3").bind(args.priority, now, id).run();
@@ -13136,15 +13281,1038 @@ async function conExec(env, owner, op, args) {
   }
   return { ok: false, error: "unknown console action " + op };
 }
+// DASH-OWNER-ACTIONS-1 (1.65.0 build, reviewed and corrected in 1.70.0; agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
+// approve owner items and diagnose/resolve issues and problems from fleet dashboard."). The words an owner types to decide are
+// commands, not questions for a model: approve, decline, diagnose, retry and resolve are parsed here, find their target in the
+// queue and in qnfo-audit, and never call a model, so a stalled router (three router_timeout legs at 11:20, 11:21 and 11:34Z on
+// 2026-10-20) cannot stop a decision. approve is destructive (a code from the last 15 minutes, like done and ratify) and, like
+// decline, is the owner session's own: the loop token and the dormant owner key cannot make an identity-bound decision. A decision
+// is recorded (human_responses, the card, an OWNER-DECISION line on each issue the card names) and an approval is handed to the
+// fleet as ONE task that carries the card, the approved items, the doer and the issue's closing probe; the dashboard never says that
+// the thing approved has changed, because only the doer's work and the issue's own probe can show it.
+// 1.70.0 review: (1) the hand-off is filed BEFORE anything is recorded (ownerTaskFile, no Ask cap) so an approval cannot be lost; (2) Approve
+// and Decline exist only for a card that ASKS for a decision (approve, authorize, decline, pick one, choose one) and is not a hard-marker
+// step (default_approve_markers kind hard: money, legal, signing, credential, account): those get Diagnose and Done; (3) a pick-one card needs
+// the option and the hand-off always carries the card's title, ask and why; (4) a verb is a command only when it stands alone or names its
+// target, so "Resolve next fleet open item and deploy" and "Retry the failed deploy of PR #1001" stay with the model, and retry runs unasked
+// only for "retry <reference>".
+// 1.70.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
+// stranger's Ask that starts "OWNER-DECISION from" still counts; (6) decIssueIds skips "#NNN" after PR, run, workflow or commit (decGithubNumber,
+// shared with decRefs): agent_issues ids pass 100,000, so a PR number is usually also a real, unrelated issue row.
+// 1.70.0 review round 3: (7) OWNER-PROMPT-TWIN-LINK-1 (main) links a new owner-request ticket to an open one whose title text after the first ': ' is equal and
+// the title keeps ~152 prompt characters, so a hand-off that opened with 150 characters of fixed wording filed a second card's approval under the first
+// card's ticket: the hand-off now opens with the approved items, the card key and the decision number (decHandoffText) and ownerNotesRoute never twin-links a
+// row carrying the server's hand-off marker (ownerRequestIssue opts.noTwin); (8) decResolve reads a card of any status (resolved, dismissed, rerouted) by
+// its key only for the signed-in owner or a token holder, so a stranger's key answers "Nothing matches" unless the card is open on the page.
+var DEC_NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+var DEC_STOP = /^(approve|authori[sz]e|accept|ratify|decline|refuse|reject|deny|diagnose|investigate|retry|resolve|please|each|every|all|everything|the|of|in|on|to|for|from|and|with|fixes|fix|items?|issues?|agent_issues|card|cards|that|this|these|those|them|it|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|only|except|now|just|can|you|could|would|will|ok|okay|yes|go|ahead|why|because|reason|what|about|them|are|was|were|has|have|been|then|than|also|here|there)$/i;
+var DEC_VERB_RX = /^(approve|authori[sz]e|ratify|decline|refuse|reject|resolve|retry)\b[\s:,.\-]*([\s\S]*)$/i;
+var DEC_DIAG_RX = /^(diagnose|diagnosis|investigate|why(?:\s+is)?|what(?:'s|\s+is)\s+wrong\s+with|what(?:'s|\s+is)\s+up\s+with)\b[\s:,.\-]*([\s\S]*)$/i;
+// "PR #3608", "pull request #3608", "run #123", "commit #abc": GitHub numbers share the range of the issue ids (agent_issues runs past
+// 100,000, so most PR numbers are also a real, unrelated, old issue row) and are never an issue reference. at = index of the "#".
+function decGithubNumber(s, at) {
+  return /\b(?:prs?|pull(?:\s+requests?)?|runs?|workflows?|commits?)\s*$/i.test(String(s).slice(0, at));
+}
+// Every reference a line can hold, best first: an issue id (named, #-prefixed, first on the line, or five digits or more), a
+// card or objective key, an UPPER-DASH keyword (UIA-SOURCE-FIDELITY-1) and a slug.
+function decRefs(text) {
+  const s = String(text || ""), out = [], seen = {};
+  const add = function(r) {
+    const k = r.kind + ":" + (r.id || r.key || r.word);
+    if (!seen[k]) {
+      seen[k] = 1;
+      out.push(r);
+    }
+  };
+  let m, re = /\b(?:agent_issues|issues?)\s*#?\s*(\d{3,7})\b/gi;
+  while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[0] });
+  re = /(?:^|[\s(])#(\d{3,7})\b/g;
+  while ((m = re.exec(s))) {
+    if (decGithubNumber(s, m.index + m[0].indexOf("#"))) continue;
+    add({ kind: "issue", id: Number(m[1]), raw: "#" + m[1] });
+  }
+  if ((m = /^\s*(\d{3,7})(?=[\s.,;:!?)]|$)/.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
+  re = /(?:^|\s)(\d{5,7})(?=[\s.,;:)]|$)/g;
+  while ((m = re.exec(s))) add({ kind: "issue", id: Number(m[1]), raw: m[1] });
+  re = /(?:^|[\s(])((?:ha|goals):[A-Za-z0-9:._-]{2,150})/g;
+  while ((m = re.exec(s))) add({ kind: "key", key: m[1].replace(/[.,;:]+$/, ""), raw: m[1] });
+  re = /\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/g;
+  while ((m = re.exec(s))) add({ kind: "word", word: m[1], upper: true, raw: m[1] });
+  re = /(?:^|\s)((?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)+)(?=[\s.,;:)]|$)/g;
+  while ((m = re.exec(s))) add({ kind: "word", word: m[1], upper: false, raw: m[1] });
+  return out.slice(0, 8);
+}
+function decIssueIds(text) {
+  const out = [];
+  String(text || "").replace(/(?:agent_issues|issues?|#)\s*#?(\d{3,7})\b/gi, function(all, d, at, whole) {
+    if (all.charAt(0) === "#" && decGithubNumber(whole, at)) return all;
+    if (out.indexOf(Number(d)) < 0) out.push(Number(d));
+    return all;
+  });
+  return out;
+}
+function decCardIds(card) {
+  const ids = decIssueIds((card.title || "") + " " + (card.why || "") + " " + (card.action || ""));
+  const m = /-(\d{4,7})$/.exec(String(card.slug || ""));
+  if (m && ids.indexOf(Number(m[1])) < 0) ids.push(Number(m[1]));
+  return ids;
+}
+// The numbered items of an issue ("1) ...", "2. ..."): only a run that starts at 1 and does not skip counts, and only two or more.
+function decItems(desc) {
+  const out = [];
+  for (const line of String(desc || "").split(/\r?\n/)) {
+    const m = /^\s*(\d{1,2})[.)]\s+(\S[\s\S]*)$/.exec(line);
+    if (!m) continue;
+    if (Number(m[1]) !== out.length + 1) {
+      if (out.length) break;
+      continue;
+    }
+    out.push({ n: out.length + 1, text: m[2].replace(/\s+/g, " ").trim().slice(0, 260) });
+  }
+  return out.length >= 2 ? out : [];
+}
+// A card that asks for a decision on each part says so ("each of the seven fixes"); one that does not is one decision.
+function decWantsItems(card) {
+  const t = (card.action || "") + " " + (card.why || "") + " " + (card.title || "");
+  return new RegExp("\\b(?:each|every|all)\\s+(?:of\\s+)?(?:the\\s+)?(?:\\d{1,2}|" + Object.keys(DEC_NUMS).join("|") + ")\\b", "i").test(t);
+}
+// A card that ASKS for a decision: its action or title says approve, authorize, decline, pick one or choose one. An IDENTITY-BOUND line alone is
+// not a question (19 of the 40 cards that line matched on 2026-10-26 asked the owner to send an e-mail, renew a domain, create a token or sign a
+// statement), so it opens no button.
+var DEC_ASK_RX = /\b(approve|authori[sz]e|decline|pick one|choose one)\b/i;
+var DEC_PICK_RX = /\b(?:pick|choose) one\b/i;
+function decAsksDecision(it) {
+  return !!(it && String(it.key || "").indexOf("ha:") === 0 && !it.receipt && DEC_ASK_RX.test(String(it.action || "") + " " + String(it.title || "")));
+}
+// A card that asks to be decided and is not a legal, signing, money, credential or account act. The hard markers are DEFAULT-APPROVE-1's own
+// (default_approve_markers kind 'hard', the text ' ' || lower(title why action default) || ' ' matched with LIKE), read from D1 and kept five
+// minutes; DEC_HARD_FALLBACK_RX stands in when the table cannot be read. Approve and Decline are never offered for such a card, and nothing
+// is handed to the fleet for it: the fleet's authority never covers a legal, financial or signing act in the owner's name.
+var DEC_HARD_FALLBACK_RX = /\b(payments?|invoice|bank|credit card|billing|purchase|wire transfer|top[- ]?up|prepaid|subscri\w*|renew\w*|registrar|refund|wallet|fees?|legal|signature|signing|sign the|patent applic\w*|dpa|irreversible|delete|wipe|erase|truncate|drop table|destroy|api key|oauth|sign[- ]in|log in to|password|credential|rotate|secret|token|grant access|your name|owner's name|mailbox|send (?:an )?e-?mail|email from|visibility|make public|be public|one-time code|verification code|privacy of|gdpr|personal data|suppress\w*|opt[- ]?out|unsubscribe|consent)\b|\$\S/i;
+var decHardCache = null;
+function decLikeRx(pattern) {
+  return new RegExp("^" + String(pattern).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, "[\\s\\S]*").replace(/_/g, "[\\s\\S]") + "$", "i");
+}
+async function decLoadHard(env) {
+  const now = Date.now();
+  if (decHardCache && decHardCache.db === env.AUDIT && now - decHardCache.at < 3e5) return;
+  let list = null;
+  try {
+    const rows = await d1all(env.AUDIT, "SELECT pattern FROM default_approve_markers WHERE kind = 'hard'");
+    if (rows.length) list = rows.map(function(r) {
+      return decLikeRx(r.pattern);
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "decLoadHard", error: String(e && e.message || e).slice(0, 160) }));
+  }
+  decHardCache = { at: now, db: env.AUDIT, list };
+}
+function decHardText(card) {
+  return " " + [card.title, card.why, card.action, card.fallback].map(function(x) {
+    return String(x || "");
+  }).join(" ").toLowerCase() + " ";
+}
+function decIsHard(card) {
+  const t = decHardText(card);
+  return decHardCache && decHardCache.list ? decHardCache.list.some(function(rx) {
+    return rx.test(t);
+  }) : DEC_HARD_FALLBACK_RX.test(t);
+}
+function decIsDecisionCard(it) {
+  return decAsksDecision(it) && !decIsHard(it);
+}
+function decPickOne(it) {
+  return DEC_PICK_RX.test(String(it && it.action || "") + " " + String(it && it.title || ""));
+}
+function decNumList(str) {
+  const out = [];
+  const s = String(str || "").toLowerCase().replace(/\band\b|&/g, ",").replace(/(\d)\s+to\s+(\d)/g, "$1-$2").replace(/(\d)\s*[-\u2013\u2014]\s*(\d)/g, "$1-$2");
+  for (const tok of s.split(/[,\s]+/)) {
+    if (!tok) continue;
+    const m = /^#?(\d{1,2})(?:-(\d{1,2}))?$/.exec(tok);
+    if (!m) return null;
+    const a = Number(m[1]), b = m[2] ? Number(m[2]) : a;
+    if (b < a) return null;
+    for (let n = a; n <= b; n++) if (out.indexOf(n) < 0) out.push(n);
+  }
+  return out.sort(function(x, y) {
+    return x - y;
+  });
+}
+function decFmtRange(list) {
+  const l = (list || []).slice().sort(function(x, y) {
+    return x - y;
+  }), out = [];
+  for (let i = 0; i < l.length; ) {
+    let j = i;
+    while (j + 1 < l.length && l[j + 1] === l[j] + 1) j++;
+    out.push(j > i ? l[i] + "-" + l[j] : String(l[i]));
+    i = j + 1;
+  }
+  return out.join(", ");
+}
+// What follows the target: "1-5", "items 2, 4 and 5", "except 6", "all", "each of the seven fixes", and a reason ("why ...").
+function decItemSpec(rest) {
+  let s = " " + String(rest || "").replace(/\s+/g, " ").trim() + " ";
+  const spec = { all: false, except: null, list: null, reason: "" };
+  let m = /\s(?:why|because|reason)\b[:,]?\s*([\s\S]+)$/i.exec(s);
+  if (m) {
+    spec.reason = m[1].trim().slice(0, 300);
+    s = s.slice(0, m.index) + " ";
+  }
+  if ((m = /\bexcept(?:\s+for)?\s+(?:items?\s+|fix(?:es)?\s+|#)?([0-9][0-9,\s\-\u2013]*(?:\s*(?:and|&)\s*[0-9]+)?)/i.exec(s))) {
+    spec.except = decNumList(m[1]);
+    s = s.replace(m[0], " ");
+  }
+  if (/\b(all|each|every|everything)\b/i.test(s) || new RegExp("\\bthe\\s+(?:\\d{1,2}|" + Object.keys(DEC_NUMS).join("|") + ")\\s+(?:fixes|items)\\b", "i").test(s)) spec.all = true;
+  if (!spec.all && s.length <= 80 && (m = /(?:^|\s)(?:items?\s+|fix(?:es)?\s+|#)?(\d{1,2}(?:\s*(?:-|,|and|&|to)\s*\d{1,2})*)(?=\s|$)/i.exec(s))) spec.list = decNumList(m[1]);
+  return spec;
+}
+function decSelect(items, spec) {
+  if (!items.length) return { sel: null };
+  let sel = items.map(function(i) {
+    return i.n;
+  });
+  if (spec.list && spec.list.length) sel = spec.list;
+  if (spec.except && spec.except.length) sel = sel.filter(function(n) {
+    return spec.except.indexOf(n) < 0;
+  });
+  const bad = sel.filter(function(n) {
+    return !items.some(function(i) {
+      return i.n === n;
+    });
+  });
+  if (bad.length) return { error: "There is no item " + decFmtRange(bad) + ": this card has items 1-" + items.length + "." };
+  if (!sel.length) return { error: "That leaves no item to decide." };
+  return { sel };
+}
+async function decIssueRow(env, id) {
+  try {
+    return (await d1all(env.AUDIT, "SELECT id, title, status, priority, category, source, description, created_at FROM agent_issues WHERE id = ?1", [id]))[0] || null;
+  } catch (e) {
+    return null;
+  }
+}
+// The open owner cards: the queue's (what the page shows) and every other open row of human_actions (a snoozed card is still open).
+async function decOpenCards(env, c) {
+  await decLoadHard(env);
+  const list = [], seen = {};
+  const put = function(r) {
+    const card = { key: "ha:" + r.slug, slug: r.slug, title: String(r.title || ""), why: String(r.why || ""), action: String(r.action || ""), fallback: String(r.fallback || ""), receipt: !!r.receipt, status: "open" };
+    if (!seen[card.key]) {
+      seen[card.key] = 1;
+      list.push(card);
+    }
+  };
+  for (const it of cmdQueue(c && c.v)) if (String(it.key).indexOf("ha:") === 0) put({ slug: String(it.key).slice(3), title: it.title, why: it.why, action: it.action, fallback: it.fallback, receipt: it.receipt });
+  try {
+    for (const r of await d1all(env.AUDIT, "SELECT slug, title, why, action, default_in_effect AS fallback FROM human_actions WHERE status = 'open' ORDER BY id LIMIT 200")) put(r);
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "decOpenCards", error: String(e && e.message || e).slice(0, 160) }));
+  }
+  return list;
+}
+function decObjectives(c) {
+  const out = [];
+  for (const it of cmdQueue(c && c.v)) if (String(it.key).indexOf("goals:objective-revision") === 0) for (const d of it.detail || []) out.push({ id: Number(d.id), statement: String(d.statement || "") });
+  return out;
+}
+function decWords(s) {
+  return String(s || "").replace(/[^A-Za-z0-9_ -]/g, " ").split(/\s+/).filter(function(w) {
+    return w.length >= 4 && !DEC_STOP.test(w) && !/^\d+$/.test(w);
+  });
+}
+// Does the line name anything at all (an id, a key, a queue number or a keyword)? A bare verb names nothing.
+function decHasTarget(s) {
+  return decRefs(s).length > 0 || /^#?\d{1,2}(?=\s|$)/.test(String(s || "").trim()) || decWords(s).length > 0;
+}
+function decCardMentions(card, id) {
+  return decCardIds(card).indexOf(Number(id)) >= 0;
+}
+// A typed target to a thing: { card, issue, objective, candidates, none, error, rest }. rest is the line without the target, where
+// the item list and the reason are read. Several matches come back as candidates (buttons), never as a guess.
+async function decResolve(env, c, text, refsOnly, minWords) {
+  const s = String(text || "").trim();
+  const need = minWords || 2;
+  const cards = await decOpenCards(env, c);
+  const deciding = cards.filter(decIsDecisionCard);
+  const refs = decRefs(s);
+  const qi = /^#?(\d{1,2})(?=\s|$)/.exec(s);
+  const words = refsOnly ? [] : decWords(s);
+  if (refsOnly && !refs.length) return { none: true, rest: s };
+  if (!refs.length && !qi && !words.length) {
+    const cands = deciding.map(function(cd) {
+      return { arg: cd.key, label: cd.title.slice(0, 70) || cd.key, card: cd };
+    }).concat(decObjectives(c).map(function(o) {
+      return { arg: "goals:objective-revision:" + o.id, label: "Objective #" + o.id + ": " + o.statement.slice(0, 55), objective: o };
+    }));
+    if (!cands.length) return { none: true, rest: s };
+    if (cands.length === 1) return cands[0].card ? { card: cands[0].card, rest: s } : { objective: cands[0].objective, rest: s };
+    return { candidates: cands, rest: s };
+  }
+  if (qi && !refs.length) {
+    const it = cmdQueue(c && c.v)[Number(qi[1]) - 1];
+    if (it) {
+      const rest = s.slice(qi[0].length).trim();
+      if (String(it.key).indexOf("ha:") === 0) return { card: cards.find(function(cd) {
+        return cd.key === it.key;
+      }) || { key: it.key, slug: String(it.key).slice(3), title: it.title, why: it.why, action: it.action, fallback: it.fallback, status: "open" }, rest };
+      const ob = String(it.key).indexOf("goals:objective-revision") === 0 && (it.detail || [])[0];
+      if (ob) return { objective: { id: Number(ob.id), statement: String(ob.statement || "") }, rest };
+      return { error: "'" + it.title + "' clears by itself when its source clears; snooze it instead.", rest };
+    }
+  }
+  const cardFor = function(id) {
+    const named = cards.filter(function(cd) {
+      return !cd.receipt && decCardMentions(cd, id);
+    });
+    return named.find(decIsDecisionCard) || named[0] || null;
+  };
+  for (const r of refs) {
+    const rest = s.replace(r.raw, " ").replace(/\s+/g, " ").trim();
+    if (r.kind === "issue") {
+      const row = await decIssueRow(env, r.id);
+      if (row) return { issue: row, card: cardFor(row.id), rest };
+    } else if (r.kind === "key") {
+      const om = /^goals:objective-revision:(\d{1,7})$/.exec(r.key);
+      if (om) {
+        const ob = decObjectives(c).find(function(o) {
+          return o.id === Number(om[1]);
+        });
+        return { objective: ob || { id: Number(om[1]), statement: "" }, rest };
+      }
+      const hit = cards.find(function(cd) {
+        return cd.key.toLowerCase() === r.key.toLowerCase();
+      });
+      if (hit) return { card: hit, rest };
+      // A card in any status (resolved, dismissed, rerouted at birth) is read only for the signed-in owner or a token holder: the text of a card that
+      // was never on the page is not a stranger's to read. A stranger resolves a key against the open cards above and gets "Nothing matches" otherwise.
+      if (/^ha:/i.test(r.key) && c && c.holder) {
+        const row = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status FROM human_actions WHERE slug = ?1").bind(r.key.slice(3)).first().catch(function() {
+          return null;
+        });
+        if (row) return { card: { key: "ha:" + row.slug, slug: row.slug, title: row.title || "", why: row.why || "", action: row.action || "", fallback: row.fallback || "", status: row.status }, rest };
+      }
+    } else {
+      const lo = r.word.toLowerCase();
+      const hit = cards.find(function(cd) {
+        return cd.slug.toLowerCase() === lo;
+      });
+      if (hit) return { card: hit, rest };
+      if (r.upper) {
+        let rows = [];
+        try {
+          rows = await d1all(env.AUDIT, "SELECT id, title, status, priority, category, source, description, created_at FROM agent_issues WHERE title LIKE ?1 ORDER BY (status = 'open') DESC, id DESC LIMIT 4", [r.word + "%"]);
+        } catch (e) {
+          rows = [];
+        }
+        const open = rows.filter(function(x) {
+          return x.status === "open";
+        });
+        const pick = open.length ? open : rows;
+        if (pick.length === 1) return { issue: pick[0], card: cardFor(pick[0].id), rest };
+        if (pick.length > 1) return { candidates: pick.map(function(x) {
+          return { arg: String(x.id), label: "#" + x.id + " " + String(x.title).slice(0, 60) };
+        }), rest };
+      }
+    }
+  }
+  if (words.length) {
+    const lows = Array.from(new Set(words.map(function(w) {
+      return w.toLowerCase();
+    })));
+    const scored = cards.map(function(cd) {
+      const hay = (cd.key + " " + cd.title).toLowerCase();
+      return { cd, n: lows.filter(function(w) {
+        return hay.indexOf(w) >= 0;
+      }).length };
+    }).filter(function(x) {
+      return x.n > 0;
+    }).sort(function(a, b) {
+      return b.n - a.n;
+    });
+    // two title words, never one: "Approve the Living Papers launch post" shares the single word 'papers' with an unrelated card
+    if (scored.length && scored[0].n >= need) {
+      const top = scored.filter(function(x) {
+        return x.n === scored[0].n;
+      });
+      if (top.length === 1) return { card: top[0].cd, rest: s };
+      return { candidates: top.slice(0, 5).map(function(x) {
+        return { arg: x.cd.key, label: x.cd.title.slice(0, 70) || x.cd.key, card: x.cd };
+      }), rest: s };
+    }
+  }
+  return { error: "Nothing matches '" + s.slice(0, 80) + "'. Give an issue id (100140), a card key (ha:...), two words of its title, or a queue number.", rest: s };
+}
+function decNoun(card, n) {
+  return /\bfix(es)?\b/i.test((card.action || "") + " " + (card.title || "") + " " + (card.why || "")) ? n === 1 ? "fix" : "fixes" : n === 1 ? "item" : "items";
+}
+function decKeyword(issue) {
+  const m = issue && /^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)/.exec(String(issue.title || ""));
+  return m ? m[1] : "";
+}
+// The state of each numbered item of a card: { n: "approve" | "decline" } from human_responses; "*" for a decision on the whole card.
+async function decDecided(env, key) {
+  const out = {};
+  try {
+    for (const r of await d1all(env.AUDIT, "SELECT kind, note FROM human_responses WHERE key = ?1 AND kind IN ('approve', 'decline') ORDER BY id", [key])) {
+      const list = decParseNote(r.note);
+      if (list) for (const n of list) out[Number(n)] = r.kind;
+      else out["*"] = r.kind;
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "decDecided", error: String(e && e.message || e).slice(0, 160) }));
+  }
+  return out;
+}
+// The note of a decision row reads as a sentence ("items 1-5, 7; issue 100140; why: ...") and is read back with decParseNote; a row with no
+// items is a decision on the whole card.
+function decNote(sel, issueId, reason) {
+  return (sel ? "items " + decFmtRange(sel) + "; " : "") + (issueId ? "issue " + issueId + "; " : "") + (reason ? "why: " + reason : "");
+}
+function decParseNote(note) {
+  const m = /^items ([0-9][0-9,\s-]*)(?:;|$)/.exec(String(note || ""));
+  return m ? decNumList(m[1]) : null;
+}
+function decIssueClause(ids) {
+  return ids.length ? "issue" + (ids.length === 1 ? " " : "s ") + ids.join(", ") : "";
+}
+// The parts of a selection that are already approved (sel null = the whole card, reported as [0]). An approval is handed to the fleet once, when it is
+// made: a second approve of the same item files nothing, and a decline of an approved item does not call the work back, so neither is recorded.
+function decApproved(prior, sel) {
+  return sel ? sel.filter(function(n) {
+    return prior[n] === "approve";
+  }) : prior["*"] === "approve" ? [0] : [];
+}
+// partial: the sentence for a selection that holds other parts too (they go ahead), else the whole answer.
+function decSettledText(card, hit, sel, kind, partial) {
+  const many = !!sel && hit.length > 1;
+  const what = sel ? (many ? "Items " : "Item ") + decFmtRange(hit) : "'" + card.title + "'";
+  if (kind === "approve") return what + (many ? " are" : " is") + " already approved and was handed to the fleet; " + (partial ? "it is left out of this one." : "nothing was filed again.");
+  return what + (many ? " were" : " was") + " already approved and handed to the fleet; declining it does not undo that, so it stays approved" + (partial ? " and is left out of this decline." : " and nothing was recorded.");
+}
+// approve | decline [target] [items] [why ...]: the confirm button (approve) or the decision button (decline), with a preview.
+async function decApprove(env, c, kind, rest) {
+  const holder = !!(c && c.holder);
+  const verb = kind === "approve" ? "approve" : "decline";
+  const r = await decResolve(env, c, rest);
+  if (r.error) return { text: r.error + "\n\nType '" + verb + "' alone to list what waits on you." };
+  if (r.none) return { text: "Nothing is waiting on a decision: no owner card asks to be approved or declined and no objective revision is proposed.", actions: [conCmd("queue", "Queue"), conCmd("suggest", "Suggest")] };
+  if (r.candidates) return { text: "More than one thing can be " + (kind === "approve" ? "approved" : "declined") + ". Pick one:", actions: r.candidates.map(function(x) {
+    return conCmd(verb + " " + x.arg, x.label);
+  }) };
+  if (r.objective) {
+    const o = r.objective;
+    return { text: (kind === "approve" ? "Ratify" : "Reject") + " objective revision #" + o.id + (o.statement ? ": " + o.statement.slice(0, 200) : "") + ".", actions: [cmdAction(kind === "approve" ? "ratify" : "reject", { id: o.id })] };
+  }
+  if (!r.card) {
+    const ids = r.issue ? [r.issue.id] : [];
+    return { text: "No open owner card names " + (ids.length ? "issue " + ids[0] : "that") + ", so there is nothing to " + verb + ". 'diagnose " + (ids[0] || "") + "' says what it is waiting on.", actions: ids.length ? [conCmd("diagnose " + ids[0], "Diagnose #" + ids[0])] : [] };
+  }
+  const card = r.card;
+  if (card.status && card.status !== "open") return { text: "'" + card.title + "' is already " + card.status + "; nothing to " + verb + "." };
+  await decLoadHard(env);
+  const own = [conCmd("diagnose " + card.key, "Diagnose"), cmdAction("done", { key: card.key, title: card.title })];
+  if (!decAsksDecision(card)) return { text: "'" + card.title + "' does not ask for a decision: it asks you to do something yourself, so there is nothing to " + verb + ". 'diagnose' says what it waits on; mark it done when you have done it.", actions: own };
+  if (decIsHard(card)) return { text: "'" + card.title + "' is a legal, signing, money, credential or account step. It is yours alone: Approve and Decline do not apply to it and nothing is handed to the fleet for it. 'diagnose' says what it waits on; mark it done when you have done it.", actions: own };
+  let issue = r.issue || null;
+  if (!issue) for (const id of decCardIds(card).slice(0, 3)) {
+    issue = await decIssueRow(env, id);
+    if (issue) break;
+  }
+  const items = issue && decWantsItems(card) ? decItems(issue.description) : [];
+  const spec = decItemSpec(r.rest);
+  const pick = decSelect(items, spec);
+  if (pick.error) return { text: pick.error };
+  const sel = pick.sel;
+  const pickOne = decPickOne(card);
+  const choice = pickOne ? decChoice(r.rest) : "";
+  if (kind === "approve" && pickOne && choice.length < 2) return { text: "'" + card.title + "' asks you to pick one, so a bare Approve cannot say which." + (card.action ? "\nThe card says: " + conClip(card.action, 300) : "") + "\nName your choice after the card: approve " + card.key + " <the option>.", actions: [{ fill: "approve " + card.key + " ", label: "Approve an option" }, conCmd("decline " + card.key, "Decline"), conCmd("diagnose " + card.key, "Diagnose")] };
+  const prior = await decDecided(env, card.key);
+  const settled = decApproved(prior, sel);
+  if (settled.length && (!sel || settled.length === sel.length)) return { text: decSettledText(card, settled, sel, kind, false), actions: [conCmd("diagnose " + (issue ? issue.id : card.key), "Diagnose")] };
+  const kw = decKeyword(issue);
+  const noun = decNoun(card, sel ? sel.length : 1);
+  const scope = sel ? sel.length === items.length ? "all " + items.length + " " + noun : noun + " " + decFmtRange(sel) + " of " + items.length : "";
+  const label = (kind === "approve" ? "Approve " : "Decline ") + (scope ? scope + " of " : "") + (issue ? "issue " + issue.id + (kw ? " (" + kw + ")" : "") : "'" + card.title.slice(0, 60) + "'");
+  const a = cmdAction(kind, { key: card.key, issue: issue ? issue.id : null, items: sel, note: spec.reason, title: card.title, choice: choice || void 0 });
+  a.label = label;
+  const L = [label + (choice ? ": " + choice : "") + (spec.reason ? " - " + spec.reason : "")];
+  if (sel && holder) for (const i of items) if (sel.indexOf(i.n) >= 0) L.push("  " + i.n + ") " + i.text.slice(0, 150));
+  if (sel && !holder) L.push("  (the text of each item is shown to the signed-in owner)");
+  if (settled.length) L.push(decSettledText(card, settled, sel, kind, true));
+  const done = Object.keys(prior).filter(function(k) {
+    return k !== "*";
+  });
+  if (done.length) L.push("Already decided: " + done.map(function(k) {
+    return k + " " + prior[k];
+  }).join(", ") + ".");
+  if (kind === "approve") {
+    L.push("", "A tap files ONE task for the fleet first (it carries the card's title, what it asks and why" + (sel ? ", the approved items" : "") + (choice ? ", your choice" : "") + (issue ? ", the doer and the closing probe of issue " + issue.id : "; no issue is linked to this card, so it names no closing probe") + "), and only then records your approval and closes the card once every item is decided. If the task cannot be filed nothing is recorded and the card stays open. It changes nothing else by itself: the work happens when the fleet picks the task up" + (issue ? ", and issue " + issue.id + " closes only when its own probe passes" : "") + ". It needs a code from the last 15 minutes.");
+  } else {
+    L.push("", "A tap records your decline" + (sel ? " of " + (sel.length === 1 ? "this item" : "these items") : "") + "; " + (card.fallback ? card.fallback : "the default stays in effect") + ". The card closes when every item is decided.");
+  }
+  const acts = [a, conCmd("diagnose " + (issue ? issue.id : card.key), "Diagnose")];
+  return { text: L.join("\n"), actions: acts };
+}
+// What the owner typed after a pick-one card's key: the option, without a "why ..." clause.
+function decChoice(rest) {
+  return String(rest || "").replace(/\s+/g, " ").replace(/\s(?:why|because|reason)\b[\s\S]*$/i, "").replace(/^\s*(?:option|choice)\s*[:\-]?\s*/i, "").trim().slice(0, 200);
+}
+// retry: the closing probe of an issue due now (op iretry), a failed workflow run again (op rerun) or, alone, the last question
+// that fell back (handled before the parse, where the text can be replaced).
+async function decRetry(env, c, rest) {
+  let m;
+  if ((m = /^run\s+#?(\d{6,14})$/i.exec(rest))) return { actions: [cmdAction("rerun", { run: Number(m[1]), title: "run " + m[1] })], auto: true, text: "Re-run the failed jobs of run " + m[1] };
+  if (!decHasTarget(rest)) return { text: "Type 'retry' alone to ask your last unanswered question again, 'retry <issue id>' to mark an issue's closing probe due now, or 'retry run <run id>' to re-run a failed workflow." };
+  const r = await decResolve(env, c, rest);
+  // only 'retry <reference>' with nothing after the reference runs at once; any other wording comes back as a button to tap
+  if (r.issue) return { actions: [cmdAction("iretry", { id: Number(r.issue.id), title: "#" + r.issue.id })], auto: decOnlyRef(rest), text: "Mark the closing probe of #" + r.issue.id + " due now" + (decOnlyRef(rest) ? "" : " (the line held more than a reference, so this waits for your tap)") };
+  if (r.candidates) return { text: "More than one issue matches. Pick one:", actions: r.candidates.filter(function(x) {
+    return !x.card && /^\d+$/.test(x.arg);
+  }).map(function(x) {
+    return conCmd("retry " + x.arg, x.label);
+  }) };
+  return { text: "Retry needs an issue: 'retry 100140'. " + (r.error || "") };
+}
+// resolve: close an issue on the evidence its own probe holds (the newest verification must be a PASS), or on evidence typed
+// after the id; resolve a card is done. The close itself is the destructive op iclose, behind the same confirm and fresh code.
+async function decResolveVerb(env, c, rest) {
+  if (!decHasTarget(rest)) return { text: "Type 'resolve <issue id>' to close an issue on its passing closing probe, 'resolve <issue id> <evidence>' to close it on evidence you type (20 characters or more), or 'resolve <card>' to mark a card done." };
+  const r = await decResolve(env, c, rest);
+  if (r.candidates) return { text: "More than one thing matches. Pick one:", actions: r.candidates.map(function(x) {
+    return conCmd("resolve " + x.arg, x.label);
+  }) };
+  if (r.issue) {
+    const a = r.issue, holder = !!(c && c.holder);
+    if (a.status !== "open") return { text: "#" + a.id + " is already " + a.status + "." };
+    const typed = String(r.rest || "").trim();
+    if (typed.length >= 20) return { actions: [cmdAction("iclose", { id: Number(a.id), evidence: typed.slice(0, 2e3), wontfix: false, title: "close #" + a.id })], text: "Close #" + a.id + " with: " + typed };
+    const v = ((await conFirst(env, "SELECT pass, class, observed, expected, verified_at, verifier FROM remediation_verifications WHERE issue_id = ?1 ORDER BY id DESC LIMIT 1", [Number(a.id)])) || [])[0];
+    if (!v || !Number(v.pass)) return { text: "#" + a.id + " cannot be resolved from its probe: " + (!v ? "no verification of its closing probe is recorded." : "its newest check FAILED at " + v.verified_at + (holder ? " (observed " + conClip(v.observed, 160) + ")" : "") + ".") + "\nResolving closes an issue only on evidence: 'diagnose " + a.id + "' says what it waits on, or type 'resolve " + a.id + " <the live measurement that shows it is fixed>'.", actions: [conCmd("diagnose " + a.id, "Diagnose #" + a.id), conCmd("retry " + a.id, "Retry its probe")] };
+    const ev = "Closing probe " + (v.class || "") + " passed at " + v.verified_at + (v.verifier ? " (" + v.verifier + ")" : "") + ": observed " + conClip(v.observed, 300) + (v.expected ? ", expected " + conClip(v.expected, 120) : "") + ".";
+    return { actions: [cmdAction("iclose", { id: Number(a.id), evidence: ev, wontfix: false, title: "close #" + a.id })], text: "Close #" + a.id + " on its passing probe:\n" + ev };
+  }
+  if (r.card) return { actions: [cmdAction("done", { key: r.card.key, title: r.card.title })], text: "Mark done: " + r.card.title };
+  return { text: (r.error || "Nothing matches.") + "\nGive an issue id: 'resolve 100140'." };
+}
+// The first thing after retry / resolve: an issue id ("100140", "#100140", "issue 100140"), a card key, an UPPER-DASH keyword, a slug, or a
+// queue number on its own. A sentence that only has a reference somewhere inside it ("Resolve GitHub PR #3608 and #3445 conflicts ...",
+// "Retry the failed deploy of PR #1001 and tell me why") is the model's.
+var DEC_LEAD_REF_RX = /^(?:(?:agent_issues|issues?)\s*#?\s*\d{3,7}|#?\d{3,7}|(?:ha|goals):[A-Za-z0-9:._-]{2,150}|[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+|(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)+)(?=[\s.,;:)]|$)/;
+function decLeadRef(rest) {
+  const s = String(rest || "").trim();
+  return DEC_LEAD_REF_RX.test(s) || /^#?\d{1,2}$/.test(s) || /^run\s+#?\d{6,14}$/i.test(s);
+}
+// Approve / decline name their target anywhere in the line (the owner's own sentence "Approve each of the seven fixes in agent_issues
+// 100140" is one), by a queue number on its own, or by nothing at all beyond filler ("Approve all", "approve it", "approve 1-5": the
+// one decision that waits, or a list of them to pick from). A line with words of its own and no reference is a sentence.
+function decNamesTarget(rest) {
+  const s = String(rest || "").trim();
+  return decRefs(s).length > 0 || /^#?\d{1,2}(?:\s+(?:why|because|reason)\b[\s\S]*)?$/i.test(s) || decWords(s).length === 0 && !/\d{3,}/.test(s);
+}
+// The whole of what follows the verb is one reference and nothing else.
+function decOnlyRef(rest) {
+  const s = String(rest || "").trim(), refs = decRefs(s);
+  return refs.length === 1 && s.replace(refs[0].raw, "").replace(/[\s.,;:!?#]+/g, "") === "";
+}
+async function conDecide(env, text, c, owner) {
+  const t = String(text || "").trim();
+  const m = DEC_VERB_RX.exec(t);
+  if (!m) {
+    if (/^(?:#|agent_issues\s*#?\s*)\d{3,7}$/i.test(t)) {
+      const li = await cmdLocalIntent(env, t, c, "bare");
+      return li ? { text: li.text, actions: li.actions } : null;
+    }
+    return null;
+  }
+  const word = m[1].toLowerCase(), rest = m[2].trim();
+  // A verb is a command only when it stands alone or names its target (DASH-OWNER-ACTIONS-1). "Resolve next fleet open item and deploy",
+  // "Approve the Living Papers launch post" and "Retry the failed deploy of PR #1001 and tell me why" are requests for the model: null
+  // sends them on to it, with the quick buttons beside the answer.
+  if (word === "retry" || word === "resolve") {
+    if (rest && !decLeadRef(rest)) return null;
+  } else if (rest && !decNamesTarget(rest)) return null;
+  if (word === "retry") return await decRetry(env, c, rest);
+  if (word === "resolve") return CMD_FIXALL_RX.test(t) ? null : await decResolveVerb(env, c, rest);
+  const kind = /^(approve|authori[sz]e|ratify)$/.test(word) ? "approve" : "decline";
+  return await decApprove(env, c, kind, rest);
+}
+function decClip(x, n) {
+  return String(x || "").replace(/\s+/g, " ").trim().slice(0, n);
+}
+// The first line puts what tells one decision from another first (the approved items, then the card key, then the decision number): the ticket
+// title keeps only about 152 characters of this text and OWNER-PROMPT-TWIN-LINK-1 compares them, so boilerplate ahead of the key made two cards'
+// hand-offs equal (T22). The 'OWNER-DECISION from ' prefix and 'owner card <key>' are what the closing probes and detectors match.
+// The one task an approval hands to the fleet. It must stand alone: the card's title, what it asks and why (when no issue holds the
+// brief), the approved items, the owner's chosen option, the doer and the closing probe. The text is the same for the same decision (no
+// clock in it, a decision number instead), so filing it again after the decision could not be recorded finds the first one. It is read
+// from owner_prompts into an issue body clipped at DEC_HANDOFF_MAX characters (ownerNotesRoute), so the items share what the fixed lines leave and
+// the text is never longer than the body keeps: the first line (which carries the card key) and the closing lines are always inside it.
+var DEC_HANDOFF_MAX = 1800;
+function decHandoffText(card, issue, items, sel, others, paper, choice, round) {
+  const L = ["OWNER-DECISION from fleet.qnfo.org: the owner APPROVED " + (sel ? "item" + (sel.length === 1 ? " " : "s ") + decFmtRange(sel) + " of " + items.length : "the decision") + " on owner card " + card.key + " (decision " + round + (issue ? ", issue " + issue.id + ": " + decClip(issue.title, 90) : "") + "; owner session, approval code in the last 15 minutes)."];
+  L.push("Card: " + decClip(card.title, 130));
+  if (card.action) L.push("Asked: " + decClip(card.action, issue ? 200 : 320));
+  if (card.why) L.push("Why: " + decClip(card.why, issue ? 140 : 260));
+  if (choice) L.push("Chosen option (the owner's words): " + decClip(choice, 200));
+  const tail = [];
+  if (sel && others.length) tail.push("Not approved here (declined or still undecided): " + decFmtRange(others) + ". Leave them as they are.");
+  tail.push("Doer: " + (paper ? "the revision and errata path of qnfo-research-exec (REVISION-LOOP-1); these are the owner's own papers, so change only what each approved item names, and nothing around it." : issue ? "the loop that owns issue " + issue.id + " (issue_triage.owner)." : "the loop that owns the card's subject; the card text above is the whole brief."));
+  if (issue) tail.push("Closing probe: remediation contract issue-" + issue.id + " (read it with: issue " + issue.id + "). Close issue " + issue.id + " only with that evidence, in issue_triage.close_evidence; the approval is not the evidence.");
+  else tail.push("No issue is linked to this card, so there is no closing probe to cite; the approval is not evidence that anything changed.");
+  const body = [];
+  if (sel) {
+    const chosen = items.filter(function(i) {
+      return sel.indexOf(i.n) >= 0;
+    });
+    // room = what the budget leaves after the fixed lines, the header and one "N) " prefix and newline per item; below 30 characters an item
+    // says nothing, so the items are named by number and the issue (which every numbered item comes from) holds their text
+    const header = "Apply exactly these approved items and nothing else" + (issue ? " (the full text of each is in issue " + issue.id + ")" : "") + ":";
+    const room = DEC_HANDOFF_MAX - L.concat(tail).join("\n").length - header.length - 2 - chosen.length * 6;
+    const per = Math.min(200, Math.floor(room / chosen.length));
+    if (per >= 30) {
+      body.push(header);
+      for (const i of chosen) body.push(i.n + ") " + i.text.slice(0, per));
+    } else {
+      body.push("Apply exactly these approved items and nothing else: " + decFmtRange(sel) + (issue ? " (the full text of each is in issue " + issue.id + ")" : "") + ".");
+    }
+  }
+  return L.concat(body, tail).join("\n").slice(0, DEC_HANDOFF_MAX);
+}
+async function decApprovalCount(env, key) {
+  try {
+    return Number((await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM human_responses WHERE key = ?1 AND kind = 'approve'", [key]))[0].n) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+// Run an approval or a refusal. Reached only through /api/cmd/run (which has already asked for the code, and for a code from the
+// last 15 minutes for approve) and the owner session's own cookie.
+async function cmdDecide(request, env, ctx, owner, op, args) {
+  if (ownerCredential(owner) !== "owner-session") return { ok: false, error: "An approval or a refusal is your own decision: it needs your email-code session (type 'login'). The fleet's loop token and the dormant owner key cannot make it." };
+  const key = String(args && args.key || "");
+  if (!/^ha:[A-Za-z0-9:._-]{2,150}$/.test(key)) return { ok: false, error: "Name the owner card: " + op + " ha:<card key>." };
+  await ensureOwnerTables(env);
+  await ownerRequestColumns(env);
+  await ensureResponseCredential(env);
+  await decLoadHard(env);
+  const slug = key.slice(3);
+  const card = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status FROM human_actions WHERE slug = ?1").bind(slug).first();
+  if (!card) return { ok: false, error: "No owner card " + slug + "." };
+  if (card.status !== "open") return { ok: true, text: "'" + card.title + "' is already " + card.status + "; nothing was changed." };
+  const cardView = { key, title: card.title, why: card.why, action: card.action, fallback: card.fallback };
+  if (!decAsksDecision(cardView)) return { ok: false, error: "'" + card.title + "' does not ask for a decision: it asks you to do something yourself, so Approve and Decline do not apply. Mark it done when you have done it." };
+  if (decIsHard(cardView)) return { ok: false, error: "'" + card.title + "' is a legal, signing, money, credential or account step. It is yours alone: Approve and Decline do not apply and nothing is handed to the fleet for it. Mark it done when you have done it." };
+  const pickOne = decPickOne(cardView);
+  const choice = pickOne ? decClip(args.choice, 200) : "";
+  if (op === "approve" && pickOne && choice.length < 2) return { ok: false, error: "'" + card.title + "' asks you to pick one: name the option, 'approve " + key + " <the option>'. Nothing was recorded." };
+  const ids = decCardIds(card);
+  const issues = [];
+  for (const id of ids.slice(0, 3)) {
+    const row = await decIssueRow(env, id);
+    if (row) issues.push(row);
+  }
+  const want = Number(args.issue);
+  const primary = issues.find(function(x) {
+    return Number(x.id) === want;
+  }) || issues[0] || null;
+  const items = primary && decWantsItems(card) ? decItems(primary.description) : [];
+  let sel = null;
+  if (items.length) {
+    sel = Array.isArray(args.items) && args.items.length ? args.items.map(Number).filter(function(n) {
+      return items.some(function(i) {
+        return i.n === n;
+      });
+    }) : items.map(function(i) {
+      return i.n;
+    });
+    if (!sel.length) return { ok: false, error: "No such item: this card has items 1-" + items.length + "." };
+  }
+  const prior = await decDecided(env, key);
+  // A repeat approve of what is already approved files no second hand-off and records nothing; a decline of what is already approved is not recorded
+  // (the fleet has the task, a decline cannot call it back) and says so. The other parts of a mixed selection go ahead.
+  const settled = decApproved(prior, sel);
+  if (settled.length) {
+    const rest = sel ? sel.filter(function(n) {
+      return settled.indexOf(n) < 0;
+    }) : [];
+    if (!sel || !rest.length) return { ok: true, text: decSettledText(card, settled, sel, op, false), result: { key, op, items: [], closes: false, settled } };
+    sel = rest;
+  }
+  const now = Date.now();
+  const stamp = "[owner " + new Date(now).toISOString().slice(0, 16) + "Z, fleet console]";
+  const reason = String(args.note || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const decided = Object.assign({}, prior);
+  if (sel) for (const n of sel) decided[n] = op;
+  else decided["*"] = op;
+  const undecided = items.filter(function(i) {
+    return !decided[i.n];
+  }).map(function(i) {
+    return i.n;
+  });
+  const closes = !undecided.length;
+  const approvedAll = items.length ? items.filter(function(i) {
+    return decided[i.n] === "approve";
+  }).map(function(i) {
+    return i.n;
+  }) : decided["*"] === "approve" ? [0] : [];
+  const declinedAll = items.length ? items.filter(function(i) {
+    return decided[i.n] === "decline";
+  }).map(function(i) {
+    return i.n;
+  }) : [];
+  const summary = items.length ? (approvedAll.length ? "approved " + decFmtRange(approvedAll) : "") + (approvedAll.length && declinedAll.length ? ", " : "") + (declinedAll.length ? "declined " + decFmtRange(declinedAll) : "") : op === "approve" ? "approved" : "declined";
+  const fresh = sel ? sel.filter(function(n) {
+    return prior[n] !== "approve";
+  }) : prior["*"] === "approve" ? [] : [0];
+  // An approval is filed with the fleet BEFORE anything is recorded. The hand-off is what makes it real, so a decision is never written
+  // without it: when the task cannot be filed, nothing is recorded, the card stays open and the same tap files it again.
+  let filed = null, paper = false;
+  if (op === "approve" && fresh.length) {
+    if (!primary && decClip(card.action, 400).length < 12) return { ok: false, error: "'" + card.title + "' names no issue and carries no action text, so there is nothing the fleet could apply from an approval. Nothing was recorded and the card stays open; mark it done if you handled it yourself." };
+    const others = items.filter(function(i) {
+      return decided[i.n] !== "approve";
+    }).map(function(i) {
+      return i.n;
+    });
+    paper = /paper|ignorance|living-paper|papers\.qnfo|manuscript/i.test((card.title || "") + " " + (card.action || "") + " " + (primary ? primary.title + " " + String(primary.description || "").slice(0, 600) : ""));
+    const round = (await decApprovalCount(env, key)) + 1;
+    try {
+      filed = await ownerTaskFile(env, decHandoffText(cardView, primary, items, sel ? fresh : null, others, paper, choice, round), { reuse: true, handoff: true });
+    } catch (e) {
+      return { ok: false, error: "The hand-off to the fleet could not be filed (" + decClip(e && e.message || e, 160) + "), so your approval was not recorded and the card is still open. Tap Approve again." };
+    }
+  }
+  const batch = [
+    env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, credential) VALUES (?1, ?2, ?3, 'owner-session')").bind(key, op, (decNote(sel, primary ? Number(primary.id) : 0, reason) + (choice ? (reason || sel || primary ? " " : "") + "choice: " + choice : "")).slice(0, 500).trim() || null)
+  ];
+  if (closes) {
+    const anyApprove = approvedAll.length > 0;
+    batch.push(env.AUDIT.prepare("UPDATE human_actions SET status = ?1, resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?2 WHERE slug = ?3 AND status = 'open'").bind(anyApprove ? "resolved" : "dismissed", op + " via dashboard by " + OBJREV_RATIFIED_BY["owner-session"] + ": " + summary + (choice ? " (" + choice + ")" : "") + (reason ? " (" + reason + ")" : ""), slug));
+  }
+  for (const x of issues) batch.push(env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " OWNER-DECISION " + op + (sel ? " items " + decFmtRange(sel) : "") + " on card " + key + (choice ? ", choice: " + choice : "") + (reason ? ": " + reason : "") + (op === "approve" ? ". Approved for the fleet to apply; it is not applied by this line, and this issue closes only on its own probe." : ". The default stays in effect for the declined parts."), now, x.id));
+  try {
+    await env.AUDIT.batch(batch);
+  } catch (e) {
+    return { ok: false, error: (filed ? "The hand-off task was filed" + (filed.issue_id ? " (issue " + filed.issue_id + ")" : "") + ", but your approval could not be recorded (" + decClip(e && e.message || e, 120) + "). Tap Approve again: the same task is recognised and not filed twice." : "Your decision could not be recorded (" + decClip(e && e.message || e, 120) + "); nothing was changed.") };
+  }
+  const L = [(op === "approve" ? "Approved" : "Declined") + (sel ? " " + decFmtRange(sel) + (items.length ? " of " + items.length : "") : "") + (choice ? " (" + choice + ")" : "") + (primary ? " (issue " + primary.id + ")" : "") + ". Recorded in human_responses (credential owner-session) and on " + (issues.length ? decIssueClause(issues.map(function(x) {
+    return x.id;
+  })) : "the card") + " as OWNER-DECISION."];
+  L.push(closes ? "The card is " + (approvedAll.length ? "resolved" : "dismissed") + ": every part is decided." : "The card stays open until every item is decided: " + decFmtRange(undecided) + " left.");
+  if (settled.length) L.push(decSettledText(card, settled, sel, op, true));
+  if (filed) L.push("Handed to the fleet as ONE task" + (filed.issue_id ? " (issue " + filed.issue_id + ")" : "") + (filed.duplicate ? " (the same task was already queued)" : "") + ": it carries the card's title and what it asks" + (sel ? ", names the approved items" : "") + (choice ? ", your choice" : "") + (primary ? ", the doer (" + (paper ? "the revision and errata path of qnfo-research-exec" : "the loop that owns issue " + primary.id) + ") and the closing probe of issue " + primary.id : "; no issue is linked to this card, so there is no closing probe to cite") + ". Nothing has been applied yet" + (primary ? "; issue " + primary.id + " closes only when its own probe passes." : "."));
+  return { ok: true, text: L.join("\n"), result: { key, op, items: sel, closes } };
+}
+// The overview: the blocked issues worst first, and what waits on the owner.
+async function conDiagnoseOverview(env, c, holder) {
+  let rows = [];
+  try {
+    rows = await d1all(env.AUDIT, "SELECT k.issue_id AS id, k.class, k.last_verdict, k.attempts, k.max_attempts, k.escalate_to, a.priority, a.category, a.title FROM remediation_contracts k JOIN agent_issues a ON a.id = k.issue_id WHERE k.status = 'active' AND a.status = 'open' ORDER BY a.id LIMIT 500");
+  } catch (e) {
+    rows = [];
+  }
+  const live = function(k) {
+    return Number(k.attempts || 0) < Number(k.max_attempts || 0) && String(k.escalate_to || "") !== "owner" && !CMD_PROBE_DEAD_RX.test(String(k.last_verdict || ""));
+  };
+  const blocked = rows.filter(function(k) {
+    return !live(k);
+  }).sort(function(a, b) {
+    return cmdPrio(a.priority) - cmdPrio(b.priority) || Number(a.id) - Number(b.id);
+  });
+  const waiting = (await decOpenCards(env, c)).filter(decAsksDecision);
+  const L = ["Diagnosis (read from the fleet's data, no model):"];
+  L.push(blocked.length ? blocked.length + " open issue" + (blocked.length === 1 ? " is" : "s are") + " blocked: a contract exists but cannot close it by itself. Worst first:" : "No open issue is blocked behind a failing contract.");
+  for (const k of blocked.slice(0, 6)) L.push("  #" + k.id + " [" + k.priority + "] " + (holder ? conClip(String(k.title || "").replace(/\s+/g, " "), 70) + " - " : "(" + (k.category || "uncategorised") + ") ") + cmdBlockWhy(k));
+  if (waiting.length) L.push("", waiting.length + " owner card" + (waiting.length === 1 ? "" : "s") + " wait" + (waiting.length === 1 ? "s" : "") + " on your decision: " + waiting.slice(0, 4).map(function(x) {
+    return x.title.slice(0, 60);
+  }).join("; ") + ".");
+  const s = c && c.v && c.v.system;
+  if (s && s.stuck && s.stuck.length) L.push("", s.stuck.length + " fleet error" + (s.stuck.length === 1 ? " is" : "s are") + " past its 2h SLA.");
+  L.push("", "'diagnose <issue id>' reads one in full.");
+  const acts = blocked.slice(0, 6).map(function(k) {
+    return conCmd("diagnose " + k.id, "Diagnose #" + k.id);
+  });
+  if (waiting.length) acts.push(conCmd("approve", "What waits on my decision"));
+  return { text: L.join("\n"), actions: acts };
+}
+// diagnose <issue>: the facts, who works it, what it waits on, and one plain sentence of what that means with the next-step buttons.
+async function conDiagnoseIssue(env, c, a, card, holder) {
+  const id = Number(a.id);
+  const r = await Promise.all([
+    conFirst(env, "SELECT class, status, last_verdict, last_attempt_at, attempts, max_attempts, escalate_to, next_due_at FROM remediation_contracts WHERE issue_id = ?1", [id]),
+    conFirst(env, "SELECT pass, class, observed, expected, verified_at, verifier FROM remediation_verifications WHERE issue_id = ?1 ORDER BY id DESC LIMIT 3", [id]),
+    conFirst(env, "SELECT doer, plan_outcome, planned_at, plan_reason, rung, age_h FROM v_issue_age_ladder WHERE id = ?1", [id]),
+    conFirst(env, "SELECT outcome, detail, task_id, path, planned_at FROM issue_plans WHERE issue_id = ?1", [id]),
+    conFirst(env, "SELECT holder, intent, claimed_at, expires_at, pr FROM work_claims WHERE (issue_id = ?1 OR path = ?2) AND released_at IS NULL AND expires_at > ?3 ORDER BY id DESC LIMIT 2", [id, "issue:" + id, new Date().toISOString()]),
+    conFirst(env, "SELECT fm_key, failure_mode, remediation FROM failure_modes WHERE issue_id = ?1 LIMIT 2", [id]),
+    conFirst(env, "SELECT owner, triage_state, close_evidence FROM issue_triage WHERE issue_id = ?1", [id])
+  ]);
+  const contracts = r[0] || [], vers = r[1] || [], lad = r[2] && r[2][0], plan = r[3] && r[3][0], claims = r[4] || [], fms = r[5] || [], tri = r[6] && r[6][0];
+  let task = null;
+  if (plan && plan.task_id) task = ((await conFirst(env, "SELECT id, status, step, attempts, pr_url, merge_state, last_error FROM code_tasks WHERE id = ?1", [plan.task_id])) || [])[0] || null;
+  const subjects = [tri && tri.owner, a.category, "issue-" + id].filter(Boolean);
+  let heal = [];
+  for (const tbl of ["breach_selfheal_actions", "breach_diagnoses"]) {
+    const rows = await conFirst(env, "SELECT * FROM " + tbl + " WHERE subject IN (" + subjects.map(function(_, i) {
+      return "?" + (i + 1);
+    }).join(",") + ") ORDER BY id DESC LIMIT 3", subjects);
+    if (rows && rows.length) {
+      heal = rows.map(function(x) {
+        return { tbl, ts: x.ts, subject: x.subject, action: x.action || x.diagnosis || x.detail || "" };
+      });
+      break;
+    }
+  }
+  const L = [];
+  L.push("Diagnosis of #" + id + " [" + (a.priority || "?") + "] " + a.status + (holder ? " - " + conClip(String(a.title || "").replace(/\s+/g, " "), 140) : " (" + (a.category || "uncategorised") + "; titles are shown to the signed-in owner)"));
+  L.push("category " + (a.category || "?") + ", opened " + conIso(a.created_at) + (lad && lad.age_h != null ? ", age " + Math.round(Number(lad.age_h)) + " h" : ""));
+  const asks = !!(card && decAsksDecision(card));
+  const dcard = asks && !decIsHard(card) ? card : null;
+  const ycard = asks && !dcard ? card : null;
+  for (const k of contracts) L.push("Closing probe " + k.class + ": " + k.status + ", last verdict " + (k.last_verdict || "none") + (k.last_attempt_at ? " at " + k.last_attempt_at : "") + ", attempt " + Number(k.attempts || 0) + " of " + Number(k.max_attempts || 0) + (k.next_due_at ? ", next check " + String(k.next_due_at).slice(0, 16).replace("T", " ") + " UTC" : ""));
+  if (!contracts.length) L.push("Closing probe: none (no remediation contract is recorded for this issue).");
+  if (vers[0]) L.push("Latest check: " + (Number(vers[0].pass) ? "PASS" : "FAIL") + " " + vers[0].verified_at + (vers[0].verifier ? " by " + vers[0].verifier : "") + (holder ? " - observed " + conClip(vers[0].observed, 200) : ""));
+  if (lad) L.push("Doer: " + (lad.doer || "none assigned") + ", planner verdict " + (lad.plan_outcome || "none") + (lad.rung ? ", age rung " + lad.rung : "") + (holder && lad.plan_reason ? "\n  " + conClip(lad.plan_reason, 220) : ""));
+  else if (plan) L.push("Plan: " + plan.outcome + (plan.path ? " on " + plan.path : "") + (holder && plan.detail ? " - " + conClip(plan.detail, 200) : ""));
+  if (task) L.push("Code task " + task.id + ": " + task.status + "/" + task.step + ", attempts " + task.attempts + (task.pr_url ? ", " + task.pr_url : "") + (task.merge_state ? ", merge " + task.merge_state : "") + (holder && task.last_error ? "\n  last error: " + conClip(task.last_error, 240) : ""));
+  for (const w of claims) L.push("Live work claim: " + w.holder + " until " + w.expires_at + (w.pr ? ", PR " + w.pr : "") + (holder ? " - " + conClip(w.intent, 140) : ""));
+  for (const f of fms) L.push("Failure mode " + f.fm_key + ": " + conClip(f.failure_mode, 160));
+  for (const h of heal) L.push("Self-heal (" + h.tbl + ", " + h.subject + ", " + h.ts + "): " + conClip(h.action, 200));
+  if (card) L.push("Owner card " + card.key + (dcard ? " waits on your decision" : ycard ? " waits on a step only you can take" : " names it") + (holder && dcard && card.fallback ? "; if you do not decide: " + conClip(card.fallback, 140) : "") + ".");
+  const latestPass = vers[0] && Number(vers[0].pass);
+  const blockedK = contracts.find(function(k) {
+    return k.status === "active" && !(Number(k.attempts || 0) < Number(k.max_attempts || 0) && String(k.escalate_to || "") !== "owner" && !CMD_PROBE_DEAD_RX.test(String(k.last_verdict || "")));
+  });
+  const activeK = contracts.find(function(k) {
+    return k.status === "active";
+  });
+  let means;
+  if (a.status !== "open") means = "It is " + a.status + (tri && tri.close_evidence ? ", with close evidence on file." : ", and no close evidence is recorded.");
+  else if (dcard) means = "It is waiting on your decision, not on a loop: until you approve or decline the owner card, nothing else will move it.";
+  else if (ycard) means = "It is waiting on a step only you can take (a legal, signing, money, credential or account act): no loop will do it and the fleet is not handed it. Do it, then mark the owner card done.";
+  else if (latestPass || contracts.some(function(k) {
+    return k.last_verdict === "pass";
+  })) means = "Its closing probe passes now, so it can be closed: it closes itself on the next remediation pass, or resolve it now.";
+  else if (claims.length) means = claims[0].holder + " is working on it until " + claims[0].expires_at + "; wait for that, or take it over once the claim lapses with the work undone.";
+  else if (task && task.last_error) means = "Its code task failed: " + conClip(task.last_error, 160) + ". The code loop retries it; a different anchor or path may be needed.";
+  else if (task && task.pr_url) means = "Its fix is in " + task.pr_url + " (merge " + (task.merge_state || "pending") + "): the merge runner merges it on green checks and the probe then closes the issue.";
+  else if (blockedK) means = "It is blocked: " + cmdBlockWhy(blockedK) + ". A person or a different probe has to unblock it.";
+  else if (activeK) means = "It closes itself when its probe passes; the last check said " + (activeK.last_verdict || "nothing yet") + ". Retry runs the probe now.";
+  else means = "It has no self-closing probe: the issue loop works it" + (lad && lad.plan_outcome ? " (planner verdict " + lad.plan_outcome + ")" : "") + " and it closes only with a live measurement in issue_triage.close_evidence.";
+  L.push("", "What this means: " + means);
+  const acts = [];
+  if (holder && dcard) acts.push(conCmd("approve " + card.key, "Approve"), conCmd("decline " + card.key, "Decline"));
+  if (holder && ycard) acts.push(conCmd("done " + card.key, "Done"));
+  if (holder && a.status === "open" && activeK) acts.push(conCmd("retry " + id, "Retry its probe"));
+  if (a.status === "open" && latestPass) acts.push(conCmd("resolve " + id, "Resolve on its passing probe"));
+  if (holder && a.status === "open" && !/code-task:/.test(String(a.description || ""))) acts.push({ fill: "codetask " + id + " <dir>/worker.js ", label: "Hand to the code loop" });
+  acts.push(conCmd("issue " + id, "Everything about #" + id));
+  return { text: L.join("\n"), actions: acts };
+}
+async function conDiagnoseCard(env, c, card, holder) {
+  const L = ["Diagnosis of the owner card " + card.key + " (" + card.title + ")"];
+  if (card.why) L.push("Why it is yours: " + conClip(card.why, 400));
+  if (card.action) L.push("To do: " + conClip(card.action, 400));
+  if (card.fallback) L.push("If you wait: " + conClip(card.fallback, 300));
+  const hard = decAsksDecision(card) && decIsHard(card);
+  L.push("", "What this means: it waits on you; no loop will decide it" + (decIsDecisionCard(card) ? ". Approve or decline it here." : hard ? ": it is a legal, signing, money, credential or account step that only you can take, so Approve and Decline are not offered. Do it, then mark it done." : "; done or snooze it."));
+  const acts = [];
+  if (holder && decIsDecisionCard(card)) acts.push(conCmd("approve " + card.key, "Approve"), conCmd("decline " + card.key, "Decline"));
+  if (holder && hard) acts.push(conCmd("done " + card.key, "Done"));
+  acts.push(conCmd("info " + card.key, "Details"));
+  return { text: L.join("\n"), actions: acts };
+}
+// conRead hook: "diagnose" alone, "diagnose <reference>" and "investigate <reference>" answer in code (a reference opens the argument: an issue id,
+// #id, a card key, an UPPER-DASH keyword or slug, a queue number, or a scheduled worker's name); "why <x>" and "what is wrong with <x>" answer only
+// when <x> is something the fleet holds (an issue, a card, a worker). A sentence that merely starts with a verb goes to the model.
+async function conDiagnoseLine(env, c, m, owner) {
+  const lead = m[1].toLowerCase(), rest = String(m[2] || "").trim();
+  const strict = /^(diagnose|diagnosis|investigate)$/.test(lead);
+  // "why ..." is a diagnosis only when the line opens with the thing: "why 100140", "why is #100140 blocked", "why is issue 100140 stuck"
+  // ("why is open_agent_issues 254 against < 0 ..." is the metric Diagnose control's question and stays with the model). A number counts as an
+  // issue only when it says so ("issue 100140", "agent_issues 100140", "#100140") or is the whole argument ("why 100140?"): a number that opens a
+  // sentence is a year or a count ("why 2026 papers were pulled?" is not a question about agent_issues 2026) and the model answers it.
+  if (!strict) {
+    const head = rest.split(/\s+/).slice(0, 2).join(" ").replace(/[?.!,]+$/, "");
+    const whole = rest.replace(/[\s?.!,]+$/, "");
+    const refs = decRefs(head).filter(function(r) {
+      return r.kind !== "issue" || r.raw.charAt(0) === "#" || /^(?:agent_issues|issues?)\b/i.test(r.raw) || r.raw === whole;
+    });
+    if (!rest || rest.length > 100 || !refs.length) return null;
+  }
+  const holder = !!(c && c.holder);
+  if (strict && !rest) return await conDiagnoseOverview(env, c, holder);
+  const w = rest.toLowerCase().replace(/[?.!]+$/, "");
+  const sched = ((c && c.st && c.st.scheduled) || []).find(function(s) {
+    return s.name === w;
+  });
+  // A sentence that only starts with the verb ("Investigate why the dashboard is slow", "diagnose the stuck integration chain") is the model's, as
+  // it is for retry and resolve (decLeadRef): the verb is a command only when what follows opens with a reference (an issue id, #id, a card key in
+  // either case, an UPPER-DASH keyword or slug, a queue number) or is exactly a scheduled worker's name. A one-word title match never answers a sentence.
+  if (strict && !sched && !decLeadRef(rest) && !/^(?:ha|goals):/i.test(rest)) return null;
+  if (sched) return { text: cmdFmtWorker(sched, ((c.st.probes) || []).find(function(p) {
+    return p.name === sched.name;
+  })) + "\n\nWhat this means: " + (sched.status === "OK" || sched.status === "IDLE" ? "the worker is " + sched.status.toLowerCase() + "." : "the worker is " + sched.status + "; read its errors."), actions: holder ? [conCmd("logs " + sched.name, "Errors of " + sched.name)] : [] };
+  // The argument is one reference, or a reference with words after it? Title words match a card only for the bare reference (decResolve needs 99
+  // matching words otherwise, which no card has): "diagnose real-time dashboard lag" is never the card that has 'dashboard' in its title.
+  const bare = /^\S+$/.test(w) || decOnlyRef(rest);
+  const r = await decResolve(env, c, rest, false, strict && !bare ? 99 : 1);
+  if (r.issue) return await conDiagnoseIssue(env, c, r.issue, r.card, holder);
+  if (r.card) return await conDiagnoseCard(env, c, r.card, holder);
+  if (r.candidates && strict) return { text: "More than one thing matches. Pick one:", actions: r.candidates.map(function(x) {
+    return conCmd("diagnose " + (x.card ? x.card.key : x.arg), x.label);
+  }) };
+  if (r.objective && strict) return { text: "Objective revision #" + r.objective.id + (r.objective.statement ? ": " + r.objective.statement.slice(0, 240) : "") + ". Ratify or reject it from the queue card.", actions: [conCmd("suggest", "Suggest")] };
+  // Nothing matched: the dead end is for a reference the fleet does not hold ("diagnose 999999", "diagnose 424242 please", "diagnose ha:nope",
+  // "diagnose UIA-NOPE-1"). A sentence that opens with a dashed word ("investigate real-time lag", "diagnose qnfo-ops deploy failures") is not
+  // a reference, and the model answers it.
+  if (strict && (/^\S+$/.test(w) || /^(?:(?:agent_issues|issues?)\s*#?\s*\d{3,7}|#?\d{3,7}|(?:ha|goals):)/i.test(rest))) return { text: (r.error || "Nothing matches.") + "\n'diagnose' alone lists what is blocked." };
+  return null;
+}
+// The owner-gated decision cards of the queue, each with the numbered parts of the issue it names and which are decided (signed-in
+// owner only: the text of the parts comes from the issue, which can be private).
+async function ownerDecisionView(env, v) {
+  await decLoadHard(env);
+  const cards = (v && v.items || []).filter(decAsksDecision).slice(0, 8);
+  await Promise.all(cards.map(async function(it) {
+    try {
+      // a legal, signing, money, credential or account step is the owner's alone: the block offers Diagnose and Done and reads no issue
+      if (decIsHard(it)) {
+        it.decision = { hard: true, issue: null, items: [] };
+        return;
+      }
+      let issue = null;
+      for (const id of decCardIds({ slug: String(it.key).slice(3), title: it.title, why: it.why, action: it.action }).slice(0, 3)) {
+        issue = await decIssueRow(env, id);
+        if (issue) break;
+      }
+      const items = issue && decWantsItems(it) ? decItems(issue.description) : [];
+      const dec = items.length ? await decDecided(env, it.key) : {};
+      it.decision = { hard: false, pick: decPickOne(it), issue: issue ? Number(issue.id) : null, items: items.map(function(i) {
+        return { n: i.n, text: i.text, state: dec[i.n] || null };
+      }) };
+    } catch (e) {
+      console.error(JSON.stringify({ worker: NAME, where: "ownerDecisionView", key: it.key, error: String(e && e.message || e).slice(0, 160) }));
+    }
+  }));
+  return v;
+}
+// The buttons on a decision card (signed-in owner only): Approve, Decline and Diagnose for the card, and Approve / Decline for each
+// numbered part. Each is a typed command (data-fleet-cmd) so the preview, the confirm and the fresh-code step all apply; the
+// click handler is delegated on document, so the buttons survive the 15 s refresh of #live like the .acts buttons do.
+function decCardHtml(it, e) {
+  const key = String(it.key), d = it.decision;
+  let h = '<div class="dec" data-dec="' + e(key) + '">';
+  const btn = function(cls, cmd, label) {
+    return '<button type="button" class="' + cls + '" data-fleet-cmd="' + e(cmd) + '">' + e(label) + "</button>";
+  };
+  if (d && d.hard) {
+    h += '<p class="dec-h">Only you can take this step (a legal, signing, money, credential or account act): Approve and Decline are not offered.</p>';
+    h += '<div class="dec-all">' + btn("dec-d", "diagnose " + key, "Diagnose") + btn("dec-d", "done " + key, "Done") + "</div>";
+  } else if (d && d.items && d.items.length) {
+    const left = d.items.filter(function(i) {
+      return !i.state;
+    });
+    h += '<p class="dec-h">Decide each part: ' + (d.items.length - left.length) + " of " + d.items.length + " decided</p><ul class=\"dec-items\">";
+    for (const i of d.items) h += '<li class="dec-i"><span class="dec-t"><b>' + e(i.n) + ")</b> " + e(i.text) + "</span>" + (i.state ? '<span class="dec-s">' + (i.state === "approve" ? "&#10003; approved" : "&#10007; declined") + "</span>" : "") + '<span class="dec-b">' + btn("dec-y", "approve " + key + " " + i.n, "Approve " + i.n) + btn("dec-n", "decline " + key + " " + i.n, "Decline " + i.n) + "</span></li>";
+    h += "</ul>";
+    const only = left.length && left.length < d.items.length ? " " + decFmtRange(left.map(function(i) {
+      return i.n;
+    })) : "";
+    h += '<div class="dec-all">' + btn("dec-y", "approve " + key + only, left.length && left.length < d.items.length ? "Approve the " + left.length + " left" : "Approve all " + d.items.length) + btn("dec-n", "decline " + key + only, left.length && left.length < d.items.length ? "Decline the " + left.length + " left" : "Decline all") + btn("dec-d", "diagnose " + key, "Diagnose") + "</div>";
+  } else {
+    // a pick-one card cannot be approved bare: the button fills the command line with the card's key for the owner to name the option
+    const yes = d && d.pick ? '<button type="button" class="dec-y" data-fleet-fill="' + e("approve " + key + " ") + '">Approve an option</button>' : btn("dec-y", "approve " + key, "Approve");
+    h += '<div class="dec-all">' + yes + btn("dec-n", "decline " + key, "Decline") + btn("dec-d", "diagnose " + key, "Diagnose") + "</div>";
+  }
+  return h + "</div>";
+}
+// The words that mean a decision, found anywhere in a line: what the model path shows at once (while it thinks) and instead of a
+// stored-data summary when it does not answer. Every button is a typed command, so the confirm and the fresh code still apply;
+// nothing here runs or proposes a destructive op itself. mode: "quick" (needs a verb or a reference, else null), "fallback"
+// (always answers), "bare" (a reference on its own).
+async function cmdLocalIntent(env, text, c, mode) {
+  const t = String(text || "").trim();
+  const vm = /\b(approve|authori[sz]e|decline|refuse|reject|diagnose|investigate|retry|try again|rerun|resolve)\b/i.exec(t);
+  const refs = decRefs(t);
+  if (mode === "quick" && !vm && !refs.length) return null;
+  const word = vm ? vm[1].toLowerCase() : "";
+  const kind = /^(approve|authori[sz]e)$/.test(word) ? "approve" : /^(decline|refuse|reject)$/.test(word) ? "decline" : /^(diagnose|investigate)$/.test(word) ? "diagnose" : /^(retry|try again|rerun)$/.test(word) ? "retry" : word === "resolve" ? "resolve" : "";
+  const holder = !!(c && c.holder);
+  let r = { none: true };
+  if (kind || refs.length || mode === "bare") r = await decResolve(env, c, t, !kind);
+  const L = [], acts = [];
+  let matched = false;
+  const nm = function(card, issue) {
+    return card ? card.title.slice(0, 80) : issue ? "#" + issue.id + (holder ? " " + String(issue.title || "").slice(0, 70) : "") : "";
+  };
+  if (r.candidates) {
+    matched = true;
+    L.push("More than one thing could be meant:");
+    for (const x of r.candidates.slice(0, 5)) acts.push(conCmd((kind === "approve" || kind === "decline" ? kind : "diagnose") + " " + x.arg, x.label));
+  } else if (r.objective) {
+    matched = true;
+    L.push("Objective revision #" + r.objective.id + (r.objective.statement ? ": " + r.objective.statement.slice(0, 160) : ""));
+    acts.push(conCmd((kind === "decline" ? "reject" : "ratify") + " #" + r.objective.id, (kind === "decline" ? "Reject" : "Ratify") + " #" + r.objective.id));
+  } else if (r.card || r.issue) {
+    matched = true;
+    const ref = r.card ? r.card.key : String(r.issue.id), idArg = r.issue ? String(r.issue.id) : r.card.key;
+    L.push("Matched: " + nm(r.card, r.issue) + (r.card && r.issue ? " (issue " + r.issue.id + ")" : "") + ".");
+    const decide = r.card && decIsDecisionCard(r.card);
+    const A = decide ? [conCmd("approve " + ref, "Approve"), conCmd("decline " + ref, "Decline")] : [];
+    const D = conCmd("diagnose " + idArg, "Diagnose");
+    if (kind === "approve") acts.push.apply(acts, decide ? [A[0], A[1], D] : [D]);
+    else if (kind === "decline") acts.push.apply(acts, decide ? [A[1], A[0], D] : [D]);
+    else if (kind === "retry" && r.issue) acts.push(conCmd("retry " + r.issue.id, "Retry its probe"), D);
+    else if (kind === "resolve") acts.push(conCmd("resolve " + ref, "Resolve"), D);
+    else {
+      acts.push(D, r.issue ? conCmd("issue " + r.issue.id, "Details") : conCmd("info " + r.card.key, "Details"));
+      acts.push.apply(acts, A);
+      if (r.card && String(r.card.key).indexOf("ha:") === 0) acts.push(conCmd("done " + r.card.key, "Done"), conCmd("snooze " + r.card.key + " 3d", "Snooze 3d"));
+    }
+    if (!decide && (kind === "approve" || kind === "decline")) L.push(r.card && decAsksDecision(r.card) ? "It is a legal, signing, money, credential or account step that only you can take, so there is nothing to " + kind + " here; 'diagnose' says what it waits on." : "No owner card asks for a decision on it, so there is nothing to " + kind + "; 'diagnose' says what it waits on.");
+  }
+  if (!matched && mode === "fallback") acts.push(conCmd("queue", "Queue"), conCmd("suggest", "Suggest"), conCmd("issues", "Issues"));
+  if (!matched && mode !== "fallback") return null;
+  return { matched, text: L.join("\n"), actions: acts.slice(0, 8) };
+}
+async function decLastFallback(env, holder, visitor) {
+  try {
+    const rows = holder ? await d1all(env.AUDIT, "SELECT text FROM cmd_log WHERE kind = 'ai' AND owner = 1 AND status IN ('fallback', 'failed') AND ts >= datetime('now', '-1 day') AND lower(text) NOT LIKE 'retry%' ORDER BY ts DESC LIMIT 1") : await d1all(env.AUDIT, "SELECT text FROM cmd_log WHERE kind = 'ai' AND owner = 0 AND visitor = ?1 AND status IN ('fallback', 'failed') AND ts >= datetime('now', '-1 day') AND lower(text) NOT LIKE 'retry%' ORDER BY ts DESC LIMIT 1", [visitor]);
+    return rows.length ? String(rows[0].text || "") : "";
+  } catch (e) {
+    return "";
+  }
+}
+// A bare six-digit line is a sign-in code only when a code is waiting; an issue id (100140) is six digits too.
+async function decCodePending(env) {
+  try {
+    const rows = await d1all(env.AUDIT, "SELECT 1 AS x FROM owner_codes WHERE sent_ok = 1 AND used_ms IS NULL AND expires_ms > ?1 AND tries < ?2 LIMIT 1", [Date.now(), CMD_CODE_MAX_TRIES]);
+    return rows.length > 0;
+  } catch (e) {
+    return true;
+  }
+}
+// "reject 100140" / "ratify 100140" mean an objective revision only when the id is one (goals.goal_type objective-revision); any
+// other id is an issue or a card, so they read as decline and approve. A database that cannot say keeps the old meaning.
+async function decIsObjective(env, id) {
+  try {
+    return (await d1all(env.AUDIT, "SELECT 1 AS x FROM goals WHERE id = ?1 AND goal_type = 'objective-revision' LIMIT 1", [id])).length > 0;
+  } catch (e) {
+    return true;
+  }
+}
 // Proposals the model may make: console read commands only, shown as buttons that type the command (its own gates apply).
-var CON_AI_CMD = /^(mail( [\w .@:#-]{1,80})?|issue \d{1,7}|backlog( [\w .:-]{1,60})?|info \S{1,160}|tasks( [\w .\/:-]{1,60})?|locks|prs|pr \d{1,6}|runs( [a-z0-9._-]+\.ya?ml)?|logs [a-z0-9-]{2,63}( \d{1,2})?)$/i;
+var CON_AI_CMD = /^(diagnose \d{1,7}|approve [\w:.#-]{1,160}( \d{1,2}([-,]\d{1,2})*)?|decline [\w:.#-]{1,160}( \d{1,2}([-,]\d{1,2})*)?|mail( [\w .@:#-]{1,80})?|issue \d{1,7}|backlog( [\w .:-]{1,60})?|info \S{1,160}|tasks( [\w .\/:-]{1,60})?|locks|prs|pr \d{1,6}|runs( [a-z0-9._-]+\.ya?ml)?|logs [a-z0-9-]{2,63}( \d{1,2})?)$/i;
 // ---- UI ----
-var CMD_CSS = ".cmd{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}.cmd form{display:flex;gap:8px;align-items:flex-start}.cmd .pr0{font:600 15px/34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--link)}#ctext{flex:1;min-width:0;resize:none;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:36px;max-height:160px}#ctext:focus{outline:2px solid var(--link);outline-offset:0}.cmd button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer;white-space:nowrap}.cmd button.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}.cmd button.d{border-color:var(--act);color:var(--act)}.cmd button:disabled{opacity:.5;cursor:default}#cout{margin-top:8px}.co{border-top:1px solid var(--line);padding:8px 0 4px;font-size:14px}.co .q{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mute)}.co pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 0;font:13.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.co .err{color:var(--act)}.co .acts{margin-top:6px}.co .acts button{white-space:normal;text-align:left;max-width:100%}.co .why{font-size:12px;color:var(--mute);margin:2px 0 0 2px}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.cmeta a{color:var(--mute)}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chips button{font-size:12px;padding:3px 9px;border-radius:99px}.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--link);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}@keyframes sp{to{transform:rotate(360deg)}}";
+var CMD_CSS = ".cmd{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}.cmd form{display:flex;gap:8px;align-items:flex-start}.cmd .pr0{font:600 15px/34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--link)}#ctext{flex:1;min-width:0;resize:none;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:36px;max-height:160px}#ctext:focus{outline:2px solid var(--link);outline-offset:0}.cmd button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer;white-space:nowrap}.cmd button.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}.cmd button.d{border-color:var(--act);color:var(--act)}.cmd button:disabled{opacity:.5;cursor:default}#cout{margin-top:8px}.co{border-top:1px solid var(--line);padding:8px 0 4px;font-size:14px}.co .q{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mute)}.co pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 0;font:13.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.co .err{color:var(--act)}.co .acts{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}.co .acts button{min-height:44px}.co .acts .why{flex-basis:100%}.co .acts input{min-height:44px;font-size:16px}.co .qk{margin-top:4px}.co .acts button{white-space:normal;text-align:left;max-width:100%}.co .why{font-size:12px;color:var(--mute);margin:2px 0 0 2px}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.cmeta a{color:var(--mute)}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chips button{font-size:12px;padding:3px 9px;border-radius:99px}.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--link);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}@keyframes sp{to{transform:rotate(360deg)}}";
 function cmdPanelHtml(holder, from, q) {
   return '<section class="cmd" id="cmd" data-from="' + esc(from || "") + '" data-q="' + esc(q || "") + '"><form id="cform" autocomplete="off"><span class="pr0">&rsaquo;</span><textarea id="ctext" rows="1" maxlength="8000" placeholder="Ask or tell the fleet" aria-label="Fleet command line"></textarea><button class="p" id="cgo" type="submit">Run</button></form><div class="chips" id="cchips"><button type="button" data-c="status">status</button><button type="button" data-c="queue">queue</button><button type="button" data-c="suggest">suggest</button><button type="button" data-c="issues">issues</button><button type="button" data-c="tools">tools</button><button type="button" data-c="spend">spend</button><button type="button" data-c="help">help</button></div><div id="cout" aria-live="polite"></div><div class="cmeta"><span id="cwho">' + (holder ? "Signed in: actions enabled" : "Reading and asking are open to everyone. Actions need your email code.") + '</span><span>' + (holder ? '<a href="#" id="clogout">sign out</a>' : '<a href="#" id="clogin">email me a code</a>') + (from ? ' &middot; from <a href="' + esc(from) + '">' + esc(String(from).replace(/^https?:\/\//, "").slice(0, 48)) + "</a>" : "") + "</span></div></section>";
 }
 // Client: submit, history (Up/Down), "/" to focus, background polling, action buttons, inline code sign-in.
-var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]')}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var a=el('div','acts');j.actions.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){if(x.fill){ta.value=x.fill;fit();ta.focus()}else if(x.cmd)send(x.cmd);else run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});c.appendChild(a)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{}).then(function(j){a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<45000){var w=c.querySelector('.wait span.t');if(w)w.textContent='thinking '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='pending'&&j.id){poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-cmd]');if(!t)return;e.preventDefault();send(t.getAttribute('data-fleet-cmd'));if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-fill]');if(!t)return;e.preventDefault();ta.value=t.getAttribute('data-fleet-fill');fit();ta.focus();if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});var q0=box.getAttribute('data-q');if(q0)send(q0)})();"; // standards-ok: a browser script in a string; its catch blocks guard sessionStorage in the visitor's browser, where Workers Logs cannot see them
+var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]')}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function acts(p,list,c){var a=el('div','acts');list.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){if(x.fill){ta.value=x.fill;fit();ta.focus()}else if(x.cmd)send(x.cmd);else run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});p.appendChild(a)}function quick(c,q){var d=el('div','qk');if(q.text)d.appendChild(el('pre',null,q.text));if(q.actions&&q.actions.length)acts(d,q.actions,c);var w=c.querySelector('.wait');c.insertBefore(d,w)}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var qk=c.querySelector('.qk');if(qk)c.removeChild(qk);acts(c,j.actions,c)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{}).then(function(j){a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<45000){var w=c.querySelector('.wait span.t');if(w)w.textContent='thinking '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='pending'&&j.id){if(j.quick)quick(c,j.quick);poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-cmd]');if(!t)return;e.preventDefault();send(t.getAttribute('data-fleet-cmd'));if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-fill]');if(!t)return;e.preventDefault();ta.value=t.getAttribute('data-fleet-fill');fit();ta.focus();if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});var q0=box.getAttribute('data-q');if(q0)send(q0)})();"; // standards-ok: a browser script in a string; its catch blocks guard sessionStorage in the visitor's browser, where Workers Logs cannot see them
 function cmdScript(holder) {
   return "<script>" + CMD_JS.replace("holder=HOLDER;", "holder=" + (holder ? "true" : "false") + ";") + "</script>";
 }
