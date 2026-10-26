@@ -290,8 +290,10 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
   // in pubGateVerdict applies only to papers already published).
   const ops = readFileSync(new URL("../qnfo-cloud-ops/worker.js", import.meta.url), "utf8");
   const fnText = (name) => { const s = ops.indexOf("function " + name + "("); let d = 0; for (let i = ops.indexOf("{", s); i < ops.length; i++) { if (ops[i] === "{") d++; else if (ops[i] === "}" && --d === 0) return ops.slice(s, i + 1); } return ""; };
-  const opsGate = new Function(fnText("pubGateSectionStructure") + "\n" + fnText("pubGateScore") + "\n" + fnText("pubGateVerdictRaw") + "\nreturn function (md) { return pubGateVerdictRaw(pubGateScore(md)); };")();
-  const bodies = ["", "short", "x".repeat(3000), "# T\n\n## Prior Work\n\n" + "word ".repeat(3000), "y".repeat(5000) + " arXiv:2401.00001 arXiv:2401.00002 10.1000/abc", "z".repeat(4500) + "\n| a | b |\n|---|---|\n| 1 | 2 |\n```py\nx\n```\n## Related Work\n" + " arxiv.org/abs/2401.00001".repeat(12)];
+  // DEGENERATE-TEXT-1 (qnfo-cloud-ops 1.41.0): pubGateScore reads the detector block, so the block is part of the function under test.
+  const opsLib = ops.slice(ops.indexOf("// DEGENERATE-TEXT-BEGIN"), ops.indexOf("// DEGENERATE-TEXT-END"));
+  const opsGate = new Function(opsLib + "\n" + fnText("pubGateSectionStructure") + "\n" + fnText("pubGateScore") + "\n" + fnText("pubGateVerdictRaw") + "\nreturn function (md) { return pubGateVerdictRaw(pubGateScore(md)); };")();
+  const bodies = ["", "short", "x".repeat(3000), "# T\n\n## Prior Work\n\n" + Array.from({ length: 3000 }, (_, i) => "word" + i.toString(36)).join(" "), "y".repeat(5000) + " arXiv:2401.00001 arXiv:2401.00002 10.1000/abc", "z".repeat(4500) + "\n| a | b |\n|---|---|\n| 1 | 2 |\n```py\nx\n```\n## Related Work\n" + " arxiv.org/abs/2401.00001".repeat(12)];
   ok(bodies.every((b) => { const a = releaseGateVerdict(b), o = opsGate(b); return a.pass === o.pass && a.reason === o.reason; }), "releaseGateVerdict equals the qnfo-cloud-ops verdict on every sample", bodies.map((b) => [releaseGateVerdict(b).reason, opsGate(b).reason]));
   const pubs = src.split("\n").filter((l) => /UPDATE papers SET [^"]*status='published',/.test(l));
   ok(pubs.length === 3 && pubs.filter((l) => /release_gate_pass=\?2, release_gate_at=\?3, release_gate_reason=\?4/.test(l)).length === 2, "the two research publish stages write the gate verdict with the published status", pubs.map((l) => l.trim().slice(0, 120)));
