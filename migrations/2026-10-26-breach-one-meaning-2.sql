@@ -12,4 +12,3 @@ INSERT OR REPLACE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
  ('bp26_issues_open', 'structure', 'BREACH-ONE-MEANING-2');
 UPDATE metric_registry SET last_value = CAST((SELECT COALESCE(SUM(breaches), 0) FROM v_breach_by_cause WHERE cause_key = 'unmapped') AS TEXT),
   last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE metric = 'breaches_unmapped';
-UPDATE metric_registry SET refresh_cadence = 'hourly via contract fm-breach-unmapped (trigger exemption: the contract is the detector)' WHERE metric = 'breaches_unmapped';
