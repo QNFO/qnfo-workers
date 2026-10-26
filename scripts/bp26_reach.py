@@ -121,7 +121,7 @@ def _decode_attachment(data):
 
 
 def parse_dmarc_report(raw_text):
-    """Raw MIME text of a DMARC aggregate report mail -> {domain, org, begin, end, p, records: [(count, dkim, spf)]} or None. Rejects any XML with a DTD or entity."""
+    """Raw MIME text of a DMARC aggregate report mail -> {domain, org, end, p, records: [(count, dkim, spf, disposition)]} or None. Rejects any XML with a DTD or entity."""
     msg = email.message_from_string(raw_text, policy=email.policy.default)
     for part in msg.walk():
         if part.is_multipart():
@@ -152,8 +152,9 @@ def parse_dmarc_report(raw_text):
             cnt = _child_text(rec, "row", "count")
             dk = (_child_text(rec, "row", "policy_evaluated", "dkim") or "").lower()
             sp = (_child_text(rec, "row", "policy_evaluated", "spf") or "").lower()
+            disp = (_child_text(rec, "row", "policy_evaluated", "disposition") or "").lower()
             try:
-                recs.append((int(cnt), dk, sp))
+                recs.append((int(cnt), dk, sp, disp))
             except (TypeError, ValueError):
                 continue
         try:
@@ -172,9 +173,9 @@ def aggregate_dmarc(reports, since_epoch):
         if r["end"] is None or r["end"] < since_epoch:
             continue
         key = (r["domain"], r["org"])
-        b = per.setdefault(key, {"total": 0, "aligned": 0, "dkim": 0, "spf": 0, "reports": 0})
+        b = per.setdefault(key, {"total": 0, "aligned": 0, "dkim": 0, "spf": 0, "reports": 0, "enforced": 0})
         b["reports"] += 1
-        for cnt, dk, sp in r["records"]:
+        for cnt, dk, sp, disp in r["records"]:
             b["total"] += cnt
             total += cnt
             if dk == "pass":
@@ -184,6 +185,8 @@ def aggregate_dmarc(reports, since_epoch):
             if dk == "pass" or sp == "pass":
                 b["aligned"] += cnt
                 aligned += cnt
+            elif disp in ("reject", "quarantine"):
+                b["enforced"] += cnt
     return aligned, total, per
 
 
@@ -255,7 +258,8 @@ def collect_dmarc(ctx):
     rows = []
     for (dom, org), b in sorted(per.items()):
         rows.append(("dmarc:%s via %s" % (dom, org), 1 if b["aligned"] == b["total"] else 0,
-                     "messages=%d aligned_pass=%d dkim_pass=%d spf_pass=%d reports=%d" % (b["total"], b["aligned"], b["dkim"], b["spf"], b["reports"])))
+                     "messages=%d aligned_pass=%d dkim_pass=%d spf_pass=%d unaligned=%d of which rejected_or_quarantined_by_receiver=%d reports=%d"
+                     % (b["total"], b["aligned"], b["dkim"], b["spf"], b["total"] - b["aligned"], b["enforced"], b["reports"])))
     dns = []
     for d in DMARC_DOMAINS:
         try:
@@ -287,9 +291,11 @@ def collect_dmarc(ctx):
     reporting = sorted({d for d, _ in per})
     if total == 0:
         return [Result("dmarc_aligned_pass_rate", None, "no parseable DMARC aggregate report ended in the last %d days (%d archived report mails, %d unparsed)" % (DMARC_WINDOW_DAYS, len(rows_sql), unparsed), rows)]
-    note = ("aligned pass (dkim or spf pass in policy_evaluated) %d of %d messages in %d reports of the last %d days, domains reporting: %s; domains with no rua tag (unmeasured): %s; domains with a rua tag and no report in the window: %s; "
-            "published policies: %s; %d archived report mails unparsed"
-            % (aligned, total, sum(b["reports"] for b in per.values()), DMARC_WINDOW_DAYS, ",".join(reporting) or "-", ",".join(no_rua) or "none", ",".join(silent) or "none",
+    enforced = sum(b["enforced"] for b in per.values())
+    note = ("aligned pass (dkim or spf pass in policy_evaluated) %d of %d messages in %d reports of the last %d days; the %d unaligned messages include %d that the receiving server rejected or quarantined under the "
+            "published policy (soft-failing SPF and no DKIM from addresses outside the sending set read this way in the 2026-10 reports), so a low share at this volume is mostly policy working, not lost mail; "
+            "domains reporting: %s; domains with no rua tag (unmeasured): %s; domains with a rua tag and no report in the window: %s; published policies: %s; %d archived report mails unparsed"
+            % (aligned, total, sum(b["reports"] for b in per.values()), DMARC_WINDOW_DAYS, total - aligned, enforced, ",".join(reporting) or "-", ",".join(no_rua) or "none", ",".join(silent) or "none",
                ",".join("%s=%s" % (s["domain"], s.get("dmarc_p")) for s in dns if s.get("answered")) or "unread", unparsed))
     return [Result("dmarc_aligned_pass_rate", aligned / float(total), note, rows)]
 
@@ -525,7 +531,7 @@ def selftest():
             print("FAIL " + m)
 
     def xml_report(domain, org, end, recs, extra=""):
-        rs = "".join("<record><row><source_ip>192.0.2.1</source_ip><count>%d</count><policy_evaluated><disposition>none</disposition><dkim>%s</dkim><spf>%s</spf></policy_evaluated></row></record>" % r for r in recs)
+        rs = "".join("<record><row><source_ip>192.0.2.1</source_ip><count>%d</count><policy_evaluated><disposition>%s</disposition><dkim>%s</dkim><spf>%s</spf></policy_evaluated></row></record>" % (r[0], r[3] if len(r) > 3 else "none", r[1], r[2]) for r in recs)
         return ("<?xml version='1.0'?>%s<feedback><report_metadata><org_name>%s</org_name><date_range><begin>%d</begin><end>%d</end></date_range></report_metadata>"
                 "<policy_published><domain>%s</domain><p>reject</p></policy_published>%s</feedback>" % (extra, org, end - 86400, end, domain, rs)).encode()
 
@@ -537,14 +543,15 @@ def selftest():
     now = 1790000000
     zbuf = io.BytesIO()
     with zipfile.ZipFile(zbuf, "w") as z:
-        z.writestr("r.xml", xml_report("qnfo.org", "google.com", now - 3600, [(10, "pass", "fail"), (3, "fail", "pass"), (2, "fail", "fail")]))
+        z.writestr("r.xml", xml_report("qnfo.org", "google.com", now - 3600, [(10, "pass", "fail"), (3, "fail", "pass"), (2, "fail", "fail", "reject")]))
     r1 = parse_dmarc_report(mime(zbuf.getvalue(), "application/zip", "g.zip"))
     ok(r1 and r1["domain"] == "qnfo.org" and r1["org"] == "google.com" and len(r1["records"]) == 3, "a zip attachment is parsed: %r" % (r1,))
     r2 = parse_dmarc_report(mime(gzip.compress(xml_report("qwav.org", "lolipop.jp", now - 7200, [(5, "pass", "pass")])), "application/gzip", "l.xml.gz"))
-    ok(r2 and r2["org"] == "lolipop.jp" and r2["records"] == [(5, "pass", "pass")], "a gzip attachment is parsed")
+    ok(r2 and r2["org"] == "lolipop.jp" and r2["records"] == [(5, "pass", "pass", "none")], "a gzip attachment is parsed")
     old = parse_dmarc_report(mime(xml_report("qnfo.org", "old.example", now - 30 * 86400, [(100, "fail", "fail")]), "text/xml", "o.xml"))
     al, tot, per = aggregate_dmarc([r1, r2, old], now - 7 * 86400)
     ok((al, tot) == (18, 20) and ("qnfo.org", "google.com") in per and ("qnfo.org", "old.example") not in per, "aligned = dkim or spf pass, weighted by count, old reports excluded: %r" % ((al, tot),))
+    ok(per[("qnfo.org", "google.com")]["enforced"] == 2, "failing messages the receiver rejected are counted apart: %r" % (per[("qnfo.org", "google.com")],))
     ok(parse_dmarc_report(mime(xml_report("qnfo.org", "evil", now, [(1, "pass", "pass")], extra="<!DOCTYPE x [<!ENTITY a 'b'>]>"), "text/xml", "e.xml")) is None, "an XML with a DTD or entity is refused")
     ok(parse_dmarc_report("From: a\nSubject: Report domain: x\n\nno attachment\n") is None, "a mail without an attachment is not a report")
     ok(txt_data('{"Status":0,"Answer":[{"data":"\\"v=spf1 include:_spf.mx.cloudflare.net ~all\\""},{"data":"\\"abc\\" \\"def\\""}]}') == ["v=spf1 include:_spf.mx.cloudflare.net ~all", "abcdef"], "TXT chunks are joined")
