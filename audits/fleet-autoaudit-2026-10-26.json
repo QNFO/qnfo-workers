@@ -1,7 +1,12 @@
 {
-  "audited_at": "2026-10-26 08:12:10",
-  "d1_write_failures": [],
-  "d1_writes_ok": 123,
+  "audited_at": "2026-10-26 08:38:43",
+  "d1_write_failures": [
+    [
+      "qnfo-observability",
+      "The read operation timed out (after 3 attempts, D1-TRANSIENT-RETRY-1)"
+    ]
+  ],
+  "d1_writes_ok": 122,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -545,7 +550,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.42.0-travel-picks",
+        "version": "1.43.0-ai-label",
         "worker": "personal-companion"
       },
       {
@@ -555,7 +560,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.36.1",
+        "version": "0.37.0",
         "worker": "q08-signal-engine"
       },
       {
@@ -615,12 +620,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.49.0-pr-merge-sla",
+        "version": "0.49.2-probe-author-binding",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.67.1",
+        "version": "1.67.3-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -645,7 +650,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.18.0-webmcp-1",
+        "version": "3.19.0-ai-disclosure",
         "worker": "qnfo-ipatent"
       },
       {
@@ -957,9 +962,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.42.0-travel-picks",
+      "before": "1.43.0-ai-label",
       "http": 200,
-      "live": "1.42.0-travel-picks",
+      "live": "1.43.0-ai-label",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1009,9 +1014,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.36.1",
+      "before": "0.37.0",
       "http": 200,
-      "live": "0.36.1",
+      "live": "0.37.0",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1348,17 +1353,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.49.0-pr-merge-sla",
+      "before": "0.49.2-probe-author-binding",
       "http": 200,
-      "live": "0.49.0-pr-merge-sla",
+      "live": "0.49.2-probe-author-binding",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.67.1",
+      "before": "1.67.3-codeagent",
       "http": 200,
-      "live": "1.67.1",
+      "live": "1.67.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1450,9 +1455,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.18.0-webmcp-1",
+      "before": "3.19.0-ai-disclosure",
       "http": 200,
-      "live": "3.18.0-webmcp-1",
+      "live": "3.19.0-ai-disclosure",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1776,5 +1781,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 1
 }
