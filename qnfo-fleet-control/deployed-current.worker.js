@@ -1100,7 +1100,8 @@ __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.51.0-gate-not-required"; /* 0.51.0 MERGE-STREAMLINE-1 (2026-10-26, pillar autonomy; owner directive: "DEPLOY GATE REPEATEDLY FAILS. GET RID OF IT! IT'S HOLDING UP PR MERGES."; minor: a decision the lane and the code-loop runner now take on their own): the deploy-gate job `gate` is no longer a required check (EVOLVE_REQUIRED), so a merge waits for guard, mirror-guard and comparator (seconds) and not for the 3 minute gate run; the gate still runs on every PR as advice and strict on main, and canary plus auto-revert stay the safety net. prior 0.50.0-workflows-merge */ /* 0.50.0 prior */ /* 0.50.0 OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, pillar autonomy; minor: a decision the lane now takes on its own): the owner answered "Yes, auto-approve all" to the two items listed as waiting on them, so the stale-PR lane merges a pull request that changes .github/ through every other gate unchanged (required checks green, clean, quiet window, no hold or WIP, canary and revert), recorded in the merge message; ops_config stale_pr_merge_workflows = off restores the refusal (PR-MERGE-SLA-GROUPS-1 then classes it as waits_on session again). The code loop's own merge scope (cmScope) still denies .github/workflows/**: that was not asked. prior 0.49.3-pr-sla-groups */ /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.51.1-probe-author-harden"; /* 0.51.0 MERGE-STREAMLINE-1 (2026-10-26, pillar autonomy; owner directive: "DEPLOY GATE REPEATEDLY FAILS. GET RID OF IT! IT'S HOLDING UP PR MERGES."; minor: a decision the lane and the code-loop runner now take on their own): the deploy-gate job `gate` is no longer a required check (EVOLVE_REQUIRED), so a merge waits for guard, mirror-guard and comparator (seconds) and not for the 3 minute gate run; the gate still runs on every PR as advice and strict on main, and canary plus auto-revert stay the safety net. prior 0.50.0-workflows-merge */ /* 0.50.0 prior */ /* 0.50.0 OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, pillar autonomy; minor: a decision the lane now takes on its own): the owner answered "Yes, auto-approve all" to the two items listed as waiting on them, so the stale-PR lane merges a pull request that changes .github/ through every other gate unchanged (required checks green, clean, quiet window, no hold or WIP, canary and revert), recorded in the merge message; ops_config stale_pr_merge_workflows = off restores the refusal (PR-MERGE-SLA-GROUPS-1 then classes it as waits_on session again). The code loop's own merge scope (cmScope) still denies .github/workflows/**: that was not asked. prior 0.49.3-pr-sla-groups */ /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+/* 0.51.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class) and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 and the observed value at 200 characters. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call. */
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -11763,7 +11764,7 @@ async function remediationContractsTick(env, opts) {
   // VERIFICATION-PATH-1 (b): a deferral older than RT_DEFERRAL_ESCALATE_MIN names its unblocker in an issue (once per class).
   await rtEscalateStaleDeferrals(db, out);
   // REOPEN-LIVE-PATH-3 (issue 100271): an open issue left without a live contract gets one deduped PROBE-NEEDED-1 issue naming the probe to write.
-  await rtEnsureLivePath(db, out);
+  await rtEnsureLivePath(db, out, env);
   // SLA-PATHS-1 path-count check (docs/SLA-AND-PATHS-1.md s3). A process with two paths on paper and one in practice is
   // worse than one path, because it is believed safe: today the registry read 12 processes / 0 violations while evidence
   // persistence had one live path and it was refused. Liveness is AVAILABILITY, not recent use - a fallback is never used
@@ -12101,26 +12102,162 @@ var rtProbeAuthorTickKey = 0, rtProbeAuthorTickStamp = -1, rtProbeAuthorTickN = 
 function rtProbeAuthorStrip(s) {
   return String(s || "").replace(/```(sql)?/gi, "").trim();
 }
+// PROBE-AUTHOR-HARDEN-1 (qnfo-fleet-control 0.51.1, pillar security, agent_issues 1000266; follow-up to PROBE-AUTHOR-BINDING-1): the author runs now, so three
+// weaknesses that were harmless while it never ran are closed here, each with an enum reason on the existing remediation.probe-author-reject event
+// (RT_PROBE_AUTHOR_REASONS) that never carries the probe text. (1) private-table / not-allowlisted (doctrine section 9, personal/research separation): a
+// model-authored probe reads only the operational objects in RT_PROBE_AUTHOR_ALLOW, and a private family (mail, message, contact, subscriber, identity, owner,
+// personal, credential, session, chat, outreach, suppression, calendar, draft) is refused by name first. The scan is a quote-aware lexer, not a FROM regex, so
+// a subquery, join, CTE, comma-join, schema-qualified, quoted, backticked, bracketed or string-literal table name is seen, and every identifier that names a
+// sqlite_master table or view is held to the same two rules. probe-author.test.mjs checks the constant against a fixture of the live sqlite_master names, so it
+// cannot name a private table, and sweeps every live name: only an allowlisted one passes. (2) self-confirming: the probe may not read the loop's own
+// bookkeeping (the issue ledger and its views, decision_log, remediation_*, closure and verification tables, work_claims), cloud_ops_events rows of the
+// remediation.* kinds, the author's own module name, or the target's own contract class, because those flip to ok because of the author's own writes.
+// (3) deferral-shape: a dry run whose observed value is empty or starts with pending (any case) is a deferral to rtIsDeferral, so the contract could never
+// fail or pass. A probe is at most RT_PROBE_AUTHOR_MAX_SQL (600) characters and its observed value at most RT_PROBE_AUTHOR_MAX_OBSERVED (200), so what reaches
+// remediation_contracts, cloud_ops_events, the append-only decision_log and the open verification ledger is bounded. rt_probe_author = off still stops it.
+var RT_PROBE_AUTHOR_MAX_SQL = 600;
+var RT_PROBE_AUTHOR_MAX_OBSERVED = 200;
+var RT_PROBE_AUTHOR_REASONS = ["private-table", "self-confirming", "deferral-shape", "not-allowlisted", "too-long"];
+// Operational objects only (verified against live qnfo-audit sqlite_master on 2026-10-26 and drawn from what the active d1-query contracts already probe).
+// Never add a table that holds mail, identity, contact, subscriber, credential, chat or owner text; probe-author.test.mjs fails if one is named.
+var RT_PROBE_AUTHOR_ALLOW = [
+  "ai_call_counters", "ai_model_health", "analytics_metric_triggers", "branch_hygiene_log", "cadence_sla", "capability_audit_snapshot",
+  "cloud_ops_events", "code_task_pr_links", "code_tasks", "content_stages", "control_registry", "cost_daily", "cron_fire_log",
+  "deploy_drift_cf", "deployment_history", "dissemination_tracker", "evolve_runs", "failure_modes", "fleet_budget", "fleet_crons",
+  "fleet_heartbeat", "fleet_improvements", "fleet_runs", "fleet_tasks", "fleet_tick", "github_steward_runs", "improvement_loop_runs",
+  "journey_runs", "metric_history", "metric_improvement_now", "metric_registry", "migration_runs", "model_ab_runs", "paper_claim_audits",
+  "perf_experiments", "perf_levers", "portfolio_gaps", "portfolio_sync_runs", "pr_sla_state", "queue_sla", "report_card_history",
+  "research_queue", "research_ready", "roadmap_implementation", "self_heal_actions", "service_registry", "spof_registry", "task_dod_register",
+  "v_metric_trigger_state", "v_pr_merge_sla", "worker_compat_state", "worker_live_audit", "worker_removals", "worker_usage_daily",
+  "workers_bp_findings", "workers_bp_runs", "workflow_failures", "workflow_main_state"
+];
+var RT_PROBE_AUTHOR_ALLOW_SET = (function () { var o = Object.create(null); for (var i = 0; i < RT_PROBE_AUTHOR_ALLOW.length; i++) o[RT_PROBE_AUTHOR_ALLOW[i]] = 1; return o; })();
+// Private families by object name (lower case). Deliberately wide: a false positive costs one authored probe, a false negative puts private text in an open ledger.
+var RT_PROBE_AUTHOR_PRIVATE = [
+  ["mail", /mail|inbox|imap|smtp/],
+  ["message", /message|(^|_)msgs?(_|$)|repl(y|ies)|thread/],
+  ["contact", /contact/],
+  ["subscriber", /subscri|newsletter/],
+  ["identity", /identity|(^|_)cv(_|$)/],
+  ["owner", /(^|_)owner(_|$)/],
+  ["personal", /personal|(^|_)(invest|ipatent|notes_intake|device)|(^|_)human(_|$)/],
+  ["credential", /credential|token|secret|passw|(^|_)keys?(_|$)|cookie|oauth|(^|_)auth(_|$)/],
+  ["session", /session/],
+  ["chat", /chat|conversation|(^|_)ask_|prompt|(^|_)llm_|mcp_log|ops_ai_log|(^|_)ai_log|question|response/],
+  ["outreach", /outreach|(^|_)social_/],
+  ["suppression", /suppress|opt_?out|unsubscrib/],
+  ["calendar", /calendar|^events?(_|$)|^event_/],
+  ["draft", /draft/]
+];
+// The loop's own bookkeeping by object name: what the author, the verification engine and the issue closers write.
+var RT_PROBE_AUTHOR_SELF_RE = /(^|_)issues?(_|$)|(^|_)decisions?(_|$)|decision_|remediation|closure|work_claims|triage|lifecycle|verification/;
+var RT_PROBE_AUTHOR_SELF_LITERAL_RE = /remediation\.|probe[-_ ]?author|probe[-_ ]?needed/;
+var RT_PROBE_AUTHOR_ENGINE_RE = /^(sqlite_|pragma_|dbstat)/;
+var RT_PROBE_AUTHOR_FROM_END_RE = /^(where|group|order|limit|having|union|intersect|except|window|select|values|returning)$/;
+function rtProbeAuthorFamily(name) {
+  var n = String(name || "").toLowerCase();
+  for (var i = 0; i < RT_PROBE_AUTHOR_PRIVATE.length; i++) if (RT_PROBE_AUTHOR_PRIVATE[i][1].test(n)) return RT_PROBE_AUTHOR_PRIVATE[i][0];
+  return null;
+}
+// Tokens: w bare word (lower case), q quoted identifier ("x", `x`, [x]), s string literal, n number, p punctuation. Comments are skipped as SQLite skips them.
+// null when a quote or comment is unterminated. A string literal is kept because SQLite reads 'name' as an identifier after FROM, JOIN and IN.
+function rtProbeAuthorLex(q) {
+  var toks = [], i = 0, n = q.length, c, j, d;
+  while (i < n) {
+    c = q.charAt(i);
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") { i++; continue; }
+    if (c === "-" && q.charAt(i + 1) === "-") { j = q.indexOf("\n", i); i = j < 0 ? n : j + 1; continue; }
+    if (c === "/" && q.charAt(i + 1) === "*") { j = q.indexOf("*/", i + 2); i = j < 0 ? n : j + 2; continue; }
+    if (c === "'" || c === '"' || c === "`") {
+      d = c; j = i + 1;
+      while (j < n) { if (q.charAt(j) === d) { if (q.charAt(j + 1) === d) { j += 2; continue; } break; } j++; }
+      if (j >= n) return null;
+      toks.push({ k: d === "'" ? "s" : "q", v: q.slice(i + 1, j).split(d + d).join(d) });
+      i = j + 1; continue;
+    }
+    if (c === "[") { j = q.indexOf("]", i + 1); if (j < 0) return null; toks.push({ k: "q", v: q.slice(i + 1, j) }); i = j + 1; continue; }
+    if (/[A-Za-z_]/.test(c)) { j = i + 1; while (j < n && /[A-Za-z0-9_$]/.test(q.charAt(j))) j++; toks.push({ k: "w", v: q.slice(i, j).toLowerCase() }); i = j; continue; }
+    if (/[0-9]/.test(c)) { j = i + 1; while (j < n && /[A-Za-z0-9_.]/.test(q.charAt(j))) j++; toks.push({ k: "n", v: q.slice(i, j) }); i = j; continue; }
+    toks.push({ k: "p", v: c }); i++;
+  }
+  return toks;
+}
+// refs: the names in table position (after FROM or JOIN, after a comma of a FROM list, schema-qualified or not); idents: every word, quoted or string token, lower case;
+// cte: names defined as name AS (. null on unbalanced parentheses.
+function rtProbeAuthorScan(toks) {
+  var refs = [], cte = Object.create(null), idents = [], depth = 0, inFrom = [false], expect = false, i, t, v, n1, n2;
+  for (i = 0; i < toks.length; i++) {
+    t = toks[i];
+    if (t.k === "p") {
+      if (t.v === "(") { expect = false; depth++; inFrom[depth] = false; }
+      else if (t.v === ")") { depth--; if (depth < 0) return null; }
+      else if (t.v === "," && inFrom[depth]) expect = true;
+      continue;
+    }
+    if (t.k === "n") { expect = false; continue; }
+    v = String(t.v).toLowerCase();
+    idents.push(v);
+    n1 = toks[i + 1]; n2 = toks[i + 2];
+    if (t.k !== "s" && n1 && n1.k === "w" && n1.v === "as" && n2 && n2.k === "p" && n2.v === "(") cte[v] = 1;
+    if (t.k === "w") {
+      if (v === "from" || v === "join") { expect = true; if (v === "from") inFrom[depth] = true; continue; }
+      if (RT_PROBE_AUTHOR_FROM_END_RE.test(v)) { inFrom[depth] = false; expect = false; continue; }
+      if (v === "on" || v === "using") { expect = false; continue; }
+    }
+    if (expect) {
+      expect = false;
+      if (n1 && n1.k === "p" && n1.v === "." && n2 && n2.k !== "p" && n2.k !== "n") refs.push(String(n2.v).toLowerCase());
+      else refs.push(v);
+    }
+  }
+  return depth === 0 ? { refs: refs, cte: cte, idents: idents } : null;
+}
+// A reason that starts with one of RT_PROBE_AUTHOR_REASONS is returned as "<code>: <detail>"; any other string is the older static-reject text.
+function rtProbeAuthorCode(bad) {
+  var m = /^(private-table|self-confirming|deferral-shape|not-allowlisted|too-long)\b/.exec(String(bad || ""));
+  return m ? m[1] : "static-reject";
+}
 async function rtProbeAuthorValidSql(db, sql, id) {
   var q = rtProbeAuthorStrip(sql);
   if (!q) return "empty";
+  if (q.length > RT_PROBE_AUTHOR_MAX_SQL) return "too-long: probe " + q.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_SQL;
   if (!/^(select|with)\b/i.test(q)) return "not a single SELECT or WITH";
   if (/;\s*\S/.test(q)) return "more than one statement";
   if (/\b(insert|update|delete|replace|drop|alter|create|attach|detach|pragma|vacuum|reindex)\b/i.test(q)) return "write keyword";
   if (q.indexOf("needs-machine" + "-probe") !== -1) return "needs-machine-probe marker";
-  if (/select\s+status\s+from\s+agent_issues/i.test(q)) return "reads the status of the target issue";
-  if (new RegExp("agent_issues\\s+where\\s+id\\s*=\\s*" + Number(id) + "\\b", "i").test(q)) return "reads the status of the target issue";
-  var tabs = {}, m, re = /(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi;
-  while ((m = re.exec(q))) tabs[m[1].toLowerCase()] = 1;
-  var names = Object.keys(tabs);
-  if (names.length) {
-    var have = {};
-    try {
-      var sm = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).results || [];
-      for (var k = 0; k < sm.length; k++) have[String(sm[k].name).toLowerCase()] = 1;
-    } catch (eS) { return "schema unreadable"; }
-    for (var k2 = 0; k2 < names.length; k2++) if (!have[names[k2]]) return "table " + names[k2] + " does not exist";
+  if (/select\s+status\s+from\s+agent_issues/i.test(q)) return "self-confirming: reads the status of the target issue";
+  if (new RegExp("agent_issues\\s+where\\s+id\\s*=\\s*" + Number(id) + "\\b", "i").test(q)) return "self-confirming: reads the status of the target issue";
+  if (/[^\t\n\r\x20-\x7e]/.test(q)) return "non-ASCII or control character";
+  var toks = rtProbeAuthorLex(q), scan = toks ? rtProbeAuthorScan(toks) : null;
+  if (!scan) return "SQL does not parse (unterminated quote or comment, or unbalanced parentheses)";
+  var have = Object.create(null), k;
+  try {
+    var sm = (await db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").all()).results || [];
+    for (k = 0; k < sm.length; k++) have[String(sm[k].name).toLowerCase()] = 1;
+  } catch (eS) { return "schema unreadable"; }
+  var names = [], seen = Object.create(null);
+  for (k = 0; k < scan.refs.length; k++) if (!seen[scan.refs[k]]) { seen[scan.refs[k]] = 1; names.push(scan.refs[k]); }
+  for (k = 0; k < scan.idents.length; k++) if (have[scan.idents[k]] && !seen[scan.idents[k]]) { seen[scan.idents[k]] = 1; names.push(scan.idents[k]); }
+  var priv = "", selfc = "", notal = "", missing = "", nm, fam;
+  for (k = 0; k < names.length; k++) {
+    nm = names[k];
+    if (scan.cte[nm] && !have[nm]) continue;
+    fam = rtProbeAuthorFamily(nm);
+    if (fam) { if (!priv) priv = "private-table: family=" + fam + (have[nm] ? " object=" + nm : ""); continue; }
+    if (RT_PROBE_AUTHOR_SELF_RE.test(nm)) { if (!selfc) selfc = "self-confirming: " + (have[nm] ? "reads the loop's own bookkeeping, object=" + nm : "reads the loop's own bookkeeping"); continue; }
+    if (RT_PROBE_AUTHOR_ENGINE_RE.test(nm)) { if (!notal) notal = "not-allowlisted: engine table or function"; continue; }
+    if (!have[nm]) { if (!missing) missing = "table " + nm.slice(0, 60) + " does not exist"; continue; }
+    if (RT_PROBE_AUTHOR_ALLOW_SET[nm] !== 1 && !notal) notal = "not-allowlisted: object=" + nm;
   }
+  // an engine table or table-valued function anywhere (expr IN pragma_table_info(...) names no FROM) is the same refusal
+  for (k = 0; k < scan.idents.length; k++) if (RT_PROBE_AUTHOR_ENGINE_RE.test(scan.idents[k]) && !notal) notal = "not-allowlisted: engine table or function";
+  if (priv) return priv;
+  if (selfc) return selfc;
+  if (notal) return notal;
+  if (missing) return missing;
+  var low = q.toLowerCase();
+  if (RT_PROBE_AUTHOR_SELF_LITERAL_RE.test(low)) return "self-confirming: names a remediation event kind or the author's own module";
+  if (new RegExp("issue[-_ ]?" + Number(id) + "(?![0-9])").test(low)) return "self-confirming: names the target's own contract class";
   return null;
 }
 // One event per issue per hour for a probe the author could not write, so the reason is readable from D1 and a loop that never succeeds is visible (before, it was console.error only).
@@ -12144,7 +12281,7 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     var made = await db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'remediation.probe-authored' AND ts > ?1").bind(new Date(Date.now() - 864e5).toISOString()).first();
     if ((made ? Number(made.n) || 0 : 0) >= RT_LIVEPATH_MAX_PER_DAY) return false;
   } catch (eC) { return false; }
-  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done over the tables the issue names: it reads pending while the defect stands and ok once it is fixed. It must be a single SELECT or WITH, must not write, must not read the status of issue " + id + " in agent_issues, must not mention needs-machine-probe, and must only use tables that exist. Reply with the SQL only.";
+  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done: expected is the value that means done (for example 0 or 'ok') and observed is a measured count or value that differs from expected while the defect stands and equals it once the defect is fixed. observed must never be empty and must never start with the word pending. Read only these operational tables and views, and no other: " + RT_PROBE_AUTHOR_ALLOW.join(", ") + ". Do not read the loop's own bookkeeping (issue, decision, remediation or verification tables, rows whose kind starts with remediation., issue " + id + " itself). It must be a single SELECT or WITH of at most " + RT_PROBE_AUTHOR_MAX_SQL + " characters, must not write, and must not mention needs-machine-probe. Reply with the SQL only.";
   var r, input = { messages: [{ role: "user", content: prompt }], max_tokens: 1500 };
   try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, Object.assign({ reasoning_effort: CM_REVIEW_EFFORT[RT_PROBE_AUTHOR_MODEL] || "low" }, input)); }
   catch (eR) {
@@ -12158,12 +12295,23 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
   if (!text) { await rtProbeAuthorNote(db, id, "empty", "finish=" + rep.finish + " tokens=" + rep.tokens); return false; }
   var probe = rtProbeAuthorStrip(text);
   var bad = await rtProbeAuthorValidSql(db, probe, id);
-  if (bad) { await rtProbeAuthorNote(db, id, "static-reject", bad); return false; }
+  if (bad) {
+    // a PROBE-AUTHOR-HARDEN-1 code is the reason of its own event; the detail never repeats the probe text
+    var code = rtProbeAuthorCode(bad);
+    await rtProbeAuthorNote(db, id, code, code === "static-reject" ? bad : String(bad).slice(code.length + 2));
+    return false;
+  }
   var dry;
   try { dry = await db.prepare(probe).all(); }
   catch (eD) { await rtProbeAuthorNote(db, id, "dry-run", String(eD && eD.message || eD)); return false; }
   var row0 = dry && dry.results && dry.results[0];
   if (!row0) { await rtProbeAuthorNote(db, id, "no-row", "the dry run returned no row"); return false; }
+  // deferral-shape: rtIsDeferral reads an empty or pending observation as "not measured yet", so such a contract could never fail or pass
+  var obs = row0.observed == null ? "" : String(row0.observed).trim();
+  if (!("expected" in row0) || !("observed" in row0)) { await rtProbeAuthorNote(db, id, "deferral-shape", "the probe has no expected and observed columns"); return false; }
+  if (!obs) { await rtProbeAuthorNote(db, id, "deferral-shape", "observed is empty"); return false; }
+  if (/^pending/i.test(obs)) { await rtProbeAuthorNote(db, id, "deferral-shape", "observed starts with pending"); return false; }
+  if (obs.length > RT_PROBE_AUTHOR_MAX_OBSERVED) { await rtProbeAuthorNote(db, id, "too-long", "observed " + obs.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_OBSERVED); return false; }
   if (String(row0.expected) === String(row0.observed)) { await rtProbeAuthorNote(db, id, "vacuous", "expected equals observed at birth"); return false; }
   var cid = "issue-" + id;
   var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "probe-author-1 wrote the probe that measures issue " + id;
@@ -12178,7 +12326,7 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     await db.prepare("INSERT INTO decision_log (ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'qnfo-fleet-control:probe-author-1', ?1, ?2, ?3, ?4, ?5, ?6, 'a probe written for an orphan issue without a session', ?7)").bind(
       "Issue " + id + " is open with no contract that can judge it; a read-only d1-query probe that is not vacuous at birth and passes a static check is a safe way to give it one.",
       "PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id,
-      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed; the dry run returned expected <> observed; probe: " + probe.slice(0, 300),
+      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed (operational tables only); the dry run returned expected <> observed (observed: " + obs.slice(0, RT_PROBE_AUTHOR_MAX_OBSERVED) + "); probe: " + probe.slice(0, RT_PROBE_AUTHOR_MAX_SQL),
       "contract issue-" + id + " is active with module probe-author-1",
       "one remediation_contracts row; qnfo-cloud-ops PROBE-REVIEW-1 re-judges it with disjoint models",
       "UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'",
