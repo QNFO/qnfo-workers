@@ -106,7 +106,8 @@ let env = mkEnv(db);
 let r = runner({ [FLASH]: ANS("flash answer"), [GLM]: ANS("glm answer") });
 let out = await X.fleetSteerRun(env, GLM, false, r.run);
 ok(out.choices[0].message.content === "flash answer" && r.calls.join() === FLASH, "over the cap the twin answers and the requested model is not called", r.calls);
-const w = db.writes.find((x) => /INSERT INTO ai_call_counters/.test(x.sql));
+// QUALITY-FLOOR-RECORD-1 (5.40.1): the quality-floor read is counted in the same table, so the steer rows are picked by their purpose.
+const w = db.writes.find((x) => /INSERT INTO ai_call_counters/.test(x.sql) && x.args[1] === X.FLEET_STEER_PURPOSE);
 ok(w && w.args[1] === X.FLEET_STEER_PURPOSE && w.args[2] === FLASH && w.args[3] === 0, "a steered success is counted with no error", w && w.args);
 ok(env.__fleetSteers.length === 1 && env.__fleetSteers[0].to === FLASH, "the switch is reported for _router.fleet_cap_steer", env.__fleetSteers);
 
@@ -116,7 +117,7 @@ env = mkEnv(db);
 r = runner({ [FLASH]: new Error("3046 timeout"), [GLM]: ANS("glm answer") });
 out = await X.fleetSteerRun(env, GLM, false, r.run);
 ok(out.choices[0].message.content === "glm answer" && r.calls.join() === FLASH + "," + GLM, "a twin error is answered by the requested model in the same request", r.calls);
-ok(db.writes.some((x) => /INSERT INTO ai_call_counters/.test(x.sql) && x.args[3] === 1), "the twin failure is counted as an error");
+ok(db.writes.some((x) => /INSERT INTO ai_call_counters/.test(x.sql) && x.args[1] === X.FLEET_STEER_PURPOSE && x.args[3] === 1), "the twin failure is counted as an error");
 ok(logs.some((l) => l[0] === "warn" && /fleet-cap-steer-fallback/.test(l[1])), "the fallback is logged");
 
 reset();
