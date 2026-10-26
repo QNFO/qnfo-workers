@@ -37,7 +37,9 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.2-arxiv-pool"; // 0.37.2 Q08-ARXIV-POOL-1 (2026-10-26): arXiv candidate pool from ops_config q08_arxiv_pool, see the note at scrapeArxiv.
+var VERSION = "0.37.3-dotted-names"; // 0.37.3 Q08-DOTTED-NAMES-1 (2026-10-26), see the note below.
+/* 0.37.3 (2026-10-26, charter pillar reach, agent_issues 100607): Q08-DOTTED-NAMES-1 stops the grounding check refusing a dotted name (Qwen3.8-27B, PLAN.md, Node.js) or a possessive plural that stands in the source; the ground word set only gains words, so nothing accepted before is refused. */
+/* 0.37.2 (2026-10-26, charter pillar reach, agent_issues 100439, 100453): Q08-ARXIV-POOL-1 reads the newest arXiv submissions from ops_config q08_arxiv_pool (30 to 200, absent = 100; was a fixed 30) because an arXiv run publishes about 5 times as often as a Hacker News run, and removes the never-called structuralPreflight. */
 /* 0.37.0 BP26-AI-LABEL-1 (2026-10-26, charter pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every piece page carries a visible "AI-generated" label linked to the published method note and JSON-LD creditText; HTML responses add nosniff, HSTS (no includeSubDomains) and X-Frame-Options SAMEORIGIN. */
 // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
 
@@ -2652,8 +2654,16 @@ var GROUND_OK = new Set(["readme", "changelog", "github", "gitlab", "repository"
 function groundWords(text) {
   // GROUND-HYPHEN-1: unicode hyphens count as '-', and a hyphenated source name also grants its parts ("Dex-One2Many" -> dex, one2many),
   // because the draft's tokenizer splits a name at a non-ASCII hyphen and every such name was rejected as "not in the source".
+  // Q08-DOTTED-NAMES-1 (0.37.3, agent_issues 100607): the name check below turns every character outside a-z0-9' into a space, so "Qwen3.8-27B"
+  // is read as the words qwen3, 8 and 27b and "PLAN.md" as plan and md, while this tokenizer keeps a dotted token whole ("qwen3.8", "plan.md").
+  // A name that stands verbatim in the source was therefore refused as "name not in the source". Reproduced offline on engine_runs 930, whose
+  // story title is "Five Qwen3.8-27B models match Fable 5 Using GVS5H Harness": Qwen3.8-27B, PLAN.md, STATUS.md, GOTCHAS.md and Qwen3.8 Flash
+  // Next were all refused with each of them in the ground. Other runs of 2026-10-20 to 26 with a dotted name flagged: 895 and 877 (Node.js),
+  // 748 (DeepSeek V4.1 Flash), 862, 794 and 685 (Qwen2.5); whether each stood in its source was not re-read.
+  // A dotted token now also grants its dot- and hyphen-separated parts, as a hyphenated one always did. It only adds words to the set, so no
+  // draft is refused that was accepted before.
   var set = new Set(); String(text || "").toLowerCase().replace(/[\u2010-\u2015\u2212]/g, "-").replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
-    w = w.replace(/[.'-]+$/, ""); set.add(w); if (w.indexOf("-") > 0) w.split("-").forEach(function (part) { if (part) set.add(part); }); set.add(w.replace(/'s$/, "")); if (w.length > 3 && w.charAt(w.length - 1) === "s") set.add(w.slice(0, -1)); else set.add(w + "s"); return "";
+    w = w.replace(/[.'-]+$/, ""); set.add(w); if (w.indexOf("-") > 0) w.split("-").forEach(function (part) { if (part) set.add(part); }); if (w.indexOf(".") > 0) w.split(/[-.]/).forEach(function (part) { if (part) set.add(part); }); set.add(w.replace(/'s$/, "")); if (w.length > 3 && w.charAt(w.length - 1) === "s") set.add(w.slice(0, -1)); else set.add(w + "s"); return "";
   });
   return set;
 }
@@ -2709,7 +2719,9 @@ function groundingProblems(text, ground, opts) {
         var nameParts = core.map(function (w) { var parts = w.split(/[-\u2010-\u2015]/); return parts.length > 1 ? parts.filter(function (x) { return /[A-Z0-9]/.test(x); }).join(" ") : w; }).join(" ").replace(/[’]/g, "'");
         var low = nameParts.toLowerCase().replace(/[^a-z0-9' ]/g, " ").replace(/\s+/g, " ").trim();
         if (low && !GROUND_OK.has(low)) {
-          var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !/^\d+$/.test(w); });
+          // Q08-DOTTED-NAMES-1: a possessive plural keeps its closing apostrophe here ("ShinyHunters'", "Workers'") and the ground word set drops it
+          // (engine_runs 738 and 969), so the apostrophe is stripped before the lookup, as the ground side does.
+          var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !words.has(w.replace(/'+$/, "")) && !/^\d+$/.test(w); });
           if (miss.length) { var nb = out.length; add("name not in the source", joined); if (out.length > nb && ctxs.length < 6) { var ix = sent.indexOf(core[0]); ctxs.push(joined + " <<" + sent.slice(Math.max(0, ix - 24), ix + joined.length + 12).replace(/\s+/g, " ") + ">>"); } }
         }
       }
