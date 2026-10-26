@@ -8,6 +8,86 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
+## BREACH-DOCTOR-1 (0.52.0, pillar autonomy; agent_issues 1000266)
+
+`breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
+(FLEET-TICK-SPLIT-1). Per tick, in this order: the five `doctor_*` / `breaches_*` metrics are written first (a dead heartbeat cannot hide);
+each enabled `breach_playbooks` row is validated; the verify phase settles the cases in flight (two consecutive passes of `verify_sql` are
+verified; a failed verify, an SQL error or an expired lease is failed); every open issue older than `breach_doctor_min_age_min` (120 minutes,
+SLA-120M-1) with no doer (a `code-task:` line, a live code task or a live work claim) is classified into `breach_diagnoses` (family from a code
+table of title prefixes, `cause_class` from the playbook that matched or `unclassified`, facts from numbers, ids and enum codes only), critical first,
+up to `breach_doctor_max_cases`; a case whose playbook is `on` and older than the cooldown applies its action (revert stored in the ledger,
+a `decision_log` row, a `breach_diagnosis_events` row). One tick at a time (`loop_lock` k = `breach-doctor`, 4 minutes). On live D1 a tick reads
+about 10,500 rows (the largest statement 4,023; it never reads `v_issue_age_ladder`).
+
+### Switches (all in `ops_config`, read by `bdConfig()` at the start of each tick; bounds are clamped)
+
+| key | default | meaning |
+| --- | --- | --- |
+| `breach_doctor` | `on` | `off` returns before any write (the kill switch); `measure` (also any missing or unreadable value) diagnoses and records the would-do, acts on nothing; `on` acts |
+| `breach_doctor_ai` | `off` | reserved: v1 makes no model call |
+| `breach_doctor_max_cases` | `40` (1..60) | issues classified per tick; the 263 unowned issues of 2026-10-26 drain in 7 ticks. Over the cap waits for the next tick (backpressure, never a stop) |
+| `breach_doctor_max_actions` | `6` (0..20) | state-changing actions per tick; the rest are deferred |
+| `breach_doctor_budget_ms` | `20000` (5000..40000) | wall budget per tick; no new case starts after 85% of it |
+| `breach_doctor_min_age_min` | `120` (10..120) | an unowned open issue becomes a case from this age in minutes (no SLA exceeds 120 minutes) |
+| `breach_doctor_playbook_cooldown_min` | `30` (0..120) | a playbook younger than this (from `breach_playbooks.created_at`) runs in measure |
+
+Per rule: `UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = '...'` stops one rule; `mode = 'measure'` keeps it diagnosing only; a rule with 2 failed or
+reverted cases in 24 hours demotes itself to measure (event `demote`) until a migration fixes it and sets it back to `on`. Per-rule `max_per_tick` and `max_per_day`
+defer, never stop. The strike cap is in code, not in `ops_config`: an issue whose last case failed is retried after `BD_RETRY_MIN` (60) minutes, after `BD_STRIKES` (3) failed or
+reverted cases at most once in `BD_STRIKE_RETRY_MIN` (120) minutes, and the self issue `BREACH-DOCTOR-1: self <rule> <code>` is filed once (control `breach-doctor-strike-cap`:
+a rate with a release, never a permanent exclusion). The self issue is the only issue the doctor files by itself.
+
+### Add a playbook (a migration, never a code change)
+
+An `INSERT OR IGNORE INTO breach_playbooks (...)` in a migration; `migrations/2026-10-26-breach-doctor.sql` (CM-R1, CM-R2, CM-R3, CM-R5) is the shape. Columns:
+
+- `rule_id` (primary key, `[A-Za-z0-9][A-Za-z0-9_.-]{1,40}`), `version`, `family` (the family it serves, `*` for a generic row), `cause_class` (a token such as `duplicate-exhaustion`, not `unclassified`),
+  `action_kind` (`sql`, `file-issue` or `owner-card`: the kinds are closed in code), `min_ladder` (stored, not read in v1), `max_per_tick`, `max_per_day`, `enabled`, `mode` (`measure` or `on`), `note`.
+- `trigger_sql`: one read-only SELECT (or WITH ... SELECT, no semicolon, no write keyword) that returns `issue_id`, `subject` (a token) and `facts_json` (an object of numbers, ids and enum codes).
+- `action_sql` and `revert_sql`: JSON arrays of 1 to 6 statements (use `json_array('<statement>', ...)`). Each statement is exactly one INSERT or UPDATE on `issue_triage`, `agent_issues` (UPDATE only),
+  `remediation_contracts`, `issue_plans`, `ops_config` or `human_actions`; it binds `?1` = the issue id and no other placeholder; no semicolon, no DELETE, DROP, ALTER, CREATE, PRAGMA or ATTACH,
+  no `INSERT OR REPLACE`, no INSERT into `agent_issues` or `code_tasks`, and no reference to a free-text column or table (`description`, `exceptions_json`, `detail`, `meta`, `last_error`, `worker_logs`, `cloud_ops_events`).
+  A `file-issue` or `owner-card` row carries `[]` for both.
+- `verify_sql`: one read-only SELECT (it may bind `?1` = the issue id) that returns `expected` and `observed`; equal text is a pass, and two consecutive passes verify the case.
+- The 30-minute measure cooldown: a new row is `on` in the file but runs as measure (the would-do diagnosis only) until `created_at` is `breach_doctor_playbook_cooldown_min` old, so the engine shows what it would
+  change before it changes it. Changing a row with an UPDATE does not restart the cooldown; a rule that changes what it does ships under a new `rule_id`.
+- A row that fails these checks is not run: the engine skips it, writes a `taint-drop` event (once an hour per rule and reason) and counts it in `doctor_taint_violations_24h`.
+
+### The taint rule
+
+Free text never flows into an issue, a probe, a task or a prompt. The engine reads free text (an issue body, a plan reason, `cloud_ops_events` text) only to turn it into an enum code;
+playbook SQL may not name those columns; every fact value must be a number, an id or a token (`bdFactsSafe`); a fact that is prose is dropped as a `taint-drop`. The issues the doctor
+files hold playbook constants, ids, counts and enum codes only, which is why `migrations/2026-10-26-breach-doctor-trust.sql` may add the single pair `qnfo-fleet-control|BREACH-DOCTOR-1:` to
+`ops_config code_merge_trusted_sources` (backup key `code_merge_trusted_sources--bak-20261026T0800Z`; before it applies the doctor's issues say `Doer: none yet`).
+
+### The gap: `playbook-gap` is in measure
+
+The generic `playbook-gap` row is seeded in `measure` and files no issue: a gap issue carries no `code-task:` or `code-anchor:` line (the lever for a family is a new playbook row by migration, not an edit of an
+existing file), so it would only add an unowned issue. The gap is recorded instead, by family: every case of an unmatched family is a `breach_diagnoses` row with `cause_class = 'unclassified'`,
+`v_breach_doctor_status.gap_by_family` lists the largest families, and `breaches_undiagnosed_over_60m` keeps counting those issues until a playbook finds their cause or they get a doer. To turn gap filing on (control
+`breach-doctor-gap-measure`, reviewed by 2026-11-02): `UPDATE breach_playbooks SET mode = 'on' WHERE rule_id = 'playbook-gap'`, by migration with its `decision_log` row. Armed, it files one
+`BREACH-DOCTOR-1: playbook gap <family>` issue per family per 24 hours, never for OWNER-CHAT, OWNER-REQUEST, other or BREACH-DOCTOR-1 (`BD_GAP_SKIP_FAMILIES`), and none while 3 gap issues are open (`BD_GAP_OPEN_MAX`).
+
+### What the metrics mean
+
+`breaches_undiagnosed_over_60m` counts an unowned issue until a case found its cause (a playbook matched); an issue classified `unclassified` was only looked at and stays counted, so classifying the backlog
+does not make it read 0. `breaches_auto_remediated_24h` (cases that reached `verified`) is the outcome the doctor has to earn. Issues titled `BREACH-DOCTOR-1:` are classified and counted like any other
+(family `BREACH-DOCTOR-1`) but match no playbook and take no action (control `breach-doctor-own-issue-guard`). The five metrics are mapped to a root cause in `metric_breach_cause` by the same migration.
+A case in `queued`, `applied` or `verifying` with an expired lease is failed by the verify phase (`lease-expired`); `queue_sla` row `breach-doctor-case-in-flight` and the contract `fm-breach-doctor-case-age`
+watch the oldest one (120 minutes), which also covers `breach_doctor = off`, where no tick writes.
+
+### Read it
+
+- `SELECT * FROM v_breach_doctor_status;` one row: `mode` and `ai` (the switches), `last_tick_at`, `cases_24h`, `verified_24h`, `failed_24h` (failed or reverted), `in_flight` (queued, applied or verifying),
+  `lease_expired` (in flight past its lease: the next tick fails them), `taint_drops_24h`, and the gap: `unclassified_cases`, `gap_families` and `gap_by_family` (`FAMILY:count`, largest first, at most 12).
+- `SELECT family, cause_class, state, mode, COUNT(*) FROM v_breach_diagnosis_current GROUP BY 1, 2, 3, 4;` the current case of each issue; `SELECT * FROM v_breach_owner WHERE owner_kind IS NULL;` the open issues nobody owns.
+- `SELECT ts, event, issue_id, from_state, to_state, detail FROM breach_diagnosis_events ORDER BY id DESC LIMIT 50;` the ledger. `event` is one of `tick` (one per tick; detail `mode=... rules=... hits=... diagnosed=... acted=...
+  verified=... failed=... demoted=... taint=... gap=... undiagnosed=... deferred=... err=... ms=...`), `diagnosed` (`rule=<id> cause=<class> mode=<measure|on> would-do=<kind>` or `unclassified family=<F>`), `action`, `verify`, `renew`,
+  `handoff` (an owner card), `fail` (`rule=<id> error=<code>`: `sql-error`, `no-rows`, `validation`, `verify-failed`, `verify-error`, `lease-expired`), `supersede` (the issue closed or gained a doer), `skip` (a live work claim),
+  `budget-skip`, `demote` and `taint-drop` (`rule=<id> why=<code>`). A tick that did not run leaves no `tick` event: `doctor_tick_age_min` and the contract `fm-breach-doctor-stalled` read that.
+- Offline suites: `node qnfo-fleet-control/breach-doctor.test.mjs` (the engine over a node:sqlite D1 stub), `node migrations/breach-doctor.test.mjs` and `node migrations/breach-doctor-trust.test.mjs`.
+
 ## ADVISOR-AGENT-TRACING-1 (0.46.0, pillar autonomy)
 
 The folded advisor is a custom application-owned harness, not an AI SDK/Think/Flue agent.
