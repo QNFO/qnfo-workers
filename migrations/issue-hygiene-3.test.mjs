@@ -53,19 +53,19 @@ CREATE TABLE fleet_crons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NU
 }
 function build3() {
   const db = build();
-  db.exec("CREATE TABLE cf_model_catalog (model_id TEXT PRIMARY KEY, status TEXT, notes TEXT); CREATE TABLE model_ladder_models (id TEXT PRIMARY KEY, active INTEGER, notes TEXT);");
+  db.exec("CREATE TABLE cf_model_catalog (slug TEXT PRIMARY KEY, model_id TEXT, status TEXT, notes TEXT); CREATE TABLE model_ladder_models (id TEXT PRIMARY KEY, active INTEGER, notes TEXT);");
   return db;
 }
 let k = 0;
 function promote(db, model, o = {}) {
-  const id = 1000400 + ++k;
+  const id = one(db, "SELECT MAX(COALESCE(MAX(id), 0) + 1, 2000001) AS n FROM agent_issues").n; k++;
   const lane = o.lane ?? "decision";
   db.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, 'Automatic evaluation (cfmb-2) produced a promotion reason', ?, 'optimization', 'medium', 'open', 1, 1)")
     .run(id, o.title ?? "CF-MODEL-EVAL-1: promote " + model + " on the " + lane + " battery", o.source ?? "cf-model-eval");
   db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (?, 'AUTOTRIAGE-2', 'triaged', 'qnfo-model-eval', '2026-10-26 02:00:00')").run(id);
   return id;
 }
-const cat = (db, model, status, notes = "") => db.prepare("INSERT OR REPLACE INTO cf_model_catalog (model_id, status, notes) VALUES (?, ?, ?)").run(model, status, notes);
+const cat = (db, model, status, notes = "", slug = model) => db.prepare("INSERT OR REPLACE INTO cf_model_catalog (slug, model_id, status, notes) VALUES (?, ?, ?, ?)").run(slug, model, status, notes);
 const ladder = (db, model) => db.prepare("INSERT OR REPLACE INTO model_ladder_models (id, active, notes) VALUES (?, 0, 'auto-eval promote cfmb-2 (cf-model-eval)')").run(model);
 function fixture(db) {
   cat(db, "@cf/cloudflare/clef-omni", "passed", "superseded by decision-battery winner @cf/cloudflare/clef-flash");
@@ -74,6 +74,9 @@ function fixture(db) {
   cat(db, "@cf/x/prod", "in_production", "routed");
   cat(db, "@cf/x/onladder", "passed", "kept on the ladder"); ladder(db, "@cf/x/onladder");
   cat(db, "@cf/x/rejected", "rejected", "last verdict: reject (below the control)");
+  cat(db, "@cf/x/rec-noladder", "recommended", "last verdict: promote");   // recommended, no ladder row: kept by the status clause alone
+  cat(db, "@cf/x/dup", "recommended", "last verdict: promote", "dup-a"); cat(db, "@cf/x/dup", "vanished", "left the catalog", "dup-b");   // two catalog rows of one model, no ladder row
+  cat(db, "@cf/x/dup-both", "passed", "kept", "dupb-a"); cat(db, "@cf/x/dup-both", "rejected", "reject", "dupb-b");   // two non-recommended rows: one ledger row, not two
   return {
     omni: promote(db, "@cf/cloudflare/clef-omni"),
     flash: promote(db, "@cf/cloudflare/clef-flash"),
@@ -82,6 +85,9 @@ function fixture(db) {
     prod: promote(db, "@cf/x/prod"),
     onladder: promote(db, "@cf/x/onladder"),
     nocat: promote(db, "@cf/x/unknown"),
+    recnoladder: promote(db, "@cf/x/rec-noladder"),
+    dup: promote(db, "@cf/x/dup"),
+    dupboth: promote(db, "@cf/x/dup-both"),
     otherSource: promote(db, "@cf/cloudflare/clef-omni", { source: "session" }),
     harness: promote(db, "@cf/cloudflare/clef-omni", { title: "CF-MODEL-EVAL-1: harness cannot run @cf/cloudflare/clef-omni" }),
     winner: promote(db, "@cf/cloudflare/clef-omni", { title: "CF-MODEL-EVAL-1: decision-model winner is @cf/cloudflare/clef-omni" }),
@@ -102,16 +108,16 @@ const triggers0 = one(a, "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = '
 
 // ---- apply hygiene-3: the rule runs once inside the file
 a.exec(sql3);
-for (const [key, label] of [["omni", "superseded by the winner"], ["flash", "held back by the canary gate"], ["rejected", "rejected"]]) {
+for (const [key, label] of [["omni", "superseded by the winner"], ["flash", "held back by the canary gate"], ["rejected", "rejected"], ["dupboth", "two catalog rows, neither recommended"]]) {
   ok(status(a, f[key]) === "closed", "the withdrawn promote ticket closes on apply (" + label + ")", status(a, f[key]));
 }
-for (const [key, label] of [["live", "recommended and on the ladder"], ["prod", "in production"], ["onladder", "passed but still on the ladder"], ["nocat", "no catalog row"], ["otherSource", "another source"], ["harness", "the harness-cannot-run kind"], ["winner", "the decision-model-winner kind"]]) {
+for (const [key, label] of [["live", "recommended with a ladder row"], ["recnoladder", "recommended with no ladder row (the status clause alone)"], ["dup", "one of two catalog rows of the model says recommended"], ["prod", "in production"], ["onladder", "passed but still on the ladder"], ["nocat", "no catalog row"], ["otherSource", "another source"], ["harness", "the harness-cannot-run kind"], ["winner", "the decision-model-winner kind"]]) {
   ok(status(a, f[key]) === "open", "a ticket is kept: " + label, status(a, f[key]));
 }
 const ev = one(a, "SELECT close_evidence FROM issue_triage WHERE issue_id = ?", f.flash).close_evidence;
-ok(ev.startsWith("moot: ") && ev.includes("@cf/cloudflare/clef-flash") && ev.includes("is candidate") && ev.includes("canary gate: real-data agreement 0.2917 < 0.7") && ev.includes("no row in model_ladder_models") && /ISSUE-HYGIENE-1 \d{4}-\d{2}-\d{2}$/.test(ev), "the evidence names the model, the catalog status and note and the empty ladder", ev);
+ok(ev.startsWith("moot: the evaluator no longer recommends this model") && ev.includes("@cf/cloudflare/clef-flash") && ev.includes("is candidate") && ev.includes("canary gate: real-data agreement 0.2917 < 0.7") && ev.includes("no row in model_ladder_models") && /ISSUE-HYGIENE-1 \d{4}-\d{2}-\d{2}$/.test(ev), "the evidence names the model, the catalog status and note and the empty ladder", ev);
 ok(one(a, "SELECT close_channel FROM agent_issues WHERE id = ?", f.omni).close_channel === "workflow:ISSUE-HYGIENE-1 model-eval-promote-withdrawn", "the close names its channel");
-ok(one(a, "SELECT COUNT(*) AS n FROM issue_fold_ledger WHERE rule = 'model-eval-promote-withdrawn' AND applied = 1") .n === 3 && one(a, "SELECT COUNT(*) AS n FROM issue_fold_ledger WHERE applied = 0").n === 0, "the ledger holds three applied rows of the rule and nothing pending");
+ok(one(a, "SELECT COUNT(*) AS n FROM issue_fold_ledger WHERE rule = 'model-eval-promote-withdrawn' AND applied = 1") .n === 4 && one(a, "SELECT COUNT(*) AS n FROM issue_fold_ledger WHERE applied = 0").n === 0, "the ledger holds one applied row per closed ticket (four, the duplicate-row model once) and nothing pending");
 ok(one(a, "SELECT COUNT(*) AS n FROM issue_lifecycle WHERE event = 'dispositioned' AND has_evidence = 1 AND issue_id IN (?, ?, ?)", f.omni, f.flash, f.rejected).n === 3, "each close left a lifecycle row with evidence (no silent drop)");
 
 // ---- the workflow
@@ -120,10 +126,15 @@ const v3steps = stepsOf(a);
 ok(v3.version === v2.version + 1 && v3steps.length === 12 && v2steps.length === 11, "the workflow moves up one version and holds twelve statements", { v2: v2.version, v3: v3.version, n: v3steps.length });
 const added = v3steps.filter((s) => !v2steps.includes(s));
 ok(added.length === 1 && /model-eval-promote-withdrawn/.test(added[0]) && v2steps.every((s) => v3steps.includes(s)), "exactly one statement is added and the eleven others are unchanged", added.length);
+ok(JSON.stringify(v3steps.filter((_, i) => i !== 6)) === JSON.stringify(v2steps), "the other eleven statements are the hygiene-2 statements, exactly and in order");
 ok(v3steps.indexOf(added[0]) === 6, "the new rule sits after the six rules and before the five settle statements", v3steps.indexOf(added[0]));
 ok(one(a, "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger'").n === triggers0, "the file adds no trigger");
 ok(!/^\s*(DELETE|DROP)\b/im.test(sql3.replace(/^--.*$/gm, "")), "the file runs no DELETE or DROP");
 ok(one(a, "SELECT COUNT(*) AS n FROM bak_20261026_fleet_task_issue_meta_fold_h2").n === 1 && one(a, "SELECT version FROM bak_20261026_fleet_task_issue_meta_fold_h2").version === v2.version, "the hygiene-2 definition is saved once");
+
+ok(one(a, "SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'ISSUE-HYGIENE-3:') = 1").n === 1, "the decision is logged once");
+const prod = one(a, "SELECT status, priority, description FROM agent_issues WHERE title LIKE 'MODEL-EVAL-FILE-AFTER-WITHDRAW-1:%'");
+ok(prod && prod.status === "open" && /code-task: repo=qnfo-workers path=qnfo-model-eval\/worker\.js/.test(prod.description) && /code-probe: \{"paths": \["qnfo-model-eval\/worker\.js"\], "contains": "PROMOTE-TICKET-AFTER-RECONCILE-1"\}/.test(prod.description), "the producer fix is filed with a code-task line, an anchor and a code-probe", prod && prod.description.slice(-260));
 
 // ---- later: a newly withdrawn ticket closes on the next hourly run, a re-promoted one stays
 const later = promote(a, "@cf/x/later");
@@ -142,6 +153,7 @@ ok(status(a, f.live) === "open" && status(a, f.prod) === "open" && status(a, f.o
 a.exec(sql3);
 ok(one(a, "SELECT version FROM fleet_tasks WHERE id = 'issue-meta-fold'").version === v3.version + 1, "a second apply moves the version again");
 ok(one(a, "SELECT COUNT(*) AS n FROM bak_20261026_fleet_task_issue_meta_fold_h2").n === 1 && one(a, "SELECT version FROM bak_20261026_fleet_task_issue_meta_fold_h2").version === v2.version, "and keeps the first backup");
+ok(one(a, "SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'ISSUE-HYGIENE-3:') = 1").n === 1 && one(a, "SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'MODEL-EVAL-FILE-AFTER-WITHDRAW-1:%'").n === 1, "and neither the decision row nor the producer issue is written twice");
 
 // ---- rollback restores hygiene-2
 const b = build3(); b.exec(sql1); b.exec(sql2);
