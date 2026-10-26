@@ -296,7 +296,7 @@ function baseState(over) {
   const ins2 = m2.log.find(l => l.sql.includes('INSERT INTO social_threads') && l.sql.includes('post_uri'));
   const t2 = JSON.parse(ins2.args[2]);
   assert.equal(t2.length, 2);
-  assert.ok(t2[0].includes('qnfo.org/work-with-me?utm_source=bluesky') && t2[1] === 'Second, no link.');
+  assert.ok(t2[0].includes('qnfo.org/work-with-me?utm_source=bluesky') && t2[1] === 'Second, no link.' + mod.AUTOMATION_MARKER);  // BP26-SOCIAL-AUTOMATION-1: the marker ends every automated post that has room for it
   const m3 = mkEnv(baseState({ posted7: 0 }));
   const res3 = await W.fetch(new Request('https://x/cross', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'A complete sentence about the work.', link: 'https://papers.qnfo.org/papers/abc/', slug: 'abc' }) }), m3.env);
   assert.equal(res3.status, 200);
