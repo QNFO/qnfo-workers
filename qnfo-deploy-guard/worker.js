@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.30-codeagent"; /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
+var VERSION = "1.3.31-codeagent"; /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -27,17 +27,29 @@ function tok() {
   return out;
 }
 function ms(s) { if (!s) return NaN; var v = new Date(String(s).replace(" ", "T") + (String(s).indexOf("Z") >= 0 ? "" : "Z")).getTime(); return isNaN(v) ? NaN : v; }
+// CF-OBS-ISSUE-1 (a48ea72c, "The operation was aborted" x21): the probe was strictly serial -
+// when the primary ops URL hung past the timeout, c.abort() fired on it, logged the abort, and
+// only THEN was the mirror tried, so every slow primary produced an aborted-fetch error and the
+// whole scan waited timeout+timeout. One shared AbortController now races BOTH URLs in
+// parallel (Promise.any) with a single timer that is cleared in a finally as soon as either
+// answers: a hanging primary can no longer abort (the mirror wins first, the timer is cleared,
+// nothing is aborted), and the fleet/cost probes stop losing whole timeout windows to dead hosts.
 function getJson(urls, tout) {
   return (async function () {
-    for (var i = 0; i < urls.length; i++) {
-      try {
-        var c = new AbortController(); var timerId = setTimeout(function () { c.abort(); }, tout || 15000);
-        var r = await fetch(urls[i], { signal: c.signal, headers: { accept: "application/json" } });
-        clearTimeout(timerId);
-        if (r.ok) { var j = await r.json(); if (j) return { ok: true, j: j, url: urls[i] }; }
-      } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:getJson:caught", error: String((e && e.message) || e) })); }
-    }
-    return { ok: false, j: null, url: null };
+    var c = new AbortController();
+    var timerId = setTimeout(function () { c.abort(); }, tout || 15000);
+    var attempts = urls.map(function (u) {
+      return fetch(u, { signal: c.signal, headers: { accept: "application/json" } }).then(function (r) {
+        if (!r.ok) throw new Error("status " + r.status);
+        return r.json().then(function (j) {
+          if (!j) throw new Error("empty body");
+          return { ok: true, j: j, url: u };
+        });
+      });
+    });
+    try { return await Promise.any(attempts); }
+    catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:getJson:caught", error: String((e && e.message) || e) })); return { ok: false, j: null, url: null }; }
+    finally { clearTimeout(timerId); }
   })();
 }
 // DECISION (2026-09-21): the lock is backed by D1 deploy_locks (STRONGLY consistent). It was on KV,

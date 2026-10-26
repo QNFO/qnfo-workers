@@ -1,0 +1,181 @@
+name: deploy-qnfo-agents
+
+# CF-AGENTS-1 (2026-10-26, pillar autonomy; owner directive 2026-10-25: every Cloudflare agent tool and function reachable from
+# fleet.qnfo.org/cmd and the ops endpoint). qnfo-agents declares a new Durable Object class with its migration, a worker loader,
+# the AI binding, D1 AUDIT_DB and a service binding with props. The canonical route (scripts/canonical_deploy.py -> qnfo-ops
+# /ops/deploy, a binding-preserving PUT /content) cannot send a migration, so the directory carries WRANGLER-ONLY and this
+# workflow is its deploy path, the same shape as deploy-code-orchestrator.yml: deploy-guard lock, wrangler deploy of the committed
+# bundle (worker.js, built from src/ by build.mjs and checked here against a fresh build), the fleet_deploys ledger, and a /health
+# gate plus a functional probe that fail the run closed.
+# Scope: ONLY qnfo-agents. No schedule trigger (GitHub schedule never fires on this repo). It sets no secret: qnfo-agents has none.
+# Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-agents/**"
+      - ".github/workflows/deploy-qnfo-agents.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-qnfo-agents
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # RUNNER-PIN-2: revisit after the 2026-11-19 ubuntu-26.04 rollout is validated.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER: qnfo-agents
+      GUARD: https://qnfo-deploy-guard.q08.workers.dev
+      GUARD_UA: "QNFO-fleet-ci/1.0 (+https://qnfo.org; deploy-qnfo-agents)"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Require Cloudflare credentials
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not configured - refusing to no-op"
+            exit 1
+          fi
+
+      - name: Rebuild the bundle from src and require it to match the committed worker.js
+        working-directory: qnfo-agents
+        run: |
+          set -euo pipefail
+          cp worker.js /tmp/committed-worker.js
+          npm ci --no-audit --no-fund
+          npm run build
+          if ! cmp -s worker.js /tmp/committed-worker.js; then
+            echo "::error::worker.js is not the build of src/ at this commit; run npm ci and npm run build in qnfo-agents and commit both bundles"
+            exit 1
+          fi
+          node worker.test.mjs
+
+      - name: Resolve the repo VERSION
+        id: ver
+        run: |
+          set -euo pipefail
+          want="$(grep -m1 -oE '^var VERSION = "[^"]+"' qnfo-agents/worker.js | sed -E 's/.*"([^"]+)"/\1/')"
+          [ -n "$want" ] || { echo "::error::could not read VERSION from worker.js"; exit 1; }
+          echo "want=$want" >> "$GITHUB_OUTPUT"
+          echo "repo VERSION=$want"
+
+      - name: Acquire the deploy-guard lock and read the previous live VERSION
+        id: lock
+        run: |
+          set -uo pipefail
+          prev="$(curl -s --max-time 20 "https://$WORKER.q08.workers.dev/health" | jq -r '.version // empty' 2>/dev/null || true)"
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          body="$(jq -cn --arg w "$WORKER" --arg s "gha-$GITHUB_RUN_ID" '{worker:$w,owner:"ci/deploy-qnfo-agents",actor:"deploy-qnfo-agents.yml",session_id:$s,ttl_sec:900}')"
+          res=""; acquired=false
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/lock/acquire" --data "$body")"
+            echo "lock response (attempt $attempt): $res"
+            if [ "$(echo "$res" | jq -r '.acquired // false' 2>/dev/null)" = "true" ]; then acquired=true; break; fi
+            sleep $(( 15 + RANDOM % 15 ))
+          done
+          if [ "$acquired" != "true" ]; then
+            echo "::error::DEPLOY-LOCK-CONTENTION: deploy-guard lock not acquired after 12 attempts - refusing to deploy"
+            exit 1
+          fi
+          echo "token=$(echo "$res" | jq -r '.token')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy with wrangler (this worker only)
+        id: wrangler
+        working-directory: qnfo-agents
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4 deploy 2>&1 | tee /tmp/wrangler.log
+
+      - name: Record the deploy in the guard ledger fleet_deploys
+        if: always() && steps.wrangler.outcome != 'skipped'
+        env:
+          WR: ${{ steps.wrangler.outcome }}
+        run: |
+          set -uo pipefail
+          dbid="$(grep -m1 -E '^database_id' qnfo-agents/wrangler.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          ok=1
+          if [ "$WR" != "success" ]; then ok=0; fi
+          ts="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          note="wrangler deploy (deploy-qnfo-agents.yml run ${GITHUB_RUN_ID}, Agents SDK worker with a Durable Object migration): wrangler=$WR"
+          body="$(jq -cn --arg actor "github-actions/deploy-qnfo-agents" --arg sha "$GITHUB_SHA" --arg src "qnfo-agents/worker.js" --argjson ok "$ok" --arg note "$note" --arg ts "$ts" --arg sess "run-${GITHUB_RUN_ID}" \
+            '{sql:"INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts, session_id) VALUES (?,?,?,?,?,?,?,?,?)",params:["qnfo-agents",$actor,null,$sha,$src,$ok,$note,$ts,$sess]}')"
+          code="$(curl -s -o /tmp/ledger.json -w '%{http_code}' --max-time 30 -X POST \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database/$dbid/query" --data "$body")"
+          echo "guard ledger write HTTP $code success=$(jq -r '.success' /tmp/ledger.json 2>/dev/null)"
+          if [ "$code" != "200" ]; then echo "::error::guard ledger write failed"; exit 1; fi
+
+      - name: Gate on live health VERSION and a functional probe (fail closed)
+        id: health
+        env:
+          WANT: ${{ steps.ver.outputs.want }}
+        run: |
+          set -uo pipefail
+          url="https://$WORKER.q08.workers.dev"
+          got=""
+          for i in 1 2 3 4 5 6 7 8; do
+            sleep 15
+            got="$(curl -s --max-time 30 "$url/health" | jq -r '.version // empty' 2>/dev/null || true)"
+            echo "attempt $i live VERSION=$got want=$WANT"
+            [ "$got" = "$WANT" ] && break
+          done
+          echo "got=$got" >> "$GITHUB_OUTPUT"
+          if [ "$got" != "$WANT" ]; then echo "::error::live VERSION '$got' != repo '$WANT'"; exit 1; fi
+          tools="$(curl -s --max-time 30 "$url/tools")"
+          echo "$tools" | head -c 600; echo
+          echo "$tools" | grep -q '"repo_read_file"' || { echo "::error::GET /tools did not list repo_read_file"; exit 1; }
+          code="$(curl -s -o /tmp/run.json -w '%{http_code}' --max-time 30 -X POST "$url/run" -H 'Content-Type: application/json' --data '{"text":"public probe"}')"
+          echo "public POST /run -> HTTP $code (want 403: turns are for the console and the ops endpoint only)"
+          if [ "$code" != "403" ]; then echo "::error::a public caller reached /run (HTTP $code)"; exit 1; fi
+          dom="$(curl -s --max-time 30 https://agents.qnfo.org/health | jq -r '.version // empty' 2>/dev/null || true)"
+          echo "agents.qnfo.org VERSION=${dom:-none}"
+          if [ "$dom" != "$WANT" ]; then echo "::warning::agents.qnfo.org does not answer $WANT yet (custom domain certificate may still be issuing)"; fi
+
+      - name: Write the fleet_deploys ledger row and release the lock
+        if: always()
+        env:
+          WANT: ${{ steps.ver.outputs.want }}
+          PREV: ${{ steps.lock.outputs.prev }}
+          TOKEN: ${{ steps.lock.outputs.token }}
+          WR: ${{ steps.wrangler.outcome }}
+          HC: ${{ steps.health.outcome }}
+        run: |
+          set -uo pipefail
+          rc=0
+          ok=false
+          if [ "$WR" = "success" ] && [ "$HC" = "success" ]; then ok=true; fi
+          if [ "$WR" != "skipped" ] && [ -n "$WR" ]; then
+            body="$(jq -cn --arg w "$WORKER" --arg from "$PREV" --arg to "$WANT" --argjson ok "$ok" --arg note "wrangler deploy run $GITHUB_RUN_ID sha ${GITHUB_SHA::12}" \
+              '{worker:$w,actor:"deploy-qnfo-agents.yml",from:$from,to:$to,source_path:"qnfo-agents/worker.js",ok:$ok,note:$note}')"
+            res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/ledger" --data "$body")"
+            echo "ledger response: $res"
+            if [ "$(echo "$res" | jq -r '.logged // false' 2>/dev/null)" != "true" ]; then echo "::error::fleet_deploys ledger row not written"; rc=1; fi
+          fi
+          if [ -n "${TOKEN:-}" ]; then
+            rel="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/lock/release" --data "$(jq -cn --arg w "$WORKER" --arg t "$TOKEN" '{worker:$w,token:$t}')")"
+            echo "lock release: $rel"
+          fi
+          exit $rc
+
+      - name: Upload the wrangler log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-qnfo-agents-log
+          path: /tmp/wrangler.log
+          if-no-files-found: ignore
+          retention-days: 14
