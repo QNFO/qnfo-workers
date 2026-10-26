@@ -1,11 +1,11 @@
 {
-  "audited_at": "2026-10-26 19:15:07",
+  "audited_at": "2026-10-26 19:46:42",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-fleet-control"
+        "qnfo-ops"
       ],
       "refreshed": true,
       "second_pass": []
@@ -568,12 +568,12 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.37.3-dotted-names",
+        "version": "0.37.5-thin-passed-over",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-agents",
-        "version": "0.2.4",
+        "version": "0.2.5",
         "worker": "qnfo-agents"
       },
       {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.40.1",
+        "version": "1.40.2-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -628,17 +628,17 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.71.3",
+        "version": "1.72.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.43.4-plain-ask",
+        "version": "3.44.0-plain-article",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.9.0-roadmap-twin-rows",
+        "version": "0.9.1-keep-catalogue-project",
         "worker": "qnfo-github-steward"
       },
       {
@@ -678,7 +678,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.59.2-tool-miss-not-failure",
+        "version": "2.59.4-canonical-refresh",
         "worker": "qnfo-ops"
       },
       {
@@ -688,7 +688,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.37.1-codeagent",
+        "version": "0.38.1-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1017,9 +1017,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.37.3-dotted-names",
+      "before": "0.37.5-thin-passed-over",
       "http": 200,
-      "live": "0.37.3-dotted-names",
+      "live": "0.37.5-thin-passed-over",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1052,9 +1052,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-agents": {
-      "before": "0.2.4",
+      "before": "0.2.5",
       "http": 200,
-      "live": "0.2.4",
+      "live": "0.2.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-agents"
@@ -1210,9 +1210,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.40.1",
+      "before": "1.40.2-codeagent",
       "http": 200,
-      "live": "1.40.1",
+      "live": "1.40.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1365,9 +1365,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.71.3",
+      "before": "1.72.0",
       "http": 200,
-      "live": "1.71.3",
+      "live": "1.72.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1391,17 +1391,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.43.4-plain-ask",
+      "before": "3.44.0-plain-article",
       "http": 200,
-      "live": "3.43.4-plain-ask",
+      "live": "3.44.0-plain-article",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.9.0-roadmap-twin-rows",
+      "before": "0.9.1-keep-catalogue-project",
       "http": 200,
-      "live": "0.9.0-roadmap-twin-rows",
+      "live": "0.9.1-keep-catalogue-project",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1517,9 +1517,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.59.2-tool-miss-not-failure",
+      "before": "2.59.4-canonical-refresh",
       "http": 200,
-      "live": "2.59.2-tool-miss-not-failure",
+      "live": "2.59.4-canonical-refresh",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1605,9 +1605,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.37.1-codeagent",
+      "before": "0.38.1-codeagent",
       "http": 200,
-      "live": "0.37.1-codeagent",
+      "live": "0.38.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
