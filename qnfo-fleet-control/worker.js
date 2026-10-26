@@ -12155,7 +12155,9 @@ var RT_PROBE_AUTHOR_PRIVATE = [
 ];
 // The loop's own bookkeeping by object name: what the author, the verification engine and the issue closers write.
 var RT_PROBE_AUTHOR_SELF_RE = /(^|_)issues?(_|$)|(^|_)decisions?(_|$)|decision_|remediation|closure|work_claims|triage|lifecycle|verification/;
-var RT_PROBE_AUTHOR_SELF_LITERAL_RE = /remediation\.|probe[-_ ]?author|probe[-_ ]?needed/;
+var RT_PROBE_AUTHOR_SELF_LITERAL_RE = /remediation|probe[-_ ]?(author|needed)/;
+// the text and ids the author and the live-path filer write into cloud_ops_events ("issue=<id> ...", par-/pau-/pnf- ids): a LIKE on them reads the loop's own bookkeeping without naming a kind
+var RT_PROBE_AUTHOR_SELF_TEXT_RE = /issue\s*=|^(par|pau|pnf)-/;
 var RT_PROBE_AUTHOR_ENGINE_RE = /^(sqlite_|pragma_|dbstat)/;
 var RT_PROBE_AUTHOR_FROM_END_RE = /^(where|group|order|limit|having|union|intersect|except|window|select|values|returning)$/;
 function rtProbeAuthorFamily(name) {
@@ -12204,6 +12206,7 @@ function rtProbeAuthorScan(toks) {
     n1 = toks[i + 1]; n2 = toks[i + 2];
     if (t.k !== "s" && n1 && n1.k === "w" && n1.v === "as" && n2 && n2.k === "p" && n2.v === "(") cte[v] = 1;
     if (t.k === "w") {
+      if (v === "from" && i > 0 && toks[i - 1].k === "w" && toks[i - 1].v === "distinct") continue;   // x IS [NOT] DISTINCT FROM y is no table list
       if (v === "from" || v === "join") { expect = true; if (v === "from") inFrom[depth] = true; continue; }
       if (RT_PROBE_AUTHOR_FROM_END_RE.test(v)) { inFrom[depth] = false; expect = false; continue; }
       if (v === "on" || v === "using") { expect = false; continue; }
@@ -12253,6 +12256,14 @@ async function rtProbeAuthorValidSql(db, sql, id) {
     if (!have[nm]) { if (!missing) missing = "table " + nm.slice(0, 60) + " does not exist"; continue; }
     if (RT_PROBE_AUTHOR_ALLOW_SET[nm] !== 1 && !notal) notal = "not-allowlisted: object=" + nm;
   }
+  // cloud_ops_events holds the rows of every loop, among them kinds of private families (outreach, subscribers-send, owner-local-ingest, identity-weekly, secret-watch-tick): a kind or text filter that names a private family is refused too
+  if (seen.cloud_ops_events === 1 && !priv) {
+    for (k = 0; k < toks.length; k++) {
+      if (toks[k].k !== "s" || String(toks[k].v).length > 80) continue;
+      fam = rtProbeAuthorFamily(String(toks[k].v).toLowerCase().replace(/[-.:\/ %]+/g, "_").replace(/^_+|_+$/g, ""));
+      if (fam) { priv = "private-table: family=" + fam + " (an event kind or text filter of cloud_ops_events)"; break; }
+    }
+  }
   // an engine table or table-valued function anywhere (expr IN pragma_table_info(...) names no FROM) is the same refusal
   for (k = 0; k < scan.idents.length; k++) if (RT_PROBE_AUTHOR_ENGINE_RE.test(scan.idents[k]) && !notal) notal = "not-allowlisted: engine table or function";
   if (priv) return priv;
@@ -12261,6 +12272,7 @@ async function rtProbeAuthorValidSql(db, sql, id) {
   if (missing) return missing;
   var low = q.toLowerCase();
   if (RT_PROBE_AUTHOR_SELF_LITERAL_RE.test(low)) return "self-confirming: names a remediation event kind or the author's own module";
+  for (k = 0; k < toks.length; k++) if (toks[k].k === "s" && RT_PROBE_AUTHOR_SELF_TEXT_RE.test(String(toks[k].v).toLowerCase())) return "self-confirming: matches the loop's own event text or ids";
   if (new RegExp("issue[-_ ]?" + Number(id) + "(?![0-9])").test(low)) return "self-confirming: names the target's own contract class";
   return null;
 }

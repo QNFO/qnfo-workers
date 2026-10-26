@@ -222,6 +222,14 @@ const forms = (X) => [
   // a private name that does not exist is still refused as private, never reported as a missing table
   const ghost = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps, subscribers_ghost_copy");
   ok(reasonOf(ghost) === "private-table", "a private-looking name that is not in the schema is still private-table", ghost);
+  // cloud_ops_events carries the rows of every loop, private families among them (live kinds: outreach, subscribers-send, owner-local-ingest, identity-weekly, secret-watch-tick, secret-change)
+  for (const lit of ["kind = 'outreach'", "kind = 'outreach-learner'", "kind = 'subscribers-send'", "kind = 'owner-local-ingest'", "kind = 'identity-weekly'", "kind = 'secret-watch-tick'", "kind = 'secret-change'", "kind LIKE 'owner%'", "text LIKE '%email%'", "text LIKE '%send an email to the contact%'"]) {
+    const bad = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE " + lit);
+    ok(reasonOf(bad) === "private-table", "an event filter naming a private family is private-table: " + lit, bad);
+  }
+  const okKind = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind = 'workflow-failure-intake' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day') AND status = 'error' AND text NOT LIKE '%timeout%'");
+  const okSession = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM pr_sla_state WHERE waits_on = 'session'");
+  ok(okKind === null && okSession === null, "an ordinary event kind passes, and the word session in another table's filter is not an event filter", [okKind, okSession]);
   // a CTE alias that only looks private is not a table: its body is what is scanned
   const alias = await check("WITH mail_counts AS (SELECT COUNT(*) AS n FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM mail_counts");
   ok(alias === null, "a CTE alias named like a private family is not itself a table", alias);
@@ -277,6 +285,11 @@ const forms = (X) => [
     "filed event kind": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind='remediation.probe-needed-filed'",
     "remediation kind wildcard": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind LIKE 'remediation.%'",
     "remediation kind in list": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind IN ('x', 'REMEDIATION.probe-error')",
+    "remediation kind prefix without the dot": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind LIKE 'remediation%'",
+    "event text of the author": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE text LIKE 'issue=4242%'",
+    "event text of the author, spaced": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE text LIKE '%issue = 4243 %'",
+    "event id of the author": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE id LIKE 'par-%'",
+    "event id of the filer": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE id LIKE 'PNF-%'",
     "author module literal": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE model = 'probe-author-1'",
     "author module underscore": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE model = 'probe_author'",
     "probe-needed family": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal LIKE 'PROBE-NEEDED-1%'",
@@ -294,6 +307,8 @@ const forms = (X) => [
   const other = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal = 'issue-4243'");
   const prefix = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal = 'issue-42421'");
   ok(other === null && prefix === null, "another issue's class (and a longer number that starts with the same digits) is not the target's own", [other, prefix]);
+  const distinctFrom = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status IS DISTINCT FROM 'closed' AND status IS NOT DISTINCT FROM 'open'");
+  ok(distinctFrom === null, "IS DISTINCT FROM is not a table list", distinctFrom);
   const legit = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind = 'workflow.failed' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')");
   ok(legit === null, "a read of cloud_ops_events for an ordinary kind is accepted", legit);
 }
