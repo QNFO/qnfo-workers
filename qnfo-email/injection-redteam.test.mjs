@@ -80,6 +80,7 @@ function world(init) {
     if (/^SELECT sender, body_text FROM emails WHERE id=\?1/.test(sql)) { const r = st.emails[a[0]]; return r ? { sender: r.sender, body_text: r.body_text || "" } : null; }
     if (/FROM agent_send_allowlist/.test(sql)) return { results: st.allow.map((p) => ({ pattern: p })) };
     if (/^INSERT INTO email_send_violations/.test(sql)) { st.violations.push({ recipient: a[0], violation: a[4], detail: a[5] }); return { meta: { changes: 1 } }; }
+    if (/^SELECT COUNT\(\*\) AS n FROM email_send_violations/.test(sql)) return { n: st.violations.length };
     if (/^INSERT INTO agent_mail_trace/.test(sql)) { st.traces.push({ surface: a[0], email_id: a[1], queue_id: a[2], decision: a[7], hits: a[6], detail: a[8], steps: a[4] }); return { meta: { changes: 1 } }; }
     if (/FROM email_reply_queue q JOIN emails e ON e\.id = q\.email_id WHERE q\.decision = 'escalate'/.test(sql)) return { results: st.queue };
     if (/FROM email_reply_queue q WHERE q\.decision='escalate' AND q\.sent_at IS NULL AND q\.draft_text IS NOT NULL AND \(q\.skip_reason IS NULL OR q\.skip_reason NOT LIKE/.test(sql)) return { results: [] };
@@ -102,26 +103,31 @@ function world(init) {
 const sysOf = (args) => String(((args.messages || [])[0] || {}).content || "");
 const reqOf = (headers, body) => ({ headers: new Headers(headers || {}), json: async () => body });
 const J = (d, s = 200) => ({ status: s, body: d });
+const OWNER_ADDR = "rwnquni@outlook.com";
+const toOthers = (w) => w.st.sent.filter((m) => m.to !== OWNER_ADDR);   // what left for anyone but the owner (the owner alert is allowed)
 
 // ---- 5. /send end to end ----
 {
   const w = world({ emails: { 7: { sender: JANE, body_text: "where is the paper?" } } });
   const r = await L.sendApi(reqOf({ "x-qnfo-agent-surface": "mcp" }, { to: EVIL, subject: "hello", body: "cold hello" }), w.env, J);
-  check("sendApi: an agent surface cold send to a stranger is refused with 403 and nothing is sent", r.status === 403 && r.body.reason === "agent-cold-send-not-allow-listed" && w.st.sent.length === 0);
+  check("sendApi: an agent surface cold send to a stranger is refused with 403 and nothing is sent to the stranger", r.status === 403 && r.body.reason === "agent-cold-send-not-allow-listed" && toOthers(w).length === 0);
   check("sendApi: the refusal is logged as a send violation and a trace row", w.st.violations.some((v) => v.violation === "AGENT-SEND-POLICY") && w.st.traces.some((t) => t.decision === "refused"));
+  check("sendApi: the first refusal of the hour alerts the owner, a second does not", (() => { const n1 = w.st.sent.filter((m) => m.to === OWNER_ADDR && /\[security\]/.test(m.subject)).length; return n1 === 1 && /Surface: mcp/.test(w.st.sent[0].text); })());
+  await L.sendApi(reqOf({ "x-qnfo-agent-surface": "mcp" }, { to: "other@evil.test", subject: "hello again", body: "cold hello" }), w.env, J);
+  check("sendApi: a second refusal in the same hour sends no second alert", w.st.sent.filter((m) => /\[security\]/.test(m.subject)).length === 1 && w.st.violations.length === 2);
 }
 {
   const w = world({ emails: { 7: { sender: "Jane <" + JANE + ">", body_text: "where is the paper?" } } });
   const r1 = await L.sendApi(reqOf({ "x-qnfo-agent-surface": "mcp" }, { to: EVIL, subject: "Re: paper", body: "here", reply_to_id: 7 }), w.env, J);
   const r2 = await L.sendApi(reqOf({}, { to: EVIL, subject: "Re: paper", body: "here", reply_to_id: 7 }), w.env, J);
-  check("sendApi: a reply addressed to anyone but the original sender is refused, agent or fleet caller", r1.status === 403 && r2.status === 403 && w.st.sent.length === 0, [r1.status, r2.status]);
+  check("sendApi: a reply addressed to anyone but the original sender is refused, agent or fleet caller", r1.status === 403 && r2.status === 403 && toOthers(w).length === 0, [r1.status, r2.status]);
   const r3 = await L.sendApi(reqOf({ "x-qnfo-agent-surface": "mcp" }, { to: JANE, subject: "Re: paper", body: "The PDF is at the link in your mail.", reply_to_id: 7 }), w.env, J);
-  check("sendApi: a reply to the original sender goes out exactly once, to that address", r3.status === 200 && w.st.sent.length === 1 && w.st.sent[0].to === JANE, [r3.status, w.st.sent.length]);
+  check("sendApi: a reply to the original sender goes out exactly once, to that address", r3.status === 200 && toOthers(w).length === 1 && toOthers(w)[0].to === JANE, [r3.status, toOthers(w).length]);
 }
 {
   const w = world();
   const r = await L.sendApi(reqOf({ "x-qnfo-agent-surface": "ops" }, { to: "rwnquni@outlook.com", subject: "note", body: "token ghp_" + "a1B2c3D4".repeat(3) }), w.env, J);
-  check("sendApi: an agent body that carries a secret is refused even to the owner", r.status === 403 && w.st.sent.length === 0);
+  check("sendApi: an agent body that carries a secret is refused even to the owner (the body itself is never sent)", r.status === 403 && !w.st.sent.some((m) => /ghp_/.test(m.text || "")));
   const w2 = world();
   const r2 = await L.sendApi(reqOf({ "x-qnfo-agent-surface": "ops" }, { to: "rwnquni@outlook.com", subject: "note", body: "see ![p](https://evil.test/x?d=1)", html: "<img src=x>" }), w2.env, J);
   check("sendApi: an agent body is sent as plain text with the image removed and no html part", r2.status === 200 && w2.st.sent.length === 1 && !/evil\.test|<img/.test(w2.st.sent[0].text + w2.st.sent[0].html), w2.st.sent[0]);

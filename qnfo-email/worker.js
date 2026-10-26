@@ -1586,6 +1586,13 @@ async function injSendGuard(req, e, b) {
     else { b.body = s.text; delete b.html; if (s.removed.length) detail += "; sanitised: " + s.removed.map(function (r) { return r.kind; }).join(","); }
   }
   if (!dec.ok) await injViolation(db, { recipient: b.to, sender: b.from || "qnfo@qnfo.org", subject: b.subject, violation: "AGENT-SEND-POLICY", detail: (surface || "fleet") + ": " + dec.reason });
+  if (!dec.ok && surface) {
+    // The alert: an agent surface tried to mail outside the policy. At most one owner notice an hour (the violation row just written is the first of the hour when the count is 1).
+    try {
+      const c = await db.prepare("SELECT COUNT(*) AS n FROM email_send_violations WHERE violation='AGENT-SEND-POLICY' AND detected_at >= datetime('now','-1 hour')").first();
+      if (c && Number(c.n) <= 1) await notifyOwner(e, "[security] an agent tried to send mail outside the policy", "Surface: " + surface + "\nRefused: " + dec.reason + "\nTo: " + String(b.to || "").slice(0, 200) + "\nSubject: " + injSanitizeOutbound(String(b.subject || "").slice(0, 200), { urls: false, ground: "" }).text + "\n\nNothing was sent. If you meant it, add the address (or an @domain) to agent_send_allowlist, or set ops_config agent_send_policy = off. Every refusal is a row in email_send_violations (AGENT-SEND-POLICY) and agent_mail_trace.");
+    } catch (err) { console.error(JSON.stringify({ evt: "email:injSendGuard:alert:caught", error: String((err && err.message) || err) })); }
+  }
   if (surface || !dec.ok) await injTrace(db, { surface: surface || "send-api", email_id: b.reply_to_id, goal: b.reply_to_id ? "reply" : "new-message", steps: ["send-guard", dec.ok ? "allowed" : "refused"], decision: dec.ok ? "allowed" : "refused", detail: detail });
   return dec;
 }
