@@ -1,4 +1,4 @@
-var VERSION="3.44.0-plain-article";
+var VERSION="3.44.1-codeagent";
 // 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
 // 3.43.2 PLAIN-RESIDUE-LIKE-1: the residue gate SQL uses instr (a 54-byte LIKE pattern made D1 refuse every plain-summary fill and paper-page fill from 2026-10-25 19:50); a paper page with no summary builds that one paper only, never the 12-paper hourly batch.
 // 3.42.1 PLAIN-RESIDUE-GATE-1 hides prompt residue and refreshes only flagged summaries; ROOT-PAPER-API-1 serves root-host WebMCP paper APIs.
@@ -7631,8 +7631,8 @@ var ARTICLE_RETRY_HOURS = 6;
 var ARTICLE_LEARN_MAX = 5;
 var ARTICLE_TERMS_MAX = 10;
 var ARTICLE_LINKS_MAX = 6;
-var ARTICLE_HARD_GRADE = 12;
-var ARTICLE_GATE_GRADE = 9;
+var ARTICLE_HARD_GRADE = 9;
+var ARTICLE_GATE_GRADE = 8;
 var ARTICLE_WPM = 230;
 var ARTICLE_UA = "qnfo-papers/1.0 (https://papers.qnfo.org; plain-language links)";
 var ARTICLE_GREEK = /\b(?:alpha|beta|gamma|delta|epsilon|zeta|theta|iota|kappa|lambda|nu|xi|omicron|rho|sigma|tau|upsilon|phi|chi|psi|omega|mu|eta)\b/i;
