@@ -59,7 +59,7 @@ const mkDb = (regState) => ({
         return { results: [] };
       },
       async first() { return null; },
-      async run() { if (/INSERT INTO worker_live_audit/.test(sql)) writes.push({ worker: args[0], http: args[1], note: args[3] }); if (/INSERT INTO fleet_state_snapshots/.test(sql)) snapshots.push(args); return { meta: { changes: 1 } }; }
+      async run() { if (/INTO worker_live_audit/.test(sql)) writes.push({ worker: args[0], http: args[1], note: args[3] }); if (/INSERT INTO fleet_state_snapshots/.test(sql)) snapshots.push(args); return { meta: { changes: 1 } }; }
     };
     return st;
   }
@@ -103,6 +103,23 @@ check(w2 && /up=0/.test(w2.note) && !/TOMBSTONE/.test(w2.note), "a down worker's
 const out2 = await X.selfState({ DB_AUDIT: { prepare(sql) { const base = mkDb([]).prepare(sql); if (/lower\(COALESCE\(state/.test(sql)) return { bind: () => ({ all: async () => { throw new Error("no such column: state"); } }), all: async () => { throw new Error("no such column: state"); }, run: async () => ({}), first: async () => null }; return base; } } });
 const by2 = Object.fromEntries(out2.workers.map((w) => [w.service, w]));
 check(by2["qnfo-workers"].retired === true && !by2["reg-retired-410"].retired && by2["reg-retired-410"].up === false, "a database without a state column keeps the body-marker rule and loses only the registry rule", { q: by2["qnfo-workers"], r: by2["reg-retired-410"] });
+
+// HEALTH-AUDIT-COVERAGE-1 (agent_issues 1000157): worker_live_audit is keyed by worker; the old plain INSERT failed on the first existing row every pass (live_audit_write_error), so the worker with no row
+// (qnfo-workers) was never audited. Against the real table definition: existing rows are kept as the audit sweep wrote them, the missing worker gets its row, the tombstone is classified, and no pass fails.
+import { DatabaseSync } from "node:sqlite";
+const real = new DatabaseSync(":memory:");
+real.exec("CREATE TABLE worker_live_audit (worker TEXT PRIMARY KEY, http INTEGER, live_version TEXT, registry_before TEXT, match INTEGER, note TEXT, probed_at TEXT)");
+for (const w of registry) if (w.service !== "qnfo-workers") real.prepare("INSERT INTO worker_live_audit (worker, http, live_version, registry_before, match, note, probed_at) VALUES (?, 200, ?, ?, 1, 'SYNC', '2026-10-01 00:00:00')").run(w.service, w.version, w.version);
+const hybrid = { prepare(sql) { if (!/worker_live_audit/.test(sql)) return mkDb(["qnfo-workers"]).prepare(sql); let args = []; const st = { bind(...x) { args = x; return st; }, async run() { real.prepare(sql).run(...args); return { meta: { changes: 1 } }; }, async all() { return { results: [] }; }, async first() { return null; } }; return st; } };
+const out3 = await X.selfState({ DB_AUDIT: hybrid });
+check(out3.live_audit_write_error === undefined, "no worker_live_audit write error on a table that already holds most workers", out3.live_audit_write_error);
+const rowsA = Object.fromEntries(real.prepare("SELECT * FROM worker_live_audit").all().map((r) => [r.worker, r]));
+check(rowsA["qnfo-workers"] && rowsA["qnfo-workers"].http === 410 && /^TOMBSTONE_410 /.test(rowsA["qnfo-workers"].note), "the worker that had no row gets one, classified TOMBSTONE_410", rowsA["qnfo-workers"]);
+check(rowsA["live-ok"].note === "SYNC" && rowsA["live-ok"].probed_at === "2026-10-01 00:00:00" && rowsA["live-ok"].match === 1, "an existing row keeps the audit sweep's classification, match and time (INSERT OR IGNORE)", rowsA["live-ok"]);
+check(rowsA["live-500"].note === "SYNC", "even a worker that is down keeps its existing row: the sweep, not this pass, owns its note", rowsA["live-500"]);
+const out4 = await X.selfState({ DB_AUDIT: hybrid });
+check(out4.live_audit_write_error === undefined && real.prepare("SELECT COUNT(*) AS n FROM worker_live_audit WHERE worker = 'qnfo-workers'").get().n === 1, "a second pass is idempotent: still one row for the tombstone, no error");
+check(/INSERT OR IGNORE INTO worker_live_audit/.test(src) && /ON CONFLICT\(worker\) DO UPDATE SET http = excluded\.http, probed_at = excluded\.probed_at, note = excluded\.note/.test(src), "the source: gap-fill for a worker without a row, upsert for a retired one");
 
 console.log(n + " checks, " + fails + " failure(s)");
 if (fails) process.exit(1);
