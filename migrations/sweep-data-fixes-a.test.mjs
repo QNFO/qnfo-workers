@@ -143,7 +143,24 @@ const wfDefinition = (extra = "") => JSON.stringify({ steps: [
   { type: "sql", name: "lever-request", db: "AUDIT", sql: "INSERT INTO cf_agent_requests (requester, kind, prompt, instance, priority) SELECT 'x', 'run', 'Answer in under 250 words.', 'lever', 'medium'" },
 ] });
 
+// SEED-CLOCK-PIN-1: a column that defaults to the current second (datetime('now') or the ISO strftime form) takes the second the row was seeded in, so two databases seeded across a
+// second boundary differ in every such row and a pre-state / post-state comparison between them failed about one run in eight (run 5713 of deploy-gate on main, 2026-10-26).
+// A row seeded with an explicit timestamp is not touched; a row that took the default is pinned to one constant per format, so only what the migration writes can differ.
+const ISO_NOW = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')";
+const clock = (db) => ({ plain: one(db, "SELECT datetime('now') AS d").d, iso: one(db, `SELECT ${ISO_NOW} AS d`).d });
+function pinDefaultClock(db, from, to) {
+  for (const { name: t } of all(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")) {
+    for (const c of all(db, `PRAGMA table_info(${t})`)) {
+      const d = String(c.dflt_value || "").replace(/\s+/g, "");
+      if (!d.includes("'now'")) continue;
+      const iso = d.includes("%Y-%m-%dT");
+      if (t === "decision_log") continue; // append-only by its live triggers; its one seeded row carries an explicit ts
+      db.prepare(`UPDATE ${t} SET ${c.name} = ? WHERE ${c.name} >= ? AND ${c.name} <= ?`).run(iso ? "2000-01-01T00:00:00Z" : "2000-01-01 00:00:00", iso ? from.iso : from.plain, iso ? to.iso : to.plain);
+    }
+  }
+}
 function seed(db) {
+  const seedFrom = clock(db);
   db.exec(SCHEMA);
   // 99916 / 2934 / the session-dependent count
   const iss = db.prepare("INSERT INTO agent_issues (id, title, description, status) VALUES (?, ?, ?, 'open')");
@@ -201,8 +218,9 @@ function seed(db) {
   con.run("issue-100405", 100405, "ISSUE-PROBE-AGENT-1", VAC_ACTION, "SELECT 'found_action' AS expected, CASE WHEN EXISTS (SELECT 1 FROM code_tasks WHERE lower(goal) LIKE '%100405%') THEN 'found_action' ELSE 'action_absent' END AS observed", "active", "fail", 1, "2026-10-26 10:18:39");
   for (const id of [1000100, 1000102, 1000186]) con.run("issue-" + id, id, "no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)", VAC_ACTION, vacProbe(id), "superseded", "superseded:closure-observing-probe-at-birth", 0, "2026-10-25 02:59:16");
   // decision_log and the metric the decision predicts
-  db.exec("INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path) VALUES ('s', 'a', 'EARLIER-DECISION-1: x', 'e', 'o', 'b', 'r')");
+  db.exec("INSERT INTO decision_log (ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path) VALUES ('2000-01-01T00:00:00Z', 's', 'a', 'EARLIER-DECISION-1: x', 'e', 'o', 'b', 'r')");
   db.exec("INSERT INTO metric_registry (metric, last_value, last_refreshed) VALUES ('cf_changelog_open_proposals_14d', '7', '2026-10-26T09:01:00.746Z')");
+  pinDefaultClock(db, seedFrom, clock(db));
   db.exec(BIRTH_TRIGGER); // from here on every filed issue is born with the vacuous contract, as live
   return db;
 }
