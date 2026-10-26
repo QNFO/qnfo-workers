@@ -135,7 +135,7 @@ const rr = await mod.retractDeadLinks(env(db));
 const after = Object.fromEntries(db.prepare("SELECT id, action, post_text_snippet FROM dissemination_tracker").all().map((x) => [x.id, x]));
 ok(after.l1.action === "posted" && /utm_source=bluesky/.test(after.l1.post_text_snippet) && !/MISROUTED/.test(after.l1.post_text_snippet), "a live paper keeps its as-posted text (no MISROUTED overwrite)", after.l1);
 ok(after.l2.action === "link-dead" && rr.retracted === 1 && deletes.length === 1 && /g1$/.test(deletes[0].rkey || ""), "a hard 404 is still retracted", { rr, deletes, row: after.l2 });
-ok(after.l3.action === "posted" && /^MISROUTED \(redirect 301/.test(after.l3.post_text_snippet) && rr.misrouted === 1, "a real redirect is still only flagged, never deleted", { rr, row: after.l3 });
+ok(after.l3.action === "posted" && after.l3.post_text_snippet === "Moved \u2014 as posted" && rr.misrouted === 1 && deletes.length === 1, "a real redirect is counted and left alone: not deleted, and its as-posted text is not overwritten (PRESERVE-POSTED-TEXT-1)", { rr, row: after.l3 });
 
 // ---- version ----
 const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
