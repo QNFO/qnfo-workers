@@ -18,7 +18,7 @@ db.exec(SCHEMA);
 db.exec(ledger);
 const one = (q, ...a) => db.prepare(q).get(...a);
 const all = (q, ...a) => db.prepare(q).all(...a);
-const before = { measures: one("SELECT COUNT(*) AS n FROM output_quality_measures").n, registry: one("SELECT COUNT(*) AS n FROM metric_registry").n, triggers: one("SELECT COUNT(*) AS n FROM analytics_metric_triggers").n, fms: one("SELECT COUNT(*) AS n FROM failure_modes").n, dls: one("SELECT COUNT(*) AS n FROM decision_log").n };
+const before = { measures: one("SELECT COUNT(*) AS n FROM output_quality_measures").n, registry: one("SELECT COUNT(*) AS n FROM metric_registry").n, triggers: one("SELECT COUNT(*) AS n FROM analytics_metric_triggers").n, fms: one("SELECT COUNT(*) AS n FROM failure_modes").n, dls: one("SELECT COUNT(*) AS n FROM decision_log").n, issues: one("SELECT COUNT(*) AS n FROM agent_issues").n };
 db.exec(audit);
 
 const m = one("SELECT * FROM output_quality_measures WHERE metric = 'q08_retraction_rate_30d'");
@@ -42,9 +42,21 @@ ok(dls.length === 2 && dls.every((d) => /^[a-z0-9_]+ (>=|<=|>|<) [0-9.]+ within 
 ok(/q08_compose_order/.test(dls[0].rollback_path) && /INSERT OR REPLACE INTO ops_config/.test(dls[0].rollback_path), "the writer-order decision names the override that reverts it without a deploy");
 ok(one("SELECT COUNT(*) AS n FROM capability_ledger WHERE capability LIKE 'q08 reviewer-output hygiene%'").n === 1, "one capability recorded");
 
-const snap = JSON.stringify([all("SELECT * FROM output_quality_measures"), all("SELECT metric, state FROM metric_registry ORDER BY metric"), all("SELECT fm_key FROM failure_modes ORDER BY fm_key"), all("SELECT id FROM decision_log"), all("SELECT capability FROM capability_ledger")]);
+// the follow-ups: each is a root cause found by the audits, filed with a doer, a code-task line, an anchor and a closing probe
+const issues = all("SELECT title, description, category, priority, status FROM agent_issues WHERE title NOT LIKE 'Q08-RETRACTION-METRIC-1%' ORDER BY id");
+ok(issues.length === 8 && one("SELECT COUNT(*) AS n FROM agent_issues").n === before.issues + 8, "eight follow-up issues filed", issues.map((i) => i.title.split(":")[0]));
+for (const i of issues) {
+  const tag = i.title.split(":")[0];
+  ok(i.status === "open" && /^Charter pillar: (research|reach)\./.test(i.description) && /\nDoer: /.test(i.description) && /\nDefinition of done: /.test(i.description), tag + " names its pillar, a doer and a definition of done");
+  ok(/\ncode-task: repo=qnfo-workers path=\S+\.js\ncode-anchor: \S[^\n]*\ncode-probe: \{"paths": \["[^"]+\.js"\], "contains": "[A-Z0-9-]+"\}$/.test(i.description), tag + " ends with a code-task, a code-anchor and a code-probe line of their own");
+  ok(i.description.split("\ncode-probe: ")[1].includes(tag), tag + "'s probe string is its own name, so it cannot already pass");
+}
+ok(["PAPER-CONFIRM-FALLBACK-1", "ERRATA-ROUTE-PER-PAPER-1", "PUB-DANGLING-CITATION-1", "PAPER-REVIEW-CONSISTENCY-1", "ATTENTION-STICKY-STOP-1", "QUALITY-SCORE-MEMORY-1", "COMPANION-REVIEWER-HYGIENE-1", "COMPANION-SERIAL-TITLE-1"].every((k) => issues.some((i) => i.title.startsWith(k + ":"))), "the eight families are the ones the audits found");
+ok(issues.filter((i) => /not re-read by the (filing )?session|has not been re-read/.test(i.description)).length === 2, "the two issues that rest on a count the filing session did not re-read say so");
+
+const snap = JSON.stringify([all("SELECT * FROM output_quality_measures"), all("SELECT metric, state FROM metric_registry ORDER BY metric"), all("SELECT fm_key FROM failure_modes ORDER BY fm_key"), all("SELECT id FROM decision_log"), all("SELECT capability FROM capability_ledger"), all("SELECT title FROM agent_issues ORDER BY id")]);
 db.exec(audit);
-ok(JSON.stringify([all("SELECT * FROM output_quality_measures"), all("SELECT metric, state FROM metric_registry ORDER BY metric"), all("SELECT fm_key FROM failure_modes ORDER BY fm_key"), all("SELECT id FROM decision_log"), all("SELECT capability FROM capability_ledger")]) === snap, "a second apply writes nothing");
+ok(JSON.stringify([all("SELECT * FROM output_quality_measures"), all("SELECT metric, state FROM metric_registry ORDER BY metric"), all("SELECT fm_key FROM failure_modes ORDER BY fm_key"), all("SELECT id FROM decision_log"), all("SELECT capability FROM capability_ledger"), all("SELECT title FROM agent_issues ORDER BY id")]) === snap, "a second apply writes nothing");
 
 const rb = (audit.match(/^-- Rollback: (.*)$/m) || [])[1];
 ok(!!rb, "a Rollback line exists");
