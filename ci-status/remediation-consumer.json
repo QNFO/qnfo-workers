@@ -1,64 +1,32 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@be2b2b9ac1cd",
- "due": 680,
- "pass": 481,
- "fail": 116,
- "skipped": 83,
- "deferred": 82,
+ "verifier": "remediation-consumer@1c396975758f",
+ "due": 681,
+ "pass": 482,
+ "fail": 117,
+ "skipped": 82,
+ "deferred": 81,
  "contracts": [
+  {
+   "class": "issue-1000373",
+   "issue_id": 1000373,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000314",
+   "issue_id": 1000314,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
   {
    "class": "issue-2017",
    "issue_id": 2017,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000319",
-   "issue_id": 1000319,
-   "verdict": "deferred",
-   "expected": "clear",
-   "observed": "pending: leaked appendices remain",
-   "reason": "the probe cannot judge yet: pending: leaked appendices remain"
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-papers-fts-drift",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-paper-history-lossy",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-paper-mass-withdrawal",
-   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -73,6 +41,30 @@
    "written": true
   },
   {
+   "class": "issue-1000319",
+   "issue_id": 1000319,
+   "verdict": "deferred",
+   "expected": "clear",
+   "observed": "pending: leaked appendices remain",
+   "reason": "the probe cannot judge yet: pending: leaked appendices remain"
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2305",
    "issue_id": 2305,
    "verdict": "pass",
@@ -83,6 +75,22 @@
   {
    "class": "issue-2342",
    "issue_id": 2342,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-papers-fts-drift",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-paper-mass-withdrawal",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -113,6 +121,14 @@
    "written": true
   },
   {
+   "class": "fm-paper-history-lossy",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "rt-fleet-dashboard",
    "issue_id": null,
    "verdict": "pass",
@@ -123,14 +139,6 @@
   {
    "class": "issue-2404",
    "issue_id": 2404,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "belief-hourly-publication-gate-meets-detection-sla",
-   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -161,6 +169,22 @@
    "written": true
   },
   {
+   "class": "rt-live-qnfo-ai-calibration",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "belief-hourly-publication-gate-meets-detection-sla",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-dashboard-mail-serial-reads",
    "issue_id": null,
    "verdict": "pass",
@@ -170,14 +194,6 @@
   },
   {
    "class": "fm-code-loop-budget-claim-starvation",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-ai-calibration",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -209,22 +225,6 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-containers-pilot",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-deploy-guard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-live-qnfo-email",
    "issue_id": null,
    "verdict": "pass",
@@ -234,6 +234,22 @@
   },
   {
    "class": "rt-live-qnfo-infra",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-containers-pilot",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-deploy-guard",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -273,14 +289,6 @@
    "written": true
   },
   {
-   "class": "issue-2829",
-   "issue_id": 2829,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-live-qnfo-pdf",
    "issue_id": null,
    "verdict": "pass",
@@ -305,8 +313,24 @@
    "written": true
   },
   {
+   "class": "issue-2829",
+   "issue_id": 2829,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100081",
    "issue_id": 100081,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100114",
+   "issue_id": 100114,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -321,8 +345,8 @@
    "written": true
   },
   {
-   "class": "issue-100114",
-   "issue_id": 100114,
+   "class": "fm-agent-context-loader-import-drift",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -361,22 +385,6 @@
    "written": true
   },
   {
-   "class": "fm-honeypot-named-for-autofill",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-agent-context-loader-import-drift",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-1000209",
    "issue_id": 1000209,
    "verdict": "fail",
@@ -393,7 +401,7 @@
    "written": true
   },
   {
-   "class": "fm-backlog-close-on-stale-pass",
+   "class": "fm-honeypot-named-for-autofill",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -401,14 +409,4 @@
    "written": true
   },
   {
-   "class": "issue-100041",
-   "issue_id": 100041,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-math-delim-pairing-shift",
-   "issue_id": null,
-   "ve
+   "class": "fm-backlog-close-on-stale-
