@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "orch-sql-"));
@@ -28,7 +29,7 @@ const BASE = [
 ].join("\n");
 const v = (proposal, base) => mod.__verify({}, task, base === undefined ? BASE : base, proposal);
 
-ok(/^0\.(29|[3-9]\d)\.|^[1-9]/.test(mod.__version), "the worker is 0.29.0 or later", mod.__version);
+ok(versionAtLeast(mod.__version, "0.29.0"), "the worker is 0.29.0 or later", mod.__version);
 ok(mod.__VERIFIABLE.indexOf("sql") >= 0, "sql is a verifiable extension");
 
 // good proposals
