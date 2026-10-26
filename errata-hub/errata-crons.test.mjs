@@ -35,7 +35,7 @@ CREATE TABLE errata_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, queue_id INTE
 CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);`);
 const papers = new DatabaseSync(":memory:");
-papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
+papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT, change_actor TEXT, change_reason TEXT)");
 const graph = new DatabaseSync(":memory:");
 graph.exec("CREATE TABLE nodes (id TEXT PRIMARY KEY, properties TEXT, updated_at TEXT)");
 
