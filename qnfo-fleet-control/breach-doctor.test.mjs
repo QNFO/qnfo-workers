@@ -1,4 +1,4 @@
-// BREACH-DOCTOR-1 offline suite (qnfo-fleet-control 0.51.0, agent_issues 1000266): slices the BREACH-DOCTOR-1 block out of worker.js and replays it against an in-memory
+// BREACH-DOCTOR-1 offline suite (qnfo-fleet-control 0.52.0, agent_issues 1000266): slices the BREACH-DOCTOR-1 block out of worker.js and replays it against an in-memory
 // node:sqlite D1 stub that carries the live column lists, the live close-sync triggers and migrations/2026-10-26-breach-doctor.sql.
 // Proves: the validators refuse a playbook that writes free text, a second statement, a table off the allowlist or a DELETE; kill switch off writes nothing; measure mode records the
 // would-do and acts on nothing; a playbook younger than 30 minutes runs in measure and an older one acts, bound to one issue each, with revert_sql, decision_log and events; the
@@ -30,7 +30,7 @@ if (!(a > 0 && b > a)) { console.log(pass + " passed, " + fail + " failed"); pro
 const kw = src.match(/^var __RT_WRITE_KW = \[[^\]]*\];$/m)[0];
 const block = src.slice(a, b);
 const loadApi = () => {
-  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, Error, Promise, isFinite, console: process.env.BD_DEBUG ? console : { error() {}, log() {} }, VERSION: "0.51.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
+  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, Error, Promise, isFinite, console: process.env.BD_DEBUG ? console : { error() {}, log() {} }, VERSION: "0.52.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
   vm.runInContext(kw + "\n" + block + "\nthis.api = { breachDoctorTick, bdConfig, bdRung, bdValidateRule, bdReadOnlyWhy, bdWriteWhy, bdFactsSafe, bdFamily, bdReasonCode, bdTopVerb, bdStrip };", cx);
   return cx.api;
 };
@@ -43,7 +43,7 @@ ok(callLine && !/onTwentyGrid/.test(callLine) && slot.indexOf("breachDoctorTick(
 ok(slot.indexOf("remediationContractsTick(env") > 0 && Math.abs(slot.indexOf("breachDoctorTick(env") - slot.indexOf("remediationContractsTick(env")) < 2500, "it sits next to remediationContractsTick");
 const ver = (src.match(/^var VERSION = "([^"]*)"/m) || [])[1] || "";
 const vn = ver.split("-")[0].split(".").map(Number);
-ok(vn[0] > 0 || vn[1] >= 51, "VERSION is at least 0.51.0 (a new capability is a minor bump, ahead of 0.50.0 workflows-merge)", ver);
+ok(vn[0] > 0 || vn[1] >= 52, "VERSION is at least 0.52.0 (a new capability is a minor bump, ahead of 0.51.0 gate-not-required on main)", ver);
 if (!process.env.BD_WORKER_PATH) ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 const codeOnly = block.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
 ok(!/fleet_tick/.test(codeOnly) && !/CREATE\s+TRIGGER/i.test(codeOnly), "S7: the engine touches no fleet_tick and creates no trigger");

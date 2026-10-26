@@ -1,5 +1,5 @@
 -- BREACH-DOCTOR-TRUST-1 (2026-10-26, charter pillar: autonomy; agent_issues 1000266 BREACH-DOCTOR-1; second file of that change, the first is migrations/2026-10-26-breach-doctor.sql).
--- The breach doctor (qnfo-fleet-control 0.51.0) files one kind of issue by itself: "BREACH-DOCTOR-1: self <rule> <code>", after 3 failed cases of one issue; and, only if the generic
+-- The breach doctor (qnfo-fleet-control 0.52.0) files one kind of issue by itself: "BREACH-DOCTOR-1: self <rule> <code>", after 3 failed cases of one issue; and, only if the generic
 -- playbook-gap row is ever switched to mode on, "BREACH-DOCTOR-1: playbook gap <family>". Both are built only from playbook constants, ids, counts and enum codes (the doctor's taint rule:
 -- bdFactsSafe and bdWriteWhy, counted by doctor_taint_violations_24h), so they carry no text from outside the fleet. Without a trusted (source, title-prefix) pair the planner records them as
 -- untrusted and ignores them for 7 days, which would leave the doctor's own work items without a doer. This appends the single pair qnfo-fleet-control|BREACH-DOCTOR-1: to

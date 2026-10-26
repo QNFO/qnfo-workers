@@ -2,7 +2,7 @@
 -- Owner, 2026-10-24 and again 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY REMEDIATING". Measured 2026-10-26 06:36Z on qnfo-audit:
 -- 447 open agent_issues, 371 with no doer in v_issue_age_ladder; the code planner marks them untrusted or not-code and no other loop owns the diagnosis of a family.
 -- BREACH-SELFHEAL-1 (a D1 trigger on fleet_tick) was dropped by FLEET-TICK-SPLIT-1 (it caused the SQLITE_NOMEM heartbeat outage), so the doctor is WORKER CODE:
--- qnfo-fleet-control breachDoctorTick (0.51.0) on the */10 slot. This file is the data it reads and writes. It adds no D1 trigger, and none on fleet_tick (S7).
+-- qnfo-fleet-control breachDoctorTick (0.52.0) on the */10 slot. This file is the data it reads and writes. It adds no D1 trigger, and none on fleet_tick (S7).
 --
 -- WHAT THE ENGINE DOES WITH THESE TABLES (qnfo-fleet-control/worker.js, block BREACH-DOCTOR-1)
 --   S1  Playbooks are data. breach_playbooks.trigger_sql and verify_sql are one read-only SELECT each (the remediation tick's write-keyword guard). Each action_sql / revert_sql
@@ -367,7 +367,7 @@ INSERT OR IGNORE INTO queue_sla (stuck_type, queue, definition, cycle_min, sla_m
   'qnfo-fleet-control', 'none: measured by contract fm-breach-doctor-case-age');
 
 INSERT OR IGNORE INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, last_exercised_at, evidence) VALUES
- ('breach-doctor:remediate-unowned-breaches', 'BREACH-DOCTOR-1 (qnfo-fleet-control 0.51.0 breachDoctorTick, migrations/2026-10-26-breach-doctor.sql)',
+ ('breach-doctor:remediate-unowned-breaches', 'BREACH-DOCTOR-1 (qnfo-fleet-control 0.52.0 breachDoctorTick, migrations/2026-10-26-breach-doctor.sql)',
   'qnfo-fleet-control */10 slot, breach_playbooks rows, ops_config breach_doctor = on', 'unmeasured until the first verified case: breaches_auto_remediated_24h', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), NULL,
   'the fleet diagnoses every unowned open issue older than 120 minutes and closes, with evidence and a stored revert, the ones a playbook proves done (CODE-MERGE-REFUSED-1, CODE-LOOP-EXHAUSTED-1 first), without a session');
 
@@ -376,7 +376,7 @@ SELECT 'session_01QpQv19uh1padRwZ3u1r766',
   'the doctor must be worker code on the */10 slot (never a D1 trigger on fleet_tick, FLEET-TICK-SPLIT-1), reversible by construction, and its trust attaches to its authoring pipeline (source qnfo-fleet-control, title prefix BREACH-DOCTOR-1:): the second migration (migrations/2026-10-26-breach-doctor-trust.sql, its own decision_log row and a backup key) appends exactly that one pair to code_merge_trusted_sources, and PLAN_TRUSTED code is unchanged',
   'BREACH-DOCTOR-1 v1 with the session''s binding simplifications: S1 playbooks are data (breach_playbooks) validated by the engine before it runs them; S2 three closed action kinds (sql, file-issue, owner-card) and no model call; S3 a 30-minute measure period per playbook, demotion after 2 failures in 24 hours, per-rule caps, a claim check, stored revert_sql, decision_log and ledger events; S4 classification of every unowned open issue older than 120 minutes (SLA-120M-1), critical first, with the playbook-gap row seeded in measure (a gap issue carries no anchor the code loop can edit and would only add unowned issues; the self issue after 3 failed cases is the only issue the doctor files by itself); S5 verify by two consecutive passes; S6 metrics written first, single flight, kill switch, wall budget, no read of v_issue_age_ladder; S7 no D1 trigger on fleet_tick. Seed playbooks CM-R1, CM-R2, CM-R3, CM-R5 in per-issue form.',
   'qnfo-audit 2026-10-26 06:36Z: 447 open agent_issues, 371 with no doer; CODE-MERGE-REFUSED-1 10 open (every task merged after the refusal), CODE-LOOP-EXHAUSTED-1 15 open (6 with a closed source issue, 1 twin, 1 with a merged sibling); nothing owned their diagnosis; the candidate query on the v_issue_age_ladder shape read 211,166 rows in 712 ms, re-measured at 10:02Z: ISSUE-HYGIENE-1 closed those 17 and the twin, so the four CM triggers read 0 rows (3,966 rows read), 340 issues are older than 120 minutes of which 263 have no doer, and the first tick reads about 10,500 rows (largest statement 4,023) and writes 40 cases in measure',
-  'migration merged and qnfo-fleet-control 0.51.0 deployed through the canonical path',
+  'migration merged and qnfo-fleet-control 0.52.0 deployed through the canonical path',
   'issue_triage, agent_issues (close and reopen only through the issue_triage close-sync triggers), breach_diagnoses, breach_diagnosis_events, breach_playbooks, decision_log, metric_registry, loop_lock; cases act only after a playbook is 30 minutes old and only on issues with no doer and no live work claim',
   'ops_config breach_doctor = off stops the engine without a deploy; breach_playbooks.enabled = 0 stops one rule; every applied action stores its revert_sql in breach_diagnoses; the Rollback header',
   'the fleet diagnoses every unowned breach older than 120 minutes and closes, with evidence and a stored revert, the ones a playbook proves done, without a session',

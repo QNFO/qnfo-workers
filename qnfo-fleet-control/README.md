@@ -8,7 +8,7 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
-## BREACH-DOCTOR-1 (0.51.0, pillar autonomy; agent_issues 1000266)
+## BREACH-DOCTOR-1 (0.52.0, pillar autonomy; agent_issues 1000266)
 
 `breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
 (FLEET-TICK-SPLIT-1). Per tick, in this order: the five `doctor_*` / `breaches_*` metrics are written first (a dead heartbeat cannot hide);

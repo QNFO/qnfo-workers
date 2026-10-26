@@ -30,7 +30,7 @@ ok(!/claude\.ai|anthropic\.com/i.test(sql), "no claude.ai or anthropic.com link"
 const a = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:BEGIN ----"), b = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:END ----");
 const kwLine = workerSrc.match(/^var __RT_WRITE_KW = \[[^\]]*\];$/m);
 ok(a > 0 && b > a && kwLine, "the worker carries the BREACH-DOCTOR-1 block and the write-keyword list");
-const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, VERSION: "0.51.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
+const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, VERSION: "0.52.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
 vm.runInContext(kwLine[0] + "\n" + workerSrc.slice(a, b) + "\nthis.api = { bdValidateRule, bdReadOnlyWhy, bdWriteWhy, bdFactsSafe };", cx);
 const { bdValidateRule } = cx.api;
 

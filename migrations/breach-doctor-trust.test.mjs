@@ -121,7 +121,7 @@ for (const [name, v] of [["empty", ""], ["blank", "   "], ["null", null], ["miss
 {
   const a = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:BEGIN ----"), b = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:END ----");
   ok(a > 0 && b > a, "the worker carries the BREACH-DOCTOR-1 block");
-  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, VERSION: "0.51.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
+  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, VERSION: "0.52.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
   const kw = workerSrc.match(/^var __RT_WRITE_KW = \[[^\]]*\];$/m)[0];
   vm.runInContext(kw + "\n" + workerSrc.slice(a, b) + "\nthis.api = { bdTitleTrusted };", cx);
   const trusted = async (value, title) => cx.api.bdTitleTrusted({ db: { prepare: () => ({ first: async () => (value == null ? null : { value }) }) } }, title);

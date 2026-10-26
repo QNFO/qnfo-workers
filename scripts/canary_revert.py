@@ -21,7 +21,8 @@ WHAT   After canonical-deploy.yml (or deploy-code-orchestrator.yml for the conta
        numeric X.Y.Z core is strictly above the pushed one therefore means a later push deployed, which version-bump-guard
        (VERSION-AHEAD-1) makes the only way a core above the pushed one can be live: it is logged and not a failure, and that later
        push's own canary (VERSION and functional step) owns the verdict. An equal core with another suffix, a lower core and an
-       unreadable version still fail exactly as before.
+       unreadable version still fail exactly as before. Each run that meets an ahead worker writes one cloud_ops_events row of kind
+       canary-ahead (record_ahead), so a revert that was not made is a durable record and not only a log line.
 WHY    CONTROL-PLANE-MANUAL-1 (2026-10-02, human_actions 21) kept qnfo-fleet-control from merging any pull request that
        changes a control-plane worker, because nothing could undo a bad control-plane deploy: the fleet's own revert lives
        in qnfo-fleet-control, which is one of the workers at risk. This canary runs on the GitHub runner with the
@@ -250,6 +251,26 @@ def record_functional(acct, token, pushed, fn, mode):
         return None
 
 
+def record_ahead(acct, token, pushed, results):
+    """CANARY-AHEAD-1: one cloud_ops_events row (kind canary-ahead) per canary run that met a worker answering with a VERSION ahead of
+    the pushed one, so a revert the canary no longer makes is a durable record and not only a log line. Best effort, like
+    record_functional: returns "ok", or None when there is nothing to record, no credential, or the write failed."""
+    ahead = {w: r for w, r in results.items() if r["state"] == "ahead"}
+    if not ahead or not (acct and token):
+        return None
+    try:
+        from apply_migrations import d1
+        text = ("CANARY-AHEAD-1 push %s: " % str(pushed)[:7]) + "; ".join(
+            "%s wanted %s, live %s is ahead after %d poll%s" % (w, r["want"], r["seen"], r["polls"], "" if r["polls"] == 1 else "s") for w, r in sorted(ahead.items()))
+        d1(acct, token, DB_ID, "INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, status, text, job, meta) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'canary-ahead', 'ok', ?2, 'canonical-deploy', ?3)",
+           ["canary-ahead-" + str(pushed)[:12] + "-" + "-".join(sorted(ahead))[:80], text[:900],
+            json.dumps({"pushed": str(pushed), "workers": sorted(ahead), "want": {w: r["want"] for w, r in ahead.items()}, "seen": {w: r["seen"] for w, r in ahead.items()}})])
+        return "ok"
+    except Exception as e:  # noqa: BLE001
+        emit("::warning::canary: ahead result not recorded: " + str(e)[:200])
+        return None
+
+
 def git(args, check=True):
     return subprocess.run(["git"] + list(args), check=check, capture_output=True, text=True).stdout
 
@@ -455,6 +476,7 @@ def selftest():
     t_b = {"v": 0.0}
     res_b = poll({"qnfo-gateway": "3.31.2-seo-index-8"}, 1, 20, fetch=lambda w: {"version": "3.31.3-seo-index-9"}, clock=lambda: t_b["v"], sleep=lambda s_: t_b.__setitem__("v", t_b["v"] + s_))
     ok(res_b["qnfo-gateway"]["state"] == "ahead" and t_b["v"] == 0.0, "poll: an all-ahead set ends at the first poll, without waiting out the window", res_b)
+    ok(record_ahead(None, None, "c0ffee1", res_a) is None and record_ahead("a", "t", "c0ffee1", {"qnfo-ops": {"want": "1", "state": "ok", "seen": "1", "polls": 1}}) is None and record_ahead("a", "t", "c0ffee1", {}) is None, "record_ahead writes nothing without credentials or without an ahead worker")
     t_ai, d_ai = issue_text("c0ffee1234567", {"qnfo-ops": {"want": "2.0.0", "state": "failed:wrong-version", "seen": "1.9.9", "polls": 3}, "qnfo-gateway": {"want": "3.31.2", "state": "ahead", "seen": "3.31.3", "polls": 1}}, {"sha": "abc1234def", "redeploy": ["canonical-deploy.yml"]})
     ok("qnfo-gateway" not in t_ai and "qnfo-gateway" not in d_ai and "qnfo-ops" in t_ai, "issue_text: a worker that is ahead is never named as failed", t_ai)
     ok(is_revert_commit("Revert \"x\"") and is_revert_commit("revert: abc (CONTROL-PLANE-CANARY-1)") and not is_revert_commit("feat: x"), "a revert commit is recognised, one level only")
@@ -574,6 +596,8 @@ def run(a):
             emit("canary: CANARY-AHEAD-1: " + w + " live VERSION " + str(results[w]["seen"]) + " is ahead of the pushed " + str(results[w]["want"])
                  + ", a later push deployed; that push's canary owns the verdict, nothing is reverted for this one")
     acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
+    if not a.dry_run and any(r["state"] == "ahead" for r in results.values()):
+        emit("canary: ahead ledger " + str(record_ahead(acct, token, a.pushed, results)))
     mode = (os.environ.get("CANARY_FUNCTIONAL") or a.functional or "revert").lower()
     why = {}
     if mode != "off":
