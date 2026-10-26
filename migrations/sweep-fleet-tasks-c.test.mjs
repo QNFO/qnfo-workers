@@ -11,7 +11,12 @@
 //      reconciled row older than 30 days and a worker with no row still file their gaps; the UPDATE projects statement is untouched.
 //   4. fleet_tasks_canonical moves with the task (the drift gate reads nothing), docs/fleet-tasks-canonical.json mirrors the migrated row, a second apply
 //      changes nothing, an unexpected shape aborts before any write, and the Rollback header restores every touched row.
-//   5. The three fm- detectors fail before and pass after, and the closing probes handed to the issues do not pass before and pass after.
+//   5. The three fm- detectors fail before and pass after (their enabled / ran-in-the-last-180-minutes legs too), and the closing probes handed to the issues
+//      do not pass before and pass after.
+//   6. Independent review minors: the born-superseded contracts of 100341 and 100342 are re-armed with a probe whose boundary day is built at apply time
+//      (a contract someone else repaired and the claimed 1000125 / 1000126 contracts are left alone); the doer issue PORTFOLIO-GAP-RESOLVED-1 is filed once
+//      with a code-task line whose anchor exists once in migrations/issue-hygiene.test.mjs, and its probe is red until the rule exists and the four issues are
+//      closed with evidence; the metric formula and SLA-GOAL-EVAL-120M say what the statement does, with backups and Rollback; a retired TP-5 keeps its DoD.
 // Run: node --no-warnings migrations/sweep-fleet-tasks-c.test.mjs
 // Mutation checks: SWEEP_C_MIGRATION=<path to an altered copy of the migration> must make this suite fail.
 import { DatabaseSync } from "node:sqlite";
@@ -43,13 +48,17 @@ const PENDING_DOD = "Done when this query reads ok: SELECT 'ok' AS expected, 'pe
 const RED_DRAIN_STEP0 = "UPDATE remediation_contracts SET status='superseded',\n        last_verdict='superseded:probe-unusable (no machine-executable probe; the issue stays open and needs a real one)',\n        last_attempt_at=datetime('now')\n      WHERE status IN ('active','holding')\n        AND (verify_probe LIKE '%needs-machine-probe%' OR COALESCE(last_verdict,'') IN ('vacuous-probe-result','probe-not-machine-executable','probe-error'))\n        AND substr(class,1,3) <> 'fm-' AND substr(class,1,7) <> 'belief-'";
 const TRIGGER_ACTION = "Pillar autonomy (ROADMAP-SELF-MAINTAIN-1). Read SELECT c.class, c.status, c.last_verdict, c.last_attempt_at, c.next_due_at FROM remediation_contracts c WHERE c.module = 'goal-dod-v1' AND c.class IN (SELECT 'goal-' || goal_key FROM v_goal_status WHERE status = 'adopted' AND transport IS NOT NULL AND (last_verified_at IS NULL OR last_verified_at < datetime('now', '-120 minutes'))). A contract that left status active was parked by another sweep and roadmap-self-maintain re-activates it on its next run; a last_verdict of probe-error or probe-not-machine-executable means the DoD text is not a runnable SELECT: correct the goal's dod (the contract follows it within the hour). If every contract is active and due, check that qnfo-fleet-control remediationContractsTick and scripts/remediation_consumer.py are running. Definition of done: goals_unevaluated reads 0.";
 const GOAL_FORMULA = "adopted goals with a machine-checkable DoD (v_goal_dod) whose goal-<key> contract is older than 120 minutes and has no verdict in the last 120 minutes";
+const GOAL_FORMULA_NEW = "adopted goals with a machine-checkable DoD (v_goal_dod) whose goal-<key> contract is older than 120 minutes and has neither a verdict nor a deferred read (active contract, last_verdict deferred, attempted) in the last 120 minutes";
+const SLA_METRIC = "adopted goals with a machine-checkable DoD and no verdict in 120 minutes (goals_unevaluated)";
+const SLA_METRIC_NEW = "adopted goals with a machine-checkable DoD and neither a verdict nor a deferred read (active contract, last_verdict deferred, attempted) in 120 minutes (goals_unevaluated)";
 
 // the closing probes handed to the issues (the dates are the first day after the fix)
 const CLOSE_100069 = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM v_goal_status s JOIN remediation_contracts c ON c.class='goal-'||s.goal_key WHERE s.status='adopted' AND s.transport IS NOT NULL AND replace(substr(c.ts,1,19),'T',' ')<datetime('now','-120 minutes') AND (s.last_verified_at IS NULL OR s.last_verified_at<datetime('now','-120 minutes')) AND NOT (COALESCE(c.status,'')='active' AND COALESCE(c.last_verdict,'') LIKE 'deferred%' AND COALESCE(replace(substr(c.last_attempt_at,1,19),'T',' '),'')>=datetime('now','-120 minutes'))) AS TEXT) AS observed";
-const closeGap = (kind, entity) => "SELECT '0' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind='portfolio-lifecycle' AND ts >= '2026-10-27') = 0 THEN 'pending: no portfolio-lifecycle tick has run on or after 2026-10-27' ELSE CAST((SELECT COUNT(*) FROM portfolio_gaps WHERE kind='" + kind + "' AND entity='" + entity + "' AND day >= '2026-10-27') AS TEXT) END AS observed";
-const CLOSE_100341 = closeGap("deploy-unrecorded", "voice-stt");
-const CLOSE_100342 = closeGap("project-stale-deploy", "W.voice-stt");
-const today = sql => sql.replaceAll("'2026-10-27'", "date('now')"); // replay: "the first day after the fix" is today
+// the closing probes of 100341 / 100342 are written into the two contracts at apply time with the boundary day built there (date('now','+1 day')):
+const closeGap = (kind, entity, day) => "SELECT '0' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind='portfolio-lifecycle' AND ts >= '" + day + "') = 0 THEN 'pending: no portfolio-lifecycle tick has run on or after " + day + "' ELSE CAST((SELECT COUNT(*) FROM portfolio_gaps WHERE kind='" + kind + "' AND entity='" + entity + "' AND day >= '" + day + "') AS TEXT) END AS observed";
+const today = (sql, day) => sql.replaceAll("'" + day + "'", "date('now')"); // replay: "the first day after the fix" is today
+const BORN_VERDICT = "superseded:closure-observing-probe-at-birth (CLOSE-PROBE-CIRCULAR-1: this template observes the guarded issue status, which issue_close_evidence_required only lets change after a close that the same probe blocks; a doer that knows the defect replaces it with a probe that measures it)";
+const DOER_ANCHOR = "Proves, for each of the eight rules, that it closes what it states and nothing else:";
 
 // ---- live DDL ----
 const DDL = `
@@ -107,6 +116,13 @@ CREATE TABLE portfolio_gaps (kind TEXT NOT NULL, entity TEXT NOT NULL, detail TE
 CREATE TABLE service_registry (service TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'worker', version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT, state TEXT NOT NULL DEFAULT 'live');
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER, pipeline_stage TEXT DEFAULT NULL, predicate_id TEXT, recheck_count INTEGER DEFAULT 0, close_channel TEXT);
+CREATE TABLE sla_registry (sla_id TEXT PRIMARY KEY, class TEXT NOT NULL, metric TEXT NOT NULL, threshold TEXT NOT NULL, window TEXT NOT NULL, owner TEXT NOT NULL, enforcement TEXT NOT NULL, breach_action TEXT NOT NULL, autofix INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, close_evidence TEXT);
+-- live trigger text (read 2026-10-26): a contract is born with every open issue
+CREATE TRIGGER agent_issues_birth_contract_ins AFTER INSERT ON agent_issues WHEN NEW.status = 'open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id) BEGIN INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES ('issue-' || NEW.id, NEW.id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'); END;
+-- APPROXIMATION of the template triggers (contract_probe_templates_v3_generic and CLOSE-PROBE-CIRCULAR-1): only their end state on live is reproduced,
+-- a born contract superseded as closure-observing with the template probe that reads the issue's own status
+CREATE TRIGGER emulated_born_template AFTER INSERT ON remediation_contracts WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL BEGIN UPDATE remediation_contracts SET status = 'superseded', module = 'probe-template-v3-generic', last_verdict = '${BORN_VERDICT}', verify_probe = 'SELECT ''closed'' AS expected, (SELECT CASE WHEN status IN (''closed'', ''resolved'') THEN ''closed'' ELSE NULL END FROM agent_issues WHERE id = ' || NEW.issue_id || ') AS observed' WHERE class = NEW.class; END;
 `;
 
 function mk({ rsm = OLD_RSM, pl = OLD_PL, canon = pl } = {}) {
@@ -121,6 +137,11 @@ function mk({ rsm = OLD_RSM, pl = OLD_PL, canon = pl } = {}) {
   d.prepare("INSERT INTO analytics_metric_triggers (id, metric_key, title, operator, threshold, action) VALUES (9162, 'goals_unevaluated', 't', 'gt', 0, ?)").run(TRIGGER_ACTION);
   d.prepare("INSERT INTO metric_registry (metric, layer, kind, formula, last_value, state) VALUES ('goals_unevaluated', 'operational', 'guard', ?, '11', 'MEASURED')").run(GOAL_FORMULA);
   d.prepare("INSERT INTO metric_registry (metric, layer, kind, last_value, state) VALUES ('breach_code_task_pct', 'operational', 'lagging', '8.1', 'MEASURED')").run();
+  d.prepare("INSERT INTO sla_registry (sla_id, class, metric, threshold, window, owner, enforcement, breach_action, autofix, enabled) VALUES ('SLA-GOAL-EVAL-120M', 'roadmap', ?, '0', '120m', 'qnfo-fleet-control', 'v_goal_status', 'metric trigger goals_unevaluated files the issue', 1, 1)").run(SLA_METRIC);
+  // the four PORTFOLIO-GAP issues as live: open, each with its born contract (superseded, closure-observing)
+  for (const [id, title, session] of [[100341, "PORTFOLIO-GAP deploy-unrecorded voice-stt", null], [100342, "PORTFOLIO-GAP project-stale-deploy W.voice-stt", null], [1000125, "PORTFOLIO-GAP deploy-unrecorded qnfo-workers", "b6445c2a-8e78-4ad1-bca0-41d39f3c4f7b"], [1000126, "PORTFOLIO-GAP project-stale-deploy W.qnfo-workers", "b6445c2a-8e78-4ad1-bca0-41d39f3c4f7b"]]) {
+    d.prepare("INSERT INTO agent_issues (id, title, description, source, status, linked_session, created_at, updated_at) VALUES (?, ?, 'x', 'portfolio-autopilot', 'open', ?, 1, 1)").run(id, title, session);
+  }
   return d;
 }
 const defOf = (d, id) => d.prepare("SELECT definition FROM fleet_tasks WHERE id=?").get(id).definition;
@@ -300,6 +321,16 @@ const classes = (d) => d.prepare("SELECT class FROM remediation_contracts").all(
   ok(after.every(c => before.includes(c)), "the new read query lists no class the old one did not");
   ok(action.endsWith(TRIGGER_ACTION.split("-120 minutes'))). A contract")[1]), "the rest of the action text is kept");
   ok(action.includes("Definition of done: goals_unevaluated reads 0."), "definition of done kept");
+  ok(action.includes("CONSUMER-PENDING-IS-DEFERRAL-1 writes no verification row"), "the migrated action text explains why a deferred read counts as evaluated");
+  ok(action.includes("fm-verification-deferral-unaged"), "and names the detector that keeps grading a long deferral");
+}
+{
+  // a retired TP-5 is not rewritten (the UPDATE is guarded on status = 'adopted')
+  const d = mk();
+  d.exec("UPDATE goals SET status = 'retired' WHERE goal_key = 'TP-5-MEASURE-TO-ACT-1'");
+  d.exec(migration);
+  eq(d.prepare("SELECT dod, updated_at, status FROM goals WHERE goal_key = 'TP-5-MEASURE-TO-ACT-1'").get(), { dod: TP5_DOD, updated_at: "2026-10-19 04:00:00", status: "retired" }, "TP-5 retired: dod and updated_at unchanged by the migration");
+  eq(rowOf(d, "roadmap-self-maintain").version, 2, "and the rest of the migration still applies");
 }
 
 // ======================= 3. portfolio-lifecycle =======================
@@ -392,19 +423,28 @@ function tick(d, def) { for (const s of stepsOf(def)) d.exec(s.sql); }
   eq(JSON.stringify([gaps(n), ledger(n), n.prepare("SELECT COUNT(*) c FROM project_state").get().c]), before, "a second tick changes nothing");
 
   // closing probes of 100341 / 100342 (the first day after the fix is today in the replay)
-  const p41 = today(CLOSE_100341), p42 = today(CLOSE_100342);
+  const tomorrow = n.prepare("SELECT date('now', '+1 day') d").get().d;
+  const contractProbe = (db, cls) => db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = ?").get(cls).verify_probe;
+  eq(contractProbe(n, "issue-100341"), closeGap("deploy-unrecorded", "voice-stt", tomorrow), "issue-100341 carries the closing probe with the boundary built at apply time (tomorrow)");
+  eq(contractProbe(n, "issue-100342"), closeGap("project-stale-deploy", "W.voice-stt", tomorrow), "issue-100342 carries the closing probe with the boundary built at apply time (tomorrow)");
+  ok(tomorrow > n.prepare("SELECT date('now') d").get().d, "the boundary day is after today, so a late apply moves it with it");
+  const p41 = today(contractProbe(n, "issue-100341"), tomorrow), p42 = today(contractProbe(n, "issue-100342"), tomorrow);
+  ok([p41, p42].every(p => p.includes("ts >= date('now')") && p.includes("day >= date('now')")), "replay: both boundary literals of each probe become today");
   const fresh = mk(); seedPortfolio(fresh);
   eq(probeRow(fresh, p41)[1].startsWith("pending:"), true, "closing probe 100341 reads pending before any tick (does not pass)");
   eq(probeRow(fresh, p42)[1].startsWith("pending:"), true, "closing probe 100342 reads pending before any tick (does not pass)");
   tick(fresh, OLD_PL);
   eq([probeRow(fresh, p41), probeRow(fresh, p42)], [["0", "1"], ["0", "1"]], "closing probes read 1 when the old definition ticks: they fail while the defect exists");
   eq([probeRow(n, p41), probeRow(n, p42)], [["0", "0"], ["0", "0"]], "closing probes read 0 after a tick of the new definition");
-  eq(CLOSE_100341.includes("'voice-stt'") && CLOSE_100342.includes("'W.voice-stt'"), true, "probes name the real entities");
+  eq(p41.includes("entity='voice-stt'") && p42.includes("entity='W.voice-stt'"), true, "probes name the real entities");
 }
 
 // ======================= 4. whole-migration properties =======================
 {
   const d = mk();
+  const contractRows = (db, ...cls) => cls.map(c => db.prepare("SELECT * FROM remediation_contracts WHERE class = ?").get(c));
+  const bornBefore = contractRows(d, "issue-100341", "issue-100342", "issue-1000125", "issue-1000126");
+  eq(bornBefore.map(r => [r.status, r.module, r.last_verdict === BORN_VERDICT]), [["superseded", "probe-template-v3-generic", true], ["superseded", "probe-template-v3-generic", true], ["superseded", "probe-template-v3-generic", true], ["superseded", "probe-template-v3-generic", true]], "replay: the four PORTFOLIO-GAP contracts are born superseded as on live");
   d.exec(migration);
   const snap = () => JSON.stringify({
     t: d.prepare("SELECT id, definition, version, enabled, updated_at FROM fleet_tasks ORDER BY id").all(),
@@ -412,7 +452,10 @@ function tick(d, def) { for (const s of stepsOf(def)) d.exec(s.sql); }
     g: d.prepare("SELECT goal_key, dod, updated_at FROM goals ORDER BY goal_key").all(),
     a: d.prepare("SELECT id, action FROM analytics_metric_triggers").all(),
     f: d.prepare("SELECT fm_key FROM failure_modes ORDER BY fm_key").all(),
-    r: d.prepare("SELECT class, status FROM remediation_contracts ORDER BY class").all(),
+    r: d.prepare("SELECT * FROM remediation_contracts ORDER BY class").all(),
+    m: d.prepare("SELECT metric, formula FROM metric_registry ORDER BY metric").all(),
+    s: d.prepare("SELECT sla_id, metric FROM sla_registry").all(),
+    i: d.prepare("SELECT id, title, status, description FROM agent_issues ORDER BY id").all(),
     l: d.prepare("SELECT COUNT(*) n FROM decision_log").get(),
   });
   const first = snap();
@@ -434,11 +477,87 @@ function tick(d, def) { for (const s of stepsOf(def)) d.exec(s.sql); }
   eq(d.prepare("SELECT definition = ? AS same FROM bak_20261026_sweep_c_canon").get(OLD_PL).same, 1, "canon backup holds the old canonical row");
   eq(d.prepare("SELECT dod FROM bak_20261026_sweep_c_goal").get().dod, TP5_DOD, "goal backup holds the old DoD");
   eq(d.prepare("SELECT action FROM bak_20261026_sweep_c_trigger").get().action, TRIGGER_ACTION, "trigger backup holds the old action text");
+  eq(d.prepare("SELECT formula FROM bak_20261026_sweep_c_metric").get().formula, GOAL_FORMULA, "metric backup holds the old formula");
+  eq(d.prepare("SELECT metric FROM bak_20261026_sweep_c_sla").get().metric, SLA_METRIC, "sla backup holds the old metric text");
+  eq(d.prepare("SELECT class, status, module, last_verdict = ? AS born FROM bak_20261026_sweep_c_contract ORDER BY class").all(BORN_VERDICT).map(r => [r.class, r.status, r.module, r.born]), [["issue-100341", "superseded", "probe-template-v3-generic", 1], ["issue-100342", "superseded", "probe-template-v3-generic", 1]], "contract backup holds the two born-superseded contracts");
+
+  // wording of the measure
+  eq(d.prepare("SELECT formula FROM metric_registry WHERE metric = 'goals_unevaluated'").get().formula, GOAL_FORMULA_NEW, "metric formula says: neither a verdict nor a deferred read (active contract, last_verdict deferred, attempted) in the last 120 minutes");
+  eq(d.prepare("SELECT metric FROM sla_registry WHERE sla_id = 'SLA-GOAL-EVAL-120M'").get().metric, SLA_METRIC_NEW, "SLA-GOAL-EVAL-120M metric text says the same");
+  eq(d.prepare("SELECT COUNT(*) n FROM sla_registry").get().n, 1, "no SLA row added");
+
+  // closing contracts of 100341 and 100342: re-armed, the claimed ones untouched
+  const rearmed = contractRows(d, "issue-100341", "issue-100342");
+  for (const [i, r] of rearmed.entries()) {
+    eq([r.status, r.module, r.attempts, r.verify_transport], ["active", "sweep-fleet-tasks-c", 0, "d1-query"], "issue-" + [100341, 100342][i] + " re-armed: active, module, attempts 0, d1-query");
+    ok(r.last_verdict.startsWith("rearmed: SWEEP-FLEET-TASKS-C (was superseded:closure-observing-probe-at-birth"), "its last_verdict names what it was", r.last_verdict);
+    ok(!r.verify_probe.includes(";") && !/FROM agent_issues WHERE id =/.test(r.verify_probe), "its probe has no semicolon (D1 trigger would rewrite it) and is not the closure-observing template");
+    ok(r.next_due_at && r.next_due_at >= bornBefore[i].ts, "it is due now");
+  }
+  const claimedAfter = contractRows(d, "issue-1000125", "issue-1000126");
+  eq(claimedAfter, bornBefore.slice(2), "the claimed issues' contracts (1000125, 1000126) are byte identical");
+  eq(d.prepare("SELECT id, status, linked_session FROM agent_issues WHERE id IN (1000125, 1000126) ORDER BY id").all(), [{ id: 1000125, status: "open", linked_session: "b6445c2a-8e78-4ad1-bca0-41d39f3c4f7b" }, { id: 1000126, status: "open", linked_session: "b6445c2a-8e78-4ad1-bca0-41d39f3c4f7b" }], "and the claimed issues are untouched");
+  eq(migration.split("date('now', '+1 day')").length - 1, 6, "the boundary is built with date('now', '+1 day') three times in each of the two probes");
+  ok(!migration.includes("2026-10-27"), "no literal boundary date in the file");
+
+  // a contract another session already repaired is left alone
+  {
+    const e = mk();
+    e.exec("UPDATE remediation_contracts SET status = 'active', last_verdict = 'pass', verify_probe = 'SELECT 1 AS expected, 1 AS observed', module = 'other' WHERE class = 'issue-100341'");
+    const was = contractRows(e, "issue-100341")[0];
+    e.exec(migration);
+    eq(contractRows(e, "issue-100341")[0], was, "a contract that is no longer born-superseded is not overwritten");
+    eq(contractRows(e, "issue-100342")[0].module, "sweep-fleet-tasks-c", "while the other one is re-armed");
+  }
+
+  // the doer of 1000125 and 1000126
+  const doer = d.prepare("SELECT * FROM agent_issues WHERE title LIKE 'PORTFOLIO-GAP-RESOLVED-1: %'").all();
+  eq(doer.length, 1, "exactly one PORTFOLIO-GAP-RESOLVED-1 issue (deduped on title, a second apply adds none)");
+  const di = doer[0];
+  eq([di.status, di.category, di.priority, di.source, di.predicate_id], ["open", "portfolio", "medium", "sweep-fleet-tasks-c", "PORTFOLIO-GAP-RESOLVED-1"], "doer issue fields");
+  ok(/^code-task: repo=qnfo-workers path=migrations\/issue-hygiene\.test\.mjs$/m.test(di.description), "its description carries a code-task line of its own (the age ladder reads that as a doer)");
+  ok(di.description.split("\n").includes("code-anchor: " + DOER_ANCHOR), "and the code-anchor line of its own");
+  eq(readFileSync(here + "issue-hygiene.test.mjs", "utf8").split(DOER_ANCHOR).length - 1, 1, "the anchor occurs exactly once in migrations/issue-hygiene.test.mjs");
+  ok(["issue-meta-fold", "portfolio-gap-resolved", "1000125", "1000126", "linked_session b6445c2a", "portfolio-autopilot"].every(s => di.description.includes(s)), "it names the owning loop, the rule, the two issues and the claim");
+  const dc = d.prepare("SELECT * FROM remediation_contracts WHERE class = ?").get("issue-" + di.id);
+  eq([dc.status, dc.module, dc.verify_transport, dc.attempts, dc.last_verdict], ["active", "sweep-fleet-tasks-c", "d1-query", 0, null], "its contract is active with the closing probe");
+  ok(!dc.verify_probe.includes(";") && !/FROM agent_issues WHERE id =/.test(dc.verify_probe), "the probe is not the closure-observing template and has no semicolon");
+  // the closing probe: red now, red until the rule exists, green only when the rule exists and the four issues are closed with evidence
+  eq(probeRow(d, dc.verify_probe), ["0", "5"], "doer probe does not pass today (rule missing + four open issues)");
+  d.exec("INSERT INTO fleet_tasks (id, name, type, definition, version, enabled, updated_at) VALUES ('issue-meta-fold', 'x', 'workflow', '{\"steps\":[{\"type\":\"sql\",\"db\":\"AUDIT\",\"sql\":\"SELECT 1 /* portfolio-gap-resolved */\"}]}', 1, 1, 'x')");
+  eq(probeRow(d, dc.verify_probe), ["0", "4"], "with the rule in issue-meta-fold the four issues still keep it red");
+  for (const id of [100341, 100342, 1000125]) {
+    d.exec("UPDATE agent_issues SET status = 'closed' WHERE id = " + id);
+    d.exec("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) VALUES (" + id + ", 'x', 'x', 'x', 'moot: gap closed')");
+  }
+  eq(probeRow(d, dc.verify_probe), ["0", "1"], "three of four closed with evidence: still red");
+  d.exec("UPDATE agent_issues SET status = 'closed' WHERE id = 1000126");
+  eq(probeRow(d, dc.verify_probe), ["0", "1"], "closed without close_evidence does not count");
+  d.exec("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) VALUES (1000126, 'x', 'x', 'x', 'moot: gap closed')");
+  eq(probeRow(d, dc.verify_probe), ["0", "0"], "rule present and the four closed with evidence: green");
+  d.exec("DELETE FROM fleet_tasks WHERE id = 'issue-meta-fold'");
+  eq(probeRow(d, dc.verify_probe), ["0", "1"], "without the rule it is red again");
+  for (const id of [100341, 100342, 1000125, 1000126]) d.exec("UPDATE agent_issues SET status = 'open' WHERE id = " + id);
+  d.exec("DELETE FROM issue_triage");
 
   // detectors: fail before, pass after
   const before = mk();
-  const detectors = (db) => Object.fromEntries(db.prepare("SELECT class, verify_probe FROM remediation_contracts WHERE class LIKE 'fm-%'").all().map(r => [r.class, probeRow(db, r.verify_probe)]));
+  const detectors = (db) => Object.fromEntries(db.prepare("SELECT class, verify_probe FROM remediation_contracts WHERE class LIKE 'fm-%' ORDER BY class").all().map(r => [r.class, probeRow(db, r.verify_probe)]));
+  const detNow = (db) => detectors(db);
+  eq(detNow(d)["fm-goals-unevaluated-counts-deferred-probes"], ["1", "0"], "FM1 detector: the definition leg alone is not enough, the metric must also have been refreshed (never refreshed here)");
+  eq(detNow(d)["fm-portfolio-gap-ignores-reconciled-deploy"], ["1", "0"], "FM3 detector: the definition leg alone is not enough, the task must also have run ok (no event here)");
+  d.exec(stepByName(defOf(d, "roadmap-self-maintain"), "metric-goals-unevaluated")); // the hourly run refreshes the metric
+  tick(d, defOf(d, "portfolio-lifecycle"));                                          // and the lifecycle tick writes its ok event
   const after = detectors(d);
+  const legs = (label, setup, undo, want) => { d.exec(setup); eq(detNow(d), want, label); d.exec(undo); };
+  const wantAllPass = { "fm-goal-dod-embeds-placeholder-literal": ["0", "0"], "fm-goals-unevaluated-counts-deferred-probes": ["1", "1"], "fm-portfolio-gap-ignores-reconciled-deploy": ["1", "1"] };
+  eq(detNow(d), wantAllPass, "AFTER a refresh and a tick, with the task enabled, all three detectors pass");
+  legs("FM1 goes red when roadmap-self-maintain is disabled", "UPDATE fleet_tasks SET enabled = 0 WHERE id = 'roadmap-self-maintain'", "UPDATE fleet_tasks SET enabled = 1 WHERE id = 'roadmap-self-maintain'", { ...wantAllPass, "fm-goals-unevaluated-counts-deferred-probes": ["1", "0"] });
+  legs("FM1 goes red when the metric was last refreshed 4 hours ago", "UPDATE metric_registry SET last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-4 hours') WHERE metric = 'goals_unevaluated'", "UPDATE metric_registry SET last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE metric = 'goals_unevaluated'", { ...wantAllPass, "fm-goals-unevaluated-counts-deferred-probes": ["1", "0"] });
+  legs("FM1 stays green at 2 hours (inside the 180 minute window)", "UPDATE metric_registry SET last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 hours') WHERE metric = 'goals_unevaluated'", "UPDATE metric_registry SET last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE metric = 'goals_unevaluated'", wantAllPass);
+  legs("FM3 goes red when portfolio-lifecycle is disabled", "UPDATE fleet_tasks SET enabled = 0 WHERE id = 'portfolio-lifecycle'", "UPDATE fleet_tasks SET enabled = 1 WHERE id = 'portfolio-lifecycle'", { ...wantAllPass, "fm-portfolio-gap-ignores-reconciled-deploy": ["1", "0"] });
+  legs("FM3 goes red when the last ok event is 4 hours old", "UPDATE cloud_ops_events SET ts = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-4 hours')", "UPDATE cloud_ops_events SET ts = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", { ...wantAllPass, "fm-portfolio-gap-ignores-reconciled-deploy": ["1", "0"] });
+  legs("FM3 goes red when the event is not ok", "UPDATE cloud_ops_events SET status = 'error'", "UPDATE cloud_ops_events SET status = 'ok'", { ...wantAllPass, "fm-portfolio-gap-ignores-reconciled-deploy": ["1", "0"] });
   eq(Object.entries(after).sort(), [
     ["fm-goal-dod-embeds-placeholder-literal", ["0", "0"]],
     ["fm-goals-unevaluated-counts-deferred-probes", ["1", "1"]],
@@ -461,6 +580,11 @@ function tick(d, def) { for (const s of stepsOf(def)) d.exec(s.sql); }
   eq(d.prepare("SELECT definition, repo_path, exported_at FROM fleet_tasks_canonical WHERE id='portfolio-lifecycle'").get(), { definition: OLD_PL, repo_path: null, exported_at: "2026-10-18 13:49:49" }, "Rollback restores the canonical row");
   eq(d.prepare("SELECT dod, updated_at FROM goals WHERE goal_key='TP-5-MEASURE-TO-ACT-1'").get(), { dod: TP5_DOD, updated_at: "2026-10-19 04:00:00" }, "Rollback restores the TP-5 DoD");
   eq(d.prepare("SELECT action FROM analytics_metric_triggers WHERE id=9162").get().action, TRIGGER_ACTION, "Rollback restores the trigger action");
+  eq(d.prepare("SELECT formula FROM metric_registry WHERE metric = 'goals_unevaluated'").get().formula, GOAL_FORMULA, "Rollback restores the metric formula");
+  eq(d.prepare("SELECT metric FROM sla_registry WHERE sla_id = 'SLA-GOAL-EVAL-120M'").get().metric, SLA_METRIC, "Rollback restores the SLA metric text");
+  eq(contractRows(d, "issue-100341", "issue-100342"), bornBefore.slice(0, 2), "Rollback restores the two born-superseded contracts exactly");
+  eq(d.prepare("SELECT status FROM agent_issues WHERE title LIKE 'PORTFOLIO-GAP-RESOLVED-1: %'").get().status, "superseded", "Rollback supersedes the doer issue (nothing is deleted)");
+  eq(d.prepare("SELECT status FROM agent_issues WHERE id IN (100341, 100342, 1000125, 1000126)").all().map(r => r.status), ["open", "open", "open", "open"], "Rollback leaves the four PORTFOLIO-GAP issues as they were");
   eq([d.prepare("SELECT COUNT(*) n FROM failure_modes").get().n, d.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'").get().n], [0, 0], "Rollback removes the failure modes and their detectors");
 }
 
