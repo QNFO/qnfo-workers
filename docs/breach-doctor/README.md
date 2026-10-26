@@ -19,7 +19,7 @@ Rules are data in `breach_playbooks`; the engine validates every statement befor
 
 The tick above has one slot, so a slot that is starved or crashes before the doctor (the 2026-10-26 `SQLITE_NOMEM` heartbeat outage is the observed case, not a dead D1) stops the diagnosis path.
 `qnfo-cloud-ops` `jobBreachDoctorWatch` (every 10 minutes, another worker and another cron) measures it: it writes `doctor_tick_age_min` from the newest `breach_diagnosis_events` tick and files one deduped
-issue when the age passes 30 minutes. Since `qnfo-cloud-ops` 1.40.0 and `qnfo-fleet-control` 0.54.0 it also ACTS: it calls `POST /breach-doctor/run` on `qnfo-fleet-control` through the `FLEET_CONTROL` service
+issue when the age passes 30 minutes. Since `qnfo-cloud-ops` 1.40.0 and `qnfo-fleet-control` 0.55.0 it also ACTS: it calls `POST /breach-doctor/run` on `qnfo-fleet-control` through the `FLEET_CONTROL` service
 binding (`props = { caller = "qnfo-cloud-ops" }`, no key), at most once in 30 minutes while the tick is stale and once a day as a drill while it is healthy.
 
 * The route runs the same `breachDoctorTick`, so the same validators, `loop_lock` and live-case index, in its own invocation. Nothing of the engine is copied into `qnfo-cloud-ops` (the validator was patched three times in one day; a copy would drift).

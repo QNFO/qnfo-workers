@@ -102,11 +102,11 @@ function fake(db, clock, mode, extra) {
     if (mode === "hang") return new Promise(() => {});
     const tid = "t" + (++seq).toString(36).padStart(7, "0");
     const row = (detail, id, ts) => db.prepare("INSERT INTO breach_diagnosis_events (ts, event, detail, tick_id) VALUES (?, 'tick', ?, ?)").run(ts || isoAt(clock.now), detail, id || tid);
-    const body = { ok: true, ran: true, tick_id: tid, mode: "on", skipped: null, cases: 3, acted: 2, verified: 0, failed: 0, error: null, tick_age_min_before: 47, version: "0.54.0", ms: 90 };
+    const body = { ok: true, ran: true, tick_id: tid, mode: "on", skipped: null, cases: 3, acted: 2, verified: 0, failed: 0, error: null, tick_age_min_before: 47, version: "0.55.0", ms: 90 };
     let status = 200;
-    if (mode === "ok") row("mode=on v=0.54.0 acted=2 err=none source=watch");
+    if (mode === "ok") row("mode=on v=0.55.0 acted=2 err=none source=watch");
     else if (mode === "no-row") { /* answers ok and writes nothing */ }
-    else if (mode === "no-source") row("mode=on v=0.54.0 acted=2 err=none");
+    else if (mode === "no-source") row("mode=on v=0.55.0 acted=2 err=none");
     else if (mode === "wrong-id") row("mode=on err=none source=watch", "tother0001");
     else if (mode === "old-row") row("mode=on err=none source=watch", tid, isoAt(clock.now - 5 * 6e4));
     else if (mode === "lock-held") Object.assign(body, { ran: false, tick_id: null, skipped: "lock-held", cases: 0, acted: 0 });

@@ -52,7 +52,7 @@ const d2 = src.indexOf("var worker_default2 = {");
 const schedAt = src.indexOf("async scheduled(event, env, ctx) {", d2);
 const swapAt = src.indexOf("env = await ghAppEnv(env);", d2);
 const fetchHead = src.slice(d2, swapAt + 40), sched = src.slice(schedAt, src.indexOf('if (cron === "*/10 * * * *") {', schedAt));
-// BREACH-DOCTOR-WATCH-2 (0.54.0): POST /breach-doctor/run is the one route ahead of the swap on purpose: the second runner of the breach doctor needs D1 alone and no GitHub token, so a slow or failing
+// BREACH-DOCTOR-WATCH-2 (0.55.0): POST /breach-doctor/run is the one route ahead of the swap on purpose: the second runner of the breach doctor needs D1 alone and no GitHub token, so a slow or failing
 // GitHub App mint cannot delay it. Every other route still comes after the swap.
 const routesBeforeSwap = (fetchHead.match(/\bp === "[^"]+"/g) || []).map((x) => x.slice(6));
 check(swapAt > 0 && swapAt - d2 < 1500 && /env = await ghAppEnv\(env\)/.test(fetchHead) && routesBeforeSwap.length <= 1 && routesBeforeSwap.every((r) => r === '"/breach-doctor/run"'), "fetch swaps the App token in before any route (the GitHub-free breach doctor route excepted)", routesBeforeSwap);

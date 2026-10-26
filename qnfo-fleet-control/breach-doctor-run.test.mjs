@@ -1,4 +1,4 @@
-// BREACH-DOCTOR-WATCH-2 offline suite (qnfo-fleet-control 0.54.0, agent_issues 1000397 and 1000266): POST /breach-doctor/run, the second runner of the breach doctor.
+// BREACH-DOCTOR-WATCH-2 offline suite (qnfo-fleet-control 0.55.0, agent_issues 1000397 and 1000266): POST /breach-doctor/run, the second runner of the breach doctor.
 // Slices the BREACH-DOCTOR-1 block out of worker.js and replays it against an in-memory node:sqlite D1 stub built from the live column lists and live close triggers of the neighbour suite
 // (breach-doctor.test.mjs BASE_DDL) plus migrations/2026-10-26-breach-doctor.sql and -fix.sql.
 // Proves: the route answers only a service binding whose props.caller is qnfo-cloud-ops (no props, another worker, a case-changed name, an array, or a public host is a 403 that writes nothing: no lock, no metric,
@@ -32,7 +32,7 @@ const kw = src.match(/^var __RT_WRITE_KW = \[[^\]]*\];$/m)[0];
 const block = src.slice(a, b);
 const quiet = process.env.BDR_DEBUG ? console : { error() {}, log() {} };
 const loadApi = () => {
-  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, Error, Promise, isFinite, console: quiet, VERSION: "0.54.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
+  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, Error, Promise, isFinite, console: quiet, VERSION: "0.55.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
   vm.runInContext(kw + "\n" + block + "\nthis.api = { breachDoctorTick, breachDoctorRunApi: typeof breachDoctorRunApi === 'function' ? breachDoctorRunApi : undefined, bdRunCaller: typeof bdRunCaller === 'function' ? bdRunCaller : undefined, BD_RUN_CALLERS: typeof BD_RUN_CALLERS === 'undefined' ? undefined : BD_RUN_CALLERS };", cx);
   return cx.api;
 };
@@ -52,8 +52,8 @@ ok((block.match(/opts\.source === "watch"/g) || []).length === 1 && !/opts\.sour
 ok(!/\bfetch\(|claude\.ai|anthropic\.com/i.test(block), "the block makes no network call and holds no claude.ai or anthropic.com link");
 const ver = (src.match(/^var VERSION = "([^"]*)"/m) || [])[1] || "";
 const vn = ver.split("-")[0].split(".").map(Number);
-ok(vn[0] > 0 || vn[1] >= 54, "VERSION is at least 0.54.0 (a new route and a decision the worker takes for another worker: a minor bump)", ver);
-ok(/^\/\/ 0\.54\.0 BREACH-DOCTOR-WATCH-2 /m.test(src) && src.indexOf("// 0.54.0 BREACH-DOCTOR-WATCH-2 ") < src.indexOf("// 0.53.2 BREACH-DOCTOR-GATE-2") && !/^var VERSION = "[^"]*"; \/\* 0\.54\.0/m.test(src), "the 0.54.0 note is the first line under the VERSION-LINE-SPLIT-1 comment, none on the VERSION line");
+ok(vn[0] > 0 || vn[1] >= 55, "VERSION is at least 0.55.0 (a new route and a decision the worker takes for another worker: a minor bump)", ver);
+ok(/^\/\/ 0\.54\.0 BREACH-DOCTOR-WATCH-2 /m.test(src) && src.indexOf("// 0.55.0 BREACH-DOCTOR-WATCH-2 ") < src.indexOf("// 0.53.2 BREACH-DOCTOR-GATE-2") && !/^var VERSION = "[^"]*"; \/\* 0\.54\.0/m.test(src), "the 0.55.0 note is the first line under the VERSION-LINE-SPLIT-1 comment, none on the VERSION line");
 if (!process.env.BDR_WORKER_PATH) ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 
 // ---- the world
