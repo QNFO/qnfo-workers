@@ -4,7 +4,8 @@
 // the probe FAILS on the pre-state and PASSES on the migrated state (the contract probes are read back from remediation_contracts, so what runs is what the file wrote);
 // that exactly the intended rows change and no other row does; that a second apply and an already-fixed database change nothing but the one decision_log row; that no
 // rule is appended twice; that the Rollback header line restores the pre-state and deletes only the rows this file created; and that the two third-party addresses
-// occur only in the two email_filters INSERTs. It reads no repository file other than qnfo-email/worker.js (applyFilters), so a follow-up that lands later cannot turn it red.
+// occur nowhere in the migration (one INSERT ... SELECT takes lower(sender) of emails 1077 and 1104). It reads qnfo-email/worker.js (applyFilters) and, only while a follow-up is not yet done,
+// the files the three follow-up issues name (the anchors must occur exactly once, as migrations/code-anchor-once.test.mjs demands of trigger levers); a follow-up that lands skips its check.
 // SWEEP_A_SQL=<path> points the suite at a mutated copy of the migration (mutation checks). Run: node --no-warnings migrations/sweep-data-fixes-a.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -17,18 +18,18 @@ const all = (db, sql, ...p) => db.prepare(sql).all(...p).map((r) => ({ ...r }));
 const count = (s, t) => s.split(t).length - 1;
 const section = async (name, fn) => { try { await fn(); } catch (e) { fail++; console.log("FAIL section " + name + " threw :: " + (e && e.message)); } };
 
-// The two senders (emails 1104 and 1077). They are written here once and nowhere else in this file.
+// The two senders (emails 1104 and 1077): fixture rows only. The migration never writes an address (it reads lower(sender) from emails).
 const SENDER_1104 = ["ravi.kumar.13p01", "gmail.com"].join("@");
 const SENDER_1077 = ["jornalpublication10", "gmail.com"].join("@");
+
+const WATCHED = ["../qnfo-ai/worker.js", "../qnfo-fleet-dashboard/worker.js", "../docs/AUTONOMOUS-OPERATION-DOCTRINE.md"];
+const readRepo = (rel) => { try { return readFileSync(new URL("../" + rel, import.meta.url), "utf8"); } catch (e) { return null; } };
 
 const OPS_KEY = "OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1";
 const TITLES = {
   enforce: "COST-QUALITY-FLOOR-ENFORCE-1: a downgrade at a spend cap must revert when output quality falls",
   narrative: "PSR-NARRATIVE-CAP-SOFT-1: the weekly program narrative stays silent at a breached ai_spend cap, against BUDGET-SOFT-ROUTE-1",
   doc: "COST-QUALITY-FLOOR-DOC-1: state the owner cost and quality directive in the autonomous operation doctrine",
-  claude: "COST-QUALITY-FLOOR-CLAUDE-1: state the owner cost and quality directive under BUDGET-SOFT-ROUTE-1 in CLAUDE.md",
-  sla: "MANAGEMENT-PERSONAS-SLA-1: management_personas.sla_min is 240, above the 120-minute SLA ceiling",
-  pathb: "MANAGEMENT-PERSONAS-PATH-B-1: management_personas.path_b names the weekly review as the scorecard writer, the daily rollup is",
 };
 const FM_CLASS = "fm-ticket-quotes-its-own-counted-marker";
 
@@ -188,6 +189,11 @@ function seed(db) {
   ag.run("some-other-agent", "Other", "An unrelated agent prompt without either rule.");
   const mp = db.prepare("INSERT INTO management_personas (persona_key, level, scope, decision_authority, sla_min, path_b, status, updated_at) VALUES (?, ?, ?, ?, 240, ?, 'active', '2026-10-26 07:00:00')");
   for (const [k, lvl] of PERSONAS) mp.run(k, lvl, k.split(":")[1], lvl === "portfolio" ? AUTH_PORTFOLIO : AUTH_PROGRAM, PATH_B);
+  // two extra persona rows that already carry both rules: one with sla_min 90 and the old path_b (only path_b may change), one with sla_min 60 and another path_b (nothing may change)
+  mp.run("program:QNFO.HALF", "program", "QNFO.HALF", "stated; PERSONAL-QNFO-SEPARATION-1; NO-JOURNALS-1", PATH_B);
+  mp.run("program:QNFO.OTHER", "program", "QNFO.OTHER", "stated; PERSONAL-QNFO-SEPARATION-1; NO-JOURNALS-1", "something else entirely");
+  db.exec("UPDATE management_personas SET sla_min = 90 WHERE persona_key = 'program:QNFO.HALF'");
+  db.exec("UPDATE management_personas SET sla_min = 60 WHERE persona_key = 'program:QNFO.OTHER'");
   db.prepare("INSERT INTO fleet_tasks (id, name, type, definition, version, updated_at) VALUES ('management-personas', 'management-personas', 'workflow', ?, 7, '2026-10-26T09:43:36Z')").run(wfDefinition());
   db.prepare("INSERT INTO fleet_tasks (id, name, type, definition, version, updated_at) VALUES ('other-workflow', 'other', 'workflow', ?, 3, '2026-10-20T00:00:00Z')").run(wfDefinition("A different workflow that happens to contain the anchor. "));
   // the issue contracts as live: 100405 active (ISSUE-PROBE-AGENT-1, probe found_action), the others born superseded with the vacuous probe
@@ -217,6 +223,20 @@ const same = (a, b, skip = []) => Object.keys(PK).filter((t) => !skip.includes(t
 const contract = (db, cls) => one(db, "SELECT * FROM remediation_contracts WHERE class = ?", cls);
 const issueByTitle = (db, t) => one(db, "SELECT * FROM agent_issues WHERE title = ?", t);
 
+// The text of a function from its start to its closing brace (strings and comments skipped), so the extraction survives the function being reformatted over several lines.
+function sliceFunction(src, start) {
+  let i = src.indexOf("{", start), depth = 0;
+  for (; i < src.length; i++) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "*") { i = src.indexOf("*/", i + 2) + 1; continue; }
+    if (c === "/" && src[i + 1] === "/") { i = src.indexOf("\n", i); continue; }
+    if (c === '"' || c === "'" || c === "`") { for (i++; i < src.length && src[i] !== c; i++) if (src[i] === "\\") i++; continue; }
+    if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return src.slice(start, i + 1);
+  }
+  throw new Error("applyFilters is not closed");
+}
+
 // ------------------------------------------------------------------ 0. the file itself
 await section("0 the file itself", async () => {
   const stmts = SQL.split("\n").filter((l) => !l.startsWith("--")).join("\n");
@@ -228,14 +248,11 @@ await section("0 the file itself", async () => {
   ok((stmts.match(/INSERT INTO decision_log/g) || []).length === 1, "exactly one decision_log INSERT statement");
   ok(!/(UPDATE|DELETE FROM)\s+decision_log/i.test(stmts), "decision_log is only appended to");
   ok(!/cadence_sla/.test(stmts), "the migration does not write cadence_sla: 3003 was fixed by CADENCE-SLA-CONTINUITY-1 (migrations/2026-10-26-cadence-sla-continuity.sql)");
-  ok((stmts.match(/CREATE TABLE IF NOT EXISTS bak_20261026_sweep_a_/g) || []).length === 9, "nine bak_20261026_sweep_a_* tables are created in the file (eight before-state copies and the created-rows registry)");
-  // the two third-party addresses: only inside the two email_filters INSERTs, never in a comment, a decision row, a registry row or an issue text
-  const chunks = SQL.split(/;\s*\n/);
-  for (const a of [SENDER_1104, SENDER_1077]) {
-    const holding = chunks.filter((c) => c.includes(a));
-    ok(holding.length === 1 && /INSERT INTO email_filters/.test(holding[0]) && count(holding[0], a) === 2, `an address occurs only in its own email_filters INSERT (twice: the value and the NOT EXISTS guard)`, holding.map((h) => h.slice(0, 80)));
-  }
-  ok(!SQL.split("\n").filter((l) => l.startsWith("--")).join("\n").includes("@gmail"), "no e-mail address in a header comment");
+  ok((stmts.match(/CREATE TABLE IF NOT EXISTS bak_20261026_sweep_a_/g) || []).length === 10, "ten bak_20261026_sweep_a_* tables are created in the file (nine before-state copies and the created-rows registry)");
+  // the two third-party addresses: nowhere in the file (header, statements, Rollback), and one INSERT ... SELECT writes both filters from the emails table
+  ok(!SQL.includes(SENDER_1104) && !SQL.includes(SENDER_1077) && !/[A-Za-z0-9._+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/.test(SQL), "no e-mail address anywhere in the file");
+  ok((stmts.match(/INSERT INTO email_filters/g) || []).length === 1 && /SELECT 'filter', 'sender', lower\(e\.sender\), 'spam', 50, 1 FROM emails e\s+WHERE e\.id IN \(1077, 1104\)/.test(stmts), "one INSERT ... SELECT writes both filters from the sender of emails 1077 and 1104");
+  ok(!/COST-QUALITY-FLOOR-CLAUDE-1|MANAGEMENT-PERSONAS-SLA-1|MANAGEMENT-PERSONAS-PATH-B-1/.test(SQL), "the CLAUDE.md and the two management_personas follow-ups are not claimed anywhere (the personas fixes are in this file, the CLAUDE.md line has no code-loop doer)");
 });
 
 // ------------------------------------------------------------------ 1. every closing probe fails before and passes after
@@ -266,12 +283,12 @@ await section("2 exactly the intended rows change", async () => {
   const newClasses = newIssueIds.map((i) => "issue-" + i);
   const exp = {
     analytics_metric_triggers: ["2934"], cloudflare_capability_catalog: SLUGS, ops_config: [OPS_KEY], emails: ["1104"], control_registry: ["email-filter-journal-pitch-senders"],
-    fleet_agents: Object.keys(PROMPTS).sort(), management_personas: PERSONAS.map((p) => p[0]).sort(), decision_log: ["2"], issue_triage: [], cf_changelog_items: [],
+    fleet_agents: Object.keys(PROMPTS).sort(), management_personas: [...PERSONAS.map((p) => p[0]), "program:QNFO.HALF"].sort(), decision_log: ["2"], issue_triage: [], cf_changelog_items: [],
     fleet_tasks: ["management-personas"], failure_modes: ["ticket-quotes-its-own-counted-marker"],
     agent_issues: ["99916", ...newIssueIds], remediation_contracts: ["issue-100405", "issue-1000100", "issue-1000102", "issue-1000186", FM_CLASS, ...newClasses],
   };
   for (const [t, keys] of Object.entries(exp)) ok(JSON.stringify(changed(preSnap, postSnap, t)) === JSON.stringify([...keys].sort()), `only the intended ${t} rows change`, { got: changed(preSnap, postSnap, t), want: keys });
-  ok(newIssueIds.length === 6 && JSON.stringify(newIssueIds.map((i) => JSON.parse(postSnap.agent_issues[i]).title).sort()) === JSON.stringify(Object.values(TITLES).sort()), "exactly the six follow-up issues are filed, by title", newIssueIds.length);
+  ok(newIssueIds.length === 3 && JSON.stringify(newIssueIds.map((i) => JSON.parse(postSnap.agent_issues[i]).title).sort()) === JSON.stringify(Object.values(TITLES).sort()), "exactly the three follow-up issues are filed, by title", newIssueIds.length);
   ok(changed(preSnap, postSnap, "email_filters").length === 2 && all(post, "SELECT id FROM email_filters WHERE id > 38").length === 2, "email_filters gains exactly two rows and no existing one changes");
 });
 
@@ -321,7 +338,7 @@ await section("6 100405: the owner's words, verbatim, recorded as a record that 
   ok(m && j && j.directive_verbatim === m[1], "directive_verbatim equals the owner's note text read from agent_issues 100405", { want: m && m[1], got: j && j.directive_verbatim });
   ok(j && /^none: recorded only/.test(j.enforced_by) && /no loop reads/.test(j.enforced_by), "enforced_by says none: recorded only, no loop reads the key", j && j.enforced_by);
   ok(j && !("carried_by" in j) && !("reading" in j) && typeof j.intended === "string" && /BUDGET-SOFT-ROUTE-1/.test(j.intended) && /v_output_quality_headline/.test(j.intended), "no carried_by or reading claim; an intended field states what enforcement will be");
-  ok(j && /COST-QUALITY-FLOOR-ENFORCE-1/.test(j.follow_up) && /OWNER-NOTE-46/.test(j.source) && /100405/.test(j.source) && /not the owner/.test(j.limits), "follow-up, source and the labelled limits are recorded");
+  ok(j && /COST-QUALITY-FLOOR-ENFORCE-1/.test(j.follow_up) && /COST-QUALITY-FLOOR-DOC-1/.test(j.follow_up) && !/CLAUDE/.test(j.follow_up + r.note) && /OWNER-NOTE-46/.test(j.source) && /100405/.test(j.source) && /not the owner/.test(j.limits), "follow-up, source and the labelled limits are recorded");
   ok(/RECORD ONLY/.test(r.note) && /nothing enforces it yet/.test(r.note) && !/honor/i.test(r.note) && /COST-QUALITY-FLOOR-ENFORCE-1/.test(r.note), "the note says no loop honors the key yet and names the enforcement issue", r.note);
   // the contract of issue 100405 must not close on the record alone
   const c100405 = stored("issue-100405");
@@ -343,6 +360,10 @@ await section("7 1000100 / the decision row", async () => {
   for (const i of ["99916", "100388", "100405", "1000100", "1000102", "1000186"]) ok(r.action.includes(i), `the action names issue ${i}`);
   ok(!/@/.test([r.actor, r.assumption, r.action, r.evidence, r.outcome, r.blast_radius, r.rollback_path, r.capability_gain, r.predicted_outcome, r.reach_gain, r.surfaces_tested].join("\n")), "no e-mail address anywhere in the decision row");
   ok(/senders of emails 1077 and 1104/.test(r.action), "the row names the senders by email id");
+  ok(/sla_min 240 -> 120/.test(r.action) && /path_b corrected/.test(r.action), "the action text names both management_personas fixes");
+  ok(/rm-research only/.test(r.action) && /rc-agent-request, red-agent-request, parked-agent-request and lever-request/.test(r.action) && /not covered/.test(r.action), "the action says the hard limits are scoped to the roadmap-proposal prompt and names the steps that are not covered");
+  ok(/rc-agent-request, red-agent-request, parked-agent-request and lever-request are not covered/.test(r.capability_gain) && /roadmap-proposal/.test(r.assumption), "capability_gain and the assumption carry the same scope");
+  ok(!/CLAUDE-1|MANAGEMENT-PERSONAS-SLA|PATH-B-1|\b19\b/.test([r.assumption, r.action, r.evidence, r.capability_gain].join("\n")), "the row claims no dropped follow-up and carries no count of counted issues");
   // the wording says what is true: enforced where, not enforced where
   ok(/skipped while an ai_spend cap is breached/.test(r.assumption) && /management-personas workflow prompt that runs/.test(r.assumption), "the assumption says the dashboard narrative is skipped at a breached cap and the workflow prompt is what runs");
   ok(/PSR-NARRATIVE-CAP-SOFT-1/.test(r.capability_gain) && /nothing enforces yet/.test(r.capability_gain) && /COST-QUALITY-FLOOR-ENFORCE-1/.test(r.capability_gain), "capability_gain names the unenforced directive and the narrative gap, and claims no more");
@@ -364,15 +385,18 @@ await section("8 1000102: the two senders are blocked at ingest; no other email 
   const c = one(post, "SELECT kind, disposition, disposition_state, issue_id, critical_path, location, guards_against, alternate_path, evidence FROM control_registry WHERE control = 'email-filter-journal-pitch-senders'");
   ok(c && c.kind === "filter" && c.disposition === "keep" && c.disposition_state === "applied" && c.issue_id === 1000102, "control_registry records the filter (DOCTRINE-1)", c);
   ok(c && !/@/.test(Object.values(c).join(" ")), "the control_registry row carries no e-mail address");
+  // the filter pattern is the lower-cased sender of the email, whatever its case
+  const mixed = fresh(); mixed.prepare("UPDATE emails SET sender = ? WHERE id = 1104").run(SENDER_1104.toUpperCase()); apply(mixed);
+  ok(all(mixed, "SELECT pattern FROM email_filters WHERE id > 38").map((x) => x.pattern).sort().join() === [SENDER_1077, SENDER_1104].sort().join(), "the filter pattern is the lowercase sender even when the email row holds it in capitals");
   // a guard on the email: the same id with another subject is not moved
   const other = fresh(); other.prepare("UPDATE emails SET subject = 'something else' WHERE id = 1104").run(); apply(other);
   ok(one(other, "SELECT status FROM emails WHERE id = 1104").status === "processed", "email 1104 is moved only while it is the processed mail with the expected subject");
   // behaviour: qnfo-email's own applyFilters (extracted from the worker source) reads the new rows
   const worker = readFileSync(new URL("../qnfo-email/worker.js", import.meta.url), "utf8");
-  const line = worker.split("\n").find((l) => l.startsWith("async function applyFilters("));
-  ok(!!line, "applyFilters is found in qnfo-email/worker.js");
-  if (line) {
-    const applyFilters = new Function(line + "\nreturn applyFilters;")();
+  const start = /^(?:async )?function applyFilters\(/m.exec(worker);
+  ok(!!start, "applyFilters is found in qnfo-email/worker.js");
+  if (start) {
+    const applyFilters = new Function(sliceFunction(worker, start.index) + "\nreturn applyFilters;")();
     const ad = (db) => ({ prepare: (sql) => ({ all: async () => ({ results: db.prepare(sql).all() }) }) });
     const runF = async (db, from) => (await applyFilters(ad(db), from, "rowan.quni@qnfo.org", "Details for research authors", "hello")).action;
     ok((await runF(pre, "Sender <" + SENDER_1104 + ">")) === "process" && (await runF(pre, SENDER_1077)) === "process", "before: mail from the two senders is processed, not filed as spam");
@@ -400,7 +424,7 @@ await section("9 1000186: each rule once, only where absent; cadence text matche
     const was = lvl === "portfolio" ? AUTH_PORTFOLIO : AUTH_PROGRAM;
     ok(da[k].startsWith(was) && count(da[k], "NO-JOURNALS-1") === 1 && count(da[k], "PERSONAL-QNFO-SEPARATION-1") === 1, `${k}: decision_authority keeps its text and gains each rule once`);
   }
-  ok(all(post, "SELECT sla_min, path_a, path_b, charter FROM management_personas").every((r, i) => JSON.stringify(r) === JSON.stringify(all(pre, "SELECT sla_min, path_a, path_b, charter FROM management_personas")[i])), "management_personas columns other than decision_authority (sla_min and path_b among them) are untouched: they are filed, not fixed");
+  ok(all(post, "SELECT persona_key, level, scope, path_a, charter, kpis, status FROM management_personas").every((r, i) => JSON.stringify(r) === JSON.stringify(all(pre, "SELECT persona_key, level, scope, path_a, charter, kpis, status FROM management_personas")[i])), "management_personas columns other than decision_authority, sla_min and path_b are untouched");
   // a prompt that already carries one rule gets the other only
   const part = fresh();
   part.prepare("UPDATE fleet_agents SET system_prompt = system_prompt || ' Earlier edit: journals go nowhere (NO-JOURNALS-1).' WHERE id = 'portfolio-manager'").run();
@@ -410,6 +434,28 @@ await section("9 1000186: each rule once, only where absent; cadence text matche
   ok(count(pm, "NO-JOURNALS-1") === 1 && count(pm, "PERSONAL-QNFO-SEPARATION-1") === 1, "a prompt that already names NO-JOURNALS-1 is not given it twice", [count(pm, "NO-JOURNALS-1"), count(pm, "PERSONAL-QNFO-SEPARATION-1")]);
   const pf = one(part, "SELECT decision_authority FROM management_personas WHERE persona_key = 'portfolio:fleet'").decision_authority;
   ok(count(pf, "NO-JOURNALS-1") === 1 && count(pf, "PERSONAL-QNFO-SEPARATION-1") === 1, "the same holds for decision_authority");
+});
+
+// ------------------------------------------------------------------ 17. management_personas: sla_min within QUEUE-SLA-1, path_b names the writers that exist
+await section("17 management_personas sla_min and path_b", async () => {
+  const rows = (db) => Object.fromEntries(all(db, "SELECT persona_key, sla_min, path_b, updated_at FROM management_personas").map((r) => [r.persona_key, r]));
+  const b = rows(pre), a = rows(post);
+  const NEWB = "qnfo-fleet-dashboard daily portfolio rollup (PORTFOLIO-STRATEGIC-2) and weekly review (PORTFOLIO-STRATEGIC-1) recompute scorecards; POST /api/portfolio/strategic";
+  for (const [k] of PERSONAS) ok(b[k].sla_min === 240 && a[k].sla_min === 120 && b[k].path_b === PATH_B && a[k].path_b === NEWB, `${k}: sla_min 240 -> 120 and path_b names both writers`, [a[k].sla_min, a[k].path_b]);
+  ok(a["program:QNFO.HALF"].sla_min === 90 && a["program:QNFO.HALF"].path_b === NEWB, "a row at or under 120 minutes keeps its sla_min while its path_b is still corrected");
+  ok(JSON.stringify(a["program:QNFO.OTHER"]) === JSON.stringify(b["program:QNFO.OTHER"]), "a row with neither defect is not touched at all (updated_at included)");
+  ok(!Object.values(a).some((r) => (r.path_b || "").includes("recomputes scorecards")) && Object.values(a).every((r) => r.sla_min <= 120), "no row keeps the old wording or an SLA above 120 minutes");
+  const meta = all(post, "SELECT persona_key, sla_min, path_b FROM bak_20261026_sweep_a_personas_meta ORDER BY persona_key");
+  ok(meta.length === 7 && meta.every((r) => r.path_b === PATH_B) && meta.filter((r) => r.sla_min === 240).length === 6 && !meta.some((r) => r.persona_key === "program:QNFO.OTHER"), "the before-state copy holds the seven rows that had a defect, with their old values, and not the clean one", meta.length);
+  // the Rollback restores both columns from the copy
+  const rb = /^-- Rollback: (.*)$/m.exec(SQL);
+  const back = fresh(); apply(back); back.exec(rb[1]);
+  ok(JSON.stringify(rows(back)) === JSON.stringify(b), "the Rollback line gives sla_min, path_b and updated_at back for every persona row");
+  // each UPDATE guards on its own defect: a row with only one of them changes only that column
+  const one1 = fresh(); one1.exec("UPDATE management_personas SET sla_min = 120"); apply(one1);
+  ok(Object.values(rows(one1)).filter((r) => r.path_b === NEWB).length === 7 && Object.values(rows(one1)).every((r) => r.sla_min <= 120), "with sla_min already fixed only path_b is rewritten");
+  const one2 = fresh(); one2.prepare("UPDATE management_personas SET path_b = ?").run(NEWB); apply(one2);
+  ok(Object.values(rows(one2)).filter((r) => r.sla_min === 120).length === 6 && rows(one2)["program:QNFO.HALF"].sla_min === 90, "with path_b already fixed only sla_min is lowered");
 });
 
 // ------------------------------------------------------------------ 13. 1000186: the prompt that runs (fleet_tasks management-personas) carries the two hard limits
@@ -456,11 +502,27 @@ await section("14 the issue contracts of 100405, 1000100, 1000102 and 1000186 me
   lost.prepare("UPDATE fleet_tasks SET definition = replace(definition, 'Hard limits: never propose', 'Soft limits: never propose'), version = version + 1 WHERE id = 'management-personas'").run();
   lost.prepare("UPDATE fleet_tasks SET definition = replace(definition, '(NO-JOURNALS-1)', '(n)') WHERE id = 'management-personas'").run();
   ok(!run(lost, stored("issue-1000186")).passes, "1000186: fails again when a later rewrite of the workflow loses the limit");
+  // each limit on its own: losing only one of the two tokens from the workflow definition fails the probe
+  for (const [tok, what] of [["PERSONAL-QNFO-SEPARATION-1", "the separation rule"], ["NO-JOURNALS-1", "the journals rule"]]) {
+    const one1 = fresh(); apply(one1);
+    ok(run(one1, stored("issue-1000186")).passes, `1000186: passes before ${what} is lost`);
+    one1.prepare("UPDATE fleet_tasks SET definition = replace(definition, ?, 'x') WHERE id = 'management-personas'").run("(" + tok + ")");
+    ok(!run(one1, stored("issue-1000186")).passes, `1000186: fails when only ${what} is lost from the workflow definition`, run(one1, stored("issue-1000186")));
+  }
   // a probe a doer wrote by hand is left alone
   const hand = fresh();
   hand.prepare("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed', action = 'a doer wrote this by hand' WHERE class = 'issue-1000100'").run(); // still superseded: only the vacuous marker protects it
   const bh = contract(hand, "issue-1000100"); apply(hand);
   ok(JSON.stringify(bh) === JSON.stringify(contract(hand, "issue-1000100")), "a contract whose vacuous marker is gone (a hand-written probe) is left alone");
+  // issue-100405 (active live) is guarded twice, by the vacuous marker and by the found_action probe: each guard alone must hold
+  const hand5a = fresh(); // the probe was rewritten by hand but the action text still carries the vacuous marker
+  hand5a.prepare("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed' WHERE class = 'issue-100405'").run();
+  const b5a = contract(hand5a, "issue-100405"); apply(hand5a);
+  ok(JSON.stringify(b5a) === JSON.stringify(contract(hand5a, "issue-100405")), "issue-100405: a hand-written probe under the old action text is left alone (the found_action guard)");
+  const hand5b = fresh(); // the action text was rewritten by hand but the probe is still the any-code-task probe
+  hand5b.prepare("UPDATE remediation_contracts SET action = 'a doer wrote this by hand' WHERE class = 'issue-100405'").run();
+  const b5b = contract(hand5b, "issue-100405"); apply(hand5b);
+  ok(JSON.stringify(b5b) === JSON.stringify(contract(hand5b, "issue-100405")), "issue-100405: a hand-written action text over the old probe is left alone (the vacuous-marker guard)");
 });
 
 // ------------------------------------------------------------------ 15. the follow-ups promised in prose are filed, each with a doer and a probe
@@ -476,30 +538,29 @@ await section("15 follow-up issues with a doer and a probe", async () => {
     const lines = d.split("\n");
     const task = lines.find((l) => l.startsWith("code-task: ")), anchor = lines.find((l) => l.startsWith("code-anchor: ")), cp = lines.find((l) => l.startsWith("code-probe: {"));
     if (task) ok(/^code-task: repo=qnfo-workers path=[A-Za-z0-9._\/-]+$/.test(task), `${k}: a well-formed code-task line`, task);
-    if (k === "claude") ok(!task, "the CLAUDE.md issue carries no code-task line: CLAUDE.md is outside the code loop's merge scope, so such a line could only be refused");
+    ok(!!task && !!anchor, `${k}: a code-task line and a code-anchor line`);
     if (["enforce", "narrative", "doc"].includes(k)) ok(!!anchor && anchor.length > "code-anchor: ".length + 20, `${k}: a code-anchor line follows the code-task line`);
     if (cp) { let j = null; try { j = JSON.parse(cp.slice("code-probe: ".length)); } catch (e) { /* asserted */ } ok(j && Array.isArray(j.paths) && j.paths.length === 1 && (typeof j.contains === "string") !== (typeof j.absent === "string"), `${k}: the code-probe line is JSON with one path and exactly one of contains or absent`, cp); }
-    ok(!!cp || k === "sla" || k === "pathb", `${k}: it carries a code-probe line, or (for the two data issues) a d1-query contract`);
+    ok(!!cp, `${k}: it carries a code-probe line`);
   }
-  ok(/ops_config|OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1/.test(issueByTitle(post, TITLES.enforce).description) && issueByTitle(post, TITLES.enforce).priority === "high", "the enforcement issue ties itself to the directive record and is high priority");
-  ok(/spendGovern/.test(issueByTitle(post, TITLES.enforce).description) && /path=qnfo-ai\/worker\.js/.test(issueByTitle(post, TITLES.enforce).description), "the enforcement issue names qnfo-ai spendGovern");
-  ok(/psrNarrativeAllowed/.test(issueByTitle(post, TITLES.narrative).description) && /BUDGET-SOFT-ROUTE-1/.test(issueByTitle(post, TITLES.narrative).description) && /660\.09/.test(issueByTitle(post, TITLES.narrative).description), "the narrative issue names psrNarrativeAllowed, the rule it contradicts and the measured cap breach");
-  ok(/stale-PR lane/.test(issueByTitle(post, TITLES.claude).description) && /outside the code loop/.test(issueByTitle(post, TITLES.claude).description), "the CLAUDE.md issue names its real doer: the code loop cannot ship that file");
-  // the data issues: a d1-query contract, active and due now, whether the birth contract exists (live) or not (fallback INSERT)
-  const noBirth = fresh(); noBirth.exec("DROP TRIGGER birth_contract"); apply(noBirth);
-  for (const [name, db] of [["with the birth contract", post], ["without it", noBirth]]) {
-    for (const k of ["sla", "pathb"]) {
-      const iid = issueByTitle(db, TITLES[k]).id, c = contract(db, "issue-" + iid);
-      ok(c && c.status === "active" && c.verify_transport === "d1-query" && c.issue_id === iid && !c.action.startsWith("VACUOUS") && c.next_due_at !== null, `${k} ${name}: an active d1-query contract that measures the defect`, c && [c.status, c.action.slice(0, 40)]);
-    }
-  }
-  const sla = stored("issue-" + issueByTitle(post, TITLES.sla).id), pb = stored("issue-" + issueByTitle(post, TITLES.pathb).id);
-  ok(!run(post, sla).passes && !run(post, pb).passes && !run(pre, sla).passes, "the two data probes read the defects (they fail today)", [run(post, sla), run(post, pb)]);
-  const fixedDb = fresh(); apply(fixedDb);
-  fixedDb.exec("UPDATE management_personas SET sla_min = 120, path_b = 'qnfo-fleet-dashboard daily rollup writes program_scorecards and the Monday review writes program_review_notes'");
-  ok(run(fixedDb, sla).passes && run(fixedDb, pb).passes, "and pass once the rows are fixed");
-  // the six new issues add nothing to the metric that counts the marker
+  const e = issueByTitle(post, TITLES.enforce).description;
+  ok(/OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1/.test(e) && issueByTitle(post, TITLES.enforce).priority === "high", "the enforcement issue ties itself to the directive record and is high priority");
+  ok(/\(1\) spendGovern, the route-level decision/.test(e) && /\(2\) spendGovernWA, the Workers AI chokepoint/.test(e) && /\(3\) the FLEET-CAP-STEER-1 twin switch \(ops_config ai_fleet_cap_steer, FLEET_STEER_SWITCH, fleetSteerDecide\)/.test(e) && /all three downgrade points/.test(e), "the enforcement issue covers all three downgrade points, each named in its own clause: spendGovern, spendGovernWA and the fleet cap steer switch");
+  ok(/path=qnfo-ai\/worker\.js/.test(e) && /code-anchor: else if \(d\.action === "downgrade"\) spendRecord/.test(e), "the code-task stays on qnfo-ai/worker.js with its single-occurrence anchor");
+  ok(/the doer creates qnfo-ai\/quality-floor\.test\.mjs/.test(e) && /must assert for each of the three points/.test(e) && /lifted when worse > 0/.test(e) && /does not close this issue/.test(e), "the text says the doer creates the suite and what it must assert");
+  const ecp = JSON.parse(e.split("\n").find((l) => l.startsWith("code-probe: ")).slice("code-probe: ".length));
+  ok(ecp.paths.length === 1 && ecp.paths[0] === "qnfo-ai/quality-floor.test.mjs" && ecp.contains === "spendGovernWA" && !("absent" in ecp), "the code-probe needs the suite that names spendGovernWA, not a string in worker.js", ecp);
+  const n = issueByTitle(post, TITLES.narrative).description;
+  ok(/psrNarrativeAllowed/.test(n) && /BUDGET-SOFT-ROUTE-1/.test(n) && /660\.09/.test(n), "the narrative issue names psrNarrativeAllowed, the rule it contradicts and the measured cap breach");
+  const ncp = JSON.parse(n.split("\n").find((l) => l.startsWith("code-probe: ")).slice("code-probe: ".length));
+  ok(ncp.paths[0] === "qnfo-fleet-dashboard/worker.js" && ncp.absent === "if (narrativeAllowed) {" && !("contains" in ncp), "the narrative code-probe is the absence of the gate itself, if (narrativeAllowed) {", ncp);
+  ok(/rm-research/.test(n) && /rc-agent-request, red-agent-request, parked-agent-request and lever-request/.test(n) && /not covered/.test(n), "the narrative issue states the scope of the hard limits: the roadmap-proposal prompt only");
+  const d3 = issueByTitle(post, TITLES.doc).description;
+  ok(/docs\/\*\*\.md is inside the code loop/.test(d3) && /path=docs\/AUTONOMOUS-OPERATION-DOCTRINE\.md/.test(d3), "the doctrine issue names its doer: docs/**.md is inside the code loop's merge scope");
+  // the three new issues add nothing to the metric that counts the marker
   ok(one(post, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open' AND instr(description, 'session-task:') > 0").n === 2, "the open issues containing the marker are the two real ones of the fixture, no new issue adds one");
+  // the contracts of the three issues come from their code-probe lines (the line is the contract), so no d1-query contract is written for them
+  ok(Object.values(TITLES).every((t) => !all(post, "SELECT 1 FROM remediation_contracts WHERE class = ? AND precondition = 'SWEEP-DATA-FIXES-A-1'", "issue-" + issueByTitle(post, t).id).length), "no d1-query contract is written for the three code-probe issues (their probe is the line)");
 });
 
 // ------------------------------------------------------------------ 16. the failure mode and its detector
@@ -528,9 +589,9 @@ await section("10 idempotence: a second apply changes nothing", async () => {
   ok(same(s1, s2), "second apply changes no row in any table", Object.keys(PK).filter((t) => changed(s1, s2, t).length));
   ok(JSON.stringify(s1) === JSON.stringify(s2), "the full snapshot is identical after the second apply");
   ok(one(twice, "SELECT COUNT(*) n FROM decision_log WHERE instr(action, 'SWEEP-DATA-FIXES-A-1:') = 1").n === 1 && one(twice, "SELECT COUNT(*) n FROM decision_predictions").n === 1, "one decision row and one prediction after two applies");
-  ok(bakBefore === JSON.stringify(all(twice, "SELECT name FROM sqlite_master WHERE name LIKE 'bak_20261026_sweep_a_%' ORDER BY name")) && JSON.parse(bakBefore).length === 9, "nine backup tables, unchanged by the second apply");
+  ok(bakBefore === JSON.stringify(all(twice, "SELECT name FROM sqlite_master WHERE name LIKE 'bak_20261026_sweep_a_%' ORDER BY name")) && JSON.parse(bakBefore).length === 10, "ten backup tables, unchanged by the second apply");
   ok(createdBefore === JSON.stringify(all(twice, "SELECT tbl, pk FROM bak_20261026_sweep_a_created ORDER BY tbl, pk")), "the created-rows registry is unchanged by the second apply");
-  ok(one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_fleet_agents").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_cf_catalog").n === 7 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_emails").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_personas").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_workflow").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_contracts").n === 4, "the backups hold the pre-state rows (and keep them after a second apply)");
+  ok(one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_fleet_agents").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_cf_catalog").n === 7 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_emails").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_personas").n === 6 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_workflow").n === 1 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_contracts").n === 4 && one(twice, "SELECT COUNT(*) n FROM bak_20261026_sweep_a_personas_meta").n === 7, "the backups hold the pre-state rows (and keep them after a second apply)");
   ok(one(twice, "SELECT description FROM bak_20261026_sweep_a_issue_99916").description === DESC_99916 && one(twice, "SELECT action FROM bak_20261026_sweep_a_trigger_2934").action === ACTION_2934, "the 99916 and 2934 backups hold the original text");
   ok(one(twice, "SELECT definition FROM bak_20261026_sweep_a_workflow").definition === wfDefinition(), "the workflow backup holds the original definition");
   ok(JSON.stringify(all(twice, "SELECT tbl, pk FROM bak_20261026_sweep_a_created ORDER BY tbl, pk")) === JSON.stringify([
@@ -550,11 +611,11 @@ await section("11 rollback: the header line restores the pre-state and deletes o
   const diff = Object.keys(PK).filter((t) => !skip.includes(t) && changed(preSnap, s, t).length);
   ok(diff.length === 0, "after the Rollback line every touched table equals its pre-state", diff.map((t) => [t, changed(preSnap, s, t)]));
   ok(JSON.parse(s.fleet_tasks["management-personas"]).definition === JSON.parse(preSnap.fleet_tasks["management-personas"]).definition && JSON.parse(s.fleet_tasks["other-workflow"]).definition === JSON.parse(preSnap.fleet_tasks["other-workflow"]).definition, "the workflow definition is restored (the version only moves forward)");
-  ok(one(rolled, "SELECT description FROM agent_issues WHERE id = 99916").description === DESC_99916 && changed(preSnap, s, "agent_issues").length === 6, "99916 is restored and the six follow-up issues stay (an issue is never silently dropped)", changed(preSnap, s, "agent_issues"));
+  ok(one(rolled, "SELECT description FROM agent_issues WHERE id = 99916").description === DESC_99916 && changed(preSnap, s, "agent_issues").length === 3, "99916 is restored and the three follow-up issues stay (an issue is never silently dropped)", changed(preSnap, s, "agent_issues"));
   const strip = (row) => { const r = JSON.parse(row); delete r.next_due_at; return JSON.stringify(r); };
   const cdiff = ["issue-100405", "issue-1000100", "issue-1000102", "issue-1000186"].filter((c) => strip(preSnap.remediation_contracts[c]) !== strip(s.remediation_contracts[c]));
   ok(cdiff.length === 0, "the four contracts are restored (but for the due time, which the live edit-rerun trigger moves)", cdiff);
-  ok(!(FM_CLASS in s.remediation_contracts) && Object.keys(s.remediation_contracts).length === Object.keys(preSnap.remediation_contracts).length + 6, "the detector contract is removed and the six new issue contracts stay");
+  ok(!(FM_CLASS in s.remediation_contracts) && Object.keys(s.remediation_contracts).length === Object.keys(preSnap.remediation_contracts).length + 3, "the detector contract is removed and the three new issue contracts stay");
   ok(!run(rolled, P["99916"]).passes && !run(rolled, P["100388"]).passes && !run(rolled, stored("issue-1000186")).passes, "the probes fail again after the rollback");
   // bounded: a same-shape filter that someone else wrote first is not deleted by the Rollback, the one this file created is
   const other = fresh();
@@ -577,11 +638,10 @@ await section("12 an already-fixed database: nothing but the decision row is wri
   done.exec("UPDATE emails SET status = 'archived' WHERE id = 1104");
   done.exec("INSERT INTO control_registry (control, location, kind, evidence, disposition) VALUES ('email-filter-journal-pitch-senders', 'x', 'filter', 'earlier', 'keep')");
   for (const id of Object.keys(PROMPTS)) done.prepare("UPDATE fleet_agents SET system_prompt = ? WHERE id = ?").run("Fixed. PERSONAL-QNFO-SEPARATION-1. NO-JOURNALS-1. Cadence: hourly.", id);
-  done.exec("UPDATE management_personas SET decision_authority = 'fixed; PERSONAL-QNFO-SEPARATION-1; NO-JOURNALS-1'");
+  done.exec("UPDATE management_personas SET decision_authority = 'fixed; PERSONAL-QNFO-SEPARATION-1; NO-JOURNALS-1', sla_min = MIN(sla_min, 120), path_b = 'daily portfolio rollup (PORTFOLIO-STRATEGIC-2) and weekly review (PORTFOLIO-STRATEGIC-1) recompute scorecards'");
   done.prepare("UPDATE fleet_tasks SET definition = replace(definition, 'ONE new feature', 'ONE new feature (NO-JOURNALS-1 and PERSONAL-QNFO-SEPARATION-1 stated)') WHERE id = 'management-personas'").run();
   for (const id of [100405, 1000100, 1000102, 1000186]) done.prepare("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed', action = 'MEASURES it, written by a doer', status = 'active' WHERE class = ?").run("issue-" + id);
   for (const t of Object.values(TITLES)) done.prepare("INSERT INTO agent_issues (title, description, status) VALUES (?, 'filed earlier', 'open')").run(t);
-  done.exec("UPDATE remediation_contracts SET verify_probe = 'SELECT ''x'' AS expected, ''x'' AS observed', action = 'MEASURES it, written by a doer', status = 'active' WHERE class IN (SELECT 'issue-' || id FROM agent_issues WHERE title LIKE 'MANAGEMENT-PERSONAS-%')");
   done.exec("INSERT INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, first_seen) VALUES ('ticket-quotes-its-own-counted-marker', 'f', 'r', 'm', 'd', '2026-10-26')");
   done.exec("INSERT INTO remediation_contracts (class, precondition, action, verify_probe, verify_transport, escalate_to) VALUES ('" + FM_CLASS + "', 'p', 'failure-mode detector', 'SELECT ''0'' AS expected, ''0'' AS observed', 'd1-query', 'qnfo-fleet-control')");
   const before = snap(done);
@@ -589,9 +649,29 @@ await section("12 an already-fixed database: nothing but the decision row is wri
   const after = snap(done);
   ok(same(before, after, ["decision_log"]), "an already-fixed database: no row in any table changes", Object.keys(PK).filter((t) => t !== "decision_log" && changed(before, after, t).length).map((t) => [t, changed(before, after, t)]));
   ok(changed(before, after, "decision_log").length === 1, "only the decision_log row is added");
-  ok(["issue_99916", "trigger_2934", "cf_catalog", "emails", "fleet_agents", "personas", "workflow", "contracts", "created"].every((n) => one(done, `SELECT COUNT(*) n FROM bak_20261026_sweep_a_${n}`).n === 0), "the backups and the created-rows registry of an already-fixed database are empty (nothing to restore, nothing to delete)");
+  ok(["issue_99916", "trigger_2934", "cf_catalog", "emails", "fleet_agents", "personas", "personas_meta", "workflow", "contracts", "created"].every((n) => one(done, `SELECT COUNT(*) n FROM bak_20261026_sweep_a_${n}`).n === 0), "the backups and the created-rows registry of an already-fixed database are empty (nothing to restore, nothing to delete)");
   ok(one(done, "SELECT COUNT(*) n FROM email_filters WHERE lower(pattern) = lower(?) OR lower(pattern) = lower(?)", SENDER_1104, SENDER_1077).n === 2, "an existing filter for either sender (any field spelling or case) is not duplicated");
   for (const t of Object.values(TITLES)) ok(one(done, "SELECT COUNT(*) n FROM agent_issues WHERE title = ?", t).n === 1, "a follow-up that is already open is not filed twice");
+});
+
+// ------------------------------------------------------------------ 18. each follow-up's code-anchor occurs exactly once on the checkout, while the fix is not yet on main
+// Follows migrations/code-anchor-once.test.mjs: a code-task whose anchor is not placed exactly once cannot be built. Once the follow-up is done (its code-probe passes on this checkout)
+// the check is skipped, because the fix itself moves the anchor. The filed text is the one the migration writes, read back from the migrated database.
+await section("18 follow-up anchors on the checkout", async () => {
+  const state = {};
+  for (const [k, t] of Object.entries(TITLES)) {
+    const lines = issueByTitle(post, t).description.split("\n");
+    const task = /^code-task: repo=qnfo-workers path=(\S+)$/.exec(lines.find((l) => l.startsWith("code-task: ")) || "");
+    const anchor = (lines.find((l) => l.startsWith("code-anchor: ")) || "").slice("code-anchor: ".length);
+    const cp = JSON.parse(lines.find((l) => l.startsWith("code-probe: ")).slice("code-probe: ".length));
+    const target = readRepo(cp.paths[0]);
+    const passes = typeof cp.contains === "string" ? target !== null && target.includes(cp.contains) : target === null || !target.includes(cp.absent);
+    const file = task ? readRepo(task[1]) : null;
+    state[k] = { passes, anchors: file === null ? -1 : count(file, anchor) };
+    if (passes) continue; // done on main: nothing to place any more
+    ok(!!task && file !== null && anchor.length > 20 && count(file, anchor) === 1, `${k}: the code-anchor occurs exactly once in ${task && task[1]} on this checkout (the code loop can place the edit)`, state[k]);
+  }
+  ok(WATCHED.length === 3 && Object.keys(state).length === 3, "the suite names the three files it reads, so SUITE-DEPENDENTS-1 selects it when one of their directories changes");
 });
 
 console.log(`sweep-data-fixes-a: ${pass} passed, ${fail} failed`);
