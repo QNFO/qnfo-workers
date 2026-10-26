@@ -84,10 +84,21 @@ ok(!/model such as llama/i.test(src.split("\n").filter((l) => l.includes('name: 
   // OPS-DASHBOARD-FEED-ERROR-BLIND-1 (agent_issues 1000178): a non-2xx feed carries its reason in `error` (logToolEvent writes it to the audit row).
   const m405 = { fetch: async () => J({ error: "method_not_allowed", path: "/api/cmd", allow: ["POST"], hint: "Use POST /api/cmd to send a command; GET /api lists the read-only endpoints." }, 405) };
   r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: m405 }, { path: "/api/cmd" });
-  ok(r.ok === false && r.status === 405 && r.error === "HTTP 405 for /api/cmd: method_not_allowed", "dashboard_feed 405 names status, path and the endpoint's reason", r);
+  ok(r.ok === false && r.status === 405 && r.path === "/api/cmd" && r.error === "HTTP 405 for /api/cmd: method_not_allowed", "dashboard_feed 405 names status, path and the endpoint's reason", r);
   ok(Array.isArray(r.allow) && r.allow[0] === "POST" && /Use POST \/api\/cmd/.test(r.hint) && r.json && r.json.error === "method_not_allowed", "dashboard_feed 405 keeps allow, the endpoint's hint and the body", r);
+  // the default 405 hint is built from the endpoint's own allow list (body, else the Allow header) and says this tool is GET-only
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: "method_not_allowed", allow: ["PUT"] }, 405) } }, { path: "/api/cmd" });
+  ok(r.ok === false && (r.allow || []).join() === "PUT" && r.hint === "dashboard_feed is GET-only and this endpoint allows PUT; GET /api lists the read feeds" && !/POST/.test(r.hint), "a 405 without its own hint says the tool is GET-only and names the body's allow list", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => new Response("nope", { status: 405, headers: { allow: "DELETE, PUT" } }) } }, { path: "/api/cmd" });
+  ok(r.ok === false && (r.allow || []).join() === "DELETE,PUT" && r.hint === "dashboard_feed is GET-only and this endpoint allows DELETE,PUT; GET /api lists the read feeds" && !/POST/.test(r.hint) && r.error === "HTTP 405 for /api/cmd: nope", "a plain-text 405 takes the allow list from the Allow header", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: "m", allow: "PUT, DELETE" }, 405) } }, { path: "/api/cmd" });
+  ok((r.allow || []).join() === "PUT,DELETE", "a string allow in the body is split into a list", r);
   r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: "method" }, 405) } }, { path: "/api/cmd" });
-  ok(r.ok === false && r.error === "HTTP 405 for /api/cmd: method" && /rejects GET/.test(r.hint), "a 405 without its own hint gets the POST-only hint", r);
+  ok(r.ok === false && r.error === "HTTP 405 for /api/cmd: method" && r.allow === undefined && r.hint === "dashboard_feed is GET-only and this endpoint allows another method; GET /api lists the read feeds", "a 405 that names no allow list still says the tool is GET-only", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: "E", message: "M" }, 400) } }, { path: "/api/x" });
+  ok(r.ok === false && r.error === "HTTP 400 for /api/x: E", "error wins over message when the body has both", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: "x".repeat(5000) }, 500) } }, { path: "/api/x" });
+  ok(r.ok === false && String(r.error).length < 260 && String(r.error).indexOf("HTTP 500 for /api/x: xxxx") === 0, "a 5000-character JSON reason is capped in the error", r.error && r.error.length);
   r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ message: "no such feed" }, 404) } }, { path: "/api/nope" });
   ok(r.ok === false && r.error === "HTTP 404 for /api/nope: no such feed" && r.hint === undefined, "a JSON refusal with only a message uses it", r);
   r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: { code: 7 } }, 500) } }, { path: "/api/x" });

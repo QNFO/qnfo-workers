@@ -3183,7 +3183,10 @@ async function dashboardFeed(env, args) {
   if (!r.ok) {
     const why = j && (j.error || j.message);
     const detail = why ? fpaCap(typeof why === "string" ? why : JSON.stringify(why), 200) : fpaCap(t, 200);
-    return { ok: false, status: r.status, path, error: "HTTP " + r.status + " for " + path + (detail ? ": " + detail : ""), allow: j && j.allow || undefined, hint: j && j.hint || (r.status === 405 ? "the endpoint exists but rejects GET; POST it, or read GET /api for the feed list" : undefined), json: j || undefined, text: j ? undefined : fpaCap(t, 12e3) };
+    // the allow list is the endpoint's own (body, else the Allow header); this tool only issues GET, so a 405 hint says so and never tells the caller to POST
+    const al = j && j.allow != null ? j.allow : r.headers && r.headers.get("allow");
+    const allow = al ? (Array.isArray(al) ? al : String(al).split(/\s*,\s*/)).map(String).filter(Boolean) : undefined;
+    return { ok: false, status: r.status, path, error: "HTTP " + r.status + " for " + path + (detail ? ": " + detail : ""), allow: allow && allow.length ? allow : undefined, hint: j && j.hint || (r.status === 405 ? "dashboard_feed is GET-only and this endpoint allows " + (allow && allow.length ? allow.join(",") : "another method") + "; GET /api lists the read feeds" : undefined), json: j || undefined, text: j ? undefined : fpaCap(t, 12e3) };
   }
   return { ok: true, status: r.status, path, json: j || undefined, text: j ? undefined : fpaCap(t, 12e3) };
 }
