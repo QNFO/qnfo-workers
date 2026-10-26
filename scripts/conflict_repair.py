@@ -275,10 +275,18 @@ def resolve_version_only(text, pr_side="theirs"):
     return "\n".join(out) if hunks else None
 
 
+def hold_text(body):
+    """The body without fenced blocks and inline code spans: a hold phrase inside code documents a hold, it does not set one (same rule as bhHoldText in
+    qnfo-fleet-control). An unterminated fence stays in the text, so an odd body errs towards holding."""
+    t = re.sub(r"```.*?```", " ", str(body or ""), flags=re.S)
+    t = re.sub(r"~~~.*?~~~", " ", t, flags=re.S)
+    return re.sub(r"`[^`\n]*`", " ", t)
+
+
 def asks_to_wait(pr):
     """True when the pull request's title, labels or description ask not to be touched (WIP, hold, do not merge)."""
     labels = " ".join(str((l or {}).get("name") or "") for l in (pr.get("labels") or []))
-    return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or BODY_HOLD_RE.search(str(pr.get("body") or "")))
+    return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or BODY_HOLD_RE.search(hold_text(pr.get("body"))))
 
 
 def merge_tree_conflicts(number, cwd=None):
@@ -895,7 +903,7 @@ def selftest():
     ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n=======\nvar VERSION = "2";\n/* n */ const z = 1;\n>>>>>>> pr\n') is None, "a note line that carries code is refused")
     ok(asks_to_wait({"title": "WIP: x"}) and asks_to_wait({"title": "hold: y"}) and asks_to_wait({"title": "z", "labels": [{"name": "do not merge"}]}) and asks_to_wait({"title": "z", "body": "please do-not-merge"}) and not asks_to_wait({"title": "Withhold nothing, shipping soon", "body": "ok"}), "asks_to_wait: WIP, hold and do-not-merge, not words that merely contain them")
     ok(all(asks_to_wait({"title": "z", "body": b}) for b in ("Draft until an independent adversarial review has returned", "this stays a draft", "Keep it as a draft for now", "not ready for merge", "not ready to merge yet", "Not ready for review"))
-       and not any(asks_to_wait({"title": "z", "body": b}) for b in ("the harness opens every session pull request as a draft", "ready for review", "a draft that is green is marked ready", "drafting notes until later")), "asks_to_wait: the body phrases a session uses to keep a draft on purpose hold it; a body that only mentions drafts does not")
+       and not any(asks_to_wait({"title": "z", "body": b}) for b in ("the phrase `draft until` in code documents the rule", "```\ndo not merge\n```\nfinished", "use ~~~\nnot ready for merge\n~~~ as the fence", "the harness opens every session pull request as a draft", "ready for review", "a draft that is green is marked ready", "drafting notes until later")), "asks_to_wait: the body phrases a session uses to keep a draft on purpose hold it; a body that only mentions drafts does not")
     stamp = lambda secs: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1000000 + secs))
     prs = {1: dict(base_pr, number=1, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a1", ref="codeagent-x")), 2: dict(base_pr, number=2, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a2", ref="fix/y")),
            3: dict(base_pr, number=3, mergeable=True, mergeable_state="clean", head=dict(base_pr["head"], sha="a3")), 4: dict(base_pr, number=4, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a4", ref="repair/pr-9-abc")),

@@ -106,7 +106,7 @@ async function run(sc, opts) {
   const sandbox = { evApi: gh.evApi, evGraphql: gh.evGraphql, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, setTimeout, __export: null };
   vm.createContext(sandbox);
   const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_CONTROL_PLANE = ", "var CM_LOOP_CANARIED = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\nBH_READY_WAIT_MS = 0;\n__export = { bhMergeDecide, bhPrAgeRow, bhReadyForReview, branchHygieneTick };", sandbox, { filename: "bh-block.js" });
+  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\nBH_READY_WAIT_MS = 0;\n__export = { bhMergeDecide, bhPrAgeRow, bhReadyForReview, branchHygieneTick, bhHoldText, bhWaitsOn };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export, sc };
@@ -190,6 +190,52 @@ const scenario = (prs, extra) => Object.assign({ branches: [{ name: "main", prot
   const sc2 = scenario({ 121: dnm }, { prSeq: { 121: [dnm] } });
   await run(sc2);
   eq(sc2.merges || [], [], "the body phrases hold a ready pull request too, not only a draft");
+}
+{
+  // PR-MERGE-SLA-GROUPS-1 (review by session_01LJNL3L on #4385): a hold phrase inside a code span or a fenced block documents the rule, it does not set a hold
+  const docs = [
+    "The lane treats `draft until`, `stays a draft` and `do not merge` as holds.",
+    "Phrases:\n```\nnot ready for merge\ndo not merge\n```\nAll green and finished.",
+    "Phrases:\n~~~\ndraft until review\n~~~\nFinished.",
+    "Use `keep it as a draft` in a body to hold a pull request; this one is done.",
+  ];
+  const prs = Object.fromEntries(docs.map((b, i) => [140 + i, prj(140 + i, "claude/doc-" + i, "a" + (140 + i), { draft: true, body: b })]));
+  const plain = prj(150, "claude/plain-hold", "a150", { draft: true, body: "Draft until the review returns, `with a code span` elsewhere." });
+  const unterminated = prj(151, "claude/unterminated", "a151", { draft: true, body: "```\nnot ready for merge, fence never closed" });
+  prs[150] = plain; prs[151] = unterminated;
+  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x, x, Object.assign({}, x, { draft: false })]])) });
+  const { out, W } = await run(sc);
+  eq(sc.merges.map((m) => m.pr).sort(), [140, 141, 142, 143], "four bodies that only quote a hold phrase in code are merged");
+  eq(out.merged_prs.includes(150) || out.merged_prs.includes(151), false, "a plain hold phrase beside a code span, and an unterminated fence, still hold");
+  eq([W.bhHoldText("a `x y` b"), W.bhHoldText("a ```\nz\n``` b"), W.bhHoldText(null)], ["a   b", "a   b", ""], "bhHoldText: a code span or a fenced block becomes one space, null is empty");
+}
+{
+  // PR-MERGE-SLA-GROUPS-1: who a refused pull request waits on is recorded, and cleared when the reason goes away
+  const held = prj(160, "claude/held-title", "a160", { title: "WIP: not yet" });
+  const wf = prj(161, "claude/wf-change", "a161");
+  const plainRed = prj(162, "claude/plain", "a162");
+  const prs = { 160: held, 161: wf, 162: plainRed };
+  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x]])) });
+  sc.files[161] = W2([".github/workflows/x.yml"]);
+  sc.checks.a162 = green("a162", ["gate", "mirror-guard", "comparator"]); // guard missing: refused for a check, waits on nobody
+  const t = await run(sc);
+  const w = Object.fromEntries(t.d1.db.prepare("SELECT pr, waits_on FROM pr_sla_state").all().map((r) => [r.pr, r.waits_on]));
+  eq([w[160], w[161], w[162]], ["hold", "session", null], "a held title waits on 'hold', a workflow change on 'session', a missing check on nobody");
+  // the hold is released: the next refusal has another reason, so the mark is cleared
+  const released = prj(160, "claude/held-title", "a160", { title: "now ready" });
+  const sc2 = scenario({ 160: released }, { prSeq: { 160: [released] } });
+  sc2.checks.a160 = green("a160", ["gate", "mirror-guard", "comparator"]);
+  sc2.seed = (db) => db.exec("CREATE TABLE IF NOT EXISTS pr_sla_state (pr INTEGER PRIMARY KEY, opened_at TEXT NOT NULL, head_ref TEXT, draft INTEGER DEFAULT 0, state TEXT NOT NULL DEFAULT 'open', last_seen TEXT, closed_at TEXT, waits_on TEXT); INSERT INTO pr_sla_state (pr, opened_at, state, last_seen, waits_on) VALUES (160, '" + hAgo(0.3) + "', 'open', '" + hAgo(0.1) + "', 'hold')");
+  const t2 = await run(sc2);
+  eq(t2.d1.db.prepare("SELECT waits_on FROM pr_sla_state WHERE pr = 160").get().waits_on, null, "once the reason is another one the 'hold' mark is cleared");
+  // pure classifier
+  const W = t.W;
+  eq([W.bhWaitsOn({ held: true, why: "x" }), W.bhWaitsOn({ why: "the pull request asks not to be merged (title, label or body)" }), W.bhWaitsOn({ why: "it changes .github/a.yml; workflows and repository settings are never merged automatically" }), W.bhWaitsOn({ why: "required check guard is missing" }), W.bhWaitsOn(null)], ["hold", "hold", "session", null, null], "pure: bhWaitsOn");
+  // a table that has no waits_on column yet (the migration has not landed) never breaks the tick
+  const sc3 = scenario({ 160: held }, { prSeq: { 160: [held] } });
+  sc3.seed = (db) => db.exec("CREATE TABLE pr_sla_state (pr INTEGER PRIMARY KEY, opened_at TEXT NOT NULL, head_ref TEXT, draft INTEGER DEFAULT 0, state TEXT NOT NULL DEFAULT 'open', last_seen TEXT, closed_at TEXT)");
+  const t3 = await run(sc3);
+  eq(t3.out.ok, true, "a pr_sla_state without waits_on still completes the tick");
 }
 {
   // the switch: stale_pr_merge_drafts = off restores "a draft is never merged"
