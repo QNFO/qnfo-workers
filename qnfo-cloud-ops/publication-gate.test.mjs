@@ -82,7 +82,7 @@ function freshEnv({ papers, mode }) {
   living.exec(`CREATE TABLE papers (identifier TEXT PRIMARY KEY, slug TEXT, status TEXT, body_md TEXT, updated_at TEXT, release_gate_pass INTEGER DEFAULT 0, release_gate_at TEXT, release_gate_reason TEXT);
     CREATE TABLE publication_gate_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, run_at TEXT DEFAULT (datetime('now')), slug TEXT, status TEXT, mode TEXT, decision TEXT, reason TEXT, score INTEGER, quality_flag TEXT, body_len INTEGER, has_abstract INTEGER, refs INTEGER, gate_version TEXT);`);
   const ins = living.prepare("INSERT INTO papers (identifier, slug, status, body_md) VALUES (?, ?, ?, ?)");
-  for (const [slug, status, body] of papers) ins.run(slug, slug, status, body);
+  for (const [slug, status, body, ident] of papers) ins.run(ident || slug, slug, status, body);
   const counter = { batches: 0, maxBatch: 0 };
   const env = { AUDIT: d1(audit, counter), LIVING: d1(living, counter) };
   return { env, audit, living, counter };
@@ -171,12 +171,43 @@ ok(mod.__verdict(mod.__score(junk)).decision === "demote", "a score under 25 is 
   ok(living.prepare("SELECT COUNT(*) n FROM papers WHERE status='published'").get().n === papers.length, "every paper stays published");
 }
 
+// 6. PUB-GATE-RESTORE-1 (1.36.0): heading style alone never demotes, owner papers are not withdrawn for structure or score, and what v2
+// wrongly quarantined comes back (2026-10-25: 364 demoted, 69 owner papers, 200 on subsection-without-section only).
+const h1Sections = "# T\n\n# 1. Introduction\n\n## 1.1 Scope\n\n# 2. Methods\n\n## 2.1 Setup\n\n## Related work\n\n" + "x".repeat(5000) + "\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n10.1000/abc 10.1000/def 10.1000/ghi arXiv:2401.12345\n";
+{
+  const st = mod.__structure(h1Sections);
+  ok(st.ok && st.soft.includes("subsection-without-section-1"), "a subsection under an H1 section is a soft issue, not a structure failure", st);
+  ok(mod.__verdict(mod.__score(h1Sections)).decision === "pass", "that paper passes", mod.__verdict(mod.__score(h1Sections)));
+  ok(mod.__verdict(malformed, { identifier: "qnfo-2025-00-x" }).decision === "revise", "an owner paper with hard structure issues is revise, never demote");
+  ok(mod.__verdict(mod.__score(junk), { identifier: "qnfo-2025-09-y" }).decision === "revise", "an owner paper with a low score is revise, never demote");
+  ok(mod.__verdict(residue, { identifier: "qnfo-2025-00-z" }).decision === "demote", "prompt residue still demotes an owner paper");
+  ok(mod.__verdict(malformed, { identifier: "qnf-2026-1" }).decision === "demote", "a pipeline paper with hard structure issues still demotes");
+}
+{
+  const { env, living } = freshEnv({ papers: [["h1", "quarantined", h1Sections], ["own", "quarantined", malformedSections, "qnfo-2025-00-own"], ["bad", "quarantined", malformedSections], ["res", "quarantined", promptResidue], ["other", "quarantined", h1Sections]] });
+  living.exec("UPDATE papers SET release_gate_reason = 'quality:structure subsection-without-section-1' WHERE slug IN ('h1', 'own', 'bad', 'res'); UPDATE papers SET release_gate_reason = NULL WHERE slug = 'other'");
+  const r = await mod.__job(env);
+  const st = (slug) => living.prepare("SELECT status FROM papers WHERE slug = ?").get(slug).status;
+  ok(st("h1") === "published" && st("own") === "published", "a heading-style quarantine and an owner paper are restored", { h1: st("h1"), own: st("own") });
+  ok(st("bad") === "quarantined" && st("res") === "quarantined", "hard structure and prompt residue stay quarantined");
+  ok(st("other") === "quarantined", "a paper quarantined by something else (no quality: reason) is not touched");
+  ok(r.notes.restored === 2 && living.prepare("SELECT COUNT(*) n FROM publication_gate_audit WHERE decision = 'restore'").get().n === 2, "each restore is counted and audited", r.notes);
+  const r2 = await mod.__job(env);
+  ok(st("h1") === "published" && st("own") === "published" && r2.notes.quarantined === 0, "the next run keeps them published", r2.notes);
+}
+{
+  const { env, living } = freshEnv({ papers: [["h1", "quarantined", h1Sections]], mode: "shadow" });
+  living.exec("UPDATE papers SET release_gate_reason = 'quality:structure subsection-without-section-1'");
+  await mod.__job(env);
+  ok(living.prepare("SELECT status FROM papers WHERE slug = 'h1'").get().status === "quarantined", "shadow mode restores nothing");
+}
+
 // 5. Wiring: hourly quality enforcement, daily topic metric, no new Worker cron trigger.
 ok(mod.__jobs["quality-score"] === mod.__job, "quality-score dispatches to the gated sweep");
 ok(mod.__sched["quality-score"] && mod.__sched["quality-score"].days === "*" && mod.__sched["quality-score"].times.length === 24 && mod.__sched["quality-score"].times.every((t, i) => t === String(i).padStart(2, "0") + ":20"), "publication gate runs every hour");
 ok(mod.__sched["idea-topic-metric"] && mod.__sched["idea-topic-metric"].times.join() === "06:25" && !(mod.__comp["quality-score"] || []).includes("idea-topic-metric"), "idea-topic metric retains its daily cadence outside the hourly companion slot");
 const [maj, min] = String(mod.__version).split(/[.-]/).map(Number);
-ok(maj > 1 || (maj === 1 && min >= 35), "VERSION is at least 1.35 (minor bump for hourly publication enforcement)", mod.__version);
+ok(maj > 1 || (maj === 1 && min >= 36), "VERSION is at least 1.36 (minor bump: the gate restores what it wrongly quarantined)", mod.__version);
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
