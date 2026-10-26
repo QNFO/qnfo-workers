@@ -1,7 +1,7 @@
 // ISSUE-HYGIENE-3 offline suite: migrations/2026-10-26-issue-hygiene-3.sql adds the rule model-eval-promote-withdrawn to the hourly workflow issue-meta-fold and runs it once.
 // A CF-MODEL-EVAL-1 "promote <model> on the <lane> battery" ticket closes, with the fact that withdrew it, when the evaluator's own catalog no longer says recommended or
 // in_production and the model has no row in model_ladder_models (the state qnfo-model-eval leaves when a newer winner supersedes it or the canary gate holds it back).
-// Proves, on the live close-guard triggers replayed in node:sqlite:
+// Proves, on five of the live close-guard triggers (the evidence-required, lifecycle, triage-sync, superseded-contract and append-only decision_log ones) replayed in node:sqlite:
 //  * before the file the workflow does not close such a ticket (the gap), the file closes the withdrawn ones on apply with evidence naming the model, the catalog status and note;
 //  * a ticket whose model is recommended, in production, still on the ladder, has no catalog row, belongs to another source or is another CF-MODEL-EVAL-1 kind is kept;
 //  * after the file the hourly workflow closes a later withdrawn ticket and keeps one whose model is promoted again;
@@ -10,10 +10,12 @@
 // Run: node --no-warnings migrations/issue-hygiene-3.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 const here = (f) => new URL("./" + f, import.meta.url);
 const sql1 = readFileSync(here("2026-10-26-issue-hygiene-1.sql"), "utf8");
 const sql2 = readFileSync(here("2026-10-26-issue-hygiene-2.sql"), "utf8");
-const sql3 = readFileSync(here("2026-10-26-issue-hygiene-3.sql"), "utf8");
+// H3_MIGRATION points the suite at a mutated copy of the migration (mutation checks); unset, it reads the merged file.
+const sql3 = readFileSync(process.env.H3_MIGRATION ? resolve(process.env.H3_MIGRATION) : here("2026-10-26-issue-hygiene-3.sql"), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 400))); } };
 const one = (db, s, ...a) => db.prepare(s).get(...a);
@@ -28,7 +30,7 @@ BEGIN
 END`,
   `CREATE TRIGGER issue_lifecycle_au AFTER UPDATE OF status ON agent_issues WHEN COALESCE(OLD.status, '') <> COALESCE(NEW.status, '')
 BEGIN INSERT INTO issue_lifecycle (issue_id, event, from_status, to_status, has_evidence) VALUES (NEW.id, CASE WHEN NEW.status IN ('closed', 'resolved', 'wontfix') THEN 'dispositioned' ELSE 'reopened' END, OLD.status, NEW.status, CASE WHEN EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') THEN 1 ELSE 0 END); END`,
-  `CREATE TRIGGER triage_close_sync_issue_upd AFTER UPDATE OF triage_state ON issue_triage WHEN NEW.triage_state IN ('closed','closed-refuted','wontfix') BEGIN UPDATE agent_issues SET status = CASE WHEN NEW.triage_state='wontfix' THEN 'wontfix' ELSE 'closed' END, updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status='open'; END`,
+  `CREATE TRIGGER triage_close_sync_issue_upd AFTER UPDATE OF triage_state ON issue_triage WHEN NEW.triage_state IN ('closed','closed-refuted','wontfix') BEGIN UPDATE agent_issues SET status = CASE WHEN NEW.triage_state='wontfix' THEN 'wontfix' ELSE 'closed' END, close_channel = COALESCE(close_channel, 'auto:triage-sync' || CASE WHEN COALESCE(NEW.owner, '') <> '' THEN ':' || NEW.owner ELSE '' END), updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status='open'; END`, // the live text of 2026-10-26 (it also sets close_channel)
   `CREATE TRIGGER triage_superseded_contracts_upd AFTER UPDATE OF triage_state, close_evidence ON issue_triage
 WHEN NEW.triage_state = 'closed' AND (lower(substr(COALESCE(NEW.close_evidence, ''), 1, 10)) = 'superseded' OR lower(substr(COALESCE(NEW.close_evidence, ''), 1, 4)) = 'moot')
 BEGIN UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:closure-superseded', last_attempt_at = datetime('now') WHERE issue_id = NEW.issue_id AND status IN ('active', 'holding', 'needs-machine-probe', 'probe-review-refused'); END`,
@@ -148,6 +150,7 @@ cat(a, "@cf/x/repromoted", "recommended", "last verdict: promote"); ladder(a, "@
 run(a);
 ok(status(a, re) === "open", "a ticket whose model is promoted again stays open");
 ok(status(a, f.live) === "open" && status(a, f.prod) === "open" && status(a, f.onladder) === "open", "and the kept tickets are still open after another run");
+ok(status(a, f.recnoladder) === "open" && status(a, f.dup) === "open", "and so are the recommended model with no ladder row and the model with a recommended duplicate catalog row after the hourly run (the status clause of the workflow step, not only of the file)", { recnoladder: status(a, f.recnoladder), dup: status(a, f.dup) });
 
 // ---- idempotent apply, first backup kept
 a.exec(sql3);
