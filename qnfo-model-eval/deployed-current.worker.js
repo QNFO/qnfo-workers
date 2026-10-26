@@ -53,7 +53,9 @@
 // AB-LENGTH-RETRY-1 (1.8.0, agent_issues 100277, pillar autonomy; minor: the hourly tick takes a decision it did not take before, it re-measures a pair whose newest regression came from an
 // older harness revision, abStaleRevCandidates): the release note is carried by the comment blocks at AB_RETRY_MAX_TOKENS, AB_HARNESS_REV and abStaleRevCandidates, and none is added to
 // the VERSION line below (VERSION-LINE-NOTES-1, 2026-10-19). The older notes stay on that line until the line is pruned.
-var VERSION = "1.8.1-codeagent"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+// PROMOTE-TICKET-AFTER-RECONCILE-1 (1.8.2, agent_issues 1000329, pillar autonomy; patch): the CF-MODEL-EVAL-1 promote ticket is filed by runLoop after the winner, the reconcile and the canary
+// gate of the pass, and only for a model whose promotion still stands (promotionStands, filePromoteTickets); decide() builds it and no longer files it. promote-ticket.test.mjs.
+var VERSION = "1.8.2-codeagent"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -537,6 +539,11 @@ async function decide(env, e, control) {
      WHERE model_id=?1`
   ).bind(e.model_id, status, e.score, note, typedInput ? 1 : 0).run();
 
+  // PROMOTE-TICKET-AFTER-RECONCILE-1 (1.8.2, agent_issues 1000329): the promote ticket is built here but not filed here. The ladder row and the roadmap item
+  // below are written at once because the same pass withdraws them again (reconcileDecisionPromotions, blockDecisionPromotion); the ticket was filed at the same
+  // moment and nothing withdrew it, so 9 tickets in 8 days (2963-2965, 100098-100100, 1000201-1000203) named a promotion that no longer existed. runLoop hands
+  // the ticket to filePromoteTickets after the winner, the reconcile and the canary gate of the same pass.
+  let promoteTicket = null;
   if (d.verdict === "promote") {
     const row = await db.prepare("SELECT slug, price_in, price_out, ctx FROM cf_model_catalog WHERE model_id=?1").bind(e.model_id).first();
     const tier = DECISION_KINDS.has(e.kind) ? 1 : 2;
@@ -547,15 +554,17 @@ async function decide(env, e, control) {
       Math.round(e.score * 100), (row && row.ctx) || null, `auto-eval promote ${BATTERY_VERSION} (cf-model-eval)`).run();
     await addRoadmapItem(env, `MODEL-${e.model_id}`, `Adopt ${e.model_id} in the ${DECISION_KINDS.has(e.kind) ? "decision" : "chat"} lane`,
       "model", e.model_id, `${BATTERY_VERSION}: ${d.reason}`);
-    await fileIssue(env,
-      `CF-MODEL-EVAL-1: promote ${e.model_id} on the ${DECISION_KINDS.has(e.kind) ? "decision" : "chat"} battery`,
-      `Automatic evaluation (${BATTERY_VERSION}) produced a promotion reason:\n\n${d.reason}\n\n` +
-      `Model: ${e.model_id}\nScore: ${e.passed}/${e.n_tasks} probes, mean latency ${e.mean_latency_ms}ms\n` +
-      `Control: ${control ? control.model_id : "none"} at ${cScore}\n` +
-      `Failed probes: ${e.failed_probes || "none"}\n\n` +
-      `Action: registered in model_ladder_models with active=0 and on the roadmap as MODEL-${e.model_id}. ` +
-      `Flip routing only after the canary agrees (see /canary for decision models).`,
-      "medium");
+    promoteTicket = {
+      model_id: e.model_id,
+      title: `CF-MODEL-EVAL-1: promote ${e.model_id} on the ${DECISION_KINDS.has(e.kind) ? "decision" : "chat"} battery`,
+      description: `Automatic evaluation (${BATTERY_VERSION}) produced a promotion reason:\n\n${d.reason}\n\n` +
+        `Model: ${e.model_id}\nScore: ${e.passed}/${e.n_tasks} probes, mean latency ${e.mean_latency_ms}ms\n` +
+        `Control: ${control ? control.model_id : "none"} at ${cScore}\n` +
+        `Failed probes: ${e.failed_probes || "none"}\n\n` +
+        `Action: registered in model_ladder_models with active=0 and on the roadmap as MODEL-${e.model_id}. ` +
+        `Flip routing only after the canary agrees (see /canary for decision models).`,
+      priority: "medium",
+    };
   }
   if (d.verdict === "harness_error" && !typedInput) {
     await fileIssue(env,
@@ -570,7 +579,7 @@ async function decide(env, e, control) {
   await db.prepare(
     "UPDATE cf_model_evals SET verdict=?2 WHERE id=(SELECT MAX(id) FROM cf_model_evals WHERE model_id=?1)"
   ).bind(e.model_id, d.verdict).run();
-  return { ...d, status, controlScore: cScore };
+  return { ...d, status, controlScore: cScore, promoteTicket };
 }
 
 // CANARY: a decision model is not "in production use" because it scored 1.0 on eight
@@ -754,6 +763,38 @@ async function blockDecisionPromotion(env, modelId, reason) {
     .bind("MODEL-" + modelId, ("BLOCKED: " + reason).slice(0, 500)).run();
 }
 
+// PROMOTE-TICKET-AFTER-RECONCILE-1 (1.8.2, agent_issues 1000329, pillar autonomy): a promotion stands when the model's catalog row still says recommended or
+// in_production, or its ladder row is still there. This is the test ISSUE-HYGIENE-3 (rule model-eval-promote-withdrawn of the hourly workflow issue-meta-fold) applies
+// to close a promote ticket as moot, so the producer now files exactly the tickets that rule keeps: reconcileDecisionPromotions leaves the superseded model 'passed' and
+// without a ladder row, blockDecisionPromotion leaves the blocked one 'candidate' and without one.
+async function promotionStands(env, modelId) {
+  const r = await env.AUDIT.prepare(
+    `SELECT (SELECT COUNT(*) FROM cf_model_catalog WHERE model_id=?1 AND status IN ('recommended','in_production')) live,
+            (SELECT COUNT(*) FROM model_ladder_models WHERE id=?1) ladder`
+  ).bind(modelId).first();
+  return !!r && (Number(r.live) > 0 || Number(r.ladder) > 0);
+}
+
+// Files the promote tickets of one pass after its winner selection, its reconcile and its canary gate, and only for a model whose promotion stands. A withdrawn
+// promotion files nothing: its ladder row and roadmap item are gone and the catalog says why. One bad insert does not lose the others.
+async function filePromoteTickets(env, tickets) {
+  const out = { filed: 0, withheld: [], errors: [] };
+  const seen = new Set();
+  for (const t of (tickets || [])) {
+    if (!t || !t.model_id || seen.has(t.title)) continue;
+    seen.add(t.title);
+    try {
+      if (await promotionStands(env, t.model_id)) {
+        await fileIssue(env, t.title, t.description, t.priority || "medium");
+        out.filed++;
+      } else out.withheld.push(t.model_id);
+    } catch (err) {
+      out.errors.push(`${t.model_id}: ${String(err && err.message ? err.message : err).slice(0, 160)}`);
+    }
+  }
+  return out;
+}
+
 async function recordEval(env, e, role) {
   const cost = await costOf(env, e.model_id, e);
   await env.AUDIT.prepare(
@@ -829,6 +870,8 @@ async function runLoop(env, trigger, opts) {
   ).bind(BATTERY_VERSION).first();
   const clefControl = prevClef && prevClef.s != null ? { model_id: "decision-family-best", score: prevClef.s } : null;
 
+  // PROMOTE-TICKET-AFTER-RECONCILE-1: the promote tickets wait here until the winner, the reconcile and the canary gate of this pass have run.
+  const promoteTickets = [];
   for (const p of picks) {
     if (Date.now() > deadline) { summary.skipped++; continue; }
     const kind = p.modality === "clef" ? "clef" : "chat";
@@ -838,6 +881,7 @@ async function runLoop(env, trigger, opts) {
       const e = await evalModel(env, p.model_id, p.slug, kind, probes);
       await recordEval(env, e, "candidate");
       const d = await decide(env, e, kind === "chat" ? control : clefControl);
+      if (d.promoteTicket) promoteTickets.push(d.promoteTicket);
       summary.evaluated.push({ model_id: e.model_id, score: e.score, passed: e.passed, n: e.n_tasks, verdict: d.verdict, reason: d.reason, failed: e.failed_probes });
     } catch (err) { summary.errors.push(`${p.model_id}: ${String(err.message || err)}`); }
   }
@@ -859,6 +903,13 @@ async function runLoop(env, trigger, opts) {
       } catch (e) { summary.errors.push("canary: " + String(e.message || e)); }
     }
   }
+
+  // PROMOTE-TICKET-AFTER-RECONCILE-1: only now, and only for a model whose promotion the reconcile and the canary gate left standing.
+  try {
+    const pt = await filePromoteTickets(env, promoteTickets);
+    summary.promote_tickets = { filed: pt.filed, withheld: pt.withheld };
+    for (const m of pt.errors) summary.errors.push("promote-ticket: " + m);
+  } catch (e) { summary.errors.push("promote-tickets: " + String(e.message || e)); }
 
   // safety net: candidates sitting unevaluated too long
   const idle = await db.prepare(
