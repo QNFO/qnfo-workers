@@ -128,7 +128,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES, cmCompanions, cmTaskGates, cmReviewScreen, cmReviewCombine, cmCiteFound, cmDefectName, cmDefinedIn, cmReviewFacts, cmSecondReviewer, cmReviewPrompt, cmRepairable, CM_REVIEW_DIFF_CHARS, CM_REVIEW_GOAL_CHARS, CM_STALE_RE };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmVerAhead, cmVerCore, cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES, cmCompanions, cmTaskGates, cmReviewScreen, cmReviewCombine, cmCiteFound, cmDefectName, cmDefinedIn, cmReviewFacts, cmSecondReviewer, cmReviewPrompt, cmRepairable, CM_REVIEW_DIFF_CHARS, CM_REVIEW_GOAL_CHARS, CM_STALE_RE };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
 vm.runInContext("EV_MERGE_RETRY_WAIT_MS = 0;", sandbox); // MERGE-RACE-RETRY-1: no real waits in the suite
 
@@ -1229,6 +1229,42 @@ sandbox.aiRunAttr = async () => null;
   const rt = J(await W.codeMergeTick(env, { now: NOW }));
   ok(reads >= 5 && gh.merges.length === 1, "mergeability null for four reads and known on the fifth: the runner keeps reading (25 s) and merges in the same tick", { reads, decided: rt.decided });
   delete sandbox.setTimeout;
+}
+
+// ================================================================ 10. MERGE-VERSION-AHEAD-1 (0.48.1)
+// qnfo-research-exec #4297 and #4282 both bumped 0.34.0 to 0.34.1 from the same base. Once the runner merges one change per worker per tick, the
+// second merged clean with an unchanged VERSION and main's version-bump-guard failed (ci-watchdog #4319). The head's VERSION must be ahead of main's now.
+{
+  ok(W.cmVerAhead("1.2.4-codeagent", "1.2.3-demo") === true && W.cmVerAhead("1.2.10", "1.2.9") === true && W.cmVerAhead("1.3.0", "1.2.99") === true && W.cmVerAhead("2.0.0", "1.99.99") === true, "cmVerAhead: patch, minor and major steps compare numerically (1.2.10 is ahead of 1.2.9)");
+  ok(W.cmVerAhead("0.34.1-codeagent", "0.34.1-codeagent") === false && W.cmVerAhead("0.34.1-a", "0.34.1-b") === false && W.cmVerAhead("1.2.3", "1.2.4") === false && W.cmVerAhead("1.2.9", "1.2.10") === false, "cmVerAhead: the same core with another suffix, and a lower core, are not ahead");
+  ok(W.cmVerAhead("x", "1.2.3") === true && W.cmVerAhead("1.2.3", "") === true && W.cmVerAhead(null, null) === true, "cmVerAhead: an unreadable side is not this gate's call");
+
+  const arrange = async (mainText) => {
+    freshDb(); freshGh();
+    db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+    seedTask();
+    seedWorkerPr(401, BRANCH, "h1");
+    gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+    if (mainText != null) gh.contents["main:" + PATH] = mainText;
+    sandbox.setTimeout = (fn) => { fn(); return 0; };
+    const out = J(await W.codeMergeTick(env, { now: NOW }));
+    delete sandbox.setTimeout;
+    return out;
+  };
+
+  let rv = await arrange(NEXT);   // main already carries 1.2.4-codeagent: the head's VERSION is the same
+  let rw = one("SELECT status, last_error FROM code_tasks WHERE id = ?", ID);
+  ok(gh.merges.length === 0 && rv.decided[0].action === "refuse" && /VERSION-AHEAD-1: the pull request's VERSION 1\.2\.4-codeagent is not ahead of main's 1\.2\.4-codeagent/.test(rv.decided[0].why), "main already at the head's VERSION: not merged, refused as stale with the reason", rv.decided);
+  ok(rw.status === "failed" && /VERSION-AHEAD-1/.test(rw.last_error || ""), "a task with no parked edits to rebuild from ends failed with the reason, handed to the fleet", rw);
+
+  rv = await arrange(BASE.replace('"1.2.3-demo"', '"1.3.0-newer"'));   // main is ahead of the head
+  ok(gh.merges.length === 0 && rv.decided[0].action === "refuse" && /is not ahead of main's 1\.3\.0-newer/.test(rv.decided[0].why), "main ahead of the head's VERSION: not merged", rv.decided);
+
+  rv = await arrange(BASE);   // main at 1.2.3-demo, the head at 1.2.4-codeagent
+  ok(gh.merges.length === 1 && rv.decided[0].action === "merge", "main behind the head's VERSION: merges as before", rv.decided);
+
+  rv = await arrange(null);   // main's file unreadable (404): this gate does not decide
+  ok(gh.merges.length === 1, "main's file missing: the gate does not block", rv.decided);
 }
 
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
