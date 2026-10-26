@@ -371,7 +371,7 @@ ok(rc == 0, "a re-run meets the column it already added and carries on", out[-1]
 n1 = len(calls)
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
-    rc = M.main(["--check"] + sorted(glob.glob(os.path.join(HERE, "..", "migrations", "*.sql"))))
+    rc = M.main(["--check", "--history"] + sorted(glob.glob(os.path.join(HERE, "..", "migrations", "*.sql"))))
 lines = [json.loads(l) for l in buf.getvalue().splitlines() if l.strip()]
 ok(rc == 0 and len(calls) == n1 and lines and all("skipped" in l or l.get("ok") for l in lines), "--check passes the repository's migrations without touching D1", [l for l in lines if not ("skipped" in l or l.get("ok"))][:3])
 
@@ -393,6 +393,58 @@ ok(not [p for p in probs_good if "CHECK-ENUM-LINT-1" in p], "allowed literals (w
 _, probs_sel, _ = M.plan("migrations/sel.sql", en_hdr + "INSERT INTO control_registry (control, kind, disposition, disposition_state, evidence) SELECT 'z', 'bogus', 'keep', 'applied', 'e' WHERE 1;\n")
 ok(not [p for p in probs_sel if "CHECK-ENUM-LINT-1" in p], "an INSERT ... SELECT is not parsed as VALUES (no false claim)", probs_sel)
 ok(M.enum_violations("INSERT INTO other_table (kind) VALUES ('audit')") == [], "tables without a known constraint are not judged")
+
+# CONTROL-PROBE-AT-BIRTH-1 (2026-10-26, agent_issues 1000483): a control registered with an alternate_path carries its probe, or says why not.
+cp_cols = "(control, location, kind, disposition, disposition_state, alternate_path, evidence)"
+cp_row = "('%s', 'here', 'gate', 'keep', 'applied', 'the lever it names', '%s')"
+cp_ins = "INSERT OR IGNORE INTO control_registry " + cp_cols + " VALUES\n "
+cp_probe = ("INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled)\nSELECT c.control, 'SELECT ''ok'' AS expected, "
+            "CASE WHEN 1 THEN ''x'' ELSE ''ok'' END AS observed', '60 minutes', 1 FROM control_registry c WHERE c.control = '%s';\n")
+
+
+def cp_problems(text, birth=True):
+    return [p for p in M.plan("migrations/cp.sql", text, birth=birth)[1] if "CONTROL-PROBE-AT-BIRTH-1" in p]
+
+
+cp_one = en_hdr + cp_ins + cp_row % ("ctl-a", "e") + ";\n"
+ok(cp_problems(cp_one + cp_probe % "ctl-a") == [], "a control insert with its probe row passes")
+cp_no = cp_problems(cp_one)
+ok(len(cp_no) == 1 and "ctl-a" in cp_no[0], "a control insert with an alternate_path and no probe is refused, naming the control", cp_no)
+ok(all(w in cp_no[0] for w in ("control, probe_sql, window_note, enabled", "SELECT ''ok'' AS expected", "AS observed", "read-only", "2026-10-26-control-alternate-probes4.sql",
+                               "ALTERNATE-NOT-EXERCISABLE", "CONTROL-PROBE: none")),
+   "and the message names the probe columns, its shape, the example file and both ways out", cp_no)
+ok(cp_problems(en_hdr + cp_ins + cp_row % ("ctl-a", "no drill is possible: ALTERNATE-NOT-EXERCISABLE") + ";\n") == [], "the reason text ALTERNATE-NOT-EXERCISABLE in the control's evidence passes")
+ok(cp_problems(en_hdr + "-- CONTROL-PROBE: none (the alternate is a person)\n" + cp_ins + cp_row % ("ctl-a", "e") + ";\n") == [], "the header line CONTROL-PROBE: none (<reason>) passes")
+cp_bare = cp_problems(en_hdr + "-- CONTROL-PROBE: none\n" + cp_ins + cp_row % ("ctl-a", "e") + ";\n")
+ok(len(cp_bare) == 1 and "CONTROL-PROBE header must read" in cp_bare[0], "the header opt-out without a reason in parentheses is refused", cp_bare)
+ok(cp_problems(en_hdr + "UPDATE control_registry SET evidence = 'edited', alternate_path = 'moved' WHERE control = 'ctl-a';\n") == [], "an edit of an existing control row passes")
+ok(cp_problems(en_hdr + "INSERT INTO control_registry (control, location, kind, disposition, disposition_state, evidence) VALUES ('ctl-b', 'h', 'gate', 'keep', 'applied', 'e');\n") == [],
+   "a control inserted with no alternate_path (the view reads no-alternate) needs no probe")
+ok(cp_problems(en_hdr + cp_ins + cp_row % ("ctl-a", "e") + ";\n" + cp_probe % "ctl-other") != [], "a probe row for another control does not cover this one")
+cp_multi = (en_hdr + cp_ins + ",\n ".join(cp_row % ("ctl-%d" % n, "ALTERNATE-NOT-EXERCISABLE" if n == 0 else "e") for n in range(9)) + ";\n"
+            + "".join(cp_probe % ("ctl-%d" % n) for n in (1, 2)))
+cp_m = cp_problems(cp_multi)
+ok(len(cp_m) == 1 and "ctl-3" in cp_m[0] and "and 1 more" in cp_m[0] and "ctl-0" not in cp_m[0] and "ctl-1," not in cp_m[0],
+   "a multi-row insert judges each row: the marker covers its own row, the probes theirs, five names are listed and the rest counted", cp_m)
+cp_select = en_hdr + ("INSERT INTO control_registry (control, location, kind, disposition, disposition_state, alternate_path, evidence) "
+                      "SELECT 'ctl-s', 'h', 'gate', 'keep', 'applied', 'alt', 'e' WHERE 1;\n")
+ok(cp_problems(cp_select) != [] and cp_problems(cp_select + cp_probe % "ctl-s") == [], "an INSERT ... SELECT of a control is judged too (any probe row in the file covers it)")
+ok(cp_problems(cp_one, birth=False) == [] and [p for p in M.plan("migrations/cp.sql", cp_one)[1] if "CONTROL-PROBE-AT-BIRTH-1" in p] == [] and cp_problems(cp_one) != [],
+   "plan() asks only when birth=True, so apply_file and the tests that plan() a merged file never refuse it for a missing probe")
+cp_cli = io.StringIO()
+cp_tmp = os.path.join(HERE, "_cp_gate_tmp.sql")
+open(cp_tmp, "w", encoding="utf-8", newline="\n").write(cp_one)
+try:
+    with contextlib.redirect_stdout(cp_cli):
+        rc_check = M.main(["--check", cp_tmp])
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc_hist = M.main(["--check", "--history", cp_tmp])
+finally:
+    os.remove(cp_tmp)
+ok(rc_check == 1 and "CONTROL-PROBE-AT-BIRTH-1" in cp_cli.getvalue() and rc_hist == 0, "--check refuses the file and --check --history lets it through", (rc_check, rc_hist, cp_cli.getvalue()[:120]))
+for good_file in ("2026-10-20-apply-migrations-lint.sql", "2026-10-26-control-alternate-probes4.sql", "2026-10-26-control-probe-at-birth.sql"):
+    gp = os.path.join(HERE, "..", "migrations", good_file)
+    ok(os.path.exists(gp) and cp_problems(open(gp, encoding="utf-8").read()) == [], "the sibling migration " + good_file + " that ships its probes passes")
 
 # APPEND-ONLY-LINT-1 (2026-10-13): decision_log and issue_lifecycle refuse UPDATE, DELETE and REPLACE at apply time.
 for stmt in ("UPDATE decision_log SET outcome = 'x' WHERE id = 1;", "DELETE FROM issue_lifecycle WHERE id = 1;",

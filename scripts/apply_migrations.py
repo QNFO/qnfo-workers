@@ -591,8 +591,76 @@ def parse_problems(stmts, lines):
     return problems, None
 
 
-def plan(path, text):
-    """Validate one file. Returns (opted_in, problems, info)."""
+# CONTROL-PROBE-AT-BIRTH-1 (2026-10-26, agent_issues 1000483; CHAOS-DRILL-FAILED-1 control:control-alternate-probes, 1000214): 18 controls were
+# registered in one day by several sessions with an alternate_path and no control_alternate_probes row, and v_control_alternate_status read them
+# as no-probe until migrations/2026-10-26-control-alternate-probes4.sql gave them probes. Nothing asked the author for the probe at the
+# registration, so --check does: a control_registry INSERT that sets an alternate_path needs, in the same file, a control_alternate_probes row
+# for that control, or ALTERNATE-NOT-EXERCISABLE in that control's evidence (the view then reads not-exercisable), or the header line
+# "-- CONTROL-PROBE: none (<reason>)". Only a file that changes in the pull request is checked; the controls already registered are untouched,
+# and an UPDATE of an existing control row is not an INSERT, so it passes.
+CONTROL_PROBE_NONE = re.compile(r"^none\s*\(\s*(\S.*?)\s*\)\s*$", re.I)
+NOT_EXERCISABLE = "ALTERNATE-NOT-EXERCISABLE"
+CONTROL_PROBE_HOW = ("add INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled) VALUES ('<control>', "
+                     "'SELECT ''ok'' AS expected, CASE WHEN <the alternate is missing or in the wrong state> THEN ''<reason>'' ELSE ''ok'' END AS observed', "
+                     "'<window in minutes>', 1) with a read-only, falsifiable probe of the alternate_path (example: "
+                     "migrations/2026-10-26-control-alternate-probes4.sql), or put " + NOT_EXERCISABLE + " in the control's evidence, "
+                     "or declare '-- CONTROL-PROBE: none (<reason>)' in the header")
+
+
+def control_probe_problems(stmts, lines):
+    """Problems for controls this file registers with an alternate_path and no probe; stmts is statements(text), lines is header(text)."""
+    switch = header_value(lines, "CONTROL-PROBE")
+    if switch is not None:
+        if CONTROL_PROBE_NONE.match(switch):
+            return []
+        return ["CONTROL-PROBE header must read '-- CONTROL-PROBE: none (<reason>)' (got '" + switch[:60] + "') (CONTROL-PROBE-AT-BIRTH-1)"]
+    inserts = [(INSERT_HEAD.match(body(s)), body(s)) for s in stmts if not s.startswith("__INCOMPLETE__")]
+    probes = [sql for m, sql in inserts if m and m.group(1).lower() == "control_alternate_probes"]
+    probed = set()
+    for sql in probes:
+        probed.update(_literals(sql))
+    missing = []
+    for m, sql in inserts:
+        if not m or m.group(1).lower() != "control_registry":
+            continue
+        open_i = m.end() - 1
+        close_i = _close(sql, open_i)
+        cols = [c.strip().strip('"').lower() for c in _split_top(sql[open_i + 1:close_i])] if close_i > 0 else []
+        if "alternate_path" not in cols:
+            continue  # no alternate registered: v_control_alternate_status reads no-alternate
+        v = re.compile(r"\bVALUES\b", re.I).search(sql, close_i) if close_i > 0 else None
+        if not v:  # INSERT ... SELECT: the names are not literals here, so any probe insert in the file or the marker in the statement counts
+            if not probes and NOT_EXERCISABLE not in sql:
+                missing.append("(INSERT ... SELECT)")
+            continue
+        i = v.end()
+        while True:
+            p = sql.find("(", i)
+            q = _close(sql, p) if p >= 0 else -1
+            if q < 0:
+                break
+            row = _split_top(sql[p + 1:q])
+            by = {c: row[k] for k, c in enumerate(cols) if k < len(row)}
+            alt = by.get("alternate_path", "NULL")
+            name = by.get("control", "")
+            if not re.fullmatch(r"(?i)NULL|''", alt.strip()):
+                lit = name[1:-1].replace("''", "'") if re.fullmatch(r"'(?:[^']|'')*'", name) else None
+                if NOT_EXERCISABLE not in sql[p:q + 1] and (lit is None and not probes or lit is not None and lit not in probed):
+                    missing.append(lit if lit is not None else "(computed name)")
+            i = q + 1
+            if not sql[i:].lstrip().startswith(","):
+                break
+    if not missing:
+        return []
+    return ["control_registry INSERT sets an alternate_path for " + ", ".join(missing[:5]) + (" and %d more" % (len(missing) - 5) if len(missing) > 5 else "")
+            + " and this file inserts no control_alternate_probes row for it (CONTROL-PROBE-AT-BIRTH-1: the drill reads it as no-probe and "
+            "fm-control-alternate-undrilled files an issue); " + CONTROL_PROBE_HOW]
+
+
+def plan(path, text, birth=False):
+    """Validate one file. Returns (opted_in, problems, info). birth=True adds the checks that only guard a new or changed file in a pull request
+    (CONTROL-PROBE-AT-BIRTH-1); only --check asks for it (not --history), so a file already on main is applied as merged and never refused for a
+    probe its author did not write."""
     lines = header(text)
     by = header_value(lines, "APPLY-BY")
     if not by or by.split()[0].lower() != "ci":
@@ -629,6 +697,8 @@ def plan(path, text):
     for s in stmts:
         for bad in enum_violations(body(s)):
             problems.append("CHECK constraint would refuse " + bad + " (CHECK-ENUM-LINT-1)")
+    if birth:
+        problems.extend(control_probe_problems(stmts, lines))
     for s in stmts:
         m = APPEND_ONLY_WRITE.match(body(s))
         if m:
@@ -1002,6 +1072,7 @@ def main(argv=None):
     g.add_argument("--apply", action="store_true")
     ap.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
     ap.add_argument("--base", default="", help="with --check: the base ref; an edited, already-merged file is checked for MIGRATION-NO-CLOBBER-1")
+    ap.add_argument("--history", action="store_true", help="with --check: files already on main; skips the checks that only guard a new or changed file (CONTROL-PROBE-AT-BIRTH-1)")
     ap.add_argument("files", nargs="*")
     a = ap.parse_args(argv)
     files = [f for f in a.files if f.endswith(".sql") and os.path.exists(f)]
@@ -1009,7 +1080,7 @@ def main(argv=None):
     if a.check:
         for f in files:
             text = open(f, encoding="utf-8").read()
-            ok, problems, info = plan(f, text)
+            ok, problems, info = plan(f, text, birth=not a.history)
             if ok and a.base:
                 problems = list(problems) + clobber_problems(text, base_text_of(f, a.base))
             if not ok:
