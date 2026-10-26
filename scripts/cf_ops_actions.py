@@ -675,9 +675,14 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
 # SPARE-DOMAIN-CANON-2 (2026-10-12, HOST-CENSUS-BROKEN-1 #2130, the 2077 host map): every spare zone names its own canonical
 # target; q-wave.tech joins the qwav.org set, ipatent.me (an apex with no address record) points at the flagship's page and
 # empoweringchange.today (a PAUSED zone, which is why its TLS handshake failed) is unpaused first and points at qnfo.org.
+# SPARE-DOMAIN-CANON-3 (2026-10-26, agent_issues 100307, DOMAIN-PLANE-1:qwav.tech): qwav.tech joins the set, but unlike the four
+# parked zones it also serves live hosts (deep, score, primer, ask) and its redirect ruleset holds a primer.qwav.tech -> deep.qwav.tech
+# rule. The ruleset is therefore merged, not replaced: the canon rule goes first, a rule that only redirects the apex or www is dropped
+# (the canon rule shadows it and the backup holds it), every other rule is kept.
 CANON_TARGET = "https://qwav.org"
-SPARE_ZONES = {"qwav.uk": CANON_TARGET, "qwave.tech": CANON_TARGET, "q-wave.tech": CANON_TARGET,
+SPARE_ZONES = {"qwav.uk": CANON_TARGET, "qwave.tech": CANON_TARGET, "q-wave.tech": CANON_TARGET, "qwav.tech": CANON_TARGET,
                "ipatent.me": "https://ipatent.qnfo.org", "empoweringchange.today": "https://qnfo.org"}
+RULE_KEYS = ("ref", "action", "action_parameters", "expression", "description", "enabled")
 REDIRECT_PHASE = "http_request_dynamic_redirect"
 PAGES_ORIGIN = "qwav.pages.dev"
 
@@ -692,6 +697,23 @@ def canon_rule(zone: str) -> dict:
             "description": "SPARE-DOMAIN-CANON-1 (agent_issues 2361, 2130): %s and www.%s are spare names of %s" % (zone, zone, target),
             "action_parameters": {"from_value": {"status_code": 301, "preserve_query_string": True,
                                                  "target_url": {"expression": 'concat("%s", http.request.uri.path)' % target}}}}
+
+
+def sanitize_rule(rule: dict) -> dict:
+    """The writable fields of a ruleset rule (id, version and last_updated are read-only on a PUT)."""
+    return {k: rule[k] for k in RULE_KEYS if k in rule}
+
+
+def apex_only_rule(rule: dict, zone: str) -> bool:
+    """A rule whose whole expression is `http.host eq "<zone>"` or `http.host eq "www.<zone>"`: the canon rule replaces it."""
+    expr = re.sub(r"[\s()]", "", str(rule.get("expression") or ""))
+    return expr in ('http.hosteq"%s"' % zone, 'http.hosteq"www.%s"' % zone)
+
+
+def merged_rules(before: list, zone: str) -> list:
+    """The redirect ruleset to write: the canon rule first, then every existing rule that is neither the canon rule nor an apex/www-only rule."""
+    keep = [sanitize_rule(r) for r in (before or []) if not apex_only_rule(r, zone) and not canon_rule_present([r], zone)]
+    return [canon_rule(zone)] + keep
 
 
 def canon_rule_present(rules: list, zone: str) -> bool:
@@ -788,12 +810,13 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
             for r in mine:
                 if not r.get("proxied"):
                     dns_plan.append({"host": host, "op": "patch", "id": r.get("id"), "body": {"proxied": True}})
-        rule_needed = not canon_rule_present(before, zone)
+        want_rules = merged_rules(before, zone)
+        rule_needed = want_rules != [sanitize_rule(r) for r in before]
         if mode == "dry":
             emit({"action": "spare-domain-canon", "ok": True, "dry": True, "zone": zone, "target": target, "paused": paused, "rule_needed": rule_needed, "dns": dns_plan, "rule": canon_rule(zone)})
             continue
         if rule_needed:
-            st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": [canon_rule(zone)]})
+            st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": want_rules})
             if st not in (200, 201) or j.get("success") is False:
                 emit({"action": "spare-domain-canon", "ok": False, "zone": zone, "stage": "put-ruleset", "http": st, "errors": j.get("errors")})
                 rc = 1
@@ -822,7 +845,7 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
         # answered something other than the redirect (a 200 from the old target) is the case the restore exists for.
         answered = [c for c in checks if not c["ok"] and c["status"] != 0]
         if not ok and rule_needed and answered:
-            st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": before})
+            st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": [sanitize_rule(r) for r in before]})
             restored = {"http": st, "rules": len(before)}
         if not ok:
             rc = 1

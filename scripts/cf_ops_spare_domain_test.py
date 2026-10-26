@@ -179,6 +179,42 @@ f11 = Fake(rules_before=[], dns=[], zones=[("z-ec", "empoweringchange.today")])
 rc = run(f11, "empoweringchange.today", mode="dry")
 ok(not [c for c in f11.calls if c[0] in ("PUT", "PATCH", "POST")], "dry mode never switches ssl on", f11.calls)
 
+# 9. SPARE-DOMAIN-CANON-3 (agent_issues 100307): qwav.tech keeps its primer -> deep rule; the apex/www-only rule is replaced; the canon rule goes first
+live_rules = [
+    {"id": "f1e0", "version": "1", "last_updated": "2026-05-29T09:10:50Z", "ref": "f1e0", "action": "redirect", "enabled": True,
+     "description": "Redirect www.qwav.tech to qwav.tech", "expression": '(http.host eq "www.qwav.tech")',
+     "action_parameters": {"from_value": {"status_code": 301, "target_url": {"value": "https://qwav.tech"}}}},
+    {"id": "3254", "version": "1", "last_updated": "2026-07-16T11:54:39Z", "ref": "3254", "action": "redirect", "enabled": True,
+     "description": "Redirect primer.qwav.tech to deep.qwav.tech", "expression": '(http.host eq "primer.qwav.tech")',
+     "action_parameters": {"from_value": {"status_code": 301, "preserve_query_string": True, "target_url": {"value": "https://deep.qwav.tech/"}}}},
+]
+ok("qwav.tech" in m.SPARE_ZONES and m.canon_target("qwav.tech") == "https://qwav.org", "qwav.tech is a spare zone with the qwav.org target")
+f12 = Fake(rules_before=live_rules, zones=[("z-qt", "qwav.tech")],
+           dns=[{"id": "a", "type": "CNAME", "name": "qwav.tech", "proxied": True}, {"id": "b", "type": "CNAME", "name": "www.qwav.tech", "proxied": True}])
+rc = run(f12, "qwav.tech")
+puts12 = [c for c in f12.calls if c[0] == "PUT"]
+ok(rc == 0 and len(puts12) == 1, "qwav.tech: one ruleset PUT, run ok", (rc, puts12))
+w = puts12[0][2]["rules"]
+ok(len(w) == 2 and w[0] == m.canon_rule("qwav.tech"), "the canon rule is first", w)
+ok(w[1]["expression"] == '(http.host eq "primer.qwav.tech")' and w[1]["description"].startswith("Redirect primer") and w[1]["ref"] == "3254", "the primer -> deep rule is kept", w[1])
+ok(not [r for r in w if r.get("description") == "Redirect www.qwav.tech to qwav.tech"], "the www-only rule is dropped (the canon rule covers it)", w)
+ok(all(not ({"id", "version", "last_updated"} & set(r)) for r in w), "no read-only field is sent on the PUT", w)
+ok(f12.emitted[2]["ruleset_rules"] == live_rules, "the backup emitted before the write holds both original rules, read-only fields included", f12.emitted[2])
+ok(not [c for c in f12.calls if c[0] in ("PATCH", "POST")], "proxied apex and www records need no DNS write", f12.calls)
+f13 = Fake(rules_before=m.merged_rules(live_rules, "qwav.tech"), zones=[("z-qt", "qwav.tech")],
+           dns=[{"id": "a", "type": "CNAME", "name": "qwav.tech", "proxied": True}, {"id": "b", "type": "CNAME", "name": "www.qwav.tech", "proxied": True}])
+rc = run(f13, "qwav.tech")
+ok(rc == 0 and not [c for c in f13.calls if c[0] in ("PUT", "PATCH", "POST")] and f13.emitted[-1]["rule_written"] is False, "a second run on the merged ruleset writes nothing", f13.calls)
+f14 = Fake(rules_before=live_rules, zones=[("z-qt", "qwav.tech")],
+           dns=[{"id": "a", "type": "CNAME", "name": "qwav.tech", "proxied": True}, {"id": "b", "type": "CNAME", "name": "www.qwav.tech", "proxied": True}])
+f14.verify_ok = False
+rc = run(f14, "qwav.tech")
+puts14 = [c for c in f14.calls if c[0] == "PUT"]
+ok(rc == 1 and len(puts14) == 2 and [r["ref"] for r in puts14[1][2]["rules"]] == ["f1e0", "3254"] and all("id" not in r for r in puts14[1][2]["rules"]),
+   "a failed verification restores both original rules without read-only fields", puts14)
+ok(m.merged_rules([], "qwav.uk") == [m.canon_rule("qwav.uk")] and m.merged_rules([m.canon_rule("qwav.uk")], "qwav.uk") == [m.canon_rule("qwav.uk")],
+   "a parked zone still ends with exactly the one canon rule")
+
 # 6. canon_verify reads a 301 to qwav.org as ok and anything else as not ok
 ok(m.canon_verify("qwav.uk", fetch=lambda u: (301, "https://qwav.org/x?y=1"))["ok"] is True, "301 to qwav.org is ok")
 ok(m.canon_verify("qwav.uk", fetch=lambda u: (200, ""))["ok"] is False, "a 200 is not ok")
