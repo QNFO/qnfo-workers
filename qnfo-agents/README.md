@@ -1,0 +1,61 @@
+# qnfo-agents
+
+The fleet's Cloudflare Agents SDK agent (CF-AGENTS-1, charter pillar `autonomy`). Owner directive 2026-10-25: every Cloudflare
+agent tool and function is reachable from the fleet console (https://fleet.qnfo.org/cmd) and the ops endpoint (ops.qnfo.org).
+
+Address: https://agents.qnfo.org (machine origin `qnfo-agents.q08.workers.dev`).
+
+## What it does
+
+One Agent class, `FleetCodeAgent` (a SQLite-backed Durable Object from `agents@0.30.1`), runs coding and operations turns:
+
+| Agents SDK feature | Here |
+|---|---|
+| Agent Durable Object, state, SQL | `FleetCodeAgent`, instance `fleet` by default; every turn is a row in its `runs` table and in D1 `cf_agent_runs` |
+| Durable execution | each turn is a `runFiber`; a turn cut off by eviction is re-run once (`onFiberRecovered`), twice means failed |
+| Scheduling | `POST /schedules` or the `schedule_turn` tool: a cron (at most every 5 minutes) or a delay; each fires a new turn |
+| Callable methods | `run`, `runs`, `status`, `schedules` over WebSocket at `/agents/fleet-code-agent/<instance>` (trusted callers) |
+| MCP server | `POST /mcp` (`createMcpHandler`, stateless): public clients get `repo_read_file`; trusted callers get every tool plus `agent_run` and `agent_status` |
+| MCP client | `POST /mcp-servers {name, url}` or the `mcp_connect` tool; the server's tools join later turns |
+| Code Mode | the `codemode` tool: the model writes JavaScript that calls every tool as `codemode.<name>()` in a Dynamic Worker (`LOADER`, no outbound network); `POST /sandbox {code}` runs code without a model |
+| Models | Workers AI through AI Gateway `default` (`createAI`): `@cf/moonshotai/kimi-k2.7-code`, fallback `@cf/zai-org/glm-5.3-flash`; `ops_config qnfo_agents_model` overrides the primary |
+
+Tools: `repo_read_file` (the public repository), `fleet_sql` (read-only SQL on qnfo-audit; sign-in and secret tables refused),
+`ops_catalog` and `ops_call` (the qnfo-ops tool surface: Cloudflare API, D1, R2, KV, GitHub, workspace, containers, deploys),
+every qnfo-ops tool again inside Code Mode as `codemode.ops_<name>`, `propose_code_task`, and with the write scope `file_issue`,
+`schedule_turn` and `mcp_connect`.
+
+Code changes go through the code loop: `propose_code_task` returns a proposal (`code-task: repo=qnfo-workers path=<file>` plus
+an anchor) to the caller, and the console files it as an owner task when the owner taps it, so the issue carries the owner-request
+provenance the planner trusts (INTAKE-PROVENANCE-1). The agent never writes a code task under its own name.
+
+## Who may do what
+
+There are no secrets. A caller is `ctx.props.caller`, which only a service binding can set.
+
+| Scope | Who | What |
+|---|---|---|
+| public | anyone | `GET /`, `/health`, `/tools`; `POST /mcp` with `repo_read_file`. No model call, no fleet data |
+| read | `qnfo-fleet-dashboard`, `qnfo-ops` (each verifies the owner first) | turns, read-only ops tools, D1 reads, sandbox runs, run history |
+| write | the same callers with `x-agent-scope: write` (the console sends it only after a fresh owner code) | every ops tool, fleet issues, schedules, MCP connections |
+
+The read-only ops tool list (`OPS_READ_ONLY` in src/lib.js) equals `CMD_TOOL_READ_ONLY` in the dashboard; worker.test.mjs holds them equal.
+
+## Routes
+
+Open: `GET /`, `GET /health`, `GET /tools`, `POST /mcp`.
+Trusted: `POST /run {text, instance?, wait_ms?}`, `GET /runs`, `GET /runs/<id>`, `GET|POST /schedules`, `DELETE /schedules/<id>`,
+`GET|POST /mcp-servers`, `DELETE /mcp-servers/<id>`, `POST /sandbox {code}`, `/agents/fleet-code-agent/<instance>`.
+
+## Build and deploy
+
+`src/index.ts` and `src/lib.js` are the source. `npm ci && npm run build` writes `worker.js`, one self-contained module (the fleet's
+load gate and deploy transports take one module per worker), and copies it to `deployed-current.worker.js`. The version is
+`package.json` `version`; the bundle's first line is `var VERSION = "<it>"` for the fleet's version guards. Bump it in package.json
+and rebuild.
+
+The directory is WRANGLER-ONLY: the Durable Object migration needs wrangler, so `.github/workflows/deploy-qnfo-agents.yml` deploys
+it on a push to main (it rebuilds the bundle and fails when the committed one differs, takes the deploy-guard lock, writes
+`fleet_deploys`, and fails closed unless `/health` answers the VERSION, `/tools` lists the tools and a public `POST /run` answers 403).
+
+`node worker.test.mjs` is the offline suite.

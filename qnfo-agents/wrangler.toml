@@ -1,0 +1,50 @@
+# charter-pillar: autonomy
+# qnfo-agents (CF-AGENTS-1, owner directive 2026-10-25): the fleet's Cloudflare Agents SDK agent. Every Agents SDK capability
+# (Agent Durable Object, durable fibers, schedules, callable methods, MCP server and client, Code Mode sandbox, Workers AI through
+# AI Gateway) over the whole qnfo-ops tool surface, reached from fleet.qnfo.org/cmd and ops.qnfo.org. README.md has the routes.
+# Net-zero: it takes the duties of the retired qnfo-code-agent, qnfo-agent-orchestrator and qnfo-artifact-agent (the fleet's earlier
+# agent experiments, all RETIRED) and of the Agents SDK half of the folded qnfo-fleet-advisor; no new worker of the same class remains.
+#
+# main is the esbuild bundle of src/index.ts (build.mjs); deployed-current.worker.js is identical to it (mirror-guard).
+# WRANGLER-ONLY: a new Durable Object class needs a wrangler migration, which the canonical /content deploy cannot send, so
+# .github/workflows/deploy-qnfo-agents.yml deploys this directory (deploy-guard lock, fleet_deploys ledger, /health canary).
+# No secrets: callers are authenticated by service-binding props (ctx.props.caller), which only a deploy of the caller can set.
+# No wrangler cron: the agent's own schedules (Durable Object alarms) drive scheduled turns.
+name = "qnfo-agents"
+main = "worker.js"
+compatibility_date = "2026-10-20"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "agents.qnfo.org", custom_domain = true }
+]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[ai]
+binding = "AI"
+
+[[worker_loaders]]
+binding = "LOADER"
+
+[[d1_databases]]
+binding = "AUDIT_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# TOOL-BRIDGE-1: qnfo-ops trusts this caller on /v1/tools and /v1/tools/call only (OPS_AGENT_TOOL_CALLERS in qnfo-ops/worker.js).
+[[services]]
+binding = "OPS"
+service = "qnfo-ops"
+props = { caller = "qnfo-agents" }
+
+[[durable_objects.bindings]]
+name = "FleetCodeAgent"
+class_name = "FleetCodeAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FleetCodeAgent"]
