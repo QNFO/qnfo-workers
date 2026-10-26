@@ -603,6 +603,97 @@ INSERT INTO emails (recipient, subject, body_text, status, received_at) VALUES (
     ok(st == "not-green" and red == ["gate"] and miss == [], "a failed required check is red: %r" % ((st, miss, red),))
     st, miss, red = classify_checks([{"name": "guard", "conclusion": "success"}], ["gate", "guard"])
     ok(st == "not-green" and miss == ["gate"], "a required check that never ran is missing")
+    # end to end on a sqlite shim: collect_deploys stores new deployments once and computes from the table
+    import collections
+    Resp = collections.namedtuple("Resp", "status headers set_cookies text final_url ms hops error")
+    old_acc = os.environ.get("CF_ACCOUNT_ID")
+    os.environ["CF_ACCOUNT_ID"] = "acc"
+    try:
+        db = sqlite3.connect(":memory:")
+        db.executescript("""
+CREATE TABLE bp26_deploy_events (deployment_id TEXT PRIMARY KEY, worker TEXT NOT NULL, created_on TEXT NOT NULL, strategy TEXT, n_versions INTEGER NOT NULL DEFAULT 0, min_pct REAL, triggered_by TEXT, message TEXT, version_ids TEXT, seen_at TEXT NOT NULL);
+CREATE TABLE ci_gate_audit (pr INTEGER PRIMARY KEY, merged_at TEXT NOT NULL, merge_sha TEXT, head_sha TEXT, required_state TEXT NOT NULL, missing TEXT, red TEXT, checked_at TEXT NOT NULL);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, created_at INTEGER);
+""")
+        now = _epoch("2026-10-26T20:00:00Z")
+        db.execute("INSERT INTO agent_issues VALUES (1, 'CONTROL-PLANE-REVERTED-1: push 7a9d293 reverted, qnfo-gateway deploy canary failed', ?)", [(now - 3600) * 1000])
+
+        def mk(i, minute, vid, by="upload", pct=100):
+            return {"id": "d%d" % i, "strategy": "percentage", "created_on": _iso(now - 7200 + minute * 60), "annotations": {"workers/triggered_by": by}, "versions": [{"version_id": vid, "percentage": pct}]}
+        api = {"/accounts/acc/workers/scripts": {"result": [{"id": "w1"}, {"id": "qnfo-gateway"}]},
+               "/accounts/acc/workers/scripts/w1/deployments": {"result": {"deployments": [mk(1, 0, "v1"), mk(2, 10, "v2"), mk(3, 20, "v1"), mk(4, 30, "v4", pct=50)]}},
+               "/accounts/acc/workers/scripts/qnfo-gateway/deployments": {"result": {"deployments": [mk(5, 0, "g1"), mk(6, 5, "g2")]}}}
+
+        class EC(object):
+            dry = False
+
+            def __init__(self):
+                self.now = now
+
+            def d1(self, sql, params=None):
+                cur = db.execute(sql, params or [])
+                cols = [d[0] for d in cur.description] if cur.description else []
+                rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+                db.commit()
+                return rows
+
+            def left(self):
+                return 100
+
+            def cf(self, path):
+                if path not in api:
+                    raise RuntimeError("HTTP 404 " + path)
+                return api[path]
+        res = {r.metric: r for r in collect_deploys(EC())}
+        ok(db.execute("SELECT COUNT(*) FROM bp26_deploy_events").fetchone()[0] == 6, "six deployments stored once")
+        ok(abs(res["deploys_via_gradual"].value - 1 / 6.0) < 1e-9, "one of six deployments is a 50 percent step: %r" % res["deploys_via_gradual"].value)
+        # w1: d3 re-activates v1 ten minutes after d2 (v2 failed); qnfo-gateway: a canary revert issue inside its window
+        ok(abs(res["change_failure_rate"].value - 2 / 6.0) < 1e-9, "two failures (v2 re-activation, canary revert) of six: %r %s" % (res["change_failure_rate"].value, res["change_failure_rate"].note[:120]))
+        ok(res["mttr_rollback_min_p95"].value is None and "1 rollback events" in res["mttr_rollback_min_p95"].note, "mttr stays unknown below five rollbacks: %s" % res["mttr_rollback_min_p95"].note[:80])
+        res2 = {r.metric: r for r in collect_deploys(EC())}
+        ok(db.execute("SELECT COUNT(*) FROM bp26_deploy_events").fetchone()[0] == 6 and abs(res2["deploys_via_gradual"].value - 1 / 6.0) < 1e-9, "a second run stores nothing new and computes the same")
+        # CI gate: one audited merge without the gate check makes a count; three green merges at full coverage make a zero
+        PRS = [{"number": 11, "merged_at": _iso(now - 1000), "merge_commit_sha": "m11", "head": {"sha": "h11"}, "updated_at": _iso(now)},
+               {"number": 12, "merged_at": _iso(now - 2000), "merge_commit_sha": "m12", "head": {"sha": "h12"}, "updated_at": _iso(now)},
+               {"number": 13, "merged_at": None, "merge_commit_sha": None, "head": {"sha": "h13"}, "updated_at": _iso(now)}]
+        green = [{"name": n, "conclusion": "success"} for n in ("gate", "guard", "mirror-guard", "identity-guard")]
+
+        def http(url, **kw):
+            if "/search/issues" in url:
+                return Resp(200, {}, [], json.dumps({"total_count": 2}), url, 1, [], None)
+            if "/pulls?" in url:
+                return Resp(200, {}, [], json.dumps(PRS), url, 1, [], None)
+            if "/commits/h11/check-runs" in url:
+                return Resp(200, {}, [], json.dumps({"check_runs": green}), url, 1, [], None)
+            if "/commits/h12/check-runs" in url:
+                return Resp(200, {}, [], json.dumps({"check_runs": green[1:]}), url, 1, [], None)
+            return Resp(404, {}, [], "", url, 1, [], "http 404")
+
+        class GC(EC):
+            def http(self, url, **kw):
+                return http(url, **kw)
+
+            def read(self, rel):
+                return json.dumps({"required_checks": ["gate", "guard", "mirror-guard", "identity-guard"]})
+        out = collect_ci_gate(GC())[0]
+        ok(out.value == 1 and out.note.startswith("at least 1 of 2 audited") and db.execute("SELECT COUNT(*) FROM ci_gate_audit").fetchone()[0] == 2, "a merge without the gate check is counted: %r %s" % (out.value, out.note[:100]))
+        db.execute("UPDATE ci_gate_audit SET required_state = 'green', missing = ''")
+        out = collect_ci_gate(GC())[0]
+        ok(out.value == 0, "full coverage and no bypass is a measured zero: %r %s" % (out.value, out.note[:100]))
+        PRS.append({"number": 14, "merged_at": _iso(now - 500), "merge_commit_sha": "m14", "head": {"sha": "h14"}, "updated_at": _iso(now)})
+
+        class GC2(GC):
+            def http(self, url, **kw):
+                if "/search/issues" in url:
+                    return Resp(200, {}, [], json.dumps({"total_count": 100}), url, 1, [], None)
+                return http(url, **kw)
+        out = collect_ci_gate(GC2())[0]
+        ok(out.value is None and "coverage is below 98 percent" in out.note, "partial coverage with no bypass is unknown, not zero: %r" % (out.value,))
+    finally:
+        if old_acc is None:
+            os.environ.pop("CF_ACCOUNT_ID", None)
+        else:
+            os.environ["CF_ACCOUNT_ID"] = old_acc
     print("bp26_cfapi selftest %s" % ("ok" if not fails else "FAILED %d" % len(fails)))
     return 1 if fails else 0
 
