@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 17:13:31",
+  "audited_at": "2026-10-26 17:44:39",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -625,7 +625,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.43.2-plain-residue-like",
+        "version": "3.43.3-daily-slot",
         "worker": "qnfo-gateway"
       },
       {
@@ -685,7 +685,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.19.2-link-slash-canon",
+        "version": "0.19.3-engagement-coverage",
         "worker": "qnfo-social"
       },
       {
@@ -1382,9 +1382,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.43.2-plain-residue-like",
+      "before": "3.43.3-daily-slot",
       "http": 200,
-      "live": "3.43.2-plain-residue-like",
+      "live": "3.43.3-daily-slot",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1658,9 +1658,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.19.2-link-slash-canon",
+      "before": "0.19.3-engagement-coverage",
       "http": 200,
-      "live": "0.19.2-link-slash-canon",
+      "live": "0.19.3-engagement-coverage",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
