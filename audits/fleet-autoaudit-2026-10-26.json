@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-26 14:10:48",
+  "audited_at": "2026-10-26 14:38:53",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-dashboard",
-        "qnfo-infra"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -593,7 +585,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.39.0",
+        "version": "1.40.0",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -623,7 +615,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.54.0-probe-author-values",
+        "version": "0.55.0-breach-doctor-watch-2",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1209,9 +1201,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.39.0",
+      "before": "1.40.0",
       "http": 200,
-      "live": "1.39.0",
+      "live": "1.40.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1356,9 +1348,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.54.0-probe-author-values",
+      "before": "0.55.0-breach-doctor-watch-2",
       "http": 200,
-      "live": "0.54.0-probe-author-values",
+      "live": "0.55.0-breach-doctor-watch-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
