@@ -79,7 +79,11 @@ const NOT_TABLES = new Set(["select", "values", "set", "where", "json_each", "js
   "sqlite_sequence", "sqlite_temp_master", "pragma_table_info", "pragma_index_list", "dual", "new", "old", "excluded", "__dyn__", "if", "not", "exists", "lateral", "d1_schema_index"]);
 const IDENT = String.raw`["\x60\[]?([A-Za-z_][A-Za-z0-9_]*)["\x60\]]?`;
 export function sqlTables(sqlIn) {
-  const sql = String(sqlIn || "").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+  // SQL-LITERAL-TEXT-1 (2026-10-26, fleet_graph_findings_warn): text inside a single-quoted SQL string literal is data, not SQL. Prose such as 'the owner replied from
+  // fleet.qnfo.org', 'came from a fleet address' or 'absent from live catalog' was read as FROM <word> and filed sql-table-missing for the "tables" fleet, a and live
+  // (qnfo-fleet-dashboard conMailReply and refreshEngagedHumanSessions, qnfo-model-eval syncCatalog). Literals are blanked after comments are stripped; a doubled quote
+  // ('it''s') stays inside its literal. Identifiers use double quotes or backticks here, never single quotes.
+  const sql = String(sqlIn || "").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/'(?:[^']|'')*'/g, "''");
   const ctes = new Set();
   for (const m of sql.matchAll(/(?:\bWITH(?:\s+RECURSIVE)?|,)\s*["\x60]?([A-Za-z_]\w*)["\x60]?\s*(?:\([^)]*\))?\s+AS\s*\(/gi)) ctes.add(m[1].toLowerCase());
   const reads = new Set(), writes = new Set(), creates = new Set(), drops = new Set();
@@ -1118,6 +1122,13 @@ export async function selftest(log = console.log) {
   const u = sqlTables("UPDATE OR IGNORE agent_issues SET status = 'x' WHERE id IN (SELECT id FROM issue_triage)");
   ok(u.writes[0] === "agent_issues" && u.reads.includes("issue_triage"), "sqlTables update");
   ok(sqlTables("SELECT * FROM __DYN__ WHERE 1").dynamic === 1, "dynamic table name counted, not emitted");
+  // SQL-LITERAL-TEXT-1: prose inside a string literal is not a table reference
+  const lit = sqlTables("UPDATE email_reply_queue SET skip_reason = 'INBOX-REPLY-1: the owner replied from fleet.qnfo.org', note = 'it''s from a bot' WHERE email_id = ?1 AND decision <> 'sent'");
+  ok(lit.reads.length === 0 && lit.writes.join() === "email_reply_queue", "sqlTables ignores prose in string literals (from fleet.qnfo.org, from a bot): " + JSON.stringify(lit));
+  const lit2 = sqlTables("UPDATE cf_model_catalog SET status='vanished', notes=COALESCE(notes,'')||' | absent from live catalog' WHERE slug=?1");
+  ok(lit2.reads.length === 0 && lit2.writes.join() === "cf_model_catalog", "sqlTables ignores 'absent from live catalog' in a SET expression: " + JSON.stringify(lit2));
+  const lit3 = sqlTables("SELECT a.id FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id WHERE a.title LIKE 'from x%' AND t.rc = 'join y'");
+  ok(lit3.reads.slice().sort().join() === "agent_issues,issue_triage", "sqlTables keeps real FROM and JOIN tables when literals hold the words from and join: " + JSON.stringify(lit3));
   const d = sqlTables("DELETE FROM work_claims WHERE expires_at < ?1");
   ok(d.writes.includes("work_claims") && !d.reads.includes("work_claims"), "delete is a write");
   ok(looksLikeSql("SELECT id FROM agent_issues WHERE id = ?1") && !looksLikeSql("Select the best option from the list"), "looksLikeSql");
