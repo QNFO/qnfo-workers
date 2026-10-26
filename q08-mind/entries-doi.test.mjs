@@ -46,9 +46,11 @@ const PINS = {
 };
 
 // ---- corpus shape (the issues' definition of done) -------------------------------------------------------------------
-assert.equal(A.length, 18, "entries-a.json keeps 18 entries");
-assert.equal(B.length, 18, "entries-b.json keeps 18 entries");
-assert.equal(BY_SLUG.size, 36, "36 distinct slugs");
+// Minimums, not equalities: the reading list may grow, it may not lose the entries these issues repaired.
+assert.ok(A.length >= 18, "entries-a.json keeps at least its 18 entries");
+assert.ok(B.length >= 18, "entries-b.json keeps at least its 18 entries");
+assert.equal(BY_SLUG.size, ALL.length, "no two entries share a slug");
+assert.ok(BY_SLUG.size >= 36, "at least the 36 slugs of 2.2.0 remain");
 for (const e of ALL) if (e.n) assert.ok(BY_SLUG.has(e.n), `${e.s}: n points at a slug that exists (${e.n})`);
 const links = ALL.map((e) => String(e.l || "").toLowerCase()).filter(Boolean);
 assert.equal(new Set(links).size, links.length, "no two entries share one source link");
@@ -90,14 +92,15 @@ try {
   for (const [slug, pin] of Object.entries(PINS)) {
     const page = await get("/q/" + slug);
     assert.equal(page.status, 200, `/q/${slug} answers 200`);
-    assert.ok(page.body.includes(`<a href="https://doi.org/${pin.doi}" rel="noopener">`), `/q/${slug} links https://doi.org/${pin.doi}`);
+    const anchor = new RegExp(`<a href="https://doi\\.org/${pin.doi.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>`);
+    assert.match(page.body, anchor, `/q/${slug} links https://doi.org/${pin.doi}`);
     for (const bad of Object.keys(pin.wrong)) assert.ok(!page.body.toLowerCase().includes(bad), `/q/${slug} does not link ${bad}`);
     assert.ok(api.body.includes("https://doi.org/" + pin.doi), `/api/entries.json carries ${pin.doi}`);
   }
   assert.ok(!/10\.1017\/cbo9780511613292/i.test(api.body), "/api/entries.json no longer carries the DOI with no Crossref record");
   assert.ok(!api.body.includes("10.1037/0022-3514.84.4.822"), "/api/entries.json no longer carries the Brown and Ryan DOI");
   const health = JSON.parse((await get("/health")).body);
-  assert.equal(health.entries, 36, "/health still counts 36 entries");
+  assert.equal(health.entries, ALL.length, "/health counts the entries the data files hold");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
