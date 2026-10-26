@@ -3176,7 +3176,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.43.5-edge-headers";
+var VERSION = "1.43.6-reading-jsonld";
+/* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
 /* 1.43.2 COMPANION-SERIAL-TITLE-1 (2026-10-26, pillar personal; patch): a serial installment takes the running title with its number ("<title>, part N", N from companion_series.chapters plus one) before the duplicate-title check, so the check no longer rejects a full compose for keeping the title the prompt tells the writer to keep; every other form keeps the check as it was. */
@@ -4547,13 +4548,25 @@ function renderIndex(pieces, keyQS, filter) {
   nav += "<a href=/?form=notes" + (keyQS ? "&" + keyQS.slice(1) : "") + ">field notes</a>";
   nav += "<a href=/?form=serial" + (keyQS ? "&" + keyQS.slice(1) : "") + ">long-form</a></nav>";
   var body = nav + (items.length ? "<ul class=idx>" + items.join("") + "</ul>" : "<p>Nothing yet.</p>");
-  return page("Reading", shell(body));
+  return page("Reading", shell(body), readingIndexLd());
 }
 __name(renderIndex, "renderIndex");
 __name2(renderIndex, "renderIndex");
 __name22(renderIndex, "renderIndex");
 // BP26-AI-LABEL-1 (1.43.0): Article 50(4) disclosure on every piece; there is no human editorial review, so the label is unconditional.
 var AI_LABEL_HTML = "<span class=ai title=\"Written by AI and checked against its source material by automated review. No human reviews pieces before they appear.\">AI-generated</span>";
+// BP26-AI-ACT-ART50-1 (1.43.6): the JSON-LD flag that goes with AI_LABEL_HTML. Both ride the same sentence, so the visible label and the machine-readable one never disagree.
+function pieceLd(p) {
+  var url = "https://reading.q08.org/p/" + String(p.slug || "");
+  var ld = { "@context": "https://schema.org", "@type": "Article", headline: String(p.title || "").slice(0, 200), datePublished: String(p.day || ""), inLanguage: "en", url: url, mainEntityOfPage: url,
+    author: { "@type": "Organization", name: "Reading (reading.q08.org)", url: "https://reading.q08.org/" }, publisher: { "@type": "Organization", name: "q08", url: "https://q08.org/" },
+    creditText: "Written by AI and checked against its source material by automated review. No human reviews pieces before they appear." };
+  return "<script type=\"application/ld+json\">" + JSON.stringify(ld).replace(/</g, "\\u003c") + "</script>";
+}
+function readingIndexLd() {
+  var ld = { "@context": "https://schema.org", "@type": "Blog", name: "Reading", url: "https://reading.q08.org/", description: "Essays, field notes and long-form serials written by AI for one reader and checked against their source material by automated review.", publisher: { "@type": "Organization", name: "q08", url: "https://q08.org/" } };
+  return "<script type=\"application/ld+json\">" + JSON.stringify(ld).replace(/</g, "\\u003c") + "</script>";
+}
 function renderPiece(p, keyQS) {
   var bodyMd = String(p.body_md || "");
   var startsHeading = /^\s*#/.test(bodyMd);
@@ -4561,7 +4574,7 @@ function renderPiece(p, keyQS) {
   var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words &middot; " + AI_LABEL_HTML + "</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + ledeHtml + renderBody(plainCredit(bodyMd)) + sourcesFoot(p.anchor_json);
   var fb = "<div class=fb>Was this worth your time? <a href=/api/f?slug=" + p.slug + "&s=good>yes</a><a href=/api/f?slug=" + p.slug + "&s=flat>flat</a><a href=/api/f?slug=" + p.slug + "&s=no>no</a></div>";
   var foot = "<footer><a href=/ " + keyQS + ">back to index</a></footer>";
-  return page(p.title, shell(body + fb + foot));
+  return page(p.title, shell(body + fb + foot), pieceLd(p));
 }
 __name(renderPiece, "renderPiece");
 __name2(renderPiece, "renderPiece");
