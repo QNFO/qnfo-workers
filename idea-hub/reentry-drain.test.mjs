@@ -18,7 +18,7 @@ let fetchCalls = 0;
 const errLog = [];
 const sb = { console: { log: () => {}, error: (m) => errLog.push(String(m)) }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { fetchCalls++; throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { runReentry, runConsume, ideationCycle, VERSION, REENTRY_NOQ_TTL_H, REENTRY_TTL_DAYS, REENTRY_EXPIRE_BATCH, REENTRY_BATCH, CONSUME_SIGNALS };", sb);
+vm.runInContext(src + "\n__x = { runReentry, runConsume, ideationCycle, recordReentryEvent, VERSION, REENTRY_NOQ_TTL_H, REENTRY_TTL_DAYS, REENTRY_EXPIRE_BATCH, REENTRY_BATCH, CONSUME_SIGNALS };", sb);
 const api = sb.__x;
 // The shim enforces D1's limit of 100 bound parameters per query (a longer IN (?,?,...) list fails there with "too many SQL variables"),
 // which in-memory SQLite does not, and records the largest parameter count any query bound.
@@ -152,6 +152,84 @@ ok(rg && /living-paper unavailable/.test(rg.emit_error || "") && rg.errors >= 1 
 ok(rg && rg.expired_stale >= 1 && audit.prepare("SELECT status FROM signals WHERE source_ref = '10.9999/test.guard-stale'").get().status === "expired", "the drain leg still ran: a weight>0 signal older than 7 days expired", rg);
 ok(errLog.some((l) => /runReentry\.emit/.test(l) && /living-paper unavailable/.test(l)), "the swallowed failure is logged for Workers Logs", errLog);
 ok(/where: "ideationCycle\.reentry"/.test(src), "the cycle logs a runReentry error it used to swallow into r.reentry");
+
+// ---- review of dfdd6e9b: the mutations the first suite did not catch, pinned by behaviour ----
+// (B) the emission guard drops the papers when the signals read fails after the papers query succeeded: nothing is emitted on a half-read
+{
+  const base = env.QNFO_AUDIT;
+  const haveFails = { prepare(sql) { if (sql === "SELECT source_ref FROM signals WHERE source='artifact_reentry'") throw new Error("D1_ERROR: signals read down"); return base.prepare(sql); } };
+  const before = n("SELECT COUNT(*) n FROM signals");
+  let rh = null, thrownH = null;
+  try { rh = await api.runReentry({ ...env, QNFO_AUDIT: haveFails }); } catch (e) { thrownH = String(e && e.message || e); }
+  ok(thrownH === null && rh && /signals read down/.test(rh.emit_error || ""), "a failing signals read is reported in emit_error and does not abort the run", { thrownH, rh });
+  ok(rh && rh.scanned === 0 && rh.emitted === 0 && n("SELECT COUNT(*) n FROM signals") === before, "the papers already read are dropped with it: nothing scanned, nothing emitted from a half-read (no re-emission of papers that have signals)", rh);
+}
+// (D) the failure is counted exactly once: only the json_each query fails here, every other leg reads and writes normally
+{
+  const lpBase = env.LIVING_PAPER;
+  const lpJson = { prepare(sql) { if (sql.includes("json_each")) throw new Error("D1_ERROR: json_each down"); return lpBase.prepare(sql); } };
+  let rj = null;
+  try { rj = await api.runReentry({ ...env, LIVING_PAPER: lpJson }); } catch (e) { rj = { thrown: String(e && e.message || e) }; }
+  ok(rj && rj.errors === 1 && /json_each down/.test(rj.emit_error || "") && rj.emitted === 0, "an emission-block failure adds exactly one to errors when no other leg fails", rj);
+}
+// the scan limit: a run that reads REENTRY_SCAN_LIMIT papers says so, and the limit reaches the query
+{
+  ok(/var REENTRY_SCAN_LIMIT = 500;/.test(src) && /ORDER BY created_at DESC LIMIT " \+ REENTRY_SCAN_LIMIT\)/.test(src), "the papers query is limited by REENTRY_SCAN_LIMIT (500)");
+  const rNo = await api.runReentry(env);
+  ok(rNo.scan_capped === undefined && rNo.scanned < 500, "below the limit scan_capped is absent", rNo);
+  vm.runInContext("REENTRY_SCAN_LIMIT = 100", sb);
+  let r100 = null;
+  try { r100 = await api.runReentry(env); } catch (e) { r100 = { thrown: String(e && e.message || e) }; }
+  vm.runInContext("REENTRY_SCAN_LIMIT = 500", sb);
+  ok(r100 && r100.scanned === 100 && r100.scan_capped === true, "a run that reads exactly REENTRY_SCAN_LIMIT papers reports scan_capped", r100);
+}
+// (A) + persistence: the cycle logs a runReentry throw it used to swallow, and writes the leg's result to cloud_ops_events once per cycle
+audit.exec("CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT)");
+const evRow = () => audit.prepare("SELECT * FROM cloud_ops_events WHERE id = 'idea-reentry'").get();
+const evCount = () => n("SELECT COUNT(*) n FROM cloud_ops_events WHERE id = 'idea-reentry'");
+{
+  // direct: the shape of the row
+  const okRes = { permitted: true, scanned: 363, emitted: 20, errors: 0, owner_dois: 250, rescored: 0, expired: 0, expired_noq: 0, expired_stale: 0 };
+  await api.recordReentryEvent(env, okRes);
+  let e1 = evRow(), m1 = JSON.parse(e1.meta || "{}");
+  ok(e1 && e1.kind === "idea-reentry" && e1.job === "idea-hub" && e1.status === "ok" && /363 scanned, 20 emitted/.test(e1.text), "the leg result is one cloud_ops_events row, kind idea-reentry, job idea-hub, status ok", e1);
+  ok(m1.scanned === 363 && m1.emitted === 20 && m1.owner_dois === 250 && m1.emit_error === null && m1.owner_dois_capped === null && m1.scan_capped === false && m1.version === api.VERSION, "its meta carries scanned, emitted, emit_error, owner_dois, owner_dois_capped, scan_capped and the version", m1);
+  await api.recordReentryEvent(env, { ...okRes, emitted: 7 });
+  ok(evCount() === 1 && JSON.parse(evRow().meta).emitted === 7, "a second write replaces the row (INSERT OR REPLACE): one row, no growth per cycle");
+  await api.recordReentryEvent(env, { ...okRes, emit_error: "D1_ERROR: living-paper unavailable", emitted: 0, scanned: 0 });
+  const e2 = evRow(), m2 = JSON.parse(e2.meta);
+  ok(e2.status === "error" && m2.emit_error === "D1_ERROR: living-paper unavailable" && /FAILED \(D1_ERROR: living-paper unavailable\)/.test(e2.text), "a failed emission block makes the row status error and carries the reason", e2);
+  await api.recordReentryEvent(env, { error: "boom in the drain leg" });
+  const e3 = evRow(), m3 = JSON.parse(e3.meta);
+  ok(e3.status === "error" && m3.error === "boom in the drain leg" && /FAILED \(boom in the drain leg\)/.test(e3.text) && /no scan/.test(e3.text), "a leg that threw makes the row status error and carries the error", e3);
+  await api.recordReentryEvent(env, { permitted: true, scanned: 10, emitted: 0, owner_dois: 10, owner_dois_capped: 250, scan_capped: true });
+  const m4 = JSON.parse(evRow().meta);
+  ok(m4.owner_dois_capped === 250 && m4.scan_capped === true && evRow().status === "ok", "a cut DOI list and a capped scan are in the row", m4);
+  errLog.length = 0;
+  let thrownE = null;
+  try { await api.recordReentryEvent({ QNFO_AUDIT: { prepare() { throw new Error("D1_ERROR: events down"); } } }, okRes); } catch (e) { thrownE = String(e && e.message || e); }
+  ok(thrownE === null && errLog.some((l) => /recordReentryEvent/.test(l) && /events down/.test(l)), "a failing event write never throws into the cycle and is logged", { thrownE, errLog });
+  await api.recordReentryEvent(env, undefined);
+  ok(evRow().status === "ok" && /no scan/.test(evRow().text), "an undefined result is recorded without throwing");
+}
+{
+  // through ideationCycle (later stages need tables this fixture does not have: the cycle may reject after the leg, which is why the row is written first)
+  const cycle = async (e) => { try { await api.ideationCycle(e); } catch (x) { /* a later stage */ } };
+  audit.exec("DELETE FROM cloud_ops_events WHERE id = 'idea-reentry'");
+  await cycle(env);
+  const ec = evRow();
+  ok(evCount() === 1 && ec && ec.status === "ok" && JSON.parse(ec.meta).scanned > 0 && JSON.parse(ec.meta).version === api.VERSION, "ideationCycle writes the idea-reentry row once per cycle (written before the later stages)", ec);
+  // (A) the leg throws outside the emission guard (the old0 read): the cycle logs it, records it, and the later stages still run
+  audit.exec("DELETE FROM cloud_ops_events WHERE id = 'idea-reentry'");
+  errLog.length = 0;
+  const baseA = env.QNFO_AUDIT;
+  const old0Down = { prepare(sql) { if (sql.includes("COALESCE(evidential_weight,0)=0 AND created_at < ?1")) throw new Error("D1_ERROR: old0 read down"); return baseA.prepare(sql); } };
+  await cycle({ ...env, QNFO_AUDIT: old0Down });
+  const logged = errLog.map((l) => { try { return JSON.parse(l); } catch (x) { return {}; } }).filter((o) => o.where === "ideationCycle.reentry");
+  ok(logged.length === 1 && logged[0].worker === "idea-hub" && /old0 read down/.test(logged[0].error || ""), "a runReentry throw is logged by the cycle with the worker, the place and the error", errLog);
+  const eA = evRow();
+  ok(evCount() === 1 && eA && eA.status === "error" && JSON.parse(eA.meta).error && /old0 read down/.test(JSON.parse(eA.meta).error), "and the cycle records it as status error with the error in meta", eA);
+}
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

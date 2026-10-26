@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.14.2"; // 1.14.2 REENTRY-BIND-LIMIT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): runReentry bound the 5 owner identifier types plus up to 200 owner-pipeline DOIs in one IN (?,?,...) list, and D1 allows 100 bound parameters per query ("too many SQL variables"); the owner pipeline reached 99 DOIs at the 2026-10-19 00:25Z cycle, so the papers query threw on every hourly cycle after it (ideationCycle swallowed the throw into r.reentry), emission and both drain legs never ran, and 17 artifact_reentry rows stayed new with weight 0, none consumed in 7 days. The DOIs now travel as one JSON parameter read by json_each(?) (6 bound parameters at any DOI count), the owner-DOI slice(0, 200) that would have silently dropped papers past 200 is a 5000 growth bound that reports itself, a failure of the emission block (papers or signals read) no longer stops the drain legs, and the swallowed cycle error is logged. idea-hub/reentry-drain.test.mjs. // 1.14.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 1.13.0 IDEA-SCORING-POISON-1 (2026-10-19, agent_issues 100145, pillar autonomy; minor: a decision triage now takes on its own): a row that no model in T_CHAIN can score (no JSON, an invalid scorecard) stayed status new, was scored again by up to four models on every hourly cycle, and counted out.errors, so fleet_heartbeat idea-hub read ok=0 on every cycle since 2026-10-19 10:32Z (CRON-FAULT-1 100145, four consecutive failures by 16:32Z) while ai_call_counters showed no API error (0 errors in 130 triage calls a day, the fallback models glm-5.3 and deepseek answering 74 of them). Row 1923 (owner-corpus) sat new from 13:25Z. A scoring failure of a generated or corpus row is now recorded on the row (rationale [scoring-error N ISO] reason, no new column), the row is retried on the next cycles up to 3 times and then once every 24 hours, rows without a failure marker are taken first so a failing row cannot starve the batch, and it is counted as scoring_failed (event meta scoring_failed, scoring_cooling, scoring_error, errors) and not as errors: a model that cannot read one text is not a cron fault, while a thrown error still is. A row scored later has its marker replaced by the rationale. idea-hub/scoring-failure.test.mjs. // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged; ops_config ideas_cap_trickle_per_run (0 to 12) overrides the rate and 0 restores the old hold without a deploy. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
+var VERSION = "1.14.3"; // 1.14.3 PROPOSAL-COOLING-1 + REENTRY-EVENT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): (1) a proposal that IDEA-SCORING-POISON-1 could not score (a "[scoring-error" marker in rationale, 24 of the 33 'new' rows on 2026-10-26) no longer counts against PROPOSAL_BACKPRESSURE and PROPOSAL_FILL_TO in proposalRoom, runConsume, runOwnerCorpus, thinkLoop and runAskGap, which had held the count above 30 and kept re-entry consumption and the producers paused; triage's own selection of those rows is unchanged. It does not by itself clear the chaos drill of 1000244. (2) The re-entry leg's result is persisted once per cycle to cloud_ops_events id 'idea-reentry' (scanned, emitted, emit_error, owner_dois, owner_dois_capped, scan_capped; status error when the leg threw or its emission block failed), and a run that reads REENTRY_SCAN_LIMIT (500) papers says so in scan_capped. idea-hub/reentry-drain.test.mjs, idea-hub/proposal-headroom.test.mjs, migrations/2026-10-26-reentry-bind-limit.sql. // 1.14.2 REENTRY-BIND-LIMIT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): runReentry bound the 5 owner identifier types plus up to 200 owner-pipeline DOIs in one IN (?,?,...) list, and D1 allows 100 bound parameters per query ("too many SQL variables"); the owner pipeline reached 99 DOIs at the 2026-10-19 00:25Z cycle, so the papers query threw on every hourly cycle after it (ideationCycle swallowed the throw into r.reentry), emission and both drain legs never ran, and 17 artifact_reentry rows stayed new with weight 0, none consumed in 7 days. The DOIs now travel as one JSON parameter read by json_each(?) (6 bound parameters at any DOI count), the owner-DOI slice(0, 200) that would have silently dropped papers past 200 is a 5000 growth bound that reports itself, a failure of the emission block (papers or signals read) no longer stops the drain legs, and the swallowed cycle error is logged. idea-hub/reentry-drain.test.mjs. // 1.14.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 1.13.0 IDEA-SCORING-POISON-1 (2026-10-19, agent_issues 100145, pillar autonomy; minor: a decision triage now takes on its own): a row that no model in T_CHAIN can score (no JSON, an invalid scorecard) stayed status new, was scored again by up to four models on every hourly cycle, and counted out.errors, so fleet_heartbeat idea-hub read ok=0 on every cycle since 2026-10-19 10:32Z (CRON-FAULT-1 100145, four consecutive failures by 16:32Z) while ai_call_counters showed no API error (0 errors in 130 triage calls a day, the fallback models glm-5.3 and deepseek answering 74 of them). Row 1923 (owner-corpus) sat new from 13:25Z. A scoring failure of a generated or corpus row is now recorded on the row (rationale [scoring-error N ISO] reason, no new column), the row is retried on the next cycles up to 3 times and then once every 24 hours, rows without a failure marker are taken first so a failing row cannot starve the batch, and it is counted as scoring_failed (event meta scoring_failed, scoring_cooling, scoring_error, errors) and not as errors: a model that cannot read one text is not a cron fault, while a thrown error still is. A row scored later has its marker replaced by the rationale. idea-hub/scoring-failure.test.mjs. // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged; ops_config ideas_cap_trickle_per_run (0 to 12) overrides the rate and 0 restores the old hold without a deploy. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
 // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
 const MAX_TOPIC_SHARE = 0.5;
 async function applyDiversityConstraint(proposal, getRecentAccepts) {
@@ -926,8 +926,15 @@ var REENTRY_BATCH = 20, CONSUME_SIGNALS = 2, CONSUME_QUESTIONS = 3, PROPOSAL_BAC
 // out stays where it is (signals new, ask_events uncovered, the note unseen) for the next cycle. An unreadable count leaves the
 // producers as they were.
 var PROPOSAL_FILL_TO = 25;
+// PROPOSAL-COOLING-1 (1.14.3, agent_issues 1000244): the proposals that await triage, as one WHERE clause shared by every backpressure and room
+// count below (proposalRoom, runConsume, runOwnerCorpus, thinkLoop, runAskGap). A row IDEA-SCORING-POISON-1 could not score carries a
+// "[scoring-error N ISO]" marker in rationale and stays in 'new': it waits for a model that can read it, not for triage capacity, and from its
+// third failure triage tries it once a day. On 2026-10-26 24 of the 33 'new' rows carried the marker, which held the count above
+// PROPOSAL_BACKPRESSURE (30) and left runConsume paused and every producer without room. A marked row is not counted here; triage still
+// selects and scores it on its own schedule (that query is unchanged), and it counts again once a score replaces the marker.
+var PROPOSAL_PENDING_WHERE = "status IN ('new', 'deferred_budget') AND COALESCE(rationale, '') NOT LIKE '%[scoring-error%'";
 async function proposalRoom(env) {
-  var p = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('new', 'deferred_budget')").first().catch(function (e) { console.error("idea-hub proposalRoom: " + String(e && e.message || e).slice(0, 160)); return null; });
+  var p = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE " + PROPOSAL_PENDING_WHERE).first().catch(function (e) { console.error("idea-hub proposalRoom: " + String(e && e.message || e).slice(0, 160)); return null; });
   return p ? PROPOSAL_FILL_TO - Number(p.n) : null;
 }
 // REENTRY-RESCORE-1 (1.3.1): the 1.2.0 port dropped qnfo-signal-loop's re-score leg, so a signal emitted with no
@@ -957,6 +964,7 @@ var REENTRY_NOQ_TTL_H = 20, REENTRY_TTL_DAYS = 7, REENTRY_EXPIRE_BATCH = 50;
 var PAPER_KEY_SQL = "COALESCE(NULLIF(doi, ''), slug)";
 var REENTRY_OWNER_TYPES = ["slug", "doi", "internal", "owner", "zen" + "odo"];
 var REENTRY_OWNER_DOI_MAX = 5000; // growth bound for the owner-pipeline DOI list (one JSON parameter, see runReentry), not a bind limit
+var REENTRY_SCAN_LIMIT = 500; // papers one run reads (newest first); a run that reaches it says so in out.scan_capped
 // The owner-only re-entry has its own boundary row, so the pre-1.7.0 code (which still reads 'artifact_reentry', paused by
 // OWNER-NARROW-SIGNAL-1) can never resume the arXiv-wide scan if a deploy lags the migration that opens this one.
 var REENTRY_BOUNDARY_SOURCE = "artifact_reentry_owner";
@@ -994,9 +1002,10 @@ async function runReentry(env) {
     // this query once the owner pipeline passed 95 DOIs (201 on 2026-10-26). The DOIs are now ONE bound parameter, a JSON array
     // read by json_each(?) (D1 supports json_each), so the statement binds REENTRY_OWNER_TYPES.length (5) + 1 parameters at any
     // DOI count; the five identifier types stay one "?" each. The old slice(0, 200) is gone because it dropped, unordered and
-    // silently, every owner paper past the 200th as the pipeline grows. REENTRY_OWNER_DOI_MAX is only a growth bound (5000
-    // DOIs is about 200 KB of JSON, far under D1's 2 MB value limit); the query's own LIMIT 500 still caps the papers read, and
-    // a truncation is reported in out.owner_dois_capped instead of passing unseen.
+    // silently, every owner paper past the 200th as the pipeline grows. REENTRY_OWNER_DOI_MAX is only a growth bound (a DOI is about
+    // 77 characters on 2026-10-26, so 5000 of them are about 400 KB of JSON, under D1's 2 MB value limit; the 100 KB statement
+    // limit does not apply to a bound value). The query's own LIMIT (REENTRY_SCAN_LIMIT, 500) still caps the papers read, newest
+    // first. Both cuts are reported, in out.owner_dois_capped and out.scan_capped, instead of passing unseen.
     var allOwn = await ownerPipelineDois(env);
     var ownDois = allOwn.slice(0, REENTRY_OWNER_DOI_MAX);
     out.owner_dois = ownDois.length;
@@ -1004,7 +1013,7 @@ async function runReentry(env) {
     // A failure here (living-paper or the signals read) must not stop the drain legs below, which read and write qnfo-audit
     // only: the emission is skipped for this run, the failure is counted and logged, and the drain still runs.
     try {
-      papers = (await env.LIVING_PAPER.prepare("SELECT " + PAPER_KEY_SQL + " AS doi, title FROM papers WHERE " + PAPER_KEY_SQL + " IS NOT NULL AND " + PAPER_KEY_SQL + " != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND (identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ")" + (ownDois.length ? " OR " + PAPER_KEY_SQL + " IN (SELECT value FROM json_each(?))" : "") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES, ...(ownDois.length ? [JSON.stringify(ownDois)] : [])).all()).results || [];
+      papers = (await env.LIVING_PAPER.prepare("SELECT " + PAPER_KEY_SQL + " AS doi, title FROM papers WHERE " + PAPER_KEY_SQL + " IS NOT NULL AND " + PAPER_KEY_SQL + " != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND (identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ")" + (ownDois.length ? " OR " + PAPER_KEY_SQL + " IN (SELECT value FROM json_each(?))" : "") + ") ORDER BY created_at DESC LIMIT " + REENTRY_SCAN_LIMIT).bind(...REENTRY_OWNER_TYPES, ...(ownDois.length ? [JSON.stringify(ownDois)] : [])).all()).results || [];
       have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
     } catch (e) {
       papers = []; have = new Set(); out.errors++;
@@ -1013,6 +1022,7 @@ async function runReentry(env) {
     }
   } else out.emit_paused = "signal_worker_boundary idea-hub/" + REENTRY_BOUNDARY_SOURCE + " not permitted";
   out.scanned = papers.length;
+  if (papers.length >= REENTRY_SCAN_LIMIT) out.scan_capped = true;
   var todo = papers.filter(function (p) { return !have.has(String(p.doi)); }).slice(0, REENTRY_BATCH);
   for (var i = 0; i < todo.length; i++) {
     var p = todo[i];
@@ -1103,7 +1113,7 @@ var REENTRY_NONOWNER_PER_DAY = 2, CONSUME_WINDOW = 20;
 var REENTRY_NONOWNER_MARK = "HOLD-RELEASE-REENTRY-1 non-owner";
 async function runConsume(env) {
   var out = { consumed: 0, proposals: 0, paused: false, errors: 0 };
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE " + PROPOSAL_PENDING_WHERE).first();
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
   var room = pending ? PROPOSAL_FILL_TO - Number(pending.n) : null; // PROPOSAL-HEADROOM-1
   if (room !== null && room <= 0) { out.paused = true; out.room = room; return out; }
@@ -1180,7 +1190,7 @@ async function shortHash(s) {
 async function runOwnerCorpus(env, deadline) {
   var out = { ok: true, picked: 0, proposed: 0, none: 0, short: 0, missing: 0, errors: 0, wall_cut: 0 };
   if (!env.VAULT) { out.ok = false; out.why = "VAULT binding absent"; return out; }
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE " + PROPOSAL_PENDING_WHERE).first();
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = "proposal backpressure"; return out; }
   var rq = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
   // OWNER-CORPUS-RATE-1 (1.8.1, agent_issues 2185): a full research_queue slows the leg to OWNER_CORPUS_SLOW_BATCH notes per
@@ -1236,7 +1246,7 @@ async function runOwnerCorpus(env, deadline) {
 var THINK_EVERY_H = 6;
 var THINK_MODEL = "@cf/zai-org/glm-5.3";
 async function thinkLoop(env) {
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE " + PROPOSAL_PENDING_WHERE).first();
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) return { ok: true, skipped: "backpressure" };
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
   var ai = await aiRunAttr(env, "idea-hub", "think", THINK_MODEL, { messages: [
@@ -1271,7 +1281,7 @@ async function thinkLoop(env) {
 var ASK_GAP_BATCH = 5;
 async function runAskGap(env) {
   var out = { ok: true, candidates: 0, inserted: 0, skipped: 0 };
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('new', 'deferred_budget')").first().catch(function () { return null; });
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE " + PROPOSAL_PENDING_WHERE).first().catch(function () { return null; });
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
   var room = pending ? PROPOSAL_FILL_TO - Number(pending.n) : null; // PROPOSAL-HEADROOM-1
   if (room !== null && room <= 0) { out.paused = true; out.room = room; return out; }
@@ -1288,6 +1298,20 @@ async function runAskGap(env) {
   }
   return out;
 }
+// REENTRY-EVENT-1 (1.14.3, agent_issues 1000244): scheduled() discards what ideationCycle returns, so the re-entry leg's own result was
+// visible only in Workers Logs, and the bind-limit throw of 1.14.1 and before ran for 7 days seen by nothing but the chaos drill. The latest
+// result of the leg is now one cloud_ops_events row, INSERT OR REPLACE on id 'idea-reentry' (the pattern of 'idea-triage-budget', no growth
+// per cycle), status 'error' when the leg threw (rr.error) or its emission block failed (rr.emit_error), else 'ok'. It never throws.
+async function recordReentryEvent(env, rr) {
+  try {
+    rr = rr || {};
+    var bad = !!(rr.error || rr.emit_error);
+    var meta = { version: VERSION, permitted: rr.permitted, scanned: rr.scanned, emitted: rr.emitted, emit_error: rr.emit_error || null, error: rr.error || null, owner_dois: rr.owner_dois, owner_dois_capped: rr.owner_dois_capped || null, scan_capped: !!rr.scan_capped, errors: rr.errors, rescored: rr.rescored, expired: rr.expired, expired_noq: rr.expired_noq, expired_stale: rr.expired_stale };
+    var text = "idea re-entry: " + (bad ? "FAILED (" + String(rr.error || rr.emit_error).slice(0, 160) + "); " : "") + (rr.scanned === undefined ? "no scan" : rr.scanned + " scanned, " + rr.emitted + " emitted");
+    await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-reentry', ?1, 'idea-reentry', ?2, ?3, 'idea-hub', ?4)")
+      .bind(new Date().toISOString(), text, JSON.stringify(meta), bad ? "error" : "ok").run();
+  } catch (e) { console.error(JSON.stringify({ worker: "idea-hub", where: "recordReentryEvent", error: String(e && e.message || e).slice(0, 300) })); }
+}
 async function ideationCycle(env) {
   // CRON-BUDGET-1 (2026-10-17): the hourly cycle ended exceededWallTime on 2 of 3 recent runs. Give the
   // cycle an explicit 240s wall budget and skip the later stages when the earlier ones consumed it, so the
@@ -1301,6 +1325,7 @@ async function ideationCycle(env) {
   var left = function () { return BUDGET_MS - (Date.now() - t0); };
   var r = { budget_ms: BUDGET_MS };
   try { r.reentry = await runReentry(env); } catch (e) { r.reentry = { error: String(e && e.message || e) }; console.error(JSON.stringify({ worker: "idea-hub", where: "ideationCycle.reentry", error: r.reentry.error })); }
+  await recordReentryEvent(env, r.reentry); // REENTRY-EVENT-1: the leg's result outlives the cycle, success or failure
   if (left() > 30000) { try { r.consume = await runConsume(env); } catch (e) { r.consume = { error: String(e && e.message || e) }; } } else r.consume = { skipped: "budget" };
   if (left() > 30000) { try { r.askgap = await runAskGap(env); } catch (e) { r.askgap = { error: String(e && e.message || e) }; } } else r.askgap = { skipped: "budget" };
   if (left() > 60000) { try { r.corpus = await runOwnerCorpus(env, WALL_DEADLINE); } catch (e) { r.corpus = { error: String(e && e.message || e) }; } } else r.corpus = { skipped: "budget" };
