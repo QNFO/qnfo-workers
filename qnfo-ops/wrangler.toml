@@ -203,6 +203,13 @@ bucket_name = "qnfo-backups"
 binding = "SKILLS_R2"
 bucket_name = "qnfo-skills"
 
+# CANONICAL-REFRESH-1 (2.59.4, agent_issues 1000161): /ops/deploy writes qnfo-canonical/<worker>.js after a deploy whose /health version
+# matches the requested one, so the artifact that the heal and drift paths re-assert is never older than live. The canonical deploy installs
+# declared bindings; while this one is absent the route skips the write and records a canonical_refresh row with status skipped.
+[[r2_buckets]]
+binding = "CANONICAL"
+bucket_name = "qnfo-canonical"
+
 # KV (key read via kv_get)
 [[kv_namespaces]]
 binding = "EQCACHE_KV"
