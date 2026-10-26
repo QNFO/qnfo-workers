@@ -696,6 +696,13 @@ async function cmdAgent(env, verb, commandText, kind) {
     const tok = String(env.COMMAND_TOKEN || "");
     if (text.indexOf(tok) < 0) return { ok: false, error: "COMMAND_TOKEN required for action commands (append the token to your message)" };
   }
+  // BP26-PROMPT-INJECTION-1: this text goes to ops-exec, an agent with tools. Hidden characters are removed, and a text that carries instruction-injection markers is refused, never passed on.
+  const cscan = injScan(text);
+  if (cscan.score >= 3) {
+    if (env.AUDIT_DB) await injTrace(env.AUDIT_DB, { surface: "email-command", goal: "ops-exec passthrough", steps: ["scan", "refused"], score: cscan.score, hits: cscan.hits, decision: "refused", detail: "command text carries injection markers" });
+    return { ok: false, error: "command refused: the text carries instruction-injection markers (" + cscan.hits.join(", ") + "); type the command again in your own words" };
+  }
+  const cleanText = injSanitizeInbound(text, 4000);
   const key = env.OPS_KEY || "";
   if (!key && !env.OPS) return { ok: false, error: "OPS_KEY not configured on qnfo-email; agent passthrough disabled" };
   let j = null, lastErr = "";
@@ -704,7 +711,7 @@ async function cmdAgent(env, verb, commandText, kind) {
       const res = await opsFetch("/v1/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (key || "internal") },
-        body: JSON.stringify({ model: "ops-exec", messages: [{ role: "user", content: text }] })
+        body: JSON.stringify({ model: "ops-exec", messages: [{ role: "user", content: cleanText }] })
       }, env);
       const txt = await res.text();
       if (res.status === 202) { try { j = JSON.parse(txt); } catch (e) { j = null; } }
