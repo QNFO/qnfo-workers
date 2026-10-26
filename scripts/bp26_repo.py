@@ -55,7 +55,9 @@ from bp26_producers import Collector, Result  # noqa: E402
 
 CF_ACCOUNT_ENV = ("CF_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID")
 D1_LIMIT_BYTES = 10 * 1000 ** 3
-BOOKMARK_BATCH = 200
+BOOKMARK_BATCH = 300
+BOOKMARK_THREADS = 6
+BOOKMARK_BUDGET_S = 100
 BOOKMARK_LEAD_S = 120
 RETENTION_DAYS = 29  # Time Travel keeps 30 days; one day of margin so a fetch never lands on the edge
 EXPIRY_WARN_DAYS = 14
@@ -448,7 +450,7 @@ def collect_d1_size_and_drill(ctx):
             out.append(Result("d1_restore_drill_age_days", days, "newest passing restore drill %s (%d drills recorded)" % (str(lp)[:19], n), [("d1_restore_drills", 1, "last pass %s" % str(lp)[:19])]))
         else:
             out.append(Result("d1_restore_drill_age_days", None,
-                              "no restore drill has passed (%d recorded): the age is unknown, not zero; the drill protocol is docs/KILL-SWITCH-DRILL.md style work for the owning loop" % n,
+                              "no restore drill has passed (%d recorded): the age is unknown, not zero; the drill itself is not built (a code-task: export at a bookmark, import into a scratch database, compare counts, delete only that scratch database)" % n,
                               [("d1_restore_drills", None, "no passing drill")]))
     except Exception as e:  # noqa: BLE001
         out.append(Result("d1_restore_drill_age_days", None, "d1_restore_drills unreadable: " + str(e)[:100], []))
@@ -460,6 +462,15 @@ def iso_minus(iso, seconds):
     return datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _fetch_bookmark(ctx, acct, dbid, ts):
+    """(bookmark, error token) for the Time Travel restore point of one database at one timestamp."""
+    try:
+        r = ctx.cf("/accounts/%s/d1/database/%s/time_travel/bookmark?timestamp=%s" % (acct, dbid, ts))
+        return ((r.get("result") or {}).get("bookmark")) or "", None
+    except Exception as e:  # noqa: BLE001
+        return "", str(e)[:60]
+
+
 def collect_migration_bookmarks(ctx):
     acct = account_id()
     cutoff = datetime.datetime.fromtimestamp(ctx.now - RETENTION_DAYS * 86400, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -468,34 +479,46 @@ def collect_migration_bookmarks(ctx):
                       [cutoff, BOOKMARK_BATCH])
     except Exception as e:  # noqa: BLE001
         return [Result("pre_migration_bookmark_recorded", None, "migration_runs.bookmark is not readable yet (migration 2026-10-26-bp26-repo.sql not applied?): " + str(e)[:100], [])]
-    recorded, failed, ids = 0, {}, {}
+    recorded, would, failed, ids = 0, 0, {}, {}
     if todo and acct:
         try:
             ids = {n: i for n, i, _ in d1_list(ctx, acct)}
         except Exception as e:  # noqa: BLE001
             failed["d1-list"] = str(e)[:80]
+        jobs = []
         for row in todo:
-            if ctx.left() < 25:
-                break
             dbid = ids.get(row.get("db") or "qnfo-audit")
             if not dbid:
-                failed["no-db:" + str(row.get("db"))] = 1
+                failed["no-db:" + str(row.get("db"))] = failed.get("no-db:" + str(row.get("db")), 0) + 1
                 continue
-            ts = iso_minus(row["applied_at"], BOOKMARK_LEAD_S)
-            try:
-                r = ctx.cf("/accounts/%s/d1/database/%s/time_travel/bookmark?timestamp=%s" % (acct, dbid, ts))
-                bm = ((r.get("result") or {}).get("bookmark")) or ""
-            except Exception as e:  # noqa: BLE001
-                failed[str(e)[:60]] = failed.get(str(e)[:60], 0) + 1
-                continue
-            if not bm:
-                continue
-            try:
-                ctx.d1("UPDATE migration_runs SET bookmark = ?1, bookmark_source = 'time-travel-at(applied_at-120s)' WHERE id = ?2 AND (bookmark IS NULL OR bookmark = '')", [bm, row["id"]])
-                recorded += 1
-            except Exception as e:  # noqa: BLE001
-                failed["write: " + str(e)[:60]] = 1
-                break
+            jobs.append((row, dbid, iso_minus(row["applied_at"], BOOKMARK_LEAD_S)))
+        # Time Travel answers a past timestamp in about 1.6 s, so the reads run in parallel, a chunk at a time, inside a wall-clock budget that leaves the run's other collectors their time.
+        t_end = time.time() + min(BOOKMARK_BUDGET_S, max(0.0, ctx.left() - 25))
+        stop = False
+        step = max(1, BOOKMARK_THREADS * 3)
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max(1, BOOKMARK_THREADS)) as ex:
+            for i in range(0, len(jobs), step):
+                if stop or time.time() > t_end:
+                    break
+                chunk = jobs[i:i + step]
+                got = list(ex.map(lambda j: _fetch_bookmark(ctx, acct, j[1], j[2]), chunk))
+                for (row, _dbid, _ts), (bm, err) in zip(chunk, got):
+                    if err:
+                        failed[err] = failed.get(err, 0) + 1
+                        continue
+                    if not bm:
+                        continue
+                    if ctx.dry:  # a dry run reads Time Travel but writes nothing to the ledger
+                        would += 1
+                        continue
+                    try:
+                        ctx.d1("UPDATE migration_runs SET bookmark = ?1, bookmark_source = 'time-travel-at(applied_at-120s)' WHERE id = ?2 AND (bookmark IS NULL OR bookmark = '')", [bm, row["id"]])
+                        recorded += 1
+                    except Exception as e:  # noqa: BLE001
+                        failed["write: " + str(e)[:60]] = 1
+                        stop = True
+                        break
     window = datetime.datetime.fromtimestamp(ctx.now - 30 * 86400, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         r = ctx.d1("SELECT COUNT(*) AS n, SUM(CASE WHEN bookmark IS NOT NULL AND bookmark <> '' THEN 1 ELSE 0 END) AS b FROM migration_runs WHERE status = 'ok' AND applied_at >= ?1", [window])
@@ -506,7 +529,8 @@ def collect_migration_bookmarks(ctx):
         return [Result("pre_migration_bookmark_recorded", None, "no migration was applied in the last 30 days", [])]
     return [Result("pre_migration_bookmark_recorded", b / float(n),
                    "%d of %d migrations applied in the last 30 days carry a Time Travel bookmark (this run recorded %d of the newest %d without one, taken at applied_at minus %d s; apply-time capture in "
-                   "scripts/apply_migrations.py is a pending code-task)%s" % (b, n, recorded, len(todo), BOOKMARK_LEAD_S, "; failures: " + json.dumps(failed)[:160] if failed else ""),
+                   "scripts/apply_migrations.py is a pending code-task)%s%s" % (b, n, recorded, len(todo), BOOKMARK_LEAD_S, "; failures: " + json.dumps(failed)[:160] if failed else "",
+                                                                              "; dry run: %d bookmarks fetched, none stored" % would if ctx.dry else ""),
                    [("migration_runs", 1 if b == n else 0, "%d with bookmark, %d without" % (b, n - b))])]
 
 
@@ -522,6 +546,7 @@ COLLECTORS = [
 
 # ---------------------------------------------------------------- selftest
 def selftest():
+    global BOOKMARK_THREADS
     import shutil
     import sqlite3
     import tempfile
@@ -666,11 +691,22 @@ INSERT INTO credential_registry VALUES ('no-date', 'x', 'k', NULL, NULL, 'self',
         c.execute("INSERT INTO d1_restore_drills (ts, outcome) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 days'), 'fail')")
         res = {r.metric: r for r in collect_d1_size_and_drill(P.Ctx(d1=d1, cf=cf2, root=root, now=time.time()))}
         ok(res["d1_restore_drill_age_days"].value in (8, 9), "age counts from the newest PASS, not the newest drill: %r" % res["d1_restore_drill_age_days"].value)
-        # bookmarks
+        # bookmarks (one thread: the fake API below fails its third call, which must be deterministic)
+        BOOKMARK_THREADS = 1
         for i in range(6):
             c.execute("INSERT INTO migration_runs (file, db, status, applied_at) VALUES (?, 'qnfo-audit', 'ok', strftime('%Y-%m-%dT%H:%M:%SZ','now', ?))", ["m%d.sql" % i, "-%d hours" % (i + 1)])
         c.execute("INSERT INTO migration_runs (file, db, status, applied_at) VALUES ('old.sql', 'qnfo-audit', 'ok', strftime('%Y-%m-%dT%H:%M:%SZ','now','-35 days'))")
         c.execute("INSERT INTO migration_runs (file, db, status, applied_at) VALUES ('bad.sql', 'qnfo-audit', 'error', strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours'))")
+        dry_calls = []
+
+        def cf_dry(path):
+            if "/d1/database?" in path:
+                return {"result": [{"name": "qnfo-audit", "uuid": "uuid-audit", "file_size": 1}]}
+            dry_calls.append(path)
+            return {"result": {"bookmark": "bm-dry"}}
+        rd = collect_migration_bookmarks(P.Ctx(d1=d1, cf=cf_dry, root=root, now=time.time(), dry=True))[0]
+        ok(d1("SELECT COUNT(*) AS n FROM migration_runs WHERE bookmark IS NOT NULL")[0]["n"] == 0 and len(dry_calls) == 6 and "dry run: 6 bookmarks fetched, none stored" in rd.note,
+           "a dry run fetches the bookmarks and stores none: %r %r" % (len(dry_calls), rd.note[-80:]))
         asked = []
 
         def cf3(path):
@@ -689,6 +725,16 @@ INSERT INTO credential_registry VALUES ('no-date', 'x', 'k', NULL, NULL, 'self',
         ok(d1("SELECT bookmark_source FROM migration_runs WHERE bookmark IS NOT NULL LIMIT 1")[0]["bookmark_source"] == "time-travel-at(applied_at-120s)", "the method is recorded on the row")
         r2 = collect_migration_bookmarks(P.Ctx(d1=d1, cf=cf3, root=root, now=time.time()))[0]
         ok(abs(r2.value - 1.0) < 1e-9, "the next run records the one that failed and the figure reaches 1.0: %r" % r2.value)
+        BOOKMARK_THREADS = 4  # the parallel path: only the API reads run in threads, the ledger writes stay on the calling thread
+        for i in range(7):
+            c.execute("INSERT INTO migration_runs (file, db, status, applied_at) VALUES (?, 'qnfo-audit', 'ok', strftime('%Y-%m-%dT%H:%M:%SZ','now', ?))", ["p%d.sql" % i, "-%d hours" % (i + 10)])
+
+        def cf4(path):
+            if "/d1/database?" in path:
+                return {"result": [{"name": "qnfo-audit", "uuid": "uuid-audit", "file_size": 1}]}
+            return {"result": {"bookmark": "bm-par-" + path.rsplit("=", 1)[1]}}
+        r3 = collect_migration_bookmarks(P.Ctx(d1=d1, cf=cf4, root=root, now=time.time()))[0]
+        ok(abs(r3.value - 1.0) < 1e-9 and d1("SELECT COUNT(*) AS n FROM migration_runs WHERE bookmark LIKE 'bm-par-%'")[0]["n"] == 7, "the parallel path records all seven: %r" % r3.value)
         ok(iso_minus("2026-10-26T12:00:30Z", 120) == "2026-10-26T11:58:30Z", "iso_minus")
         # framework integration: collectors discovered with the right metrics
         cols = {x.name: x for x in COLLECTORS}
