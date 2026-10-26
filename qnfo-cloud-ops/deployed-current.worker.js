@@ -3946,7 +3946,7 @@ __name(jobResearchExecWatchdog, "jobResearchExecWatchdog");
 // "BREACH-DOCTOR-1: doctor stalled (watch)" with a d1-query contract (tick age <= 15 minutes) that the existing remediation flow closes on recovery.
 // Bounds: no model call; four D1 calls at most per run (one read, the metric update, one atomic batch of issue + contract + event when it files, or the heartbeat row); one issue
 // per 120 minutes (SLA-120M-1: the stall window is 30 minutes, the filing gap 120); single flight inside the isolate and, across isolates, in the SQL guards of the INSERTs.
-// Tolerant of a deploy that lands before the doctor migration: a missing breach_diagnosis_events table is a skipped run that writes nothing, and so is ops_config breach_doctor = off
+// Tolerant of a missing ledger (a deploy that lands before the doctor migration, or a failed or rolled-back one; the live table has existed since 2026-10-26T10:22Z): a missing breach_diagnosis_events table is a skipped run that writes nothing, and so is ops_config breach_doctor = off
 // (the doctor's own tri-state: off | measure | on, a missing value means measure). Nothing is copied out of free text: the issue holds a constant, two numbers, an ISO ts and the mode.
 var BREACH_DOCTOR_WATCH_STALE_MIN = 30;
 var BREACH_DOCTOR_WATCH_LATE_MIN = 15;

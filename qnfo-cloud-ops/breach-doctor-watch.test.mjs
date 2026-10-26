@@ -217,7 +217,7 @@ const COUNTS = "SELECT (SELECT COUNT(*) FROM agent_issues) a, (SELECT COUNT(*) F
   const db = world({ cfg: "on", noLedger: true });
   const before = one(db, COUNTS);
   const { out, stats } = await run(db);
-  check(out.status === "ok" && out.skipped === "ledger-missing" && out.notes.skipped === "ledger-missing", "missing breach_diagnosis_events: skipped, status ok (a deploy can land before the migration)", out);
+  check(out.status === "ok" && out.skipped === "ledger-missing" && out.notes.skipped === "ledger-missing", "missing breach_diagnosis_events: skipped, status ok (a failed or rolled-back doctor migration, or a deploy that lands before it; the live table has existed since 2026-10-26T10:22Z)", out);
   check(JSON.stringify(one(db, COUNTS)) === JSON.stringify(before) && stats.calls === 1, "and nothing was written (one read, no metric, no event, no issue)", { calls: stats.calls });
 }
 for (const off of ["off", "OFF", "0", "disabled"]) {
