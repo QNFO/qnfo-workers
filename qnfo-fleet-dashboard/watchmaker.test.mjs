@@ -13,6 +13,7 @@
 // WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
 // GRANT-FOLLOWUP-HONEST-1: a grant-followup run that left a mailbox unread is dated as a run and counted with its reason
 // (gmail_pass_unset, errors) until a full read; only no run at all reads "never ran".
+// WATCHMAKER-RESEARCH-REPO-SYNC-1: the research record sync of qnfo-research-exec reads the updated_at of its ops_config cursor row (never ran, stalled after 2h, fresh).
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -169,6 +170,17 @@ const op = (m, k) => m.ops.find((o) => o.key === k);
   db.prepare("UPDATE cron_fire_log SET fired_at = ? WHERE task_id = 'qnfo-gateway' AND cron_expr = '0 * * * *'").run(ago(0.4));
   const fresh = op(await api.watchmakerMeasure(env, NOW), "reader-report");
   ok(fresh && !fresh.counted && /^ok, last run 0.4h ago$/.test(fresh.state), "a fresh reader-report sweep clears the stall");
+}
+{ // WATCHMAKER-RESEARCH-REPO-SYNC-1: qnfo-research-exec repoSyncTick rewrites ops_config research_repo_sync_cursor each time it advances; that row's updated_at dates the run.
+  const wm = (h) => new Date(NOW - h * 36e5).toISOString().slice(0, 19).replace("T", " ");
+  const never = op(await api.watchmakerMeasure(env, NOW), "research-repo-sync");
+  ok(never && never.counted && never.state === "never ran" && never.runner === "cron:qnfo-research-exec", "a research repo sync whose cursor never moved counts as never ran (" + (never && never.state) + ")");
+  db.prepare("INSERT OR REPLACE INTO ops_config (key, value, note, updated_at) VALUES ('research_repo_sync_cursor', 'a-paper-slug', '', ?)").run(wm(3));
+  const stale = op(await api.watchmakerMeasure(env, NOW), "research-repo-sync");
+  ok(stale && stale.counted && stale.state === "stalled: last run 3h ago, cadence 1h", "a research repo sync silent for 3h counts as stalled (" + (stale && stale.state) + ")");
+  db.prepare("UPDATE ops_config SET updated_at = ? WHERE key = 'research_repo_sync_cursor'").run(wm(0.4));
+  const fresh = op(await api.watchmakerMeasure(env, NOW), "research-repo-sync");
+  ok(fresh && !fresh.counted && /^ok, last run 0.4h ago$/.test(fresh.state), "a research repo sync that advanced 24 minutes ago is ok (" + (fresh && fresh.state) + ")");
 }
 let m = await api.watchmakerMeasure(env, NOW);
 { const ce = op(m, "compat-exposure"); ok(ce && !ce.counted && ce.runner === "cron:qnfo-ops", "compat-exposure is listed, run by qnfo-ops, not counted when fresh (COMPAT-WATCHMAKER-1, " + (ce && ce.state) + ")"); }
