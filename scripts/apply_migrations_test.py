@@ -40,10 +40,12 @@ db = sqlite3.connect(":memory:")
 db.execute("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER)")
 db.execute("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT)")
 calls = []
+paths = []
 
 
 def fake_call(method, path, token, body=None, timeout=60):
     calls.append(body["sql"][:60])
+    paths.append((path, body["sql"][:60]))
     sql = body["sql"]
     params = body.get("params") or []
     q = __import__("re").sub(r"\?(\d+)", lambda m: ":p" + m.group(1), sql)
@@ -88,7 +90,7 @@ ok(rc == 0 and db.execute("SELECT COUNT(*) FROM migration_runs WHERE file = 'mig
 
 # 4. Header refusals, before any D1 call.
 n0 = len(calls)
-bad_db = GOOD.replace("-- DB: qnfo-audit", "-- DB: living-paper")
+bad_db = GOOD.replace("-- DB: qnfo-audit", "-- DB: no-such-db")
 ok(M.apply_file("migrations/x.sql", bad_db, "a", "t", "c", emit) == 1 and "DB header" in out[-1] and len(calls) == n0, "an unknown DB is refused without touching D1", out[-1])
 no_rb = GOOD.replace("-- Rollback: DELETE FROM ops_config WHERE key IN ('a', 'b;c');\n", "")
 ok(M.apply_file("migrations/x.sql", no_rb, "a", "t", "c", emit) == 1 and "Rollback" in out[-1] and len(calls) == n0, "a file without a Rollback line is refused", out[-1])
@@ -1024,6 +1026,16 @@ script_text = open(os.path.join(HERE, "apply_migrations.py"), encoding="utf-8").
 markers = [json.loads(r[0])["contains"] for r in reg.execute("SELECT verify_probe FROM remediation_contracts")]
 ok(len(markers) == 3 and all(m in script_text for m in markers), "every code-probe marker the migration registers occurs in scripts/apply_migrations.py", markers)
 ok("BACKUP-SCHEMA-ONLY-1" in script_text and "APPLY-MIGRATIONS-LINT-1" in script_text, "the markers named in the issue's closing code-probe are in the script")
+
+# MIGRATION-LIVING-PAPER-1: a living-paper file runs its statements on living-paper and keeps the ledger in qnfo-audit.
+LIVING = GOOD.replace("-- DB: qnfo-audit", "-- DB: living-paper").replace("'x; y'", "'living'")
+del paths[:]
+rc = M.apply_file("migrations/living.sql", LIVING, "a", "t", "c9", emit)
+lid, aid = M.DATABASES["living-paper"], M.DATABASES["qnfo-audit"]
+stmt_paths = [pp for pp, sq in paths if sq.startswith("INSERT OR REPLACE INTO ops_config")]
+ledger_paths = [pp for pp, sq in paths if "migration_runs" in sq]
+ok(rc == 0 and stmt_paths and all(lid in pp for pp in stmt_paths), "a living-paper file runs its statements on living-paper", stmt_paths)
+ok(ledger_paths and all(aid in pp for pp in ledger_paths), "and records migration_runs in qnfo-audit", ledger_paths)
 
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
