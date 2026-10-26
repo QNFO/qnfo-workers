@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.71.4";
+var VERSION = "1.72.0";
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
 /* 1.71.1 PSR-NARRATIVE-CAP-SOFT-1 (2026-10-26, agent_issues 1000409, pillar cost; patch): the weekly program-strategic review writes its narrative at a breached ai_spend cap and when the budget cannot be read, on the free Workers AI model only (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06: a breached cap steers model choice and never stops work); the result carries narrative_tier (normal | lean) and narrative_count in place of narrative_allowed, and the summary names the tier. */
 /* 1.71.0 ONE-TAP-DECISIONS-1 (2026-10-26, pillar autonomy; minor: Approve and Decline run at the tap; owner request "I need one click/tap actions: approve, etc ... action oriented, at a glance, one tap", about the 100140 card whose Approve a phone could not tap): on a decision card the owner's Approve and Decline (the whole card, the undecided rest, or one numbered item) are buttons that carry their op and args (data-dec-op, data-dec-args) and DEC_JS posts them to /api/cmd/run at the tap and writes the answer on the card, with no typed-command preview and no second confirm tap; when the session is missing or the 15-minute step-up has lapsed the card asks for the emailed code in place (the code is sent at once, the tap repeats on Verify), so the approve stays the owner-session's own, still needs a code from the last 15 minutes and is still refused for the loop token and for a card that matches a hard marker; Diagnose and Done stay typed commands; the owner's decision card opens with its buttons (52 px on a phone) and folds the seven parts and the Why / If you wait / To do reading under them, a card that asks for a step only the owner can take keeps its reading open; a signed-out visitor gets ONE "Email me a code to decide" button (the code is emailed at once and the page reloads once it is verified; OPEN-ACCESS-1 keeps the words sign in off the public page) on a card that asks for a decision and still no decision button, item text or owner script (T14, T24 unchanged in that); on / and /classic; ONE-TAP-ACTIONS-1 in the same release: on the home page a card that is not a decision (and a derived item) carries one-tap Done, Snooze 3 and 7 days and Not doing (the same /api/cmd/run, so the fresh-code rule for done and dismiss stands) instead of an "Act on it" link to /classic, the owner's cards that can be decided in one tap come first (urgent before them) under a heading that says how the list splits, a hard card's Done is a tap too, and a stranger still sees "Act on it"; on /classic the same taps replace the confirm-dialog buttons of a card that is not a decision (the decision card keeps its row); offline suite cmd-decide.test.mjs T30-T36 (443 checks), fleet-cmd G19 accepts the tap; a Chromium run on a 390 px viewport tapped Approve, the code step and the sign-in button. */
@@ -3222,7 +3222,10 @@ if (path === "/health") {
       return json(await ga4Ingest(env, { day: dG, force: url.searchParams.get("force") === "1" }));
     }
     const rowsG = await d1all(env.AUDIT, "SELECT id, ts, status, text FROM cloud_ops_events WHERE kind = 'ga4-ingest' ORDER BY id DESC LIMIT 14").catch(function() { return []; });
-    return rtRead(request, url, { ok: true, version: VERSION, key_present: !!env.GA4_SA_KEY, runs: rowsG }, { schema: "ga4/v1" });
+    // INTEG-GSC-1: the service account address (an identifier, not a credential: it is the user the owner adds in Analytics and Search Console) and the Search Console runs.
+    const rowsGsc = await d1all(env.AUDIT, "SELECT id, ts, status, text FROM cloud_ops_events WHERE kind = 'gsc-ingest' ORDER BY id DESC LIMIT 7").catch(function() { return []; });
+    const saKey = ga4ParseKey(env.GA4_SA_KEY);
+    return rtRead(request, url, { ok: true, version: VERSION, key_present: !!env.GA4_SA_KEY, sa_email: saKey ? saKey.email : null, runs: rowsG, gsc_runs: rowsGsc }, { schema: "ga4/v1" });
   }
   // PORTFOLIO-STRATEGIC-1 routes (2026-10-25): manual trigger for the strategic review (loop-token gated
   // when LOOP_TOKEN is set) and a public read of the latest review notes + runs.
@@ -5257,10 +5260,10 @@ function ga4ParseKey(raw) {
   if (!k || !k.client_email || !k.private_key) return null;
   return { email: String(k.client_email), pem: String(k.private_key).replace(/\\n/g, "\n"), tokenUri: String(k.token_uri || "https://oauth2.googleapis.com/token") };
 }
-async function ga4AccessToken(key, nowMs) {
+async function ga4AccessToken(key, nowMs, scope) {
   const iat = Math.floor((nowMs || Date.now()) / 1000);
   const head = ga4B64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claim = ga4B64url(JSON.stringify({ iss: key.email, scope: GA4_SCOPE, aud: key.tokenUri, iat, exp: iat + 3600 }));
+  const claim = ga4B64url(JSON.stringify({ iss: key.email, scope: scope || GA4_SCOPE, aud: key.tokenUri, iat, exp: iat + 3600 }));
   const signingInput = head + "." + claim;
   const ck = await crypto.subtle.importKey("pkcs8", ga4PemToDer(key.pem), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const sig = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", ck, new TextEncoder().encode(signingInput)));
@@ -5410,6 +5413,90 @@ async function ga4Ingest(env, opts) {
     console.error(JSON.stringify({ worker: NAME, where: "ga4Ingest:ledger", error: reachErr(e) }));
   }
   if (out.error) console.error(JSON.stringify({ worker: NAME, where: "ga4Ingest", day, error: out.error }));
+  return out;
+}
+// ==== INTEG-GSC-1 (1.72.0, agent_issues 2924): Google Search Console, read-only ====
+// The same service account as GA4 (GA4_SA_KEY) with the scope webmasters.readonly reads searchAnalytics.query for one complete UTC day:
+// the site total, the pages and the top queries, into reach_signals source gsc (channel search; metrics clicks, impressions, ctr,
+// position). Search Console data lags about two days, so the day read is GSC_LAG_DAYS back. The service account has to be a user of
+// the property (only its owner can add it: owner card gsc-service-account-user) and the Search Console API has to be enabled in
+// its Google Cloud project; until then Google answers 403 and the ledger row gsc-ingest-<day> says so (status denied, one attempt
+// a day) and no number is written. Property: ops_config gsc_site_url, else the domain property of the site.
+var GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
+var GSC_DEFAULT_SITE = "sc-domain:qnfo.org";
+var GSC_LAG_DAYS = 3;
+var GSC_PAGE_ROWS = 200;
+var GSC_QUERY_ROWS = 100;
+async function gscQuery(token, site, body) {
+  const r = await fetch("https://www.googleapis.com/webmasters/v3/sites/" + encodeURIComponent(site) + "/searchAnalytics/query", { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+  const j = await r.json().catch(function() { return {}; });
+  if (!r.ok) {
+    const detail = j.error ? [j.error.status, j.error.message].filter(Boolean).join(": ") : "";
+    const e = new Error("searchAnalytics " + r.status + " " + String(detail).slice(0, 120));
+    e.status = r.status;
+    throw e;
+  }
+  return j;
+}
+// Pure: the reach_signals rows one searchAnalytics answer yields (keys[0] is the page or the query; the site total has no key).
+function gscRows(day, report, entityType) {
+  const rows = [];
+  for (const row of (report && report.rows) || []) {
+    const id = String((row.keys && row.keys[0]) || (entityType === "site" ? "(all)" : "")).trim().toLowerCase();
+    if (!id) continue;
+    for (const m of ["clicks", "impressions", "ctr", "position"]) {
+      const v = Number(row[m]);
+      if (Number.isFinite(v)) rows.push(reachRow(day, "gsc", "search", entityType, id.slice(0, 200), m, v, "human"));
+    }
+  }
+  return rows;
+}
+async function gscIngest(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  const day = opts.day || reachShiftDay(reachYesterday(nowMs), -(GSC_LAG_DAYS - 1));
+  const evId = "gsc-ingest-" + day;
+  const prev = await d1all(env.AUDIT, "SELECT status FROM cloud_ops_events WHERE id = ?", [evId]);
+  if (prev.length && !opts.force) return { throttled: day, status: prev[0].status };
+  const out = { day, written: 0, site: null, error: null };
+  let denied = false;
+  try {
+    const key = ga4ParseKey(env.GA4_SA_KEY);
+    if (!key) throw new Error(env.GA4_SA_KEY ? "GA4_SA_KEY is not a service-account JSON key" : "GA4_SA_KEY not set");
+    let site = GSC_DEFAULT_SITE;
+    try { const c = await d1all(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'gsc_site_url'"); if (c.length && String(c[0].value).trim()) site = String(c[0].value).trim(); } catch (e) { console.log(JSON.stringify({ worker: NAME, where: "gscIngest:site", note: reachErr(e) })); }
+    out.site = site;
+    const token = await ga4AccessToken(key, nowMs, GSC_SCOPE);
+    const range = { startDate: day, endDate: day };
+    const total = await gscQuery(token, site, Object.assign({ rowLimit: 1 }, range));
+    const pages = await gscQuery(token, site, Object.assign({ dimensions: ["page"], rowLimit: GSC_PAGE_ROWS }, range));
+    const queries = await gscQuery(token, site, Object.assign({ dimensions: ["query"], rowLimit: GSC_QUERY_ROWS }, range));
+    const rows = gscRows(day, total, "site").concat(gscRows(day, pages, "page"), gscRows(day, queries, "query"));
+    for (let i = 0; i < rows.length; i += 12) {
+      const chunk = rows.slice(i, i + 12);
+      const binds = [];
+      const vals = chunk.map(function(r) { binds.push(r.date, r.source, r.channel, r.entity_type, r.entity_id, r.metric, r.value, r.quality); return "(?,?,?,?,?,?,?,?)"; });
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES " + vals.join(",")).bind(...binds).run();
+    }
+    out.written = rows.length;
+    out.pages = (pages.rows || []).length;
+    out.queries = (queries.rows || []).length;
+  } catch (e) {
+    out.error = reachErr(e);
+    denied = !!(e && (e.status === 403 || e.status === 401));
+  }
+  // A day with no search traffic is "empty" (nothing to write), a refusal is "denied" and names the step that fixes it.
+  const status = out.error ? (denied ? "denied" : "error") : (out.written > 0 ? "ok" : "empty");
+  out.status = status;
+  const text = out.error
+    ? "GSC ingest " + day + " " + status + ": " + out.error + (denied ? " (the service account is not a user of " + out.site + ", or the Search Console API is not enabled in its Google Cloud project: owner card gsc-service-account-user)" : "")
+    : "GSC ingest " + day + ": " + out.written + " rows (" + (out.pages || 0) + " pages, " + (out.queries || 0) + " queries) from " + out.site;
+  try {
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'gsc-ingest', ?3, ?4, 'qnfo-fleet-dashboard', ?5)").bind(evId, new Date(nowMs).toISOString(), text, JSON.stringify(out), status).run();
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "gscIngest:ledger", error: reachErr(e) }));
+  }
+  if (out.error) console.error(JSON.stringify({ worker: NAME, where: "gscIngest", day, error: out.error }));
   return out;
 }
 // ==== GA4-RICH-1 (1.57.0, 2026-10-25): the full Google Analytics 4 read ====
@@ -5654,6 +5741,9 @@ async function reachIngestTick(env, opts) {
   // GA4-DATA-API-1: yesterday's GA4 numbers, once a day on their own ledger row; a failure never stops the scorecard.
   let ga4 = null;
   try { ga4 = await ga4Ingest(env, opts.nowMs ? { nowMs: opts.nowMs } : {}); } catch (e) { ga4 = { error: reachErr(e) }; }
+  // INTEG-GSC-1: Search Console (three days back, the lag of its data), once a day on its own ledger row; a refusal or an error never stops the scorecard.
+  let gsc = null;
+  try { gsc = await gscIngest(env, opts.nowMs ? { nowMs: opts.nowMs } : {}); } catch (e) { gsc = { error: reachErr(e) }; }
 
   // ATTENTION-LOOP-1: the daily scorecard follows the day's ingest (its own ledger row keeps it to once a day).
   let attention = null;
@@ -5669,16 +5759,16 @@ async function reachIngestTick(env, opts) {
       return "reach-ingest-" + d;
     }));
   } catch (e) {
-    return { live, ga4, backfill: { error: reachErr(e) } };
+    return { live, ga4, gsc, backfill: { error: reachErr(e) } };
   }
   const seen = {};
   for (const r of have) seen[String(r.id).replace("reach-ingest-", "")] = 1;
   const missing = days.find(function(d) {
     return !seen[d];
   });
-  if (!missing) return { live, attention, ga4, backfill: null };
+  if (!missing) return { live, attention, ga4, gsc, backfill: null };
   const b = await ingestReachSignals(env, Object.assign({ day: missing }, opts.nowMs ? { nowMs: opts.nowMs } : {}));
-  return { live, attention, ga4, backfill: { day: missing, written: b && b.written, skipped: b && b.skipped } };
+  return { live, attention, ga4, gsc, backfill: { day: missing, written: b && b.written, skipped: b && b.skipped } };
 }
 // ==== AREA-MAP research: q08 review decision (Q08-REVIEW-2026-10-31) ====
 // Q08-REVIEW-2026-10-31 (agent_issues 1716, docs/STRATEGY.md s7; charter pillar: cost). q08-signal-engine writes an AI
