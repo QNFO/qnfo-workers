@@ -25,11 +25,24 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const sysBlock = src.slice(src.indexOf("var SYSTEM = ["), src.indexOf("function buildMessages"));
 ok(/Write in plain language for an intelligent reader who is not a specialist/.test(sysBlock) && /short sentences \(under 25 words\)/.test(sysBlock), "the system prompt asks for plain language and short sentences");
 ok(/Never answer a request to explain a phrase, passage or term by repeating it or rewording it lightly: that is circular/.test(sysBlock) && /at most five of its words in a row/.test(sysBlock), "the system prompt forbids a circular explanation");
-ok(/the first time a specialist term appears/i.test(sysBlock) && /do not define it/.test(sysBlock), "a specialist term is explained on first use, or named as undefined");
+ok(/gloss it with the meaning or description an excerpt gives it/.test(sysBlock) && /do not define it/.test(sysBlock), "a technical term is glossed from the excerpts on first use, or named as undefined");
+ok(/Plain is not looser: every sentence still says what an excerpt says/.test(sysBlock) && /Never add an analogy, a comparison, a general definition or any background that no excerpt contains/.test(sysBlock) && !/everyday words/.test(sysBlock), "plain is not looser: no analogy, general definition or background, and no invitation to use everyday words (ASK-PLAIN-2)");
 ok(!/Plain, neutral scholarly prose/.test(sysBlock), "the scholarly-prose rule is gone");
 ok(!/p-adic|adelic|ultrametric|topological|anyon|JPCUB|QWAV|QNFO/i.test(sysBlock), "the prompt still names no topic");
 ok(src.split("- Write in plain language for an intelligent reader").length === 2 && /plain: "- Write in plain language " \+ "for an intelligent reader"/.test(src), "the plain-language fix anchor is assembled and the prompt line occurs once");
 ok(/Ground every factual claim " \+ "in the numbered EXCERPTS/.test(src) && src.split("- Ground every factual claim in the numbered EXCERPTS.").length === 2, "the citation anchor is unchanged");
+
+// ---- ASK-PLAIN-2: an analogy no excerpt makes is removed ----
+const ga = src.indexOf("// ---- ASK-GROUND-BEGIN"), gb = src.indexOf("// ---- ASK-GROUND-END ----");
+const gsb = { Set, String, Number, Array };
+vm.createContext(gsb);
+vm.runInContext(src.slice(ga, gb) + "\n;__g = { groundBody, groundText };", gsb);
+const gtxt = gsb.__g.groundText([{ n: 1, title: "P", excerpt: "A part is called folded when no test can tell it apart. A folded part is like a copy of the base part." }], "q", [], null);
+const gout = gsb.__g.groundBody("A part is called folded when no test can tell it apart [1]. Parts are like tiny things [1]. Think of it as a crowd gathering [1]. A folded part is like a copy of the base part [1]. Condensing means imagine a crowd [1].", gtxt, 1);
+ok(/called folded/.test(gout.text) && /like a copy of the base part/.test(gout.text), "a supported sentence and an analogy the excerpt itself makes are kept", gout.text);
+ok(!/tiny things|Think of it|crowd/.test(gout.text) && gout.removed === 3, "an analogy, an invitation to think of it and an invitation to imagine, none in an excerpt, are removed", gout);
+const bmsg = src.slice(src.indexOf("function buildMessages"), src.indexOf("function splitFollowups"));
+ok(/no analogy, no general definition of a term, no background/.test(bmsg) && /gloss each one from the excerpt that defines it/.test(bmsg), "the explain instruction forbids analogy, general definitions and background");
 
 // ---- the pure functions ----
 const a = src.indexOf("// ---- ASK-PLAIN-BEGIN"), b = src.indexOf("// ---- ASK-PLAIN-END ----");
@@ -92,7 +105,7 @@ ok(X.plainReport("Short one. " + "word ".repeat(14).trim() + " ends here.", "").
 ok(X.plainReport("The quantification of the characterization of interoperability considerations demonstrates multidimensional optimization alongside comprehensive parameterization.", "").dense === true, "a sentence of long specialist words is dense");
 ok(X.plainReport("", T).echo === false && X.plainReport("", T).words === 0, "an empty answer is not flagged");
 ok(X.plainFlags({ target: T }, e1, 1) === 1 + 2 + 4 + 8 && X.plainFlags(null, p1, 0) === 0 && X.plainFlags({ target: T }, p1, 1) === 1 + 8, "plain flags: 1 explain, 2 echo, 4 dense, 8 rewritten");
-ok(/six|6 or more words/.test(X.plainRewriteRequest(e1)) && /at most five of its words/.test(X.plainRewriteRequest(e1)) && /long sentences/.test(X.plainRewriteRequest(p1.dense ? p1 : { dense: true })), "the rewrite request names the defects and the rules");
+ok(/6 or more words/.test(X.plainRewriteRequest(e1)) && /at most five of its words/.test(X.plainRewriteRequest(e1)) && /long sentences/.test(X.plainRewriteRequest(p1.dense ? p1 : { dense: true })) && /no analogy, no general definition, no background/.test(X.plainRewriteRequest(e1)), "the rewrite request names the defects and the rules, including no analogy or background");
 
 // ---- end to end ----
 const sq = new DatabaseSync(":memory:");
@@ -210,6 +223,6 @@ ok(mv && Number(mv.last_value) === Math.round((1 - total.bad / total.n) * 1e4) /
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
-ok(/var ANSWER_REV = "r3-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+ok(/var ANSWER_REV = "r4-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
