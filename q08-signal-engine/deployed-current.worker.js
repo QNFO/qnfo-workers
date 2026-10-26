@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.1-codeagent"; // 0.37.0 BP26-AI-LABEL-1 (2026-10-26): visible AI-generated label, see the note below.
+var VERSION = "0.37.2-arxiv-pool"; // 0.37.2 Q08-ARXIV-POOL-1 (2026-10-26): arXiv candidate pool from ops_config q08_arxiv_pool, see the note at scrapeArxiv.
 /* 0.37.0 BP26-AI-LABEL-1 (2026-10-26, charter pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every piece page carries a visible "AI-generated" label linked to the published method note and JSON-LD creditText; HTML responses add nosniff, HSTS (no includeSubDomains) and X-Frame-Options SAMEORIGIN. */
 // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
 
@@ -356,34 +356,16 @@ function meterCall(env, kind) {
   env.q08Meter[kind] = (env.q08Meter[kind] || 0) + 1;
   if (kind === "panel" || kind === "factcheck") env.q08Meter.verify = (env.q08Meter.verify || 0) + 1;
 }
-// RED-DRAIN-1 (#100453, Q08-GATE-PREFLIGHT-1): the structural gate (min refs, prior-work section, table-or-code) used to run
-// AFTER the expensive compose call, so at a 3.2% pass rate ~31 compose calls were burned per published piece and the whole
-// daily neuron cap could be spent on failed attempts. The gate inputs are deterministic and need no model, so it is hoisted
-// into this pre-compose preflight: it runs on the source material only, and a failing check must cause the caller to skip
-// the compose call entirely and record the failed check name in the run ledger (insertRun writes it via r.error).
-var PREFLIGHT_MIN_REFS = 3;
-var PREFLIGHT_MIN_SOURCE_CHARS = 800;
-function structuralPreflight(src) {
-  var s = src || {};
-  var text = String(s.friction_point || s.text || "");
-  var failed = null;
-  // 0. source thickness: PREFLIGHT_MIN_SOURCE_CHARS was previously declared but never checked, so a near-empty
-  // source sailed past step 1's fallback count and burned a compose call. Checked first so the cheapest,
-  // most-certain rejection costs nothing.
-  if (text.length < PREFLIGHT_MIN_SOURCE_CHARS) failed = "source_too_short";
-  // 1. min refs: enough distinct comments/signals to cite (each "Comment:" line is one reference)
-  var refs = 0;
-  if (text) refs = (text.match(/Comment:/g) || []).length || (text.split(/\n+/).filter(function (l) { return l.trim().length > 40; }).length);
-  if (refs < PREFLIGHT_MIN_REFS) failed = "min_refs";
-  // 2. prior-work section: some mention of prior art / what exists today in the material
-  if (!failed && !/\b(prior (art|work)|existing|previously|earlier|before this|status quo|current(ly)? (approach|solution|state)|related work)\b/i.test(text)) failed = "prior_work_section";
-  // 3. table-or-code: something concrete enough to ground a table or code block (numbers, code fences, technical terms)
-  if (!failed) {
-    var concrete = /```|\bcode\b|\bAPI\b|\bfunction\b|\b[A-Za-z0-9_]+\(\)|\b\d+(\.\d+)?%?\b/.test(text);
-    if (!concrete) failed = "table_or_code";
-  }
-  return { ok: !failed, failed: failed, refs: refs, sourceChars: text.length };
-}
+// Q08-ARXIV-POOL-1 (0.37.2, 2026-10-26; agent_issues 100439 and 100453, rem-a7). RED-DRAIN-1 had hoisted a "structural gate" (min refs,
+// prior-work section, table-or-code) into structuralPreflight() on the claim that the gate ran after the compose call. That gate does not
+// exist in this engine (the writer gate checks titles, register, lede and figures; the source checks are MIN_GROUND_CHARS, THIN_MIN_ARTICLE
+// and learnedSourceFloor in generate(), which already run before any model call), and the function had no caller: engine_runs, 7 days to
+// 2026-10-26, hold 256 finished runs that logged a source size and the thinnest source behind any of them was 2208 characters (0 under
+// 800, 0 under 1500). It is removed so no one reads the engine as having a preflight it does not run. What fails is measured in
+// engine_runs: of 249 gate failures since 2026-10-20, 175 (70 percent) end at the accuracy checks and 57 (23 percent) at the reader panel.
+// The lever that has a measured effect is the choice of source: since 2026-10-14 an arXiv run published in 8 of 102 finished runs (7.8
+// percent) and a Hacker News run in 5 of 362 (1.4 percent). scrapeArxiv() read the 30 newest submissions, a few hours of them (a weekend
+// leaves the same Friday papers, already tried), so papers took 22 percent of the runs; the pool is now ops_config q08_arxiv_pool.
 // r: { scraped, scored, published, top, model, ms, status, error, sourceChars, sourceKind }
 async function insertRun(env, r) {
   var m = (env && env.q08Meter) ? { compose: env.q08Meter.compose || 0, verify: env.q08Meter.verify || 0, panel: env.q08Meter.panel || 0, factcheck: env.q08Meter.factcheck || 0 } : null;
@@ -570,9 +552,34 @@ async function scrapeGitHub() {
 
 // --- arXiv (narrative signals): recent abstracts matching high-intent keywords ---
 var ARXIV_KEYWORDS = ["distributed system","consensus","fault tolerance","compiler","programming language","database","security","privacy","machine learning","infrastructure","network","operating system","formal verification","cryptography","scalability","reliability","architecture","verification","protocol"];
-async function scrapeArxiv() {
+// Q08-ARXIV-POOL-1 (0.37.2): how many of the newest submissions the scrape reads. 30 was a few hours of them (the newest 30 on 2026-10-26
+// 17:00Z all dated 2026-10-23, a Friday), so the candidate list ran dry and the alternation in orderCandidates fell back to stories.
+// ops_config q08_arxiv_pool (an integer, 30 to 200, absent = 100) sets it without a deploy; 30 restores the earlier pool. Read once a
+// minute at most; an unreadable or invalid value reads as the default, and only the pool size changes (the keyword filter, the order, the
+// 12 candidates kept, every gate and every cap are untouched).
+var ARXIV_POOL_KEY = "q08_arxiv_pool", ARXIV_POOL_DEFAULT = 100, ARXIV_POOL_MIN = 30, ARXIV_POOL_MAX = 200;
+function parseArxivPool(v) {
+  var s = v == null ? "" : String(v).trim();
+  if (!/^\d{1,4}$/.test(s)) return ARXIV_POOL_DEFAULT;
+  return Math.min(ARXIV_POOL_MAX, Math.max(ARXIV_POOL_MIN, Number(s)));
+}
+var __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT };
+async function arxivPoolSize(env) {
+  if (!env || !env.AUDIT || typeof env.AUDIT.prepare !== "function") return ARXIV_POOL_DEFAULT;
+  var now = Date.now();
+  if (__arxivPool.at && now - __arxivPool.at < 60000) return __arxivPool.n;
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(ARXIV_POOL_KEY).first();
+    __arxivPool = { at: now, n: parseArxivPool(r && r.value) };
+  } catch (e) {
+    console.error("q08 arxivPoolSize read failed: " + String(e && e.message || e).slice(0, 160));
+    __arxivPool = { at: now, n: ARXIV_POOL_DEFAULT };
+  }
+  return __arxivPool.n;
+}
+async function scrapeArxiv(env) {
   var q = "cat:cs.DC OR cat:cs.CR OR cat:cs.DB OR cat:cs.PL OR cat:cs.OS OR cat:cs.NI OR cat:cs.SY OR cat:cs.SE OR cat:cs.AR";
-  var url = "http://export.arxiv.org/api/query?search_query=" + encodeURIComponent(q) + "&sortBy=submittedDate&sortOrder=descending&max_results=30";
+  var url = "http://export.arxiv.org/api/query?search_query=" + encodeURIComponent(q) + "&sortBy=submittedDate&sortOrder=descending&max_results=" + (await arxivPoolSize(env));
   var resp = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
   if (!resp.ok) throw new Error("arxiv " + resp.status);
   var xml = await resp.text();
@@ -2047,7 +2054,7 @@ async function generate(env) {
   var stories = [];
   try { stories = stories.concat(await scrapeHN()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
   try { stories = stories.concat(await scrapeGitHub()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
-  try { stories = stories.concat(await scrapeArxiv()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  try { stories = stories.concat(await scrapeArxiv(env)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
   if (!stories.length) return await quit("skipped", "no signals scraped");
   // Skip already-processed signal IDs (source-scoped). Q08-SIGNAL-RETRY-1 (2026-10-17): a 7-day window over EVERY
   // status exhausted the candidate pool (15:00Z run: "all signals already processed") because ~30 runs/day mark
@@ -4178,7 +4185,7 @@ function cleanNote(v) {
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __forecast = { forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
-export const __gen = { parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
+export const __gen = { parseArxivPool: parseArxivPool, arxivPoolSize: arxivPoolSize, resetArxivPool: function () { __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT }; }, scrapeArxiv: scrapeArxiv, ARXIV_POOL_DEFAULT: ARXIV_POOL_DEFAULT, parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };
 export const __cuts = { readerCutIndices: readerCutIndices, applyReaderCuts: applyReaderCuts };
