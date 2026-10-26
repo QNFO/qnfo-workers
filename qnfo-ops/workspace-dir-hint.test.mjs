@@ -15,7 +15,8 @@ const parts = [
 ok(parts.every((p) => p.length > 100), "fmtContainer and containerWorkspaceExec are found in worker.js", parts.map((p) => p.length));
 let calls = [];
 let dispatch = async () => ({ ok: true, result: { exitCode: 0, stdout: "", stderr: "" } });
-const { containerWorkspaceExec } = new Function("containerDispatch", parts.join("\n") + "\nreturn { containerWorkspaceExec };")(async (env, path, body, timeout) => { calls.push({ path, body: { ...body } }); return dispatch(path, body); });
+// WORKSPACE-STAGE-1 (2.59.3): the tool stages ops-workspace files first; this suite is about the directory hint, so staging is a no-op here (workspace-stage.test.mjs covers it)
+const { containerWorkspaceExec } = new Function("containerDispatch", "workspaceStage", parts.join("\n") + "\nreturn { containerWorkspaceExec };")(async (env, path, body, timeout) => { calls.push({ path, body: { ...body } }); return dispatch(path, body); }, async () => ({ prelude: "", staged: [], skipped: [] }));
 const exit = (code, stdout, stderr) => ({ ok: code === 0, result: { exitCode: code, stdout: stdout || "", stderr: stderr || "" } });
 const CD_FAIL = "bash: line 1: cd: /workspace/qw: No such file or directory";
 
