@@ -37,6 +37,16 @@ SELECT 'idle-metric-counts-non-scripts', 'workers_idle_7d counted a registry mem
   'metric workers_idle_7d against SELECT service FROM service_registry WHERE kind <> ''worker'' AND state = ''live''', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE NOT EXISTS (SELECT 1 FROM failure_modes WHERE fm_key = 'idle-metric-counts-non-scripts');
 
+-- Detectors (AUTOAUDIT: every failure mode has an fm-<key> contract). fm-issue-without-defect-check was missing from
+-- migrations/2026-10-26-issue-probe-agent.sql, so v_failure_mode_status read it unprobed.
+INSERT OR IGNORE INTO remediation_contracts (class, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container)
+VALUES ('fm-issue-without-defect-check', 'ISSUE-PROBE-AGENT-1', 'failure-mode detector',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM fleet_crons WHERE name = ''issue-probe-agent-hourly'' AND (enabled = 0 OR last_fired IS NULL OR replace(substr(last_fired, 1, 19), ''T'', '' '') < datetime(''now'', ''-150 minutes''))) + (SELECT COUNT(*) FROM issue_probe_requests r JOIN cf_agent_requests q ON q.id = r.request_id WHERE q.status NOT IN (''done'', ''failed'') AND r.requested_at < datetime(''now'', ''-3 hours'')) AS TEXT) AS observed',
+  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0),
+ ('fm-idle-metric-counts-non-scripts', 'WORKERS-IDLE-MEASURE-1', 'failure-mode detector',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM metric_registry WHERE metric = ''workers_idle_7d'' AND (last_refreshed IS NULL OR replace(substr(last_refreshed, 1, 19), ''T'', '' '') < datetime(''now'', ''-130 minutes''))) + (SELECT COUNT(*) FROM sqlite_master WHERE type = ''trigger'' AND name = ''workers_idle_tick'' AND sql NOT LIKE ''%s.kind = ''''worker''''%'') AS TEXT) AS observed',
+  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0);
+
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session_01RdDA76KLvqYHYBjL9C2be5', 'a member route and a worker younger than the usage snapshot are not idle workers',
   'WORKERS-IDLE-MEASURE-1: workers_idle_7d counts kind worker only and skips workers first deployed in the last 7 days with no snapshot row',
