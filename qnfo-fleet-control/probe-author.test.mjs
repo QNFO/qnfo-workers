@@ -4,7 +4,7 @@
 //   1. it read the model from env["qnfo-ai"] || env.qnfo_ai, a binding this worker has never had (wrangler.toml declares [ai] binding AI), and returned false silently;
 //   2. it read the reply only as body.response or body.result, while a chat model answers choices[0].message.content;
 //   3. its decision_log insert used the columns (ts, decision, reason), which the table does not have (it requires ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path).
-// PROBE-AUTHOR-HARDEN-1 (0.51.1, agent_issues 1000266) adds the second half, once the author could run: it must refuse (1) private tables, (2) self-confirming probes, (3) deferral-shaped
+// PROBE-AUTHOR-HARDEN-1 (0.52.1, agent_issues 1000266) adds the second half, once the author could run: it must refuse (1) private tables, (2) self-confirming probes, (3) deferral-shaped
 // probes, with an enum reason on the existing remediation.probe-author-reject event that never carries the probe text. probe-author.fixture.json holds the live qnfo-audit sqlite_master
 // names (captured 2026-10-26, 603 tables, 194 views, names only) and the live definitions of the allowlisted views, so the allowlist constant is checked against the real schema and every live
 // object is swept: only an allowlisted one may pass the static check.
@@ -400,15 +400,16 @@ const refused = (r, code) => r.done === false && !r.contract && r.authored.lengt
   const old = [await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps; DELETE FROM portfolio_gaps"), await check("UPDATE portfolio_gaps SET status = 'x'"), await check("SELECT needs-machine-probe AS expected, 1 AS observed")];
   ok(old[0] === "more than one statement" && old[1] === "not a single SELECT or WITH" && old[2] === "needs-machine-probe marker", "the older static rejects keep their text", old);
 }
-{ // the tick hands the author its AI binding: until 0.51.1 the call site passed none and every call ended in no-ai-binding
+{ // the tick hands the author its AI binding: until 0.52.1 the call site passed none and every call ended in no-ai-binding
   const tickSrc = src.slice(src.indexOf("await rtEscalateStaleDeferrals(db, out);"));
   ok(tickSrc.indexOf("await rtEnsureLivePath(db, out, env);") > 0 && tickSrc.indexOf("await rtEnsureLivePath(db, out, env);") < 400, "the remediation tick passes env to rtEnsureLivePath");
   ok(/function rtEnsureLivePath\(db, out, env\)/.test(src) && /rtAuthorLivePathProbe\(db, env, rows\[i\]\)/.test(src), "rtEnsureLivePath hands env on to the author");
 }
-{ // VERSION: a patch above main's 0.51.0, notes under the statement (VERSION-LINE-NOTES-1)
-  const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src), vAt = src.search(/var VERSION = "/);
-  ok(v && (Number(v[1]) > 0 || Number(v[2]) > 51 || (Number(v[2]) === 51 && Number(v[3]) >= 1)), "VERSION is at least 0.51.1", v && v[0]);
-  ok(/\/\* 0\.51\.1 PROBE-AUTHOR-HARDEN-1 /.test(src.slice(vAt, vAt + 30000)), "the release note sits under the VERSION statement");
+{ // VERSION: a patch above main's 0.52.0 (the doctor engine); the note is a // line under the VERSION-LINE-SPLIT-1 header, as its neighbours are, and not on the VERSION line
+  const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src), vAt = src.search(/var VERSION = "/), hAt = src.indexOf("// VERSION-LINE-SPLIT-1 (agent_issues 100220)");
+  ok(v && (Number(v[1]) > 0 || Number(v[2]) > 52 || (Number(v[2]) === 52 && Number(v[3]) >= 1)), "VERSION is at least 0.52.1", v && v[0]);
+  ok(hAt > 0 && hAt < vAt && /\n\/\/ 0\.52\.1 PROBE-AUTHOR-HARDEN-1 /.test(src.slice(hAt, vAt)), "the release note is a comment line between the VERSION-LINE-SPLIT-1 header and the VERSION statement");
+  ok(src.slice(vAt, src.indexOf("\n", vAt)).indexOf("PROBE-AUTHOR-HARDEN-1") < 0, "the release note is not on the VERSION line");
 }
 ok(mirror === src, "the deployed-current mirror is identical to worker.js");
 console.log(pass + " passed, " + fail + " failed");
