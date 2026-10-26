@@ -1,0 +1,27 @@
+-- RUNTIME-LIVENESS-GAP-4 (2026-10-26, pillar autonomy; metric runtime_verified_share_24h; follow-up to migrations/2026-10-26-runtime-liveness-gap.sql, -2 and -3).
+-- Measured 2026-10-26 17:57Z, 1.2 hours after the first file went live: runtime-observable verifications 2531 of 29197 in 24 hours (8.67 %). The 21 new or re-armed contracts have 1.2 hours of rows in the window
+-- (about 110 of the 840 a day they add), while the other 24 hour counts grew 3.4 % in the same time (28236 to 29197): the steady state of the first file's arithmetic is
+-- (2421 + 840) / (29197 + 730) = 10.9 %, which clears the trigger (under 10) with a margin of less than one point that growth in the d1-query and code-read rows can use up.
+-- Six more standing probes on stable, fast, consumer-facing routes widen the margin to about 11.9 % (27 contracts x 40 rows a day): the three area feeds of the scoreboard (autonomy, reliability, platform), the manager
+-- verdict feed, and the model lists of the two gateways (ai.qnfo.org and ops.qnfo.org /v1/models), which every desktop client reads to pick a model. All six answered 200 in under 1.2 s with their marker on
+-- 2026-10-26 17:57Z. Nothing is relabelled: each is a GET from the GitHub runner, and three straight failures file RUNTIME-PROBE-FAIL-1.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:rollback RUNTIME-LIVENESS-GAP-4' WHERE class IN ('rt-page-fleet-area-autonomy', 'rt-page-fleet-area-reliability', 'rt-page-fleet-area-platform', 'rt-page-fleet-managers', 'rt-live-ai-models', 'rt-live-ops-models')
+
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, next_due_at) VALUES
+ ('rt-page-fleet-area-autonomy', NULL, 'standing liveness: fleet.qnfo.org/api/area/autonomy (the autonomy area feed of the scoreboard) answers with its schema', 'none while it passes; 3 straight failures file RUNTIME-PROBE-FAIL-1', '{"url": "https://fleet.qnfo.org/api/area/autonomy", "status": 200, "contains": "fleet-area-feed/v1", "max_ms": 15000}', 'runner-https', 3, 'qnfo-ops', 1, 'active', 'runtime-liveness-v1', 45000, 5, datetime('now')),
+ ('rt-page-fleet-area-reliability', NULL, 'standing liveness: fleet.qnfo.org/api/area/reliability answers with its schema', 'none while it passes; 3 straight failures file RUNTIME-PROBE-FAIL-1', '{"url": "https://fleet.qnfo.org/api/area/reliability", "status": 200, "contains": "fleet-area-feed/v1", "max_ms": 15000}', 'runner-https', 3, 'qnfo-ops', 1, 'active', 'runtime-liveness-v1', 45000, 5, datetime('now')),
+ ('rt-page-fleet-area-platform', NULL, 'standing liveness: fleet.qnfo.org/api/area/platform answers with its schema', 'none while it passes; 3 straight failures file RUNTIME-PROBE-FAIL-1', '{"url": "https://fleet.qnfo.org/api/area/platform", "status": 200, "contains": "fleet-area-feed/v1", "max_ms": 15000}', 'runner-https', 3, 'qnfo-ops', 1, 'active', 'runtime-liveness-v1', 45000, 5, datetime('now')),
+ ('rt-page-fleet-managers', NULL, 'standing liveness: fleet.qnfo.org/api/managers (the portfolio and program manager verdicts) answers with its schema', 'none while it passes; 3 straight failures file RUNTIME-PROBE-FAIL-1', '{"url": "https://fleet.qnfo.org/api/managers", "status": 200, "contains": "fleet-managers/v1", "max_ms": 15000}', 'runner-https', 3, 'qnfo-ops', 1, 'active', 'runtime-liveness-v1', 45000, 5, datetime('now')),
+ ('rt-live-ai-models', NULL, 'standing liveness: ai.qnfo.org/v1/models (the research gateway model list every client reads) answers with a list', 'none while it passes; 3 straight failures file RUNTIME-PROBE-FAIL-1', '{"url": "https://ai.qnfo.org/v1/models", "status": 200, "contains": "owned_by", "max_ms": 10000}', 'runner-https', 3, 'qnfo-ops', 1, 'active', 'runtime-liveness-v1', 45000, 5, datetime('now')),
+ ('rt-live-ops-models', NULL, 'standing liveness: ops.qnfo.org/v1/models (the ops gateway model list every client reads) answers with a list', 'none while it passes; 3 straight failures file RUNTIME-PROBE-FAIL-1', '{"url": "https://ops.qnfo.org/v1/models", "status": 200, "contains": "owned_by", "max_ms": 10000}', 'runner-https', 3, 'qnfo-ops', 1, 'active', 'runtime-liveness-v1', 45000, 5, datetime('now'));
+
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session-infra-breach-remediation',
+  'a margin of under one point on a share that moves with the other counts is not a fix; independent probes of the routes clients read are real runtime evidence',
+  'RUNTIME-LIVENESS-GAP-4: six standing runner-https liveness contracts on three area feeds, the manager feed and the two gateway model lists',
+  'remediation_verifications 24 h at 2026-10-26 17:57Z: runtime 2531 of 29197 (8.67 %); steady state of the first file 10.9 %; the six URLs answered 200 under 1.2 s with their marker',
+  'applied by migration', 'six contract rows; the consumer makes six more GETs every 22 minutes', 'the Rollback line',
+  'outside-in liveness of the scoreboard feeds and the gateway model lists', 'runtime_verified_share_24h about 11.9 once a full day of the 27 contracts is in the window', 'reach: clients keep a working model list', 'https GET of the six URLs'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log d WHERE d.action LIKE 'RUNTIME-LIVENESS-GAP-4:%');
