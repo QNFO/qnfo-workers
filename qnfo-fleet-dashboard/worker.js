@@ -10,7 +10,8 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.70.0";
+var VERSION = "1.70.1";
+/* 1.70.1 DASH-OWNER-ACTIONS-1 follow-up (2026-10-26, agent_issues 100360, pillar autonomy; patch): a receipt card (human_actions.source owner-request-issue, "Closed for you") is loaded as a receipt by decOpenCards and cmdDecide (both select source, with the no-column fallback of collectHumanActions), so a bare approve no longer offers it as a second choice, approve on it is refused and /api/cmd/run approve on it writes nothing; the hard-marker gate FAILS CLOSED: when default_approve_markers cannot be read (a D1 error or no rows) every card that asks for a decision offers Diagnose and Done only, in the page, the typed verbs and the server, the unreadable result is retried after 60 seconds, and the embedded regex stays as an extra layer on a readable list. prior 1.70.0 */
 /* 1.70.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them; since FLEET-STATUS-1 made the home page statusPageHtml, the Needs-you cards of / carry the same Approve / Decline / Diagnose block for the signed-in owner only (statusOwnerDecisions, read per request, never inside the cached fleetStatusData document or the public /api/status, because the numbered items are the text of an issue that can be private), a stranger's page is unchanged, and /classic keeps its own; a second approve of an approved item files no second hand-off and a decline of an approved item says it was already handed to the fleet and is not undone; "why 2026 papers were pulled?" is the model's, since a number is an issue only after issue / agent_issues / # or as the whole argument; "Investigate why the dashboard is slow" and "diagnose the stuck integration chain" are the model's too (diagnose and investigate answer in code alone, or when a reference or a scheduled worker's name opens the argument, and one title word never answers a sentence); the hand-off is never longer than the 1800 characters the issue body keeps. */
 // 1.69.2 WATCHMAKER-RESEARCH-REPO-SYNC-1 (2026-10-26, agent_issues 1000373, pillar autonomy; patch): WATCHMAKER_OPS counts the research record sync of qnfo-research-exec 0.35.0 (repoSyncTick every 10 minutes: failed deposits retried, ledger gaps restored, published paper text compared with git, ensemble catch-up dispatched), read from the updated_at of the ops_config research_repo_sync_cursor row, which the tick rewrites each time it advances. 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.1-codeagent (ATTENTION-STICKY-STOP-1)
 // 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. prior 1.67.3-codeagent // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
@@ -13380,14 +13381,19 @@ function decWantsItems(card) {
 // not a question (19 of the 40 cards that line matched on 2026-10-26 asked the owner to send an e-mail, renew a domain, create a token or sign a
 // statement), so it opens no button.
 var DEC_ASK_RX = /\b(approve|authori[sz]e|decline|pick one|choose one)\b/i;
+// human_actions.source of a receipt card (OWNER-REQUEST-RECEIPT-1): how the owner's own request ended. It asks for no decision, whatever its title says.
+var DEC_RECEIPT_SOURCE = "owner-request-issue";
 var DEC_PICK_RX = /\b(?:pick|choose) one\b/i;
 function decAsksDecision(it) {
   return !!(it && String(it.key || "").indexOf("ha:") === 0 && !it.receipt && DEC_ASK_RX.test(String(it.action || "") + " " + String(it.title || "")));
 }
 // A card that asks to be decided and is not a legal, signing, money, credential or account act. The hard markers are DEFAULT-APPROVE-1's own
 // (default_approve_markers kind 'hard', the text ' ' || lower(title why action default) || ' ' matched with LIKE), read from D1 and kept five
-// minutes; DEC_HARD_FALLBACK_RX stands in when the table cannot be read. Approve and Decline are never offered for such a card, and nothing
-// is handed to the fleet for it: the fleet's authority never covers a legal, financial or signing act in the owner's name.
+// minutes. When the table cannot be read (a D1 error, or no rows) NO card is decidable: decIsHard FAILS CLOSED and every card that asks for a decision
+// offers Diagnose and Done only, because DEC_HARD_FALLBACK_RX is not a copy of the live list ('Fund a stronger code-loop model', an e-mail address,
+// 'unbacked rows are wiped', 'enter the login code', 'use the login link', a bare 'pay' or 'paid' are hard live and pass it). The embedded regex stays as
+// an extra layer on top of a readable list. Approve and Decline are never offered for such a card, and nothing is handed to the fleet for it: the
+// fleet's authority never covers a legal, financial or signing act in the owner's name.
 var DEC_HARD_FALLBACK_RX = /\b(payments?|invoice|bank|credit card|billing|purchase|wire transfer|top[- ]?up|prepaid|subscri\w*|renew\w*|registrar|refund|wallet|fees?|legal|signature|signing|sign the|patent applic\w*|dpa|irreversible|delete|wipe|erase|truncate|drop table|destroy|api key|oauth|sign[- ]in|log in to|password|credential|rotate|secret|token|grant access|your name|owner's name|mailbox|send (?:an )?e-?mail|email from|visibility|make public|be public|one-time code|verification code|privacy of|gdpr|personal data|suppress\w*|opt[- ]?out|unsubscribe|consent)\b|\$\S/i;
 var decHardCache = null;
 function decLikeRx(pattern) {
@@ -13405,7 +13411,8 @@ async function decLoadHard(env) {
   } catch (e) {
     console.error(JSON.stringify({ worker: NAME, where: "decLoadHard", error: String(e && e.message || e).slice(0, 160) }));
   }
-  decHardCache = { at: now, db: env.AUDIT, list };
+  // an unreadable list is kept 60 seconds (every decision card is owner-only meanwhile), a readable one five minutes
+  decHardCache = { at: list ? now : now - 24e4, db: env.AUDIT, list };
 }
 function decHardText(card) {
   return " " + [card.title, card.why, card.action, card.fallback].map(function(x) {
@@ -13413,10 +13420,13 @@ function decHardText(card) {
   }).join(" ").toLowerCase() + " ";
 }
 function decIsHard(card) {
+  // FAIL CLOSED: with no list (never loaded, a D1 error, an empty table) the card is hard; callers pair this with decAsksDecision, so only a card that
+  // asks for a decision is affected
+  if (!decHardCache || !decHardCache.list) return true;
   const t = decHardText(card);
-  return decHardCache && decHardCache.list ? decHardCache.list.some(function(rx) {
+  return decHardCache.list.some(function(rx) {
     return rx.test(t);
-  }) : DEC_HARD_FALLBACK_RX.test(t);
+  }) || DEC_HARD_FALLBACK_RX.test(t);
 }
 function decIsDecisionCard(it) {
   return decAsksDecision(it) && !decIsHard(it);
@@ -13498,7 +13508,7 @@ async function decOpenCards(env, c) {
   await decLoadHard(env);
   const list = [], seen = {};
   const put = function(r) {
-    const card = { key: "ha:" + r.slug, slug: r.slug, title: String(r.title || ""), why: String(r.why || ""), action: String(r.action || ""), fallback: String(r.fallback || ""), receipt: !!r.receipt, status: "open" };
+    const card = { key: "ha:" + r.slug, slug: r.slug, title: String(r.title || ""), why: String(r.why || ""), action: String(r.action || ""), fallback: String(r.fallback || ""), receipt: !!r.receipt || r.origin === DEC_RECEIPT_SOURCE, status: "open" };
     if (!seen[card.key]) {
       seen[card.key] = 1;
       list.push(card);
@@ -13506,7 +13516,15 @@ async function decOpenCards(env, c) {
   };
   for (const it of cmdQueue(c && c.v)) if (String(it.key).indexOf("ha:") === 0) put({ slug: String(it.key).slice(3), title: it.title, why: it.why, action: it.action, fallback: it.fallback, receipt: it.receipt });
   try {
-    for (const r of await d1all(env.AUDIT, "SELECT slug, title, why, action, default_in_effect AS fallback FROM human_actions WHERE status = 'open' ORDER BY id LIMIT 200")) put(r);
+    // DASH-OWNER-ACTIONS-1 follow-up: `source` says a card is a receipt ("Closed for you", OWNER-REQUEST-RECEIPT-1), which asks for no decision; a database
+    // without the column reads every card as a card, as collectHumanActions does.
+    let open;
+    try {
+      open = await d1all(env.AUDIT, "SELECT slug, title, why, action, default_in_effect AS fallback, source AS origin FROM human_actions WHERE status = 'open' ORDER BY id LIMIT 200");
+    } catch (e) {
+      open = await d1all(env.AUDIT, "SELECT slug, title, why, action, default_in_effect AS fallback FROM human_actions WHERE status = 'open' ORDER BY id LIMIT 200");
+    }
+    for (const r of open) put(r);
   } catch (e) {
     console.error(JSON.stringify({ worker: NAME, where: "decOpenCards", error: String(e && e.message || e).slice(0, 160) }));
   }
@@ -13713,6 +13731,7 @@ async function decApprove(env, c, kind, rest) {
   if (card.status && card.status !== "open") return { text: "'" + card.title + "' is already " + card.status + "; nothing to " + verb + "." };
   await decLoadHard(env);
   const own = [conCmd("diagnose " + card.key, "Diagnose"), cmdAction("done", { key: card.key, title: card.title })];
+  if (card.receipt) return { text: "'" + card.title + "' asks for no decision: it is the receipt of a request of yours that the fleet closed, so there is nothing to " + verb + ". Mark it done to clear it.", actions: [cmdAction("done", { key: card.key, title: card.title })] };
   if (!decAsksDecision(card)) return { text: "'" + card.title + "' does not ask for a decision: it asks you to do something yourself, so there is nothing to " + verb + ". 'diagnose' says what it waits on; mark it done when you have done it.", actions: own };
   if (decIsHard(card)) return { text: "'" + card.title + "' is a legal, signing, money, credential or account step. It is yours alone: Approve and Decline do not apply to it and nothing is handed to the fleet for it. 'diagnose' says what it waits on; mark it done when you have done it.", actions: own };
   let issue = r.issue || null;
@@ -13898,10 +13917,17 @@ async function cmdDecide(request, env, ctx, owner, op, args) {
   await ensureResponseCredential(env);
   await decLoadHard(env);
   const slug = key.slice(3);
-  const card = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status FROM human_actions WHERE slug = ?1").bind(slug).first();
+  // `source` marks a receipt card (DEC_RECEIPT_SOURCE); a database without the column reads every card as a card (collectHumanActions does the same)
+  let card;
+  try {
+    card = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status, source AS origin FROM human_actions WHERE slug = ?1").bind(slug).first();
+  } catch (e) {
+    card = await env.AUDIT.prepare("SELECT slug, title, why, action, default_in_effect AS fallback, status FROM human_actions WHERE slug = ?1").bind(slug).first();
+  }
   if (!card) return { ok: false, error: "No owner card " + slug + "." };
   if (card.status !== "open") return { ok: true, text: "'" + card.title + "' is already " + card.status + "; nothing was changed." };
-  const cardView = { key, title: card.title, why: card.why, action: card.action, fallback: card.fallback };
+  const cardView = { key, title: card.title, why: card.why, action: card.action, fallback: card.fallback, receipt: card.origin === DEC_RECEIPT_SOURCE };
+  if (cardView.receipt) return { ok: false, error: "'" + card.title + "' asks for no decision: it is the receipt of a request of yours that the fleet closed, so Approve and Decline do not apply and nothing is handed to the fleet. Mark it done." };
   if (!decAsksDecision(cardView)) return { ok: false, error: "'" + card.title + "' does not ask for a decision: it asks you to do something yourself, so Approve and Decline do not apply. Mark it done when you have done it." };
   if (decIsHard(cardView)) return { ok: false, error: "'" + card.title + "' is a legal, signing, money, credential or account step. It is yours alone: Approve and Decline do not apply and nothing is handed to the fleet for it. Mark it done when you have done it." };
   const pickOne = decPickOne(cardView);
