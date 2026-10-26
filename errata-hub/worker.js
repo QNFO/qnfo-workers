@@ -11,7 +11,7 @@ function rxSecretEqual(given, expected) {
   for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-var VERSION = "1.8.0-no-registrar"; // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.8.1-confirm-cost"; // 1.8.1 ERRATA-CONFIRM-COST-1 (2026-10-26): internal confirm deepseek-v4-flash then kimi-k2.6, 24k excerpt, ops_config errata_confirm_max (folded into qnfo-research-exec 0.34.0). // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21750,18 +21750,36 @@ async function sweepInternalErrata(env) {
 // finding is a deterministic render measurement and is confirmed without a model call. A finding whose paper is not in the
 // corpus (no slug or DOI matches) becomes no-paper: there is no text to check or correct. A failed call or an unreadable
 // verdict leaves the row internal-open for the next tick and is logged.
+// ERRATA-CONFIRM-COST-1 (2026-10-26, agent_issues 1000032/1000035, pillar cost): kimi-k2.6 confirms ran 207 calls and 158,848
+// neurons on 2026-10-25, 33% of the shared research budget (COST-SUSTAIN-1), and the research stages were held from 13:00 UTC
+// on. PAPER-LEARN-1 findings already carry glm and gpt-oss verdicts, so the independent check needs a third family: deepseek
+// v4 flash (44 neurons per 1k tokens against kimi's 99, 0.6% errors over 523 calls) goes first, kimi stays the second path, and
+// the excerpt around the quoted passage is 24k chars, not 48k. ops_config errata_confirm_max sets the rows per tick (default 12,
+// 1..48), so BREACH-SELFHEAL-1 raises it while the internal-open backlog is old and lowers it when the budget is short.
 var INTERNAL_CONFIRM_MAX = 12;
+var INTERNAL_CONFIRM_MAX_CEIL = 48;
 var INTERNAL_CONFIRM_BUDGET_MS = 24e4;
 var INTERNAL_CONFIRM_MIN_AGE = "-30 minutes";
 var CONFIRM_MODEL_REVISER = "@cf/openai/gpt-oss-120b";
 var CONFIRM_MODEL_OTHER = "@cf/moonshotai/kimi-k2.6";
-var CONFIRM_EXCERPT_MAX = 48e3;
+var CONFIRM_MODEL_THIRD = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+var CONFIRM_EXCERPT_MAX = 24e3;
 function internalConfirmModel(sender) {
   return /qnfo-paper-reviser/i.test(String(sender || "")) ? CONFIRM_MODEL_REVISER : CONFIRM_MODEL_OTHER;
 }
 function internalConfirmModels(sender) {
-  const first = internalConfirmModel(sender);
-  return [first, first === CONFIRM_MODEL_REVISER ? CONFIRM_MODEL_OTHER : CONFIRM_MODEL_REVISER];
+  // A reviser finding was written with deepseek, so it is checked by gpt-oss then kimi; every other finding by deepseek then kimi.
+  return internalConfirmModel(sender) === CONFIRM_MODEL_REVISER ? [CONFIRM_MODEL_REVISER, CONFIRM_MODEL_OTHER] : [CONFIRM_MODEL_THIRD, CONFIRM_MODEL_OTHER];
+}
+async function internalConfirmMax(env) {
+  try {
+    const r = await env.WATCH_DB.prepare("SELECT value FROM ops_config WHERE key = 'errata_confirm_max'").first();
+    const n = r ? parseInt(String(r.value), 10) : NaN;
+    if (Number.isFinite(n) && n >= 1) return Math.min(n, INTERNAL_CONFIRM_MAX_CEIL);
+  } catch (e) {
+    console.error("[errata-hub] internal confirm: errata_confirm_max unreadable:", String(e && e.message || e).slice(0, 160));
+  }
+  return INTERNAL_CONFIRM_MAX;
 }
 async function logConfirmDefer(env, row, why) {
   try {
@@ -21777,6 +21795,7 @@ function confirmRunInput(model, prompt) {
     input.reasoning_effort = "none";
   }
   if (/gpt-oss/.test(model)) input.reasoning = { effort: "low" };
+  if (/deepseek/.test(model)) input.chat_template_kwargs = { thinking: false };
   return input;
 }
 function confirmReplyText(res) {
@@ -21843,11 +21862,12 @@ async function settleInternalErratum(env, row, status, note) {
   }
 }
 async function confirmInternalErrata(env) {
-  const out = { ok: true, max: INTERNAL_CONFIRM_MAX, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [] };
+  const max = await internalConfirmMax(env);
+  const out = { ok: true, max: max, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [], models: {} };
   let rows = [];
   try {
     rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY RANDOM() LIMIT ?2")
-      .bind(INTERNAL_CONFIRM_MIN_AGE, INTERNAL_CONFIRM_MAX).all()).results || [];
+      .bind(INTERNAL_CONFIRM_MIN_AGE, max).all()).results || [];
   } catch (e) {
     out.ok = false;
     out.error = String(e && e.message || e).slice(0, 300);
@@ -21905,6 +21925,7 @@ async function confirmInternalErrata(env) {
         continue;
       }
       const status = v.confirmed ? "detected" : "rejected";
+      out.models[model] = (out.models[model] || 0) + 1;
       await settleInternalErratum(env, row, status, (v.confirmed ? "confirmed" : "not confirmed") + " by " + model + " against " + paper.slug + ": " + (v.why || "(no reason given)"));
       if (v.confirmed) out.confirmed++;
       else out.rejected++;
@@ -22028,7 +22049,7 @@ export default {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "errata-hub", "AI", "WATCH_DB");
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, internal_confirm: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep", "internal-errata-confirm"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction is re-published only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)", "after the sweep, up to 3 internal-open rows older than 30 minutes are checked against the paper text by a model of another family (gpt-oss-120b for a reviser finding, kimi-k2.6 otherwise; a RENDER-HEALTH measurement needs none): confirmed -> detected (errata-respond drafts it), not confirmed -> rejected, no paper in the corpus -> no-paper; a failed call waits for the next tick (ERRATA-INTERNAL-CONFIRM-1)"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, internal_confirm: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep", "internal-errata-confirm"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction is re-published only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)", "after the sweep, up to ops_config errata_confirm_max (default 12) internal-open rows older than 30 minutes are checked against the paper text by a model of another family (gpt-oss-120b then kimi-k2.6 for a reviser finding, deepseek-v4-flash then kimi-k2.6 otherwise; a RENDER-HEALTH measurement needs none): confirmed -> detected (errata-respond drafts it), not confirmed -> rejected, no paper in the corpus -> no-paper; a failed call waits for the next tick (ERRATA-INTERNAL-CONFIRM-1)"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }
