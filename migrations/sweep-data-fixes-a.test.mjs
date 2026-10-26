@@ -174,14 +174,14 @@ function seed(db) {
   db.prepare("INSERT INTO ops_config (key, value, note) VALUES ('OWNER_DIRECTIVE_2026_10_20_ISSUE_THROUGHPUT_1', '{\"id\":\"ISSUE-THROUGHPUT-1\"}', 'earlier directive row')").run();
   // 1000102
   const em = db.prepare("INSERT INTO emails (id, message_id, sender, recipient, subject, classification, status) VALUES (?, ?, ?, 'rowan.quni@qnfo.org', ?, 'personal-unverified', ?)");
-  em.run(966, "m-966", "kavithakavi6162@gmail.com", "Editorial update and paper inquiry", "spam");
+  em.run(966, "m-966", "spam-sender-966@example.test", "Editorial update and paper inquiry", "spam");
   em.run(1077, "m-1077", SENDER_1077, "Research Across All Disciplines", "spam");
   em.run(1104, "m-1104", SENDER_1104, "Details for research authors", "processed");
   em.run(1105, "m-1105", "someone.else@example.org", "Details for research authors", "processed");
   em.run(1150, "m-1150", SENDER_1104, "A different mail from the same sender", "processed");
   em.run(1200, "m-1200", SENDER_1104, "Another one", "received");
   const flt = db.prepare("INSERT INTO email_filters (id, rule_type, field, pattern, action, priority, enabled) VALUES (?, 'filter', ?, ?, ?, ?, 1)");
-  flt.run(30, "from", "advancedresearchpub.com", "spam", 100); flt.run(37, "from", "rowan.quni@qnfo.org", "accept", 200); flt.run(38, "sender", "kavithakavi6162@gmail.com", "spam", 50);
+  flt.run(30, "from", "advancedresearchpub.com", "spam", 100); flt.run(37, "from", "rowan.quni@qnfo.org", "accept", 200); flt.run(38, "sender", "spam-sender-966@example.test", "spam", 50);
   db.exec("INSERT INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, evidence) VALUES ('code-merge-trusted-sources', 'ops_config', 'filter', 'outside text', 1, 'replace', 'applied', 'seed')");
   // 1000186
   const ag = db.prepare("INSERT INTO fleet_agents (id, name, system_prompt, model, tools, enabled, version, updated_at) VALUES (?, ?, ?, 'router:qnfo-ai', '[]', 1, 1, '2026-10-25T11:26:40.180Z')");
