@@ -286,10 +286,11 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
 {
   const runs = src.match(/env\.AI\.run\(MODEL, \{ messages: \[\{ role: "user", content: prompt \}\][^)]*\)/g) || [];
   ok(runs.length === 2 && runs.every((r) => /max_tokens: 4096, temperature: 0 \}, \{ gateway/.test(r)), "both errata env.AI.run calls carry an explicit token budget", runs);
-  // The verdict is the qnfo-cloud-ops PUB-GATE-LOOP-1 gate, function for function.
+  // The verdict is the qnfo-cloud-ops PUB-GATE-LOOP-1 gate, function for function (pubGateVerdictRaw; the owner-paper exemption
+  // in pubGateVerdict applies only to papers already published).
   const ops = readFileSync(new URL("../qnfo-cloud-ops/worker.js", import.meta.url), "utf8");
   const fnText = (name) => { const s = ops.indexOf("function " + name + "("); let d = 0; for (let i = ops.indexOf("{", s); i < ops.length; i++) { if (ops[i] === "{") d++; else if (ops[i] === "}" && --d === 0) return ops.slice(s, i + 1); } return ""; };
-  const opsGate = new Function(fnText("pubGateSectionStructure") + "\n" + fnText("pubGateScore") + "\n" + fnText("pubGateVerdict") + "\nreturn function (md) { return pubGateVerdict(pubGateScore(md)); };")();
+  const opsGate = new Function(fnText("pubGateSectionStructure") + "\n" + fnText("pubGateScore") + "\n" + fnText("pubGateVerdictRaw") + "\nreturn function (md) { return pubGateVerdictRaw(pubGateScore(md)); };")();
   const bodies = ["", "short", "x".repeat(3000), "# T\n\n## Prior Work\n\n" + "word ".repeat(3000), "y".repeat(5000) + " arXiv:2401.00001 arXiv:2401.00002 10.1000/abc", "z".repeat(4500) + "\n| a | b |\n|---|---|\n| 1 | 2 |\n```py\nx\n```\n## Related Work\n" + " arxiv.org/abs/2401.00001".repeat(12)];
   ok(bodies.every((b) => { const a = releaseGateVerdict(b), o = opsGate(b); return a.pass === o.pass && a.reason === o.reason; }), "releaseGateVerdict equals the qnfo-cloud-ops verdict on every sample", bodies.map((b) => [releaseGateVerdict(b).reason, opsGate(b).reason]));
   const pubs = src.split("\n").filter((l) => /UPDATE papers SET [^"]*status='published',/.test(l));
