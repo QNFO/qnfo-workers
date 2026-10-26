@@ -73,6 +73,7 @@ ok(!requesterOk("") && !requesterOk("x y") && requesterOk("portfolio-manager"), 
 ok(loopInstance("program-manager:research") === "loop-program-manager-research" && loopInstance("pm", "managers") === "managers", "one agent instance per requester unless it names its own");
 ok(DRAIN_PER_TICK >= 1 && DRAIN_PER_TICK <= 5, "the drain is bounded per tick");
 ok(/async scheduled\(/.test(src) && /drainRequests\(env\)/.test(src), "the cron runs drainRequests");
+ok(/path === "\/requests\/drain" && request\.method === "POST"/.test(src), "POST /requests/drain is the second drain path (spof_registry)");
 ok(/scope: "loop"/.test(src) && /if \(c\.scope !== "write"\) return t;\n    t\.mcp_connect/.test(src), "loop turns get schedules but never MCP connections");
 const mig = readFileSync(new URL("../migrations/2026-10-26-cf-agent-requests.sql", import.meta.url), "utf8");
 ok(/CREATE TABLE IF NOT EXISTS cf_agent_requests/.test(mig) && /INSERT OR IGNORE INTO queue_sla/.test(mig) && /analytics_metric_triggers/.test(mig), "the queue ships with its SLA row and metric trigger");

@@ -473,7 +473,7 @@ function selfDoc(caller: string, scope: Scope) {
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
       loops: ["INSERT INTO qnfo-audit.cf_agent_requests (requester, kind run|sandbox|schedule, prompt | code, cron | delay_s, instance?, priority?): drained every 5 minutes, outcome written back to the row"],
-      trusted: ["GET /requests?status=&requester=", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
+      trusted: ["GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
     },
     surfaces: { console: "https://fleet.qnfo.org/cmd (cfagent <request>, cfagent! <request> for the write scope)", ops: "https://ops.qnfo.org/v1/agents/..." }
   };
@@ -512,6 +512,8 @@ export default {
       if (path === "/mcp-servers" && request.method === "POST") return json(await stub.connectMcp(b.name, b.url));
       if ((m = /^\/mcp-servers\/([A-Za-z0-9_-]{4,80})$/.exec(path)) && request.method === "DELETE") return json(await stub.disconnectMcp(m[1]));
       if (path === "/sandbox" && request.method === "POST") return json(await stub.sandbox(String(b.code || ""), scope, caller));
+      // The second path for the 5-minute cron (spof_registry 'qnfo-agents cron */5'): a trusted caller drains the queue on demand.
+      if (path === "/requests/drain" && request.method === "POST") return json({ ok: true, ...(await drainRequests(env)) });
       if (path === "/requests" && request.method === "GET") {
         const st = String(url.searchParams.get("status") || ""), rq = String(url.searchParams.get("requester") || "");
         const r: any = await env.AUDIT_DB.prepare("SELECT id, requester, kind, priority, status, attempts, run_id, substr(coalesce(prompt, code), 1, 200) AS request, substr(result, 1, 600) AS result, error, created_at, started_at, finished_at FROM cf_agent_requests WHERE (?1 = '' OR status = ?1) AND (?2 = '' OR requester = ?2) ORDER BY id DESC LIMIT 30").bind(st, rq).all();

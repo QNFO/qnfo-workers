@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP VIEW IF EXISTS v_stuck_summary_cf_agent_requests; DROP VIEW IF EXISTS v_cf_agent_requests_health; DROP TABLE IF EXISTS cf_agent_requests; DELETE FROM queue_sla WHERE stuck_type = 'cf-agent-request'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'cf_agent_requests_over_120m'; DELETE FROM metric_registry WHERE metric = 'cf_agent_requests_over_120m'
+-- Rollback: DROP VIEW IF EXISTS v_stuck_summary_cf_agent_requests; DROP VIEW IF EXISTS v_cf_agent_requests_health; DROP TABLE IF EXISTS cf_agent_requests; DELETE FROM queue_sla WHERE stuck_type = 'cf-agent-request'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'cf_agent_requests_over_120m'; DELETE FROM metric_registry WHERE metric = 'cf_agent_requests_over_120m'; DELETE FROM spof_registry WHERE component = 'qnfo-agents cron */5 (CF-AGENTS-LOOPS-1)'
 -- CF-AGENTS-LOOPS-1 (2026-10-26, pillar autonomy). Owner directive 2026-10-26 (verbatim): "EXPAND AGENT INTEGRATION AND SURFACES FOR
 -- MORE AUTONOMOUS FLEET OPERATION. PORTFOLIO AND PROGRAM MANAGER AGENTS SHALL MAKE MOST DAILY DECISIONS AUTOMATICALLY TO MAINTAIN,
 -- IMPROVEN, UPGRADE, AND ENHANCE THE FLEET".
@@ -62,3 +62,12 @@ INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table
 VALUES ('cf_agent_requests_over_120m', 'CF-AGENTS-LOOPS-1: fleet agent requests waiting over 120 minutes', 'v_cf_agent_requests_health', '>', 0, 2,
   'Check that the qnfo-agents 5-minute cron runs (cloud_ops_events / Workers logs, worker qnfo-agents, where drain) and that GET https://qnfo-agents.q08.workers.dev/health answers. A drain that runs but leaves rows queued means startRun failed: read cf_agent_requests.error. Close when over_120m = 0. Never delete requests to lower the count; fail them with a reason.',
   'qnfo-agents', 'agent_issues', 1, 1, 'CF-AGENTS-LOOPS-1');
+
+-- SPOF-REVIEW-GATE-1: the 5-minute cron is one drainer; POST /requests/drain is the second (any trusted caller, e.g. ops.qnfo.org/v1/agents/requests/drain).
+INSERT OR REPLACE INTO spof_registry (component, critical_path, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at)
+VALUES ('qnfo-agents cron */5 (CF-AGENTS-LOOPS-1)',
+  'cf_agent_requests rows from fleet loops and the portfolio and program managers are run only when the qnfo-agents cron drains them; rows are never lost, they wait',
+  'POST /requests/drain on qnfo-agents runs the same drainRequests for any trusted caller (ops.qnfo.org/v1/agents/requests/drain through the qnfo-ops AGENTS binding); metric cf_agent_requests_over_120m files an issue when rows wait past 120 minutes',
+  NULL,
+  'local workerd 2026-10-26: __scheduled drained sandbox, schedule and run rows; qnfo-agents/worker.test.mjs checks both drain paths',
+  NULL, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
