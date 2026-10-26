@@ -20,9 +20,16 @@ function slice(begin, end) {
 }
 const charterBlock = slice("// ---- CHARTER-LOOP-1:BEGIN", "// ---- CHARTER-LOOP-1:END ----");
 const ocBlock = slice("// ---- OBJECTIVE-CONSTRAINTS-1:BEGIN", "// ---- OBJECTIVE-CONSTRAINTS-1:END ----");
+// IL-CLOSE-VS-PROBE-2: objectiveConstraintsTick asks closeBlockedByContract (declared in the IMPROVEMENT-LOOP-1 block) before it closes. This file has no remediation_contracts table, and the helper
+// answers "not blocked" when its read fails, so the closes below are unchanged; objective-constraints-close-guard.test.mjs drives the blocked path against the live triggers.
+const guardFn = (() => {
+  const a = src.indexOf("async function closeBlockedByContract(env, issueId) {"), b = src.indexOf("async function improvementLoopTick(env) {");
+  if (a < 0 || b < a) { console.error("FAIL closeBlockedByContract not found in worker.js"); console.log("1 failed"); process.exit(1); }
+  return src.slice(a, b);
+})();
 const sandbox = { VERSION: "test", timedFetch: null, b64encode: null, sha256: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, isFinite, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(charterBlock + "\n" + ocBlock + "\n__export = { objectiveConstraintsEvaluate, objectiveLimitsReview, objectiveConstraintsTick, ocFacts, ocCapability, ocEnergy, ocUnmanaged, OBJECTIVE_CONSTRAINTS, OC_ISSUE_PREFIX, CHARTER_PILLARS };", sandbox, { filename: "objective-constraints-block.js" });
+vm.runInContext(charterBlock + "\n" + guardFn + "\n" + ocBlock + "\n__export = { objectiveConstraintsEvaluate, objectiveLimitsReview, objectiveConstraintsTick, ocFacts, ocCapability, ocEnergy, ocUnmanaged, OBJECTIVE_CONSTRAINTS, OC_ISSUE_PREFIX, CHARTER_PILLARS };", sandbox, { filename: "objective-constraints-block.js" });
 const C = sandbox.__export;
 
 let passed = 0, failed = 0;
