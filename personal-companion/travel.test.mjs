@@ -10,7 +10,8 @@ import {
   promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile,
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
-  shiftYear, planText, chatContext, placeCards, moveCards
+  shiftYear, planText, chatContext, placeCards, moveCards,
+  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -494,6 +495,59 @@ console.log("\n[pillars: places and getting around]");
   ok("getting around: one move per change of place, with the booked journey", mc.length === 2 && mc[0].from === "Valley" && mc[0].to === "Riverside" && mc[0].booked[0] === "Flight to Riverside" && mc[0].cross === true && mc[1].booked.length === 0);
   ok("getting around: fog from the place being left, transit link and a question", mc[1].fog === true && /google\.com\/maps\/dir/.test(mc[1].transit) && /Riverside, India to Coast, India on 2026-12-18/.test(mc[1].ask));
   ok("getting around: past moves are dropped", moveCards(stops, "2026-12-15", []).length === 1);
+}
+
+console.log("\n[eat and do picks]");
+{
+  const pk = parsePicks('ok {"eat":[{"name":"Thakali House","area":"Lakeside","why":"Dal bhat refills"},{"name":"thakali house","area":"x"},{"name":"Momo Corner","area":"Old Bazaar"},{"name":""},{"name":"Third","area":"A"},{"name":"Fourth"}],"do":[{"name":"Sunrise walk","area":"Ridge","why":"<b>quiet</b>"}]}');
+  ok("picks: three per kind at most, duplicates and blanks dropped, markup stripped", pk.eat.length === 3 && pk.eat[1].name === "Momo Corner" && pk.do.length === 1 && !/[<>]/.test(pk.do[0].why), pk);
+  ok("picks: map link searches the named place in its city", /google\.com\/maps\/search\/\?api=1&query=Thakali%20House%2C%20Lakeside%2C%20Lakes%2C%20Nepal/.test(mapLink("Thakali House", "Lakeside", "Lakes", "NP")));
+  const pm = picksPrompt({ city: "Lakes", country: "NP", start_date: "2027-02-12", end_date: "2027-02-16" }, [{ label: "Diet", statement: "vegetarian" }], ["Old Fort"]);
+  ok("picks: the prompt carries the stop, the profile and past rejections, and asks no question", /Lakes, Nepal, 2027-02-12 to 2027-02-16 \(February\)/.test(pm[1].content) && /vegetarian/.test(pm[1].content) && /Old Fort/.test(pm[1].content) && /never ask questions/i.test(pm[0].content));
+
+  const { raw, env } = freshEnv();
+  await ensureTravel(env.PERSONAL);
+  const db = env.PERSONAL;
+  raw.prepare("INSERT INTO travel_stops (id, city, country, start_date, end_date, updated_at) VALUES ('st_aaaaaaaaaaaaaaaaaa', 'Lakes', 'NP', '2026-11-10', '2026-11-14', 'x')").run();
+  raw.prepare("INSERT INTO travel_stops (id, city, country, start_date, end_date, updated_at) VALUES ('st_bbbbbbbbbbbbbbbbbb', 'Far', 'IN', '2027-06-01', '2027-06-05', 'x')").run();
+  const due = await picksDue(db, "2026-11-03");
+  ok("picks: the next stop within 60 days is due, a far one is not", due && due.id === "st_aaaaaaaaaaaaaaaaaa");
+  const reply = JSON.stringify({ eat: [{ name: "Thakali House", area: "Lakeside", why: "w" }, { name: "Momo Corner", area: "Bazaar" }, { name: "Old Fort Cafe" }], do: [{ name: "Sunrise walk" }, { name: "Boat at dawn" }, { name: "Old Fort" }] });
+  let calls = 0;
+  const ai = async () => { calls++; return { response: calls === 1 ? "no json" : reply }; };
+  const r1 = await makePicks(db, { ai }, C, due, "2026-11-03T09:00:00Z");
+  ok("picks: a model with no usable answer falls through to the next", r1.ok && calls === 2 && r1.eat === 3 && r1.do === 3, r1);
+  ok("picks: a stop with picks is no longer due", !(await picksDue(db, "2026-11-03")));
+  ok("picks: no model caller makes nothing", !(await makePicks(db, {}, C, due, "x")).ok);
+  const one = raw.prepare("SELECT id FROM travel_picks WHERE name = 'Old Fort'").get().id;
+  ok("picks: not for me refuses a made-up id", !(await pickNo(db, "pk_zz", "x")).ok);
+  const no = await pickNo(db, one, "2026-11-03T09:05:00Z");
+  ok("picks: not for me hides it and records a reaction", no.changed && raw.prepare("SELECT status FROM travel_picks WHERE id = ?").get(one).status === "no" && raw.prepare("SELECT COUNT(*) n FROM travel_reactions WHERE reaction = 'no' AND kind = 'do' AND option_id = ?").get(one).n === 1);
+  let seen = "";
+  const ai2 = async (m, inp) => { seen = inp.messages[1].content; return { response: reply }; };
+  const r2 = await makePicks(db, { ai: ai2 }, C, due, "2026-11-03T10:00:00Z");
+  ok("picks: fresh ideas replace the old ones, avoid the rejected one, and name it to the model", r2.ok && r2.do === 2 && /Old Fort/.test(seen) && raw.prepare("SELECT COUNT(*) n FROM travel_picks WHERE status = 'open'").get().n === 5 && raw.prepare("SELECT COUNT(*) n FROM travel_picks WHERE status = 'open' AND name = 'Old Fort'").get().n === 0);
+  const rx = await promptFor({ mode: "road", city: "Lakes", checkin: "2026-11-14", recent: [] }, C, [], (await d1(raw).prepare("SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? AND (kind IS NULL OR kind NOT IN ('eat','do'))").bind("2025-01-01").all()).results, "November");
+  ok("picks: a not-for-me on an activity never bans the city from stop ideas", !/Rejected \(never propose\): Lakes/.test(rx[1].content));
+  const pcs = placeCards([{ ...due, lat: null, lon: null }], "2026-11-03", {}, [], C, raw.prepare("SELECT * FROM travel_picks WHERE status = 'open'").all());
+  ok("picks: the place card lists eat and do with map links", pcs[0].eat.length === 3 && pcs[0].do.length === 2 && /maps\/search/.test(pcs[0].eat[0].map) && pcs[0].eat[0].name === "Thakali House");
+  raw.prepare("UPDATE travel_stops SET city = 'Elsewhere' WHERE id = ?").run(due.id);
+  const pcs2 = placeCards([{ ...due, city: "Elsewhere" }], "2026-11-03", {}, [], C, raw.prepare("SELECT * FROM travel_picks WHERE status = 'open'").all());
+  ok("picks: renaming the stop's city hides the old city's picks and makes it due again", pcs2[0].eat.length === 0 && (await picksDue(db, "2026-11-03")).city === "Elsewhere");
+
+  // page API
+  const H = "https://travel.q08.org";
+  const envK = { ...env, COMPANION_KEY: "ck" };
+  const jp = (path, body) => handleTravel(new Request(H + path, { method: "POST", headers: { Cookie: "pc_key=ck", "Content-Type": "application/json" }, body: JSON.stringify(body) }), envK, { now: NOW, ai: async () => ({ response: reply }) });
+  ok("picks over the page API", (await (await jp("/travel/api/picks", { stop: due.id })).json()).ok);
+  ok("picks for an unknown stop are refused", (await jp("/travel/api/picks", { stop: "st_nope" })).status === 404);
+  const anyId = raw.prepare("SELECT id FROM travel_picks WHERE status = 'open' LIMIT 1").get().id;
+  ok("not for me over the page API", (await (await jp("/travel/api/pick-no", { id: anyId })).json()).changed === true);
+
+  // the hourly tick fills one due stop
+  raw.prepare("DELETE FROM travel_picks").run();
+  const tr = await travelTick(env, { now: NOW, ai: async () => ({ response: reply }), send: async () => ({ ok: true }) });
+  ok("the tick makes picks for the next due stop", tr.picks === "Elsewhere" && raw.prepare("SELECT COUNT(*) n FROM travel_picks WHERE status = 'open'").get().n === 6, tr);
 }
 
 console.log("\n[sign-in mail]");

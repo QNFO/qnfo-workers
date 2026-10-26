@@ -1,4 +1,4 @@
-// CF-AGENTS-1 (1.63.0) offline suite: the cfagent console commands drive qnfo-agents over SVC_QNFO_AGENTS.
+// CF-AGENTS-1 (1.64.0) offline suite: the cfagent console commands drive qnfo-agents over SVC_QNFO_AGENTS.
 // Proves: the binding carries props caller qnfo-fleet-dashboard; read turns and reads run at once in the read scope; the write
 // scope and agent changes are destructive ops (a fresh code); a turn's code-task proposals come back as 'task' buttons; a dead
 // binding answers an error, never a throw. ADVERSARIAL: does not prove the live binding resolves; the live proof is
