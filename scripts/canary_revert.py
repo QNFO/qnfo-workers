@@ -15,6 +15,13 @@ WHAT   After canonical-deploy.yml (or deploy-code-orchestrator.yml for the conta
        reverted with -m 1; any git failure becomes an error outcome and the issue is still filed.
        The canary proves that the pushed VERSION arrived, not that the worker works: a change that keeps /health up but
        breaks a cron step or the merge lane is for LOOP-WATCH-1 and the metric triggers, the next line of defence.
+       CANARY-AHEAD-1 (2026-10-26, agent_issues 1000171): the deploy installs main's tip, so two pushes close together leave /health
+       answering the LATER push's VERSION while this canary still waits for the earlier one (push 7a9d293 wanted 3.31.2, a commit
+       15 s later deployed 3.31.3, and the canary reverted the 3.31.2 fix after 25 polls of a healthy worker). A live VERSION whose
+       numeric X.Y.Z core is strictly above the pushed one therefore means a later push deployed, which version-bump-guard
+       (VERSION-AHEAD-1) makes the only way a core above the pushed one can be live: it is logged and not a failure, and that later
+       push's own canary (VERSION and functional step) owns the verdict. An equal core with another suffix, a lower core and an
+       unreadable version still fail exactly as before.
 WHY    CONTROL-PLANE-MANUAL-1 (2026-10-02, human_actions 21) kept qnfo-fleet-control from merging any pull request that
        changes a control-plane worker, because nothing could undo a bad control-plane deploy: the fleet's own revert lives
        in qnfo-fleet-control, which is one of the workers at risk. This canary runs on the GitHub runner with the
@@ -91,14 +98,33 @@ def read_version(text):
     return m.group(1) if m else None
 
 
+VERSION_CORE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
+# CANARY-AHEAD-1: the states in which a worker needs no further polling and is not a failed deploy. "ahead" = a later push's
+# VERSION is live; that push's own canary owns the verdict, so neither the revert nor the functional step is this run's.
+CANARY_SATISFIED = ("ok", "ahead")
+
+
+def version_core(version):
+    """'3.31.2-seo-index-8' -> (3, 31, 2); None when the text has no numeric X.Y.Z core."""
+    m = VERSION_CORE_RE.match(str(version or "").strip())
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
 def judge(health, want):
-    """One /health answer against the wanted VERSION -> (state, seen). state: ok | wrong-version | no-version."""
+    """One /health answer against the wanted VERSION -> (state, seen).
+    state: ok | ahead | wrong-version | no-version. CANARY-AHEAD-1: "ahead" when the live numeric core is strictly above the
+    wanted one (a later push deployed); an equal core with another suffix, a lower core or an unreadable version is wrong-version."""
     if not isinstance(health, dict):
         return "no-version", None
     seen = health.get("version") or health.get("VERSION") or health.get("v")
     if not seen:
         return "no-version", None
-    return ("ok" if str(seen) == str(want) else "wrong-version"), str(seen)
+    if str(seen) == str(want):
+        return "ok", str(seen)
+    live, pushed = version_core(seen), version_core(want)
+    if live and pushed and live > pushed:
+        return "ahead", str(seen)
+    return "wrong-version", str(seen)
 
 
 def is_revert_commit(message):
@@ -136,17 +162,17 @@ def poll(wanted, minutes, poll_sec, fetch=fetch_health, clock=time.monotonic, sl
     out = {w: {"want": v, "state": "pending", "seen": None, "polls": 0} for w, v in wanted.items()}
     deadline = clock() + max(1, minutes) * 60
     while True:
-        pending = [w for w in out if out[w]["state"] != "ok"]
+        pending = [w for w in out if out[w]["state"] not in CANARY_SATISFIED]
         for w in pending:
             st, seen = judge(fetch(w), out[w]["want"])
             out[w]["polls"] += 1
             out[w]["seen"] = seen
             out[w]["state"] = st
-        if all(out[w]["state"] == "ok" for w in out) or clock() >= deadline:
+        if all(out[w]["state"] in CANARY_SATISFIED for w in out) or clock() >= deadline:
             break
         sleep(poll_sec)
     for w in out:
-        if out[w]["state"] != "ok":
+        if out[w]["state"] not in CANARY_SATISFIED:
             out[w]["state"] = "failed:" + out[w]["state"]
     return out
 
@@ -367,7 +393,7 @@ def _revert_push(pushed, failed, dry, why=None):
 def issue_text(pushed, results, outcome):
     """(title, description) of the issue row: CONTROL-PLANE-REVERTED-1 when the revert is on main and its deploy is
     dispatched; CONTROL-PLANE-CANARY-FAILED-1 when nothing was reverted or the revert sits on main undeployed."""
-    failed = [w for w in results if results[w]["state"] != "ok"]
+    failed = [w for w in results if results[w]["state"] not in CANARY_SATISFIED]
     if "sha" in outcome and not outcome.get("redeploy_error"):
         title = "CONTROL-PLANE-REVERTED-1: push " + str(pushed)[:7] + " reverted, " + ", ".join(failed) + " never reached the pushed VERSION"
         step = "the revert commit is " + str(outcome.get("sha")) + " and its deploy is dispatched (" + ", ".join(outcome.get("redeploy") or []) + ")."
@@ -418,6 +444,19 @@ def selftest():
     ok(parse_targets("qnfo-ops qnfo-ops/worker.js\n# c\nqnfo-ai qnfo-ai/worker.js create\n\nbad\n") == [("qnfo-ops", "qnfo-ops/worker.js"), ("qnfo-ai", "qnfo-ai/worker.js")], "targets: worker and path per line, comments and bad lines skipped")
     ok(read_version('x\nvar VERSION = "0.7.0-a"; /* c */\n') == "0.7.0-a" and read_version("nothing") is None, "read_version reads the single VERSION line")
     ok(judge({"version": "1.2.3-x"}, "1.2.3-x") == ("ok", "1.2.3-x") and judge({"version": "1.2.2"}, "1.2.3-x")[0] == "wrong-version" and judge({"ok": True}, "1")[0] == "no-version" and judge(None, "1")[0] == "no-version", "judge: ok, wrong-version, no-version")
+    # CANARY-AHEAD-1 (agent_issues 1000171): push 7a9d293 wanted 3.31.2-seo-index-8, a commit 15 s later deployed 3.31.3-seo-index-9, and the
+    # canary reverted a healthy worker after 25 polls. A strictly higher numeric core is a later push; equal, lower and unreadable still fail.
+    ok(judge({"version": "3.31.3-seo-index-9"}, "3.31.2-seo-index-8") == ("ahead", "3.31.3-seo-index-9") and judge({"version": "4.0.0"}, "3.99.99-x")[0] == "ahead" and judge({"version": "3.31.10"}, "3.31.9")[0] == "ahead", "judge: a live VERSION with a strictly higher numeric core is ahead (numeric, not textual, comparison)")
+    ok(judge({"version": "3.31.2-seo-index-9"}, "3.31.2-seo-index-8")[0] == "wrong-version" and judge({"version": "3.31.2"}, "3.31.3-seo-index-9")[0] == "wrong-version" and judge({"version": "3.9.0"}, "3.31.0")[0] == "wrong-version" and judge({"version": "garbage"}, "3.31.2")[0] == "wrong-version" and judge({"version": "3.31.3"}, "weird")[0] == "wrong-version", "judge: an equal core with another suffix, a lower core, an unreadable live or wanted VERSION stay wrong-version")
+    ok(version_core("3.31.2-seo-index-8") == (3, 31, 2) and version_core("10.0.1") == (10, 0, 1) and version_core("x3.1.1") is None and version_core(None) is None, "version_core reads the numeric X.Y.Z core only")
+    t_a = {"v": 0.0}
+    res_a = poll({"qnfo-gateway": "3.31.2-seo-index-8", "qnfo-ops": "2.0.0"}, 1, 20, fetch=lambda w: {"version": "3.31.3-seo-index-9"} if w == "qnfo-gateway" else {"version": "1.9.9"}, clock=lambda: t_a["v"], sleep=lambda s_: t_a.__setitem__("v", t_a["v"] + s_))
+    ok(res_a["qnfo-gateway"]["state"] == "ahead" and res_a["qnfo-gateway"]["polls"] == 1 and res_a["qnfo-ops"]["state"] == "failed:wrong-version" and res_a["qnfo-ops"]["polls"] >= 3, "poll: a worker that is ahead stops being polled and is not failed, a lower one still fails at the window", res_a)
+    t_b = {"v": 0.0}
+    res_b = poll({"qnfo-gateway": "3.31.2-seo-index-8"}, 1, 20, fetch=lambda w: {"version": "3.31.3-seo-index-9"}, clock=lambda: t_b["v"], sleep=lambda s_: t_b.__setitem__("v", t_b["v"] + s_))
+    ok(res_b["qnfo-gateway"]["state"] == "ahead" and t_b["v"] == 0.0, "poll: an all-ahead set ends at the first poll, without waiting out the window", res_b)
+    t_ai, d_ai = issue_text("c0ffee1234567", {"qnfo-ops": {"want": "2.0.0", "state": "failed:wrong-version", "seen": "1.9.9", "polls": 3}, "qnfo-gateway": {"want": "3.31.2", "state": "ahead", "seen": "3.31.3", "polls": 1}}, {"sha": "abc1234def", "redeploy": ["canonical-deploy.yml"]})
+    ok("qnfo-gateway" not in t_ai and "qnfo-gateway" not in d_ai and "qnfo-ops" in t_ai, "issue_text: a worker that is ahead is never named as failed", t_ai)
     ok(is_revert_commit("Revert \"x\"") and is_revert_commit("revert: abc (CONTROL-PLANE-CANARY-1)") and not is_revert_commit("feat: x"), "a revert commit is recognised, one level only")
     ok(read_version('var VERSION="3.26.1-gw";; /* c */\n') == "3.26.1-gw" and read_version("var VERSION  =  'x';") is None and read_version("  var VERSION = \"x\";") is None, "read_version: no spaces and ';;' accepted (CANARY-VERSION-REGEX-1), single quotes and indented lines are not")
     g = bump_for_revert('var VERSION="3.26.1-gw";; /* c */\nb', "3.26.2-bad", "-revert-abc1234")
@@ -531,6 +570,9 @@ def run(a):
     results = poll(wanted, a.canary_min, a.poll_sec)
     for w in results:
         emit("canary: " + w + " " + results[w]["state"] + " (wanted " + str(results[w]["want"]) + ", saw " + str(results[w]["seen"]) + ", " + str(results[w]["polls"]) + " polls)")
+        if results[w]["state"] == "ahead":
+            emit("canary: CANARY-AHEAD-1: " + w + " live VERSION " + str(results[w]["seen"]) + " is ahead of the pushed " + str(results[w]["want"])
+                 + ", a later push deployed; that push's canary owns the verdict, nothing is reverted for this one")
     acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
     mode = (os.environ.get("CANARY_FUNCTIONAL") or a.functional or "revert").lower()
     why = {}
@@ -547,9 +589,12 @@ def run(a):
                     emit("::warning::canary: " + w + " failed its functional step (observe mode, nothing reverted): " + fn[w]["detail"][:300])
         if not a.dry_run:
             emit("canary: functional ledger " + str(record_functional(acct, token, a.pushed, fn, mode)))
-    failed = [(w, dirs[w], wanted[w]) for w in results if results[w]["state"] != "ok"]
+    failed = [(w, dirs[w], wanted[w]) for w in results if results[w]["state"] not in CANARY_SATISFIED]
     if not failed:
-        emit("canary: every control-plane worker reports its pushed VERSION" + ("" if mode == "off" else " and passes its functional step"))
+        ahead = sorted(w for w in results if results[w]["state"] == "ahead")
+        emit("canary: every control-plane worker reports its pushed VERSION" + (" or a later push's" if ahead else "")
+             + ("" if mode == "off" or len(ahead) == len(results) else " and passes its functional step")
+             + ((" (" + ", ".join(ahead) + " ahead of this push, checked by that push's canary: CANARY-AHEAD-1)") if ahead else ""))
         return 0
     if a.no_revert:
         outcome = {"refused": "verify-only run (workflow_dispatch): the canary files what it saw and reverts nothing"}

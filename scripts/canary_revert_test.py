@@ -10,6 +10,8 @@ import importlib.util
 import os
 import re
 import sys
+import tempfile
+import types
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -98,6 +100,71 @@ class T(unittest.TestCase):
             print("  " + rel)
         self.assertEqual(unread, [], "line-start VERSION literals the canary cannot read: %s" % unread)
         self.assertFalse([w for w in cr.CANARY_WORKERS if w + "/worker.js" in none], "a CANARY_WORKERS entry has no VERSION literal")
+
+    # CANARY-AHEAD-1 (agent_issues 1000171): the incident replayed through run(). Push 7a9d293 carried 3.31.2-seo-index-8, a commit 15 s later
+    # deployed 3.31.3-seo-index-9, /health answered the later version, and the canary reverted the healthy worker (3595289a) after 25 polls.
+    def _run_canary(self, pushed_version, live_health):
+        calls = {"revert": [], "issue": [], "functional": []}
+        clock = {"t": 0.0}
+        names = ["git", "fetch_health", "revert_push", "file_issue", "functional", "record_functional", "poll"]
+        saved = {n: getattr(cr, n) for n in names}
+        real_poll = cr.poll
+        cr.git = lambda args, check=True: 'var VERSION = "%s";\n' % pushed_version
+        cr.fetch_health = lambda worker, timeout=10: live_health
+        cr.revert_push = lambda pushed, failed, dry, why=None: calls["revert"].append(failed) or {"sha": "r" * 40, "redeploy": ["canonical-deploy.yml"]}
+        cr.file_issue = lambda *a, **k: calls["issue"].append(a) or "filed"
+        cr.functional = lambda workers, *a, **k: calls["functional"].append(list(workers)) or {}
+        cr.record_functional = lambda *a, **k: None
+        cr.poll = lambda wanted, minutes, poll_sec, **k: real_poll(wanted, minutes, poll_sec, fetch=cr.fetch_health, clock=lambda: clock["t"], sleep=lambda sec: clock.__setitem__("t", clock["t"] + sec))
+        old_env = {k: os.environ.get(k) for k in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "CANARY_FUNCTIONAL")}
+        os.environ["CLOUDFLARE_ACCOUNT_ID"], os.environ["CLOUDFLARE_API_TOKEN"] = "acct", "tok"
+        os.environ.pop("CANARY_FUNCTIONAL", None)
+        out = []
+        real_emit = cr.emit
+        cr.emit = out.append
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+            fh.write("qnfo-gateway qnfo-gateway/worker.js\n")
+            targets = fh.name
+        try:
+            a = types.SimpleNamespace(targets=targets, pushed="7a9d2935424f8ce69eb5f7e774930ccf27a5163d", canary_min=8, poll_sec=20, dry_run=False,
+                                      no_revert=False, functional=None, functional_tries=1, functional_wait=0)
+            rc = cr.run(a)
+        finally:
+            cr.emit = real_emit
+            for n, f in saved.items():
+                setattr(cr, n, f)
+            for k, v in old_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            os.unlink(targets)
+        return rc, calls, out, clock["t"]
+
+    def test_a_later_push_deployed_is_not_a_failed_deploy(self):
+        rc, calls, out, waited = self._run_canary("3.31.2-seo-index-8", {"status": "ok", "version": "3.31.3-seo-index-9"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls["revert"], [], "a live VERSION ahead of the pushed one must not revert the push")
+        self.assertEqual(calls["issue"], [], "and files no CONTROL-PLANE-REVERTED-1 issue")
+        self.assertEqual(calls["functional"], [[]], "the functional step is the later push's: nothing is checked for an ahead worker")
+        self.assertEqual(waited, 0.0, "it answers at the first poll instead of waiting out the window")
+        text = "\n".join(out)
+        self.assertIn("CANARY-AHEAD-1", text)
+        self.assertIn("qnfo-gateway ahead (wanted 3.31.2-seo-index-8, saw 3.31.3-seo-index-9, 1 polls)", text)
+
+    def test_a_lower_or_unarrived_version_still_reverts(self):
+        for live in ({"status": "ok", "version": "3.31.1-older"}, {"status": "ok", "version": "3.31.2-other-suffix"}, {"status": "ok"}, None):
+            rc, calls, out, waited = self._run_canary("3.31.2-seo-index-8", live)
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(calls["revert"]), 1, "live %r: a push whose VERSION never arrived is still reverted" % (live,))
+            self.assertEqual(len(calls["issue"]), 1, "live %r: and the issue is still filed" % (live,))
+            self.assertGreaterEqual(waited, 8 * 60, "live %r: after the whole window" % (live,))
+            self.assertNotIn("CANARY-AHEAD-1", "\n".join(out))
+
+    def test_the_exact_version_still_runs_the_functional_step(self):
+        rc, calls, out, waited = self._run_canary("3.31.2-seo-index-8", {"status": "ok", "version": "3.31.2-seo-index-8"})
+        self.assertEqual((rc, calls["revert"], calls["functional"]), (0, [], [["qnfo-gateway"]]))
+        self.assertNotIn("CANARY-AHEAD-1", "\n".join(out))
 
 
 if __name__ == "__main__":
