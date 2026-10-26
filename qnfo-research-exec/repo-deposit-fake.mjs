@@ -54,6 +54,7 @@ export class FakeGitHub {
       if (f && f.lose) throw new Error("connection reset after the server applied the update");
       return reply(200, { object: { sha: b.sha } });
     }
+    if (method === "POST" && /\/actions\/workflows\/[\w.-]+\/dispatches$/.test(path)) { (this.dispatches = this.dispatches || []).push(path.split("/").slice(-2)[0]); return reply(204, "", true); }
     if (method === "GET" && (m = /\/compare\/(\w+)\.\.\.(\w+)$/.exec(path))) return reply(200, { status: this.isAncestor(m[1], m[2]) ? (m[1] === m[2] ? "identical" : "ahead") : "diverged" });
     if (method === "GET" && path.startsWith(base + "/contents/")) {
       const file = decodeURIComponent(path.slice((base + "/contents/").length)), ref = u.searchParams.get("ref");

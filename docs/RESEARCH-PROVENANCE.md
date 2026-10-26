@@ -20,6 +20,7 @@ is archived after the catch-up. DECISION-AUTOPROCEED-1: recorded in `decision_lo
 | a revision is published (publishV2) | `papers/<slug>/` updated, a snapshot appended to `provenance.json` | event `repo-paper` |
 | a claim-integrity correction or retraction | same writer, with a `corrected` / `retracted` event on the paper's record | `provenance.json` events |
 | every 10 minutes (`repoSyncTick`) | retry deposits that errored (2 per tick), restore listed gaps (30 checks, 3 papers per tick), compare `research_repo_sync_batch` papers with git | event `repo-sync` |
+| every 10 minutes (`repoCatchupTick`, consolidated layout only) | while `qnfo-ensemble-research` has cycles that `runs/` lacks: dispatch `ensemble-catchup.yml` in `QNFO/qnfo-research` (at most every 6 hours); when nothing is missing and 3 consolidated deposits are ledgered: one `archive-request` row in `portfolio_actions` for `QNFO/qnfo-ensemble-research` | event `repo-sync` (`catchup`), `portfolio_actions` |
 
 Before `QNFO/qnfo-research` carries `provenance/IMPORT.json` the target is the legacy repository (runs only). The marker is the only
 coordination between the repository change and the deploy; order does not matter.
@@ -39,6 +40,7 @@ python3 tools/provenance.py verify                                      -- in QN
 UPDATE ops_config SET value = 'legacy' WHERE key = 'research_repo_target';   -- runs go to the legacy repository again
 UPDATE ops_config SET value = 'off'    WHERE key = 'research_repo_sync';     -- stop the paper-text sync
 UPDATE ops_config SET value = 'off'    WHERE key = 'research_repo_restore';  -- stop the gap restore
+UPDATE ops_config SET value = 'off'    WHERE key = 'research_repo_archive';  -- do not file the archive request
 ```
 
 Every write is a git commit: a bad one is reverted with `git revert` on `QNFO/qnfo-research`; nothing is deleted by the worker.
@@ -50,5 +52,6 @@ Every write is a git commit: a bad one is reverted with `git revert` on `QNFO/qn
 * The models in a v2 manifest are the configured ones (`WRITER_MODELS`, `MODELS`), not the model that answered each call.
 * The restore tick accepts a run file only if its sha256 equals the one the old manifest recorded. A file R2 holds in another version is
   recorded `unrecoverable` with that reason, not written.
-* Archiving the old repository and asking Software Heritage to archive the new one are not done by the worker (outward, one-way). They are
-  fleet issues with closing probes.
+* Archiving the old repository is the worker's request and the portfolio loop's act (`PORTFOLIO-ARCHIVE-1`, reversible: GitHub unarchive);
+  `research_repo_archive = off` stops the request. Asking Software Heritage to archive the new repository is outward and one-way, so it is a
+  separate fleet issue with a closing probe, not something the worker does on its own.

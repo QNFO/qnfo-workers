@@ -15,14 +15,14 @@
 --   2. v_research_run_deposit_failures: a deposit that stayed error/deferred for an hour, and a run published after the ledger began that has no
 --      ledger row at all. Detector fm-research-run-deposit (expected 0). No new metric_registry row: the detector contract files its own issue on a hit.
 --   3. ops_config switches (all reversible without a deploy): research_repo_target (auto | legacy | consolidated), research_repo_sync (on | off),
---      research_repo_restore (on | off), research_repo_sync_batch, research_repo_sync_cursor.
+--      research_repo_restore (on | off), research_repo_archive (on | off), research_repo_sync_batch, research_repo_sync_cursor, research_repo_catchup_at.
 --   4. failure_modes rows for the two defects, with root cause and remediation.
 -- Closing measure: the detector reads 0 for 24 hours after the deploy and `SELECT COUNT(*) FROM research_run_ledger WHERE status = 'ok'` grows with
 -- each published paper. The repository side is checked by `python3 tools/provenance.py verify` in QNFO/qnfo-research (CI workflow provenance.yml).
 --
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP VIEW IF EXISTS v_research_run_deposit_failures; DROP TABLE IF EXISTS research_run_ledger; DELETE FROM ops_config WHERE key IN ('research_repo_target', 'research_repo_sync', 'research_repo_restore', 'research_repo_sync_batch', 'research_repo_sync_cursor'); DELETE FROM remediation_contracts WHERE class = 'fm-research-run-deposit'; DELETE FROM failure_modes WHERE fm_key IN ('research-run-deposit-partial', 'research-paper-text-stale-in-git');
+-- Rollback: DROP VIEW IF EXISTS v_research_run_deposit_failures; DROP TABLE IF EXISTS research_run_ledger; DELETE FROM ops_config WHERE key IN ('research_repo_target', 'research_repo_sync', 'research_repo_restore', 'research_repo_sync_batch', 'research_repo_sync_cursor', 'research_repo_catchup_at', 'research_repo_archive'); DELETE FROM remediation_contracts WHERE class = 'fm-research-run-deposit'; DELETE FROM failure_modes WHERE fm_key IN ('research-run-deposit-partial', 'research-paper-text-stale-in-git');
 
 CREATE TABLE IF NOT EXISTS research_run_ledger (
   run_id          TEXT PRIMARY KEY,                -- research_queue.id
@@ -62,7 +62,9 @@ INSERT OR IGNORE INTO ops_config (key, value, note) VALUES
  ('research_repo_sync', 'on', 'RESEARCH-PROVENANCE-1: off stops the paper-text sync (published living-paper text -> papers/<slug>/ in the research repository, research_repo_sync_batch papers per tick).'),
  ('research_repo_restore', 'on', 'RESEARCH-PROVENANCE-1: off stops the restore of the gaps listed in provenance/known-gaps.json (run files from R2 by hash, paper text from living-paper).'),
  ('research_repo_sync_batch', '6', 'RESEARCH-PROVENANCE-1: papers compared with their git copy per tick (a few GitHub reads each, one commit for the ones that differ).'),
- ('research_repo_sync_cursor', '', 'RESEARCH-PROVENANCE-1: last slug the paper-text sync compared; empty = start of the list. Maintained by the worker.');
+ ('research_repo_sync_cursor', '', 'RESEARCH-PROVENANCE-1: last slug the paper-text sync compared; empty = start of the list. Maintained by the worker.'),
+ ('research_repo_catchup_at', '0', 'REPO-CONSOLIDATION-1: epoch ms of the last dispatch of QNFO/qnfo-research ensemble-catchup.yml (at most one per 6 hours). Maintained by the worker.'),
+ ('research_repo_archive', 'on', 'REPO-CONSOLIDATION-1: off stops the worker from filing the archive request (portfolio_actions, PORTFOLIO-ARCHIVE-1) for QNFO/qnfo-ensemble-research once every cycle is in qnfo-research runs/ and 3 consolidated deposits are ledgered.');
 
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
  ('research-run-deposit-partial',

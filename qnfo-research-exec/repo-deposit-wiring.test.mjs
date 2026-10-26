@@ -7,6 +7,7 @@ import * as W from "./worker.js";
 import { FakeGitHub, FakeHub } from "./repo-deposit-fake.mjs";
 
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+const W_TARGET = () => ({ owner: "QNFO", repo: "qnfo-research", branch: "main", runsDir: "runs", layout: "consolidated" });
 const realFetch = globalThis.fetch;
 let passed = 0, failed = 0;
 const tests = [];
@@ -14,7 +15,7 @@ const test = (n, f) => tests.push([n, f]);
 
 // ---- fakes
 class FakeD1 {
-  constructor(config = {}) { this.config = config; this.runs = []; this.ledger = new Map(); this.pipelineSlugs = []; this.queueRows = {}; this.byslug = {}; this.failLedger = false; }
+  constructor(config = {}) { this.config = config; this.runs = []; this.ledger = new Map(); this.pipelineSlugs = []; this.queueRows = {}; this.byslug = {}; this.failLedger = false; this.portfolio = []; }
   prepare(sql) {
     const self = this;
     const mk = (a) => ({
@@ -24,6 +25,7 @@ class FakeD1 {
           const prev = self.ledger.get(a[0]) || {};
           self.ledger.set(a[0], { run_id: a[0], slug: a[1], repo: a[2], run_path: a[3], cycle: a[4], paper_path: a[5], paper_version: a[6], paper_sha256: a[7], manifest_sha256: a[8], commit_sha: a[9], status: a[10], error: a[11], attempts: (prev.attempts || 0) + 1 });
         } else if (/UPDATE ops_config SET value/.test(sql)) self.config[a[0]] = a[1];
+        else if (/INSERT INTO portfolio_actions/.test(sql)) self.portfolio.push({ repo: "QNFO/qnfo-ensemble-research", action: "archive-request", status: "requested", detail: a[1] });
         self.runs.push({ sql, args: a });
         return {};
       },
@@ -34,6 +36,8 @@ class FakeD1 {
         }
         if (/FROM research_run_ledger WHERE slug/.test(sql)) { const hit = [...self.ledger.values()].filter((r) => r.slug === a[0] && (r.status === "ok" || r.status === "landed-unverified") && r.run_path).pop(); return hit || null; }
         if (/FROM research_queue WHERE id/.test(sql)) return self.queueRows[a[0]] || null;
+        if (/FROM portfolio_actions WHERE action = 'archive-request'/.test(sql)) return self.portfolio.length ? { status: self.portfolio[self.portfolio.length - 1].status } : null;
+        if (/COUNT\(\*\) AS n FROM research_run_ledger WHERE status = 'ok'/.test(sql)) return { n: [...self.ledger.values()].filter((r) => r.status === "ok" && r.repo === "QNFO/qnfo-research").length };
         return null;
       },
       all: async () => {
@@ -210,6 +214,34 @@ test("repoSyncTick retries a deposit that errored: rebuilt from R2 and living-pa
   assert.deepEqual(r.retried, [{ slug: "alpha-paper", ok: true, status: "ok" }]);
   assert.equal(w.d1.ledger.get(w.rid).status, "ok"); assert.equal(w.d1.ledger.get(w.rid).attempts, 2);
   assert.ok(w.cons.files()["runs/cycle-397/alpha-paper/MANIFEST.json"]);
+});
+
+test("repoCatchupTick: legacy cycles missing from runs/ -> workflow dispatched once per 6 h; nothing missing and 3 proven deposits -> one archive request", async () => {
+  const w = world();
+  w.legacy.foreignCommit({ "cycle-396/x/MANIFEST.json": "{}", "cycle-397/y/MANIFEST.json": "{}" });
+  w.cons.foreignCommit({ "runs/cycle-9/old/MANIFEST.json": "{}", "runs/cycle-396/x/MANIFEST.json": "{}" });
+  const t = W_TARGET(), env = w.env;
+  w.d1.config.research_repo_catchup_at = "0";
+  let r = await W.repoCatchupTick(env, t);
+  assert.equal(r.missing, 1); assert.equal(r.first, "cycle-397"); assert.equal(r.dispatched, 204);
+  assert.deepEqual(w.cons.dispatches, ["ensemble-catchup.yml"]);
+  r = await W.repoCatchupTick(env, t);
+  assert.equal(r.waiting, true); assert.equal(w.cons.dispatches.length, 1, "not again within 6 h");
+  w.cons.foreignCommit({ "runs/cycle-397/y/MANIFEST.json": "{}" });
+  r = await W.repoCatchupTick(env, t);
+  assert.match(r.archive, /waiting for 3/); assert.equal(w.d1.portfolio.length, 0, "no archive request before consolidated deposits are proven");
+  for (let i = 0; i < 3; i++) w.d1.ledger.set("ok" + i, { run_id: "ok" + i, slug: "s" + i, repo: "QNFO/qnfo-research", status: "ok", attempts: 1 });
+  r = await W.repoCatchupTick(env, t);
+  assert.equal(r.archive, "requested"); assert.equal(w.d1.portfolio.length, 1); assert.equal(w.d1.portfolio[0].repo, "QNFO/qnfo-ensemble-research");
+  r = await W.repoCatchupTick(env, t);
+  assert.equal(r.archive, "requested"); assert.equal(w.d1.portfolio.length, 1, "asked once");
+  w.d1.config.research_repo_archive = "off"; w.d1.portfolio.length = 0;
+  assert.equal(await W.repoCatchupTick(env, t), null, "research_repo_archive = off");
+});
+
+test("repoCatchupTick does nothing in the legacy layout", async () => {
+  const w = world({ consolidated: false });
+  assert.equal(await W.repoCatchupTick(w.env, { layout: "legacy" }), null);
 });
 
 test("the old failure shapes are gone from worker.js", async () => {

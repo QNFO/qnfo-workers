@@ -2091,6 +2091,7 @@ async function repoSyncTick(env) {
   var out = { repo: t.repo };
   try { var rd = await repoRetryDeposits(env, t); if (rd.length) out.retried = rd; } catch (e) { out.error = "retry: " + String(e && e.message || e).slice(0, 160); }
   if (t.layout !== "consolidated") return Object.assign(out, { skipped: out.retried ? undefined : "consolidation pending" });
+  try { var cu = await repoCatchupTick(env, t); if (cu && (cu.dispatched !== undefined || cu.archive === "requested" || cu.missing)) out.catchup = cu; } catch (e) { out.error = "catchup: " + String(e && e.message || e).slice(0, 160); }
   if ((await floorFlag(env, "research_repo_restore")) !== "off") {
     try { var rr = await repoRestoreTick(env, t); if (!rr.ok || rr.restoredFiles || rr.restoredPapers || rr.unrecoverable) out.restore = rr; } catch (e) { out.error = "restore: " + String(e && e.message || e).slice(0, 160); }
   }
@@ -2098,6 +2099,31 @@ async function repoSyncTick(env) {
     try { var ps = await repoPaperSyncTick(env, t); if (!ps.ok || (ps.changed && ps.changed.length)) out.sync = ps; else out.syncChecked = ps.checked; } catch (e) { out.error = "sync: " + String(e && e.message || e).slice(0, 160); }
   }
   return out;
+}
+// REPO-CONSOLIDATION-1: finish the consolidation without a person. While the legacy ensemble repository holds cycles that runs/ lacks, the
+// qnfo-research workflow ensemble-catchup.yml (git subtree pull, history kept, then the provenance records) is dispatched, at most every
+// 6 hours. When nothing is missing and three consolidated deposits are in the ledger, one archive request is filed for the legacy
+// repository on the PORTFOLIO-ARCHIVE-1 path (portfolio_actions, executed by qnfo-fleet-control; reversible: GitHub unarchive).
+async function repoCatchupTick(env, t) {
+  if (t.layout !== "consolidated" || (await floorFlag(env, "research_repo_archive")) === "off") return null;
+  var asked = await env.QNFO_AUDIT.prepare("SELECT status FROM portfolio_actions WHERE action = 'archive-request' AND repo IN ('QNFO/qnfo-ensemble-research','qnfo-ensemble-research') ORDER BY id DESC LIMIT 1").first();
+  if (asked) return { archive: asked.status };
+  var legacy = REPO_DEPOSIT.TARGET_LEGACY;
+  var theirs = (await REPO_DEPOSIT.listDirNames(env, null, legacy, "")).filter(function(n) { return /^cycle-\d+$/.test(n); });
+  var have = {};
+  (await REPO_DEPOSIT.listDirNames(env, null, t, "runs")).forEach(function(n) { have[n] = 1; });
+  var missing = theirs.filter(function(n) { return !have[n]; });
+  if (missing.length) {
+    var last = Number(await floorFlag(env, "research_repo_catchup_at")) || 0;
+    if (Date.now() - last < 6 * 3600 * 1000) return { missing: missing.length, waiting: true };
+    var r = await fetch("https://api.github.com/repos/" + t.owner + "/" + t.repo + "/actions/workflows/ensemble-catchup.yml/dispatches", { method: "POST", headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", Accept: "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify({ ref: t.branch }) });
+    await repoSetFlag(env, "research_repo_catchup_at", String(Date.now()));
+    return { missing: missing.length, first: missing[0], dispatched: r.status };
+  }
+  var proven = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_run_ledger WHERE status = 'ok' AND repo = 'QNFO/qnfo-research'").first();
+  if (!proven || Number(proven.n) < 3) return { missing: 0, archive: "waiting for 3 consolidated deposits" };
+  await env.QNFO_AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, 'QNFO/qnfo-ensemble-research', 'archive-request', 'requested', ?2)").bind(nowIso(), "REPO-CONSOLIDATION-1 (qnfo-research-exec " + VERSION + "): every cycle of this repository is in QNFO/qnfo-research runs/ (history kept by git subtree) and " + proven.n + " deposits have landed there; archiving is reversible (GitHub unarchive)").run();
+  return { missing: 0, archive: "requested" };
 }
 async function repoLedgerStatus(env) {
   var by = (await env.QNFO_AUDIT.prepare("SELECT status, COUNT(*) AS n, MAX(updated_at) AS latest FROM research_run_ledger GROUP BY status").all()).results || [];
@@ -31728,6 +31754,7 @@ export {
   collectArtifacts,
   recordRunLedger,
   repoSyncTick,
+  repoCatchupTick,
   repoLedgerStatus,
   paperDirFor,
   sanitizeRetrieved,

@@ -28,7 +28,9 @@ The 10-minute tick (`repoSyncTick`) also retries a deposit that errored, restore
 `provenance/known-gaps.json` (a run file only if its sha256 equals the manifest's), and compares `research_repo_sync_batch` published papers
 with their git copy, committing the ones that differ. Until `QNFO/qnfo-research` carries `provenance/IMPORT.json` a run goes to the legacy
 `qnfo-ensemble-research` (still atomic, v2 manifest) and no paper text is written. ops_config: `research_repo_target` (auto | legacy |
-consolidated), `research_repo_sync`, `research_repo_restore`, `research_repo_sync_batch`; off/legacy revert it without a deploy.
+consolidated), `research_repo_sync`, `research_repo_restore`, `research_repo_archive`, `research_repo_sync_batch`; off/legacy revert it without a deploy.
+`repoCatchupTick` finishes the consolidation: it dispatches the `ensemble-catchup.yml` workflow while the legacy repository has cycles `runs/` lacks and,
+once none are missing and 3 consolidated deposits are ledgered, files one `portfolio_actions` archive request for the legacy repository (PORTFOLIO-ARCHIVE-1).
 Suites: `repo-deposit.test.mjs` (module, fake Git Data API with a concurrent writer, a lost response, 5xx, a corrupt blob, a byte-identical
 parity golden shared with `tools/provenance.py`) and `repo-deposit-wiring.test.mjs` (the real worker functions). Operations:
 `docs/RESEARCH-PROVENANCE.md`.
