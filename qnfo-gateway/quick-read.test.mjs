@@ -475,7 +475,7 @@ const Q = "What did the controller measure about the energy cost of one solution
   await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread");
   await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
   ok(aiCalls === 0 && env._plain.size === 0, "a digest GET with no cached summary spends nothing and builds nothing", { aiCalls, cached: env._plain.size });
-  ok(/async function plainFill\(env\)/.test(src) && /await plainFill\(env\)/.test(src), "the scheduled run calls plainFill");
+  ok(/async function plainFill\(env(, only)?\)/.test(src) && /await plainFill\(env\)/.test(src), "the scheduled run calls plainFill");
   const m = await import(pathToFileURL(join(here, "worker.js")).href);
   ok(typeof m.default.scheduled === "function", "the worker has a scheduled handler");
   const PLAIN_FILL = new Function("return " + src.match(/var PLAIN_FILL_MAX = (\d+);/)[1])();
@@ -528,6 +528,16 @@ const Q = "What did the controller measure about the energy cost of one solution
     const html = await page.text();
     ok(!/Use everyday words|We must restate|We must cover|Hard rules:|At most 1 sentence|Output only the plain-language sentences/i.test(html), "the public paper page never renders the live instruction-residue sample");
   }
+}
+
+// ---- 22. PLAIN-RESIDUE-LIKE-1: D1 refuses a LIKE pattern over 50 bytes, so the residue gate SQL must not build one
+{
+  const markers = new Function("return " + src.match(/var PLAIN_PROMPT_MARKERS = (\[[^\]]*\]);/)[1])();
+  ok(markers.some((m) => Buffer.byteLength("%" + m + "%") > 50), "a residue marker is longer than the D1 LIKE limit (the case this guards)");
+  ok(!/" LIKE '%" \+ marker/.test(src) && /"instr\(" \+ lower \+ ",'" \+ marker/.test(src), "the residue markers are matched with instr, never LIKE");
+  const likeLits = (src.match(/LIKE '[^']*'/g) || []).filter((l) => Buffer.byteLength(l.slice(6, -1)) > 50);
+  ok(likeLits.length === 0, "no LIKE literal in the worker is over 50 bytes", likeLits);
+  ok(/if \(Array\.isArray\(only\) && only\.length\) \{ var one = only\[0\]/.test(src), "a page-time fill builds only the paper it was given");
 }
 
 console.log(pass + " passed, " + fail + " failed");
