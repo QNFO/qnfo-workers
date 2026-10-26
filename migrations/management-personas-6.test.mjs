@@ -62,7 +62,10 @@ ok(!/code-task:/.test(pOps.rationale), "the stored rationale carries no second c
 ok(one("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'ROADMAP-1:%'").n === 0, "nothing is filed while ROADMAP-1 items are not a trusted merge source");
 ok(/1 proposed \(waiting for merge admission of management-personas ROADMAP-1 items in code_merge_trusted_sources\), 0 filed, 0 in build, 0 deployed in 7 days\./.test(one("SELECT summary FROM persona_briefs WHERE persona_key = 'portfolio-manager'").summary), "the brief says the proposals wait for admission", one("SELECT summary FROM persona_briefs WHERE persona_key = 'portfolio-manager'").summary);
 
-run("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('code_merge_trusted_sources', 'qnfo-fleet-control|METRIC-TRIGGER-,management-personas|ROADMAP-1:')");
+run("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('code_merge_trusted_sources', 'qnfo-fleet-control|METRIC-TRIGGER-')");
+const sql7 = rd("./2026-10-26-management-personas-7.sql");
+db.exec(sql7); db.exec(sql7.slice(0, sql7.indexOf("INSERT INTO decision_log")));
+ok(one("SELECT value FROM ops_config WHERE key = 'code_merge_trusted_sources'").value === "qnfo-fleet-control|METRIC-TRIGGER-,management-personas|ROADMAP-1:", "migration -7 admits ROADMAP-1 items once, keeping the other sources");
 run("UPDATE persona_briefs SET summary = 'Brief.'");
 tick();
 const iss = q("SELECT * FROM agent_issues WHERE title LIKE 'ROADMAP-1:%'");
