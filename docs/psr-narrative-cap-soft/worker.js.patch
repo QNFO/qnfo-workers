@@ -1,0 +1,109 @@
+diff --git qnfo-fleet-dashboard/worker.js qnfo-fleet-dashboard/worker.js
+index b9e95bfe..a09f8cfc 100644
+--- qnfo-fleet-dashboard/worker.js
++++ qnfo-fleet-dashboard/worker.js
+@@ -10,7 +10,8 @@ var __defProp222 = Object.defineProperty;
+ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
+ var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
+ // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
+-var VERSION = "1.70.2";
++var VERSION = "1.70.3";
++/* 1.70.3 PSR-NARRATIVE-CAP-SOFT-1 (2026-10-26, agent_issues 1000409, pillar cost; patch): the weekly program-strategic review writes its narrative at a breached ai_spend cap and when the budget cannot be read, on the free Workers AI model only (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06: a breached cap steers model choice and never stops work); the result carries narrative_tier (normal | lean) and narrative_count in place of narrative_allowed, and the summary names the tier. */
+ /* 1.70.2 DASH-DIAGNOSE-DOCTOR-1 (2026-10-26, agent_issues 100360 and 1000266, pillar autonomy; patch): the Diagnose verb (diagnose <id>, why <id>) reads the BREACH-DOCTOR-1 ledger through v_breach_diagnosis_current (issue_id, enums and ids only; facts_json and action_ref are never selected) and prints one "Breach doctor:" line (cause class, rule and version, family, mode, state, action kind, verify passes, error code) and, for a live on-mode diagnosis or a hand-off to an owner card, the plain-words meaning; the old lookup read breach_diagnoses by a subject column that table does not have, so it never returned a row. prior 1.70.1 */
+ /* 1.70.1 DASH-OWNER-ACTIONS-1 follow-up (2026-10-26, agent_issues 100360, pillar autonomy; patch): a receipt card (human_actions.source owner-request-issue, "Closed for you") is loaded as a receipt by decOpenCards and cmdDecide (both select source, with the no-column fallback of collectHumanActions), so a bare approve no longer offers it as a second choice, approve on it is refused and /api/cmd/run approve on it writes nothing; the hard-marker gate FAILS CLOSED: when default_approve_markers cannot be read (a D1 error or no rows) every card that asks for a decision offers Diagnose and Done only, in the page, the typed verbs and the server, the unreadable result is retried after 60 seconds, and the embedded regex stays as an extra layer on a readable list. prior 1.70.0 */
+ /* 1.70.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them; since FLEET-STATUS-1 made the home page statusPageHtml, the Needs-you cards of / carry the same Approve / Decline / Diagnose block for the signed-in owner only (statusOwnerDecisions, read per request, never inside the cached fleetStatusData document or the public /api/status, because the numbered items are the text of an issue that can be private), a stranger's page is unchanged, and /classic keeps its own; a second approve of an approved item files no second hand-off and a decline of an approved item says it was already handed to the fleet and is not undone; "why 2026 papers were pulled?" is the model's, since a number is an issue only after issue / agent_issues / # or as the whole argument; "Investigate why the dashboard is slow" and "diagnose the stuck integration chain" are the model's too (diagnose and investigate answer in code alone, or when a reference or a scheduled worker's name opens the argument, and one title word never answers a sentence); the hand-off is never longer than the 1800 characters the issue body keeps. */
+@@ -15509,9 +15510,10 @@ async function ownerRoute(request, env, path, ownerCk) {
+ //      metric is breaching, AMBER = high-open or stalled projects, else GREEN;
+ //   3. writes deterministic top actions and portfolio decisions (constrain = highest-risk program, accelerate =
+ //      open issues fell >= 20% week over week, stable otherwise);
+-//   4. attempts one short narrative per program via its charter persona prompt (fleet_agents) ONLY while no
+-//      ai_spend fleet_budget cap is breached; otherwise the deterministic text stands (SLA-AND-PATHS-1: the review's
+-//      definition of done never depends on a model call);
++//   4. attempts one short narrative per program via its charter persona prompt (fleet_agents): on the free model only
++//      while an ai_spend fleet_budget cap is breached or the budget cannot be read (PSR-NARRATIVE-CAP-SOFT-1,
++//      BUDGET-SOFT-ROUTE-1: a breached cap steers the model and never stops the work); the deterministic text stands
++//      when no model answers (SLA-AND-PATHS-1: the review's definition of done never depends on a model call);
+ //   5. writes program_review_notes + one portfolio_runs row (kind 'weekly-strategic') and files owner cards
+ //      (human_actions) ONLY for genuinely owner-bound items: spend above the A9 ceiling and RED verdicts persisting
+ //      for 3+ consecutive review weeks.
+@@ -15601,16 +15603,18 @@ async function psrScorecards(env, day) {
+ }
+ __name(psrScorecards, "psrScorecards");
+ 
+-async function psrNarrativeAllowed(env) {
++// PSR-NARRATIVE-CAP-SOFT-1 (1.70.3, agent_issues 1000409): the tier of the weekly narrative. "normal" asks the free model and falls back to the paid one; "lean" (any fleet_budget ai_spend cap
++// breached, or the budget unreadable) asks the free model only. BUDGET-SOFT-ROUTE-1 (owner directive 2026-10-06): a breached cap steers model choice to the cheapest capable model and never stops work.
++async function psrNarrativeTier(env) {
+   try {
+     const fb = await d1all(env.AUDIT, "SELECT cap, current FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'");
+-    for (const r of fb) if (psrNum(r.current) > psrNum(r.cap)) return false;
+-    return true;
++    for (const r of fb) if (psrNum(r.current) > psrNum(r.cap)) return "lean";
++    return "normal";
+   } catch (e) {
+-    return false; // budget unreadable: stay model-silent (fail toward rule 8)
++    return "lean"; // budget unreadable: do the work on the free model, never stay silent
+   }
+ }
+-__name(psrNarrativeAllowed, "psrNarrativeAllowed");
++__name(psrNarrativeTier, "psrNarrativeTier");
+ 
+ async function psrNarrative(env, personaId, promptText, freeOnly) {
+   const models = freeOnly ? [PSR_FREE_MODEL] : [PSR_FREE_MODEL, PSR_PAID_MODEL];
+@@ -15673,7 +15677,7 @@ async function psrReview(env, day) {
+   });
+   const glMap = {};
+   for (const r of glRows) glMap[r.program_code] = r;
+-  const narrativeAllowed = await psrNarrativeAllowed(env);
++  const narrativeTier = await psrNarrativeTier(env);
+   const notes = [];
+   const jobs = [];
+   for (const p of sc.programs) {
+@@ -15712,20 +15716,22 @@ async function psrReview(env, day) {
+     const trend = typeof prevOpen === "number" && typeof curOpen === "number" ? (curOpen - prevOpen) / Math.max(1, prevOpen) : null;
+     const note = { code: p.program_code, pm, verdict, risk: p.risk, open: p.open, high: p.high, guard: p.guard, stalled: p.stalled, primary: charter.primary_metric || null, acts: acts.join("; "), trend, rmNow, rmNext, rmLater, glAdopted, glCompleted, narrative: null };
+     notes.push(note);
+-    if (narrativeAllowed) {
+-      const promptText = "Program " + p.program_code + ". Objective: " + (charter.objective || "-") + ". Today: " + p.open + " open issues (" + p.high + " high), " + p.guard + " guard breaches, " + p.stalled + " stalled projects, risk score " + p.risk.toFixed(1) + ". Week-over-week open-issue change: " + (trend == null ? "unknown" : Math.round(trend * 100) + "%") + ". Write one factual sentence: verdict, main risk, one next action.";
+-      jobs.push(psrNarrative(env, pm, promptText, false).then(function(n) {
+-        return { code: p.program_code, n };
+-      }).catch(function() {
+-        return { code: p.program_code, n: null };
+-      }));
+-    }
++    const promptText = "Program " + p.program_code + ". Objective: " + (charter.objective || "-") + ". Today: " + p.open + " open issues (" + p.high + " high), " + p.guard + " guard breaches, " + p.stalled + " stalled projects, risk score " + p.risk.toFixed(1) + ". Week-over-week open-issue change: " + (trend == null ? "unknown" : Math.round(trend * 100) + "%") + ". Write one factual sentence: verdict, main risk, one next action.";
++    jobs.push(psrNarrative(env, pm, promptText, narrativeTier === "lean").then(function(n) {
++      return { code: p.program_code, n };
++    }).catch(function() {
++      return { code: p.program_code, n: null };
++    }));
+   }
++  let narrativeCount = 0;
+   if (jobs.length) {
+     const nar = await Promise.all(jobs);
+-    for (const x of nar) if (x && x.n) notes.find(function(nt) {
+-      return nt.code === x.code;
+-    }).narrative = x.n;
++    for (const x of nar) if (x && x.n) {
++      narrativeCount += 1;
++      notes.find(function(nt) {
++        return nt.code === x.code;
++      }).narrative = x.n;
++    }
+   }
+   for (const nt of notes) {
+     await env.AUDIT.prepare("INSERT OR REPLACE INTO program_review_notes (day, program_code, manager_persona, verdict, risk_score, open_issues, high_open, guard_breaches, stalled_projects, primary_metric, top_actions, narrative, roadmap_now, roadmap_next, roadmap_later, goals_adopted, goals_completed, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, datetime('now'))").bind(day, nt.code, nt.pm, nt.verdict, nt.risk, nt.open, nt.high, nt.guard, nt.stalled, nt.primary, nt.acts, nt.narrative, nt.rmNow, nt.rmNext, nt.rmLater, nt.glAdopted, nt.glCompleted).run();
+@@ -15749,11 +15755,11 @@ async function psrReview(env, day) {
+   const constraintNote = notes.find(function(n) {
+     return n.code === sc.constraint;
+   });
+-  const summary = "weekly-strategic " + day + ": programs " + notes.length + "; RED " + redCount + "; constraint " + (sc.constraint || "-") + " (program risk " + (constraintNote ? psrNum(constraintNote.risk).toFixed(0) : "?") + "); portfolio risk " + psrNum(sc.totals.risk).toFixed(0) + "; cost " + (sc.cost == null ? "unknown" : sc.cost) + " (ceiling " + PSR_COST_CEILING + "); owner items " + needs.length + "; narrative " + (narrativeAllowed ? "on" : "off (ai_spend cap breached, rule 8)");
++  const summary = "weekly-strategic " + day + ": programs " + notes.length + "; RED " + redCount + "; constraint " + (sc.constraint || "-") + " (program risk " + (constraintNote ? psrNum(constraintNote.risk).toFixed(0) : "?") + "); portfolio risk " + psrNum(sc.totals.risk).toFixed(0) + "; cost " + (sc.cost == null ? "unknown" : sc.cost) + " (ceiling " + PSR_COST_CEILING + "); owner items " + needs.length + "; narrative " + narrativeTier + " (" + narrativeCount + " of " + notes.length + ")" + (narrativeTier === "lean" ? ", free model only: ai_spend cap breached or budget unreadable" : "");
+   const runRes = await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1, 'weekly-strategic', ?2, ?3, ?4, ?5, ?6)").bind(day, NAME + "/" + VERSION, summary, JSON.stringify(sc), JSON.stringify(decisions), JSON.stringify(needs)).run();
+   return { ok: true, day, run_id: runRes.meta && runRes.meta.last_row_id || null, summary, notes: notes.map(function(n) {
+     return { code: n.code, verdict: n.verdict, risk: Math.round(n.risk * 10) / 10, trend_pct: n.trend == null ? null : Math.round(n.trend * 100) };
+-  }), decisions, needs, narrative_allowed: narrativeAllowed };
++  }), decisions, needs, narrative_tier: narrativeTier, narrative_count: narrativeCount };
+ }
+ __name(psrReview, "psrReview");
+ 
