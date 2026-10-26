@@ -90,8 +90,9 @@ function baseState(over) {
         if (s.pausedUntil) rows.push({ key: 'social_paused_until', value: s.pausedUntil });
         return rows;
       }
-      if (sql.includes('SELECT post_uri FROM social_threads')) return [{ post_uri: '{"bluesky":"at://did:plc:me/app.bsky.feed.post/a1","linkedin":"buffer-draft:9"}' }, { post_uri: 'buffer:7' }];
-      if (sql.includes('SELECT post_id FROM dissemination_tracker')) return [{ post_id: 'at://did:plc:me/app.bsky.feed.post/d1' }, { post_id: 'at://did:plc:me/app.bsky.feed.post/a1' }];
+      // SOCIAL-ENGAGEMENT-COVERAGE-1: both reads now also select posted_at (the plan orders by it).
+      if (sql.includes('SELECT post_uri, posted_at FROM social_threads')) return [{ post_uri: '{"bluesky":"at://did:plc:me/app.bsky.feed.post/a1","linkedin":"buffer-draft:9"}', posted_at: '2026-10-20 08:00:00' }, { post_uri: 'buffer:7', posted_at: '2026-10-19 08:00:00' }];
+      if (sql.includes('SELECT post_id, posted_at FROM dissemination_tracker')) return [{ post_id: 'at://did:plc:me/app.bsky.feed.post/d1', posted_at: '2026-10-21 08:00:00' }, { post_id: 'at://did:plc:me/app.bsky.feed.post/a1', posted_at: '2026-10-20 08:00:00' }];
       return [];
     }
   };

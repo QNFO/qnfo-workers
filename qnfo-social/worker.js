@@ -16,7 +16,7 @@
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
 // 0.19.1 LEARNER-ARMS-PROBE-SCOPE-1: persist policy-exclusion reasons so issue 2722 measures only eligible paper-linked learner rows.
-var VERSION = "0.19.2-link-slash-canon"; /* 0.19.2 LINK-SLASH-CANON-1 (2026-10-26, pillar reach): probeLink follows a redirect that only adds or drops the trailing slash of the same URL (one hop, same origin and query) and judges the page it lands on. qnfo-gateway SEO-INDEX-1 (2026-10-25) answers /papers/<slug>/ with a 308 to /papers/<slug>; every dissemination_tracker pages_url ends in a slash, so every probe read 'misrouted': the last Buffer post (Substack, X) left at 2026-10-25 08:31Z, the LinkedIn, Mastodon and X drains held link-misrouted, both roll-ups held no-live-links, and retractDeadLinks overwrote post_text_snippet of 203 posted rows with a MISROUTED note (it no longer overwrites a posted row's text: PRESERVE-POSTED-TEXT-1). A redirect to another path or host stays misrouted (NEVER-RETIRE-ON-REDIRECT-1); a 404/410 on the landing page is gone; the marker check still applies. qnfo-social/link-slash-canon.test.mjs. */ /* 0.19.1-no-registrar */ /* 0.19.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the Mastodon field filter matches the dead DOI prefix, not the registrar name */ /* 0.18.1 BSKY-CREATE-SESSION-COUNT-1 (2026-10-19, pillar reach, agent_issues 100191, residual of 2937): every com.atproto.server.createSession call, ok or refused, adds 1 to metric_history metric bsky_create_session_24h for the UTC day, so the 300-a-day account budget is measured; a failed count is logged and never blocks the post. */ /* 0.18.0 LEARNER-ARMS-2 (2026-10-19, pillar reach, agent_issues 2722): the attention learner learns from the posts it files. 50 of 61 learner rows read not-arm on 2026-10-17 and 124 of 137 on 2026-10-19 because learnerTopicOf named a topic for three keyword lists only and the channel-drain insert stored a null link slug. A post that links a paper now takes the paper's own shelf (living-paper paper_category, read through the new LIVING_PAPER binding; energy, ai-epistemics and ai-operations keep the arm names energy, epistemics and operations; qec, physics, mathematics, logic, synthesis and assessment are arms too) and the generic arm research when the paper has no shelf row or the binding is unreadable; q08, pillar 4 (ultrametric, adelic, p-adic, autaxic, topos), roll-up posts and posts with no paper link stay not-arm. The channel drain stores the paper slug as link_slug (parsed from the posted text, else the known paper slug). learnerVisits joins the utm ledger on the gateway's own campaign key (lower case, 64 characters) and on the row's slug, the campaign the post was tagged with, so a curated thread whose slug differs from its paper slug and a slug longer than 64 characters read their clicks. migrations/2026-10-19-learner-arms-backfill.sql re-files the recoverable not-arm rows. */ /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
+var VERSION = "0.19.3-engagement-coverage"; /* 0.19.3 SOCIAL-ENGAGEMENT-COVERAGE-1 (2026-10-26, pillar reach; guard metric attention_channels_stopped): collectEngagement measures every Bluesky post of the last 60 days. It built its list from social_threads (LIMIT 100) and then dissemination_tracker and stopped at 100 URIs, so each 07:00 run measured the newest 100 thread posts and none of the 203 dissemination posts (194 posted since 2026-10-14 had no social_engagements row), and the attention scorecard counted them as items with zero engagements. The list is now both sources deduplicated, posts without a snapshot first, then newest, up to 400 URIs (planEngagementUris); a URI the AppView omits gets no row; 429 waits and attempts are capped; the rows are written in batches of 400; the result reports candidates, never_measured, skipped_by_cap and omitted. 0.19.2 LINK-SLASH-CANON-1 (2026-10-26, pillar reach): probeLink follows a redirect that only adds or drops the trailing slash of the same URL (one hop, same origin and query) and judges the page it lands on. qnfo-gateway SEO-INDEX-1 (2026-10-25) answers /papers/<slug>/ with a 308 to /papers/<slug>; every dissemination_tracker pages_url ends in a slash, so every probe read 'misrouted': the last Buffer post (Substack, X) left at 2026-10-25 08:31Z, the LinkedIn, Mastodon and X drains held link-misrouted, both roll-ups held no-live-links, and retractDeadLinks overwrote post_text_snippet of 203 posted rows with a MISROUTED note (it no longer overwrites a posted row's text: PRESERVE-POSTED-TEXT-1). A redirect to another path or host stays misrouted (NEVER-RETIRE-ON-REDIRECT-1); a 404/410 on the landing page is gone; the marker check still applies. qnfo-social/link-slash-canon.test.mjs. */ /* 0.19.1-no-registrar */ /* 0.19.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the Mastodon field filter matches the dead DOI prefix, not the registrar name */ /* 0.18.1 BSKY-CREATE-SESSION-COUNT-1 (2026-10-19, pillar reach, agent_issues 100191, residual of 2937): every com.atproto.server.createSession call, ok or refused, adds 1 to metric_history metric bsky_create_session_24h for the UTC day, so the 300-a-day account budget is measured; a failed count is logged and never blocks the post. */ /* 0.18.0 LEARNER-ARMS-2 (2026-10-19, pillar reach, agent_issues 2722): the attention learner learns from the posts it files. 50 of 61 learner rows read not-arm on 2026-10-17 and 124 of 137 on 2026-10-19 because learnerTopicOf named a topic for three keyword lists only and the channel-drain insert stored a null link slug. A post that links a paper now takes the paper's own shelf (living-paper paper_category, read through the new LIVING_PAPER binding; energy, ai-epistemics and ai-operations keep the arm names energy, epistemics and operations; qec, physics, mathematics, logic, synthesis and assessment are arms too) and the generic arm research when the paper has no shelf row or the binding is unreadable; q08, pillar 4 (ultrametric, adelic, p-adic, autaxic, topos), roll-up posts and posts with no paper link stay not-arm. The channel drain stores the paper slug as link_slug (parsed from the posted text, else the known paper slug). learnerVisits joins the utm ledger on the gateway's own campaign key (lower case, 64 characters) and on the row's slug, the campaign the post was tagged with, so a curated thread whose slug differs from its paper slug and a slug longer than 64 characters read their clicks. migrations/2026-10-19-learner-arms-backfill.sql re-files the recoverable not-arm rows. */ /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
 
 
 // Wrap socialPausedBy to log its reads and fail‑closed on errors.
@@ -1718,24 +1718,65 @@ async function collectReplies(env, uris) {
   if (stmts.length) { await env.DB.batch(stmts); out.stored = stmts.length; }
   return out;
 }
-async function collectEngagement(env) {
-  const day = new Date().toISOString().slice(0, 10);
-  const uris = [];
+// SOCIAL-ENGAGEMENT-COVERAGE-1 (0.19.3, pillar reach; guard metric attention_channels_stopped): the daily collector built its
+// URI list from social_threads (LIMIT 100) first and then dissemination_tracker, and stopped adding at 100 URIs in all. With 141
+// threads and 203 Bluesky dissemination posts inside the 60-day window (qnfo-audit, read 2026-10-26), every 07:00 run measured the
+// newest 100 thread posts and none of the dissemination posts: social_engagements held no row for 194 of 194 dissemination posts
+// posted since 2026-10-14, and the attention scorecard (qnfo-fleet-dashboard) counted those unmeasured posts as items with zero
+// engagements. This plan covers every Bluesky post the fleet recorded in the window: both sources, deduplicated by at:// URI,
+// the posts that have no snapshot yet first, then the newest, up to BSKY_ENGAGEMENT_MAX_URIS (getPosts takes 25 URIs a call, so
+// 400 URIs are at most 16 calls). Pure: rows are { post_uri | post_id, posted_at }; measured is a Set or an object keyed by URI.
+var BSKY_ENGAGEMENT_MAX_URIS = 400;
+var BSKY_ENGAGEMENT_WINDOW_DAYS = 60;
+var BSKY_ENGAGEMENT_BATCH = 400;
+var BSKY_ENGAGEMENT_ATTEMPTS = 3;
+var BSKY_ENGAGEMENT_WAIT_CAP_MS = 30000;
+var BSKY_ENGAGEMENT_BUDGET_MS = 420000;
+function planEngagementUris(threads, dissemination, measured, max) {
+  const cap = Math.max(0, Math.floor(Number(max)) || 0);
+  const isMeasured = function(u) { return !!measured && (typeof measured.has === 'function' ? measured.has(u) : !!measured[u]); };
+  const key = function(ts) { return String(ts || '').replace('T', ' ').replace(/Z$/, ''); };
   const seen = {};
-  const add = function(u) { if (u && !seen[u] && uris.length < 100) { seen[u] = 1; uris.push(u); } };
+  const cand = [];
+  const push = function(uri, ts) {
+    if (!uri || seen[uri]) return;
+    seen[uri] = 1;
+    cand.push({ uri: uri, ts: key(ts), fresh: !isMeasured(uri), n: cand.length });
+  };
+  for (const r of (threads || [])) push(blueskyUriOf(r && r.post_uri), r && r.posted_at);
+  for (const r of (dissemination || [])) push(blueskyUriOf(r && r.post_id), r && r.posted_at);
+  cand.sort(function(a, b) {
+    if (a.fresh !== b.fresh) return a.fresh ? -1 : 1;
+    if (a.ts !== b.ts) return a.ts < b.ts ? 1 : -1;
+    return a.n - b.n;
+  });
+  const picked = cand.slice(0, cap);
+  return { uris: picked.map(function(c) { return c.uri; }), candidates: cand.length, never_measured: cand.filter(function(c) { return c.fresh; }).length, skipped_by_cap: cand.length - picked.length };
+}
+async function collectEngagement(env) {
+  const t0 = Date.now();
+  const day = new Date().toISOString().slice(0, 10);
   await ensureSocialSchema(env);
+  let threads = [], dissem = [], measured = null;
   try {
-    const a = await env.DB.prepare("SELECT post_uri FROM social_threads WHERE status='posted' AND post_uri IS NOT NULL AND post_uri<>'' AND posted_at >= datetime('now','-60 days') ORDER BY posted_at DESC LIMIT 100").all();
-    for (const r of (a.results || [])) add(blueskyUriOf(r.post_uri));
+    const a = await env.DB.prepare("SELECT post_uri, posted_at FROM social_threads WHERE status='posted' AND post_uri IS NOT NULL AND post_uri<>'' AND posted_at >= datetime('now','-" + BSKY_ENGAGEMENT_WINDOW_DAYS + " days') ORDER BY posted_at DESC").all();
+    threads = a.results || [];
   } catch (e) { console.log('SOCIAL-ENGAGEMENT-SELF-1 social_threads read failed: ' + String(e).slice(0, 120)); }
   try {
-    const b = await env.DB.prepare("SELECT post_id FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id LIKE 'at://%' AND posted_at >= datetime('now','-60 days') ORDER BY posted_at DESC LIMIT 100").all();
-    for (const r of (b.results || [])) add(blueskyUriOf(r.post_id));
+    const b = await env.DB.prepare("SELECT post_id, posted_at FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id LIKE 'at://%' AND posted_at >= datetime('now','-" + BSKY_ENGAGEMENT_WINDOW_DAYS + " days') ORDER BY posted_at DESC").all();
+    dissem = b.results || [];
   } catch (e) { console.log('SOCIAL-ENGAGEMENT-SELF-1 dissemination read failed: ' + String(e).slice(0, 120)); }
+  try {
+    const m = await env.DB.prepare("SELECT DISTINCT post_id FROM social_engagements WHERE platform='bluesky' AND post_id LIKE 'at://%'").all();
+    measured = new Set((m.results || []).map(function(r) { return String(r.post_id); }));
+  } catch (e) { console.log('SOCIAL-ENGAGEMENT-COVERAGE-1 measured-set read failed: ' + String(e).slice(0, 120)); }
+  const plan = planEngagementUris(threads, dissem, measured, BSKY_ENGAGEMENT_MAX_URIS);
+  const uris = plan.uris;
   const stmts = [];
   const withReplies = [];
-  let found = 0, errors = 0;
+  let found = 0, errors = 0, omitted = 0, skippedByBudget = 0;
   for (let i = 0; i < uris.length; i += 25) {
+    if (Date.now() - t0 > BSKY_ENGAGEMENT_BUDGET_MS) { skippedByBudget = uris.length - i; break; }
     const chunk = uris.slice(i, i + 25);
     try {
       let r;
@@ -1743,8 +1784,8 @@ async function collectEngagement(env) {
       while (true) {
         attempt++;
         r = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?' + chunk.map(function(u) { return 'uris=' + encodeURIComponent(u); }).join('&'), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
-        if (r.status !== 429) break;
-        // Honor rate‑limit headers: Retry‑After (seconds) or ratelimit‑reset (UTC timestamp)
+        if (r.status !== 429 || attempt >= BSKY_ENGAGEMENT_ATTEMPTS) break;
+        // Honor rate-limit headers: Retry-After (seconds) or ratelimit-reset (UTC timestamp)
         const retryAfter = r.headers.get('Retry-After');
         const reset = r.headers.get('ratelimit-reset');
         let waitMs = 0;
@@ -1755,24 +1796,31 @@ async function collectEngagement(env) {
           const ts = Date.parse(reset);
           if (!isNaN(ts)) waitMs = Math.max(0, ts - Date.now());
         }
-        // Fallback exponential back‑off up to 60 s
-        if (!waitMs) waitMs = Math.min(60000, attempt * 1000);
-        await new Promise(res => setTimeout(res, waitMs));
+        // Fallback exponential back-off; every wait is capped so 16 chunks stay inside the cron budget
+        if (!waitMs) waitMs = attempt * 1000;
+        await new Promise(res => setTimeout(res, Math.min(BSKY_ENGAGEMENT_WAIT_CAP_MS, waitMs)));
       }
       if (!r.ok) { errors++; continue; }
       const j = await r.json();
-      for (const p of (j && j.posts) || []) {
+      const got = (j && j.posts) || [];
+      // A URI the AppView leaves out (a deleted post) is unmeasured: it gets no row, never a row of zeros.
+      omitted += Math.max(0, chunk.length - got.length);
+      for (const p of got) {
         found++;
         if (Number(p.replyCount || 0) > 0) withReplies.push(String(p.uri));
         const m = { likes: p.likeCount, reposts: p.repostCount, replies: p.replyCount, quotes: p.quoteCount };
         for (const k of Object.keys(m)) {
-          stmts.push(env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?,?,?,?,?,?) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value").bind('bluesky', String(p.uri), k, Number(m[k] || 0), 'qnfo-social', day));
+          if (typeof m[k] !== 'number' || !isFinite(m[k])) continue;
+          stmts.push(env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?,?,?,?,?,?) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value").bind('bluesky', String(p.uri), k, Number(m[k]), 'qnfo-social', day));
         }
       }
     } catch (e) { errors++; }
   }
-  if (stmts.length) await env.DB.batch(stmts);
-  const out = { day: day, uris: uris.length, posts_found: found, rows: stmts.length, errors: errors };
+  // 400 posts are 1600 statements: written in batches of BSKY_ENGAGEMENT_BATCH so one oversized batch cannot lose the day.
+  for (let i = 0; i < stmts.length; i += BSKY_ENGAGEMENT_BATCH) {
+    try { await env.DB.batch(stmts.slice(i, i + BSKY_ENGAGEMENT_BATCH)); } catch (e) { errors++; console.log('SOCIAL-ENGAGEMENT-COVERAGE-1 batch write failed: ' + String(e).slice(0, 160)); }
+  }
+  const out = { day: day, uris: uris.length, posts_found: found, rows: stmts.length, errors: errors, candidates: plan.candidates, never_measured: plan.never_measured, skipped_by_cap: plan.skipped_by_cap, omitted: omitted, skipped_by_budget: skippedByBudget };
   // REACH-SIGNALS-1 (issue 2225): the replies themselves, for the posts that have any. Its failure never fails the counts.
   try { out.replies = await collectReplies(env, withReplies); } catch (e) { out.replies = { error: String(e && e.message || e).slice(0, 160) }; }
   console.log('SOCIAL-ENGAGEMENT-SELF-1 ' + JSON.stringify(out));
@@ -3700,7 +3748,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { mastodonWantedFields, mastodonProfileSync, drainRollup, rollupNoteText, rollupSubstack, rollupBluesky, rollupRunStatus, ROLLUP_SUBSTACK_MAX, ROLLUP_BSKY_MAX, mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { planEngagementUris, BSKY_ENGAGEMENT_MAX_URIS, mastodonWantedFields, mastodonProfileSync, drainRollup, rollupNoteText, rollupSubstack, rollupBluesky, rollupRunStatus, ROLLUP_SUBSTACK_MAX, ROLLUP_BSKY_MAX, mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerClassifyChannel, learnerCategories, learnerHintsFor, learnerUtmCampaign, learnerDiscover, LEARNER_TOPICS, LEARNER_CATEGORY_TOPIC, LEARNER_GENERIC_TOPIC, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
