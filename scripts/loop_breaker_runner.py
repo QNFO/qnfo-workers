@@ -13,6 +13,8 @@ RUNS  A step of remediation-consumer.yml (hourly). Never fails the job.
       3. WORKERS-BP-AUDIT-D1-1 (2026-10-12): runs scripts/fleet_best_practices_audit.py's D1 half (findings table, run row, metric
          workers_bp_findings_open, one WORKERS-BP-DEBT-1: <worker> issue per worker with fail-class debt, each with a code-task line
          and a d1-query probe that closes it when the worker is clean).
+      4. BP26-PRODUCERS-1 (2026-10-26): runs scripts/bp26_producers.py, the runner half of the BP26 best-practice catalogue's metrics
+         (every scripts/bp26_<area>.py module's collectors; each writes only metrics tagged [BP26] and keeps its evidence rows).
 """
 import json
 import os
@@ -103,6 +105,7 @@ def doctrine_audit(d1, week=None):
 
 
 def main(d1=None):
+    live = d1 is None  # the runner step passes nothing; the offline suite passes a sqlite shim and must never reach the network
     d1 = d1 or RC.d1
     out = {"loop_breaker": "ok"}
     try:
@@ -121,6 +124,18 @@ def main(d1=None):
         out["workers_bp_audit"] = BP.run_d1(d1)
     except Exception as e:  # noqa: BLE001
         out["workers_bp_audit"] = "failed: " + str(e)[:200]
+    # BP26-PRODUCERS-1 (2026-10-26, agent_issues 1000363): the runner half of the BP26 catalogue's measurements (public-page probes, repository
+    # scans, DNS and API reads, other databases) from this same depth-0 step. Network and API reads only on the live runner, never in the
+    # offline suite; run() never raises and writes only metrics tagged [BP26], so a broken collector cannot stop the audit above or the consumer.
+    if live:
+        try:
+            import bp26_producers as BP26  # noqa: E402
+            res = BP26.run()
+            out["bp26_producers"] = {k: res[k] for k in ("bp26_producers", "ran", "skipped", "unknown") if k in res}
+            out["bp26_producers"]["written"] = len(res.get("written", []))
+            out["bp26_producers"]["errors"] = res.get("errors", [])[:6]
+        except Exception as e:  # noqa: BLE001
+            out["bp26_producers"] = "failed: " + str(e)[:200]
     print(json.dumps(out))
     return 0
 
