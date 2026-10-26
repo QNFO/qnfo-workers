@@ -3,16 +3,21 @@
 // breachDoctorTick of qnfo-fleet-control/worker.js (sliced out by its markers) against it. The file is data only: no worker change, no new engine table.
 // Proves: the header opts in (APPLY-BY ci, DB qnfo-audit, one Rollback line, nothing deleted or dropped in the body); the file adds metric_deps and three playbooks that pass the engine's own validators
 // (bdValidateRule) against the unchanged engine allowlist, whose statements all bind ?1; MD-1 keeps the issue that bears the title evaluateMetricTriggers looks up, so the evaluator's own lookup never reopens
-// the closed loser, and acts only when the survivor is at least as urgent; the one-time closes (99937, 2570 and 100225 superseded to the parent's issue, 99949 closed MOOT) touch only the issues the engine reads
-// as owned by a line or task that has ended, leave an issue with a code task in flight alone, and leave exactly 3015, 99914 and 99915 to the doctor; over fixtures shaped like live qnfo-audit 2026-10-26 each rule's
-// trigger_sql names the issues the audit named and not the look-alikes, its per-issue action changes only the issue it is bound to, closes it with evidence built from ids, counts and enum codes, its verify_sql
-// reads a reason before and ok after, and its revert_sql restores the previous state; a claimed issue and an issue with a failing contract are not touched; the lever issues carry a code-probe each, an outcome
-// contract only where it fails while the defect exists and is gated on the code part, and, with the live autoclose trigger installed, none closes before its code-read contract passes; end to end through
-// breachDoctorTick every rule runs in measure for 30 minutes, then acts, verifies twice and settles as verified, with decision_log rows and breach_diagnosis_events, no taint drop and no failed case; a second
-// apply of the file changes nothing; the Rollback line disables the playbooks and reopens what the file closed.
+// the closed loser, acts only when the survivor is at least as urgent, and never names an issue whose source begins with owner (the owner's note 1000015 is a hand-filed note, not a double filing; a NULL source is not owner);
+// the one-time closes (99937, 2570 and 100225 superseded to the parent's issue, 99949 closed MOOT) touch only the issues the engine reads as owned by a line or task that has ended, leave an issue with a code task in flight
+// alone, and leave exactly 3015, 99914 and 99915 to the doctor; over fixtures shaped like live qnfo-audit 2026-10-26 each rule's trigger_sql names the issues the audit named and not the look-alikes, its per-issue action
+// changes only the issue it is bound to, closes it with evidence built from ids, counts and enum codes, its verify_sql reads a reason before and ok after, and its revert_sql restores the previous state; a claimed issue and an
+// issue with a failing contract are not touched; the three lever issues carry a code-probe each, an outcome contract only where it fails while the defect exists and is gated on the code part, and, with the live autoclose
+// trigger installed, none closes before its code-read contract passes; each lever carries a queued ct_im<issue> code task as its fleet doer, because the REAL intakeIssues of qnfo-code-orchestrator turns a BREACH-DOCTOR-1:
+// lever into a session-task while fleet_changelog holds the key (control, with the real intakePreflight) and builds nothing for a lever whose task is queued; no MD-P2 or MD-P4 lever exists (their premises are refuted in the
+// file header); end to end through breachDoctorTick every rule runs in measure for 30 minutes, then acts, verifies twice and settles as verified, with decision_log rows and breach_diagnosis_events, no taint drop and no failed
+// case; a second apply of the file changes nothing; the Rollback line disables the playbooks, reopens what the file closed and supersedes the queued lever tasks.
 // Output MUST contain "0 failed" on success.   node migrations/metric-playbooks.test.mjs
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import vm from "node:vm";
 
 const here = (p) => new URL(p, import.meta.url);
@@ -116,7 +121,7 @@ const qa = (raw, s, ...p) => raw.prepare(s).all(...p);
 
 function fixtures(raw, o = {}) {
   const issue = (id, title, x = {}) => {
-    raw.prepare("INSERT INTO agent_issues (id, title, description, source, priority, status, created_at, updated_at) VALUES (?, ?, ?, 'qnfo-fleet-control', ?, ?, ?, ?)").run(id, title, x.desc ?? null, x.priority ?? "medium", x.status ?? "open", Date.now() - (x.ageH ?? 30) * H, Date.now());
+    raw.prepare("INSERT INTO agent_issues (id, title, description, source, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(id, title, x.desc ?? null, x.source === null ? null : (x.source ?? "qnfo-fleet-control"), x.priority ?? "medium", x.status ?? "open", Date.now() - (x.ageH ?? 30) * H, Date.now());
     raw.prepare("INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (?, 'AUTOTRIAGE-1', 'triaged', 'qnfo-ops', '2026-10-01')").run(id);
   };
   const trig = (id, key, en, op, thr, val, x = {}) => {
@@ -162,12 +167,15 @@ function fixtures(raw, o = {}) {
   const T354 = "Cost gap: Workers AI cost over $95/30d (target $78 = 2.59/day, owner 2026-10-09)";
   trig(354, "workers_ai_cost_30d_usd", 1, "gt", 95, 298, { title: T354 }); issue(99924, "METRIC-TRIGGER-354-WORKERS-AI-COST-30D-USD: Cost gap: Workers AI spend over $10", { priority: "critical" }); issue(100226, "METRIC-TRIGGER-354-WORKERS-AI-COST-30D-USD: " + T354, { priority: "critical" });
   trig(7777, "dup_priority_metric", 1, "gt", 1, 5, { title: "new title" }); issue(5001, "METRIC-TRIGGER-7777-DUP-PRIORITY-METRIC: old title", { priority: "low" }); issue(5002, "METRIC-TRIGGER-7777-DUP-PRIORITY-METRIC: new title", { priority: "critical" });
-  trig(8888, "breaches_without_ticket", 1, "gt", 0, 0); issue(100088, "METRIC-TRIGGER-8888-BREACHES-WITHOUT-TICKET: Breaches with no ticket", { priority: "high" }); issue(1000015, "METRIC-TRIGGER: breaches_without_ticket", { priority: "high" });
+  trig(8888, "breaches_without_ticket", 1, "gt", 0, 0); issue(100088, "METRIC-TRIGGER-8888-BREACHES-WITHOUT-TICKET: Breaches with no ticket", { priority: "high" }); issue(1000015, "METRIC-TRIGGER: breaches_without_ticket", { priority: "high", source: "owner-chat" });
   trig(7778, "dup_blocked_metric", 1, "gt", 1, 5); issue(5003, "METRIC-TRIGGER-7778-DUP-BLOCKED-METRIC: a", { priority: "medium" }); issue(5004, "METRIC-TRIGGER-7778-DUP-BLOCKED-METRIC: b", { priority: "medium" });
   raw.prepare("UPDATE remediation_contracts SET status = 'active', last_verdict = 'fail', verify_probe = 'SELECT 1' WHERE issue_id = 5004").run();
   trig(7779, "dup_claimed_metric", 1, "gt", 1, 5); issue(5005, "METRIC-TRIGGER-7779-DUP-CLAIMED-METRIC: a", { priority: "medium" }); issue(5006, "METRIC-TRIGGER-7779-DUP-CLAIMED-METRIC: b", { priority: "medium" });
   raw.prepare("INSERT INTO work_claims (path, intent, holder, issue_id, expires_at) VALUES ('issue:5006', 'x', 'session_x', 5006, '2099-01-01T00:00:00Z')").run();
   trig(7780, "single_metric", 1, "gt", 1, 5); issue(5007, "METRIC-TRIGGER-7780-SINGLE-METRIC: only one", { priority: "medium" });
+  // MD-1 reads the evaluator's own issues: a pair whose old-title issue came from the owner (source owner-chat) is not a double filing and is left alone, while a pair whose old-title issue has a NULL source is still named
+  trig(7783, "dup_owner_metric", 1, "gt", 1, 5, { title: "new title" }); issue(5012, "METRIC-TRIGGER-7783-DUP-OWNER-METRIC: old title", { priority: "medium", source: "owner-chat" }); issue(5013, "METRIC-TRIGGER-7783-DUP-OWNER-METRIC: new title", { priority: "medium" });
+  trig(7784, "dup_nullsrc_metric", 1, "gt", 1, 5, { title: "new title" }); issue(5014, "METRIC-TRIGGER-7784-DUP-NULLSRC-METRIC: old title", { priority: "medium", source: null }); issue(5015, "METRIC-TRIGGER-7784-DUP-NULLSRC-METRIC: new title", { priority: "medium" });
   // the issue with the old title is MORE urgent than the one with the current title: the survivor would be less urgent than the loser, so the playbook leaves the pair alone (it cannot raise a priority)
   trig(7781, "urgent_old_metric", 1, "gt", 1, 5, { title: "current title" }); issue(5008, "METRIC-TRIGGER-7781-URGENT-OLD-METRIC: old title", { priority: "critical" }); issue(5009, "METRIC-TRIGGER-7781-URGENT-OLD-METRIC: current title", { priority: "medium" });
   // equal priority and the LOWEST id bears the current title: it survives, the later old-title issue goes
@@ -270,7 +278,7 @@ ok(qa(d, "SELECT issue_id FROM issue_triage WHERE rc = 'breach-doctor:MD-6:migra
 }
 
 // ---- idempotence
-const SNAP_T = ["breach_playbooks", "metric_deps", "agent_issues", "issue_triage", "remediation_contracts", "control_registry", "failure_modes", "capability_ledger", "decision_log", "bak_20261026_metric_playbooks_priority"];
+const SNAP_T = ["breach_playbooks", "metric_deps", "agent_issues", "issue_triage", "remediation_contracts", "control_registry", "failure_modes", "capability_ledger", "decision_log", "bak_20261026_metric_playbooks_priority", "code_tasks"];
 const snapOf = () => Object.fromEntries(SNAP_T.map((t) => [t, JSON.stringify(qa(d, "SELECT * FROM " + t))]));
 {
   // replay on a world that holds only what the file saw when it was first applied (a child filed in between would, by design, get its parent raised by a replay)
@@ -289,15 +297,17 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
 {
   const lev = qa(d, "SELECT id, title, description, source, priority FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: MD-P%' ORDER BY id");
   const keyOf = (r) => r.title.replace(/^BREACH-DOCTOR-1: (MD-P\w+) .*/, "$1");
-  ok(lev.length === 5 && lev.every((r) => r.source === "qnfo-fleet-control" && r.priority !== "critical"), "five lever issues, source qnfo-fleet-control (the trusted pair BREACH-DOCTOR-1:), none critical", lev.map((r) => r.title.slice(0, 50)));
-  ok(lev.map(keyOf).join(",") === "MD-P1a,MD-P1b,MD-P1c,MD-P2,MD-P4", "MD-P1a, MD-P1b, MD-P1c, MD-P2, MD-P4", lev.map(keyOf));
+  ok(lev.length === 3 && lev.every((r) => r.source === "qnfo-fleet-control" && r.priority !== "critical"), "three lever issues, source qnfo-fleet-control (the trusted pair BREACH-DOCTOR-1:), none critical", lev.map((r) => r.title.slice(0, 50)));
+  ok(lev.map(keyOf).join(",") === "MD-P1a,MD-P1b,MD-P1c", "MD-P1a, MD-P1b, MD-P1c and nothing else (MD-P2 and MD-P4 were removed after review)", lev.map(keyOf));
+  ok(!/MD-P2|MD-P4|tick-sequence-cap|ilHasOwnTrigger|IL_SELF_SET/.test(body), "the statements of the file carry no MD-P2 lever, no MD-P4 lever, no tick-sequence-cap migration and no ilHasOwnTrigger edit (their premises are refuted in the header)");
+  ok(/MD-P2/.test(header.join("\n")) && /MD-P4/.test(header.join("\n")) && /charterMeets\(0\.792\) is true and charterMeets\(1\.042\) is false/.test(header.join("\n")) && /hit = 0, and no METRIC-TRIGGER-387 issue exists/.test(header.join("\n")) && /read failed: raw read HTTP 404/.test(header.join("\n")), "the header says why each is not built, with the evidence (target parse, trigger 387, the 404 of a new migration file)");
   const byKey = Object.fromEntries(lev.map((r) => [keyOf(r), r]));
   const line = (r, pfx) => ((r.description + "\n").split("\n").find((l) => l.startsWith(pfx)) || "").slice(pfx.length);
   const contract = (r, suffix = "") => q1(d, "SELECT * FROM remediation_contracts WHERE class = ?", "issue-" + r.id + suffix);
-  // OWNER-NO-LOOSE-ENDS-1 / NO-CLAUDE-RUNTIME-DEPENDENCY-1: every lever has a fleet doer (a code-task line for the code loop), none is handed to a session
+  // OWNER-NO-LOOSE-ENDS-1 / NO-CLAUDE-RUNTIME-DEPENDENCY-1: every lever has a fleet doer (a code-task line for the code loop and the queued task below), none is handed to a session
   ok(lev.every((r) => /^code-task: repo=qnfo-workers path=\S+$/m.test(r.description) && /^code-probe: \{/m.test(r.description)) && !lev.some((r) => /Doer: a session|a session doer/i.test(r.description)), "every lever carries a code-task line and a code-probe line and none names a session as its doer");
   const wcode = lev.filter((r) => line(r, "code-task: ") === "repo=qnfo-workers path=qnfo-fleet-control/worker.js");
-  ok(wcode.length === 4 && wcode.every((r) => /^code-anchor: /m.test(r.description)), "four levers edit qnfo-fleet-control/worker.js with a code-anchor each", wcode.length);
+  ok(wcode.length === 3 && wcode.every((r) => /^code-anchor: /m.test(r.description)), "all three levers edit qnfo-fleet-control/worker.js with a code-anchor each", wcode.length);
   for (const r of wcode) {
     const anchor = line(r, "code-anchor: "), probe = JSON.parse(line(r, "code-probe: "));
     const k = probe.contains !== undefined ? "contains" : "absent", text = probe[k];
@@ -311,25 +321,72 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
   // MD-P1a / MD-P1b: the symptom checks read ok at birth, so they are NOT contracts (an outcome that passes at birth lets the live autoclose trigger close the issue before any code change)
   ok(!contract(byKey["MD-P1a"], "-outcome") && !contract(byKey["MD-P1b"], "-outcome"), "MD-P1a and MD-P1b carry the code-read contract alone: no d1 outcome contract that already reads ok");
   ok(/closing probe of this issue and the only contract it carries/.test(byKey["MD-P1a"].description) && /closing probe of this issue and the only contract it carries/.test(byKey["MD-P1b"].description), "and their text says the code-probe is the closing probe");
-  for (const kk of ["MD-P1c", "MD-P2", "MD-P4"]) {
-    const o = contract(byKey[kk], "-outcome"), res = o && d.prepare(o.verify_probe).get();
-    ok(o && o.verify_transport === "d1-query" && o.status === "active" && res && res.expected === "ok" && typeof res.observed === "string" && res.observed !== "ok", kk + ": a d1 outcome contract that reads a reason in the fresh state (it cannot pass at birth)", res);
+  {
+    const o = contract(byKey["MD-P1c"], "-outcome"), res = o && d.prepare(o.verify_probe).get();
+    ok(o && o.verify_transport === "d1-query" && o.status === "active" && res && res.expected === "ok" && typeof res.observed === "string" && res.observed !== "ok", "MD-P1c: a d1 outcome contract that reads a reason in the fresh state (it cannot pass at birth)", res);
   }
-  // MD-P4: a new migration file, a fleet doer, no threshold lowered
-  const p4 = byKey["MD-P4"], probe4 = JSON.parse(line(p4, "code-probe: "));
-  ok(line(p4, "code-task: ") === "repo=qnfo-workers path=migrations/2026-10-26-tick-sequence-cap.sql" && !/^code-anchor: /m.test(p4.description), "MD-P4: a code-task line for a new migration file (no anchor: the file does not exist yet), not a session doer");
-  ok(probe4.paths.join() === "migrations/2026-10-26-tick-sequence-cap.sql" && probe4.contains === "MIN(1", "MD-P4: the code-probe reads that file for the MIN(1 cap", probe4);
-  const mf = here("./2026-10-26-tick-sequence-cap.sql");
-  ok(!existsSync(mf) || readFileSync(mf, "utf8").includes("MIN(1"), "MD-P4: the probe fails while the file is absent and passes only with the cap in it");
-  ok(/over-counted ratio/.test(p4.description) && /1\.042/.test(p4.description) && /lowers? no threshold|no threshold is lowered/.test(p4.description) && /INTEGRITY-GUARDS-1/.test(p4.description), "MD-P4 says it corrects an over-counted ratio and lowers no threshold (INTEGRITY-GUARDS-1)");
+  // MD-P1a says only what is true about the pairs: the owner's note 1000015 is not one of them
+  ok(/two pairs open on 2026-10-26 06:35Z: 99924\/100226, 99928\/100225/.test(byKey["MD-P1a"].description) && !/1000015|breaches_without_ticket|hand-filed/.test(byKey["MD-P1a"].description), "MD-P1a names the two pairs the evaluator filed (99924/100226, 99928/100225) and not the owner's note");
   // MD-P1c measures what the lever changes
   ok(/within 60 minutes of the close/.test(byKey["MD-P1c"].description) && /36 of 166, 22 percent/.test(byKey["MD-P1c"].description) && !/29 percent/.test(byKey["MD-P1c"].description), "MD-P1c states the 22 percent the lever can avoid and measures closes reopened within 60 minutes of the close");
-  // MD-P2 says only what is true about triggers
-  const p2 = byKey["MD-P2"];
-  ok(/improvement_rate_7d 387, fix_hold_rate_30d 388, open_agent_issues 362/.test(p2.description) && /NO trigger row \(metric_regressions_7d, metrics_in_breach, fix_target_hold_rate_30d\)/.test(p2.description) && !/the metric has its own trigger/.test(p2.description) && /IL_SELF_SET = \{ improvement_rate_7d: 1, fix_hold_rate_30d: 1, open_agent_issues: 1 \}/.test(p2.description) && /ilHasOwnTrigger/.test(p2.description), "MD-P2 limits the set to the three metrics with an enabled trigger and names the three without one as judged as before");
+  // the fleet doer: one queued ct_im<issue> task per lever, the shape the red-drain dispatch and enqueue() write
+  for (const r of lev) {
+    const t = q1(d, "SELECT * FROM code_tasks WHERE id = ?", "ct_im" + r.id);
+    ok(t && t.repo === "qnfo-workers" && t.path === "qnfo-fleet-control/worker.js" && t.status === "queued" && t.step === "read" && t.attempts === 0, keyOf(r) + ": a queued ct_im" + r.id + " task on qnfo-fleet-control/worker.js", t);
+    const ctx = t ? JSON.parse(t.ctx) : {}, anchor = line(r, "code-anchor: ");
+    ok(t && t.goal.startsWith("[issue #" + r.id + "] " + r.title) && /Definition of done/.test(t.goal) && /^code-probe: \{/m.test(t.goal) && /^code-anchor: /m.test(t.goal) && !/^code-task: /m.test(t.goal) && t.goal.length <= 6000, keyOf(r) + ": the goal is '[issue #N] <title>' plus the issue text without its code-task line, within GOAL_MAX", t && t.goal.slice(0, 120));
+    ok(t && Object.keys(ctx).join() === "anchor" && ctx.anchor === anchor && anchor.length <= 300, keyOf(r) + ": ctx is the JSON the loop reads, {anchor} equal to the code-anchor line and within the intake limit", t && t.ctx);
+    ok(t && /^\[issue #(\d+)\]/.exec(t.goal)[1] === String(r.id) && /^ct_im(\d+)$/.exec(t.id)[1] === String(r.id), keyOf(r) + ": the goal prefix and the id both map the task to its issue (merge runner provenance, INTAKE-IM-DEDUPE-1, PARKED-TASK-ISSUE-CLOSED-1)");
+  }
+  ok(qa(d, "SELECT id FROM code_tasks WHERE goal LIKE '[issue #%' AND id LIKE 'ct_im%'").length === 3, "exactly three tasks are queued by the file, one per lever");
 }
 {
-  // outcome probes in a world of their own (no autoclose trigger): each reads a reason until the code part has a passing verification
+  // CODE-TASK-PREFLIGHT-1 over the REAL qnfo-code-orchestrator (intakeIssues, intakePreflight, issueKey, intakeRetryDecision): the shared key BREACH-DOCTOR-1 is what intake refuses while fleet_changelog holds it
+  const osrc = readFileSync(here("../qnfo-code-orchestrator/worker.js"), "utf8");
+  const tmp = mkdtempSync(join(tmpdir(), "mpb-"));
+  writeFileSync(join(tmp, "w.mjs"), osrc + "\nexport { intakeIssues as __intake, issueKey as __key };\n");
+  const fetched = [];
+  globalThis.fetch = async (u) => { fetched.push(String(u)); return new Response("nf", { status: 404 }); };
+  const { __intake, __key } = await import(pathToFileURL(join(tmp, "w.mjs")).href);
+  rmSync(tmp, { recursive: true, force: true });
+  const FC = "CREATE TABLE fleet_changelog (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, version TEXT, marker TEXT, subject TEXT, title TEXT, released_at TEXT)";
+  const intakeWorld = (o = {}) => {
+    const w = world({ stranded: true });
+    w.exec(FC);
+    w.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('code_merge_trusted_sources', ?)").run("claude-session*,qnfo-fleet-control|METRIC-TRIGGER-,qnfo-fleet-control|BREACH-DOCTOR-1:");
+    if (o.shippedAgoH !== undefined) w.prepare("INSERT INTO fleet_changelog (worker, version, marker, subject, released_at) VALUES ('qnfo-fleet-control', '0.52.0-breach-doctor', 'BREACH-DOCTOR-1', 'BREACH-DOCTOR-1: the fleet diagnoses its own unowned breaches', ?)").run(new Date(Date.now() - o.shippedAgoH * 3600e3).toISOString());
+    if (o.noTasks) w.exec("DELETE FROM code_tasks WHERE id IN (SELECT 'ct_im' || id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: MD-P%')");
+    return w;
+  };
+  const levers = (w) => qa(w, "SELECT id, title, description FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: MD-P%' ORDER BY id");
+  const nTasks = (w) => q1(w, "SELECT COUNT(*) n FROM code_tasks k WHERE EXISTS (SELECT 1 FROM agent_issues a WHERE a.title LIKE 'BREACH-DOCTOR-1: MD-P%' AND (k.id = 'ct_im' || a.id OR k.goal LIKE '[issue #' || a.id || ']%'))").n;
+  ok(levers(d).length === 3 && levers(d).every((r) => __key(r.title) === "BREACH-DOCTOR-1"), "the three lever titles share the issueKey BREACH-DOCTOR-1 (the family prefix the trusted pair forces)");
+  // control: without the queued tasks, intake refuses all three while the key is in fleet_changelog within 72 hours, and turns their code-task line into a session-task line for good
+  {
+    const w = intakeWorld({ shippedAgoH: 1, noTasks: true });
+    const r = await __intake({ AUDIT_DB: mkDb(w) }, 5);
+    const after = levers(w);
+    ok(r.ok && r.created.length === 0 && nTasks(w) === 0 && after.length === 3 && after.every((x) => /session-task: repo=qnfo-workers path=qnfo-fleet-control\/worker\.js/.test(x.description) && !/code-task: repo=/.test(x.description) && /shipped as qnfo-fleet-control 0\.52\.0-breach-doctor within 72h/.test(x.description)), "control: with no queued task and BREACH-DOCTOR-1 released an hour ago, the real intake builds nothing and rewrites all three levers to session-task lines (the defect this file works around)", after.map((x) => x.description.slice(-160)));
+    ok(fetched.length === 0, "and it refused before any file read");
+  }
+  // control: an old release (80 hours) does not refuse, so the refusal is the 72 hour window and nothing else
+  {
+    const w = intakeWorld({ shippedAgoH: 80, noTasks: true });
+    const r = await __intake({ AUDIT_DB: mkDb(w) }, 5);
+    ok(r.ok && !levers(w).some((x) => /session-task: repo=/.test(x.description)) && !levers(w).some((x) => /CODE-TASK-PREFLIGHT-1/.test(x.description)), "control: with the release 80 hours old the same intake does not refuse on the key", levers(w).map((x) => x.description.slice(-120)));
+  }
+  // the file's route: with the queued ct_im tasks in place intake finds each lever's task in flight, builds no second one and leaves the code-task line alone, with or without the release in the window
+  for (const hours of [1, 80, undefined]) {
+    const w = intakeWorld({ shippedAgoH: hours });
+    const before = nTasks(w);
+    fetched.length = 0;
+    const r = await __intake({ AUDIT_DB: mkDb(w) }, 5);
+    const after = levers(w);
+    ok(before === 3 && r.ok && r.created.length === 0 && nTasks(w) === 3 && after.every((x) => /code-task: repo=qnfo-workers path=qnfo-fleet-control\/worker\.js/.test(x.description) && !/session-task: repo=/.test(x.description) && !/CODE-TASK-PREFLIGHT-1/.test(x.description)) && fetched.length === 0, "the queued tasks keep the levers with their fleet doer (key released " + (hours === undefined ? "never" : hours + " h ago") + "): no second task, the code-task line stays", { before, created: r.created, after: nTasks(w), tail: after.map((x) => x.description.slice(-100)) });
+  }
+}
+{
+  // outcome probe in a world of its own (no autoclose trigger): it reads a reason until the code part has a passing verification
   const wp = world({ stranded: true });
   const idOf = (k) => q1(wp, "SELECT id FROM agent_issues WHERE title LIKE ?", "BREACH-DOCTOR-1: " + k + " %").id;
   const outP = (k) => wp.prepare(q1(wp, "SELECT verify_probe p FROM remediation_contracts WHERE class = ?", "issue-" + idOf(k) + "-outcome").p).get();
@@ -346,22 +403,6 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
   ok(outP("MD-P1c").observed === "ok", "MD-P1c: 5 closes reopened within 60 minutes pass; reopens after a 90 minute gap and reopens older than 24 h are not counted");
   quick(30, 20);
   ok(/^more than 5 METRIC-TRIGGER closes were reopened within 60 minutes of the close in 24 hours$/.test(outP("MD-P1c").observed), "and a sixth reads the reason", outP("MD-P1c"));
-  // MD-P2: a regression issue for a metric that has an enabled trigger of its own
-  ok(outP("MD-P2").observed === GATE, "MD-P2 outcome reads the gate reason while the code part has no passing verification");
-  codePass("MD-P2");
-  ok(outP("MD-P2").observed === "ok", "and ok once the code part passes and no such issue is open");
-  wp.exec("INSERT INTO analytics_metric_triggers (id, metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, enabled) VALUES (387, 'improvement_rate_7d', 'Improvement gap', 'registry', 'lt', 0.3, 5, 'a', 'qnfo-fleet-control', 'agent_issues', 1)");
-  wp.exec("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (8001, 'METRIC-REGRESSION-1: improvement_rate_7d', 'qnfo-fleet-control', 'high', 'open', 1, 1), (8002, 'METRIC-REGRESSION-1: metrics_in_breach', 'qnfo-fleet-control', 'medium', 'open', 1, 1)");
-  ok(/^a METRIC-REGRESSION-1 issue is open for a metric that has an enabled trigger of its own$/.test(outP("MD-P2").observed), "MD-P2: an open regression issue for improvement_rate_7d (enabled trigger 387) reads the reason", outP("MD-P2"));
-  wp.exec("DELETE FROM agent_issues WHERE id = 8001");
-  ok(outP("MD-P2").observed === "ok", "MD-P2: the open regression issue for metrics_in_breach (no trigger row) does not count, because it stays judged as before");
-  wp.exec("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (8001, 'METRIC-REGRESSION-1: improvement_rate_7d', 'qnfo-fleet-control', 'high', 'open', 1, 1)");
-  wp.exec("UPDATE analytics_metric_triggers SET enabled = 0 WHERE id = 387");
-  ok(outP("MD-P2").observed === "ok", "and a metric whose trigger is disabled does not count either");
-  // MD-P4: the stored trigger text
-  ok(outP("MD-P4").observed === "the tick_sequence ratio is not capped at 1.0", "MD-P4 outcome reads a reason while the trigger text has no MIN(1 cap");
-  wp.exec("CREATE TABLE tick_probe_src (x INTEGER); CREATE TRIGGER tick_driver_roster_tick AFTER INSERT ON tick_probe_src BEGIN SELECT MIN(1.0, 2.0); END");
-  ok(outP("MD-P4").observed === "ok", "and ok once the stored trigger text carries the cap");
 }
 {
   // the reviewer's repro, with the live autoclose trigger installed: no lever issue closes before its code-read contract passes
@@ -371,15 +412,10 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
   const rec = (k, cls, transport, expected, observed, passed) => wa.prepare("INSERT INTO remediation_verifications (issue_id, class, transport, expected, observed, pass, verifier) VALUES (?, ?, ?, ?, ?, ?, 'test')").run(idOf(k), cls, transport, expected, observed, passed);
   const runOutcome = (k) => { const cls = "issue-" + idOf(k) + "-outcome", c = q1(wa, "SELECT verify_probe p FROM remediation_contracts WHERE class = ?", cls); if (!c) return null; const r = wa.prepare(c.p).get(); rec(k, cls, "d1-query", String(r.expected), String(r.observed), String(r.expected) === String(r.observed) ? 1 : 0); return r; };
   const runCode = (k, passed) => rec(k, "issue-" + idOf(k), "code-read", "ok", passed ? "ok" : "missing-marker:qnfo-fleet-control/worker.js", passed ? 1 : 0);
-  const KEYS = ["MD-P1a", "MD-P1b", "MD-P1c", "MD-P2", "MD-P4"];
+  const KEYS = ["MD-P1a", "MD-P1b", "MD-P1c"];
   ok(q1(wa, "SELECT name FROM sqlite_master WHERE name = 'remediation_verification_autoclose_ins'"), "the world carries the live autoclose trigger");
   for (const k of KEYS) { runOutcome(k); runCode(k, false); }
   ok(KEYS.every((k) => st(k) === "open"), "first consumer pass: every d1 contract is read and every code-read contract fails, and no lever issue is closed", KEYS.map((k) => k + ":" + st(k)));
-  // P4's outcome turns true by hand (the migration applied under another file name): the failing code-read contract still keeps it open
-  wa.exec("CREATE TABLE tick_probe_src (x INTEGER); CREATE TRIGGER tick_driver_roster_tick AFTER INSERT ON tick_probe_src BEGIN SELECT MIN(1.0, 2.0); END");
-  ok(runOutcome("MD-P4").observed === "ok" && st("MD-P4") === "open", "MD-P4: the outcome passing alone does not close the issue (its code-read contract has a failing latest verification)");
-  runCode("MD-P4", true);
-  ok(st("MD-P4") === "closed", "MD-P4: it closes once both pass");
   // P1a / P1b: the code-read pass is the closing probe
   runCode("MD-P1a", true); runCode("MD-P1b", true);
   ok(st("MD-P1a") === "closed" && st("MD-P1b") === "closed", "MD-P1a and MD-P1b close when their code-read contract passes (and not before)");
@@ -390,14 +426,6 @@ const count = (t) => { let c = 0, i = 0; while ((i = t.length ? wsrc.indexOf(t, 
   ok(runOutcome("MD-P1c").observed !== "ok" && st("MD-P1c") === "open", "MD-P1c: six quick reopens keep it open");
   wa.exec("DELETE FROM issue_lifecycle");
   ok(runOutcome("MD-P1c").observed === "ok" && st("MD-P1c") === "closed", "MD-P1c: it closes when the code part has passed and the churn is within the target");
-  // P2
-  runCode("MD-P2", true);
-  ok(st("MD-P2") === "open", "MD-P2: the code-read pass alone does not close it");
-  wa.exec("INSERT INTO analytics_metric_triggers (id, metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, enabled) VALUES (387, 'improvement_rate_7d', 'Improvement gap', 'registry', 'lt', 0.3, 5, 'a', 'qnfo-fleet-control', 'agent_issues', 1)");
-  wa.exec("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (8001, 'METRIC-REGRESSION-1: improvement_rate_7d', 'qnfo-fleet-control', 'high', 'open', 1, 1)");
-  ok(runOutcome("MD-P2").observed !== "ok" && st("MD-P2") === "open", "MD-P2: an open regression issue for a trigger-owned metric keeps it open");
-  wa.exec("DELETE FROM agent_issues WHERE id = 8001");
-  ok(runOutcome("MD-P2").observed === "ok" && st("MD-P2") === "closed", "MD-P2: it closes when the code part has passed and that regression issue is gone");
 }
 {
   // control: the SHAPE the first draft shipped (a standing-guard d1 outcome that already reads ok) does close the issue on the live trigger with the code unchanged, so the fixture reproduces the defect
@@ -429,11 +457,13 @@ const verify = (rid, id) => d.prepare(pb(rid).verify_sql).get(id);
 const curTitle = (t) => "METRIC-TRIGGER-" + t.id + "-" + String(t.metric_key).toUpperCase().replace(/[^A-Z0-9]+/g, "-") + ": " + String(t.title || t.action || "").slice(0, 80);
 const lookupSql = (src.match(/SELECT id, status FROM agent_issues WHERE lower\(trim\(title\)\) = lower\(trim\(\?1\)\) AND status IN \('open','monitoring','closed'\) ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'monitoring' THEN 1 ELSE 2 END LIMIT 1/) || [])[0];
 ok(!!lookupSql || !/lower\(trim\(title\)\) = lower\(trim\(\?1\)\) AND status IN \('open','monitoring','closed'\)/.test(src), "the evaluator's lookup is the whole-title lookup this suite replays, or MD-P1a has replaced it (then it cannot reopen a parked twin of another title)");
-ok(JSON.stringify(ids("MD-1")) === JSON.stringify([5001, 5006, 5011, 99924, 1000015]), "MD-1 names the losers: the OLD-title issue 99924 at equal priority (not the current-title 100226), the lower priority (5001), the old-title issue 5011 above the lower-id current-title 5010, the hand-filed twin (1000015) and 5006 (a live claim is the engine's check, read once a tick); the failing-contract loser 5004 and the pair whose survivor is less urgent (5008, 5009) are not named", ids("MD-1"));
+ok(JSON.stringify(ids("MD-1")) === JSON.stringify([5001, 5006, 5011, 5014, 99924]), "MD-1 names the losers: the OLD-title issue 99924 at equal priority (not the current-title 100226), the lower priority (5001), the old-title issue 5011 above the lower-id current-title 5010, the old-title issue 5014 whose source is NULL and 5006 (a live claim is the engine's check, read once a tick); the failing-contract loser 5004, the pair whose survivor is less urgent (5008, 5009), the owner's note 1000015 and the owner-sourced old-title issue 5012 are not named", ids("MD-1"));
+ok(!ids("MD-1").includes(1000015) && !ids("MD-1").includes(100088) && !ids("MD-1").includes(5012) && !ids("MD-1").includes(5013), "MD-1 never names the owner's own note 1000015 (source owner-chat, a colon-form METRIC-TRIGGER: title beside 100088), nor an issue whose source begins with owner (5012) nor the pair it would leave");
+ok(!/metric-trigger:/i.test(pb("MD-1").trigger_sql) && !/metric-trigger:/i.test(pb("MD-1").action_sql) && /NOT LIKE 'owner%'/.test(pb("MD-1").trigger_sql) && /NOT LIKE 'owner%'/.test(pb("MD-1").action_sql), "MD-1 has no colon-form branch and excludes an owner source in both its trigger_sql and its action_sql");
 for (const h of hits("MD-1")) { const f = JSON.parse(h.facts_json); ok(Object.keys(h).sort().join(",") === "facts_json,issue_id,subject" && api.bdFactsSafe(f) && /^[a-z0-9-]+$/.test(h.subject), "MD-1 hit " + h.issue_id + ": issue_id, subject, facts_json; facts hold numbers and ids only", f); }
 {
   const sv = (id) => JSON.parse(hits("MD-1").find((h) => h.issue_id === id).facts_json).survivor_issue;
-  ok(sv(99924) === 100226 && sv(5001) === 5002 && sv(5011) === 5010 && sv(1000015) === 100088, "survivors: the issue that bears the evaluator's current title (100226 over the lower id 99924, 5002, 5010), and by priority then id when neither does (100088 over the hand-filed twin)");
+  ok(sv(99924) === 100226 && sv(5001) === 5002 && sv(5011) === 5010 && sv(5014) === 5015, "survivors: the issue that bears the evaluator's current title (100226 over the lower id 99924, 5002, 5010, 5015 over the NULL-source 5014)");
   // the invariant behind it: no hit names the issue whose title is the one evaluateMetricTriggers looks up for its trigger
   for (const h of hits("MD-1")) {
     const a = q1(d, "SELECT title FROM agent_issues WHERE id = ?", h.issue_id), m = /^METRIC-TRIGGER-(\d+)-/.exec(a.title), t = m && q1(d, "SELECT * FROM analytics_metric_triggers WHERE id = ?", Number(m[1]));
@@ -485,8 +515,9 @@ ok(ids("MD-4").join(",") === "6101,6106", "MD-4 names the recovered-but-open iss
   ok(apply("MD-1", 5006) === 0 && status(5006).status === "open", "MD-1: an issue under a live work claim is not closed");
   ok(apply("MD-1", 5005) === 0 && apply("MD-1", 5007) === 0 && apply("MD-1", 100226) === 0 && apply("MD-1", 5002) === 0 && apply("MD-1", 5010) === 0, "MD-1: a survivor and a single issue are not closed, nor is the current-title issue of a pair");
   ok(apply("MD-1", 5008) === 0 && apply("MD-1", 5009) === 0 && status(5008).status === "open" && status(5009).status === "open", "MD-1: the pair whose survivor (5009) is less urgent than the old-title issue (5008) is left alone");
-  ok(apply("MD-1", 5001) === 1 && evidence(5001).startsWith("SUPERSEDED BY #5002") && apply("MD-1", 1000015) === 1 && evidence(1000015).startsWith("SUPERSEDED BY #100088") && apply("MD-1", 5011) === 1 && evidence(5011).startsWith("SUPERSEDED BY #5010"), "MD-1: the lower priority, the hand-filed twin and the later old-title issue are superseded to 5002, 100088 and 5010");
-  revert("MD-1", 5001); revert("MD-1", 1000015); revert("MD-1", 5011);
+  ok(apply("MD-1", 5001) === 1 && evidence(5001).startsWith("SUPERSEDED BY #5002") && apply("MD-1", 5014) === 1 && evidence(5014).startsWith("SUPERSEDED BY #5015") && apply("MD-1", 5011) === 1 && evidence(5011).startsWith("SUPERSEDED BY #5010"), "MD-1: the lower priority, the NULL-source old-title issue and the later old-title issue are superseded to 5002, 5015 and 5010");
+  ok(apply("MD-1", 1000015) === 0 && status(1000015).status === "open" && evidence(1000015) === null && apply("MD-1", 5012) === 0 && status(5012).status === "open" && apply("MD-1", 100088) === 0, "MD-1: the owner's note 1000015 and the owner-sourced 5012 are not closed (the statement changes no row)");
+  revert("MD-1", 5001); revert("MD-1", 5014); revert("MD-1", 5011);
 }
 // MD-6 actions
 {
@@ -543,7 +574,7 @@ const tick = async (rawdb) => { const r = await loadApi().breachDoctorTick({ AUD
   // measure period: a playbook younger than 30 minutes acts on nothing
   const young = world();
   const r0 = await tick(young);
-  ok(r0.ok === true && r0.acted === 0 && qa(young, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'closed' AND id IN (3015, 99914, 99915, 5001, 5011, 99924, 1000015, 6101)")[0].n === 0, "a playbook younger than 30 minutes runs in measure: the tick diagnoses and changes nothing", { acted: r0.acted });
+  ok(r0.ok === true && r0.acted === 0 && qa(young, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'closed' AND id IN (3015, 99914, 99915, 5001, 5011, 5014, 99924, 6101)")[0].n === 0, "a playbook younger than 30 minutes runs in measure: the tick diagnoses and changes nothing", { acted: r0.acted });
   ok(qa(young, "SELECT rule_id FROM breach_diagnoses WHERE rule_id LIKE 'MD-%'").length >= 8, "and the measure tick records the would-do cases (found causes, not unclassified)", qa(young, "SELECT rule_id, issue_id FROM breach_diagnoses WHERE rule_id LIKE 'MD-%'"));
   ok(det(w).observed === "6", "before the doctor acts the failure-mode detector reads 6: the three covered children it must clear and the three look-alikes a rule deliberately leaves (7101 no dep, 7102 parent without an issue, 7105 child more urgent than its parent)", det(w));
   const results = [];
@@ -553,11 +584,12 @@ const tick = async (rawdb) => { const r = await loadApi().breachDoctorTick({ AUD
   const byRule = (r) => cases.filter((c) => c.rule_id === r && c.state === "verified").map((c) => c.issue_id).sort((x, y) => x - y).join(",");
   ok(byRule("MD-6") === "3015,99914,99915", "MD-6 verified the three covered children the doctor can reach", cases.filter((c) => c.rule_id === "MD-6"));
   ok(byRule("MD-4") === "6101", "MD-4 verified the recovered issue (the claimed 6106 was skipped)", cases.filter((c) => c.rule_id === "MD-4"));
-  ok(byRule("MD-1") === "5001,5011,99924,1000015", "MD-1 verified the four superseded duplicates (5004 has a failing contract, 5006 a live claim, 5008 and 5009 a survivor less urgent than the loser)", cases.filter((c) => c.rule_id === "MD-1"));
+  ok(byRule("MD-1") === "5001,5011,5014,99924", "MD-1 verified the four superseded duplicates (5004 has a failing contract, 5006 a live claim, 5008 and 5009 a survivor less urgent than the loser; the owner's note 1000015 and the owner-sourced 5012 are never cases)", cases.filter((c) => c.rule_id === "MD-1"));
+  ok(!cases.some((c) => c.issue_id === 1000015 || c.issue_id === 5012), "the doctor opened no case on the owner's note or the owner-sourced issue", cases.filter((c) => c.issue_id === 1000015 || c.issue_id === 5012));
   ok(!cases.some((c) => c.rule_id === "MD-7"), "no MD-7 case exists: the heartbeat issues are left to their own triggers");
   ok(cases.every((c) => c.state === "verified" || c.state === "diagnosed"), "no MD case failed, reverted or hangs in flight", cases.filter((c) => c.state !== "verified" && c.state !== "diagnosed"));
   const w2 = (id) => (q1(w, "SELECT status FROM agent_issues WHERE id = ?", id) || {}).status;
-  ok([3015, 99914, 99915, 5001, 5011, 99924, 1000015, 6101].every((i) => w2(i) === "closed") && [6106, 5004, 5006, 7105, 100226, 5002, 100088, 5010, 5008, 5009].every((i) => w2(i) === "open"), "the issues are closed as the playbooks say and the guarded ones (claimed, failing contract, a child more urgent than its parent, the survivors, the pair whose survivor is less urgent) stay open", [3015, 99914, 99915, 5001, 5011, 99924, 1000015, 6101, 6106, 5004, 5006, 7105, 100226, 5002, 100088, 5010, 5008, 5009].map((i) => i + ":" + w2(i)));
+  ok([3015, 99914, 99915, 5001, 5011, 5014, 99924, 6101].every((i) => w2(i) === "closed") && [6106, 5004, 5006, 7105, 100226, 5002, 100088, 5010, 5008, 5009, 1000015, 5012, 5013, 5015].every((i) => w2(i) === "open"), "the issues are closed as the playbooks say and the guarded ones (claimed, failing contract, a child more urgent than its parent, the survivors, the pair whose survivor is less urgent, the owner's note and the owner-sourced issue) stay open", [3015, 99914, 99915, 5001, 5011, 5014, 99924, 6101, 6106, 5004, 5006, 7105, 100226, 5002, 100088, 5010, 5008, 5009, 1000015, 5012, 5013, 5015].map((i) => i + ":" + w2(i)));
   ok(w2(100225) === "closed" && w2(3015) === "closed" && q1(w, "SELECT priority p FROM agent_issues WHERE id = 99938").p === "critical", "end to end: the parent 99938 carries the highest child priority (critical) and 100225 was closed once by the file");
   // the evaluator's lookup after the doctor ran: the current-title issue of trigger 354 is the one it finds
   if (lookupSql) { const row = w.prepare(lookupSql).get(curTitle(q1(w, "SELECT * FROM analytics_metric_triggers WHERE id = 354"))); ok(row && row.id === 100226 && row.status === "open", "end to end: after the doctor closed 99924 the evaluator's lookup finds the open 100226", row); }
@@ -583,7 +615,8 @@ const tick = async (rawdb) => { const r = await loadApi().breachDoctorTick({ AUD
   ok(q1(w, "SELECT COUNT(*) n FROM metric_deps WHERE active = 1").n === 0, "Rollback deactivates metric_deps");
   const pr = (id) => q1(w, "SELECT priority p FROM agent_issues WHERE id = ?", id).p;
   ok(pr(99938) === "medium" && pr(100301) === "medium" && pr(99935) === "medium" && pr(100225) === "critical", "Rollback restores the three parent priorities from the backup table and leaves the children alone");
-  ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: MD-P%' AND status = 'open'").n === 5 && q1(w, "SELECT COUNT(*) n FROM decision_log").n >= 2, "Rollback leaves the five lever issues open (an issue is closed only with close_evidence) and the decision_log row");
+  ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: MD-P%' AND status = 'open'").n === 3 && q1(w, "SELECT COUNT(*) n FROM decision_log").n >= 2, "Rollback leaves the three lever issues open (an issue is closed only with close_evidence) and the decision_log row");
+  ok(q1(w, "SELECT COUNT(*) n FROM code_tasks WHERE id IN (SELECT 'ct_im' || id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: MD-P%') AND status = 'superseded'").n === 3 && q1(w, "SELECT status s FROM code_tasks WHERE id = 'ct_im99937'").s === "merged" && q1(w, "SELECT COUNT(*) n FROM code_tasks").n === q1(world(), "SELECT COUNT(*) n FROM code_tasks").n, "Rollback supersedes the three queued lever tasks (a queued task is stopped, none is deleted) and leaves every other code task as it was");
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
