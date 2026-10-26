@@ -292,10 +292,15 @@ def collect_dmarc(ctx):
     if total == 0:
         return [Result("dmarc_aligned_pass_rate", None, "no parseable DMARC aggregate report ended in the last %d days (%d archived report mails, %d unparsed)" % (DMARC_WINDOW_DAYS, len(rows_sql), unparsed), rows)]
     enforced = sum(b["enforced"] for b in per.values())
-    note = ("aligned pass (dkim or spf pass in policy_evaluated) %d of %d messages in %d reports of the last %d days; the %d unaligned messages include %d that the receiving server rejected or quarantined under the "
-            "published policy (soft-failing SPF and no DKIM from addresses outside the sending set read this way in the 2026-10 reports), so a low share at this volume is mostly policy working, not lost mail; "
+    unaligned = total - aligned
+    # The reading of the failures is computed, never asserted: only a message the receiver rejected or quarantined is called stopped by the policy; any other unaligned message was
+    # delivered despite failing both aligned checks and is named as such, because that is the one a sender fix would change.
+    reading = ("all %d unaligned messages were rejected or quarantined by the receiver under the published policy" % unaligned if unaligned and enforced == unaligned else
+               "%d of the %d unaligned messages were rejected or quarantined by the receiver under the published policy and %d were delivered despite failing both aligned checks (review those senders)" % (enforced, unaligned, unaligned - enforced) if unaligned else
+               "no unaligned message")
+    note = ("aligned pass (dkim or spf pass in policy_evaluated) %d of %d messages in %d reports of the last %d days; %s; "
             "domains reporting: %s; domains with no rua tag (unmeasured): %s; domains with a rua tag and no report in the window: %s; published policies: %s; %d archived report mails unparsed"
-            % (aligned, total, sum(b["reports"] for b in per.values()), DMARC_WINDOW_DAYS, total - aligned, enforced, ",".join(reporting) or "-", ",".join(no_rua) or "none", ",".join(silent) or "none",
+            % (aligned, total, sum(b["reports"] for b in per.values()), DMARC_WINDOW_DAYS, reading, ",".join(reporting) or "-", ",".join(no_rua) or "none", ",".join(silent) or "none",
                ",".join("%s=%s" % (s["domain"], s.get("dmarc_p")) for s in dns if s.get("answered")) or "unread", unparsed))
     return [Result("dmarc_aligned_pass_rate", aligned / float(total), note, rows)]
 
@@ -612,9 +617,13 @@ CREATE TABLE bp26_dns_email_auth (domain TEXT PRIMARY KEY, spf TEXT, spf_ok INTE
     res = collect_dmarc(cx)[0]
     ok(res.metric == "dmarc_aligned_pass_rate" and abs(res.value - 18 / 20.0) < 1e-9, "dmarc value is 18/20 over both reports: %r" % (res.value,))
     ok("q08.org" in res.note and "no rua" in res.note, "the note names the domain without a rua tag: " + res.note)
+    ok("all 2 unaligned messages were rejected or quarantined" in res.note, "the reading of the failures is computed: " + res.note)
     ok(c.execute("SELECT dmarc_policy, dmarc_rua, dkim_cf_selector FROM bp26_dns_email_auth WHERE domain = 'qnfo.org'").fetchone() == ("reject", 1, 1), "the DNS state is kept in bp26_dns_email_auth")
     c.execute("DELETE FROM email_raw_archive")
     ok(collect_dmarc(cx)[0].value is None, "no report in the archive: None, not zero")
+    c.execute("INSERT INTO email_raw_archive VALUES (1, ?)", [mime(xml_report("qnfo.org", "google.com", now - 3600, [(4, "pass", "pass"), (1, "fail", "fail")]), "text/xml", "d.xml")])
+    dd = collect_dmarc(cx)[0]
+    ok(abs(dd.value - 0.8) < 1e-9 and "delivered despite failing both aligned checks" in dd.note, "an unaligned message that was delivered is named as such: " + dd.note)
     r = collect_rfc8058(cx)[0]
     ok(abs(r.value - 2 / 3.0) < 1e-9 and "personal-companion" in r.note, "two of three list-mail paths are compliant, the third is named: %r %s" % (r.value, r.note))
     ok(scan_list_mail_source("x")[0] is False, "an empty source is not compliant")
