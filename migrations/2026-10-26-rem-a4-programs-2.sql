@@ -7,6 +7,8 @@
 --     "35 failed and 4 NO-PROGRESS-CEILING-1" means 35 failed tasks, 4 of them NO-PROGRESS-CEILING-1. The claims "(a) handled by CONFLICT-REPAIR-DOER-1" and "(e) the breach doctor and the RED-DRAIN dispatch give every issue a doer path" were not measured
 --     here and are withdrawn; the orchestrator already runs 8 lanes (TICK_LANES) and serialises tasks on one file, which is the measured source of the long waits.
 --   100318 contract action: "12 on qnfo-ai" were 12 merged, 8 of them verified by the canary (qnfo-gateway: 7 merged, 7 verified).
+--   All three notes of the first file (100293, 100294, 100299) say "measured 20:10Z" (and the file header says 17:54Z to 20:10Z): the session mislabelled its own reads, which were taken between 19:25Z and 19:40Z by the wall clock; the figures are right,
+--   the stamp is not. issues_over_24h_no_doer read 93 at 19:35Z (122 in the daily row of 19:01Z), so the first note's "144 at 17:54Z" stays the earlier read.
 -- New notes: 100279 (the time gate), 100318 and 100366 (the open parts), 2008 (the clear date of its 14-day window).
 -- 2008: the last code task whose merge_note or last_error says "required check(s) failed" was created 2026-10-25T09:30:45Z (ct_zlm7wlfxfdnrxx, gate=failure); 33 such tasks since 2026-10-18, the latest five failing the gate job, which stopped being a
 --   required check on 2026-10-26 (MERGE-STREAMLINE-1). With no new such task the 14-day window of the probe clears at 2026-11-08T09:31Z. The replacement lever (scripts/code-task-publish.py runs scripts/deploy_gate.py --check) is not shipped: --check
@@ -16,12 +18,16 @@
 -- Rollback: UPDATE remediation_contracts SET action = replace(action, '12 merged (8 verified) on qnfo-ai in 7 days', '12 on qnfo-ai in 7 days') WHERE class = 'issue-100318'
 
 UPDATE agent_issues SET updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000, description = COALESCE(description, '') || char(10) ||
-  'REM-A4-PROGRAMS-2 correction 2026-10-26 (session rem-a4): in the BREACH-DOCTOR-1 family the code of 1000427 (PR 4746), 1000428 (PR 4740) and 1000430 (code task ct_im1000430c) is merged and those issues wait for their live measurement; 1000429, 1000431 and 1000433 wait for qnfo-fleet-control/worker.js, held by the code loop. PR 4736 belongs to BREACH-DOCTOR-WATCHMAKER-1 (1000398), a different family. This replaces the doer sentence for that family in the note above.'
+  'REM-A4-PROGRAMS-2 correction 2026-10-26 (session rem-a4): in the BREACH-DOCTOR-1 family the code of 1000427 (PR 4746), 1000428 (PR 4740) and 1000430 (code task ct_im1000430c) is merged and those issues wait for their live measurement; 1000429, 1000431 and 1000433 wait for qnfo-fleet-control/worker.js, held by the code loop. PR 4736 belongs to BREACH-DOCTOR-WATCHMAKER-1 (1000398), a different family. This replaces the doer sentence for that family in the note above. The stamp 20:10Z in that note is a mislabel: the reads were taken between 19:25Z and 19:40Z.'
  WHERE id = 100294 AND status = 'open' AND instr(COALESCE(description, ''), 'REM-A4-PROGRAMS-2 correction') = 0;
 
 UPDATE agent_issues SET updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000, description = COALESCE(description, '') || char(10) ||
-  'REM-A4-PROGRAMS-2 correction 2026-10-26 (session rem-a4): of the 95 merged tasks of the last 7 days that have a recorded PR open time, 63 opened their PR inside the first hour and 32 waited longer (the note above counted 103 and 40). The 4 NO-PROGRESS-CEILING-1 failures are among the 35 failed tasks. The statements that part (a) is handled by CONFLICT-REPAIR-DOER-1 and part (e) by the breach doctor and the RED-DRAIN dispatch were not measured and are withdrawn. The orchestrator already runs 8 lanes (TICK_LANES = 8) and serialises tasks on one file, so the wait before the PR opens is the held-file and red-main queue; the two ways to shorten it are a claim hand-off between tasks on one file and fewer sessions holding qnfo-fleet-control/worker.js.'
+  'REM-A4-PROGRAMS-2 correction 2026-10-26 (session rem-a4): of the 95 merged tasks of the last 7 days that have a recorded PR open time, 63 opened their PR inside the first hour and 32 waited longer (the note above counted 103 and 40). The 4 NO-PROGRESS-CEILING-1 failures are among the 35 failed tasks. The statements that part (a) is handled by CONFLICT-REPAIR-DOER-1 and part (e) by the breach doctor and the RED-DRAIN dispatch were not measured and are withdrawn. The orchestrator already runs 8 lanes (TICK_LANES = 8) and serialises tasks on one file, so the wait before the PR opens is the held-file and red-main queue; the two ways to shorten it are a claim hand-off between tasks on one file and fewer sessions holding qnfo-fleet-control/worker.js. The stamp 20:10Z in the note above is a mislabel: the reads were taken between 19:25Z and 19:40Z.'
  WHERE id = 100293 AND status = 'open' AND instr(COALESCE(description, ''), 'REM-A4-PROGRAMS-2 correction') = 0;
+
+UPDATE agent_issues SET updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000, description = COALESCE(description, '') || char(10) ||
+  'REM-A4-PROGRAMS-2 correction 2026-10-26 (session rem-a4): the note above says "Measured 20:10Z"; the reads (156 open issues over 24 h, 98 without a doer, 43 only through a code-task text line, 20 of those without a live code task, 15 with a live work claim, 0 with a live code task) were taken at about 19:30Z. issues_over_24h_no_doer read 144 at 17:54Z, 122 in the daily row of 19:01Z and 93 at 19:35Z, so it is falling; the closing probe still reads 0 of the last 7 daily reads at 0, because the daily rows of 20 to 26 October are 70, 114, 173, 202, 203, 277 and 122.'
+ WHERE id = 100299 AND status = 'open' AND instr(COALESCE(description, ''), 'REM-A4-PROGRAMS-2 correction') = 0;
 
 UPDATE remediation_contracts SET action = replace(action, '7 verified loop merges on qnfo-gateway and 12 on qnfo-ai in 7 days', '7 verified loop merges on qnfo-gateway and 12 merged (8 verified) on qnfo-ai in 7 days')
  WHERE class = 'issue-100318' AND instr(action, '12 on qnfo-ai in 7 days') > 0;
@@ -45,10 +51,10 @@ UPDATE agent_issues SET updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 10
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session-rem-a4-programs',
   'a dated note on an issue states what a read of this session showed; a sentence that the next read contradicts is corrected by a dated correction, never left as the record',
-  'REM-A4-PROGRAMS-2: corrections to the notes on 100293 and 100294 and the action text of contract issue-100318; dated notes on 100279, 100318, 100366 and 2008',
-  'code_tasks merged in 7 days with a recorded pr_opened_at 95 (63 inside the first hour, 32 longer); code_tasks merged 7 days qnfo-ai 12 (8 verified), qnfo-gateway 7 (7 verified); newest code task with required check(s) failed ct_zlm7wlfxfdnrxx 2026-10-25T09:30:45Z; CONTROL-PLANE-REVERTED-1 1000171 push 7a9d293 carried by no code task',
+  'REM-A4-PROGRAMS-2: corrections to the notes on 100293, 100294 and 100299 and the action text of contract issue-100318; dated notes on 100279, 100318, 100366 and 2008',
+  'the notes of REM-A4-PROGRAMS-1 say 20:10Z for reads taken between 19:25Z and 19:40Z; code_tasks merged in 7 days with a recorded pr_opened_at 95 (63 inside the first hour, 32 longer); code_tasks merged 7 days qnfo-ai 12 (8 verified), qnfo-gateway 7 (7 verified); newest code task with required check(s) failed ct_zlm7wlfxfdnrxx 2026-10-25T09:30:45Z; CONTROL-PLANE-REVERTED-1 1000171 push 7a9d293 carried by no code task',
   'applied by migration',
-  'text of four agent_issues descriptions, one more, and one contract action; no status, probe, cap or threshold changed',
+  'text of five agent_issues descriptions, one more, and one contract action; no status, probe, cap or threshold changed',
   'the Rollback line restores the previous action text of issue-100318; the dated notes are append-only text and stay',
   'the record on the program issues states only what was measured',
   '2008 reads ok from 2026-11-08T09:31Z if no new required-check failure appears; 100279 from 2026-10-27T04:00Z if no loop merge is reverted',

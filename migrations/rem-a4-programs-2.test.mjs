@@ -28,7 +28,7 @@ const OLD_ACTION_BEFORE = "reads a rollup. 7 verified loop merges on qnfo-gatewa
 function world(o = {}) {
   const w = new DatabaseSync(":memory:");
   w.exec(BASE_DDL);
-  for (const id of [100293, 100294, 100279, 100318, 100366, 2008]) {
+  for (const id of [100299, 100293, 100294, 100279, 100318, 100366, 2008]) {
     w.prepare("INSERT INTO agent_issues (id, title, description, source, priority, status, created_at, updated_at) VALUES (?, ?, 'original text', 'qnfo-fleet-control', 'critical', ?, 1, 1)").run(id, "ISSUE-" + id + ": a program issue", o.closed === id ? "closed" : "open");
   }
   w.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, status, module, attempts, last_verdict) VALUES ('issue-100318', 100318, 'pre', ?, 'SELECT ''ok'' AS expected, ''ok'' AS observed', 'd1-query', 1000, 'qnfo-ops', 'active', 'rem-a4-programs', 4, 'fail')").run(o.fixed ? OLD_ACTION : OLD_ACTION_BEFORE);
@@ -41,17 +41,18 @@ const desc = (w, id) => q1(w, "SELECT description d FROM agent_issues WHERE id =
 
 const w = world();
 w.exec(sql);
-for (const [id, marker] of [[100293, "REM-A4-PROGRAMS-2 correction"], [100294, "REM-A4-PROGRAMS-2 correction"], [100279, "REM-A4-PROGRAMS-2 2026-10-26"], [100318, "REM-A4-PROGRAMS-2 2026-10-26"], [100366, "REM-A4-PROGRAMS-2 2026-10-26"], [2008, "REM-A4-PROGRAMS-2 2026-10-26"]]) {
+for (const [id, marker] of [[100299, "REM-A4-PROGRAMS-2 correction"], [100293, "REM-A4-PROGRAMS-2 correction"], [100294, "REM-A4-PROGRAMS-2 correction"], [100279, "REM-A4-PROGRAMS-2 2026-10-26"], [100318, "REM-A4-PROGRAMS-2 2026-10-26"], [100366, "REM-A4-PROGRAMS-2 2026-10-26"], [2008, "REM-A4-PROGRAMS-2 2026-10-26"]]) {
   const d = desc(w, id);
   ok(d.startsWith("original text\n") && d.split(marker).length === 2, "issue " + id + " gets one note after its original text", d.slice(0, 120));
 }
 ok(/ct_im1000430c/.test(desc(w, 100294)) && /PR 4736 belongs to BREACH-DOCTOR-WATCHMAKER-1/.test(desc(w, 100294)), "the 100294 correction names the merged tasks and the family of PR 4736");
 ok(/95 merged tasks/.test(desc(w, 100293)) && /withdrawn/.test(desc(w, 100293)), "the 100293 correction states the recount and withdraws the unmeasured claims");
+ok(/mislabel/.test(desc(w, 100293)) && /mislabel/.test(desc(w, 100294)) && /about 19:30Z/.test(desc(w, 100299)), "the three corrections state the real time of the reads");
 ok(/2026-11-08T09:31Z/.test(desc(w, 2008)) && /MERGE-STREAMLINE-1/.test(desc(w, 2008)), "the 2008 note states the clear date and the gate change");
 ok(/2026-10-27T04:00Z/.test(desc(w, 100279)) && /1000171/.test(desc(w, 100279)), "the 100279 note states the time gate and the one revert issue");
 ok(q1(w, "SELECT action a FROM remediation_contracts WHERE class = 'issue-100318'").a === OLD_ACTION, "the action phrase of issue-100318 is corrected and the rest of the text is kept");
 ok(q1(w, "SELECT action a FROM remediation_contracts WHERE class = 'issue-100366'").a === "untouched 12 on qnfo-ai in 7 days", "another contract is untouched");
-ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'").n === 6, "no issue status is changed");
+ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'").n === 7, "no issue status is changed");
 ok(q1(w, "SELECT verify_probe p, status s, attempts a FROM remediation_contracts WHERE class = 'issue-100318'").p.startsWith("SELECT 'ok'") && q1(w, "SELECT status s FROM remediation_contracts WHERE class = 'issue-100318'").s === "active", "the probe and status of issue-100318 are kept");
 ok(q1(w, "SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'REM-A4-PROGRAMS-2:%'").n === 1, "one decision_log row");
 
