@@ -34,7 +34,10 @@ ok(at > WINDOW && longBody.length > 60000, "fixture: the passage lies beyond the
 
 // 1. The failure being fixed: without the anchor the excerpt is the head of the paper and does not contain the passage.
 const plain = "'" + PASSAGE + ", which exceeds the NIST Category 1 threshold of 2^143.' (Section 5.3)";
-ok(!confirmExcerpt(longBody, plain).includes("Grover speedup"), "unanchored: the confirm excerpt is the head of the paper and lacks the passage");
+// PAPER-CONFIRM-FALLBACK-1 (2026-10-26): the consumer now also centres its window on a fragment the claim itself quotes, so the failure shows only for a claim that quotes nothing.
+const unquoted = "A figure in Section 5.3 compares the Grover search cost with the NIST threshold and the comparison does not hold";
+ok(!confirmExcerpt(longBody, unquoted).includes("Grover speedup"), "unanchored and unquoted: the confirm excerpt is the head of the paper and lacks the passage");
+ok(confirmExcerpt(longBody, plain).includes("Grover speedup"), "unanchored but quoted: the consumer centres its window on the quoted passage (PAPER-CONFIRM-FALLBACK-1)");
 
 // 2. With the anchor it is centred on the passage.
 const anchored = P.anchorClaim(longBody, plain, "2^128 is less than 2^143");
@@ -109,7 +112,7 @@ await P.tick(env);
 const E = audit.prepare("SELECT * FROM internal_errata").all();
 ok(E.length === 1 && E[0].id === "pl-long-paper-2.0.0-0" && E[0].owner === "qnfo-research-exec" && E[0].status === "open", "the confirmed error reaches internal_errata", E);
 ok(E[0] && E[0].claim_text.startsWith(plain) && / At: "The Grover speedup[^"]*"$/.test(E[0].claim_text), "its claim_text ends with the At: anchor", E[0] && E[0].claim_text);
-ok(E[0] && confirmExcerpt(longBody, E[0].claim_text).includes("Grover speedup") && !confirmExcerpt(longBody, plain).includes("Grover speedup"), "the confirm excerpt for the stored claim holds the passage; for the unanchored claim it did not");
+ok(E[0] && confirmExcerpt(longBody, E[0].claim_text).includes("Grover speedup") && confirmExcerpt(longBody, plain).includes("Grover speedup") && !confirmExcerpt(longBody, unquoted).includes("Grover speedup"), "the confirm excerpt holds the passage for the stored (anchored) claim and for an unanchored claim that quotes it, and is the head of the paper for a claim that quotes nothing");
 const L = audit.prepare("SELECT claim FROM paper_learnings WHERE kind = 'error'").all();
 ok(L.length === 1 && L[0].claim === plain, "the paper_learnings row keeps the reader's own claim, unanchored", L);
 

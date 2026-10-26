@@ -11,7 +11,7 @@ function rxSecretEqual(given, expected) {
   for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-var VERSION = "1.8.2-paper-writer"; // 1.8.2 PAPER-LEDGER-ATTRIBUTION-2 (2026-10-26): repointStores sets papers.change_actor and change_reason on its corrected-text UPDATE, so living-paper paper_change_ledger no longer files the correction as unattributed. 1.8.1 ERRATA-CONFIRM-COST-1 (2026-10-26): internal confirm deepseek-v4-flash then kimi-k2.6, 24k excerpt, ops_config errata_confirm_max (folded into qnfo-research-exec 0.34.0). // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.9.0-route-per-paper"; // 1.9.0 ERRATA-ROUTE-PER-PAPER-1 + PAPER-CONFIRM-FALLBACK-1 (2026-10-26, agent_issues 1000293 and 1000292): one remediation row per paper, errata_actions routed -> verified when the corrected version is published, the confirm excerpt centred on the claim's own quotation (folded into qnfo-research-exec 0.37.0). // 1.8.2 PAPER-LEDGER-ATTRIBUTION-2 (2026-10-26): repointStores sets papers.change_actor and change_reason on its corrected-text UPDATE, so living-paper paper_change_ledger no longer files the correction as unattributed. 1.8.1 ERRATA-CONFIRM-COST-1 (2026-10-26): internal confirm deepseek-v4-flash then kimi-k2.6, 24k excerpt, ops_config errata_confirm_max (folded into qnfo-research-exec 0.34.0). // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21572,18 +21572,77 @@ __name(publishGate, "publishGate");
 // the correction SLA). A high-risk draft older than 6 h is now handed to the research pipeline as a remediation row
 // (the paper is revised and re-reviewed there, under every gate) and the erratum leaves the correction stage with that
 // route recorded; the internal_errata row follows the queue row. One INSERT OR IGNORE per erratum, no model call.
+// ERRATA-ROUTE-PER-PAPER-1 (1.9.0, 2026-10-26, agent_issues 1000293, pillars research and cost): routing made one remediation row per erratum, and a
+// remediation row is a full rewrite of the paper through the pipeline: 233 unclaimed rows covered 149 papers, so 84 of them repeated a rewrite that
+// another row for the same paper already does. A paper now has at most one open errata remediation row. The errata of one paper that are ready in the
+// same run become one row whose idea lists every erratum; an erratum that arrives while that row still waits (queued or deferred, unclaimed, at ground) is
+// appended to its idea; one that arrives while the row is being worked stays audited and is routed after the row ends, so the next row starts from the
+// corrected paper. verifyRoutedErrata then advances errata_actions routed -> verified once a remediation row of the paper has published after the routing.
+// internal_errata still follows its queue row as before. No model call.
+var ERRATA_ROUTE_ROWS_PER_RUN = 5;
+var ERRATA_ROUTE_SELECT = 40;
+var ERRATA_IDEA_MAX = 6000;
+var ERRATA_IDEA_EACH = 700;
+function errataIdeaLine(r) {
+  return (String(r.subject || r.queue_id) + ": " + String(r.claim || "")).replace(/\s+/g, " ").trim().slice(0, ERRATA_IDEA_EACH);
+}
+function errataIdea(slug, group) {
+  if (group.length === 1) {
+    const r = group[0];
+    return ("Correct the published paper '" + String(slug || "") + "' for erratum " + String(r.subject || r.queue_id) + ": " + String(r.claim || "")).slice(0, 2000);
+  }
+  return ("Correct the published paper '" + String(slug || "") + "' for " + group.length + " errata; one rewrite resolves all of them:\n" + group.map(function (r, i) {
+    return (i + 1) + ". " + errataIdeaLine(r);
+  }).join("\n")).slice(0, ERRATA_IDEA_MAX);
+}
 async function routeHighRiskErrata(env) {
-  const out = { routed: 0, synced: 0 };
+  const out = { routed: 0, rows: 0, merged: 0, waiting: 0, synced: 0 };
   try {
-    const rows = (await env.WATCH_DB.prepare("SELECT a.id, a.queue_id, a.slug, q.subject, q.claim FROM errata_actions a JOIN errata_queue q ON q.id = a.queue_id WHERE a.status = 'drafted' AND a.risk = 'high' AND q.status = 'audited' AND a.created_at < datetime('now','-6 hours') ORDER BY a.id ASC LIMIT 5").all()).results || [];
+    const rows = (await env.WATCH_DB.prepare("SELECT a.id, a.queue_id, a.slug, q.subject, q.claim FROM errata_actions a JOIN errata_queue q ON q.id = a.queue_id WHERE a.status = 'drafted' AND a.risk = 'high' AND q.status = 'audited' AND a.created_at < datetime('now','-6 hours') ORDER BY a.id ASC LIMIT " + ERRATA_ROUTE_SELECT).all()).results || [];
+    const groups = [], at = {};
     for (const r of rows) {
-      const now = new Date().toISOString();
-      const idea = ("Correct the published paper '" + String(r.slug || "") + "' for erratum " + String(r.subject || r.queue_id) + ": " + String(r.claim || "")).slice(0, 2000);
-      await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, '', 0.95, 'ACCEPT', 'queued', ?4, ?5, 'ground', 0, 0, 0)")
-        .bind("rem-" + crypto.randomUUID(), "errata:" + String(r.queue_id), idea, r.slug || null, now).run();
-      await env.WATCH_DB.prepare("UPDATE errata_actions SET status = 'routed', updated_at = datetime('now') WHERE id = ?1 AND status = 'drafted'").bind(r.id).run();
-      await env.WATCH_DB.prepare("UPDATE errata_queue SET status = 'implemented', updated_at = datetime('now') WHERE id = ?1 AND status = 'audited'").bind(r.queue_id).run();
-      out.routed++;
+      const key = r.slug ? "slug:" + r.slug : "queue:" + r.queue_id;
+      if (at[key] === undefined) {
+        at[key] = groups.length;
+        groups.push({ slug: r.slug || null, rows: [] });
+      }
+      groups[at[key]].rows.push(r);
+    }
+    let created = 0;
+    for (const g of groups) {
+      const open = g.slug ? await env.AUDIT_DB.prepare("SELECT id, status, stage, claimed_at, idea FROM research_queue WHERE source = 'remediation' AND source_id LIKE 'errata:%' AND paper_slug = ?1 AND status IN ('queued', 'deferred', 'researching', 'review') ORDER BY created_at ASC LIMIT 1").bind(g.slug).first() : null;
+      if (open) {
+        const waits = (open.status === "queued" || open.status === "deferred") && !open.claimed_at && (open.stage == null || open.stage === "ground");
+        if (!waits) {
+          out.waiting += g.rows.length;
+          continue;
+        }
+        const before = String(open.idea || "");
+        let idea = before;
+        for (const r of g.rows) {
+          const line = errataIdeaLine(r);
+          if (idea.indexOf(line.slice(0, 120)) >= 0) continue;
+          if ((idea + "\nAlso: " + line).length > ERRATA_IDEA_MAX) continue;
+          idea = idea + "\nAlso: " + line;
+        }
+        if (idea !== before) await env.AUDIT_DB.prepare("UPDATE research_queue SET idea = ?1 WHERE id = ?2 AND status IN ('queued', 'deferred') AND claimed_at IS NULL").bind(idea, open.id).run();
+        out.merged += g.rows.length;
+      } else {
+        if (created >= ERRATA_ROUTE_ROWS_PER_RUN) {
+          out.waiting += g.rows.length;
+          continue;
+        }
+        await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, '', 0.95, 'ACCEPT', 'queued', ?4, ?5, 'ground', 0, 0, 0)")
+          .bind("rem-" + crypto.randomUUID(), "errata:" + String(g.rows[0].queue_id), errataIdea(g.slug, g.rows), g.slug, new Date().toISOString()).run();
+        created++;
+        out.rows++;
+        out.merged += g.rows.length - 1;
+      }
+      for (const r of g.rows) {
+        await env.WATCH_DB.prepare("UPDATE errata_actions SET status = 'routed', updated_at = datetime('now') WHERE id = ?1 AND status = 'drafted'").bind(r.id).run();
+        await env.WATCH_DB.prepare("UPDATE errata_queue SET status = 'implemented', updated_at = datetime('now') WHERE id = ?1 AND status = 'audited'").bind(r.queue_id).run();
+        out.routed++;
+      }
     }
     // A queue row that reached a terminal state carries its internal_errata row with it (no-paper, implemented, published).
     const sync = await env.WATCH_DB.prepare("UPDATE internal_errata SET status = 'closed', remediation = substr(COALESCE(remediation, '') || ?1 || (SELECT q.status FROM errata_queue q WHERE q.subject = internal_errata.id ORDER BY q.id DESC LIMIT 1), 1, 4000), updated_at = ?2 WHERE status = 'open' AND EXISTS (SELECT 1 FROM errata_queue q WHERE q.subject = internal_errata.id AND q.status IN ('no-paper', 'implemented', 'published', 'resolved', 'closed'))")
@@ -21594,10 +21653,26 @@ async function routeHighRiskErrata(env) {
   }
   return out;
 }
+// A routed erratum is verified when the corrected version is live: a remediation row for its paper, started by errata routing, has published after the
+// erratum was routed. Routed errata are always carried by a row that was waiting at routing time (one open row per paper), so the first such row to
+// publish carries them. It states what was measured (a corrected version is published); it does not re-check the claim against the new text.
+async function verifyRoutedErrata(env) {
+  const out = { verified: 0 };
+  try {
+    const r = await env.WATCH_DB.prepare("UPDATE errata_actions SET status = 'verified', updated_at = datetime('now') WHERE status = 'routed' AND slug IS NOT NULL AND EXISTS (SELECT 1 FROM research_queue r WHERE r.source = 'remediation' AND r.source_id LIKE 'errata:%' AND r.status = 'published' AND r.paper_slug = errata_actions.slug AND datetime(r.published_at) > datetime(errata_actions.updated_at))").run();
+    out.verified = Number(r && r.meta && r.meta.changes) || 0;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "errata-hub", where: "verifyRoutedErrata", error: String(e && e.message || e).slice(0, 300) }));
+  }
+  return out;
+}
 async function runPublish(env, mode) {
   const gate = await publishGate(env);
   const dry = mode === "dry" || !gate.enabled;
-  if (!dry) await routeHighRiskErrata(env);
+  if (!dry) {
+    await routeHighRiskErrata(env);
+    await verifyRoutedErrata(env);
+  }
   if (!dry) {
     const stuck = await env.WATCH_DB.prepare(
       "SELECT id, paper_doi, slug FROM errata_actions WHERE status='publishing' AND updated_at < datetime('now','-60 minutes') ORDER BY id ASC LIMIT 5"
@@ -21832,13 +21907,48 @@ function parseConfirmVerdict(text) {
   if (typeof c !== "boolean") return null;
   return { confirmed: c, why: String(o.why || "").replace(/\s+/g, " ").trim().slice(0, 400) };
 }
+// PAPER-CONFIRM-FALLBACK-1 (2026-10-26, agent_issues 1000292, pillar research): a claim without an At: anchor was judged against the first 24k
+// characters of a paper that averages 56k, so a finding about a later passage was rejected as "not in the excerpt" (18 of 59 rejections gave a
+// window reason; the quoted passage sat at characters 31,086 to 55,772). 448 of the 556 internal-open claims carry no anchor (320 quote in single
+// quotes, 41 in double quotes). The window is now centred on the claim's own first quoted fragment of 16 or more characters (the At: anchor first;
+// a quotation split by an ellipsis is tried piece by piece), located by its opening words with whitespace and quote style ignored; with no
+// locatable quotation the first window is kept. The confirm bar is unchanged: only the text the checker reads moves. One self-contained function
+// (qnfo-lifecycle/paper-learn-anchor.test.mjs evaluates it on its own).
 function confirmExcerpt(body, claim) {
   const md = String(body || "");
   if (md.length <= CONFIRM_EXCERPT_MAX) return md;
-  const m = String(claim || "").match(/At: "([^"]{12,})/);
-  const at = m ? md.indexOf(m[1].slice(0, 160)) : -1;
+  const c = String(claim || "");
+  const frags = [];
+  const a = c.match(/At: "([^"]{12,})/);
+  if (a) frags.push(a[1]);
+  const found = [];
+  for (const re of [/"([^"\n]{16,400})"/g, /\u201c([^\u201d\n]{16,400})\u201d/g, /(?:^|[\s(\[:;,])'([^'\n]{16,400}?)'(?=$|[\s).,;:!?\]])/g]) {
+    let m;
+    while ((m = re.exec(c)) !== null && found.length < 12) found.push({ pos: m.index, text: m[1] });
+  }
+  found.sort((x, y) => x.pos - y.pos);
+  for (const f of found) for (const piece of f.text.split(/\.{3}|\u2026/)) if (piece.trim().length >= 16) frags.push(piece.trim());
+  let at = -1;
+  for (const f of frags.slice(0, 6)) {
+    const words = f.replace(/["'`\u2018\u2019\u201c\u201d\u00b4]/g, " ").split(/\s+/).filter(Boolean).slice(0, 10);
+    if (words.join(" ").length < 12) continue;
+    const exact = md.indexOf(f.slice(0, 160));
+    if (exact >= 0) {
+      at = exact;
+      break;
+    }
+    try {
+      const k = md.search(new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\"'`\u2018\u2019\u201c\u201d\u00b4]+")));
+      if (k >= 0) {
+        at = k;
+        break;
+      }
+    } catch (e) {
+      console.error("[errata-hub] internal confirm: quotation not usable as an anchor:", String(e && e.message || e).slice(0, 120));
+    }
+  }
   if (at >= 0) {
-    const from = Math.max(0, at - CONFIRM_EXCERPT_MAX / 2);
+    const from = Math.max(0, Math.min(at - CONFIRM_EXCERPT_MAX / 2, md.length - CONFIRM_EXCERPT_MAX));
     return md.slice(from, from + CONFIRM_EXCERPT_MAX);
   }
   return md.slice(0, CONFIRM_EXCERPT_MAX);
