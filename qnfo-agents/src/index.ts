@@ -94,7 +94,7 @@ async function opsCall(env: Env, scope: Scope, name: string, args: unknown): Pro
     let j: any = null;
     try { j = JSON.parse(t); } catch (e) { j = null; }
     if (!j) return { ok: false, http: r.status, error: clip(t, 800) };
-    return { ok: r.status === 200 && j.ok !== false, http: r.status, result: j.result, error: j.error || undefined };
+    return { ok: r.ok && j.ok !== false, http: r.status, result: j.result, error: j.error || undefined };
   } catch (e) { return { ok: false, error: errText(e) }; }
 }
 

@@ -20,7 +20,12 @@ routes = [
   { pattern = "agents.qnfo.org", custom_domain = true }
 ]
 
+# WORKERS-STANDARDS-1: logs and traces declared; a low-traffic worker, so every request is sampled.
 [observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
 enabled = true
 head_sampling_rate = 1
 
