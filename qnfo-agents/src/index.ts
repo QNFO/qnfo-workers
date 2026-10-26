@@ -43,6 +43,9 @@ const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 const FALLBACK_MODEL = "@cf/zai-org/glm-5.3-flash";
 const MAX_STEPS = 16;
 const TURN_TIMEOUT_MS = 10 * 60 * 1000;
+// ALARM-TIMEOUT-1: one hung model call used to hold a Durable Object until the whole-turn timeout and surfaced as an alarm exception
+// ("The operation was aborted due to timeout", post_deploy_error_workers); a step now fails after STEP_TIMEOUT_MS and the fallback model answers.
+const STEP_TIMEOUT_MS = 3 * 60 * 1000;
 const FINAL_ANSWER_TIMEOUT_MS = 2 * 60 * 1000;
 const STALE_RUN_MIN = 20;
 
@@ -302,7 +305,8 @@ export class FleetCodeAgent extends Agent<Env, State> {
       this.sql`UPDATE runs SET status = 'failed', error = 'evicted twice mid-turn', finished_ms = ${Date.now()} WHERE id = ${id}`;
       return;
     }
-    void this.runFiber("turn:" + id, async (fctx: any) => { fctx.stash({ id }); await this.executeRun(id); });
+    // ALARM-TIMEOUT-1: this runs inside the alarm; a rejection here used to escape it and the platform retried the alarm.
+    void this.runFiber("turn:" + id, async (fctx: any) => { fctx.stash({ id }); await this.executeRun(id); }).catch((e) => logErr("fiber-recover", e));
   }
 
   async executeRun(id: string) {
@@ -315,7 +319,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
       const m = await modelFor(this.env);
       modelId = m.id;
       const tools = await allTools({ env: this.env, scope: r.scope, caller: r.caller, agent: this, proposals });
-      const out: any = await generateText({ model: m.model, system: SYSTEM + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, stopWhen: stepCountIs(MAX_STEPS), abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS) } as any);
+      const out: any = await generateText({ model: m.model, system: SYSTEM + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, stopWhen: stepCountIs(MAX_STEPS), timeout: { totalMs: TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS } } as any);
       result = String(out.text || "").trim() || lastStepText(out.steps);
       steps = Array.isArray(out.steps) ? out.steps.length : 0;
       for (const s of out.steps || []) for (const tc of s.toolCalls || []) if (used.indexOf(tc.toolName) < 0) used.push(tc.toolName);
@@ -354,7 +358,8 @@ export class FleetCodeAgent extends Agent<Env, State> {
     return { ok: true, id: s.id, kind: w.kind, when: w.when };
   }
   async scheduledTurn(payload: { text: string; scope: Scope; caller: string }) {
-    await this.startRun({ text: payload.text, scope: payload.scope, caller: payload.caller + " (schedule)" });
+    // ALARM-TIMEOUT-1: a schedule fires from the alarm; a throw here makes the platform retry the whole alarm, so it is logged instead.
+    try { await this.startRun({ text: payload.text, scope: payload.scope, caller: payload.caller + " (schedule)" }); } catch (e) { logErr("scheduled-turn", e); }
   }
   listSchedules() { return this.getSchedules().map((s: any) => ({ id: s.id, type: s.type, cron: s.cron, time: s.time, payload: s.payload })); }
   async dropSchedule(id: string) { return { ok: await this.cancelSchedule(String(id)) }; }
