@@ -1,6 +1,7 @@
 // FULL-PLANE-ACCESS-1 (agent_issues 100073), qnfo-ops 2.50.0 offline suite. No network: fetch and the service bindings are
 // stubs. Proves: the seven tools are declared, dispatched and named in the operator prompt; the public mode is unchanged; GitHub issues, comments and Projects v2 shape their answers and fall back to the steward when
-// GraphQL is refused; fleet_graph and dashboard_feed go over their bindings with validated input; cf_docs builds only
+// GraphQL is refused; fleet_graph and dashboard_feed go over their bindings with validated input (a non-2xx feed answers with an
+// error naming status, path and reason: OPS-DASHBOARD-FEED-ERROR-BLIND-1); cf_docs builds only
 // developers.cloudflare.com URLs and searches an llms.txt index. SCHEMA-INDEX-REFRESH-1 (node:sqlite): a stale plane is rebuilt
 // from sqlite_master and pragma_table_info, a fresh one is left alone, an unreadable one keeps its rows, and the cron calls it.
 // Run: node qnfo-ops/full-plane-access.test.mjs   -> prints "N passed, 0 failed"
@@ -80,6 +81,23 @@ ok(!/model such as llama/i.test(src.split("\n").filter((l) => l.includes('name: 
   r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: dash }, { path: "/api/area/cost" });
   ok(r.ok && seen === "https://fleet.qnfo.org/api/area/cost", "dashboard_feed reads an area");
   for (const bad of ["/owner", "/api/../owner", "https://evil.test/api", "/api/x?y=<z>"]) ok((await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: dash }, { path: bad })).ok === false, "dashboard_feed refuses " + bad);
+  // OPS-DASHBOARD-FEED-ERROR-BLIND-1 (agent_issues 1000178): a non-2xx feed carries its reason in `error` (logToolEvent writes it to the audit row).
+  const m405 = { fetch: async () => J({ error: "method_not_allowed", path: "/api/cmd", allow: ["POST"], hint: "Use POST /api/cmd to send a command; GET /api lists the read-only endpoints." }, 405) };
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: m405 }, { path: "/api/cmd" });
+  ok(r.ok === false && r.status === 405 && r.error === "HTTP 405 for /api/cmd: method_not_allowed", "dashboard_feed 405 names status, path and the endpoint's reason", r);
+  ok(Array.isArray(r.allow) && r.allow[0] === "POST" && /Use POST \/api\/cmd/.test(r.hint) && r.json && r.json.error === "method_not_allowed", "dashboard_feed 405 keeps allow, the endpoint's hint and the body", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: "method" }, 405) } }, { path: "/api/cmd" });
+  ok(r.ok === false && r.error === "HTTP 405 for /api/cmd: method" && /rejects GET/.test(r.hint), "a 405 without its own hint gets the POST-only hint", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ message: "no such feed" }, 404) } }, { path: "/api/nope" });
+  ok(r.ok === false && r.error === "HTTP 404 for /api/nope: no such feed" && r.hint === undefined, "a JSON refusal with only a message uses it", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => J({ error: { code: 7 } }, 500) } }, { path: "/api/x" });
+  ok(r.ok === false && r.error === 'HTTP 500 for /api/x: {"code":7}', "an object-valued error is serialised, not [object Object]", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => new Response("upstream exploded ".repeat(40), { status: 502 }) } }, { path: "/api/live" });
+  ok(r.ok === false && r.status === 502 && /^HTTP 502 for \/api\/live: upstream exploded/.test(r.error) && r.error.length < 330 && /upstream exploded/.test(r.text) && r.json === undefined, "a non-JSON failure falls back to the capped body text", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: { fetch: async () => new Response("", { status: 503 }) } }, { path: "/api/live" });
+  ok(r.ok === false && r.error === "HTTP 503 for /api/live", "an empty failure body still yields a non-empty error", r);
+  r = await lib.dashboardFeed({ CH_QNFO_FLEET_DASHBOARD: dash }, { path: "/api/kpi" });
+  ok(r.ok === true && r.status === 200 && r.json.endpoints === 23 && !("error" in r) && !("hint" in r), "the 2xx shape is unchanged (no error key)", r);
   // cf_docs.
   calls = [];
   responder = (u) => /llms\.txt$/.test(u) ? new Response("# Workers\n- [Service bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)\n- [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)\n") : /service-bindings\/index\.md$/.test(u) ? new Response("# Service bindings\nbody") : new Response("nf", { status: 404 });
