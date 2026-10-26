@@ -37,7 +37,9 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.36.1"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+var VERSION = "0.37.0"; // 0.37.0 BP26-AI-LABEL-1 (2026-10-26): visible AI-generated label, see the note below.
+/* 0.37.0 BP26-AI-LABEL-1 (2026-10-26, charter pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every piece page carries a visible "AI-generated" label linked to the published method note and JSON-LD creditText; HTML responses add nosniff, HSTS (no includeSubDomains) and X-Frame-Options SAMEORIGIN. */
+// 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
 
 // Register new metric key
 if (typeof Q08_METRIC_KEYS !== 'undefined') {
@@ -3924,16 +3926,24 @@ function pieceHead(p, desc) {
   return '<meta name="citation_title" content="' + q08Attr(q08Plain(p.title)) + '"><meta name="citation_publication_date" content="' + q08Attr(d) + '"><meta name="citation_abstract_html_url" content="' + q08Attr(u) + '"><meta name="citation_publisher" content="q08"><meta name="citation_author" content="q08">' +
     '<meta property="article:published_time" content="' + q08Attr(p.published_at || "") + '"><meta property="article:section" content="' + (p.kind === "forecast" ? "Forecast" : "Analysis") + '">';
 }
+// BP26-AI-LABEL-1 (0.37.0, 2026-10-26): EU AI Act Article 50(4) requires AI-generated text published to inform the public on matters of
+// public interest to be disclosed as such unless a human holds editorial responsibility; q08 publishes without a human review step, so every
+// piece says so where it is read, links the method note, and states it in machine-readable form (JSON-LD creditText). The label is
+// unconditional: there is no switch, because the obligation has no off position.
+var AI_METHOD_URL = ORIGIN + "/p/2026-10-26-how-q08-researches-writes-and-scores-its-forecasts-m3th0d";
+var AI_LABEL_TEXT = "AI-generated";
+var AI_CREDIT_TEXT = "Researched and written by AI; factual claims are checked by an independent AI fact-checker before publication. No human reviews pieces before they appear. Method: " + AI_METHOD_URL;
+function aiLabelHtml() { return '<a class="q-badge" href="' + escHtml(AI_METHOD_URL) + '" title="' + escHtml(AI_CREDIT_TEXT) + '" style="text-decoration:none">' + AI_LABEL_TEXT + "</a>"; }
 function renderPiece(p, fr) {
   var body = mdToHtml(p.body_md || "").replace(/^\s*<h1>[\s\S]*?<\/h1>\s*/, "");
   var refs = renderSources(p.sources_json);
   var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><textarea class="q-input" name="note" maxlength="280" rows="2" style="flex-basis:100%;order:2" placeholder="Optional: what was missing?" aria-label="Optional note: what was missing?"></textarea><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button></form>';
   var date = (p.published_at || "").slice(0, 10);
   var desc = q08Short(q08Lede(p.body_md), 160);
-  var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + q08Inline(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + "</p>" +
+  var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + q08Inline(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + " \u00b7 " + aiLabelHtml() + "</p>" +
     '<div class="q-prose piece">' + body + "</div>" + (p.kind === "forecast" ? renderForecastBox(fr) : "") + fb + renderShare(p) + renderFunnel(p.slug) + (refs ? '<div class="q08-refs">' + refs.replace(/^\s*<section class="refs">/, "").replace(/<\/section>\s*$/, "") + "</div>" : "") + "</article>" + q08Sub(false);
   return q08Page({ title: q08Plain(p.title) + " \u00b7 q08", description: desc, canonical: ORIGIN + "/p/" + p.slug, ogType: "article", extraHead: pieceHead(p, desc),
-    jsonld: { "@context": "https://schema.org", "@type": "Article", headline: q08Plain(p.title).slice(0, 110), description: desc, datePublished: p.published_at || undefined, dateModified: p.published_at || undefined, url: ORIGIN + "/p/" + p.slug, mainEntityOfPage: ORIGIN + "/p/" + p.slug, isAccessibleForFree: true, inLanguage: "en", articleSection: p.kind === "forecast" ? "Forecast" : "Analysis", isPartOf: p.kind === "forecast" ? { "@type": "CreativeWorkSeries", name: "q08 Forecast Ledger", url: ORIGIN + "/forecasts" } : undefined, author: { "@type": "Organization", name: "q08", url: ORIGIN + "/" }, publisher: { "@type": "Organization", name: "q08", url: ORIGIN + "/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } } } }, html);
+    jsonld: { "@context": "https://schema.org", "@type": "Article", headline: q08Plain(p.title).slice(0, 110), description: desc, datePublished: p.published_at || undefined, dateModified: p.published_at || undefined, url: ORIGIN + "/p/" + p.slug, mainEntityOfPage: ORIGIN + "/p/" + p.slug, isAccessibleForFree: true, inLanguage: "en", creditText: AI_CREDIT_TEXT, articleSection: p.kind === "forecast" ? "Forecast" : "Analysis", isPartOf: p.kind === "forecast" ? { "@type": "CreativeWorkSeries", name: "q08 Forecast Ledger", url: ORIGIN + "/forecasts" } : undefined, author: { "@type": "Organization", name: "q08", url: ORIGIN + "/" }, publisher: { "@type": "Organization", name: "q08", url: ORIGIN + "/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } } } }, html);
 }
 // Bare fragments (subscribe, confirm, unsubscribe, not found) get the full page shell.
 function q08Wrap(fragment, title) {
@@ -4238,6 +4248,10 @@ function withPolicyHeaders(resp) {
   var r = new Response(resp.body, resp);
   r.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   r.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
+  // BP26-EDGE-HEADERS-1 (0.37.0): OWASP secure-headers baseline for HTML. No includeSubDomains: other q08.org hosts are deployed separately.
+  r.headers.set("X-Content-Type-Options", "nosniff");
+  r.headers.set("Strict-Transport-Security", "max-age=31536000");
+  r.headers.set("X-Frame-Options", "SAMEORIGIN");
   return r;
 }
 async function countPieceRead(env, req, slug, ctx) {
