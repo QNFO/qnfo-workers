@@ -11,6 +11,9 @@
 //                              live: create or update the ruleset `main-gate` (required checks, pull request required, admin role
 //                              and the fleet's apps bypass), then read /rules/branches/main back to prove it.
 //          ruleset-main-revert delete the ruleset named `main-gate`, and only that name (dry by default).
+//          delete-stuck-runs   DELETE-STUCK-RUNS-1: dry (default) lists the workflow runs that are queued or in progress, older than 24 h and
+//                              with no job running now, and the ones it skipped with the reason; live deletes at most 25 of them and stops at the
+//                              first refusal, recording its status and GitHub's text.
 //          secret-scanning     enable secret scanning, push protection, validity checks and non-provider patterns, one PATCH per
 //                              feature so a refusal of one never hides the others; the answer of each is recorded. The run is ok when
 //                              the two core protections (secret scanning, push protection) are enabled; the plan-gated extras that stay
@@ -30,7 +33,9 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const ACTIONS = ["report", "ruleset-main", "ruleset-main-revert", "secret-scanning"];
+export const ACTIONS = ["report", "ruleset-main", "ruleset-main-revert", "secret-scanning", "delete-stuck-runs"];
+export const STUCK_RUN_MIN_AGE_H = 24;
+export const STUCK_RUN_MAX_DELETES = 25;
 export const API = "https://api.github.com";
 export const CONFIG_PATH = "scripts/github-main-ruleset.json";
 const REPO_RE = /^\/repos\/QNFO\/qnfo-workers(\/|$|\?)/;
@@ -315,6 +320,46 @@ export async function actionRulesetRevert(api, cfg, mode) {
   return r;
 }
 
+// DELETE-STUCK-RUNS-1 (agent_issues 1000275, 2026-10-26): five runs sat `queued` with no jobs since 2026-10-07 and one deploy-gate run sat `in_progress`
+// since 2026-10-22 although its only job had failed. The session token and the GitHub connector both answer cancel with HTTP 409 ("Cannot cancel a workflow
+// run that has not been queued yet") and delete with 403, so the run records stay for good and distort counts. A run is a candidate only when it is queued or
+// in progress, was created more than STUCK_RUN_MIN_AGE_H hours ago, and has no job that is running now (a queued run has none; the stuck deploy-gate run has one
+// job and it concluded). Dry (default) lists the candidates and what it skipped and why; live deletes at most STUCK_RUN_MAX_DELETES runs with the admin credential
+// and stops at the first refusal, recording its status and GitHub's text: a refusal is the answer and is never retried with another credential.
+export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
+  const repo = cfg.repo, r = { action: "delete-stuck-runs", repo, mode, ok: false, min_age_h: STUCK_RUN_MIN_AGE_H, candidates: [], skipped: [], deleted: [] };
+  const cutoff = (now || Date.now()) - STUCK_RUN_MIN_AGE_H * 3600000;
+  const self = env && env.GITHUB_RUN_ID ? Number(env.GITHUB_RUN_ID) : 0;
+  const runs = [], seen = {};
+  for (const status of ["queued", "in_progress"]) {
+    const l = await api.call("GET", "/repos/" + repo + "/actions/runs?status=" + status + "&per_page=100");
+    if (!l.ok) { r.refused = { call: "GET runs " + status, status: l.status, message: l.message }; return r; }
+    for (const x of (l.body && l.body.workflow_runs) || []) if (!seen[x.id]) { seen[x.id] = 1; runs.push(x); }
+  }
+  for (const x of runs) {
+    const row = { id: x.id, name: x.name, status: x.status, branch: x.head_branch, created_at: x.created_at };
+    const created = Date.parse(x.created_at) || 0;
+    if (x.id === self) { r.skipped.push({ ...row, why: "this run" }); continue; }
+    if (!created || created >= cutoff) { r.skipped.push({ ...row, why: "younger than " + STUCK_RUN_MIN_AGE_H + " h" }); continue; }
+    const jobs = await api.call("GET", "/repos/" + repo + "/actions/runs/" + x.id + "/jobs?per_page=100");
+    if (!jobs.ok) { r.skipped.push({ ...row, why: "jobs unreadable (HTTP " + jobs.status + ")" }); continue; }
+    const running = ((jobs.body && jobs.body.jobs) || []).filter((j) => j.status === "in_progress");
+    if (running.length) { r.skipped.push({ ...row, why: running.length + " job(s) running now" }); continue; }
+    r.candidates.push({ ...row, jobs: ((jobs.body && jobs.body.jobs) || []).length });
+  }
+  r.candidate_count = r.candidates.length;
+  if (mode !== "live") { r.ok = true; r.note = "dry run: nothing written; " + r.candidates.length + " stuck run(s) would be deleted (cap " + STUCK_RUN_MAX_DELETES + " per run)"; return r; }
+  for (const c of r.candidates.slice(0, STUCK_RUN_MAX_DELETES)) {
+    const d = await api.call("DELETE", "/repos/" + repo + "/actions/runs/" + c.id);
+    if (!d.ok) { r.refused = { call: "DELETE run " + c.id, status: d.status, message: d.message }; break; }
+    r.deleted.push(c.id);
+  }
+  r.remaining = r.candidates.length - r.deleted.length;
+  r.ok = !r.refused;
+  if (r.ok && r.remaining > 0) r.note = r.remaining + " candidate(s) beyond the cap of " + STUCK_RUN_MAX_DELETES + " stay for the next run";
+  return r;
+}
+
 export async function actionSecretScanning(api, cfg, mode) {
   const repo = cfg.repo, r = { action: "secret-scanning", repo, mode, ok: true, features: {} };
   const before = await api.call("GET", "/repos/" + repo);
@@ -362,6 +407,7 @@ export async function run(action, mode, root, fetchImpl, env) {
   else if (action === "report") res = await actionReport(api, cfg, root);
   else if (action === "ruleset-main") res = await actionRulesetMain(api, cfg, root, mode);
   else if (action === "ruleset-main-revert") res = await actionRulesetRevert(api, cfg, mode);
+  else if (action === "delete-stuck-runs") res = await actionDeleteStuckRuns(api, cfg, mode, Date.now(), env);
   else res = await actionSecretScanning(api, cfg, mode);
   res.credential = token === admin && admin ? "QNFO_GH_PAT" : token ? "GITHUB_TOKEN" : "none";
   res.calls = api.calls.length;
