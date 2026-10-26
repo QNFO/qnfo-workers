@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-26 18:45:24",
+  "audited_at": "2026-10-26 19:15:07",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-control"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -102,6 +109,7 @@
       "qnfo-analytics",
       "qnfo-archive",
       "qnfo-artifact-agent",
+      "qnfo-artifacts",
       "qnfo-arxiv-radar",
       "qnfo-auditor",
       "qnfo-autonomy-scorer",
@@ -150,7 +158,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 75,
+    "not_deployed_notdrift": 76,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -291,6 +299,11 @@
         "dir": "qnfo-artifact-agent",
         "marker": "RETIRED",
         "worker": "qnfo-artifact-agent"
+      },
+      {
+        "dir": "qnfo-artifacts",
+        "marker": "RETIRED",
+        "worker": "qnfo-artifacts"
       },
       {
         "dir": "qnfo-arxiv-radar",
@@ -531,11 +544,11 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 34,
+    "sync": 33,
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.14.5",
+        "version": "1.14.6",
         "worker": "idea-hub"
       },
       {
@@ -575,13 +588,8 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.11.0",
+        "version": "2.11.3",
         "worker": "qnfo-ai-search"
-      },
-      {
-        "dir": "qnfo-artifacts",
-        "version": "1.2.3",
-        "worker": "qnfo-artifacts"
       },
       {
         "dir": "qnfo-cloud-ops",
@@ -605,7 +613,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.11.0-personal-calendar",
+        "version": "2.12.1-injection-defence",
         "worker": "qnfo-email"
       },
       {
@@ -615,7 +623,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.55.4-codeagent",
+        "version": "0.56.2-oc-close-guard",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -660,17 +668,17 @@
       },
       {
         "dir": "qnfo-model-eval",
-        "version": "1.8.1-codeagent",
+        "version": "1.8.2-codeagent",
         "worker": "qnfo-model-eval"
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.5.3-ledger-fingerprint",
+        "version": "1.5.4-outreach-drained",
         "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.59.0-ops-branch-close",
+        "version": "2.59.2-tool-miss-not-failure",
         "worker": "qnfo-ops"
       },
       {
@@ -695,7 +703,7 @@
       },
       {
         "dir": "qnfo-tools-mcp",
-        "version": "1.2.1-personal-search-repoint",
+        "version": "1.3.0-agent-send-policy",
         "worker": "qnfo-tools-mcp"
       },
       {
@@ -820,9 +828,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.14.5",
+      "before": "1.14.6",
       "http": 200,
-      "live": "1.14.5",
+      "live": "1.14.6",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1068,9 +1076,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.11.0",
+      "before": "2.11.3",
       "http": 200,
-      "live": "2.11.0",
+      "live": "2.11.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1103,11 +1111,12 @@
       "worker": "qnfo-artifact-agent"
     },
     "qnfo-artifacts": {
-      "before": "1.2.3",
-      "http": 200,
-      "live": "1.2.3",
-      "match": 1,
-      "note": "SYNC",
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-artifacts"
     },
     "qnfo-arxiv-radar": {
@@ -1251,9 +1260,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.11.0-personal-calendar",
+      "before": "2.12.1-injection-defence",
       "http": 200,
-      "live": "2.11.0-personal-calendar",
+      "live": "2.12.1-injection-defence",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1348,9 +1357,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.55.4-codeagent",
+      "before": "0.56.2-oc-close-guard",
       "http": 200,
-      "live": "0.55.4-codeagent",
+      "live": "0.56.2-oc-close-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1492,25 +1501,25 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-model-eval": {
-      "before": "1.8.1-codeagent",
+      "before": "1.8.2-codeagent",
       "http": 200,
-      "live": "1.8.1-codeagent",
+      "live": "1.8.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
-      "before": "1.5.3-ledger-fingerprint",
+      "before": "1.5.4-outreach-drained",
       "http": 200,
-      "live": "1.5.3-ledger-fingerprint",
+      "live": "1.5.4-outreach-drained",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.59.0-ops-branch-close",
+      "before": "2.59.2-tool-miss-not-failure",
       "http": 200,
-      "live": "2.59.0-ops-branch-close",
+      "live": "2.59.2-tool-miss-not-failure",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1683,9 +1692,9 @@
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
-      "before": "1.2.1-personal-search-repoint",
+      "before": "1.3.0-agent-send-policy",
       "http": 200,
-      "live": "1.2.1-personal-search-repoint",
+      "live": "1.3.0-agent-send-policy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-tools-mcp"
