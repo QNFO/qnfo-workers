@@ -247,6 +247,9 @@ def j_deploy_coherence(h, repo=None, commit_age=commit_age_min, main_ver=main_ve
     return j
 
 
+ATTESTED_KEY = "census_external_attested"
+
+
 def external_heartbeat(d1, h, now=None):
     """CENSUS-EXTERNAL-HEARTBEAT-1 (agent_issues 100166, 2026-10-26). qnfo-ops /fleet judges a worker by a service binding or by its
     workers.dev URL; a worker with no binding is answered cf-1042 from inside the account (healthy null, "blind"), and the repository-root
@@ -254,16 +257,30 @@ def external_heartbeat(d1, h, now=None):
     judges such a worker by its fleet_heartbeat row when fresh (CRON-ONLY-HEARTBEAT-1, under 2 h). This runner is outside the account, so
     it can reach those hosts: for each census row that is blind (or a 410), it probes /health itself and, only when it saw HTTP 2xx or the
     documented retired stub (410 with {"status": "retired"}), upserts the worker's heartbeat. A worker that answers an error stays
-    unhealthy; a row that is healthy:false for any other reason is never touched. Returns the names written."""
+    unhealthy; a row that is healthy:false for any other reason is never touched.
+    CENSUS-EXTERNAL-HEARTBEAT-2 (2026-10-26): the first version wrote only while a row was blind, so the heartbeat it wrote aged out two
+    hours later (run 8863 at 18:18Z, expiry 20:18Z) and the runner, which runs about hourly, healed it only after the census had been
+    blind for up to an hour, which reopened FLEET-JOURNEY-FAILED-1 on every cycle. The names this runner has attested are kept in
+    ops_config census_external_attested; a row judged healthy by its heartbeat is probed again every run when its name is on that list, so
+    the heartbeat never ages out while the host answers. A cron-only worker that writes its own heartbeat is never on the list, so its
+    stale heartbeat still reads as a dead cron. Returns the names written."""
     st, d = h.json("GET", OPS + "/fleet")
     rows = (d or {}).get("fleet") or []
     if st != 200 or not rows:
         return []
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now or time.time()))
+    attested = set()
+    try:
+        got = d1("SELECT value FROM ops_config WHERE key = ?1", [ATTESTED_KEY])
+        attested = set(json.loads((got[0] or {}).get("value") or "[]")) if got else set()
+    except Exception:  # noqa: BLE001 - an unreadable list only means no refresh of an already-healthy row this run
+        attested = set()
     wrote = []
     for r in rows:
         name = r.get("name")
-        if not name or r.get("healthy") is True:
+        if not name:
+            continue
+        if r.get("healthy") is True and not (name in attested and r.get("probe") == "heartbeat"):
             continue
         blind = r.get("healthy") is None or "1042" in str(r.get("error") or "")
         if not (blind or r.get("http") == 410):
@@ -280,6 +297,10 @@ def external_heartbeat(d1, h, now=None):
         d1("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, 1) ON CONFLICT(worker) DO UPDATE SET version = excluded.version, ts = excluded.ts, ok = 1",
            [name, version, at])
         wrote.append(name)
+    now_set = attested | set(wrote)
+    if now_set != attested:
+        d1("INSERT INTO ops_config (key, value, note, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+           [ATTESTED_KEY, json.dumps(sorted(now_set)), "CENSUS-EXTERNAL-HEARTBEAT-2: workers whose fleet_heartbeat is written by scripts/fleet_journeys.py from outside the account", at])
     return wrote
 
 
@@ -625,7 +646,10 @@ def selftest():
                {"name": "stub", "healthy": False, "http": 410},
                {"name": "blind-down", "healthy": None},
                {"name": "real-down", "healthy": False, "http": 500, "error": "boom"},
-               {"name": "gone410", "healthy": False, "http": 410}]
+               {"name": "gone410", "healthy": False, "http": 410},
+               {"name": "own-beat", "healthy": True, "probe": "heartbeat", "error": "cf-1042-no-published-route (probe blocked; target state unknown)"},
+               {"name": "kept", "healthy": True, "probe": "heartbeat", "error": "cf-1042-no-published-route (probe blocked; target state unknown)"},
+               {"name": "kept-down", "healthy": True, "probe": "heartbeat", "error": "cf-1042-no-published-route (probe blocked; target state unknown)"}]
 
     def hb_opener(method, url, body, headers):
         if url == OPS + "/fleet":
@@ -638,15 +662,49 @@ def selftest():
             return 503, "{}"
         if url == "https://gone410.q08.workers.dev/health":
             return 410, json.dumps({"error": "gone"})
+        if url == "https://kept.q08.workers.dev/health":
+            return 200, json.dumps({"ok": True, "version": "7.0.1"})
+        if url == "https://kept-down.q08.workers.dev/health":
+            return 502, ""
+        if url == "https://own-beat.q08.workers.dev/health":
+            return 200, json.dumps({"ok": True, "version": "9.9.9"})
         return 500, ""
 
+    # CENSUS-EXTERNAL-HEARTBEAT-2: "kept" and "kept-down" were attested by an earlier run and are healthy only through that heartbeat; "own-beat"
+    # is a cron-only worker that writes its own heartbeat (never on the list), so it is neither probed nor refreshed.
     hb_http, hb_sql = Http(hb_opener), []
-    hb_wrote = external_heartbeat(lambda sql, p=None: hb_sql.append((sql, p)) or [], hb_http, now=now)
-    expect("heartbeat: a blind worker the runner reaches and the retired stub are attested", hb_wrote == ["blind-ok", "stub"])
-    expect("heartbeat: the version is recorded and the stub is marked retired-stub", [(p[0], p[1]) for _s, p in hb_sql] == [("blind-ok", "3.1.4"), ("stub", "retired-stub")])
+    hb_store = {ATTESTED_KEY: json.dumps(["kept", "kept-down", "stub"])}
+
+    def hb_d1(sql, p=None):
+        hb_sql.append((sql, p))
+        if sql.startswith("SELECT value FROM ops_config"):
+            return [{"value": hb_store[p[0]]}] if p[0] in hb_store else []
+        if sql.startswith("INSERT INTO ops_config"):
+            hb_store[p[0]] = p[1]
+        return []
+
+    def hb_beats():
+        return [(p[0], p[1]) for s, p in hb_sql if s.startswith("INSERT INTO fleet_heartbeat")]
+
+    hb_wrote = external_heartbeat(hb_d1, hb_http, now=now)
+    expect("heartbeat: a blind worker the runner reaches, the retired stub and an attested worker that is judged by its heartbeat are written",
+           hb_wrote == ["blind-ok", "stub", "kept"])
+    expect("heartbeat: the version is recorded and the stub is marked retired-stub", hb_beats() == [("blind-ok", "3.1.4"), ("stub", "retired-stub"), ("kept", "7.0.1")])
     expect("heartbeat: a blind worker that answers 503, a real failure and a plain 410 are not masked",
            not {"blind-down", "real-down", "gone410"} & set(hb_wrote))
-    expect("heartbeat: a row that is already healthy is never probed", not [u for (_m, u, _s, _ms) in hb_http.calls if "w1." in u])
+    expect("heartbeat: an attested worker whose host answers an error is not refreshed, so its heartbeat ages out and the census shows it",
+           "kept-down" not in hb_wrote)
+    expect("heartbeat: a worker with its own heartbeat is never probed or refreshed, so a dead cron still ages out",
+           "own-beat" not in hb_wrote and not [u for (_m, u, _s, _ms) in hb_http.calls if "own-beat." in u])
+    expect("heartbeat: a row that is healthy through a real probe is never probed", not [u for (_m, u, _s, _ms) in hb_http.calls if "w1." in u])
+    expect("heartbeat: the attested list gains the new names and keeps the others",
+           json.loads(hb_store[ATTESTED_KEY]) == ["blind-ok", "kept", "kept-down", "stub"])
+    n_before = len(hb_sql)
+    hb_http2 = Http(hb_opener)
+    external_heartbeat(hb_d1, hb_http2, now=now)
+    expect("heartbeat: a second pass writes the list only when it changed", not [1 for s, _p in hb_sql[n_before:] if s.startswith("INSERT INTO ops_config")])
+    expect("heartbeat: an unreadable list falls back to attesting blind rows only",
+           external_heartbeat(lambda sql, p=None: (_ for _ in ()).throw(RuntimeError("d1 down")) if sql.startswith("SELECT") else [], Http(hb_opener), now=now) == ["blind-ok", "stub"])
     expect("heartbeat: an unreadable census writes nothing", external_heartbeat(lambda sql, p=None: hb_sql.append(1) or [], Http(lambda m, u, b, hd: (500, ""))) == [])
     expect("lock passes", run_one(j_lock_roundtrip).ok)
     expect("lock left behind fails", not run_one(j_lock_roundtrip, "release").ok)
