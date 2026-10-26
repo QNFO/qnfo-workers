@@ -3540,6 +3540,8 @@ async function paperLedgerBody(env, seq) {
 }
 __name(paperLedgerBody, "paperLedgerBody");
 async function jobQualityScore(env) {
+  // Ensure paper ledger bodies are archived before scoring runs
+  await paperLedgerArchiveStep(env);
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS quality_scores (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, slug TEXT, status TEXT, body_len INTEGER, refs INTEGER, lit INTEGER, verif INTEGER, score INTEGER, flag TEXT)").run();
     const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
