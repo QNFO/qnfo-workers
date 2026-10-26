@@ -36,7 +36,8 @@ CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAU
 CREATE TABLE issue_project_map (issue_id INTEGER PRIMARY KEY, project_code TEXT NOT NULL, program_code TEXT NOT NULL, kind TEXT NOT NULL, synced_milestone INTEGER, synced_labels TEXT, gh_node TEXT, gh_item TEXT, updated_at TEXT, synced_at TEXT);
 CREATE TABLE projects (project_code TEXT PRIMARY KEY, program_code TEXT NOT NULL, name TEXT, status TEXT NOT NULL DEFAULT 'active', source TEXT);
 CREATE TABLE portfolio_gaps (kind TEXT NOT NULL, entity TEXT NOT NULL, detail TEXT, first_seen TEXT DEFAULT (datetime('now')), day TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', resolved_at TEXT, issue_id INTEGER, attempts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, entity, day));
-CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL DEFAULT 'p', action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL DEFAULT 'd1-query', escalate_to TEXT NOT NULL DEFAULT 'x', status TEXT, last_verdict TEXT, attempts INTEGER DEFAULT 0, module TEXT);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL DEFAULT 'p', action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL DEFAULT 'd1-query', escalate_to TEXT NOT NULL DEFAULT 'x', status TEXT, last_verdict TEXT, attempts INTEGER DEFAULT 0, module TEXT, max_attempts INTEGER DEFAULT 3, expected_cadence_h INTEGER);
+CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
 `);
   return db;
@@ -56,7 +57,7 @@ function world() {
     db.prepare("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind, updated_at, synced_milestone, gh_node) VALUES (?, 'W.qnfo-ops', 'QNFO.OPS', 'enhancement', '2026-10-26T10:00:00Z', 7, 'N')").run(id);
   }
   // not touched: an issue with no catalogue predicate, a catalogue-like issue whose BP26 project is not active, one that already sits on a BP26 project, one with no map row
-  db.prepare("INSERT INTO agent_issues (id, title, status, predicate_id) VALUES (9001, 'plain', 'open', NULL), (9002, 'old-project issue', 'open', 'BP26-LEGACY'), (9003, 'no map row', 'open', 'BP26-EVALS')").run();
+  db.prepare("INSERT INTO agent_issues (id, title, status, predicate_id) VALUES (9001, 'plain', 'open', NULL), (9002, 'old-project issue', 'open', 'OTHER-LEGACY'), (9003, 'no map row', 'open', 'BP26-EVALS')").run();
   db.prepare("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (9001, 'W.qnfo-ops', 'QNFO.OPS', 'fix'), (9002, 'W.qnfo-ops', 'QNFO.OPS', 'fix')").run();
   db.prepare("UPDATE issue_project_map SET project_code = 'BP26.EDITORIAL', program_code = 'KEEP' WHERE issue_id = ?").run(ids["BP26-CLAIM-LEDGER"]);   // already on a BP26 project
   // the gaps: the five BP26 rows (open, the umbrella's five), a derived stub with no mapped issue, an old closed row, another kind, a gap for a project that has a mapped non-catalogue issue
@@ -97,8 +98,18 @@ ok(probe(db) === "0", "after: the umbrella probe reads 0", probe(db));
 
 const k = one(db, "SELECT * FROM remediation_contracts WHERE class = 'issue-2993'");
 ok(!/VACUOUS-PROBE-V3-1/.test(k.action) && /MEASURES the defect/.test(k.action) && k.verify_probe === PROBE_2993 && k.status === "active" && k.attempts === 196 && k.module === "rem-a4-portfolio", "the umbrella contract has an honest action; its probe, status and attempts are unchanged", k.action);
-ok(one(db, "SELECT COUNT(*) AS n FROM bak_20261026_rem_a4_portfolio_map").n === 31 && one(db, "SELECT COUNT(*) AS n FROM bak_20261026_rem_a4_portfolio_gaps").n === 6 && one(db, "SELECT COUNT(*) AS n FROM bak_20261026_rem_a4_portfolio_contract_2993").n === 1, "the before-state is saved (every mapped issue whose predicate starts BP26-: the 30 and the legacy fixture row; the 6 open no-mapped-work rows; the contract)");
+ok(one(db, "SELECT COUNT(*) AS n FROM bak_20261026_rem_a4_portfolio_map").n === 30 && one(db, "SELECT COUNT(*) AS n FROM bak_20261026_rem_a4_portfolio_gaps").n === 6 && one(db, "SELECT COUNT(*) AS n FROM bak_20261026_rem_a4_portfolio_contract_2993").n === 1, "the before-state is saved (the 30 mapped catalogue issues, the 6 open no-mapped-work rows, the contract)");
 ok(one(db, "SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'REM-A4-BP26-MAP-1:') = 1").n === 1, "the decision is logged once");
+const fm = one(db, "SELECT * FROM failure_modes WHERE fm_key = 'catalogue-mapping-overwritten'");
+const det = one(db, "SELECT * FROM remediation_contracts WHERE class = 'fm-catalogue-mapping-overwritten'");
+ok(fm && fm.probe_class === "fm-catalogue-mapping-overwritten" && fm.issue_id === 2993 && det && det.status === "active" && det.module === "failure-mode" && det.issue_id === null, "the failure mode and its detector contract are registered");
+const dprobe = (d) => d.prepare(det.verify_probe).get();
+ok(dprobe(db).expected === "0" && dprobe(db).observed === "0", "the detector reads 0 once the 30 issues sit on their BP26 projects");
+db.prepare("UPDATE issue_project_map SET project_code = 'W.qnfo-ops' WHERE issue_id = ?").run(ids["BP26-EVALS"]);
+ok(dprobe(db).observed === "1", "the detector reads 1 when a placement pass moves one open catalogue issue off its project again");
+db.prepare("UPDATE issue_project_map SET project_code = 'BP26.AGENTOPS' WHERE issue_id = ?").run(ids["BP26-EVALS"]);
+const w2 = world();
+ok(w2.db.prepare(det.verify_probe).get().observed === "28", "on the pre-apply world the detector would read 28 (30 catalogue issues, one closed, one already on a BP26 project)");
 
 const snap = () => JSON.stringify([db.prepare("SELECT * FROM issue_project_map ORDER BY issue_id").all(), db.prepare("SELECT * FROM portfolio_gaps ORDER BY kind, entity, day").all(), db.prepare("SELECT * FROM remediation_contracts").all(), db.prepare("SELECT COUNT(*) AS n FROM decision_log").all()]);
 const s0 = snap(); db.exec(sql);

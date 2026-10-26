@@ -233,6 +233,20 @@ d.exec(sql);
 const dv2 = one(d, "SELECT version, definition FROM fleet_tasks WHERE id = 'issue-meta-fold'");
 ok(dv2.version === dv.version && dv2.definition === dv.definition, "a definition without the anchor (or with it twice) is left alone");
 
+// ---- the failure mode and its detector
+const fmRow = one(a, "SELECT * FROM failure_modes WHERE fm_key = 'portfolio-gap-ticket-outlives-gap'");
+const det = c("fm-portfolio-gap-ticket-outlives-gap");
+ok(fmRow && fmRow.probe_class === "fm-portfolio-gap-ticket-outlives-gap" && fmRow.issue_id === 1000395 && det && det.status === "active" && det.module === "failure-mode" && det.issue_id === null && det.verify_transport === "d1-query", "the failure mode and its detector contract are registered", [fmRow && fmRow.fm_key, det && det.status]);
+// on the fixture the detector counts the tickets whose gap is gone for over two days and that the rule cannot close (no satisfying deployment row): E, F and I; the ones the rule closed (A, B) and the rest do not count
+const dres = val(a, det.verify_probe);
+ok(dres[0] === "0" && dres[1] === "3", "the detector counts the three tickets the rule cannot close (no deployment row, deploy older than 30 days, failed deployment)", dres);
+const e = base(); const t1 = ticket(e, "PORTFOLIO-GAP deploy-unrecorded voice-stt"); gap(e, "deploy-unrecorded", "voice-stt", day(5), "closed", ts(3), t1); dep(e, "voice-stt", "deployed", "success", ts(6));
+const t2 = ticket(e, "PORTFOLIO-GAP deploy-unrecorded fresh"); gap(e, "deploy-unrecorded", "fresh", day(1), "closed", ts(0.1), t2); gap(e, "deploy-unrecorded", "open-one", day(0), "open");
+e.exec(sql);
+ok(val(e, one(e, "SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-portfolio-gap-ticket-outlives-gap'").verify_probe)[1] === "1", "before the workflow runs, the detector counts the one ticket the rule is about to close (the voice-stt ticket; a gap closed yesterday does not count)");
+run(e);
+ok(val(e, one(e, "SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-portfolio-gap-ticket-outlives-gap'").verify_probe)[1] === "0" && status(e, t1) === "closed" && status(e, t2) === "open", "after the workflow runs the detector reads 0");
+
 // ---- decision and rollback
 ok(one(a, "SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'REM-A4-PORTFOLIO-1:') = 1").n === 1, "the decision is logged once");
 const before = JSON.stringify([a.prepare("SELECT * FROM remediation_contracts WHERE class IN ('issue-100341','issue-99953','issue-2852','issue-1000194') ORDER BY class").all().map((r) => r.class)]);
@@ -240,6 +254,7 @@ for (const stmt of rollback.split("; ")) a.exec(stmt);
 const rd = one(a, "SELECT version, definition FROM fleet_tasks WHERE id = 'issue-meta-fold'");
 ok(rd.definition === v0.definition && !/portfolio-gap-resolved/.test(rd.definition), "Rollback restores the hygiene-3 definition");
 ok(c("issue-100341").verify_probe === OLD_100341 && c("issue-99953").verify_probe === OLD_99953 && c("issue-1000194").status === "superseded" && c("issue-100341").action === VAC, "Rollback restores the four contract rows", before);
+ok(!c("fm-portfolio-gap-ticket-outlives-gap") && !one(a, "SELECT 1 AS x FROM failure_modes WHERE fm_key = 'portfolio-gap-ticket-outlives-gap'"), "Rollback removes the detector and the failure mode");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
