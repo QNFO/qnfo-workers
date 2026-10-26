@@ -137,7 +137,7 @@ await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 3, 3, 41) }, env, ctx)
 await Promise.allSettled(waits.splice(0));
 const runs = sq.prepare("SELECT kind, ok, note FROM ask_loop_runs").all();
 ok(runs.length === 9 && runs.every((r) => r.ok === 1), "all nine steps of the daily tick ran (2.2.8 adds corpus-sync): " + runs.map((r) => r.kind + ":" + r.ok).join(","));
-ok(sq.prepare("SELECT COUNT(*) n FROM metric_registry WHERE owner='qnfo-ai-search'").get().n === 8, "eight ask_* metrics registered with bands");
+ok(sq.prepare("SELECT COUNT(*) n FROM metric_registry WHERE owner='qnfo-ai-search'").get().n === 9, "nine ask_* metrics registered with bands (ASK-PLAIN-1 added ask_plain_share_7d)");
 ok(sq.prepare("SELECT last_value v FROM metric_registry WHERE metric='ask_grounded_share_7d'").get().v === "0.75", "grounding judge feeds ask_grounded_share_7d");
 ok(sq.prepare("SELECT COUNT(*) n FROM ask_golden").get().n >= 1, "golden set grows from new papers");
 ok(uploads.length === 2 && uploads.every((u) => /\.md$/.test(u.key) && u.meta && u.meta.source === "papers.qnfo.org") && sq.prepare("SELECT COUNT(*) n FROM ask_corpus_sync WHERE status = 'uploaded'").get().n === 2, "with the ai_spend caps clear the corpus feeder uploads the published papers and records them (ASK-CORPUS-FEEDER-1)", uploads);
@@ -166,7 +166,7 @@ ok(closed && closed.status === "closed" && /back inside its warning band/.test(c
 Date.now = realNow;
 // 7. public loop report
 const lp = (await call("/api/loop")).json();
-ok(lp.metrics.length === 8 && lp.runs.length > 0 && lp.config.champion, "GET /api/loop reports metrics, runs and config");
+ok(lp.metrics.length === 9 && lp.runs.length > 0 && lp.config.champion, "GET /api/loop reports metrics, runs and config");
 ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a different model from the writer");
 
 // 7. ASK-JUDGE-1: a judge that cannot judge says why in ask_loop_runs instead of reporting a bare judged:0
