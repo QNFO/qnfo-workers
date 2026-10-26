@@ -44,6 +44,13 @@ binding (`props = { caller = "qnfo-cloud-ops" }`, no key), at most once in 30 mi
 
 A playbook is one `INSERT OR IGNORE INTO breach_playbooks` in a migration (`-- APPLY-BY: ci`, `-- DB: qnfo-audit`, one-line `-- Rollback:`), with a `trigger_sql` that returns the issues the rule names, per-issue `action_sql` (each statement binds `?1` = issue id), `revert_sql`, `verify_sql`, caps, and a fixture test in `migrations/` that fails without the rule. Run the trigger read-only on live D1 first and put the real hit count in the migration comment. Close an issue only through `issue_triage.close_evidence` built from ids, counts and enum codes. A rule that cannot be made safe is a `file-issue` playbook or stays here as a design.
 
+## Build packages (`specs/`)
+
+Each package of the 2026-10-26 build has its audit spec in `specs/<package>.json` (state, evidence, lever, closing probe): `breach-doctor-core` (the engine), `dash-owner-actions` (approve, decline and diagnose in the dashboard),
+`portfolio-gap-detectors`, `doctor-watch` and `doctor-watch-acting` (the second path in qnfo-cloud-ops: detect and report, then act through a service binding), `probe-author-harden`, and the three family packages
+`probe-playbooks`, `tool-loop-playbooks` and `metric-playbooks`. A spec is data written by read-only auditors: re-verify every claim, line number and anchor against `main` and live D1 before building from it.
+The landing record is `docs/handoff/2026-10-26-closeout-4.md`.
+
 ## Honest limits
 
 Open-ended owner-request investigations (about 54 issues) have no executor class in the roster; the doctor does not pretend to clear them (ENGINE-DESIGN.md section 9). Owner-only acts stay IDENTITY-BOUND `human_actions` cards.

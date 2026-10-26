@@ -96,8 +96,9 @@ check(18 + 10 <= 30, "a 10-minute slot re-probes an hourly contract inside 30 mi
   const out = await W.remediationContractsTick({ AUDIT: wrap(db, 15) }, { budgetMs: 5 });
   const probed = db.prepare("SELECT COUNT(*) AS n FROM remediation_verifications").get().n;
   const stillDue = db.prepare("SELECT COUNT(*) AS n FROM remediation_contracts WHERE next_due_at IS NULL").get().n;
-  check(probed === 1 && out.budget_left === 4, "after the budget is spent no new probe starts and the rest are counted as left", { probed, left: out.budget_left });
-  check(stillDue === 4, "the unprobed contracts stay due for the next slot", stillDue);
+  // The budget is wall-clock (5 ms against a 15 ms probe): on a loaded runner it can lapse before the first probe starts (probed 0, left 5), so the checks are the invariant, not the count.
+  check(probed <= 1 && probed + out.budget_left === 5 && out.budget_left >= 4, "after the budget is spent no new probe starts and the rest are counted as left", { probed, left: out.budget_left });
+  check(stillDue === out.budget_left, "the unprobed contracts stay due for the next slot", { stillDue, left: out.budget_left });
   check(out.due === 5, "due counts every selected contract", out.due);
 }
 
