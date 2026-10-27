@@ -1,4 +1,4 @@
-var VERSION = "0.1.0-yt-server"; /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
+var VERSION = "0.1.1-run-sync"; /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // Owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse". docs/YOUTUBE-PIPELINE.md has the design.
 // State machine per paper (D1 qnfo-audit.youtube_videos.state): queued -> directed -> audio -> rendering -> rendered -> uploaded;
 // terminal: rejected (director left too few supported beats), failed (4 attempts), uploaded. Every tick resumes an unfinished row before
@@ -247,8 +247,9 @@ async function stageSubmit(env, row) {
   if (!r.ok) throw new Error("container submit " + r.status + ": " + (await r.text()).slice(0, 300));
   await setState(env, row.id, "rendering", { note: "submitted " + nowIso() });
 }
-async function stagePoll(env, row) {
+async function stagePoll(env, row, deadline) {
   for (var i = 0; i < RENDER_POLLS; i++) {
+    if (deadline && Date.now() > deadline) return false;
     var r = await renderStub(env).fetch("https://render.internal/poll?id=" + row.id);
     var j = await r.json().catch(function () { return {}; });
     if (j.state === "done") {
@@ -314,7 +315,7 @@ async function advance(env, row, deadline) {
         await stageAudio(env, row, beats);
       }
       else if (row.state === "audio") await stageSubmit(env, row);
-      else if (row.state === "rendering") { if (!(await stagePoll(env, row))) { if ((await env.QNFO_AUDIT.prepare("SELECT state FROM youtube_videos WHERE id = ?1").bind(row.id).first()).state === "rendering") return row.id; } }
+      else if (row.state === "rendering") { if (!(await stagePoll(env, row, deadline))) { if ((await env.QNFO_AUDIT.prepare("SELECT state FROM youtube_videos WHERE id = ?1").bind(row.id).first()).state === "rendering") return row.id; } }
       else if (row.state === "rendered") { if (!(await stageUpload(env, row))) return row.id; }
       else return row.id; // uploaded, rejected, failed
     } catch (e) {
@@ -339,7 +340,7 @@ async function refreshMetric(env) {
   return r ? r.n : 0;
 }
 async function runTick(env, opts) {
-  var deadline = Date.now() + 13 * 60 * 1000;
+  var deadline = Date.now() + ((opts && opts.budgetMs) || 13 * 60 * 1000);
   await ensureTable(env);
   var open = await env.QNFO_AUDIT.prepare("SELECT * FROM youtube_videos WHERE state IN ('queued','directed','audio','rendering','rendered') ORDER BY id LIMIT 1").first();
   var res = { resumed: null, started: null };
@@ -420,8 +421,15 @@ var worker_default = {
     if (url.pathname === "/run" && request.method === "POST") {
       var tok = request.headers.get("x-run-token") || "";
       if (!env.YT_RUN_TOKEN || !safeEqual(tok, env.YT_RUN_TOKEN)) return json({ ok: false, error: "unauthorized" }, 401);
-      ctx.waitUntil(runTick(env, { ignoreCap: url.searchParams.get("ignore_cap") === "1" }).then(function (r) { return logEvent(env, "youtube.run", JSON.stringify(r), r, "ok"); }).catch(function (e) { return logEvent(env, "youtube.run", String(e && e.message || e), null, "error"); }));
-      return json({ ok: true, started: true }, 202);
+      var budget = Math.min(85, Math.max(10, Number(url.searchParams.get("budget_s")) || 80));
+      try {
+        var rr = await runTick(env, { ignoreCap: url.searchParams.get("ignore_cap") === "1", budgetMs: budget * 1000 });
+        await logEvent(env, "youtube.run", JSON.stringify(rr), rr, "ok");
+        return json({ ok: true, result: rr, status: await status(env) });
+      } catch (e) {
+        await logEvent(env, "youtube.run", String(e && e.message || e), null, "error");
+        return json({ ok: false, error: String(e && e.message || e) }, 500);
+      }
     }
     return json({ ok: false, error: "not found" }, 404);
   },
