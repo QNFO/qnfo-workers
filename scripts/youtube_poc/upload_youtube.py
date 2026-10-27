@@ -16,7 +16,7 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("outdir"); ap.add_argument("--client", default="client_secret.json")
-    ap.add_argument("--token", default="youtube_token.json"); ap.add_argument("--public", action="store_true")
+    ap.add_argument("--token", default="youtube_token.json"); ap.add_argument("--public", action="store_true"); ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
     d = Path(a.outdir); meta = json.loads((d / "metadata.json").read_text("utf8")); video = d / "short.mp4"
     if not Path(a.client).exists():
@@ -31,7 +31,7 @@ def main():
         if cred and cred.expired and cred.refresh_token:
             cred.refresh(Request())
         else:
-            cred = InstalledAppFlow.from_client_secrets_file(a.client, SCOPES).run_local_server(port=0)
+            cred = InstalledAppFlow.from_client_secrets_file(a.client, SCOPES).run_local_server(port=8765 if a.no_browser else 0, open_browser=not a.no_browser, authorization_prompt_message="OPEN: {url}")
         Path(a.token).write_text(cred.to_json())
     yt = build("youtube", "v3", credentials=cred)
     body = {"snippet": {"title": meta["title"], "description": meta["description"], "tags": meta["tags"], "categoryId": meta["categoryId"]},

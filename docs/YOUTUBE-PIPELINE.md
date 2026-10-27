@@ -61,3 +61,28 @@ owner; an unaudited API project may upload private videos only until it passes t
 3. Upload by the YouTube Data API `videos.insert` as `private`, with `captions.insert`. The OAuth consent for the channel is owner-only (identity-bound):
    one card with an `IDENTITY-BOUND:` line. Publishing public stays a human click until retention data justifies otherwise.
 4. Add `youtube_videos_30d` and average view duration to `metric_registry` with a trigger, in the PR that ships the runner.
+
+## Server-side design (owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse")
+Proven locally: fetch, TTS, Manim render, captions, mux, upload (private Short `D6JC7fWWXns`, 2026-10-27, OAuth client `qnfo-youtube-uploader` in the QWAV project,
+`rwnquni@gmail.com` as its test user). Nothing below is built yet. Workers cannot run ffmpeg or Manim, so the render step is a Cloudflare Container.
+
+| Step | Local POC | Cloudflare replacement |
+|---|---|---|
+| Trigger | manual | worker cron (CRON-SINGLE-TRIGGER-1): newest `plain_article` row (status ok) with no `youtube_videos` row; cap 2 a week |
+| Director (beats JSON) | hand-written | qnfo-ai writer (kimi-k2.6) + checker from another family; every number in a beat must occur in the article body, else the beat is dropped |
+| TTS + word times | edge-tts (Microsoft cloud) | Workers AI TTS (`@cf/myshell-ai/melotts` or Deepgram Aura). Word times are not returned: align in the container (whisper.cpp tiny) or split by sentence |
+| Render | Manim + ffmpeg on a laptop | Cloudflare Container (python 3.12, manim, pango/cairo, ffmpeg), driven by the worker through a Durable Object; output to R2 |
+| Upload | `upload_youtube.py` | the worker calls `videos.insert` (resumable) from R2 with an access token refreshed from a Worker secret |
+| Ledger | none | D1 `youtube_videos` (slug, rev, video id, privacy, created_at, views later) and a `metric_registry` row with trigger |
+
+Constraints found, not assumed:
+- **Refresh token lifetime:** an OAuth app in "Testing" mode issues refresh tokens that expire after 7 days. The app must be set to "In production" (unverified is allowed for
+  the owner's own channel, with the warning screen) before a token is stored, or the automation stops weekly. Not yet done.
+- **Secrets:** the refresh token and client secret go in as Worker secrets under the secret-lock lease (`/secret-lock/acquire`), never in git or D1. The local copies are
+  `~/yt-client.json` and `~/yt-token.json`; delete them after the move.
+- **Containers fragility:** qnfo-containers-pilot lost its bindings once (CONTAINER-CONFIG-RESTORE-*). The new worker needs its own `[[containers]]` block, a
+  `deploy-*.yml` that verifies `/status`, and a second path (render in a GitHub runner) per ANTIFRAGILE-1.
+- **Charter:** new worker directory needs `# charter-pillar: reach` and a named same-class retirement (net-zero rule); AI-label and provenance (BP26-AI-ACT-ART50-1,
+  BP26-PROVENANCE-MARKING-1) are part of the render, not an addition.
+- **Channel:** the target is the owner's existing personal channel (2 subscribers, one 2025 community post). Aligning its name, banner and description with the
+  content is a visible account change and needs the owner's wording; Shorts stay private until the owner reviews the first batch.
