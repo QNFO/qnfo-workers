@@ -295,7 +295,10 @@ async function stageUpload(env, row) {
   var up = await fetch(loc, { method: "PUT", headers: { "content-type": "video/mp4", "content-length": String(bytes.byteLength) }, body: bytes });
   var uj = await up.json().catch(function () { return {}; });
   if (!up.ok || !uj.id) throw new Error("youtube upload " + up.status + ": " + JSON.stringify(uj).slice(0, 400));
-  await setState(env, row.id, "uploaded", { video_id: uj.id, privacy: (uj.status && uj.status.privacyStatus) || PRIVACY, uploaded_at: nowIso(), note: "https://youtube.com/shorts/" + uj.id });
+  for (var w = 0; w < 3; w++) {
+    try { await setState(env, row.id, "uploaded", { video_id: uj.id, privacy: (uj.status && uj.status.privacyStatus) || PRIVACY, uploaded_at: nowIso(), note: "https://youtube.com/shorts/" + uj.id }); break; }
+    catch (e) { await logEvent(env, "youtube.ledger_retry", row.slug + " video " + uj.id, { error: String(e && e.message || e).slice(0, 200) }, "warn"); await sleep(1500); }
+  }
   await logEvent(env, "youtube.uploaded", row.slug, { video_id: uj.id, privacy: uj.status && uj.status.privacyStatus, row: row.id }, "ok");
   return true;
 }
@@ -318,6 +321,8 @@ async function advance(env, row, deadline) {
       var msg = String(e && e.message || e);
       var attempts = (row.attempts || 0) + 1;
       var state = attempts >= MAX_ATTEMPTS ? "failed" : (row.state === "rendering" ? "audio" : row.state);
+      // YT-FM-RENDER-1: the container failed twice on this job; the job stays in R2 for youtube-render-runner.yml (a GitHub-runner render), and this row stops blocking new papers.
+      if (attempts >= 2 && attempts < MAX_ATTEMPTS && (row.state === "audio" || row.state === "rendering")) state = "runner_pending";
       await setState(env, row.id, state, { note: row.state + ": " + msg, bump: true });
       await logEvent(env, "youtube.stage_error", row.slug + " " + row.state, { error: msg.slice(0, 500), attempts: attempts }, "error");
       return row.id;
