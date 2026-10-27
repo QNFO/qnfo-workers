@@ -5,7 +5,7 @@
 // by the owner (POST needs x-loop-token). No LinkedIn/Indeed scraping (LinkedIn User Agreement s8.2).
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of jobsearch/*.py (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.0.0";
+var VERSION = "1.0.1";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "_note": "Claim ledger. Source: Documents/Rowan Brad Quni-Gudzinas - CV (verified, corrected).md (2026-10-01). Every sentence the tool emits must equal a 'text' or 'pitch' here. Edit this file, never the generated output.",
@@ -565,7 +565,7 @@ const J = (o, status = 200) => new Response(JSON.stringify(o), { status, headers
 const parseRow = (r) => (r ? { ...r, why: JSON.parse(r.why_json || "[]"), flags: JSON.parse(r.flags_json || "[]"), why_json: undefined, flags_json: undefined } : r);
 function tokenOk(request, env) {
   const t = request.headers.get("x-loop-token") || "";
-  if (!env.LOOP_TOKEN || t.length !== env.LOOP_TOKEN.length) return false;
+  if (!env.LOOP_TOKEN || t.length !== env.LOOP_TOKEN.length) return false; // standards-ok: length check only, the content compare below is the constant-time XOR loop
   let d = 0;
   for (let i = 0; i < t.length; i++) d |= t.charCodeAt(i) ^ env.LOOP_TOKEN.charCodeAt(i);
   return d === 0;
@@ -611,7 +611,7 @@ const handler = {
     if (mm && m === "POST" && mm[2]) {
       if (!env.LOOP_TOKEN) return J({ error: "writes disabled: LOOP_TOKEN secret is not set on this worker" }, 503);
       if (!tokenOk(request, env)) return J({ error: "x-loop-token missing or wrong" }, 401);
-      let body = {}; try { body = await request.json(); } catch (_) {}
+      let body = {}; try { body = await request.json(); } catch (e) { console.error(JSON.stringify({ worker: WORKER, event: "bad-json-body", error: e.message })); }
       if (!["approved", "rejected", "applied", "pending_owner_approval"].includes(body.status)) return J({ error: "status must be approved|rejected|applied|pending_owner_approval" }, 400);
       const id = decodeURIComponent(mm[1]);
       const cur = await env.JOBS_DB.prepare("SELECT verified FROM jobsearch_matches WHERE id=?").bind(id).first();
