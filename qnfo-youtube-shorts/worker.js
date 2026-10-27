@@ -26,6 +26,13 @@ var NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, s
 function json(data, status) {
   return new Response(JSON.stringify(data, null, 2), { status: status || 200, headers: { "content-type": "application/json; charset=utf-8" } });
 }
+function safeEqual(a, b) {
+  var x = new TextEncoder().encode(String(a)), y = new TextEncoder().encode(String(b));
+  if (x.length !== y.length) return false;
+  var d = 0;
+  for (var i = 0; i < x.length; i++) d |= x[i] ^ y[i];
+  return d === 0;
+}
 function nowIso() { return new Date().toISOString(); }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function b64FromBytes(u8) {
@@ -407,7 +414,7 @@ var worker_default = {
     if (url.pathname === "/status") return json(await status(env));
     if (url.pathname === "/run" && request.method === "POST") {
       var tok = request.headers.get("x-run-token") || "";
-      if (!env.YT_RUN_TOKEN || tok.length !== env.YT_RUN_TOKEN.length || tok !== env.YT_RUN_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
+      if (!env.YT_RUN_TOKEN || !safeEqual(tok, env.YT_RUN_TOKEN)) return json({ ok: false, error: "unauthorized" }, 401);
       ctx.waitUntil(runTick(env, { ignoreCap: url.searchParams.get("ignore_cap") === "1" }).then(function (r) { return logEvent(env, "youtube.run", JSON.stringify(r), r, "ok"); }).catch(function (e) { return logEvent(env, "youtube.run", String(e && e.message || e), null, "error"); }));
       return json({ ok: true, started: true }, 202);
     }
