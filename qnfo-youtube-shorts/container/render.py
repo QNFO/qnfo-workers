@@ -8,6 +8,7 @@ import base64, json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+CR, NL = chr(13), chr(10)
 FONT = os.environ.get("SHORT_FONT", "DejaVu Sans")
 
 
@@ -86,8 +87,11 @@ def render(job, out):
     spec = {"beats": [{k: v for k, v in b.items() if k != "sentences"} for b in beats]}
     (out / "spec.json").write_text(json.dumps(spec), "utf8")
     env = dict(os.environ, SHORT_SPEC=str(out / "spec.json"), SHORT_FONT=FONT)
-    subprocess.run([sys.executable, "-m", "manim", "render", "-qm", "--fps", "30", "-r", "1080,1920", "--media_dir", str(out / "media"),
-                    "-o", "diagram", str(HERE / "short_scene.py"), "ShortScene"], check=True, env=env, stdout=subprocess.DEVNULL)
+    m = subprocess.run([sys.executable, "-m", "manim", "render", "-qm", "--fps", "30", "-r", "1080,1920", "--media_dir", str(out / "media"),
+                        "-o", "diagram", str(HERE / "short_scene.py"), "ShortScene"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if m.returncode != 0:      # YT-RENDER-ERR-1: the caller sees why, not only the exit status
+        lines = [ln for ln in m.stderr.replace(CR, NL).split(NL) if ln.strip() and "it/s]" not in ln]
+        raise RuntimeError("manim exit %s: %s" % (m.returncode, " | ".join(lines)[-900:]))
     silent = next((out / "media").rglob("diagram.mp4"))
     final = out / "short.mp4"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(silent), "-i", str(out / "audio.wav"), "-vf", "subtitles=cap.ass", "-c:v", "libx264",
