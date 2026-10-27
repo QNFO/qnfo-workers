@@ -1,4 +1,4 @@
-var VERSION = "0.1.2-exports"; /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
+var VERSION = "0.1.3-director"; /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // Owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse". docs/YOUTUBE-PIPELINE.md has the design.
 // State machine per paper (D1 qnfo-audit.youtube_videos.state): queued -> directed -> audio -> rendering -> rendered -> uploaded;
 // terminal: rejected (director left too few supported beats), failed (4 attempts), uploaded. Every tick resumes an unfinished row before
@@ -163,16 +163,30 @@ async function loadArticle(env, slug) {
   if (!r) throw new Error("plain_article row missing or not ok: " + slug);
   return { slug: r.slug, rev: r.rev, title: r.title, short: r.short, sections: parseSections(r.body) };
 }
-async function aiText(env, system, user, maxTokens) {
-  var msgs = [{ role: "system", content: system }, { role: "user", content: user }];
-  if (env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
+function modelText(w) {
+  return (w && (typeof w.response === "string" ? w.response : (w.choices && w.choices[0] && w.choices[0].message && w.choices[0].message.content))) || "";
+}
+// YT-DIRECTOR-1: the first reply that holds JSON wins; the order is qnfo-ai (router), then Workers AI kimi, then gpt-oss, so one model that
+// answers with prose, an empty reply or only reasoning does not strand a paper. The failure note carries a snippet of each reply.
+async function aiJson(env, system, user, maxTokens) {
+  var msgs = [{ role: "system", content: system }, { role: "user", content: user }], notes = [];
+  var sources = [];
+  if (env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") sources.push({ n: "qnfo-ai", run: async function () {
+    var r = await env.QNFO_AI.fetch("https://qnfo-ai.internal/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "auto", messages: msgs, max_tokens: maxTokens, stream: false, temperature: 0.3 }) });
+    if (!r.ok) throw new Error("http " + r.status + " " + (await r.text()).slice(0, 120));
+    return modelText(await r.json());
+  } });
+  sources.push({ n: "kimi", run: async function () { return modelText(await env.AI.run(WRITE_FALLBACK_MODEL, { messages: msgs, max_tokens: maxTokens, reasoning_effort: "none", temperature: 0.3 })); } });
+  sources.push({ n: "gpt-oss", run: async function () { return modelText(await env.AI.run(CHECK_MODEL, { messages: msgs, max_tokens: maxTokens + 1500, reasoning_effort: "low", temperature: 0.3 })); } });
+  for (var i = 0; i < sources.length; i++) {
     try {
-      var r = await env.QNFO_AI.fetch("https://qnfo-ai.internal/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "auto", messages: msgs, max_tokens: maxTokens, stream: false, temperature: 0.3 }) });
-      if (r.ok) { var j = await r.json(); var c = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content; if (c) return c; }
-    } catch (e) { console.error(JSON.stringify({ worker: WORKER, where: "qnfo-ai", error: String(e && e.message || e) })); }
+      var t = await sources[i].run();
+      var j = jsonFromText(t);
+      if (j && Array.isArray(j.beats)) return { json: j, source: sources[i].n };
+      notes.push(sources[i].n + ": no beats array");
+    } catch (e) { notes.push(sources[i].n + ": " + String(e && e.message || e).slice(0, 140)); }
   }
-  var w = await env.AI.run(WRITE_FALLBACK_MODEL, { messages: msgs, max_tokens: maxTokens, reasoning_effort: "none", temperature: 0.3 });
-  return (w && (w.response || (w.choices && w.choices[0] && w.choices[0].message && w.choices[0].message.content))) || "";
+  throw new Error("director: " + notes.join(" | ").slice(0, 700));
 }
 function directorPrompt() {
   return "You turn a plain-language article into a 45-55 second vertical video script: 5 to 7 beats. Output JSON only: {\"title\":\"<=70 chars, plain\",\"beats\":[...]}.\n" +
@@ -189,9 +203,9 @@ function directorPrompt() {
 async function stageDirect(env, row) {
   var article = await loadArticle(env, row.slug);
   var text = article.title + "\nSummary: " + article.short + "\n\n" + article.sections.map(function (s) { return "## " + s.h + "\n" + s.paras.join("\n"); }).join("\n\n");
-  var out = await aiText(env, directorPrompt(), text.slice(0, 9000), 2500);
-  await addSpend(env, row.id, "llm", 2, "director + checker");
-  var spec = jsonFromText(out);
+  var dj = await aiJson(env, directorPrompt(), text.slice(0, 9000), 2500);
+  var spec = dj.json;
+  await addSpend(env, row.id, "llm", 2, "director " + dj.source + " + checker");
   var pre = validateBeats(spec.beats, article, []);
   var unsupported = [];
   if (pre.kept.length) {
