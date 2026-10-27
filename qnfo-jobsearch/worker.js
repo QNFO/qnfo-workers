@@ -6,7 +6,7 @@
 // JOBSEARCH-OPS-1 (1.1.0): e-mailed-code owner sign-in via qnfo-email (no secret to manage), feed health and retry, self-healing runs, posting lifecycle (expired), dedupe, retention, GET /api/ops self-report.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.1.2-codeagent";
+var VERSION = "1.1.3";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -16,6 +16,7 @@ const LEDGER = {
   "also_published_as": "Brad Gudzinas",
   "location": "Amsterdam, Netherlands",
   "email": "rowan.quni@qnfo.org",
+  "sign_in_email": "rwnquni@outlook.com",
   "links": {
    "site": "https://qnfo.org",
    "papers": "https://papers.qnfo.org",
@@ -268,7 +269,7 @@ const LEDGER = {
 };
 
 // ------------------------------------------------------------------ operations layer (JOBSEARCH-OPS-1)
-const OWNER_EMAIL = LEDGER.person.email;
+const OWNER_EMAIL = LEDGER.person.sign_in_email || LEDGER.person.email;
 const LEDGER_VERIFIED_ON = LEDGER.ledger_verified_on || "2026-10-01";
 const SESSION_MS = 12 * 3600 * 1000, CODE_MS = 15 * 60 * 1000, CODE_MAX_PER_HOUR = 3, CODE_MIN_GAP_MS = 60 * 1000, CODE_MAX_TRIES = 5;
 const DDL = [
@@ -748,7 +749,7 @@ const handler = {
     if (p === "/health") return J({ ok: true, worker: WORKER, version: VERSION, ledger_verified_on: LEDGER_VERIFIED_ON });
     if (p === "/" && m === "GET") return new Response(UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api" && m === "GET") return J(INDEX);
-    if (p === "/api/ledger" && m === "GET") return J({ person: LEDGER.person, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines });
+    if (p === "/api/ledger" && m === "GET") return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines });
     if (p === "/api/ops" && m === "GET") { const rep = await opsReport(env); return J(rep, rep.status === "ok" ? 200 : 503); }
     if (p === "/api/auth/request" && m === "POST") { const [st, body] = await authRequest(env); return J(body, st); }
     if (p === "/api/auth/verify" && m === "POST") {
