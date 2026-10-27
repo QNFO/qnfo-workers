@@ -1,8 +1,27 @@
 {
-  "audited_at": "2026-10-27 11:28:21",
+  "audited_at": "2026-10-27 12:02:38",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
+    "_deploy_settle": {
+      "settled": [
+        "qnfo-youtube-shorts"
+      ],
+      "waited_for": [
+        "qnfo-youtube-shorts"
+      ]
+    },
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-cloud-ops",
+        "qnfo-email",
+        "qnfo-jobsearch"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "qnfo-youtube-shorts"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -541,7 +560,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 35,
+    "sync": 34,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -590,7 +609,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.42.0-gcp-inventory",
+        "version": "1.42.1-gcp-inventory",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -610,7 +629,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.12.3-codeagent",
+        "version": "2.12.4-codeagent",
         "worker": "qnfo-email"
       },
       {
@@ -655,7 +674,7 @@
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.1.1",
+        "version": "1.1.3",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -709,14 +728,13 @@
         "worker": "qnfo-tools-mcp"
       },
       {
-        "dir": "qnfo-youtube-shorts",
-        "version": "0.1.0-yt-server",
-        "worker": "qnfo-youtube-shorts"
-      },
-      {
         "dir": "radar-hub",
         "version": "1.5.0-venue-recovered",
         "worker": "radar-hub"
+      },
+      {
+        "version": "0.1.3-director",
+        "worker": "qnfo-youtube-shorts"
       }
     ],
     "unmanaged_tombstones": 1,
@@ -1225,9 +1243,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.42.0-gcp-inventory",
+      "before": "1.42.1-gcp-inventory",
       "http": 200,
-      "live": "1.42.0-gcp-inventory",
+      "live": "1.42.1-gcp-inventory",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1275,9 +1293,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.12.3-codeagent",
+      "before": "2.12.4-codeagent",
       "http": 200,
-      "live": "2.12.3-codeagent",
+      "live": "2.12.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1482,9 +1500,9 @@
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.1.1",
+      "before": "1.1.3",
       "http": 200,
-      "live": "1.1.1",
+      "live": "1.1.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
@@ -1749,9 +1767,9 @@
       "worker": "qnfo-web-unified"
     },
     "qnfo-youtube-shorts": {
-      "before": "0.1.0-yt-server",
+      "before": "0.1.3-director",
       "http": 200,
-      "live": "0.1.0-yt-server",
+      "live": "0.1.3-director",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-youtube-shorts"
@@ -1816,5 +1834,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 1
 }
