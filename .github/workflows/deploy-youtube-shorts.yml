@@ -1,0 +1,78 @@
+name: deploy-youtube-shorts
+
+# YT-SERVER-1 (2026-10-27, pillar reach, project YT.SHORTS). qnfo-youtube-shorts declares [[containers]] (a Docker image built here), which the canonical
+# /ops/deploy path cannot upload, so this workflow is its deploy path (the qnfo-containers-pilot pattern, deploy-containers-pilot.yml): wrangler deploy,
+# a fleet_deploys ledger row, a gate on /health reporting the repo VERSION, and a /status check that the container class is attached
+# (container.configured true), so a deploy that dropped [[containers]] is red, not green.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'qnfo-youtube-shorts/**'
+      - '.github/workflows/deploy-youtube-shorts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-youtube-shorts
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GUARD: https://qnfo-deploy-guard.q08.workers.dev
+      GUARD_UA: "QNFO-fleet-ci/1.0 (+https://qnfo.org; deploy-youtube-shorts)"
+      BASE: https://qnfo-youtube-shorts.q08.workers.dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: unit tests
+        run: node --test qnfo-youtube-shorts/youtube-shorts.test.mjs
+
+      - name: assert the containers block and worker mirror
+        run: |
+          set -euo pipefail
+          f=qnfo-youtube-shorts/wrangler.toml
+          for key in '\[\[containers\]\]' 'class_name = "RenderContainer"' 'image = ' 'instance_type = ' 'max_instances = '; do
+            grep -Eq "$key" "$f" || { echo "::error::wrangler.toml is missing $key"; exit 1; }
+          done
+          cmp qnfo-youtube-shorts/worker.js qnfo-youtube-shorts/deployed-current.worker.js
+
+      - name: wrangler deploy (builds the render image, transmits [[containers]])
+        working-directory: qnfo-youtube-shorts
+        run: npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler.log
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: record the deploy in the guard ledger
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          ok=false; [ "${{ job.status }}" = "success" ] && ok=true
+          to="$(grep -m1 -oE '^var VERSION = "[^"]+"' qnfo-youtube-shorts/worker.js | sed -E 's/.*"([^"]+)"/\1/')"
+          body="$(jq -cn --arg w qnfo-youtube-shorts --arg to "$to" --argjson ok "$ok" --arg note "wrangler deploy (deploy-youtube-shorts.yml run $GITHUB_RUN_ID sha ${GITHUB_SHA::12})" \
+            '{worker:$w,actor:"deploy-youtube-shorts.yml",from:"",to:$to,source_path:"qnfo-youtube-shorts/worker.js",ok:$ok,note:$note}')"
+          res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/ledger" --data "$body")"
+          echo "ledger response: $res"
+
+      - name: gate - live VERSION equals repo VERSION and the container is attached
+        run: |
+          set -uo pipefail
+          sleep 20
+          want="$(grep -m1 -oE '^var VERSION = "[^"]+"' qnfo-youtube-shorts/worker.js | sed -E 's/.*"([^"]+)"/\1/')"
+          got="$(curl -s --max-time 30 "$BASE/health" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)"
+          echo "repo VERSION=$want live VERSION=$got"
+          [ -n "$want" ] && [ "$want" = "$got" ] || { echo "::error::live VERSION '$got' != repo '$want'"; exit 1; }
+          curl -s --max-time 60 "$BASE/status" | tee /tmp/status.json
+          python3 -c 'import json; d=json.load(open("/tmp/status.json")); c=d.get("container",{}); assert c.get("configured") is True, "container not attached: %r" % (c,)'

@@ -84,5 +84,8 @@ Constraints found, not assumed:
   `deploy-*.yml` that verifies `/status`, and a second path (render in a GitHub runner) per ANTIFRAGILE-1.
 - **Charter:** new worker directory needs `# charter-pillar: reach` and a named same-class retirement (net-zero rule); AI-label and provenance (BP26-AI-ACT-ART50-1,
   BP26-PROVENANCE-MARKING-1) are part of the render, not an addition.
+- **Visibility (owner directive 2026-10-27, "ALL VIDEOS/SHORTS SHALL BE PUBLIC BY DEFAULT"):** the worker uploads `public` (PRIVACY in worker.js). YouTube forces `private` on
+  videos from an API project that has not passed the YouTube API compliance audit, so the privacy YouTube returns is what `youtube_videos.privacy` stores; the audit form is an
+  owner act (identity-bound). This supersedes "Shorts stay private until the owner reviews" below.
 - **Channel:** the target is the owner's existing personal channel (2 subscribers, one 2025 community post). Aligning its name, banner and description with the
   content is a visible account change and needs the owner's wording; Shorts stay private until the owner reviews the first batch.
