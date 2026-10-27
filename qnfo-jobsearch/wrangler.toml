@@ -11,6 +11,14 @@ workers_dev = true
 enabled = true
 head_sampling_rate = 1
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05
+
 # CRON-SINGLE-TRIGGER-1: one hourly tick (CRON-HOURLY-FLOOR-1); the pipeline is idempotent (upsert by posting id).
 [triggers]
 crons = ["15 * * * *"]
