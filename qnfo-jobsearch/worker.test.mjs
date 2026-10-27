@@ -118,13 +118,22 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   // brute force: 5 wrong tries kill the code
   db.prepare("DELETE FROM jobsearch_codes").run();
   db.prepare("INSERT INTO jobsearch_codes (code_hash, salt, created_ms, expires_ms) VALUES ('x','s',?,?)").run(Date.now(), Date.now() + 60000);
-  for (let k = 0; k < 5; k++) await ver("000000");
-  ok((await ver("000000"))[0] === 429, "5 wrong tries lock the code");
+  let last5;
+  for (let k = 0; k < 5; k++) last5 = await ver("000000");
+  ok(last5[0] === 429, "the 5th wrong try locks the code", last5);
+  ok((await ver("000000"))[0] !== 200, "a locked code is not accepted afterwards");
+  // two e-mailed codes are both valid; either opens a session
+  db.prepare("DELETE FROM jobsearch_codes").run();
+  const mk = async (c, salt) => db.prepare("INSERT INTO jobsearch_codes (code_hash, salt, created_ms, expires_ms) VALUES (?,?,?,?)").run(await (async () => { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + c)); return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join(""); })(), salt, Date.now(), Date.now() + 600000);
+  await mk("111111", "a"); await mk("222222", "b");
+  ok((await ver("111111"))[0] === 200, "an older unexpired code still works");
+  ok((await ver("222222"))[0] === 200, "the newer code works too");
   // request cap: 3 per hour
   db.prepare("DELETE FROM jobsearch_codes").run();
   const t = Date.now();
-  for (let k = 0; k < 3; k++) db.prepare("INSERT INTO jobsearch_codes (code_hash, salt, created_ms, expires_ms, used) VALUES ('x','s',?,?,1)").run(t - (k + 2) * 120000, t + 1);
-  ok((await call("/api/auth/request", { method: "POST" }, env2))[0] === 429, "code requests capped at 3 per hour");
+  for (let k = 0; k < 6; k++) db.prepare("INSERT INTO jobsearch_codes (code_hash, salt, created_ms, expires_ms, used) VALUES ('x','s',?,?,1)").run(t - (k + 2) * 120000, t + 1);
+  const capped = await call("/api/auth/request", { method: "POST" }, env2);
+  ok(capped[0] === 429 && capped[1].retry_after_minutes > 0 && capped[1].enter_existing_code === true, "code requests capped at 6 per hour, answer says when to retry", capped[1]);
   ok((await call("/api/auth/request", { method: "POST" }, { ...env, EMAIL: undefined }))[0] === 503, "no EMAIL binding -> 503, not a crash");
 
   // lifecycle, feed health, self-heal
