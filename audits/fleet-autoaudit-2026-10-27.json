@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-27 02:06:54",
+  "audited_at": "2026-10-27 02:58:43",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -636,7 +636,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.9.2-handoffs-catchup",
+        "version": "1.9.3-codeagent",
         "worker": "qnfo-infra"
       },
       {
@@ -1436,9 +1436,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.9.2-handoffs-catchup",
+      "before": "1.9.3-codeagent",
       "http": 200,
-      "live": "1.9.2-handoffs-catchup",
+      "live": "1.9.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
