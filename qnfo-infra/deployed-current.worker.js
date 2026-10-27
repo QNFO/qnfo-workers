@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.9.3-codeagent"; /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.9.4-codeagent"; /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -789,6 +789,90 @@ var indexerMod = (function() {
     });
   }
 
+  async function handleSearch(env, url) {
+    if (!env.AI || !env.PAPER_VZ) {
+      return json({ error: "search unavailable", bindings: { ai: !!env.AI, vz: !!env.PAPER_VZ } }, 503);
+    }
+    const query = url.searchParams.get("q");
+    if (!query || !query.trim()) {
+      return json({ error: "missing query" }, 400);
+    }
+    const MAX_K = 50;
+    let topK = parseInt(url.searchParams.get("k") || "10", 10) || 10;
+    if (topK < 1) topK = 10;
+    if (topK > MAX_K) topK = MAX_K;
+
+    let embedRes;
+    try {
+      embedRes = await env.AI.run(EMBED_MODEL, { text: [query.trim()] }, { gateway: { id: "default" } });
+    } catch (e) {
+      return json({ error: "embedding failed", detail: String(e && e.message || e) }, 500);
+    }
+    const queryVector = embedRes && embedRes.data && embedRes.data[0];
+    if (!queryVector || !Array.isArray(queryVector)) {
+      return json({ error: "empty embedding" }, 500);
+    }
+
+    let vzRes;
+    try {
+      vzRes = await env.PAPER_VZ.query(queryVector, { topK, returnMetadata: true, returnValues: false });
+    } catch (e) {
+      return json({ error: "vector query failed", detail: String(e && e.message || e) }, 500);
+    }
+
+    const hits = (vzRes && vzRes.matches) || [];
+    const matched = [];
+    const slugSet = new Set();
+    for (const m of hits) {
+      const md = m && m.metadata || {};
+      const slug = md.slug;
+      if (!slug) continue;
+      slugSet.add(slug);
+      matched.push({ slug, score: m.score, chunk: String(md.chunk || ""), total: md.total });
+    }
+
+    const results = [];
+    if (slugSet.size > 0) {
+      try {
+        const placeholders = Array.from(slugSet).map((_, i) => "?" + (i + 1)).join(",");
+        const rows = await env.LIVING_PAPER.prepare(
+          "SELECT slug, body_md, updated_at, status, claim_line, test_line, status_line FROM papers WHERE slug IN (" + placeholders + ")"
+        ).bind(...Array.from(slugSet)).all();
+        const bySlug = new Map();
+        for (const r of rows.results || []) bySlug.set(r.slug, r);
+        for (const h of matched) {
+          const p = bySlug.get(h.slug);
+          if (!p || !CORPUS_STATUSES.includes(String(p.status))) continue;
+          let snippet = "";
+          if (p.body_md) {
+            const idx = parseInt(h.chunk, 10);
+            const chunks = chunkText(p.body_md);
+            if (chunks[idx] != null) snippet = chunks[idx].slice(0, 1200);
+          }
+          results.push({
+            slug: h.slug,
+            score: h.score,
+            chunk: h.chunk,
+            total: h.total,
+            snippet,
+            paper: {
+              slug: p.slug,
+              updated_at: p.updated_at,
+              status: p.status,
+              claim_line: p.claim_line || null,
+              test_line: p.test_line || null,
+              status_line: p.status_line || null
+            }
+          });
+        }
+      } catch (e) {
+        // Stale or anonymous results are intentionally omitted on lookup failure.
+      }
+    }
+
+    return json({ query: query.trim(), top_k: topK, count: results.length, results });
+  }
+
   var worker_default = {
     async fetch(request, env, ctx) {
       const url = new URL(request.url);
@@ -801,7 +885,7 @@ var indexerMod = (function() {
       try {
         switch (path) {
           case "/health":
-            return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, capabilities: ["paper-indexing", "vectorize-upsert", "citation-impact", "orphan-purge"], limitations: ["indexes only papers in corpus statuses", "scheduled runs at 04:00 and 06:05 daily"], features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "purge-orphan-sweep", "cron-self-heal"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
+            return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, capabilities: ["paper-indexing", "vectorize-upsert", "citation-impact", "orphan-purge", "semantic-search"], limitations: ["indexes only papers in corpus statuses", "scheduled runs at 04:00 and 06:05 daily"], features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "purge-orphan-sweep", "cron-self-heal", "semantic-search"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
           case "/count": {
             const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state").first();
             const g = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE " + CORPUS_WHERE).first();
@@ -825,6 +909,7 @@ var indexerMod = (function() {
           case "/purge": return json(await handlePurge(env, url.searchParams.get("commit") !== "1"));
           case "/webhook": return await handleWebhook(env, slug);
           case "/index": return await handleIndex(env, url);
+          case "/search": return await handleSearch(env, url);
           case "/cron/debug": return json({ worker: "qnfo-paper-indexer", version: VERSION, crons: ["5 6 * * *", "0 4 * * *"], corpus_statuses: CORPUS_STATUSES, purge_in_cron: "5 6 * * *" });
           case "/run": {
             const commit = url.searchParams.get("commit") === "1";
