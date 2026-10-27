@@ -1126,5 +1126,19 @@ M.resolve_failure("migrations/resolve-chan.sql", "f" * 64, "a", "t", M.DATABASES
 ok(db.execute("SELECT close_channel FROM agent_issues WHERE id = ?", (fail_id[0],)).fetchone()[0] == "kept", "a second resolve never rewrites an already closed issue's channel")
 db = shared_db
 
+# PROBE-SEMICOLON-LINT-1 (issue 1000507): a d1-query verify_probe holding a semicolon is refused; code-read JSON and clean probes pass.
+def _psemi(sql, birth=True):
+    hdr = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: SELECT 1\n"
+    return [p for p in M.plan("migrations/x.sql", hdr + sql, birth=birth)[1] if "PROBE-SEMICOLON-LINT-1" in p]
+_u = "UPDATE remediation_contracts SET verify_probe = 'SELECT 1 WHERE instr(x, ''a; b'') > 0' WHERE class = 'issue-1';"
+ok(len(_psemi(_u)) == 1, "an UPDATE of a d1-query probe holding a semicolon is refused", _psemi(_u))
+ok(not _psemi(_u, birth=False), "a file already on main (--history) is not refused for it")
+_i = "INSERT INTO remediation_contracts (class, verify_probe, verify_transport) VALUES ('c1', 'SELECT ''a;b''', 'd1-query'), ('c2', 'SELECT 1', 'd1-query');"
+ok(len(_psemi(_i)) == 1, "an INSERT row with a semicolon probe is refused, a clean row beside it is not", _psemi(_i))
+ok(not _psemi("UPDATE remediation_contracts SET verify_probe = 'SELECT 1', verify_transport = 'd1-query' WHERE class = 'issue-1';"), "a probe without a semicolon passes")
+_cr = "UPDATE remediation_contracts SET verify_probe = '{\"contains\": \"x; y\"}', verify_transport = 'code-read' WHERE class = 'issue-1';"
+ok(not _psemi(_cr), "a code-read JSON probe is exempt")
+ok(not _psemi("UPDATE agent_issues SET description = 'a; b' WHERE id = 1;"), "other tables are not judged")
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
