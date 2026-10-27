@@ -59,8 +59,10 @@ max_instances = 1
 name = "RENDER"
 class_name = "RenderContainer"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["RenderContainer"]
+# EXPORTS-DECLARATIVE-1 (YT-EXPORTS-1, 2026-10-27): the class is provisioned, and wrangler refuses an upload that does not declare it in `exports`
+# ([provisioned_class_missing_from_config], run 40498305104 after the secrets were written through the script API). `exports` replaces `migrations`.
+[exports.RenderContainer]
+type = "durable-object"
+storage = "sqlite"
 
 # Secrets (wrangler secret put, under the deploy-guard secret lock): YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN, YT_RUN_TOKEN
