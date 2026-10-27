@@ -6,7 +6,7 @@
 // JOBSEARCH-OPS-1 (1.1.0): e-mailed-code owner sign-in via qnfo-email (no secret to manage), feed health and retry, self-healing runs, posting lifecycle (expired), dedupe, retention, GET /api/ops self-report.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.1.3";
+var VERSION = "1.1.4";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -271,7 +271,7 @@ const LEDGER = {
 // ------------------------------------------------------------------ operations layer (JOBSEARCH-OPS-1)
 const OWNER_EMAIL = LEDGER.person.sign_in_email || LEDGER.person.email;
 const LEDGER_VERIFIED_ON = LEDGER.ledger_verified_on || "2026-10-01";
-const SESSION_MS = 12 * 3600 * 1000, CODE_MS = 15 * 60 * 1000, CODE_MAX_PER_HOUR = 3, CODE_MIN_GAP_MS = 60 * 1000, CODE_MAX_TRIES = 5;
+const SESSION_MS = 12 * 3600 * 1000, CODE_MS = 15 * 60 * 1000, CODE_MAX_PER_HOUR = 6, CODE_MIN_GAP_MS = 60 * 1000, CODE_MAX_TRIES = 5;
 const DDL = [
   "CREATE TABLE IF NOT EXISTS jobsearch_feeds (feed TEXT PRIMARY KEY, last_ok_at TEXT, last_count INTEGER, last_error TEXT, last_error_at TEXT, consecutive_fail INTEGER NOT NULL DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS jobsearch_meta (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)",
@@ -679,8 +679,13 @@ async function authRequest(env) {
   if (!env.EMAIL) return [503, { error: "e-mail sign-in is not available: the EMAIL service binding is missing" }];
   await ensure(env);
   const now = Date.now();
-  const rec = await env.JOBS_DB.prepare("SELECT COUNT(*) AS n, MAX(created_ms) AS last FROM jobsearch_codes WHERE created_ms > ?").bind(now - 3600000).first();
-  if (Number(rec.n) >= CODE_MAX_PER_HOUR) return [429, { error: "too many codes this hour; try again later" }];
+  // The request route is public, so the cap must not let a stranger lock the owner out: it is generous (6 an hour), the answer says when to retry,
+  // and a code already e-mailed stays valid for 15 minutes whatever the cap says (verify accepts any unexpired code).
+  const rec = await env.JOBS_DB.prepare("SELECT COUNT(*) AS n, MIN(created_ms) AS first, MAX(created_ms) AS last FROM jobsearch_codes WHERE created_ms > ?").bind(now - 3600000).first();
+  if (Number(rec.n) >= CODE_MAX_PER_HOUR) {
+    const retry = Math.max(1, Math.ceil((Number(rec.first) + 3600000 - now) / 60000));
+    return [429, { error: `code limit reached; a new code can be sent in ${retry} min. A code e-mailed in the last 15 min still works: enter it.`, retry_after_minutes: retry, enter_existing_code: true }];
+  }
   if (rec.last && now - Number(rec.last) < CODE_MIN_GAP_MS) return [200, { ok: true, sent: false, note: "a code was sent less than a minute ago; check " + maskedOwner() }];
   const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
   const salt = randHex(8);
@@ -697,11 +702,17 @@ async function authVerify(env, code) {
   code = String(code || "").trim();
   if (!/^\d{6}$/.test(code)) return [400, { error: "enter the 6-digit code" }];
   const now = Date.now();
-  const row = await env.JOBS_DB.prepare("SELECT id, code_hash, salt, tries FROM jobsearch_codes WHERE used=0 AND expires_ms > ?1 ORDER BY id DESC LIMIT 1").bind(now).first();
-  if (!row) return [401, { error: "no valid code; request a new one" }];
-  if (Number(row.tries) >= CODE_MAX_TRIES) { await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET used=1 WHERE id=?").bind(row.id).run(); return [429, { error: "too many wrong attempts; request a new code" }]; }
-  if (!constEq(await sha256hex(row.salt + code), row.code_hash)) { await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET tries=tries+1 WHERE id=?").bind(row.id).run(); return [401, { error: "wrong code" }]; }
-  await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET used=1 WHERE id=?").bind(row.id).run();
+  // any unexpired, unused code that has not used up its tries is a candidate (the owner may hold two e-mails)
+  const rows = (await env.JOBS_DB.prepare("SELECT id, code_hash, salt, tries FROM jobsearch_codes WHERE used=0 AND expires_ms > ?1 AND tries < ?2 ORDER BY id DESC LIMIT 6").bind(now, CODE_MAX_TRIES).all()).results;
+  if (!rows.length) return [401, { error: "no valid code; request a new one" }];
+  let hit = null;
+  for (const r of rows) if (constEq(await sha256hex(r.salt + code), r.code_hash)) hit = r;
+  if (!hit) {
+    await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET tries=tries+1 WHERE used=0 AND expires_ms > ?1 AND tries < ?2").bind(now, CODE_MAX_TRIES).run();
+    const left = CODE_MAX_TRIES - 1 - Math.max(...rows.map((r) => Number(r.tries)));
+    return left <= 0 ? [429, { error: "too many wrong attempts; request a new code" }] : [401, { error: "wrong code" }];
+  }
+  await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET used=1 WHERE id=?").bind(hit.id).run();
   const token = randHex(32);
   await env.JOBS_DB.prepare("INSERT INTO jobsearch_sessions (token_hash, created_ms, expires_ms) VALUES (?1,?2,?3)").bind(await sha256hex(token), now, now + SESSION_MS).run();
   return [200, { ok: true, token, expires_hours: SESSION_MS / 3600000 }, `jobs_session=${token}; Path=/; Max-Age=${SESSION_MS / 1000}; HttpOnly; Secure; SameSite=Strict`];
@@ -849,7 +860,7 @@ async function load(){
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
   el.innerHTML='<h4>Resume</h4><pre>'+esc(d.resume_md)+'</pre><h4>Note</h4><pre>'+esc(d.note_md)+'</pre><button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.note_md)+'">Copy note</button> <button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.resume_md)+'">Copy resume</button>'}
-async function signIn(){const r=await api('/api/auth/request',{method:'POST'});const c=prompt((r.sent===false?r.note:'A 6-digit code was e-mailed to '+r.to)+'. Enter it here:');if(!c)return false;await api('/api/auth/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:c})});who();return true}
+async function signIn(){let r;try{r=await api('/api/auth/request',{method:'POST'})}catch(e){if(!/limit/.test(e.message))throw e;r={sent:false,note:e.message}}const c=prompt((r.sent===false?r.note:'A 6-digit code was e-mailed to '+r.to)+' Enter the code:');if(!c)return false;await api('/api/auth/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:c})});who();return true}
 async function who(){try{const m=await api('/api/auth/me');$('#who').textContent=m.signed_in?'Signed in':'Not signed in';$('#signin').style.display=m.signed_in?'none':'';$('#signout').style.display=m.signed_in?'':'none'}catch(e){$('#who').textContent='Sign-in status unavailable: '+e.message}}
 async function decide(id,status){
   const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status})});
