@@ -161,6 +161,50 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok((await call("/health", {}, env2))[1].ledger_verified_on === "2026-10-01", "health shows ledger date");
 }
 
+// ---------------- JOBSEARCH-OUTCOME-1
+{
+  db.exec("CREATE TABLE IF NOT EXISTS metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT DEFAULT 'UNMEASURED')");
+  for (const m of ["jobsearch_reply_rate_90d", "jobsearch_interview_rate_90d", "jobsearch_applied_30d"]) db.prepare("INSERT OR IGNORE INTO metric_registry (metric) VALUES (?)").run(m);
+  const sess2 = { cookie: "" };
+  // sign in once more to drive the status route through the API
+  const sentCodes = [];
+  const envO = { ...env, LOOP_TOKEN: "secret-test-token", EMAIL: { fetch: async (u, init) => { sentCodes.push(JSON.parse(init.body)); return new Response("{}", { status: 200 }); } } };
+  const tokHdr = { "x-loop-token": "secret-test-token", "content-type": "application/json" };
+  const ago = (d) => new Date(Date.now() - d * 86400000).toISOString();
+  db.prepare("DELETE FROM jobsearch_events").run();
+  db.prepare("DELETE FROM jobsearch_matches").run();
+  const ins = db.prepare("INSERT INTO jobsearch_matches (id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, status) VALUES (?1, ?2, ?2, 'C', 'T', 'L', 'u', ?3, 70, '[]', '[]', 1, ?4)");
+  const ev = db.prepare("INSERT INTO jobsearch_events (match_id, event, ts) VALUES (?, ?, ?)");
+  // under 10 mature applications: rate unknown, nothing written
+  for (let k = 0; k < 4; k++) { ins.run("o" + k, ago(40), "A", "applied"); ev.run("o" + k, "applied", ago(35)); }
+  ev.run("o0", "replied", ago(30));
+  let o = (await call("/api/outcomes", {}, envO))[1];
+  ok(o.reply_rate_90d === null && /unknown/.test(o.reading) && o.mature_applied_90d === 4, "under 10 mature applications the rate is unknown", o);
+  ok(o.funnel.applied === 4 && o.funnel.replied === 1, "funnel counts", o.funnel);
+  // ten mature applications: 4 replies, 2 interviews
+  for (let k = 4; k < 10; k++) { ins.run("o" + k, ago(40), k < 8 ? "A" : "B", "applied"); ev.run("o" + k, "applied", ago(35)); }
+  ev.run("o1", "replied", ago(30)); ev.run("o2", "interview", ago(28)); ev.run("o3", "interview", ago(27)); ev.run("o1", "offer", ago(20));
+  ins.run("young", ago(5), "A", "applied"); ev.run("young", "applied", ago(3));   // too young to count
+  o = (await call("/api/outcomes", {}, envO))[1];
+  ok(o.mature_applied_90d === 10 && o.reply_rate_90d === 0.4 && o.interview_rate_90d === 0.3, "rates over mature applications only", o);
+  ok(o.applied_30d === 1 && o.by_tier.A.applied >= 7, "applied_30d and tier funnel", o);
+  // the run publishes the metrics
+  db.prepare("UPDATE jobsearch_runs SET started_at = ? WHERE id = (SELECT MAX(id) FROM jobsearch_runs)").run(ago(1));
+  globalThis.fetch = async () => new Response(JSON.stringify({ jobs: [], data: [] }), { status: 200 });
+  await w.scheduled({}, envO, { waitUntil: (p) => p }); await new Promise((r) => setTimeout(r, 4000));
+  const mv = (k) => db.prepare("SELECT last_value, state FROM metric_registry WHERE metric=?").get(k);
+  ok(mv("jobsearch_reply_rate_90d").last_value === "0.4" && mv("jobsearch_reply_rate_90d").state === "MEASURED" && mv("jobsearch_applied_30d").last_value === "1", "run writes the outcome metrics", [mv("jobsearch_reply_rate_90d"), mv("jobsearch_applied_30d")]);
+  // no reply in 21 days closes the application automatically (o4..o9 never replied and were applied 35 days ago)
+  ok(db.prepare("SELECT status FROM jobsearch_matches WHERE id='o5'").get().status === "no_reply" && db.prepare("SELECT status FROM jobsearch_matches WHERE id='o1'").get().status === "applied", "no reply in 21 days becomes no_reply; replied stays", db.prepare("SELECT id, status FROM jobsearch_matches").all());
+  ok(db.prepare("SELECT COUNT(*) AS n FROM jobsearch_events WHERE event='no_reply'").get().n >= 5, "no_reply events are logged");
+  // owner status changes are logged as events; outcome statuses are accepted
+  const st = await call("/api/matches/young/status", { method: "POST", headers: tokHdr, body: JSON.stringify({ status: "replied" }) }, envO);
+  ok(st[0] === 200 && db.prepare("SELECT event FROM jobsearch_events WHERE match_id='young' ORDER BY id DESC LIMIT 1").get().event === "replied", "outcome status is an event", st);
+  ok((await call("/api/matches/young/status", { method: "POST", headers: tokHdr, body: JSON.stringify({ status: "hired" }) }, envO))[0] === 400, "unknown status refused");
+  ok((await call("/api/outcomes", {}, envO))[1].by_tier.A.replied >= 1, "tier funnel sees replies");
+  globalThis.fetch = realFetch;
+}
+
 globalThis.fetch = realFetch;
 console.log(`qnfo-jobsearch: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

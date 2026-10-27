@@ -4,9 +4,10 @@
 // line, and stores the result in D1 (jobsearch_matches). Nothing is ever sent: status moves pending_owner_approval -> approved/rejected/applied
 // by the owner (POST needs x-loop-token). No LinkedIn/Indeed scraping (LinkedIn User Agreement s8.2).
 // JOBSEARCH-OPS-1 (1.1.0): e-mailed-code owner sign-in via qnfo-email (no secret to manage), feed health and retry, self-healing runs, posting lifecycle (expired), dedupe, retention, GET /api/ops self-report.
+// JOBSEARCH-OUTCOME-1 (1.2.0): append-only status events, outcome funnel (applied, replies, interviews, offers), reply rate of applications older than 21 days, metrics jobsearch_reply_rate_90d / jobsearch_interview_rate_90d / jobsearch_applied_30d written each run, no_reply after 21 days.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.1.4";
+var VERSION = "1.2.0";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -277,6 +278,8 @@ const DDL = [
   "CREATE TABLE IF NOT EXISTS jobsearch_meta (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)",
   "CREATE TABLE IF NOT EXISTS jobsearch_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code_hash TEXT NOT NULL, salt TEXT NOT NULL, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, used INTEGER NOT NULL DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS jobsearch_sessions (token_hash TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_events (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id TEXT NOT NULL, event TEXT NOT NULL, ts TEXT NOT NULL, note TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_jobsearch_events_match ON jobsearch_events (match_id, ts)",
 ];
 let ensured = false;
 async function ensure(env) {
@@ -641,6 +644,12 @@ async function run(env) {
     await env.JOBS_DB.batch(stmts);
     await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?, feeds=?, fetched=?, passed=?, stored=?, blocked=?, excluded_json=?, errors_json=? WHERE id=?")
       .bind(new Date().toISOString(), feeds, fetched, kept.length, Math.min(picked.length, 40), blocked, JSON.stringify(excl), JSON.stringify(errors), rid).run();
+    const nrCut = iso(t0 - NO_REPLY_DAYS * 86400000), nrWhere = "status='applied' AND id IN (SELECT match_id FROM jobsearch_events GROUP BY match_id HAVING MIN(CASE WHEN event='applied' THEN ts END) < ?1) AND id NOT IN (SELECT match_id FROM jobsearch_events WHERE event IN ('replied','interview','offer'))";
+    await env.JOBS_DB.batch([
+      env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) SELECT id, 'no_reply', ?2, 'auto: no reply in 21 days' FROM jobsearch_matches WHERE " + nrWhere).bind(nrCut, new Date().toISOString()),
+      env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='no_reply', decided_at=?2 WHERE " + nrWhere).bind(nrCut, new Date().toISOString()),
+    ]);
+    try { await writeOutcomeMetrics(env, await outcomes(env)); } catch (e) { logErr("outcome-metrics", e); }
     await setMeta(env, "ledger_verified_on", LEDGER_VERIFIED_ON);
     await setMeta(env, "worker_version", VERSION);
     await setMeta(env, "email_binding", env.EMAIL ? "1" : "0");
@@ -661,6 +670,45 @@ async function tokenOk(request, env) {
   if (!env.LOOP_TOKEN) return false;
   const [expected, actual] = await Promise.all([sha256hex(env.LOOP_TOKEN), sha256hex(t)]);
   return constEq(expected, actual);
+}
+// ------------------------------------------------------------------ outcomes (JOBSEARCH-OUTCOME-1): does the matching help?
+// Every status change is an append-only event. The outcome measure is the reply rate of applications old enough to have had a reply
+// (21 days): replies, interviews and offers per application. Under MIN_N mature applications it is unknown and nothing is written.
+const OUTCOME_STATUSES = ["applied", "replied", "interview", "offer", "no_reply"];
+const ALL_STATUSES = ["pending_owner_approval", "approved", "rejected", ...OUTCOME_STATUSES];
+const REPLY_EVENTS = ["replied", "interview", "offer"], NO_REPLY_DAYS = 21, MIN_N = 10;
+async function outcomes(env) {
+  await ensure(env);
+  const now = Date.now();
+  const matches = (await env.JOBS_DB.prepare("SELECT id, tier, score, status FROM jobsearch_matches").all()).results;
+  const events = (await env.JOBS_DB.prepare("SELECT match_id, event, ts FROM jobsearch_events ORDER BY ts").all()).results;
+  const by = {};
+  for (const e of events) { (by[e.match_id] = by[e.match_id] || []).push(e); }
+  const rows = matches.map((m) => {
+    const ev = by[m.id] || [], has = (k) => ev.some((e) => e.event === k);
+    const applied = ev.find((e) => e.event === "applied");
+    return { tier: m.tier, score: m.score, approved: has("approved") || has("applied"), applied: !!applied, applied_ms: applied ? Date.parse(applied.ts) : null,
+      replied: REPLY_EVENTS.some(has), interview: has("interview") || has("offer"), offer: has("offer") };
+  });
+  const funnel = (list) => ({ matches: list.length, approved: list.filter((r) => r.approved).length, applied: list.filter((r) => r.applied).length, replied: list.filter((r) => r.replied).length, interview: list.filter((r) => r.interview).length, offer: list.filter((r) => r.offer).length });
+  const mature = rows.filter((r) => r.applied && r.applied_ms <= now - NO_REPLY_DAYS * 86400000 && r.applied_ms >= now - 90 * 86400000);
+  const rate = (list, k) => (list.length >= MIN_N ? +(list.filter((r) => r[k]).length / list.length).toFixed(4) : null);
+  const tiers = {};
+  for (const t of ["A", "B"]) { const l = mature.filter((r) => r.tier === t); tiers[t] = { mature_applied: l.length, reply_rate: rate(l, "replied") }; }
+  return {
+    funnel: funnel(rows), by_tier: { A: funnel(rows.filter((r) => r.tier === "A")), B: funnel(rows.filter((r) => r.tier === "B")) },
+    mature_applied_90d: mature.length, min_mature_for_rate: MIN_N,
+    reply_rate_90d: rate(mature, "replied"), interview_rate_90d: rate(mature, "interview"),
+    applied_30d: rows.filter((r) => r.applied && r.applied_ms >= now - 30 * 86400000).length,
+    reply_rate_by_tier: tiers,
+    reading: mature.length < MIN_N ? `unknown: ${mature.length} application(s) old enough to have had a reply, ${MIN_N} needed` : "measured",
+  };
+}
+async function writeOutcomeMetrics(env, o) {
+  const put = async (metric, value) => { if (value === null || value === undefined) return; await env.JOBS_DB.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = ?3").bind(String(value), new Date().toISOString(), metric).run(); };
+  await put("jobsearch_reply_rate_90d", o.reply_rate_90d);
+  await put("jobsearch_interview_rate_90d", o.interview_rate_90d);
+  await put("jobsearch_applied_30d", o.applied_30d);
 }
 async function ownerSession(request, env) {
   try {
@@ -746,8 +794,8 @@ const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
-    "POST /api/matches/:id/status": "owner decision {status: approved|rejected|applied|pending_owner_approval}; needs an owner session or x-loop-token", "GET /health": "version",
+    "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "GET /health": "version",
   },
   policy: "nothing is sent; approval is a status change only",
 };
@@ -762,6 +810,7 @@ const handler = {
     if (p === "/api" && m === "GET") return J(INDEX);
     if (p === "/api/ledger" && m === "GET") return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines });
     if (p === "/api/ops" && m === "GET") { const rep = await opsReport(env); return J(rep, rep.status === "ok" ? 200 : 503); }
+    if (p === "/api/outcomes" && m === "GET") return J(await outcomes(env));
     if (p === "/api/auth/request" && m === "POST") { const [st, body] = await authRequest(env); return J(body, st); }
     if (p === "/api/auth/verify" && m === "POST") {
       let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
@@ -799,12 +848,16 @@ const handler = {
       if (!env.LOOP_TOKEN && !env.EMAIL) return J({ error: "writes disabled: neither the EMAIL binding nor LOOP_TOKEN is available" }, 503);
       if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
       let body = {}; try { body = await request.json(); } catch (e) { console.error(JSON.stringify({ worker: WORKER, event: "bad-json-body", error: e.message })); }
-      if (!["approved", "rejected", "applied", "pending_owner_approval"].includes(body.status)) return J({ error: "status must be approved|rejected|applied|pending_owner_approval" }, 400);
+      if (!ALL_STATUSES.includes(body.status)) return J({ error: "status must be one of " + ALL_STATUSES.join("|") }, 400);
       const id = decodeURIComponent(mm[1]);
       const cur = await env.JOBS_DB.prepare("SELECT verified FROM jobsearch_matches WHERE id=?").bind(id).first();
       if (!cur) return J({ error: "not found" }, 404);
       if (!cur.verified && body.status !== "rejected" && body.status !== "pending_owner_approval") return J({ error: "artifacts failed verification; only rejected is allowed" }, 409);
-      await env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status=?, decided_at=? WHERE id=?").bind(body.status, new Date().toISOString(), id).run();
+      const tsNow = new Date().toISOString();
+      await env.JOBS_DB.batch([
+        env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status=?, decided_at=? WHERE id=?").bind(body.status, tsNow, id),
+        env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1, ?2, ?3, 'owner')").bind(id, body.status, tsNow),
+      ]);
       return J({ ok: true, id, status: body.status });
     }
     if (p === "/api/run" && m === "POST") {
@@ -841,7 +894,7 @@ pre{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-
 </style></head><body>
 <header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
 <div class="bar"><select id="tier"><option value="">All tiers</option><option>A</option><option>B</option></select>
-<select id="status"><option value="">All statuses</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option></select>
+<select id="status"><option value="">All statuses</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
 <input id="q" placeholder="Search title, company, place" size="26"><button id="run" class="p">Run now</button><a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn().catch(e=>alert(e.message))">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
 <main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><div id="list"></div></main>
 <script>
@@ -849,13 +902,13 @@ const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
 async function load(){
   const q=new URLSearchParams();for(const k of['tier','status','q']){const v=$('#'+k).value;if(v)q.set(k,v)}
-  const [m,r]=await Promise.all([api('/api/matches?'+q),api('/api/runs')]);
-  const last=r.runs[0];$('#meta').textContent=last?('Last run '+last.started_at+' | '+last.fetched+' postings from '+last.feeds+' feeds | '+last.passed+' passed gates | '+last.blocked+' blocked by verifier'+(last.errors.length?' | feed errors: '+last.errors.length:'')):'No run yet. Press Run now.';
+  const [m,r,oc]=await Promise.all([api('/api/matches?'+q),api('/api/runs'),api('/api/outcomes')]);
+  const last=r.runs[0];$('#meta').textContent=last?('Last run '+last.started_at+' | '+last.fetched+' postings from '+last.feeds+' feeds | '+last.passed+' passed gates | '+last.blocked+' blocked by verifier'+(last.errors.length?' | feed errors: '+last.errors.length:'')):'No run yet. Press Run now.';$('#meta').textContent+=' | Applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview+' | reply rate '+(oc.reply_rate_90d===null?'unknown ('+oc.reading+')':Math.round(oc.reply_rate_90d*100)+'%');
   $('#list').innerHTML=m.matches.map(x=>'<div class="card" id="c-'+esc(x.id)+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span><span class="t">'+esc(x.title)+'</span><span class="mute">'+esc(x.company)+' | '+esc(x.location||'n/a')+'</span><span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span></div>'
    +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(f=>'<div class="flag">Check: '+esc(f)+'</div>').join('')
    +(x.verified?'':'<div class="flag">Blocked by verifier: '+esc(x.blocked_reason)+'</div>')
    +'<div class="acts"><a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button onclick="show(\\''+esc(x.id)+'\\')">Resume and note</button>'
-   +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'rejected\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button></div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
+   +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'rejected\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button>'+[['replied','Got a reply'],['interview','Interview'],['offer','Offer']].map(o=>'<button onclick="decide(\\''+esc(x.id)+'\\',\\''+o[0]+'\\')">'+o[1]+'</button>').join('')+'</div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}

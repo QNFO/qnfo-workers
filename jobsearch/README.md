@@ -30,3 +30,9 @@ Runs entirely on Cloudflare: hourly cron (minute 15), D1 `qnfo-audit` (`jobsearc
 - **Self-maintenance**: unfinished runs are closed by the next run; feeds are retried once and tracked; postings gone upstream become `expired` after 48 h (only when their feed answered); duplicates across boards are merged; expired/rejected rows are deleted after 90 days.
 - **Change the ledger**: edit `jobsearch/facts.json` and the same object in `qnfo-jobsearch/worker.js` (a node test fails if they differ), raise `ledger_verified_on` only after re-checking the CV, bump the worker VERSION, PR to main.
 - **Failure modes** are registered in `failure_modes` / `remediation_contracts` by `migrations/2026-10-27-jobsearch-ops.sql`.
+
+## Does the matching help? (JOBSEARCH-OUTCOME-1, qnfo-jobsearch 1.2.0)
+Mark what happens on the page: **Mark applied**, then **Got a reply**, **Interview**, **Offer** (an application with no reply after 21 days becomes `no_reply` by itself). Every change is an append-only row in `jobsearch_events`.
+- `GET /api/outcomes`: funnel (matches, approved, applied, replies, interviews, offers) overall and by tier, the reply rate of applications 21 to 90 days old, and the reply rate by tier. Under 10 such applications the rate is **unknown** and nothing is published.
+- Metrics (written each run, `metric_registry`): `jobsearch_reply_rate_90d` (target >= 0.06, trigger under 0.03; 0.06 is the one independent figure, an untailored auto-apply test), `jobsearch_interview_rate_90d` and `jobsearch_applied_30d` (named exemptions). The outcome row is in `output_quality_measures` (role outcome); the claim verifier stays a proxy and is not counted.
+- If tier A does not reply more than tier B after enough applications, the score weights are not predictive and the trigger sends the code loop to `qnfo-jobsearch/worker.js` (never the verifier).
