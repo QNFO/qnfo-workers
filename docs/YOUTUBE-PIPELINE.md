@@ -28,6 +28,25 @@ Measured on `institutionalized-unfalsifiability-...`: 7 scenes, 3 min 38 s, 3.9 
   and 16 mass-AI channels were reported terminated in January 2026 (third-party reports, not YouTube's own pages: verify before launch). Synthetic
   narration should be disclosed; the pipeline sets the flag.
 
+## Update 2026-10-27: vertical Shorts with generated diagrams (YT-POC-2)
+Owner feedback: text over slides is not engaging; start with TikTok-style Shorts and prove upload end to end.
+
+GitHub survey (stars and push date read from the API today): MoneyPrinterTurbo (135k, MIT, active) and short-video-maker (1.4k, MIT, idle since 2025-06)
+both put TTS and captions over *stock footage*: the look YouTube's inauthentic-content policy targets, and unrelated to a paper's argument.
+ShortGPT (8k, idle) the same. For explainers the better fit is **Manim** (41.9k, MIT, active): it animates the paper's own idea (bars, meters, populations
+changing). Remotion (68k) and Motion Canvas (19.5k, MIT) are the alternatives; HyperFrames/Kokoro for later. Word-timed captions come free from
+edge-tts `WordBoundary` (no Whisper pass needed; whisper.cpp/WhisperX only if a non-edge voice is used).
+
+Built: `directors/<name>.json` (7 beats: narration + one diagram template each) -> `make_short.py` (TTS with word times, Manim render of
+`short_scene.py` at 1080x1920/30 fps, ASS karaoke captions with the spoken word highlighted, ffmpeg mux, `metadata.json` with #Shorts and the AI
+disclosure) -> `upload_youtube.py` (YouTube Data API v3 resumable upload, private by default). Result: a 48 s short, 2.9 MB.
+Visible "AI-GENERATED NARRATION" tag on every frame (BP26-AI-ACT-ART50-1).
+
+Gaps: the director spec is hand-written for this paper; production needs an LLM director (qnfo-ai, a kimi-k2.6 writer plus a checker that every
+number and claim in the narration appears in the plain article) choosing among the six templates. Six templates fit a game-theory paper; other
+papers need more (timeline, flow, comparison). Upload needs a Google OAuth client (`client_secret.json`) and one browser consent by the channel
+owner; an unaudited API project may upload private videos only until it passes the YouTube API compliance audit.
+
 ## Known weaknesses (honest)
 1. The video is a text slideshow. This is the template look that policy and viewers punish. Next step: one generated diagram or illustrated scene per
    section, animated captions (word-level via edge-tts WordBoundary), a varied title card, a human-written opener.
