@@ -27,3 +27,9 @@ crons = ["15 * * * *"]
 binding = "JOBS_DB"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# JOBSEARCH-OPS-1: owner sign-in code is e-mailed through qnfo-email (CLAUDE.md #1703: service-binding props, no key copy).
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+props = { caller = "qnfo-jobsearch" }
