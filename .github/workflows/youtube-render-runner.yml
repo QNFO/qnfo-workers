@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg libpango1.0-dev libcairo2-dev pkg-config fonts-dejavu-core
-          pip install -q "manim==0.18.1" "numpy<2"
+          pip install -q "manim==0.22.0"
       - name: fetch job.json from R2
         run: |
           set -euo pipefail
