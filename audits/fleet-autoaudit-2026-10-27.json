@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-10-27 10:58:34",
+  "audited_at": "2026-10-27 11:28:21",
   "d1_write_failures": [],
-  "d1_writes_ok": 125,
+  "d1_writes_ok": 126,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -541,7 +541,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 34,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -655,7 +655,7 @@
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.0.1",
+        "version": "1.1.1",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -707,6 +707,11 @@
         "dir": "qnfo-tools-mcp",
         "version": "1.3.0-agent-send-policy",
         "worker": "qnfo-tools-mcp"
+      },
+      {
+        "dir": "qnfo-youtube-shorts",
+        "version": "0.1.0-yt-server",
+        "worker": "qnfo-youtube-shorts"
       },
       {
         "dir": "radar-hub",
@@ -1477,9 +1482,9 @@
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.0.1",
+      "before": "1.1.1",
       "http": 200,
-      "live": "1.0.1",
+      "live": "1.1.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
@@ -1742,6 +1747,14 @@
       "match": 0,
       "note": "NOT_A_WORKER",
       "worker": "qnfo-web-unified"
+    },
+    "qnfo-youtube-shorts": {
+      "before": "0.1.0-yt-server",
+      "http": 200,
+      "live": "0.1.0-yt-server",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-youtube-shorts"
     },
     "radar-hub": {
       "before": "1.5.0-venue-recovered",
