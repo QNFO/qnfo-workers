@@ -1,0 +1,45 @@
+name: youtube-render-runner
+
+# YT-SERVER-1 second render path (ANTIFRAGILE-1): when the Cloudflare Container cannot render, the job stays in R2 (qnfo-media youtube/<id>/job.json) and this
+# workflow renders it on a GitHub runner with the same code (qnfo-youtube-shorts/container/render.py), writes short.mp4 back to R2 with the repository's
+# Cloudflare token and sets youtube_videos.state = 'rendered', so the worker's next hourly tick uploads it. Dispatch: workflow_dispatch with row_id.
+
+on:
+  workflow_dispatch:
+    inputs:
+      row_id:
+        description: "youtube_videos.id whose job.json is in R2"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ROW: ${{ github.event.inputs.row_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install render dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libpango1.0-dev libcairo2-dev pkg-config fonts-dejavu-core
+          pip install -q "manim==0.18.1" "numpy<2"
+      - name: fetch job.json from R2
+        run: |
+          set -euo pipefail
+          [[ "$ROW" =~ ^[0-9]+$ ]] || { echo "row_id must be numeric"; exit 1; }
+          curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCT/r2/buckets/qnfo-media/objects/youtube%2F$ROW%2Fjob.json" -o /tmp/job.json
+      - name: render
+        run: python3 qnfo-youtube-shorts/container/render.py /tmp/job.json /tmp/out | tee /tmp/render.json
+      - name: upload short.mp4 and mark the row rendered
+        run: |
+          set -euo pipefail
+          curl -fsS -X PUT -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: video/mp4" --data-binary @/tmp/out/short.mp4 "https://api.cloudflare.com/client/v4/accounts/$CF_ACCT/r2/buckets/qnfo-media/objects/youtube%2F$ROW%2Fshort.mp4"
+          dur="$(python3 -c 'import json; print(json.load(open("/tmp/render.json"))["duration_s"])')"
+          body="$(jq -cn --arg sql "UPDATE youtube_videos SET state = 'rendered', duration_s = $dur, note = 'rendered by youtube-render-runner run $GITHUB_RUN_ID', updated_at = datetime('now') WHERE id = $ROW" '{sql:$sql}')"
+          curl -fsS -X POST -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCT/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query" --data "$body"
