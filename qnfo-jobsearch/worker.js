@@ -6,7 +6,7 @@
 // JOBSEARCH-OPS-1 (1.1.0): e-mailed-code owner sign-in via qnfo-email (no secret to manage), feed health and retry, self-healing runs, posting lifecycle (expired), dedupe, retention, GET /api/ops self-report.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.1.1";
+var VERSION = "1.1.2-codeagent";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -655,16 +655,15 @@ async function run(env) {
 // ------------------------------------------------------------------ http
 const J = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" } });
 const parseRow = (r) => (r ? { ...r, why: JSON.parse(r.why_json || "[]"), flags: JSON.parse(r.flags_json || "[]"), why_json: undefined, flags_json: undefined } : r);
-function tokenOk(request, env) {
+async function tokenOk(request, env) {
   const t = request.headers.get("x-loop-token") || "";
-  if (!env.LOOP_TOKEN || t.length !== env.LOOP_TOKEN.length) return false; // standards-ok: length check only, the content compare below is the constant-time XOR loop
-  let d = 0;
-  for (let i = 0; i < t.length; i++) d |= t.charCodeAt(i) ^ env.LOOP_TOKEN.charCodeAt(i);
-  return d === 0;
+  if (!env.LOOP_TOKEN) return false;
+  const [expected, actual] = await Promise.all([sha256hex(env.LOOP_TOKEN), sha256hex(t)]);
+  return constEq(expected, actual);
 }
 async function ownerSession(request, env) {
   try {
-    const tok = tokenOk(request, env) ? "loop" : "";
+    const tok = (await tokenOk(request, env)) ? "loop" : "";
     if (tok) return { kind: "loop-token" };
     const c = /(?:^|;\s*)jobs_session=([0-9a-f]{64})/.exec(request.headers.get("cookie") || "");
     const b = /^Bearer ([0-9a-f]{64})$/.exec(request.headers.get("authorization") || "");
