@@ -1,4 +1,4 @@
-var VERSION = "0.1.5-manim-pin"; /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
+var VERSION = "0.1.6-codeagent"; /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // Owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse". docs/YOUTUBE-PIPELINE.md has the design.
 // State machine per paper (D1 qnfo-audit.youtube_videos.state): queued -> directed -> audio -> rendering -> rendered -> uploaded;
 // terminal: rejected (director left too few supported beats), failed (4 attempts), uploaded. Every tick resumes an unfinished row before
@@ -149,7 +149,26 @@ async function monthSpend(env) {
 }
 async function ensureTable(env) {
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS youtube_spend (id INTEGER PRIMARY KEY AUTOINCREMENT, month TEXT NOT NULL, row_id INTEGER, kind TEXT NOT NULL, units REAL NOT NULL, usd REAL NOT NULL, note TEXT, created_at TEXT NOT NULL)").run();
-  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS youtube_videos (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE, rev TEXT, state TEXT NOT NULL, title TEXT, attempts INTEGER NOT NULL DEFAULT 0, note TEXT, duration_s REAL, video_id TEXT, privacy TEXT, synthetic INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, uploaded_at TEXT, views INTEGER)").run();
+  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS youtube_videos (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE, rev TEXT, state TEXT NOT NULL, title TEXT, attempts INTEGER NOT NULL DEFAULT 0, note TEXT, duration_s REAL, video_id TEXT, privacy TEXT, synthetic INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, uploaded_at TEXT, views INTEGER, avg_view_duration_s REAL)").run();
+  // YT-6: read views and average view duration back from YouTube Analytics hourly
+  await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, last_value, state) VALUES ('youtube_avg_view_duration_s', '', 'PENDING')").run();
+ }
+// YT-6: for every uploaded video, read views and averageViewDuration from the YouTube Analytics API and store them on the row.
+async function refreshStats(env) {
+  if (!env.YT_CLIENT_ID || !env.YT_CLIENT_SECRET || !env.YT_REFRESH_TOKEN) return;
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, video_id FROM youtube_videos WHERE state = 'uploaded' AND video_id IS NOT NULL").all()).results || [];
+  if (!rows.length) return;
+  var tok = await accessToken(env);
+  for (var i = 0; i < rows.length; i++) {
+    try {
+      var u = "https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&metrics=views,averageViewDuration&filters=video==" + encodeURIComponent(rows[i].video_id);
+      var r = await fetch(u, { headers: { authorization: "Bearer " + tok } });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.rows || !j.rows[0]) { await logEvent(env, "youtube.stats_error", rows[i].video_id, { status: r.status, body: JSON.stringify(j).slice(0, 200) }, "warn"); continue; }
+      await env.QNFO_AUDIT.prepare("UPDATE youtube_videos SET views = ?1, avg_view_duration_s = ?2, updated_at = ?3 WHERE id = ?4")
+        .bind(Number(j.rows[0][0]) || 0, Number(j.rows[0][1]) || 0, nowIso(), rows[i].id).run();
+    } catch (e) { await logEvent(env, "youtube.stats_error", rows[i].video_id, { error: String(e && e.message || e).slice(0, 200) }, "warn"); }
+  }
 }
 async function setState(env, id, state, fields) {
   var f = fields || {};
@@ -351,6 +370,8 @@ async function refreshMetric(env) {
   await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'youtube_videos_30d'").bind(String(r ? r.n : 0), nowIso()).run();
   var sp = await monthSpend(env);
   await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'youtube_spend_usd_month'").bind(sp.toFixed(4), nowIso()).run();
+  var av = await env.QNFO_AUDIT.prepare("SELECT AVG(avg_view_duration_s) AS a FROM youtube_videos WHERE state = 'uploaded' AND avg_view_duration_s IS NOT NULL").first();
+  await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'youtube_avg_view_duration_s'").bind(av && av.a != null ? (Math.round(Number(av.a) * 100) / 100).toFixed(2) : "", nowIso()).run();
   return r ? r.n : 0;
 }
 async function runTick(env, opts) {
@@ -379,6 +400,7 @@ async function runTick(env, opts) {
       }
     }
   }
+  try { await refreshStats(env); } catch (e) { await logEvent(env, "youtube.stats_error", "refreshStats", { error: String(e && e.message || e).slice(0, 200) }, "warn"); }
   res.uploaded_30d = await refreshMetric(env);
   try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, 1)").bind(WORKER, VERSION, nowIso()).run(); } catch (e) { console.error(JSON.stringify({ worker: WORKER, where: "heartbeat", error: String(e && e.message || e) })); }
   return res;
