@@ -34,7 +34,7 @@ from bp26_producers import Collector, Result, now_iso  # noqa: E402
 EVAL_SUITE = "qnfo-email/injection-redteam.test.mjs"
 EVAL_RE = re.compile(r"INJECTION_EVAL pass=(\d+) total=(\d+)")
 FLEET_DOMAINS = ("qnfo.org", "q08.org", "qwav.org", "qwav.tech", "qwav.net", "qwav.uk", "qwave.tech", "q-wave.tech", "ipatent.me")
-OWNER = ("rwnquni@outlook.com", "rowan.quni@outlook.com", "rwnqni@outlook.com", "rowan.quni@qnfo.org", "rwnquni@qnfo.org", "rwnquni@gmail.com")
+OWNER = ("rwnquni@outlook.com", "rowan.quni@outlook.com", "rowan.quni@qnfo.org", "rwnquni@qnfo.org", "rwnquni@gmail.com")
 EGRESS_TOOLS = ("web_fetch", "git_clone_exec")
 LIVE_EMAIL_HEALTH = "https://qnfo-email.q08.workers.dev/health"
 
