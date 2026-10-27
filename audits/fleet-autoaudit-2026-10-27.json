@@ -1,27 +1,8 @@
 {
-  "audited_at": "2026-10-27 12:02:38",
+  "audited_at": "2026-10-27 12:32:29",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-youtube-shorts"
-      ],
-      "waited_for": [
-        "qnfo-youtube-shorts"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-cloud-ops",
-        "qnfo-email",
-        "qnfo-jobsearch"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-youtube-shorts"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -560,7 +541,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 34,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -674,7 +655,7 @@
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.1.3",
+        "version": "1.1.4",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -728,13 +709,14 @@
         "worker": "qnfo-tools-mcp"
       },
       {
+        "dir": "qnfo-youtube-shorts",
+        "version": "0.1.5-manim-pin",
+        "worker": "qnfo-youtube-shorts"
+      },
+      {
         "dir": "radar-hub",
         "version": "1.5.0-venue-recovered",
         "worker": "radar-hub"
-      },
-      {
-        "version": "0.1.3-director",
-        "worker": "qnfo-youtube-shorts"
       }
     ],
     "unmanaged_tombstones": 1,
@@ -1500,9 +1482,9 @@
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.1.3",
+      "before": "1.1.4",
       "http": 200,
-      "live": "1.1.3",
+      "live": "1.1.4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
@@ -1767,9 +1749,9 @@
       "worker": "qnfo-web-unified"
     },
     "qnfo-youtube-shorts": {
-      "before": "0.1.3-director",
+      "before": "0.1.5-manim-pin",
       "http": 200,
-      "live": "0.1.3-director",
+      "live": "0.1.5-manim-pin",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-youtube-shorts"
@@ -1834,5 +1816,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 1
+  "stale_rows_purged": 0
 }
