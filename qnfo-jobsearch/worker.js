@@ -3,11 +3,13 @@
 // against the owner's claim ledger, assembles a tailored resume and note ONLY from ledger sentences, re-verifies every output
 // line, and stores the result in D1 (jobsearch_matches). Nothing is ever sent: status moves pending_owner_approval -> approved/rejected/applied
 // by the owner (POST needs x-loop-token). No LinkedIn/Indeed scraping (LinkedIn User Agreement s8.2).
+// JOBSEARCH-OPS-1 (1.1.0): e-mailed-code owner sign-in via qnfo-email (no secret to manage), feed health and retry, self-healing runs, posting lifecycle (expired), dedupe, retention, GET /api/ops self-report.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of jobsearch/*.py (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.0.1";
+var VERSION = "1.1.0";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
+ "ledger_verified_on": "2026-10-01",
  "_note": "Claim ledger. Source: Documents/Rowan Brad Quni-Gudzinas - CV (verified, corrected).md (2026-10-01). Every sentence the tool emits must equal a 'text' or 'pitch' here. Edit this file, never the generated output.",
  "person": {
   "name": "Rowan Brad Quni-Gudzinas",
@@ -265,6 +267,48 @@ const LEDGER = {
  }
 };
 
+// ------------------------------------------------------------------ operations layer (JOBSEARCH-OPS-1)
+const OWNER_EMAIL = LEDGER.person.email;
+const LEDGER_VERIFIED_ON = LEDGER.ledger_verified_on || "2026-10-01";
+const SESSION_MS = 12 * 3600 * 1000, CODE_MS = 15 * 60 * 1000, CODE_MAX_PER_HOUR = 3, CODE_MIN_GAP_MS = 60 * 1000, CODE_MAX_TRIES = 5;
+const DDL = [
+  "CREATE TABLE IF NOT EXISTS jobsearch_feeds (feed TEXT PRIMARY KEY, last_ok_at TEXT, last_count INTEGER, last_error TEXT, last_error_at TEXT, consecutive_fail INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_meta (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code_hash TEXT NOT NULL, salt TEXT NOT NULL, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, used INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_sessions (token_hash TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0)",
+];
+let ensured = false;
+async function ensure(env) {
+  if (ensured) return;
+  for (const q of DDL) await env.JOBS_DB.prepare(q).run();
+  ensured = true;
+}
+const iso = (ms) => new Date(ms).toISOString();
+const log = (event, o) => console.log(JSON.stringify({ worker: WORKER, event, ...o }));
+const logErr = (event, e) => console.error(JSON.stringify({ worker: WORKER, event, error: String((e && e.message) || e) }));
+async function sha256hex(x) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(x)));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function constEq(a, b) {
+  a = String(a); b = String(b);
+  let r = a.length === b.length ? 0 : 1;
+  const n = Math.max(a.length, b.length, 1);
+  for (let i = 0; i < n; i++) r |= (a.charCodeAt(i % (a.length || 1)) ^ b.charCodeAt(i % (b.length || 1))) | 0;
+  return r === 0;
+}
+const randHex = (bytes) => [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const maskedOwner = () => OWNER_EMAIL.replace(/^(.).*(@.*)$/, "$1***$2");
+async function setMeta(env, k, v) {
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_meta (k, v, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET v=?2, updated_at=?3").bind(k, String(v), new Date().toISOString()).run();
+}
+// feed key -> id prefix of the postings it produced (a feed that failed this run never expires anything)
+function feedPrefix(feed) {
+  const [kind, arg] = feed.split(":");
+  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, remotive: "rm:", arbeitnow: "an:" }[kind];
+}
+const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
+
 // ------------------------------------------------------------------ feeds
 const BOARDS = {
   greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe"],
@@ -511,25 +555,35 @@ async function pool(tasks, n) {
   return res;
 }
 async function collectAndRank(onlyGroups) {
-  const tasks = [], labels = [];
+  const tasks = [], feedsList = [];
   for (const [kind, args] of Object.entries(BOARDS)) {
     if (onlyGroups && !onlyGroups.includes(kind)) continue;
-    for (const a of kind === "arbeitnow" ? [true] : args) { labels.push(`${kind}:${a}`); tasks.push(async () => { try { return { jobs: await FETCHERS[kind](a) }; } catch (e) { return { err: `${kind}:${a}: ${e.message}` }; } }); }
+    for (const a of kind === "arbeitnow" ? [true] : args) {
+      const feed = kind === "arbeitnow" ? "arbeitnow" : `${kind}:${a}`;
+      feedsList.push(feed);
+      tasks.push(async () => {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try { return { feed, jobs: await FETCHERS[kind](a) }; }
+          catch (e) { if (attempt === 2) return { feed, err: `${feed}: ${e.message}` }; await new Promise((r) => setTimeout(r, 1500)); }
+        }
+      });
+    }
   }
-  const kept = [], errors = [], excl = {};
+  const kept = [], errors = [], excl = {}, feedResults = [];
   let fetched = 0;
-  // one feed at a time per slot: each feed is ranked as soon as it is parsed so only passing jobs stay in memory
+  // each feed is ranked as soon as it is parsed so only passing jobs stay in memory
   await pool(tasks.map((t) => async () => {
     const r = await t();
-    if (r.err) { errors.push(r.err); return; }
-    for (const j of r.jobs) j.company = DISPLAY[j.company] || j.company;
+    if (r.err) { errors.push(r.err); feedResults.push({ feed: r.feed, ok: false, error: r.err }); return; }
+    for (const jb of r.jobs) jb.company = DISPLAY[jb.company] || jb.company;
     fetched += r.jobs.length;
+    feedResults.push({ feed: r.feed, ok: true, count: r.jobs.length });
     const [ok, ex] = rank(r.jobs);
     for (const [k, v] of Object.entries(ex)) excl[k] = (excl[k] || 0) + v;
     kept.push(...ok);
   }), 3);
   kept.sort((a, b) => b.match.score - a.match.score);
-  return { kept, errors, excl, fetched, feeds: labels.length };
+  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults };
 }
 function artifactsFor(j) {
   const res = buildResume(j, j.match), note = buildNote(j, j.match);
@@ -537,27 +591,65 @@ function artifactsFor(j) {
   return v.length ? { verified: 0, blocked: v.join("; "), resume: null, note: null } : { verified: 1, blocked: null, resume: stripTags(res), note: stripTags(note) };
 }
 async function run(env) {
-  const started = new Date().toISOString();
+  await ensure(env);
+  const t0 = Date.now(), started = iso(t0);
+  // self-heal: a run that never finished (isolate killed, D1 error) is closed by the next run instead of reading as "running" forever
+  await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?1, errors_json=?2 WHERE finished_at IS NULL AND started_at < ?3")
+    .bind(started, JSON.stringify(["run did not finish: closed by the next run"]), iso(t0 - 15 * 60 * 1000)).run();
   const rid = (await env.JOBS_DB.prepare("INSERT INTO jobsearch_runs (started_at) VALUES (?)").bind(started).run()).meta.last_row_id;
-  const { kept, errors, excl, fetched, feeds } = await collectAndRank();
-  const per = {}, picked = [];
-  for (const j of kept) { if ((per[j.company] || 0) < 3) { per[j.company] = (per[j.company] || 0) + 1; picked.push(j); } }
-  let blocked = 0;
-  const now = new Date().toISOString();
-  const stmts = [];
-  for (const j of picked.slice(0, 40)) {
-    const a = artifactsFor(j);
-    if (!a.verified) blocked++;
-    stmts.push(env.JOBS_DB.prepare(
-      `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status)
-       VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval')
-       ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7`
-    ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why), JSON.stringify(j.match.flags), a.verified, a.blocked, a.resume, a.note));
+  try {
+    const { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank();
+    const per = {}, seen = new Set(), picked = [];
+    for (const j of kept) {
+      const dk = dedupeKey(j);
+      if (seen.has(dk)) continue;               // the same posting listed on two boards
+      seen.add(dk);
+      if ((per[j.company] || 0) < 3) { per[j.company] = (per[j.company] || 0) + 1; picked.push(j); }
+    }
+    let blocked = 0;
+    const now = new Date().toISOString();
+    const stmts = [];
+    for (const j of picked.slice(0, 40)) {
+      const a = artifactsFor(j);
+      if (!a.verified) blocked++;
+      stmts.push(env.JOBS_DB.prepare(
+        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status)
+         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval')
+         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7`
+      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why), JSON.stringify(j.match.flags), a.verified, a.blocked, a.resume, a.note));
+    }
+    // feed health: success resets the streak, failure extends it (detector fm-jobsearch-feed-down reads 3 in a row)
+    for (const f of feedResults) {
+      stmts.push(f.ok
+        ? env.JOBS_DB.prepare("INSERT INTO jobsearch_feeds (feed, last_ok_at, last_count, consecutive_fail) VALUES (?1,?2,?3,0) ON CONFLICT(feed) DO UPDATE SET last_ok_at=?2, last_count=?3, consecutive_fail=0, last_error=NULL").bind(f.feed, now, f.count)
+        : env.JOBS_DB.prepare("INSERT INTO jobsearch_feeds (feed, last_error, last_error_at, consecutive_fail) VALUES (?1,?2,?3,1) ON CONFLICT(feed) DO UPDATE SET last_error=?2, last_error_at=?3, consecutive_fail=consecutive_fail+1").bind(f.feed, f.error.slice(0, 300), now));
+    }
+    // lifecycle: a pending match whose feed answered this run but did not list it for 48 h is gone upstream or no longer matches
+    const cutoff = iso(t0 - 48 * 3600 * 1000), prefixes = new Set();
+    const okFeeds = new Set(feedResults.filter((f) => f.ok).map((f) => f.feed));
+    for (const f of feedResults) {
+      if (!f.ok) continue;
+      if (f.feed.startsWith("remotive:") && !BOARDS.remotive.every((c) => okFeeds.has("remotive:" + c))) continue;
+      prefixes.add(feedPrefix(f.feed));
+    }
+    for (const pre of prefixes) stmts.push(env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='expired', decided_at=?3 WHERE status='pending_owner_approval' AND id LIKE ?1 AND last_seen < ?2").bind(pre + "%", cutoff, now));
+    // retention
+    stmts.push(env.JOBS_DB.prepare("DELETE FROM jobsearch_matches WHERE status IN ('expired','rejected') AND last_seen < ?").bind(iso(t0 - 90 * 86400000)));
+    stmts.push(env.JOBS_DB.prepare("DELETE FROM jobsearch_codes WHERE created_ms < ?").bind(t0 - 86400000));
+    stmts.push(env.JOBS_DB.prepare("DELETE FROM jobsearch_sessions WHERE expires_ms < ?").bind(t0 - 86400000));
+    await env.JOBS_DB.batch(stmts);
+    await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?, feeds=?, fetched=?, passed=?, stored=?, blocked=?, excluded_json=?, errors_json=? WHERE id=?")
+      .bind(new Date().toISOString(), feeds, fetched, kept.length, Math.min(picked.length, 40), blocked, JSON.stringify(excl), JSON.stringify(errors), rid).run();
+    await setMeta(env, "ledger_verified_on", LEDGER_VERIFIED_ON);
+    await setMeta(env, "worker_version", VERSION);
+    await setMeta(env, "email_binding", env.EMAIL ? "1" : "0");
+    log("run-ok", { run_id: rid, fetched, passed: kept.length, blocked, feed_errors: errors.length, ms: Date.now() - t0 });
+    return { run_id: rid, feeds, fetched, passed: kept.length, stored: Math.min(picked.length, 40), blocked, errors };
+  } catch (e) {
+    logErr("run-failed", e);
+    await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?, errors_json=? WHERE id=?").bind(new Date().toISOString(), JSON.stringify(["run failed: " + String((e && e.message) || e).slice(0, 300)]), rid).run().catch((e2) => logErr("run-failed-record", e2));
+    throw e;
   }
-  if (stmts.length) await env.JOBS_DB.batch(stmts);
-  await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?, feeds=?, fetched=?, passed=?, stored=?, blocked=?, excluded_json=?, errors_json=? WHERE id=?")
-    .bind(new Date().toISOString(), feeds, fetched, kept.length, stmts.length, blocked, JSON.stringify(excl), JSON.stringify(errors), rid).run();
-  return { run_id: rid, feeds, fetched, passed: kept.length, stored: stmts.length, blocked, errors };
 }
 
 // ------------------------------------------------------------------ http
@@ -570,12 +662,81 @@ function tokenOk(request, env) {
   for (let i = 0; i < t.length; i++) d |= t.charCodeAt(i) ^ env.LOOP_TOKEN.charCodeAt(i);
   return d === 0;
 }
+async function ownerSession(request, env) {
+  try {
+    const tok = tokenOk(request, env) ? "loop" : "";
+    if (tok) return { kind: "loop-token" };
+    const c = /(?:^|;\s*)jobs_session=([0-9a-f]{64})/.exec(request.headers.get("cookie") || "");
+    const b = /^Bearer ([0-9a-f]{64})$/.exec(request.headers.get("authorization") || "");
+    const raw = (c && c[1]) || (b && b[1]);
+    if (!raw) return null;
+    await ensure(env);
+    const row = await env.JOBS_DB.prepare("SELECT expires_ms FROM jobsearch_sessions WHERE token_hash=?1 AND revoked=0").bind(await sha256hex(raw)).first();
+    return row && Number(row.expires_ms) > Date.now() ? { kind: "session", hash: await sha256hex(raw) } : null;
+  } catch (e) { logErr("session-check", e); return null; }
+}
+async function authRequest(env) {
+  if (!env.EMAIL) return [503, { error: "e-mail sign-in is not available: the EMAIL service binding is missing" }];
+  await ensure(env);
+  const now = Date.now();
+  const rec = await env.JOBS_DB.prepare("SELECT COUNT(*) AS n, MAX(created_ms) AS last FROM jobsearch_codes WHERE created_ms > ?").bind(now - 3600000).first();
+  if (Number(rec.n) >= CODE_MAX_PER_HOUR) return [429, { error: "too many codes this hour; try again later" }];
+  if (rec.last && now - Number(rec.last) < CODE_MIN_GAP_MS) return [200, { ok: true, sent: false, note: "a code was sent less than a minute ago; check " + maskedOwner() }];
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
+  const salt = randHex(8);
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_codes (code_hash, salt, created_ms, expires_ms) VALUES (?1,?2,?3,?4)").bind(await sha256hex(salt + code), salt, now, now + CODE_MS).run();
+  try {
+    const r = await env.EMAIL.fetch("https://qnfo-email/send", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: OWNER_EMAIL, subject: "Job matches sign-in code", body: `Your sign-in code for the job matches page is ${code}. It expires in 15 minutes. If you did not ask for it, ignore this message.`, notify: true }) });
+    if (!r.ok) { logErr("auth-mail", "send HTTP " + r.status); return [502, { error: "the code could not be e-mailed (HTTP " + r.status + ")" }]; }
+  } catch (e) { logErr("auth-mail", e); return [502, { error: "the code could not be e-mailed" }]; }
+  return [200, { ok: true, sent: true, to: maskedOwner(), expires_minutes: 15 }];
+}
+async function authVerify(env, code) {
+  await ensure(env);
+  code = String(code || "").trim();
+  if (!/^\d{6}$/.test(code)) return [400, { error: "enter the 6-digit code" }];
+  const now = Date.now();
+  const row = await env.JOBS_DB.prepare("SELECT id, code_hash, salt, tries FROM jobsearch_codes WHERE used=0 AND expires_ms > ?1 ORDER BY id DESC LIMIT 1").bind(now).first();
+  if (!row) return [401, { error: "no valid code; request a new one" }];
+  if (Number(row.tries) >= CODE_MAX_TRIES) { await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET used=1 WHERE id=?").bind(row.id).run(); return [429, { error: "too many wrong attempts; request a new code" }]; }
+  if (!constEq(await sha256hex(row.salt + code), row.code_hash)) { await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET tries=tries+1 WHERE id=?").bind(row.id).run(); return [401, { error: "wrong code" }]; }
+  await env.JOBS_DB.prepare("UPDATE jobsearch_codes SET used=1 WHERE id=?").bind(row.id).run();
+  const token = randHex(32);
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_sessions (token_hash, created_ms, expires_ms) VALUES (?1,?2,?3)").bind(await sha256hex(token), now, now + SESSION_MS).run();
+  return [200, { ok: true, token, expires_hours: SESSION_MS / 3600000 }, `jobs_session=${token}; Path=/; Max-Age=${SESSION_MS / 1000}; HttpOnly; Secure; SameSite=Strict`];
+}
+// Operational self-report: the same checks as the fm-jobsearch-* detector contracts in migrations/2026-10-27-jobsearch-ops.sql
+async function opsReport(env) {
+  await ensure(env);
+  const db = env.JOBS_DB, now = Date.now();
+  const last = await db.prepare("SELECT * FROM jobsearch_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 1").first();
+  const recent = (await db.prepare("SELECT passed, fetched FROM jobsearch_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 3").all()).results;
+  const unfinished = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_runs WHERE finished_at IS NULL AND started_at < ?").bind(iso(now - 15 * 60000)).first()).n;
+  const feeds = (await db.prepare("SELECT feed, last_ok_at, last_count, last_error, consecutive_fail FROM jobsearch_feeds ORDER BY feed").all()).results;
+  const counts = (await db.prepare("SELECT status, COUNT(*) AS n FROM jobsearch_matches GROUP BY status").all()).results;
+  const blockedN = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_matches WHERE verified=0 AND status='pending_owner_approval'").first()).n;
+  const stalePending = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_matches WHERE status='pending_owner_approval' AND last_seen < ?").bind(iso(now - 72 * 3600000)).first()).n;
+  const ageMin = last ? Math.round((now - Date.parse(last.finished_at)) / 60000) : null;
+  const ledgerAge = Math.floor((now - Date.parse(LEDGER_VERIFIED_ON)) / 86400000);
+  const checks = [
+    { fm: "jobsearch-cron-stalled", ok: ageMin !== null && ageMin <= 120, detail: ageMin === null ? "no finished run yet" : `last run finished ${ageMin} min ago (limit 120)` },
+    { fm: "jobsearch-run-unfinished", ok: Number(unfinished) === 0, detail: `${unfinished} run(s) open for over 15 min (the next run closes them)` },
+    { fm: "jobsearch-feed-down", ok: !feeds.some((f) => f.consecutive_fail >= 3), detail: feeds.filter((f) => f.consecutive_fail >= 3).map((f) => f.feed + " x" + f.consecutive_fail).join(", ") || "no feed failed 3 runs in a row" },
+    { fm: "jobsearch-verifier-blocked", ok: Number(blockedN) === 0, detail: `${blockedN} pending match(es) whose drafts failed verification` },
+    { fm: "jobsearch-stale-pending", ok: Number(stalePending) === 0, detail: `${stalePending} pending match(es) not seen for 72 h` },
+    { fm: "jobsearch-ledger-stale", ok: ledgerAge <= 90, detail: `ledger verified ${LEDGER_VERIFIED_ON}, ${ledgerAge} days old (limit 90)` },
+    { fm: "jobsearch-intake-collapse", ok: !(recent.length >= 3 && recent.every((r) => Number(r.fetched) < 1000 || Number(r.passed) === 0)), detail: recent.map((r) => `${r.fetched}/${r.passed}`).join(" ") + " (fetched/passed, last 3 runs)" },
+    { fm: "jobsearch-auth-unavailable", ok: !!env.EMAIL || !!env.LOOP_TOKEN, detail: `email sign-in ${env.EMAIL ? "bound" : "missing"}, loop token ${env.LOOP_TOKEN ? "set" : "not set"}` },
+  ];
+  return { worker: WORKER, version: VERSION, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
+}
 const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "POST /api/run": "trigger a run (10-minute cooldown)",
-    "POST /api/matches/:id/status": "owner decision {status: approved|rejected|applied|pending_owner_approval}; needs x-loop-token", "GET /health": "version",
+    "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "POST /api/matches/:id/status": "owner decision {status: approved|rejected|applied|pending_owner_approval}; needs an owner session or x-loop-token", "GET /health": "version",
   },
   policy: "nothing is sent; approval is a status change only",
 };
@@ -585,10 +746,25 @@ const handler = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url), p = url.pathname, m = request.method;
     if (m === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type,x-loop-token", "access-control-allow-methods": "GET,POST,OPTIONS" } });
-    if (p === "/health") return J({ ok: true, worker: WORKER, version: VERSION });
+    if (p === "/health") return J({ ok: true, worker: WORKER, version: VERSION, ledger_verified_on: LEDGER_VERIFIED_ON });
     if (p === "/" && m === "GET") return new Response(UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api" && m === "GET") return J(INDEX);
     if (p === "/api/ledger" && m === "GET") return J({ person: LEDGER.person, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines });
+    if (p === "/api/ops" && m === "GET") { const rep = await opsReport(env); return J(rep, rep.status === "ok" ? 200 : 503); }
+    if (p === "/api/auth/request" && m === "POST") { const [st, body] = await authRequest(env); return J(body, st); }
+    if (p === "/api/auth/verify" && m === "POST") {
+      let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
+      const [st, body, cookie] = await authVerify(env, b.code);
+      const r = J(body, st);
+      if (cookie) r.headers.append("set-cookie", cookie);
+      return r;
+    }
+    if (p === "/api/auth/me" && m === "GET") return J({ signed_in: !!(await ownerSession(request, env)), email_sign_in: !!env.EMAIL });
+    if (p === "/api/auth/logout" && m === "POST") {
+      const ses = await ownerSession(request, env);
+      if (ses && ses.hash) await env.JOBS_DB.prepare("UPDATE jobsearch_sessions SET revoked=1 WHERE token_hash=?").bind(ses.hash).run();
+      const r = J({ ok: true }); r.headers.append("set-cookie", "jobs_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"); return r;
+    }
     if (p === "/api/runs" && m === "GET") {
       const r = await env.JOBS_DB.prepare("SELECT id, started_at, finished_at, feeds, fetched, passed, stored, blocked, excluded_json, errors_json FROM jobsearch_runs ORDER BY id DESC LIMIT 10").all();
       return J({ runs: r.results.map((x) => ({ ...x, excluded: JSON.parse(x.excluded_json || "{}"), errors: JSON.parse(x.errors_json || "[]"), excluded_json: undefined, errors_json: undefined })) });
@@ -609,8 +785,8 @@ const handler = {
       return row ? J(parseRow(row)) : J({ error: "not found" }, 404);
     }
     if (mm && m === "POST" && mm[2]) {
-      if (!env.LOOP_TOKEN) return J({ error: "writes disabled: LOOP_TOKEN secret is not set on this worker" }, 503);
-      if (!tokenOk(request, env)) return J({ error: "x-loop-token missing or wrong" }, 401);
+      if (!env.LOOP_TOKEN && !env.EMAIL) return J({ error: "writes disabled: neither the EMAIL binding nor LOOP_TOKEN is available" }, 503);
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
       let body = {}; try { body = await request.json(); } catch (e) { console.error(JSON.stringify({ worker: WORKER, event: "bad-json-body", error: e.message })); }
       if (!["approved", "rejected", "applied", "pending_owner_approval"].includes(body.status)) return J({ error: "status must be approved|rejected|applied|pending_owner_approval" }, 400);
       const id = decodeURIComponent(mm[1]);
@@ -629,7 +805,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, LEDGER };
+handler.__test = { evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, LEDGER, dedupeKey, feedPrefix };
 export default handler;
 
 // ------------------------------------------------------------------ web UI (light theme, plain JS, talks only to the API above)
@@ -655,11 +831,10 @@ pre{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-
 <header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
 <div class="bar"><select id="tier"><option value="">All tiers</option><option>A</option><option>B</option></select>
 <select id="status"><option value="">All statuses</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option></select>
-<input id="q" placeholder="Search title, company, place" size="26"><button id="run" class="p">Run now</button><a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a></div></header>
+<input id="q" placeholder="Search title, company, place" size="26"><button id="run" class="p">Run now</button><a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn().catch(e=>alert(e.message))">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
 <main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><div id="list"></div></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let tok=localStorage.getItem('jobs_token')||'';
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
 async function load(){
   const q=new URLSearchParams();for(const k of['tier','status','q']){const v=$('#'+k).value;if(v)q.set(k,v)}
@@ -674,8 +849,11 @@ async function load(){
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
   el.innerHTML='<h4>Resume</h4><pre>'+esc(d.resume_md)+'</pre><h4>Note</h4><pre>'+esc(d.note_md)+'</pre><button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.note_md)+'">Copy note</button> <button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.resume_md)+'">Copy resume</button>'}
-async function decide(id,status){if(!tok){tok=prompt('Owner token (x-loop-token)')||'';if(!tok)return;localStorage.setItem('jobs_token',tok)}
-  try{await api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json','x-loop-token':tok},body:JSON.stringify({status})});load()}catch(e){if(/token/.test(e.message)){localStorage.removeItem('jobs_token');tok=''}alert(e.message)}}
+async function signIn(){const r=await api('/api/auth/request',{method:'POST'});const c=prompt((r.sent===false?r.note:'A 6-digit code was e-mailed to '+r.to)+'. Enter it here:');if(!c)return false;await api('/api/auth/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:c})});who();return true}
+async function who(){try{const m=await api('/api/auth/me');$('#who').textContent=m.signed_in?'Signed in':'Not signed in';$('#signin').style.display=m.signed_in?'none':'';$('#signout').style.display=m.signed_in?'':'none'}catch(e){$('#who').textContent='Sign-in status unavailable: '+e.message}}
+async function decide(id,status){
+  const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status})});
+  try{await call()}catch(e){if(/sign in/.test(e.message)){try{if(await signIn())await call();else return}catch(e2){alert(e2.message);return}}else{alert(e.message);return}}load()}
 $('#run').onclick=async()=>{$('#run').disabled=true;try{await api('/api/run',{method:'POST'});$('#meta').textContent='Run started. Refreshing in 40 s…';setTimeout(()=>{load();$('#run').disabled=false},40000)}catch(e){alert(e.message);$('#run').disabled=false}};
-for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};load();
+for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};load();who();
 </script></body></html>`;

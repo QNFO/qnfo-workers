@@ -22,3 +22,11 @@ Work authorization (NL/EU/US), salary floor, languages, relocation tolerance. Un
 - Owned-surface publishing: JSON-LD `Person` + CV page on qnfo.org generated from the same ledger.
 - Optional LLM re-rank (reason about fit only; may not write claims; output run through `verify_freeform`).
 - Scheduled run as a worker cron writing to D1 `agent_issues`/owner queue.
+
+## Server-side operation (qnfo-jobsearch worker, JOBSEARCH-1 / JOBSEARCH-OPS-1)
+Runs entirely on Cloudflare: hourly cron (minute 15), D1 `qnfo-audit` (`jobsearch_*` tables), web UI at `/`, JSON API at `/api`.
+- **Sign in** (UI "Sign in" or `POST /api/auth/request` then `POST /api/auth/verify {"code":"123456"}`): a 6-digit code is e-mailed to the ledger address through qnfo-email; 3 codes an hour, 5 tries a code, 12-hour session (cookie `jobs_session`, or the returned token as `Authorization: Bearer`). `x-loop-token` is accepted as a second path if that secret is ever set.
+- **Operate**: `GET /api/ops` (200 ok / 503 degraded) lists the eight `fm-jobsearch-*` checks, feed health, counts and the last run. `POST /api/run` triggers a run (10-minute cooldown). `GET /api/runs` shows history.
+- **Self-maintenance**: unfinished runs are closed by the next run; feeds are retried once and tracked; postings gone upstream become `expired` after 48 h (only when their feed answered); duplicates across boards are merged; expired/rejected rows are deleted after 90 days.
+- **Change the ledger**: edit `jobsearch/facts.json` and the same object in `qnfo-jobsearch/worker.js` (a node test fails if they differ), raise `ledger_verified_on` only after re-checking the CV, bump the worker VERSION, PR to main.
+- **Failure modes** are registered in `failure_modes` / `remediation_contracts` by `migrations/2026-10-27-jobsearch-ops.sql`.
