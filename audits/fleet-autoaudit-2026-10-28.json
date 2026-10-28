@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-28 03:08:44",
+  "audited_at": "2026-10-28 04:10:41",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
@@ -640,7 +640,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.9.5-codeagent",
+        "version": "1.9.6-codeagent",
         "worker": "qnfo-infra"
       },
       {
@@ -1458,9 +1458,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.9.5-codeagent",
+      "before": "1.9.6-codeagent",
       "http": 200,
-      "live": "1.9.5-codeagent",
+      "live": "1.9.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
