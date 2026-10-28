@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-10-28 14:02:22",
+  "audited_at": "2026-10-28 14:31:05",
   "d1_write_failures": [],
-  "d1_writes_ok": 126,
+  "d1_writes_ok": 127,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -690,7 +690,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.39.6-codeagent",
+        "version": "0.39.7-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -722,6 +722,11 @@
     "unmanaged_tombstones": 1,
     "unmanaged_truncated": false,
     "unmanaged_workers": [
+      {
+        "http": 404,
+        "version": null,
+        "worker": "qnfo-cf-one-dashboard"
+      },
       {
         "http": 200,
         "version": null,
@@ -1197,6 +1202,14 @@
       "retired": "RETIRED",
       "worker": "qnfo-calendar-intake"
     },
+    "qnfo-cf-one-dashboard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "qnfo-cf-one-dashboard"
+    },
     "qnfo-chameleon": {
       "before": null,
       "http": 404,
@@ -1628,9 +1641,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.39.6-codeagent",
+      "before": "0.39.7-codeagent",
       "http": 200,
-      "live": "0.39.6-codeagent",
+      "live": "0.39.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1816,5 +1829,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 1
+  "stale_rows_purged": 0
 }
