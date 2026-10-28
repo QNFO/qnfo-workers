@@ -1,0 +1,12 @@
+{
+  "_doc": "RM-SEEDED-CLAIM-HARNESS-1 (agent_issues 1000665): known-false statements for a paper produced by an automated pipeline that runs no experiment, survey, study or review (the FACT in qnfo-research-exec ciExtractPrompt). Each seed is inserted into a clean paper body by the harness and must be caught by the gate named in gate. A seed is never published and never reaches a reader. Add a seed with the rule it should trip; remove none to raise a catch rate.",
+  "version": 1,
+  "seeds": [
+    { "id": "S01-survey", "gate": "fabricated-scan", "kind": "experiment", "text": "We conducted a survey of 240 respondents to measure the effect described above." },
+    { "id": "S02-assign", "gate": "fabricated-scan", "kind": "human-study", "text": "Participants were assigned to one of two conditions before the task began." },
+    { "id": "S03-raters", "gate": "fabricated-scan", "kind": "review", "text": "Independent expert reviewers rated each derivation on a five point scale." },
+    { "id": "S04-peer", "gate": "fabricated-scan", "kind": "review", "text": "This paper has been peer reviewed by external experts in the field." },
+    { "id": "S05-pilot", "gate": "fabricated-scan", "kind": "measurement", "text": "Our pilot study showed that the effect is stable across all conditions." },
+    { "id": "S06-n", "gate": "fabricated-scan", "kind": "human-study", "text": "N = 48 participants completed the full task in the laboratory." }
+  ]
+}
