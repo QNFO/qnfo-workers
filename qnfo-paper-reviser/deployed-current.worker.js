@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.4.2-reviser-thinking-off"; // 1.4.0 REVISER-REREAD-1 (agent_issues 2500, pillar research): every applied revision is re-read by a model of another family before it is queued; a HARD finding or no verdict keeps it out of version_queue and the verdict is logged in paper_revision_log.audit_summary. Folded into qnfo-research-exec 0.18.0 as REVISER_VERSION 1.4.0-folded. 1.3.2 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.3.1 NOZ-DOI-1 (2026-10-11): no external record service is called; candidates are the published papers, the already-revised test reads the paper version, provenance files are regenerated from the body, and the paper key in logs, queues and errata is the slug (status reports published_total).  1.3.0 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new packages under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.4.3-reviser-standard"; // 1.4.3 REVISED-STANDARD-1 (owner directive 2026-10-28): revisions are typeset like new papers (no front matter, byline, metadata, repeated title or in-body changelog). 1.4.0 REVISER-REREAD-1 (agent_issues 2500, pillar research): every applied revision is re-read by a model of another family before it is queued; a HARD finding or no verdict keeps it out of version_queue and the verdict is logged in paper_revision_log.audit_summary. Folded into qnfo-research-exec 0.18.0 as REVISER_VERSION 1.4.0-folded. 1.3.2 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.3.1 NOZ-DOI-1 (2026-10-11): no external record service is called; candidates are the published papers, the already-revised test reads the paper version, provenance files are regenerated from the body, and the paper key in logs, queues and errata is the slug (status reports published_total).  1.3.0 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new packages under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -386,6 +386,66 @@ function bumpVersion(v) {
   return "2.0.0";
 }
 __name(bumpVersion, "bumpVersion");
+// REVISED-STANDARD-1 (owner directive 2026-10-28): a revised paper is typeset like a new paper: one "# Title" line, an
+// "## Abstract" and the sections, with no YAML front matter, byline or metadata lines, no repeated title heading and no
+// stray text above the abstract (the page and PDF renderers print the title block from the paper's record).
+var META_LINE_RX = /^\s*(?:[*_]{1,2})?(?:author|authors|affiliation|contact|e-?mail|orcid|isni|url|website|publication date|date|version|doi|license|keywords|status|modified|last updated|robots|dc\.rights)(?:[*_]{1,2})?\s*:(?:[*_]{1,2})?\s*.*$/i;
+function normTitle(s) {
+  return String(s || "").toLowerCase().replace(/[*_`#]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+__name(normTitle, "normTitle");
+function standardizeBody(md, title) {
+  let s = String(md || "").replace(/\r\n/g, "\n");
+  const fm = /^﻿?---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$)/.exec(s);
+  let fmTitle = "";
+  if (fm) {
+    const t = /^title:\s*["']?(.+?)["']?\s*$/im.exec(fm[0]);
+    if (t) fmTitle = t[1];
+    s = s.slice(fm[0].length);
+  }
+  const lines = s.split("\n");
+  function isTitleLine(l) {
+    const m = /^#{1,2}[ \t]+(.+?)\s*#*\s*$/.exec(l);
+    if (!m) return false;
+    const n = normTitle(m[1]);
+    return !!n && (n === normTitle(title) || n === normTitle(fmTitle) || n === normTitle(h1text));
+  }
+  let h1text = "";
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^#[ \t]+(.+?)\s*#*\s*$/.exec(lines[i]);
+    if (m) { h1text = m[1]; break; }
+    if (/^#{2,6}[ \t]/.test(lines[i])) break;
+  }
+  const headEnd = (function() {
+    for (let i = 0; i < lines.length; i++) {
+      if (/^#{2,6}[ \t]+/.test(lines[i]) && !isTitleLine(lines[i])) return i;
+    }
+    return lines.length;
+  })();
+  // head = everything above the first real section heading; drop title headings and metadata lines from it
+  const head = [];
+  for (let i = 0; i < headEnd; i++) {
+    const l = lines[i];
+    if (isTitleLine(l) || META_LINE_RX.test(l)) continue;
+    if (/^\s*(?:[*_]{2}\s*)?(?:Version|Date)\b[^\n]{0,40}$/i.test(l) && /\d/.test(l) && l.length < 60) continue;
+    head.push(l);
+  }
+  const rest = lines.slice(headEnd);
+  const headText = head.join("\n").trim();
+  const t = String(h1text || title || fmTitle || "").trim();
+  let out = "# " + t + "\n\n";
+  if (headText && !/^#{1,6}[ \t]+Abstract\b/im.test(headText) && !(rest.length && /^#{2,6}[ \t]+(?:\d+\.?\s*)?Abstract\b/i.test(rest[0]))) {
+    out += "## Abstract\n\n" + headText + "\n\n";
+  } else if (headText) {
+    out += headText + "\n\n";
+  }
+  out += rest.join("\n");
+  // a title heading repeated later as a section heading is the same duplicate
+  const tn = normTitle(t);
+  out = out.split("\n").filter(function(l, i) { return i < 2 || !(/^#{1,2}[ \t]+/.test(l) && normTitle(l.replace(/^#+[ \t]+/, "")) === tn); }).join("\n");
+  return out.replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+__name(standardizeBody, "standardizeBody");
 function applyVersionMarkers(md, versionTo) {
   let out = md;
   if (/\*\*Version:\*\*/i.test(out)) out = out.replace(/\*\*Version:\*\*\s*[^\n]*/i, "**Version:** " + versionTo);
@@ -534,7 +594,7 @@ async function processPaper(env, paper, mode, runId) {
   // every paper that reached it), so nothing was ever queued. The revision is now computed first.
   const versionTo = bumpVersion(paper.version);
   const edits = applyEdits(paper.body_md || "", low);
-  let revised = applyVersionMarkers(edits.md, versionTo);
+  let revised = standardizeBody(edits.md, paper.title);
   // FIX-REVISER-GARBAGE (2026-09-14): reject non-paper AI output (reasoning preamble / outline fragment).
   // Root cause of the 20-row gate-blocked backlog: for long essay inputs the auditor's surgical
   // edits produced reasoning text / outline fragments that were queued as corrected_md.
@@ -573,7 +633,7 @@ async function processPaper(env, paper, mode, runId) {
     return a.category;
   }).join(", ") || "no substantive corrections required";
   const changelog = "Adversarial audit revision. Fixes: " + appliedCats + ".";
-  revised = addChangelog(revised, versionTo, changelog);
+  // REVISED-STANDARD-1: no in-body changelog; the revision history lives in paper_revision_log and the paper ledger.
   const regen = regenerateProvenance(revised, paper.title, paper.slug);
   const merged = {
     references_bib: prov.references_bib || regen.references_bib,
