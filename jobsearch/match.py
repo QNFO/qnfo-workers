@@ -69,7 +69,7 @@ def evaluate(job):
     title = job["title"].lower()
     desc = job["desc"]
     why, flags, loc_pen = [], [], 0
-    if any(x in title for x in ("intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect")):
+    if any(x in title for x in ("intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect", "counsel", "attorney", "lawyer", "paralegal", "legal", "marketing", "forward deployed", "deployment strategist")):
         return {"status": "excluded", "reason": "seniority below target"}
     if any(x in title for x in TITLE_EXCLUDE) and not any(s in title for s in TITLE_STRONG):
         return {"status": "excluded", "reason": "role family excluded by title"}
@@ -111,7 +111,7 @@ def evaluate(job):
     yrs = [int(x) for x in re.findall(r"(\d{1,2})\+?\s*(?:or more )?years", low)]
     if yrs and max(yrs) > 22:
         flags.append(f"YEARS: asks {max(yrs)}+ years")
-    tier = "A" if score >= 70 and cl else "B" if score >= 45 else "C"
+    tier = "A" if score >= 70 and cl else "B" if score >= 35 else "C"
     return {"status": "ok", "score": score, "tier": tier, "clusters": sorted(cl), "unique": unique, "why": why, "flags": flags}
 
 
