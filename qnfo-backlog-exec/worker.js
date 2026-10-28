@@ -223,6 +223,21 @@ async function openInventory(env) {
   registers["github"] = { open: null, kind: "external", disposition: "GitHub mirror (dashboard GITHUB_TOKEN)" };
   return { laneCount: INVENTORY_LANES.length + 1, total: total, registers: registers };
 }
+// SLA-GAP-1 (agent_issues 1000619, QNFO.OPS roadmap #162): which open issues lack a doer, an owner or a next action, or have an expired SLA. "No doer" is the fleet's own
+// definition, the view v_issues_no_next_action (no active or holding contract, no code-task or session-task line, no live code task, work claim or owner card).
+async function slaGap(env) {
+  const one = async (sql) => { try { const r = await env.AUDIT.prepare(sql).first(); return r ? Number(r.n) : -1; } catch (e) { return -1; } };
+  const counts = {
+    open: await one("SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'"),
+    no_doer: await one("SELECT COUNT(*) n FROM v_issues_no_next_action"),
+    no_owner: await one("SELECT COUNT(*) n FROM agent_issues a LEFT JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = 'open' AND (t.issue_id IS NULL OR COALESCE(t.owner, '') = '')"),
+    no_next_action: await one("SELECT COUNT(*) n FROM agent_issues a LEFT JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = 'open' AND COALESCE(t.remediation, '') = '' AND instr(COALESCE(a.description, ''), 'code-task:') = 0"),
+    sla_breached: await one("SELECT COUNT(*) n FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = 'open' AND t.sla_due_at < datetime('now')")
+  };
+  let rows = [];
+  try { rows = (await env.AUDIT.prepare("SELECT id, priority, age_h, substr(title, 1, 120) AS title FROM v_issues_no_next_action ORDER BY CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, age_h DESC LIMIT 20").all()).results || []; } catch (e) { rows = []; }
+  return { counts: counts, first20_no_doer: rows };
+}
 function healthOptIn(title, description) {
   const t = String(title || "") + " " + String(description || "");
   const m = t.match(/probe_target\s*=\s*([A-Za-z0-9_.-]+)/i);
@@ -603,6 +618,9 @@ var worker_default = {
     }
     if (url.pathname === "/inventory") {
       return json({ ok: true, worker: WORKER, version: VERSION, inventory: await openInventory(env) });
+    }
+    if (url.pathname === "/sla-gap") {
+      return json({ ok: true, worker: WORKER, version: VERSION, sla_gap: await slaGap(env) });
     }
     if (url.pathname === "/run" && request.method === "POST") {
       const runTok = env.RUN_TOKEN;

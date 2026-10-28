@@ -47,6 +47,11 @@ def parse(ts):
 def cause_class(details):
     """The root-cause class the sample details support."""
     t = " ".join(details).lower()
+    # SLO-SLOW-CLASS-1 (agent_issues 1000678): an answer the SLI accepts (2xx, 3xx, 401, 403) that failed only on the 5 s limit is slow, not a client error.
+    # travel.q08.org answered "status 401 in 5463 ms" nine times and was classed client-error, which pointed the postmortem at the wrong cause.
+    ms = [(int(a), int(b)) for a, b in re.findall(r"status (\d{3}) in (\d+) ms", t)]
+    if ms and all((200 <= s < 400 or s in (401, 403)) and m >= 5000 for s, m in ms):
+        return "slow", "the host answered with an accepted status but slower than the 5 s limit"
     if "timeout" in t:
         return "timeout", "the host did not answer inside the probe timeout"
     if "tls" in t:
@@ -229,6 +234,7 @@ def selftest():
     eps = episodes([("t1", 1, ""), ("t2", 0, "down: timeout"), ("t3", 0, "status 503"), ("t4", 1, ""), ("t5", 0, "tls:x")])
     ok(len(eps) == 2 and eps[0][3] == 2 and eps[0][2] == "t4" and eps[1][2] is None, "two episodes, the second still open: %r" % (eps,))
     ok(cause_class(["down: timeout"])[0] == "timeout" and cause_class(["status 503 in 12 ms"])[0] == "server-error" and cause_class(["down: tls:bad"])[0] == "tls", "cause classes")
+    ok(cause_class(["status 401 in 5463 ms"])[0] == "slow" and cause_class(["status 404 in 90 ms"])[0] == "client-error" and cause_class(["status 503 in 5600 ms"])[0] == "server-error", "SLO-SLOW-CLASS-1: an accepted status over 5 s is slow, a refused one is not")
     c = sqlite3.connect(":memory:")
     script = """
 CREATE TABLE slo_definitions (surface TEXT PRIMARY KEY, sli TEXT, objective REAL, window_days INTEGER, source TEXT, owner TEXT, created_at TEXT);

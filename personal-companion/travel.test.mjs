@@ -583,5 +583,17 @@ console.log("\n[repository hygiene]");
   ok("worker.js routes /travel/ and runs the hourly travel step", /TRV\.handleTravel\(/.test(w) && /TRV\.travelTick\(/.test(w));
 }
 
+console.log("\n[ensure once, TRAVEL-ENSURE-ONCE-1]");
+{
+  const { env } = freshEnv();
+  let stmts = 0;
+  const counted = { prepare(sql) { stmts++; return env.PERSONAL.prepare(sql); } };
+  await ensureTravel(counted);
+  const first = stmts;
+  await ensureTravel(counted);
+  await ensureTravel(counted);
+  ok("the second and third ensureTravel on the same handle write nothing", first === DDL.length + Object.keys(DEFAULTS).length && stmts === first, { first, stmts });
+}
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

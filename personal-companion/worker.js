@@ -1515,12 +1515,19 @@ const PROFILE_CHARS = 12000;
 const BASE = "https://reading.q08.org";
 const PLANNER_URL = "https://travel.q08.org/travel";
 
+// TRAVEL-ENSURE-ONCE-1 (agent_issues 1000678): the schema and default rows are written once per isolate and database handle, not on every request.
+// Every GET of travel.q08.org ran every CREATE and every default INSERT in sequence against the D1 primary; when those writes queued behind the hourly
+// tick the sign-in page answered in 5.3 to 6.0 s (9 of 38 hourly samples, all status 401, over the SLI's 5 s limit).
+const ENSURED_DBS = new WeakSet();
+
 async function ensureTravel(db, nowIso) {
+  if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
   for (const s of DDL) await db.prepare(s).run();
   const ts = nowIso || new Date().toISOString();
   for (const [k, v] of Object.entries(DEFAULTS)) {
     await db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts).run();
   }
+  if (db && typeof db === "object") ENSURED_DBS.add(db);
 }
 
 async function cfg(db) {
@@ -3205,7 +3212,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.1-codeagent";
+var VERSION = "1.44.2-travel-ensure-once";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
