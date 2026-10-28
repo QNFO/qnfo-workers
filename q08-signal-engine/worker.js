@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.39.2";
+var VERSION = "0.39.3-codeagent";
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
@@ -4791,6 +4791,11 @@ async function q08Fetch(req, env, ctx) {
       if (!cp) return html("<h1>Not found</h1>", 404);
       return new Response(citationFile(cp, cm[2]), { headers: { "Content-Type": cm[2] === "bib" ? "application/x-bibtex; charset=utf-8" : "application/x-research-info-systems; charset=utf-8", "Content-Disposition": 'attachment; filename="q08-' + cp.slug + "." + cm[2] + '"' } });
     }
+    var pm = /^\/p\/([a-z0-9-]+)\/provenance\.json$/.exec(path);
+    if (pm) { // BP26-PROVENANCE-MARKING-1: machine-readable provenance sidecar per piece
+      return await provenanceResponse(env, pm[1]);
+    }
+
     if (path.startsWith("/p/")) {
       var slug = path.slice(3);
       var piece = await env.DB.prepare("SELECT * FROM published_pieces WHERE slug=?").bind(slug).first();
@@ -4801,7 +4806,14 @@ async function q08Fetch(req, env, ctx) {
       // cancelled once the response returns), and a failure is logged instead of swallowed.
       await countPieceRead(env, req, slug, ctx);
       var frow = piece.kind === "forecast" ? await env.DB.prepare("SELECT * FROM q08_forecasts WHERE slug = ?").bind(slug).first().catch(function () { return null; }) : null;
-      return html(renderPiece(piece, frow));
+      var pieceHtml = renderPiece(piece, frow);
+      var provLink = '<link rel="c2pa-manifest" href="/p/' + slug + '/provenance.json">';
+      if (pieceHtml.indexOf("</head>") >= 0) {
+        pieceHtml = pieceHtml.replace(/<\/head>/i, provLink + "\n</head>");
+      } else {
+        pieceHtml = provLink + "\n" + pieceHtml;
+      }
+      return html(pieceHtml);
     }
 
     if (path === "/sitemap.xml") {
@@ -4964,6 +4976,48 @@ async function mirrorPipeline(env) {
     console.error(JSON.stringify({ worker: PIPE_WORKER, where: "mirrorPipeline", error: String(e && e.message || e).slice(0, 300) }));
     return { ok: false, error: String(e && e.message || e).slice(0, 200) };
   }
+}
+
+// BP26-PROVENANCE-MARKING-1: machine-readable provenance sidecar helpers
+function bufToHex(buffer) {
+  return Array.prototype.map.call(new Uint8Array(buffer), function (b) {
+    return b.toString(16).padStart(2, "0");
+  }).join("");
+}
+async function sha256Hex(text) {
+  var enc = new TextEncoder();
+  var buf = await crypto.subtle.digest("SHA-256", enc.encode(text));
+  return bufToHex(buf);
+}
+async function hmacSha256Hex(key, text) {
+  var enc = new TextEncoder();
+  var k = await crypto.subtle.importKey("raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return bufToHex(await crypto.subtle.sign("HMAC", k, enc.encode(text)));
+}
+async function provenanceResponse(env, slug) {
+  var piece = await env.DB.prepare("SELECT slug, body_md, title, published_at FROM published_pieces WHERE slug=?").bind(slug).first();
+  if (!piece) return json({ ok: false, error: "not found" }, 404);
+  var retr = await env.DB.prepare("SELECT slug FROM q08_retractions WHERE slug=?").bind(slug).first().catch(function () { return null; });
+  if (retr) return json({ ok: false, error: "retracted" }, 410);
+  var manifest = {
+    slug: piece.slug,
+    body_sha256: await sha256Hex(piece.body_md || ""),
+    generated_at: new Date().toISOString(),
+    claim_generator: (typeof WORKER !== "undefined" ? WORKER : "q08-signal-engine") + "@" + (typeof VERSION !== "undefined" ? VERSION : "unknown"),
+    digitalSourceType: "trainedAlgorithmicMedia"
+  };
+  var key = env.PROVENANCE_SIGNING_KEY;
+  var signature = null;
+  var signed = false;
+  if (key) {
+    try {
+      signature = await hmacSha256Hex(key, JSON.stringify(manifest));
+      signed = true;
+    } catch (e) {
+      console.error(JSON.stringify({ evt: "q08 provenance sign failed", slug: slug, error: String(e && e.message || e) }));
+    }
+  }
+  return json(Object.assign({}, manifest, { signature: signature, signed: signed }));
 }
 
 async function q08Heartbeat(env, ok) {
