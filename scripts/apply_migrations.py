@@ -801,6 +801,29 @@ def plan(path, text, birth=False):
                             "backup": backup, "creates_backup": creates, "parse_lint": parse_note or "ok"}
 
 
+# BP26-D1-DISCIPLINE-1 (2026-10-28, agent_issues 1000349): a Time Travel bookmark is recorded in migration_runs.bookmark before a file
+# runs, so a bad migration can be rolled back to the moment before it with `wrangler d1 time-travel restore`. Best effort by design:
+# a failed bookmark read never blocks a migration (the BACKUP header rules still apply); the column is added on first use.
+def time_travel_bookmark(acct, token, db_id):
+    import cf_ops_actions as C
+    try:
+        st, j = C.call("GET", f"/accounts/{acct}/d1/database/{db_id}/time_travel/bookmark", token, None, timeout=30)
+        if st == 200 and j.get("success", False):
+            return str((j.get("result") or {}).get("bookmark") or "")
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def ensure_bookmark_column(acct, token, ledger_id):
+    try:
+        d1(acct, token, ledger_id, "ALTER TABLE migration_runs ADD COLUMN bookmark TEXT")
+    except Exception as e:  # noqa: BLE001
+        if "duplicate column" not in str(e).lower():
+            return False
+    return True
+
+
 def d1(acct, token, db_id, sql, params=None):
     import cf_ops_actions as C
     st, j = C.call("POST", f"/accounts/{acct}/d1/database/{db_id}/query", token, {"sql": sql, "params": params or []}, timeout=90)
@@ -973,6 +996,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
             return record_failure(path, sha, commit, info, acct, token, ledger_id, why, emit)
         checked = True
     done_n = 0
+    bookmark = time_travel_bookmark(acct, token, db_id) if ensure_bookmark_column(acct, token, ledger_id) else ""
     # D1-TRIGGER-DEPTH-RESTORE-1 (2026-10-18, migration_runs 292): snapshot every trigger definition BEFORE the file runs, so
     # a refused canary can put the table back the way it was. A per-statement read is not enough: a file that does
     # DROP TRIGGER then CREATE TRIGGER has already removed the standing definition by the time the CREATE is checked, and
@@ -1024,8 +1048,12 @@ def apply_file(path, text, acct, token, commit, emit=print):
                         restored = " RESTORE FAILED, the table is without this trigger: " + str(e)[:120]
                 return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
                                       "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
-    d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
-       [path, sha, commit or "", info["db"], str(done_n)])
+    try:
+        d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by, bookmark) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations', ?6)",
+           [path, sha, commit or "", info["db"], str(done_n), bookmark])
+    except Exception:  # noqa: BLE001
+        d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
+           [path, sha, commit or "", info["db"], str(done_n)])
     resolve_failure(path, sha, acct, token, ledger_id, done_n)
     applied = {"file": path, "ok": True, "statements": done_n, "sha256": sha[:12]}
     if advisories:
