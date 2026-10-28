@@ -172,8 +172,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("slug"); ap.add_argument("--out"); ap.add_argument("--beats", type=int, default=8); ap.add_argument("--tries", type=int, default=3)
     ap.add_argument("--no-llm-check", action="store_true")
+    ap.add_argument("--recheck", help="re-run the LLM fact-check on an existing director JSON and report")
     a = ap.parse_args()
     art = fetch_article(a.slug)
+    if a.recheck:
+        beats = [b for b in json.load(open(a.recheck, encoding="utf8"))["beats"] if b["kind"] != "cta"]
+        v = parse_json(call([{"role": "user", "content": checker_prompt(art, beats)}], 16000))["verdicts"]
+        print(json.dumps([x for x in v if not x.get("ok", True)] or "all beats supported", indent=1)); return
     full = " ".join([art["title"], art["short"]] + [s["text"] for s in art["sections"]])
     nums = numbers_in(full)
     drops, spec, kept, beats = [], None, [], []
@@ -195,14 +200,20 @@ def main():
             else:
                 kept.append(b)
         if not a.no_llm_check and kept:
-            try:
-                verdicts = parse_json(call([{"role": "user", "content": checker_prompt(art, kept)}], 16000))["verdicts"]
+            verdicts = None
+            for _ in range(3):                 # a checker reply that does not parse is retried; it is never skipped silently
+                try:
+                    verdicts = parse_json(call([{"role": "user", "content": checker_prompt(art, kept)}], 16000))["verdicts"]
+                    break
+                except Exception as e:
+                    round_drops.append({"attempt": attempt, "stage": "llm-checker", "why": f"checker reply unusable, retrying: {e}"[:200]})
+            if verdicts is None:
+                kept = []                      # fail closed: unchecked beats are not accepted
+            else:
                 bad = {v["i"]: v.get("why", "") for v in verdicts if not v.get("ok", True)}
                 for i in sorted(bad, reverse=True):
                     round_drops.append({"attempt": attempt, "beat": i, "kind": kept[i].get("kind"), "stage": "llm-checker", "why": bad[i][:200]})
                     del kept[i]
-            except Exception as e:
-                round_drops.append({"attempt": attempt, "stage": "llm-checker", "why": f"checker failed, deterministic checks only: {e}"[:200]})
         drops += round_drops
         if kept and kept[0].get("kind") == "hook" and len(kept) >= 5:
             break
