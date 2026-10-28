@@ -4,8 +4,10 @@
 -- Prediction: METRIC-UNMEASURED-1 and CF-OBS-ISSUE-1 reopens_7d (22 and 50 on 2026-10-28) fall by at least half within 7 days; guard: open_agent_issues rises by at most the count of chronic flappers (<= 55) and issues_open_over_120m does not worsen by more than that.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Backup: schema of both triggers is in this file's Rollback section (the pre-change text is the 2026-10-12-autoclose-all-contracts.sql lineage); take a D1 time-travel bookmark before apply.
--- Rollback: DROP both triggers and recreate them without the VACUOUS-FLAP-1 AND NOT (...) block (the clause is self-contained and marked by that comment).
+-- BACKUP: bak_20261028_autoclose_triggers
+-- Rollback: CREATE TABLE IF NOT EXISTS bak_20261028_autoclose_triggers AS SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'remediation_verification_autoclose%';
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, symptom, blast_radius) VALUES ('vacuous-close-flap', 'An issue whose remediation contract is a VACUOUS-PROBE is auto-closed on a pass that measures nothing, then reopened by its producer, repeatedly', 'remediation_verification_autoclose_ins/upd close on any pass=1 and a vacuous contract never blocks the close, so the close carries no outcome evidence', 'VACUOUS-FLAP-1: no auto-close of an already-reopened issue on a vacuous contract; a doer replaces the probe (FM-4)', 'fm-vacuous-close-flap: count of open-or-closed issues with a vacuous contract and reopened_count >= 3, expected 0 new per day', 'd1-query', '2026-10-28', '190 issues closed on vacuous probes, 50 reopened, 122 reopens (2026-10-28)', 'METRIC-UNMEASURED-1 and CF-OBS-ISSUE-1 families');
+DROP TRIGGER IF EXISTS remediation_verification_autoclose_ins; DROP TRIGGER IF EXISTS remediation_verification_autoclose_upd; then recreate both from bak_20261028_autoclose_triggers.sql (the saved pre-change trigger text).
 DROP TRIGGER IF EXISTS remediation_verification_autoclose_ins;
 CREATE TRIGGER remediation_verification_autoclose_ins AFTER INSERT ON remediation_verifications
 WHEN NEW.pass = 1
