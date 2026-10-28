@@ -71,6 +71,7 @@ function fakeGitHub(opts = {}) {
     // GitHub deletes only a run that has completed (run 40290472819, 2026-10-26: 403 "Could not delete the workflow run" for queued and wedged runs)
     if (method === "POST" && (m = /\/actions\/runs\/(\d+)\/force-cancel$/.exec(path))) {
       if (opts.forceCancelRefuse) return json(403, { message: "Resource not accessible by integration" });
+      if (opts.forceCancelWedged && opts.forceCancelWedged.includes(Number(m[1]))) return json(409, { message: "Cannot cancel a workflow run that has not been queued yet." });
       const x = st.runs.find((y) => String(y.id) === m[1]);
       if (!x) return json(404, { message: "Not Found" });
       if (!opts.forceCancelStaysQueued) { x.status = "completed"; x.conclusion = "cancelled"; }
@@ -307,6 +308,11 @@ ok(!/ghp_|github_pat_|ghs_[A-Za-z0-9]{10}/.test(readFileSync(join(repoRoot, "scr
   r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
   ok(!r2.ok && r2.refused.call === "POST force-cancel run 101" && r2.refused.status === 403 && /not accessible/.test(r2.refused.message), "a refused force-cancel is recorded with its status and GitHub's text", r2.refused);
   ok(g2.st.log.filter((x) => x.method === "POST").length === 1 && !g2.st.log.some((x) => x.method === "DELETE") && g2.st.tokens.size === 1 && r2.deleted.length === 0, "and it stops there: no delete is sent, no second candidate is tried, no other credential is used");
+
+  // STUCK-RUN-WEDGED-1: one run wedged on GitHub's side (409) must not block the candidates behind it
+  g2 = fakeGitHub({ runs: stuck(), forceCancelWedged: [101] });
+  r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
+  ok(r2.ok && !r2.refused && r2.wedged.map((w) => w.id).join() === "101" && r2.deleted.join() === "102,103" && /wedged on GitHub/.test(r2.note), "a run whose force-cancel answers 409 is recorded as wedged and the next candidates are still deleted", r2);
 
   g2 = fakeGitHub({ runs: stuck(), forceCancelStaysQueued: true });
   r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin", GITHUB_RUN_ID: "106" });
