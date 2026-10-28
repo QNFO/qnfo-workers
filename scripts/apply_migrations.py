@@ -1049,8 +1049,8 @@ def apply_file(path, text, acct, token, commit, emit=print):
                 return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
                                       "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
     try:
-        d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by, bookmark) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations', ?6)",
-           [path, sha, commit or "", info["db"], str(done_n), bookmark])
+        d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by, bookmark, bookmark_source) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations', ?6, ?7)",
+           [path, sha, commit or "", info["db"], str(done_n), bookmark, "apply-time" if bookmark else ""])
     except Exception:  # noqa: BLE001
         d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
            [path, sha, commit or "", info["db"], str(done_n)])
