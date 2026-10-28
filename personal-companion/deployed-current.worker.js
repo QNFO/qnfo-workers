@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.3-travel-ensure-batch";
+var VERSION = "1.44.4-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -5457,9 +5457,12 @@ async function sendOne(env, to, subject, body, pre) {
   if (pre && pre.checked) { if (pre.set.has(String(to).toLowerCase())) return { ok: false, suppressed: true, to: to }; }
   // SUPPRESSION-1 (2026-09-22): honour opt-out stored in qnfo-audit before any direct send.
   else try { if (env.AUDIT) { const _s = await env.AUDIT.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_s) return { ok: false, suppressed: true, to: to }; const _l = await env.AUDIT.prepare("SELECT suppress FROM contact_ledger WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_l && _l.suppress) return { ok: false, suppressed: true, to: to }; } } catch (e) { logCaught("sendOne", e); }
+  var listHeaders = pre && pre.unsub ? { "List-Unsubscribe": "<" + pre.unsub + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : null;
   if (env.SEND_EMAIL) {
     try {
-      await env.SEND_EMAIL.send({ to, from: "rowan.quni@qnfo.org", subject, text: body });
+      var sendPayload = { to, from: "rowan.quni@qnfo.org", subject, text: body };
+      if (listHeaders) sendPayload.headers = listHeaders;
+      await env.SEND_EMAIL.send(sendPayload);
       return { ok: true, via: "send_email" };
     } catch (e) {
       return { ok: false, error: "send_email: " + String(e && e.message || e) };
@@ -5467,11 +5470,13 @@ async function sendOne(env, to, subject, body, pre) {
   }
   if (!env.EMAIL) return { ok: false, error: "no email path" };
   try {
+    var emailPayload = { to, from: "rowan.quni@qnfo.org", subject, body };
+    if (listHeaders) emailPayload.headers = listHeaders;
     var resp = await env.EMAIL.fetch("https://email.internal/send", {
       method: "POST",
       // EMAIL-CALLER-PROPS-1 (#1923): qnfo-email 2.5.1+ authenticates this binding by its props (wrangler.toml); no key copy.
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, from: "rowan.quni@qnfo.org", subject, body })
+      body: JSON.stringify(emailPayload)
     });
     return { ok: resp.ok, status: resp.status };
   } catch (e) {
@@ -5612,7 +5617,7 @@ async function sendRun(env, key, origin, mailFor) {
   var sent = 0, failed = 0, suppressed = 0;
   for (var i = 0; i < rows.length; i++) {
     var m = mailFor(rows[i]);
-    var rr = await sendOne(env, rows[i].email, m.subject, m.body, { checked: true, set: supp });
+    var rr = await sendOne(env, rows[i].email, m.subject, m.body, { checked: true, set: supp, unsub: m.unsub });
     if (rr && rr.ok) sent++;
     else if (rr && rr.suppressed) suppressed++;
     else failed++;
@@ -5624,7 +5629,8 @@ async function sendRun(env, key, origin, mailFor) {
 }
 function digestMail(day, list, base) {
   return function (s) {
-    return { subject: "Reading \u2014 daily digest", body: "Reading \u2014 daily digest (" + day + ")" + NL + NL + list + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token };
+    var unsub = base + "/unsubscribe?t=" + s.token;
+    return { subject: "Reading \u2014 daily digest", body: "Reading \u2014 daily digest (" + day + ")" + NL + NL + list + NL + NL + "Unsubscribe: " + unsub, unsub: unsub };
   };
 }
 async function digestList(env, day, base) {
@@ -5634,7 +5640,8 @@ async function digestList(env, day, base) {
 }
 function pieceMail(prow, base, link) {
   return function (s) {
-    return { subject: prow.title, body: (/^\s*#/.test(String(prow.body_md || "")) ? "" : prow.lede ? prow.lede + NL + NL : "") + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token };
+    var unsub = base + "/unsubscribe?t=" + s.token;
+    return { subject: prow.title, body: (/^\s*#/.test(String(prow.body_md || "")) ? "" : prow.lede ? prow.lede + NL + NL : "") + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + unsub, unsub: unsub };
   };
 }
 // The hourly tick continues the oldest unfinished run (one per tick, so a tick never sends more than SEND_CAP_PER_RUN).
