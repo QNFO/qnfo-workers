@@ -249,6 +249,55 @@ def is_resurrection_refusal(res: dict) -> bool:
     return "WORKER-RESURRECTION-GUARD-1" in txt and not bool(res.get("ok"))
 
 
+# BP26-GRADUAL-ADOPT-1 (2026-10-28, charter pillar autonomy; agent_issues 1000352): a worker listed in scripts/gradual-deploy-workers.txt is deployed as a
+# health-gated staged rollout (scripts/gradual_deploy.py: Versions upload, preview smoke test, 10/50/100 percent, automatic rollback) when this push changed
+# only its code. A push that touches the worker's wrangler.toml (bindings, crons, compatibility date), a refused or unavailable staged rollout and every
+# unlisted worker use the /ops/deploy path above, unchanged. A staged rollout that rolled back is a failed deploy (the canary and revert logic see it).
+GRADUAL_LIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gradual-deploy-workers.txt")
+
+
+def gradual_workers() -> set:
+    try:
+        with open(GRADUAL_LIST, encoding="utf-8") as fh:
+            return {ln.split("#")[0].strip() for ln in fh if ln.split("#")[0].strip()}
+    except OSError:
+        return set()
+
+
+def config_changed(worker: str) -> bool:
+    """True when the last commit touched <worker>/wrangler.toml, or the diff cannot be read (then the default path is the safe one)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "diff", "--name-only", "HEAD~1", "HEAD", "--", f"{worker}/wrangler.toml", f"{worker}/wrangler.jsonc"], capture_output=True, text=True, timeout=30)
+        return r.returncode != 0 or bool(r.stdout.strip())
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def gradual_attempt(worker: str, path: str, runner=None) -> tuple:
+    """(handled, ok). handled False means the caller must use the /ops/deploy path."""
+    if worker not in gradual_workers() or config_changed(worker) or os.environ.get("GRADUAL_DEPLOY", "on").lower() == "off":
+        return False, False
+    if not (os.environ.get("CLOUDFLARE_API_TOKEN") and os.environ.get("CLOUDFLARE_ACCOUNT_ID")):
+        return False, False
+    import subprocess
+    run = runner or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=1500))
+    here = os.path.dirname(os.path.abspath(__file__))
+    r = run([sys.executable, os.path.join(here, "gradual_deploy.py"), "--worker", worker, "--path", path, "--soak-sec", "60"])
+    line = [x for x in (r.stdout or "").splitlines() if x.startswith("RESULT_JSON=")]
+    try:
+        res = json.loads(line[-1].split("=", 1)[1]) if line else {}
+    except ValueError:
+        res = {}
+    print(f"    gradual: {res.get('outcome')} {str(res.get('why', ''))[:300]}", flush=True)
+    outcome = res.get("outcome")
+    if outcome == "rolled-out":
+        return True, True
+    if outcome == "rolled-back":
+        return True, False
+    return False, False  # refused (a rollout in progress, a non-module script, an unreadable deployment): the default path decides
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Deploy workers via the canonical /ops/deploy route.")
     ap.add_argument("--worker", help="single worker script name")
@@ -288,7 +337,11 @@ def main(argv: list[str] | None = None) -> int:
     for worker, path in targets:
         t0 = time.time()
         print(f"\n==> {worker} ({path})", flush=True)
-        res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create, args.compat_verify)
+        handled, g_ok = gradual_attempt(worker, path)
+        if handled:
+            res = {"ok": g_ok, "status": "gradual", "log": [{"step": "crons", "ok": True, "note": "gradual path: code only, wrangler.toml unchanged"}]}
+        else:
+            res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create, args.compat_verify)
         dt = time.time() - t0
         ok = bool(res.get("ok"))
         skipped = (not ok) and (not args.allow_create) and is_resurrection_refusal(res)
