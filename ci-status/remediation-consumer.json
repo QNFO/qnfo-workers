@@ -1,123 +1,367 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1a75744b6dff",
- "due": 8,
- "pass": 0,
- "fail": 8,
- "skipped": 0,
- "deferred": 0,
+ "verifier": "remediation-consumer@50ea341d10b6",
+ "due": 680,
+ "pass": 521,
+ "fail": 133,
+ "skipped": 26,
+ "deferred": 25,
  "contracts": [
   {
-   "class": "issue-1000658",
-   "issue_id": 1000658,
+   "class": "issue-1000643",
+   "issue_id": 1000643,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-ops/worker.js",
+   "observed": "missing-marker:qnfo-jobsearch/worker.js",
    "written": true
   },
   {
-   "class": "issue-1000659",
-   "issue_id": 1000659,
+   "class": "owner-card-exuvia-register",
+   "issue_id": null,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-ops/worker.js",
+   "observed": "missing-marker",
    "written": true
   },
   {
-   "class": "issue-1000660",
-   "issue_id": 1000660,
+   "class": "issue-1000335",
+   "issue_id": 1000335,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:qnfo-ops/worker.js",
+   "expected": "pass",
+   "observed": "fail",
    "written": true
   },
   {
-   "class": "issue-1000661",
-   "issue_id": 1000661,
+   "class": "issue-1000556",
+   "issue_id": 1000556,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-intent-orchestrator/worker.js",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000669",
-   "issue_id": 1000669,
+   "class": "fm-census-heartbeat-ages-out",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-two-closers-disagree",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2826",
+   "issue_id": 2826,
    "verdict": "fail",
    "expected": "0",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-view-alias-capture",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1000670",
-   "issue_id": 1000670,
+   "class": "fm-standing-detector-superseded",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-dispatch-resolved-gh-open",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-100120",
+   "issue_id": 100120,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "20",
+   "written": true
+  },
+  {
+   "class": "fm-pr-open-over-10m",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-99916-BACKFILL-1",
+   "issue_id": 99916,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-1000566",
+   "issue_id": 1000566,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000671",
-   "issue_id": 1000671,
-   "verdict": "fail",
-   "expected": "1",
+   "class": "fm-code-task-whole-file-over-window",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000672",
-   "issue_id": 1000672,
-   "verdict": "fail",
-   "expected": "1",
+   "class": "fm-relapse-for-superseded-metric",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
    "observed": "0",
    "written": true
-  }
- ],
- "trusted_transports": [
-  "binding-http",
-  "cf-api",
-  "code-read",
-  "container",
-  "curl",
-  "d1-query",
-  "d1-query@ipatent-db",
-  "d1-query@living-paper",
-  "d1-query@personal-life",
-  "d1-query@portfolio-state",
-  "d1-query@q08-signal",
-  "d1-query@qnfo-cms",
-  "d1-query@qnfo-graph",
-  "dns",
-  "edge-ext",
-  "external",
-  "external-curl",
-  "external-http",
-  "external-https",
-  "http",
-  "runner-https"
- ],
- "budget_exhausted": false,
- "runtime_verified_share_24h": 9.6,
- "host_census": {
-  "skipped": "ran within 6h"
- },
- "fleet_journeys": {
-  "skipped": "ran within 50 min"
- },
- "cf_token_watch": {
-  "ok": 1,
-  "expires_in_min": 999999,
-  "path": "accounts"
- },
- "migrations": {
-  "opted_in": 683,
-  "unapplied": [],
-  "applied_now": [],
-  "failed": [],
-  "metric": 0
- },
- "spent_ms": 16028,
- "head": "1a75744b6dff8265fc8af0388265fb151711c06c",
- "job_status": "success",
- "ts": "2026-10-28T13:05:31Z"
-}
+  },
+  {
+   "class": "fm-pr-attempt-unlinked",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-plan-wip-terminal-omitted",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-metric-refresh-null-component",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-dissemination-queue-over-cadence",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-99929-BACKFILL-1",
+   "issue_id": 99929,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-1000472",
+   "issue_id": 1000472,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "fewer than 7 errata corrections published in 7 days: 2 published, 2 with claimed_at set, 219 waiting",
+   "written": true
+  },
+  {
+   "class": "fm-ops-jobs-sweep-status-gap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-probe-author-silent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-fm-sla-due-at-mixed-format",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-consumer-gate-starvation",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-health-ok-but-empty",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-reader-report-pending",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-jobsearch-stale-pending",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000594",
+   "issue_id": 1000594,
+   "verdict": "fail",
+   "expected": "@cf/google/gemma-4-26b-a4b-it present in routing_capability for chat with tool_call_ok=1",
+   "observed": "absent from chat routing_capability",
+   "written": true
+  },
+  {
+   "class": "fm-closure-without-disposition",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-jobsearch-intake-collapse",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000598",
+   "issue_id": 1000598,
+   "verdict": "fail",
+   "expected": "retired: qnfo-ipatent is retired and qnfo-youtube-shorts is live",
+   "observed": "present: qnfo-ipatent state=live, qnfo-youtube-shorts state=live, last_census=UNMEASURED req24=1297 seen=2026-10-27T17:01:00.963Z",
+   "written": true
+  },
+  {
+   "class": "fm-standing-report-issue",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1",
+   "issue_id": null,
+   "verdict": "deferred",
+   "expected": "1",
+   "observed": "pending: 30-day window from 2026-10-06T06:30Z still open",
+   "reason": "the probe cannot judge yet: pending: 30-day window from 2026-10-06T06:30Z still open"
+  },
+  {
+   "class": "research-terminal-rem-0039",
+   "issue_id": 100205,
+   "verdict": "deferred",
+   "expected": "resolved",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-1838-BACKFILL-1",
+   "issue_id": 1838,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "fm-reasoning-starves-small-answer",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-remedy-efficacy-counts-dedupes",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-portfolio-gap-close-evidence",
+   "issue_id": null,
+   "verdict": "probe-not-machine-executable",
+   "reason": "write-keyword:insert into"
+  },
+  {
+   "class": "issue-99930-BACKFILL-1",
+   "issue_id": 99930,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100084-BACKFILL-1",
+   "issue_id": 100084,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "fm-jobsearch-auth-unavailable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-research-revise-shrink",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-companion-stall-closes-on-one-piece",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "writte
