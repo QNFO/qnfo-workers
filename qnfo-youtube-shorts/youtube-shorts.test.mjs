@@ -100,3 +100,78 @@ test("YT-QUALITY-1: a bignum value that is not in the article drops the beat", (
 test("YT-QUALITY-1: Aura spend is priced per character", () => {
   assert.ok(Math.abs(_spend("tts_aura", 1000) - 0.03) < 1e-9);
 });
+
+// ---------- YT-6 (agent_issues 1000597): retention read ----------
+import { DatabaseSync } from "node:sqlite";
+import * as W from "./worker.js";
+test("YT-6: the Analytics report parses views and average view duration by video id", () => {
+  const r = W.parseRetentionReport({ columnHeaders: [{ name: "video" }, { name: "views" }, { name: "averageViewDuration" }], rows: [["abc", 120, 31.5], ["def", 7, 4]] });
+  assert.deepEqual(r, { abc: { views: 120, avg_view_duration_s: 31.5 }, def: { views: 7, avg_view_duration_s: 4 } });
+  assert.deepEqual(W.parseRetentionReport({}), {});
+  assert.deepEqual(W.parseRetentionReport({ columnHeaders: [{ name: "views" }], rows: [[1]] }), {});
+});
+test("YT-6: the Data API statistics parse to views per id and ignore a missing count", () => {
+  assert.deepEqual(W.parseVideoStats({ items: [{ id: "a", statistics: { viewCount: "42" } }, { id: "b", statistics: {} }, { id: "c" }] }), { a: { views: 42 } });
+});
+test("YT-6: a read is due when never read or older than 55 minutes", () => {
+  const now = Date.parse("2026-10-28T20:00:00Z");
+  assert.equal(W.retentionDue(null, now), true);
+  assert.equal(W.retentionDue("2026-10-28T19:30:00Z", now), false);
+  assert.equal(W.retentionDue("2026-10-28T19:04:00Z", now), true);
+  assert.equal(W.retentionDue("garbage", now), true);
+});
+test("YT-6: 401 and an insufficient-scope 403 are the missing consent; other failures are not called that", () => {
+  assert.equal(W.retentionFailure(401, "{}"), "scope-missing");
+  assert.equal(W.retentionFailure(403, '{"error":{"message":"Request had insufficient authentication scopes."}}'), "scope-missing");
+  assert.equal(W.retentionFailure(403, '{"error":{"message":"quotaExceeded"}}'), "quota");
+  assert.equal(W.retentionFailure(500, "boom"), "http-500");
+});
+function retentionEnv() {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE youtube_videos (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, state TEXT, video_id TEXT, uploaded_at TEXT, updated_at TEXT, views INTEGER); CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);");
+  db.prepare("INSERT INTO youtube_videos (slug, state, video_id, uploaded_at) VALUES ('s1', 'uploaded', 'v1', '2026-10-27T13:00:00Z'), ('s2', 'uploaded', 'v2', '2026-10-27T14:00:00Z'), ('s3', 'rendering', NULL, NULL)").run();
+  const prep = (sql) => { let a = []; const s = { bind: (...x) => { a = x.map((v) => (v === undefined ? null : v)); return s; }, first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }), run: async () => { const r = db.prepare(sql).run(...a); return { success: true, meta: { changes: Number(r.changes) } }; } }; return s; };
+  return { db, env: { QNFO_AUDIT: { prepare: prep }, YT_CLIENT_ID: "i", YT_CLIENT_SECRET: "s", YT_REFRESH_TOKEN: "r" } };
+}
+test("YT-6: with the consent the read writes views and average view duration for the uploaded Shorts only", async () => {
+  const { db, env } = retentionEnv();
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("oauth2.googleapis.com")) return new Response(JSON.stringify({ access_token: "tok" }));
+    if (u.includes("/youtube/v3/videos")) return new Response(JSON.stringify({ items: [{ id: "v1", statistics: { viewCount: "50" } }, { id: "v2", statistics: { viewCount: "9" } }] }));
+    if (u.includes("youtubeanalytics")) return new Response(JSON.stringify({ columnHeaders: [{ name: "video" }, { name: "views" }, { name: "averageViewDuration" }], rows: [["v1", 52, 21.25], ["v2", 9, 3]] }));
+    return new Response("{}", { status: 404 });
+  };
+  try {
+    const r = await W.readRetention(env, Date.parse("2026-10-28T20:00:00Z"));
+    assert.equal(r.rows, 2); assert.equal(r.wrote, 2); assert.equal(r.failure, null);
+    const rows = db.prepare("SELECT slug, views, avg_view_duration_s, retention_read_at FROM youtube_videos ORDER BY id").all();
+    assert.deepEqual(rows.map((x) => [x.slug, x.views, x.avg_view_duration_s]), [["s1", 52, 21.25], ["s2", 9, 3], ["s3", null, null]]);
+    assert.ok(rows[0].retention_read_at && rows[2].retention_read_at === null);
+    const again = await W.readRetention(env, Date.parse("2026-10-28T20:10:00Z"));
+    assert.equal(again.rows, 0);
+  } finally { globalThis.fetch = real; }
+});
+test("YT-6: without the consent the read is refused, recorded once as a warning, and nothing is written (never a zero)", async () => {
+  const { db, env } = retentionEnv();
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("oauth2.googleapis.com")) return new Response(JSON.stringify({ access_token: "tok" }));
+    return new Response(JSON.stringify({ error: { message: "Request had insufficient authentication scopes." } }), { status: 403 });
+  };
+  try {
+    const r = await W.readRetention(env, Date.parse("2026-10-28T20:00:00Z"));
+    assert.equal(r.failure, "scope-missing"); assert.equal(r.wrote, 0);
+    const rows = db.prepare("SELECT views, avg_view_duration_s, retention_read_at FROM youtube_videos").all();
+    assert.ok(rows.every((x) => x.views === null && x.avg_view_duration_s === null && x.retention_read_at === null));
+    const ev = db.prepare("SELECT kind, status, text FROM cloud_ops_events").all();
+    assert.equal(ev.length, 1); assert.equal(ev[0].kind, "youtube.retention_scope"); assert.equal(ev[0].status, "warn"); assert.match(ev[0].text, /yt-analytics-consent/);
+  } finally { globalThis.fetch = real; }
+});
+test("YT-6: no credentials means skipped, not an error", async () => {
+  const { env } = retentionEnv();
+  delete env.YT_REFRESH_TOKEN;
+  assert.deepEqual(await W.readRetention(env), { skipped: "no-credentials" });
+});

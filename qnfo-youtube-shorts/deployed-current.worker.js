@@ -1,4 +1,4 @@
-var VERSION = "0.2.1-health-contract"; /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
+var VERSION = "0.3.0-retention"; /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // Owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse". docs/YOUTUBE-PIPELINE.md has the design.
 // State machine per paper (D1 qnfo-audit.youtube_videos.state): queued -> directed -> audio -> rendering -> rendered -> uploaded;
 // terminal: rejected (director left too few supported beats), failed (4 attempts), uploaded. Every tick resumes an unfinished row before
@@ -383,11 +383,95 @@ async function advance(env, row, deadline) {
   return row.id;
 }
 
+// ---------- YT-6 (agent_issues 1000597, roadmap YT-6, pillar reach): what viewers did with each Short ----------
+// Views and average view duration are read back hourly into youtube_videos (views, avg_view_duration_s, retention_read_at) from the YouTube Data API (statistics.viewCount) and the
+// YouTube Analytics API (views, averageViewDuration by video). The refresh token this worker holds was consented for upload; reading needs youtube.readonly and yt-analytics.readonly, which
+// is one more owner consent (IDENTITY-BOUND, human_actions yt-analytics-consent). Until it is given the read answers 401 or 403, the worker records that exactly once per tick as
+// youtube.retention_scope with status warn, leaves the columns NULL and never writes a zero: metric youtube_avg_view_duration_s reads unmeasured, not 0.
+var RETENTION_EVERY_MIN = 55;
+function parseRetentionReport(j) {
+  var out = {};
+  if (!j || !Array.isArray(j.rows) || !Array.isArray(j.columnHeaders)) return out;
+  var names = j.columnHeaders.map(function (h) { return h && h.name; });
+  var iv = names.indexOf("video"), iw = names.indexOf("views"), ia = names.indexOf("averageViewDuration");
+  if (iv < 0) return out;
+  j.rows.forEach(function (r) {
+    var o = {};
+    if (iw >= 0 && r[iw] != null && isFinite(Number(r[iw]))) o.views = Number(r[iw]);
+    if (ia >= 0 && r[ia] != null && isFinite(Number(r[ia]))) o.avg_view_duration_s = Number(r[ia]);
+    out[String(r[iv])] = o;
+  });
+  return out;
+}
+function parseVideoStats(j) {
+  var out = {};
+  ((j && j.items) || []).forEach(function (it) {
+    var n = it && it.statistics && it.statistics.viewCount;
+    if (it && it.id && n != null && isFinite(Number(n))) out[String(it.id)] = { views: Number(n) };
+  });
+  return out;
+}
+function retentionDue(lastIso, nowMs) {
+  if (!lastIso) return true;
+  var t = Date.parse(lastIso);
+  return !isFinite(t) || nowMs - t >= RETENTION_EVERY_MIN * 60000;
+}
+// 401, or 403 with an insufficient-scope reason, is the missing consent; anything else is reported as the HTTP status, never as the consent.
+function retentionFailure(status, bodyText) {
+  var t = String(bodyText || "");
+  if (status === 401 || (status === 403 && /insufficient|scope|forbidden|permission/i.test(t))) return "scope-missing";
+  if (status === 403 && /quota/i.test(t)) return "quota";
+  return "http-" + status;
+}
+var RETENTION_COLS_READY = new WeakSet();
+async function ensureRetentionColumns(env) {
+  if (RETENTION_COLS_READY.has(env.QNFO_AUDIT)) return;
+  var have = ((await env.QNFO_AUDIT.prepare("SELECT name FROM pragma_table_info('youtube_videos')").all()).results || []).map(function (r) { return r.name; });
+  if (have.indexOf("avg_view_duration_s") < 0) await env.QNFO_AUDIT.prepare("ALTER TABLE youtube_videos ADD COLUMN avg_view_duration_s REAL").run();
+  if (have.indexOf("retention_read_at") < 0) await env.QNFO_AUDIT.prepare("ALTER TABLE youtube_videos ADD COLUMN retention_read_at TEXT").run();
+  RETENTION_COLS_READY.add(env.QNFO_AUDIT);
+}
+async function readRetention(env, nowMs) {
+  nowMs = nowMs || Date.now();
+  if (!env.YT_CLIENT_ID || !env.YT_CLIENT_SECRET || !env.YT_REFRESH_TOKEN) return { skipped: "no-credentials" };
+  await ensureRetentionColumns(env);
+  var rows = ((await env.QNFO_AUDIT.prepare("SELECT id, video_id, uploaded_at, retention_read_at FROM youtube_videos WHERE state = 'uploaded' AND video_id IS NOT NULL ORDER BY id LIMIT 50").all()).results || []).filter(function (r) { return retentionDue(r.retention_read_at, nowMs); });
+  if (!rows.length) return { rows: 0 };
+  var token = await accessToken(env);
+  var ids = rows.map(function (r) { return r.video_id; });
+  var auth = { headers: { authorization: "Bearer " + token } };
+  var stats = {}, report = {}, failure = null;
+  var d = await fetch("https://www.googleapis.com/youtube/v3/videos?part=statistics&id=" + encodeURIComponent(ids.join(",")), auth);
+  var dText = await d.text();
+  if (d.ok) { try { stats = parseVideoStats(JSON.parse(dText)); } catch (e) { stats = {}; } } else failure = retentionFailure(d.status, dText);
+  var from = rows.map(function (r) { return String(r.uploaded_at || "").slice(0, 10); }).filter(Boolean).sort()[0] || new Date(nowMs - 30 * 864e5).toISOString().slice(0, 10);
+  var to = new Date(nowMs).toISOString().slice(0, 10);
+  var a = await fetch("https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=" + from + "&endDate=" + to + "&metrics=views,averageViewDuration&dimensions=video&sort=-views&maxResults=50&filters=" + encodeURIComponent("video==" + ids.join(",")), auth);
+  var aText = await a.text();
+  if (a.ok) { try { report = parseRetentionReport(JSON.parse(aText)); } catch (e) { report = {}; } } else if (!failure) failure = retentionFailure(a.status, aText);
+  var wrote = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var id = rows[i].video_id, s = stats[id] || {}, p = report[id] || {};
+    var views = p.views != null ? p.views : s.views;
+    if (views == null && p.avg_view_duration_s == null) continue;
+    await env.QNFO_AUDIT.prepare("UPDATE youtube_videos SET views = COALESCE(?1, views), avg_view_duration_s = COALESCE(?2, avg_view_duration_s), retention_read_at = ?3, updated_at = ?3 WHERE id = ?4")
+      .bind(views == null ? null : views, p.avg_view_duration_s == null ? null : p.avg_view_duration_s, nowIso(), rows[i].id).run();
+    wrote++;
+  }
+  if (failure) await logEvent(env, "youtube.retention_scope", failure === "scope-missing" ? "retention read refused (" + failure + "): the OAuth grant lacks youtube.readonly / yt-analytics.readonly; owner card yt-analytics-consent" : "retention read failed: " + failure, { failure: failure, rows: rows.length, wrote: wrote }, "warn");
+  return { rows: rows.length, wrote: wrote, failure: failure };
+}
 async function refreshMetric(env) {
   var r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM youtube_videos WHERE state = 'uploaded' AND uploaded_at >= ?1").bind(new Date(Date.now() - 30 * 86400000).toISOString()).first();
   await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'youtube_videos_30d'").bind(String(r ? r.n : 0), nowIso()).run();
   var sp = await monthSpend(env);
   await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'youtube_spend_usd_month'").bind(sp.toFixed(4), nowIso()).run();
+  // YT-6: the average view duration over the Shorts whose retention was read; with none read the metric stays unmeasured (no row is written, never a zero).
+  try {
+    await ensureRetentionColumns(env);
+    var av = await env.QNFO_AUDIT.prepare("SELECT AVG(avg_view_duration_s) AS a, COUNT(avg_view_duration_s) AS c FROM youtube_videos WHERE state = 'uploaded' AND avg_view_duration_s IS NOT NULL").first();
+    if (av && Number(av.c) > 0) await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'youtube_avg_view_duration_s'").bind(String(Math.round(Number(av.a) * 100) / 100), nowIso()).run();
+  } catch (e) { console.error(JSON.stringify({ worker: WORKER, where: "refreshMetric:avg-view-duration", error: String(e && e.message || e) })); }
   return r ? r.n : 0;
 }
 async function runTick(env, opts) {
@@ -416,6 +500,7 @@ async function runTick(env, opts) {
       }
     }
   }
+  try { res.retention = await readRetention(env); } catch (e) { res.retention = { error: String(e && e.message || e).slice(0, 200) }; await logEvent(env, "youtube.retention_error", res.retention.error, null, "warn"); }
   res.uploaded_30d = await refreshMetric(env);
   try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, 1)").bind(WORKER, VERSION, nowIso()).run(); } catch (e) { console.error(JSON.stringify({ worker: WORKER, where: "heartbeat", error: String(e && e.message || e) })); }
   return res;
@@ -458,7 +543,8 @@ class RenderContainer {
 async function status(env) {
   var out = { ok: true, worker: WORKER, version: VERSION, privacy: PRIVACY, weekly_cap: WEEKLY_CAP, spend_stop_usd: SPEND_STOP_USD, month_spend_usd: await monthSpend(env).catch(function () { return null; }), credentials: !!(env.YT_CLIENT_ID && env.YT_CLIENT_SECRET && env.YT_REFRESH_TOKEN) };
   try {
-    out.rows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, state, attempts, video_id, privacy, duration_s, substr(note,1,200) AS note, created_at, uploaded_at FROM youtube_videos ORDER BY id DESC LIMIT 10").all()).results) || [];
+    await ensureRetentionColumns(env);
+    out.rows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, state, attempts, video_id, privacy, duration_s, views, avg_view_duration_s, substr(note,1,200) AS note, created_at, uploaded_at FROM youtube_videos ORDER BY id DESC LIMIT 10").all()).results) || [];
   } catch (e) { out.rows = []; out.rows_error = String(e && e.message || e); }
   try { out.container = await (await renderStub(env).fetch("https://render.internal/state")).json(); } catch (e) { out.container = { error: String(e && e.message || e) }; }
   return out;
@@ -468,8 +554,8 @@ var worker_default = {
   async fetch(request, env, ctx) {
     var url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION,
-      capabilities: ["paper-to-short-video", "tts-voice-over", "container-render", "youtube-upload", "status-report"],
-      limitations: ["POST /run needs the x-run-token header (YT_RUN_TOKEN); /health and /status are open", "rendering runs in a container, one unfinished row is resumed per tick", "uploads at the configured privacy status through the YouTube Data API, so it is bound by that API quota", "a paper whose script has too few supported beats is rejected, and a row failing 4 attempts is terminal"] });
+      capabilities: ["paper-to-short-video", "tts-voice-over", "container-render", "youtube-upload", "retention-read", "status-report"],
+      limitations: ["POST /run needs the x-run-token header (YT_RUN_TOKEN); /health and /status are open", "rendering runs in a container, one unfinished row is resumed per tick", "uploads at the configured privacy status through the YouTube Data API, so it is bound by that API quota", "a paper whose script has too few supported beats is rejected, and a row failing 4 attempts is terminal", "views and average view duration are read only once the OAuth grant also carries youtube.readonly and yt-analytics.readonly (owner consent); until then they stay NULL"] });
     if (url.pathname === "/status") return json(await status(env));
     if (url.pathname === "/run" && request.method === "POST") {
       var tok = request.headers.get("x-run-token") || "";
@@ -490,5 +576,5 @@ var worker_default = {
     ctx.waitUntil(runTick(env, {}).then(function (r) { return logEvent(env, "youtube.tick", JSON.stringify(r), r, "ok"); }).catch(function (e) { console.error(JSON.stringify({ worker: WORKER, where: "scheduled", error: String(e && e.message || e) })); return logEvent(env, "youtube.tick", String(e && e.message || e), null, "error"); }));
   }
 };
-export { RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION };
+export { RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION, parseRetentionReport, parseVideoStats, retentionDue, retentionFailure, readRetention };
 export default worker_default;
