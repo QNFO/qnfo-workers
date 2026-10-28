@@ -21897,8 +21897,16 @@ function parseConfirmVerdict(text) {
   try {
     o = JSON.parse(t.slice(a, b + 1));
   } catch (e) {
-    console.error("[errata-hub] internal confirm: verdict is not JSON:", String(e && e.message || e).slice(0, 120));
-    return null;
+    // ERRATA-CONFIRM-JSON-REPAIR-1 (agent_issues 1000489): a model reply that quotes LaTeX or a path writes a lone backslash (LaTeX, a Windows path), which JSON refuses
+    // ("Bad escaped character in JSON at position 79"). One repair is tried, doubling every backslash that does not start a legal escape; the verdict is read unchanged otherwise.
+    // A reply that still does not parse is deferred by the caller (logConfirmDefer) and logged as a warning, not as an error: 51 console errors in 6 hours read as a failing
+    // worker (8.8 percent, over the 5 percent bar) in the traffic-health journey although each row was only deferred to the next tick.
+    try {
+      o = JSON.parse(t.slice(a, b + 1).replace(/\\(?!["\\\/bfnrtu])/g, "\\\\"));
+    } catch (e2) {
+      console.warn("[errata-hub] internal confirm: verdict is not JSON:", String(e && e.message || e).slice(0, 120));
+      return null;
+    }
   }
   if (!o) return null;
   let c = o.confirmed;
