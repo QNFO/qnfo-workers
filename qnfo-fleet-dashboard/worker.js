@@ -10,7 +10,8 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.73.0";
+var VERSION = "1.74.0";
+/* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
 /* 1.71.1 PSR-NARRATIVE-CAP-SOFT-1 (2026-10-26, agent_issues 1000409, pillar cost; patch): the weekly program-strategic review writes its narrative at a breached ai_spend cap and when the budget cannot be read, on the free Workers AI model only (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06: a breached cap steers model choice and never stops work); the result carries narrative_tier (normal | lean) and narrative_count in place of narrative_allowed, and the summary names the tier. */
 /* 1.71.0 ONE-TAP-DECISIONS-1 (2026-10-26, pillar autonomy; minor: Approve and Decline run at the tap; owner request "I need one click/tap actions: approve, etc ... action oriented, at a glance, one tap", about the 100140 card whose Approve a phone could not tap): on a decision card the owner's Approve and Decline (the whole card, the undecided rest, or one numbered item) are buttons that carry their op and args (data-dec-op, data-dec-args) and DEC_JS posts them to /api/cmd/run at the tap and writes the answer on the card, with no typed-command preview and no second confirm tap; when the session is missing or the 15-minute step-up has lapsed the card asks for the emailed code in place (the code is sent at once, the tap repeats on Verify), so the approve stays the owner-session's own, still needs a code from the last 15 minutes and is still refused for the loop token and for a card that matches a hard marker; Diagnose and Done stay typed commands; the owner's decision card opens with its buttons (52 px on a phone) and folds the seven parts and the Why / If you wait / To do reading under them, a card that asks for a step only the owner can take keeps its reading open; a signed-out visitor gets ONE "Email me a code to decide" button (the code is emailed at once and the page reloads once it is verified; OPEN-ACCESS-1 keeps the words sign in off the public page) on a card that asks for a decision and still no decision button, item text or owner script (T14, T24 unchanged in that); on / and /classic; ONE-TAP-ACTIONS-1 in the same release: on the home page a card that is not a decision (and a derived item) carries one-tap Done, Snooze 3 and 7 days and Not doing (the same /api/cmd/run, so the fresh-code rule for done and dismiss stands) instead of an "Act on it" link to /classic, the owner's cards that can be decided in one tap come first (urgent before them) under a heading that says how the list splits, a hard card's Done is a tap too, and a stranger still sees "Act on it"; on /classic the same taps replace the confirm-dialog buttons of a card that is not a decision (the decision card keeps its row); offline suite cmd-decide.test.mjs T30-T36 (443 checks), fleet-cmd G19 accepts the tap; a Chromium run on a 390 px viewport tapped Approve, the code step and the sign-in button. */
@@ -2448,6 +2449,7 @@ var API_INDEX = [
   { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v3", cache: "public 15s, ETag", freshness: "queue read at request time; area model cached 15 s; state refreshed by the */15 cron and on request when older than 300 s, with measured source ages in the response", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict, ranked breaches and root-cause explanations. Send If-None-Match, or ?since=<revision>." },
   { path: "/api/human", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open (owner fields with a holder)", schema_version: "fleet-human/v2", cache: "public 15s open / private no-store with a holder, ETag", freshness: "queue read live from D1", what: "The owner queue the page renders: items, upcoming, blind sources, decision, system summary. Send If-None-Match or ?since=<revision>." },
   { path: "/api/areas", area: "platform", source: "live", lag_s: 15, method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 15 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
+  { path: "/api/triage", area: "platform", source: "live", lag_s: 15, method: "GET", auth: "open", schema_version: "fleet-triage/v1", cache: "public 15s, ETag", freshness: "v_breach_by_cause, v_metric_trigger_state and v_failure_mode_status read per request", what: "Where the breaches come from: breaching metrics grouped by root cause, the breaching metrics no root cause maps (the unmapped list), and the recurring failure modes. A source that cannot be read is named in blind, never shown as zero. /triage is the plain-language guide." },
   { path: "/api/decision", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-decision/v1", cache: "public 15s, ETag", freshness: "governance snapshot, re-measured when older than 5 min", what: "Continue / scale back / stop, its reasons, and what would flip it." },
   { path: "/api/state", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-state/v1.1", cache: "public 15s, ETag", freshness: "fleet_dashboard_state, rebuilt by the */15 cron", what: "The full machine state: scheduled workers, probes, integration, issues." },
   { path: "/api/actions", area: "autonomy", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-actions/v1", cache: "public 15s, ETag", freshness: "same state as /api/state", what: "The issue list as machine actions with remediation." },
@@ -2586,6 +2588,61 @@ function changelogDigest(b) {
 // is returned unchanged apart from `revision`; a ?since= that matches answers {not_modified:true} with no content.
 // A route whose ?since= already means something else (GET /api/changes takes a timestamp) is unaffected: a revision is
 // eight hex characters and can never equal an ISO date, so the comparison simply does not match.
+// FLEET-TRIAGE-1: one open read of where the breaches come from. Three D1 reads, each isolated: a view that cannot be read
+// is named in `blind` and its section is null, never an empty list that would read as "nothing wrong".
+async function triageModel(env) {
+  const out = { schema_version: "fleet-triage/v1", worker: NAME, version: VERSION, generated_at: new Date().toISOString(), by_cause: null, unmapped: null, recurring_failure_modes: null, totals: null, blind: [] };
+  async function rows(label, sql) {
+    try {
+      const r = await env.AUDIT.prepare(sql).all();
+      return r && r.results ? r.results : [];
+    } catch (err) {
+      out.blind.push({ source: label, error: String(err && err.message || err).slice(0, 160) });
+      return null;
+    }
+  }
+  const causes = await rows("v_breach_by_cause", "SELECT cause_key, title, plain, lever, doer, needs_owner, breaches, metrics FROM v_breach_by_cause ORDER BY breaches DESC");
+  if (causes) {
+    out.by_cause = causes.map(function(c) {
+      return { cause: c.cause_key, title: c.title, plain: c.plain, lever: c.lever, doer: c.doer, needs_owner: Number(c.needs_owner) || 0, breaches: Number(c.breaches) || 0, metrics: String(c.metrics || "").split(", ").filter(Boolean) };
+    });
+  }
+  const unm = await rows("unmapped metrics", "SELECT s.metric_key AS metric_key, s.val AS val, s.owner AS owner FROM v_metric_trigger_state s LEFT JOIN metric_breach_cause m ON m.metric_key = s.metric_key WHERE s.hit = 1 AND m.metric_key IS NULL ORDER BY s.metric_key");
+  if (unm) out.unmapped = unm.map(function(u) {
+    return { metric: u.metric_key, value: u.val, owner: u.owner };
+  });
+  const fm = await rows("v_failure_mode_status", "SELECT fm_key, failure_mode, probe_class, last_probed FROM v_failure_mode_status WHERE status = 'recurring' ORDER BY fm_key");
+  if (fm) out.recurring_failure_modes = fm.map(function(f) {
+    return { key: f.fm_key, failure_mode: f.failure_mode, detector: f.probe_class, last_probed: f.last_probed };
+  });
+  if (out.by_cause) {
+    const total = out.by_cause.reduce(function(a, c) {
+      return a + c.breaches;
+    }, 0);
+    out.totals = { breaches: total, causes: out.by_cause.length, unmapped: out.unmapped ? out.unmapped.length : null, recurring_failure_modes: out.recurring_failure_modes ? out.recurring_failure_modes.length : null };
+  }
+  return out;
+}
+// The guide is static text plus one fetch of /api/triage; the client writes every value with textContent, so a metric
+// name or a cause text can never inject markup.
+function triagePageHtml() {
+  const css = "body{font:16px/1.5 system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a}h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem}code,pre{background:#f3f3f3;border-radius:4px}code{padding:0 .25rem}pre{padding:.75rem;overflow:auto}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.n{text-align:right;font-variant-numeric:tabular-nums}.warn{color:#9a3b00}";
+  const js = "fetch('/api/triage').then(function(r){return r.json()}).then(function(d){var s=document.getElementById('sum');" +
+    "if(d.blind&&d.blind.length){var b=document.createElement('p');b.className='warn';b.textContent='Could not read: '+d.blind.map(function(x){return x.source}).join(', ');s.after(b)}" +
+    "if(d.totals){s.textContent=d.totals.breaches+' metrics in breach across '+d.totals.causes+' root causes; '+d.totals.unmapped+' have no cause recorded; '+d.totals.recurring_failure_modes+' failure modes are recurring.'}else{s.textContent='Totals unavailable (see above).'}" +
+    "var t=document.getElementById('causes');(d.by_cause||[]).forEach(function(c){var tr=document.createElement('tr');[c.cause,c.breaches,c.title,c.doer].forEach(function(v,i){var td=document.createElement('td');if(i===1)td.className='n';td.textContent=v;tr.appendChild(td)});t.appendChild(tr)});" +
+    "var u=document.getElementById('unm');(d.unmapped||[]).forEach(function(m){var li=document.createElement('li');li.textContent=m.metric+' = '+m.value;u.appendChild(li)});" +
+    "var f=document.getElementById('fm');(d.recurring_failure_modes||[]).forEach(function(m){var li=document.createElement('li');li.textContent=m.key+': '+m.failure_mode;f.appendChild(li)})}).catch(function(){document.getElementById('sum').textContent='Could not load /api/triage.'});";
+  return "<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Fleet triage</title><style>" + css + "</style><body>" +
+    "<h1>Fleet triage: where the breaches come from</h1><p id=sum>Loading...</p>" +
+    "<h2>Breaches by root cause</h2><table><thead><tr><th>Cause<th class=n>Breaches<th>What it means<th>Owner loop</thead><tbody id=causes></tbody></table>" +
+    "<h2>Breaching metrics with no root cause recorded</h2><p>Each needs a row in <code>metric_breach_cause</code>; the breach doctor or the metric's registrant maps it, never a guess.</p><ul id=unm></ul>" +
+    "<h2>Recurring failure modes</h2><ul id=fm></ul>" +
+    "<h2>How to ask the fleet yourself</h2><p>Every read below is open, needs no key, and answers JSON. Add <code>?since=&lt;revision&gt;</code> to learn cheaply whether anything changed.</p>" +
+    "<pre>curl https://fleet.qnfo.org/api/triage        # this page's data\ncurl https://fleet.qnfo.org/api/status        # the whole fleet in one document\ncurl https://fleet.qnfo.org/api/areas         # breaches by functional area\ncurl https://fleet.qnfo.org/api/decision      # continue / scale back / stop\ncurl https://fleet.qnfo.org/api/managers      # what each program manager is focused on\ncurl https://fleet.qnfo.org/api              # index of every read endpoint</pre>" +
+    "<p>Pretty-print any of them with <code>| python -m json.tool</code>. Changing the fleet (filing a task, ratifying a decision) is not open: use <a href=/cmd>the command line</a> or <a href=/>the dashboard</a>.</p>" +
+    "<script>" + js + "</script></body></html>";
+}
 function rtRead(request, url, body, opts) {
   const o = opts || {};
   // Compute revision after potentially adjusting STOP verdict based on fresh human clicks.
@@ -3436,6 +3493,17 @@ if (path === "/health") {
       return json(bodyC, 200, { req: request, digest: revC, cache: cacheC, headers: hdrC });
     }
     return new Response(changelogHtml(v, holder), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  if (path === "/api/triage" && request.method === "GET") {
+    const mT = await triageModel(env);
+    const revT = rtDigest(mT);
+    mT.revision = revT;
+    const sinceT = (url.searchParams.get("since") || "").replace(/^rev:/, "");
+    if (sinceT && sinceT === revT) return json({ schema_version: "fleet-triage/v1", not_modified: true, revision: revT }, 200, { req: request, digest: revT, cache: RT_CACHE_PUBLIC });
+    return json(mT, 200, { req: request, digest: revT, cache: RT_CACHE_PUBLIC });
+  }
+  if ((path === "/triage" || path === "/triage/") && request.method === "GET") {
+    return new Response(triagePageHtml(), { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
   }
   if (path === "/api/decision" && request.method === "GET") {
     const st = await currentState(env, ctx, 5 * 6e4);
