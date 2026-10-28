@@ -22,9 +22,26 @@ ok(T.verify(note + "I also hold a PhD.\n", JOB).length > 0, "untagged line rejec
 ok(T.verify(note.replace(/"[^"]+"/, '"quantum cryptography"'), JOB).length > 0, "foreign quoted term rejected");
 for (const [title, loc] of [["Sales Lead, Research", "Amsterdam"], ["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Staff Engineer, Research Platform", "Amsterdam"], ["Senior AI Governance Counsel", "Amsterdam"], ["Product Marketing, Data Products", "Amsterdam"], ["Forward Deployed Product Manager, Public Sector", "Amsterdam"]])
   ok(T.evaluate({ ...JOB, title, location: loc }).status === "excluded", "gate " + title + " / " + loc);
-const tk = T.evaluate({ ...JOB, location: "Tokyo, Japan" });
-ok(tk.status === "ok" && tk.flags.some((f) => f.includes("visa")), "anywhere is flagged, not dropped", tk);
-ok(T.evaluate({ ...JOB, location: "San Francisco, CA" }).flags.some((f) => f.startsWith("LOCATION")), "US flagged");
+const jobAt = (location, title = "Senior Policy Advisor") => ({ ...JOB, title, location });
+ok(T.evaluate(jobAt("Tokyo, Japan")).status === "excluded", "elsewhere is off by default");
+const tk = T.evaluate(jobAt("Tokyo, Japan"), T.makeCtx({ loc_world: true }));
+ok(tk.status === "ok" && tk.flags.some((f) => f.includes("visa")), "elsewhere comes back flagged when selected", tk);
+ok(T.evaluate(jobAt("San Francisco, CA")).status === "excluded", "US on-site is off by default (the owner lives in Amsterdam)");
+ok(T.evaluate(jobAt("San Francisco, CA"), T.makeCtx({ loc_us: true })).flags.some((f) => f.startsWith("LOCATION")), "US on-site flagged when selected");
+ok(T.evaluate(jobAt("Berlin, Germany")).status === "excluded" && T.evaluate(jobAt("Berlin, Germany"), T.makeCtx({ loc_eu: true })).status === "ok", "other EU country only when selected");
+ok(T.evaluate(jobAt("Amsterdam, Netherlands")).status === "ok" && T.evaluate(jobAt("Remote, Europe")).status === "ok" && T.evaluate(jobAt("Amsterdam; San Francisco")).status === "ok", "Amsterdam, EU remote and mixed lists pass");
+// role families come from the whole record, not only AI
+for (const title of ["Senior Policy Advisor", "Senior Transport Planner", "Lead Data Scientist", "Head of Analytics", "Senior Program Manager", "Senior Product Manager, Data Platform", "Senior Consultant, Mobility", "Executive Director", "Senior GIS Analyst", "Contracts Manager"]) {
+  const r = T.evaluate({ ...JOB, title, desc: "Amsterdam role.", location: "Amsterdam" });
+  ok(r.status === "ok", "in lane: " + title, r);
+}
+ok(T.evaluate(jobAt("Amsterdam", "Senior Transport Planner"), T.makeCtx({ fam_transport: false })).status === "excluded", "a family switched off drops its titles");
+ok(T.evaluate(jobAt("Amsterdam", "Policy Analyst"), T.makeCtx({ lvl_mid: false })).status === "excluded", "below-senior titles drop when the owner says no");
+const dis = T.makeCtx({}, [{ title: "Analytics Operations Specialist", verdict: "dislike" }, { title: "Operations Analytics Specialist", verdict: "dislike" }, { title: "Policy Advisor Housing", verdict: "like" }]);
+ok(dis.learned.block.has("analytics") && dis.learned.boost.has("housing") && !dis.learned.block.has("policy"), "two dislikes block a word, a like boosts one");
+const an = T.scoreJob(jobAt("Tokyo, Japan"), T.makeCtx({}), "analyze");
+ok(an.drops.length > 0 && an.fit > 0, "analysis keeps the fit when the gates would drop the job", an);
+ok(T.evaluate(jobAt("Amsterdam", "Product Marketing Manager")).status === "excluded" && T.evaluate(jobAt("Amsterdam", "Senior AI Governance Counsel")).status === "excluded", "marketing and legal titles stay out");
 ok(T.evaluate({ ...JOB, desc: JOB.desc + " A PhD is required." }).flags.some((f) => f.startsWith("DEGREE")), "PhD flag");
 ok(T.stripHtml("&lt;p&gt;Hello &amp;amp; <b>world</b>&lt;/p&gt;").includes("Hello & world"), "html decode");
 
@@ -74,7 +91,7 @@ ok((await post({ "x-loop-token": "secret-test-token" }, { status: "approved" }))
 ok((await post({ "x-loop-token": "secret-test-token" }, { status: "rejected" }))[0] === 200, "unverified draft can be rejected");
 // rerun keeps decision
 await w.scheduled({}, env, { waitUntil: (p) => p }); await new Promise((r) => setTimeout(r, 50));
-ok((await call("/api/matches"))[1].matches[0].status === "rejected", "rerun upsert keeps owner decision");
+ok((await call("/api/matches?status=all"))[1].matches[0].status === "rejected" && (await call("/api/matches"))[1].count === 0, "rerun upsert keeps the owner decision and the rejected match stays hidden");
 // cooldown
 ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
 
@@ -203,6 +220,48 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(st[0] === 200 && db.prepare("SELECT event FROM jobsearch_events WHERE match_id='young' ORDER BY id DESC LIMIT 1").get().event === "replied", "outcome status is an event", st);
   ok((await call("/api/matches/young/status", { method: "POST", headers: tokHdr, body: JSON.stringify({ status: "hired" }) }, envO))[0] === 400, "unknown status refused");
   ok((await call("/api/outcomes", {}, envO))[1].by_tier.A.replied >= 1, "tier funnel sees replies");
+  globalThis.fetch = realFetch;
+}
+
+// ---------------- JOBSEARCH-PROFILE-1 (API)
+{
+  const sessEnv = { ...env, LOOP_TOKEN: "secret-test-token", EMAIL: { fetch: async () => new Response("{}", { status: 200 }) } };
+  const H = { "x-loop-token": "secret-test-token", "content-type": "application/json" };
+  const post = (path, body, e = sessEnv) => call(path, { method: "POST", headers: H, body: JSON.stringify(body) }, e);
+  const pr = (await call("/api/prefs", {}, sessEnv))[1];
+  ok(pr.survey.length >= 20 && pr.survey.every((q) => q.q && q.group), "survey served", pr.survey.length);
+  ok((await call("/api/prefs", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }, sessEnv))[0] === 401, "saving preferences needs sign-in");
+  ok((await post("/api/prefs", { answers: { nope: true } }))[0] === 400 && (await post("/api/prefs", { answers: { loc_us: "yes" } }))[0] === 400, "unknown question and non-boolean answers refused");
+  globalThis.fetch = async () => new Response(JSON.stringify({ jobs: [], data: [] }), { status: 200 });
+  const saved = await call("/api/prefs", { method: "POST", headers: H, body: JSON.stringify({ answers: { loc_us: true, fam_edu: false } }) }, sessEnv);
+  ok(saved[0] === 200 && saved[1].rerun === true, "saving works and re-runs the search", saved);
+  ok((await call("/api/prefs", {}, sessEnv))[1].survey.find((q) => q.id === "loc_us").answer === true, "answers persist");
+  // rejected matches stay hidden
+  db.prepare("DELETE FROM jobsearch_matches").run();
+  const ins2 = db.prepare("INSERT INTO jobsearch_matches (id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, status) VALUES (?1, ?2, ?2, 'C', ?3, 'L', 'u', 'B', 50, '[]', '[]', 1, ?4)");
+  ins2.run("h1", new Date().toISOString(), "Kept role", "pending_owner_approval"); ins2.run("h2", new Date().toISOString(), "Rejected role", "rejected");
+  ok((await call("/api/matches", {}, sessEnv))[1].matches.map((x) => x.id).join() === "h1", "rejected matches are hidden by default");
+  ok((await call("/api/matches?status=all", {}, sessEnv))[1].count === 2, "status=all shows them");
+  // a rejection teaches the search
+  const rj = await call("/api/matches/h1/status", { method: "POST", headers: H, body: JSON.stringify({ status: "rejected" }) }, sessEnv);
+  ok(rj[0] === 200 && db.prepare("SELECT verdict FROM jobsearch_feedback ORDER BY id DESC LIMIT 1").get().verdict === "dislike", "a rejection is logged as a dislike");
+  // check a job
+  const txt = "Senior Policy Advisor, Housing\nWe need a senior policy advisor for public policy research on housing affordability across the Netherlands. You lead survey and statistical analysis, manage the research programme and work with government agencies. Python and Tableau a plus. 8 years of experience.";
+  const chk = await post("/api/analyze", { input: txt, company: "Acme", location: "Amsterdam" });
+  ok(chk[0] === 200 && chk[1].verdict && chk[1].would_appear_in_your_search === true && chk[1].strengths.length >= 3 && chk[1].gaps.some((g) => /tableau/i.test(g)) && chk[1].draft.resume, "analyze a pasted posting: verdict, strengths, gaps, draft", chk[1]);
+  ok(!/<!--/.test(chk[1].draft.note) && chk[1].draft.resume.includes("Federal Highway"), "the draft is clean and from the ledger");
+  const chk2 = await post("/api/analyze", { input: txt, company: "Acme", location: "Tokyo, Japan" });
+  ok(chk2[1].would_appear_in_your_search === false && chk2[1].why_not_in_search.length > 0, "analysis says why a job would not appear");
+  ok((await post("/api/analyze", { input: "" }))[0] === 400, "empty input refused");
+  ok((await call("/api/analyze", { method: "POST", body: "{}" }, sessEnv))[0] === 401, "analyze needs sign-in");
+  const ssrf = await post("/api/analyze", { input: "https://127.0.0.1/admin" });
+  ok(ssrf[0] === 422 && /public website/.test(ssrf[1].error), "private hosts are refused", ssrf);
+  const html = '<html><head><title>x</title><script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@type": "JobPosting", title: "Senior Transport Planner", hiringOrganization: { name: "City of Utrecht" }, jobLocation: { address: { addressLocality: "Utrecht", addressCountry: "NL" } }, description: "<p>Lead transport planning and travel demand modelling for the municipality. Statistics and GIS.</p>" }) + "</script></head><body></body></html>";
+  globalThis.fetch = async (u) => new Response(html, { status: 200, headers: { "content-type": "text/html" } });
+  const viaUrl = await post("/api/analyze", { input: "https://jobs.example.org/posting/1" });
+  ok(viaUrl[0] === 200 && viaUrl[1].title === "Senior Transport Planner" && viaUrl[1].company === "City of Utrecht" && viaUrl[1].location.includes("Utrecht"), "a job link is read through its JobPosting data", viaUrl);
+  const lk = await post("/api/feedback", { title: "Senior Transport Planner", company: "City of Utrecht", verdict: "like" });
+  ok(lk[0] === 200 && (await post("/api/feedback", { title: "x", verdict: "maybe" }))[0] === 400, "feedback stored, bad verdict refused");
   globalThis.fetch = realFetch;
 }
 

@@ -5,9 +5,10 @@
 // by the owner (POST needs x-loop-token). No LinkedIn/Indeed scraping (LinkedIn User Agreement s8.2).
 // JOBSEARCH-OPS-1 (1.1.0): e-mailed-code owner sign-in via qnfo-email (no secret to manage), feed health and retry, self-healing runs, posting lifecycle (expired), dedupe, retention, GET /api/ops self-report.
 // JOBSEARCH-OUTCOME-1 (1.2.0): append-only status events, outcome funnel (applied, replies, interviews, offers), reply rate of applications older than 21 days, metrics jobsearch_reply_rate_90d / jobsearch_interview_rate_90d / jobsearch_applied_30d written each run, no_reply after 21 days.
+// JOBSEARCH-PROFILE-1 (1.3.0): yes/no search survey, role families drawn from the whole record (policy, transport and planning, data, product, program, research, consulting, nonprofit, GIS, contracts, social policy), location gates from the owner answers (Netherlands and remote by default, US and other on-site only when selected), likes and dislikes teach the search, rejected matches stay hidden, "check a job" analysis of a pasted link or text.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.2.2";
+var VERSION = "1.3.0";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -35,7 +36,9 @@ const LEDGER = {
    "id": "F01",
    "cluster": [
     "research_mgmt",
-    "federal"
+    "federal",
+    "contracting",
+    "program_mgmt"
    ],
    "employer": "U.S. DOT, Federal Highway Administration",
    "period": "2011-2015",
@@ -47,7 +50,9 @@ const LEDGER = {
    "cluster": [
     "transport_modeling",
     "federal",
-    "data_product"
+    "data_product",
+    "urban_planning",
+    "survey_methods"
    ],
    "employer": "U.S. DOT, Federal Highway Administration",
    "period": "2011-2015",
@@ -58,7 +63,10 @@ const LEDGER = {
    "id": "F03",
    "cluster": [
     "policy_research",
-    "data_product"
+    "data_product",
+    "social_policy",
+    "survey_methods",
+    "gis"
    ],
    "employer": "AARP Public Policy Institute",
    "period": "2016-2021",
@@ -68,7 +76,8 @@ const LEDGER = {
   {
    "id": "F04",
    "cluster": [
-    "policy_research"
+    "policy_research",
+    "social_policy"
    ],
    "employer": "AARP Public Policy Institute",
    "period": "2016-2021",
@@ -78,7 +87,8 @@ const LEDGER = {
   {
    "id": "F05",
    "cluster": [
-    "policy_research"
+    "policy_research",
+    "social_policy"
    ],
    "employer": "AARP Public Policy Institute",
    "period": "2016-2021",
@@ -144,7 +154,8 @@ const LEDGER = {
    "id": "F11",
    "cluster": [
     "nonprofit",
-    "leadership"
+    "leadership",
+    "program_mgmt"
    ],
    "employer": "Empowering Change",
    "period": "2023-2024",
@@ -155,7 +166,8 @@ const LEDGER = {
    "id": "F12",
    "cluster": [
     "data_science",
-    "federal"
+    "federal",
+    "consulting"
    ],
    "employer": "Deloitte Consulting LLP",
    "period": "2015-2016",
@@ -166,7 +178,9 @@ const LEDGER = {
    "id": "F13",
    "cluster": [
     "transport_modeling",
-    "policy_research"
+    "policy_research",
+    "survey_methods",
+    "urban_planning"
    ],
    "employer": "Deloitte Consulting LLP",
    "period": "2015-2016",
@@ -177,7 +191,8 @@ const LEDGER = {
    "id": "F14",
    "cluster": [
     "transport_modeling",
-    "policy_research"
+    "policy_research",
+    "urban_planning"
    ],
    "employer": "U.S. DOT, Federal Highway Administration",
    "period": "2011-2015",
@@ -187,7 +202,8 @@ const LEDGER = {
   {
    "id": "F15",
    "cluster": [
-    "product"
+    "product",
+    "data_product"
    ],
    "employer": "iManage; Epsilon (Publicis Groupe); AARP",
    "period": "2016-2023",
@@ -248,6 +264,16 @@ const LEDGER = {
     "research_integrity"
    ],
    "text": "Research systems builder: founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail."
+  },
+  {
+   "id": "H3",
+   "cluster": [
+    "data_product",
+    "product",
+    "data_science",
+    "survey_methods"
+   ],
+   "text": "Data and product leader: 15 years running national research programs and data products at the U.S. Federal Highway Administration and AARP; later product roles at Epsilon and iManage."
   }
  ],
  "closing": "Full CV, papers, and contact: qnfo.org",
@@ -280,6 +306,8 @@ const DDL = [
   "CREATE TABLE IF NOT EXISTS jobsearch_sessions (token_hash TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS jobsearch_events (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id TEXT NOT NULL, event TEXT NOT NULL, ts TEXT NOT NULL, note TEXT)",
   "CREATE INDEX IF NOT EXISTS idx_jobsearch_events_match ON jobsearch_events (match_id, ts)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_prefs (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, verdict TEXT NOT NULL, source TEXT)",
 ];
 let ensured = false;
 async function ensure(env) {
@@ -309,7 +337,7 @@ async function setMeta(env, k, v) {
 // feed key -> id prefix of the postings it produced (a feed that failed this run never expires anything)
 function feedPrefix(feed) {
   const [kind, arg] = feed.split(":");
-  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, remotive: "rm:", arbeitnow: "an:" }[kind];
+  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:" }[kind];
 }
 const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -322,6 +350,8 @@ const BOARDS = {
   lever: ["palantir", "mistral", "mendix", "brookings", "oliverwyman", "zoox"],
   ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake"],
   remotive: ["data", "product", "all-others"],
+  muse: ["Amsterdam, Netherlands|", "Amsterdam, Netherlands|Data and Analytics", "Amsterdam, Netherlands|Project & Product Management", "Amsterdam, Netherlands|Management", "Flexible / Remote|Data and Analytics", "Flexible / Remote|Project & Product Management", "Flexible / Remote|Management", "Flexible / Remote|Consulting"],
+  jobicy: ["netherlands", "europe", "emea"],
   arbeitnow: true,
 };
 const DISPLAY = { openai: "OpenAI", scaleai: "Scale AI", gitlab: "GitLab", mongodb: "MongoDB", anthropic: "Anthropic", databricks: "Databricks", elastic: "Elastic", stripe: "Stripe", palantir: "Palantir", mistral: "Mistral", cohere: "Cohere", notion: "Notion", elevenlabs: "ElevenLabs", adyen: "Adyen", bird: "Bird", datadog: "Datadog", cloudflare: "Cloudflare", canonical: "Canonical", grafanalabs: "Grafana Labs", mozilla: "Mozilla", wikimedia: "Wikimedia Foundation", khanacademy: "Khan Academy", codeforamerica: "Code for America", givewell: "GiveWell", dataiku: "Dataiku", fivetran: "Fivetran", nesta: "Nesta", gallup: "Gallup", rti: "RTI International", ideo: "IDEO", waymo: "Waymo", nuro: "Nuro", lyft: "Lyft", mendix: "Mendix", brookings: "Brookings Institution", oliverwyman: "Oliver Wyman", zoox: "Zoox", mollie: "Mollie", mapbox: "Mapbox", perplexity: "Perplexity", snowflake: "Snowflake" };
@@ -364,6 +394,21 @@ const FETCHERS = {
     const d = await getJson(`https://remotive.com/api/remote-jobs?category=${cat}`);
     return (d.jobs || []).map((j) => ({ id: `rm:${j.id}`, source: "remotive", company: j.company_name || "", title: j.title || "", location: "Remote - " + (j.candidate_required_location || ""), url: j.url || "", desc: stripHtml(j.description || "") }));
   },
+  // The Muse: all industries (consulting, public sector, nonprofits, product, data); arg is "location|category", 3 pages of 20
+  async muse(arg) {
+    const [loc, cat] = arg.split("|"), out = [];
+    for (let p = 1; p <= 3; p++) {
+      const d = await getJson(`https://www.themuse.com/api/public/jobs?page=${p}&location=${encodeURIComponent(loc)}${cat ? "&category=" + encodeURIComponent(cat) : ""}`);
+      for (const j of d.results || []) out.push({ id: `mu:${j.id}`, source: "muse", company: (j.company && j.company.name) || "", title: j.name || "", location: (j.locations || []).map((l) => l.name).join(" | "), url: (j.refs && j.refs.landing_page) || "", desc: stripHtml(j.contents || "") });
+      if (p >= (d.page_count || 1)) break;
+    }
+    return out;
+  },
+  // Jobicy: remote roles by region
+  async jobicy(geo) {
+    const d = await getJson(`https://jobicy.com/api/v2/remote-jobs?count=100&geo=${geo}`);
+    return (d.jobs || []).map((j) => ({ id: `jb:${j.id}`, source: "jobicy", company: j.companyName || "", title: j.jobTitle || "", location: "Remote - " + (Array.isArray(j.jobGeo) ? j.jobGeo.join(", ") : j.jobGeo || ""), url: j.url || "", desc: stripHtml(j.jobDescription || j.jobExcerpt || "") }));
+  },
   async arbeitnow() {
     const out = [];
     for (let p = 1; p <= 3; p++) {
@@ -375,31 +420,106 @@ const FETCHERS = {
 };
 
 // ------------------------------------------------------------------ matching (port of match.py)
+// ------------------------------------------------------------------ search profile (JOBSEARCH-PROFILE-1)
+// The owner answers yes/no questions (survey); answers and the likes and dislikes he gives drive the gates, so the search is his, not a fixed AI-lab filter.
+// [id, group, question, default]; default null = unanswered (no effect beyond a small ranking nudge)
+const SURVEY = [
+  ["loc_nl", "Where", "Roles in Amsterdam or elsewhere in the Netherlands (on-site or hybrid)?", true],
+  ["loc_remote", "Where", "Fully remote roles open to Europe or worldwide?", true],
+  ["loc_eu", "Where", "Roles on-site in another EU country or the UK (you would move)?", false],
+  ["loc_us", "Where", "Roles on-site in the United States (you would move)?", false],
+  ["loc_world", "Where", "Roles on-site anywhere else in the world (you would move)?", false],
+  ["fam_policy", "Work", "Public policy research and advisory (policy analyst, advisor, officer, head of policy)?", true],
+  ["fam_transport", "Work", "Transport, mobility, urban and regional planning?", true],
+  ["fam_data", "Work", "Data science and analytics leadership (head of data, analytics manager, lead data scientist)?", true],
+  ["fam_product", "Work", "Product management, especially data and platform products?", true],
+  ["fam_program", "Work", "Program, project and portfolio management (you hold the PMP)?", true],
+  ["fam_research", "Work", "Research management: research director, grants, research operations, senior researcher?", true],
+  ["fam_consult", "Work", "Consulting and advisory (consultant, principal, engagement manager)?", true],
+  ["fam_nonprofit", "Work", "Nonprofit, foundation and NGO leadership (executive director, program director)?", true],
+  ["fam_gis", "Work", "GIS and geospatial analysis?", true],
+  ["fam_contract", "Work", "Contracts and procurement oversight (you were a certified contracting officer representative)?", true],
+  ["fam_social", "Work", "Housing, ageing, community and social policy?", true],
+  ["fam_climate", "Work", "Sustainability, climate and energy-transition roles?", null],
+  ["fam_ai", "Work", "AI and machine-learning product, governance or safety roles?", true],
+  ["fam_quantum", "Work", "Quantum, deep-tech and research-integrity roles?", null],
+  ["fam_edu", "Work", "Teaching, training and academic roles?", null],
+  ["lvl_manage", "Level", "Roles that manage people?", null],
+  ["lvl_mid", "Level", "Roles below senior level (no senior, lead, head, principal or director in the title)?", null],
+  ["type_contract", "Contract", "Contract, freelance or interim engagements?", true],
+];
+const SURVEY_IDS = new Set(SURVEY.map((q) => q[0]));
+// role families: title terms (a hit means the title is in your lane) and the survey question that switches the family on or off
+const FAMILIES = {
+  fam_policy: ["policy analyst", "policy advisor", "policy adviser", "policy officer", "policy manager", "policy lead", "head of policy", "director of policy", "public policy", "policy researcher", "senior policy", "policy and research", "science policy", "policy specialist", "policy director"],
+  fam_transport: ["transport", "mobility", "urban planner", "urban planning", "regional planning", "spatial planning", "transport planner", "city planner", "land use", "transport model", "smart city", "traffic", "infrastructure planning", "urban development"],
+  fam_data: ["data scientist", "head of data", "director of data", "analytics manager", "analytics lead", "director of analytics", "head of analytics", "head of insights", "data science manager", "chief data", "data strategy", "insights manager", "data analytics manager", "lead data", "principal data", "data product", "data lead"],
+  fam_product: ["product manager", "product owner", "head of product", "group product", "product lead", "director of product", "principal product", "product management"],
+  fam_program: ["program manager", "programme manager", "project manager", "portfolio manager", "pmo", "delivery manager", "head of programs", "head of programmes", "director of programs", "programme director", "program director", "program lead", "programme lead"],
+  fam_research: ["research manager", "research director", "research program", "research programme", "head of research", "director of research", "research operations", "research lead", "grants manager", "research coordinator", "research partnerships", "research strategy", "senior researcher", "principal researcher", "research advisor", "research adviser", "research fellow", "evaluation manager", "monitoring and evaluation"],
+  fam_consult: ["consultant", "engagement manager", "advisory", "associate partner", "management consult", "strategy consult"],
+  fam_nonprofit: ["executive director", "managing director", "country director", "chief of staff", "director of operations", "foundation"],
+  fam_gis: ["gis", "geospatial", "geographic information", "spatial data", "spatial analyst"],
+  fam_contract: ["contracting officer", "contract manager", "contracts manager", "procurement manager", "vendor manager", "sourcing manager"],
+  fam_social: ["housing", "social policy", "community development", "ageing", "aging", "livability", "affordable"],
+  fam_climate: ["sustainability", "climate", "energy transition", "esg", "net zero", "decarbon"],
+  fam_ai: ["ai governance", "ai policy", "applied ai", "ai product", "ml product", "responsible ai", "ai safety", "trust and safety", "ai evaluation", "ai ethics", "ai strategy", "ai program", "ai programme"],
+  fam_quantum: ["quantum", "research integrity", "scientific integrity", "open science"],
+  fam_edu: ["lecturer", "professor", "teaching fellow", "instructor", "trainer", "education manager", "learning manager", "curriculum"],
+};
 const CLUSTER_KW = {
-  research_mgmt: ["research program", "research portfolio", "research operations", "research management", "program management", "research strategy", "head of research", "research lead"],
-  federal: ["federal government", "federal agenc", "government agenc", "public sector", "public administration", "government"],
-  transport_modeling: ["transportation", "travel demand", "mobility", "urban planning", "transit", "forecasting"],
-  policy_research: ["public policy", "policy research", "survey", "social science", "evidence-based"],
+  research_mgmt: ["research program", "research portfolio", "research operations", "research management", "program management", "research strategy", "head of research", "research lead", "grant"],
+  federal: ["federal government", "federal agenc", "government agenc", "public sector", "public administration", "government", "ministry", "municipal", "european commission"],
+  transport_modeling: ["transportation", "travel demand", "mobility", "transit", "forecasting", "traffic", "infrastructure"],
+  urban_planning: ["urban planning", "regional planning", "land use", "spatial planning", "urban development", "city planning", "smart city"],
+  gis: ["gis", "geospatial", "arcgis", "qgis", "spatial analysis", "geographic information"],
+  policy_research: ["public policy", "policy research", "survey", "social science", "evidence-based", "policy analysis", "stakeholder"],
+  social_policy: ["housing", "affordab", "ageing", "aging", "older adults", "livability", "community development", "social policy"],
+  survey_methods: ["statistical", "econometric", "survey methodology", "statistics", "modelling", "modeling", "quantitative"],
   ai_systems: ["llm", "large language model", "ai agent", "agentic", "generative ai", "applied ai", "machine learning", "ai evaluation", "evals", "rag "],
   research_integrity: ["research integrity", "reproducib", "peer review", "scientific integrity", "open science", "provenance", "responsible ai", "ai governance", "ai safety", "audit", "trustworthy"],
-  data_product: ["data product", "data platform", "analytics"],
+  data_product: ["data product", "data platform", "analytics", "dashboard", "data strategy", "data governance"],
   quantum_energy: ["quantum", "energy efficiency", "benchmark"],
-  nonprofit: ["nonprofit", "non-profit", "civil society"],
-  product: ["product manager", "product management", "roadmap"],
-  data_science: ["data science", "data scientist"],
+  nonprofit: ["nonprofit", "non-profit", "civil society", "ngo", "foundation", "philanthrop"],
+  product: ["product manager", "product management", "roadmap", "product strategy", "stakeholder"],
+  data_science: ["data science", "data scientist", "machine learning", "predictive"],
+  program_mgmt: ["program management", "programme management", "project management", "portfolio", "pmo", "delivery", "milestone", "budget"],
+  contracting: ["contracting officer", "procurement", "vendor management", "contract management", "deliverables", "tender"],
+  consulting: ["consulting", "advisory", "client engagement", "clients"],
+  climate: ["sustainab", "climate", "energy transition", "net zero", "decarbon"],
 };
-const TITLE_STRONG = ["research manager", "research program", "head of research", "director of research", "research director", "research operations", "research integrity", "ai governance", "ai policy", "research lead", "data product", "ai evaluation", "research strategy", "program manager, research", "research partnerships", "science policy", "responsible ai", "trust and safety research"];
-const TITLE_MEDIUM = ["product manager", "program manager", "principal", "director", "head of", "lead", "research", "policy", "strategist"];
-const TITLE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "sales", "scientist", "account executive", "recruiter", "counsel", "attorney", "engineer", "architect", "solutions", "customer success", "devops", "site reliability", "security engineer", "designer", "marketing", "finance", "accountant", "payroll"];
-const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect", "counsel", "attorney", "lawyer", "paralegal", "legal", "marketing", "forward deployed", "deployment strategist"];
+const TITLE_MEDIUM = ["product manager", "program manager", "programme manager", "principal", "director", "head of", "lead", "strategist", "manager", "analyst", "advisor", "adviser", "consultant", "researcher", "specialist", "policy", "research"];
+const SENIOR_RE = /\b(senior|sr\.?|lead|head|director|principal|chief|vp|vice president|staff|manager|partner|executive)\b/i;
+const MANAGE_RE = /\b(head of|director|manager|lead|chief|vp|vice president)\b/i;
+// hard noise: never your lane, whatever else the title says
+const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect", "counsel", "attorney", "lawyer", "paralegal", "legal", "marketing", "forward deployed", "deployment strategist",
+  "sales", "account executive", "account manager", "business development", "recruit", "talent", "payroll", "accountant", "accounting", "treasury", "fp&a", "tax ", "facilities", "warehouse", "driver", "nurse", "technician",
+  "customer success", "customer support", "customer service", "support specialist", "financial", "webinar", "solutions", "devops", "site reliability", "designer", "finance", "people partner", "hr ", "receptionist", "assistant"];
+const TITLE_EXCLUDE_SOFT = ["scientist"];
 const LOC_BAD_REMOTE = ["us only", "united states only", "us-only", "usa only", "canada only", "uk only", "india only", "latam", "apac only"];
-const HOME = ["amsterdam", "netherlands", "nederland", "rotterdam", "utrecht", "eindhoven", "the hague", "europe", "emea", "european", "eu ", "eu-", "worldwide", "anywhere", "global"];
-const EUROPE_OTHER = ["germany", "berlin", "munich", "france", "paris", "london", "uk", "united kingdom", "ireland", "dublin", "spain", "madrid", "barcelona", "portugal", "lisbon", "italy", "belgium", "brussels", "denmark", "copenhagen", "sweden", "stockholm", "norway", "oslo", "finland", "helsinki", "austria", "vienna", "switzerland", "zurich", "poland", "warsaw", "czech", "prague"];
+const HOME = ["amsterdam", "netherlands", "nederland", "rotterdam", "utrecht", "eindhoven", "the hague", "den haag", "delft", "leiden", "groningen", "haarlem", "almere", "amersfoort"];
+const REGION_WIDE = ["europe", "emea", "european", "eu ", "eu-", "worldwide", "anywhere", "global"];
+const EUROPE_OTHER = ["germany", "berlin", "munich", "france", "paris", "london", "uk", "united kingdom", "ireland", "dublin", "spain", "madrid", "barcelona", "portugal", "lisbon", "italy", "belgium", "brussels", "denmark", "copenhagen", "sweden", "stockholm", "norway", "oslo", "finland", "helsinki", "austria", "vienna", "switzerland", "zurich", "poland", "warsaw", "czech", "prague", "luxembourg", "estonia", "latvia", "lithuania", "hungary", "romania", "greece", "croatia", "slovenia", "slovakia", "bulgaria", "malta", "cyprus"];
 const US_RE = /\b(us|usa|united states|san francisco|new york|seattle|washington|boston|austin|chicago|los angeles|palo alto|mountain view|menlo park|sf|nyc|dc)\b|, (ca|ny|wa|ma|tx|il|dc)\b/;
-const CORE = new Set(["federal", "policy_research", "transport_modeling", "research_mgmt"]);
+const CORE = new Set(["federal", "policy_research", "transport_modeling", "research_mgmt", "urban_planning", "social_policy", "contracting"]);
 const FRONTIER = new Set(["ai_systems", "research_integrity"]);
+const DATA_SIDE = new Set(["data_product", "data_science", "survey_methods", "ai_systems", "gis"]);
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const has = (text, kws) => kws.filter((k) => text.includes(k));
+const STOP_TOKENS = new Set(["senior", "lead", "head", "manager", "director", "principal", "global", "europe", "remote", "team", "and", "for", "the", "with", "staff", "group", "associate"]);
+const tokens = (title) => [...new Set(String(title || "").toLowerCase().split(/[^a-z]+/).filter((t) => t.length >= 4 && !STOP_TOKENS.has(t)))];
+
+// ctx = what the owner told us. answers: {id: true|false|null}; learned: {boost:Set, block:Set} from likes and dislikes of real postings
+function makeCtx(answers, feedback) {
+  const a = {};
+  for (const [id, , , def] of SURVEY) a[id] = answers && Object.prototype.hasOwnProperty.call(answers, id) && answers[id] !== undefined ? answers[id] : def;
+  const fam = new Set(Object.keys(FAMILIES).filter((k) => a[k] !== false));
+  const like = {}, dis = {};
+  for (const f of feedback || []) for (const t of tokens(f.title)) { const m = f.verdict === "like" ? like : dis; m[t] = (m[t] || 0) + 1; }
+  const boost = new Set(Object.keys(like).filter((t) => !dis[t])), block = new Set(Object.keys(dis).filter((t) => dis[t] >= 2 && !like[t]));
+  return { a, fam, learned: { boost, block } };
+}
+const DEFAULT_CTX = makeCtx({}, []);
 
 function clustersIn(desc, title) {
   const t = desc.toLowerCase(), ti = (title || "").toLowerCase();
@@ -407,49 +527,93 @@ function clustersIn(desc, title) {
   for (const [c, kws] of Object.entries(CLUSTER_KW)) if (has(t, kws).length >= 2 || has(ti, kws).length) out.add(c);
   return out;
 }
-function locationGate(loc, descHead) {
+function locationGate(loc, descHead, ctx = DEFAULT_CTX) {
   const l = (loc || "").toLowerCase() + " ";
+  const a = ctx.a;
   if (!l.trim()) return ["check", "location missing"];
   if (LOC_BAD_REMOTE.some((b) => l.includes(b))) return ["fail", `location restricted: ${loc}`];
-  if (l.includes("united states") && l.includes("remote") && !HOME.some((k) => l.includes(k))) return ["ok", `US-based remote; owner authorized in US (${loc})`];
-  if (HOME.some((k) => l.includes(k))) return ["ok", loc];
-  if (EUROPE_OTHER.some((k) => new RegExp("\\b" + escRe(k) + "\\b").test(l))) return ["check", `Europe but not NL; relocation or employer-of-record unverified (${loc})`];
+  const home = HOME.some((k) => l.includes(k)), remote = l.includes("remote");
+  const otherEu = EUROPE_OTHER.some((k) => new RegExp("\\b" + escRe(k) + "\\b").test(l)) || /\b(serbia|ukraine|turkey|albania|bosnia|montenegro|macedonia|moldova|georgia|armenia)\b/.test(l);
+  // a region word ("Europe", "EMEA") counts as open to Europe only when no other country or city is named, or when the role is remote
+  const wide = REGION_WIDE.some((k) => l.includes(k)) && (remote || (!otherEu && !US_RE.test(l)));
+  if (home) return a.loc_nl === false ? ["fail", `Netherlands not selected: ${loc}`] : ["ok", loc];
+  if (wide) return a.loc_remote === false && remote ? ["fail", `remote not selected: ${loc}`] : ["ok", loc];
+  if (otherEu)
+    return a.loc_eu ? ["check", `Europe outside NL: you would move; employer-of-record or permit unverified (${loc})`] : ["fail", `Europe outside NL not selected: ${loc}`];
   if (l.replace(/[^a-z]/g, "") === "remote" || l.replace(/[^a-z]/g, "") === "remoteremote") {
-    if (/(must|should) (be )?(located|based|reside) in the (u\.?s|united states|uk|canada)/.test(descHead.toLowerCase())) return ["fail", "remote but posting requires US/UK/CA residence"];
-    return ["check", "remote, region unspecified"];
+    if (/(must|should) (be )?(located|based|reside) in the (u\.?s|united states|uk|canada)/.test((descHead || "").toLowerCase())) return ["fail", "remote but posting requires US/UK/CA residence"];
+    return a.loc_remote === false ? ["fail", "remote not selected"] : ["check", "remote, region unspecified"];
   }
-  if (US_RE.test(l)) return ["check", `US on-site/hybrid: relocation from Amsterdam, owner says negotiable (${loc})`];
-  return ["check", `Elsewhere: owner will relocate but is authorized only in NL/US; visa needed (${loc})`];
+  if (US_RE.test(l)) {
+    // remote inside the US is still a US job (time zone, payroll): it needs the US answer, not the Europe-remote one
+    return a.loc_us ? ["check", `US on-site/hybrid: you would move from Amsterdam (${loc})`] : ["fail", `US on-site not selected: ${loc}`];
+  }
+  return a.loc_world ? ["check", `Elsewhere: you would move; authorized only in NL/US, visa needed (${loc})`] : ["fail", `outside NL, EU and US, not selected: ${loc}`];
 }
-function evaluate(job) {
-  const title = job.title.toLowerCase(), desc = job.desc || "";
-  const why = [], flags = [];
-  let locPen = 0;
-  if (ABSOLUTE_EXCLUDE.some((x) => title.includes(x))) return { status: "excluded", reason: "seniority or role family below target" };
-  const strong = has(title, TITLE_STRONG), medium = has(title, TITLE_MEDIUM);
-  if (TITLE_EXCLUDE.some((x) => title.includes(x)) && !strong.length) return { status: "excluded", reason: "role family excluded by title" };
-  if (!strong.length && !medium.length) return { status: "excluded", reason: "title not in target families" };
-  const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000));
-  if (gate === "fail") return { status: "excluded", reason: locNote };
-  if (gate === "check") { flags.push("LOCATION: " + locNote); locPen = /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
+// score the posting against the profile. mode "analyze" never drops a posting: it reports the fit and what the gates would say
+function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
+  const title = (job.title || "").toLowerCase(), desc = job.desc || "";
+  const why = [], flags = [], drops = [];
+  let pen = 0;
+  const drop = (reason) => { drops.push(reason); };
+  if (ABSOLUTE_EXCLUDE.some((x) => title.includes(x))) drop("role family below target or not your lane");
+  const famOn = [...ctx.fam].filter((k) => has(title, FAMILIES[k]).length);
+  const famOff = Object.keys(FAMILIES).filter((k) => !ctx.fam.has(k) && has(title, FAMILIES[k]).length);
+  const medium = has(title, TITLE_MEDIUM);
+  const soft = TITLE_EXCLUDE_SOFT.some((x) => title.includes(x));
+  if (soft && !famOn.length) drop("role family excluded by title");
+  if (!famOn.length && famOff.length) drop("family switched off in your preferences: " + famOff[0].replace("fam_", ""));
+  if (!famOn.length && !medium.length) drop("title not in your role families");
+  const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000), ctx);
+  if (gate === "fail") drop(locNote);
+  if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
   const cl = clustersIn(desc, job.title);
-  const tScore = strong.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : 12;
+  if (!famOn.length && cl.size < 2) drop("generic title and thin evidence in the posting");
+  if (famOn.length && !cl.size) pen += 15;
+  const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : 12;
   const eScore = Math.min(45, 9 * cl.size);
-  const uniq = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => FRONTIER.has(c));
-  if (strong.length) why.push("title match: " + strong[0]); else why.push("title family: " + medium.slice(0, 2).join(", "));
-  why.push(cl.size ? "evidence clusters: " + [...cl].sort().join(", ") : "no evidence clusters");
-  if (uniq) why.push("uncommon intersection: research-program or policy-research management + AI or research-integrity systems");
-  let score = tScore + eScore + (uniq ? 15 : 0) - locPen;
+  const uniqA = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => FRONTIER.has(c));
+  const uniqB = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => DATA_SIDE.has(c));
+  if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else why.push("generic title: " + medium.slice(0, 2).join(", "));
+  why.push(cl.size ? "evidence in the posting: " + [...cl].sort().join(", ") : "no matching evidence in the posting text");
+  if (uniqA) why.push("uncommon intersection: research-program or policy-research management + AI or research-integrity systems");
+  else if (uniqB) why.push("uncommon intersection: public-policy or planning expertise + data and analytics");
+  let score = tScore + eScore + (uniqA || uniqB ? 15 : 0);
+  const senior = SENIOR_RE.test(job.title || "");
+  if (!senior) { if (ctx.a.lvl_mid === false) drop("below senior level (preference)"); else if (ctx.a.lvl_mid !== true) { pen += 6; why.push("no seniority marker in the title"); } }
+  if (ctx.a.lvl_manage === false && MANAGE_RE.test(job.title || "")) pen += 15;
+  if (ctx.a.type_contract === false && /\b(contract|freelance|interim|temporary)\b/.test(title)) drop("contract work not selected");
+  const tk = tokens(job.title);
+  if (tk.some((t) => ctx.learned.boost.has(t))) { score += 10; why.push("looks like roles you liked: " + tk.filter((t) => ctx.learned.boost.has(t)).slice(0, 2).join(", ")); }
+  if (tk.some((t) => ctx.learned.block.has(t))) { pen += 15; why.push("looks like roles you rejected: " + tk.filter((t) => ctx.learned.block.has(t)).slice(0, 2).join(", ")); }
   const low = desc.toLowerCase();
-  if (/ph\.?d\.?[^.\n]{0,40}(required|must)|(required|must)[^.\n]{0,40}ph\.?d/.test(low)) { flags.push("DEGREE: PhD appears required; owner holds M.S."); score -= 20; }
+  if (/ph\.?d\.?[^.\n]{0,40}(required|must)|(required|must)[^.\n]{0,40}ph\.?d/.test(low)) { flags.push("DEGREE: PhD appears required; you hold an M.S."); score -= 20; }
   if (/security clearance|u\.?s\.? citizen/.test(low)) flags.push("AUTH: clearance/citizenship language present");
-  if (/right to work|work authori[sz]ation|visa sponsorship|eligible to work/.test(low) && gate === "check" && !/^US/.test(locNote)) flags.push("AUTH: work-authorization language; owner is authorized in NL and US only");
+  if (/right to work|work authori[sz]ation|visa sponsorship|eligible to work/.test(low) && gate === "check" && !/^US/.test(locNote)) flags.push("AUTH: work-authorization language; you are authorized in NL and US only");
   const lang = [...low.matchAll(/(?:fluen\w*|proficien\w*|native)[^.\n]{0,30}\b(german|dutch|french|spanish|italian|japanese|korean|mandarin|portuguese|hindi)/g)].map((m) => m[1]);
-  if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; owner lists English only");
+  if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; you list English only");
   const yrs = [...low.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
   if (yrs.length && Math.max(...yrs) > 22) flags.push(`YEARS: asks ${Math.max(...yrs)}+ years`);
+  if (!famOn.length) score = Math.min(score, 49);   // a generic title never outranks a title in your lane
+  const fit = score;
+  score -= pen;
   const tier = score >= 70 && cl.size ? "A" : score >= 35 ? "B" : "C";
-  return { status: "ok", score, tier, clusters: [...cl].sort(), unique: uniq, why, flags };
+  return { fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn };
+}
+function evaluate(job, ctx = DEFAULT_CTX) {
+  const r = scoreJob(job, ctx);
+  if (r.drops.length) return { status: "excluded", reason: r.drops[0] };
+  return { status: "ok", score: r.score, tier: r.tier, clusters: r.clusters, unique: r.unique, why: r.why, flags: r.flags };
+}
+function rank(jobs, ctx = DEFAULT_CTX) {
+  const ok = [], excl = {};
+  for (const j of jobs) {
+    const r = evaluate(j, ctx);
+    if (r.status === "ok" && r.tier !== "C") ok.push({ ...j, match: r });
+    else { const k = (r.reason || "score below threshold").replace(/:.*/, ""); excl[k] = (excl[k] || 0) + 1; }
+  }
+  ok.sort((a, b) => b.match.score - a.match.score);
+  return [ok, excl];
 }
 
 // ------------------------------------------------------------------ tailoring + verification (port of tailor.py)
@@ -468,12 +632,16 @@ function pickFacts(clusters, k) {
     if (s) scored.push([-s, i, f]);
   });
   scored.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  return scored.slice(0, k).map((x) => x[2]);
+  const picked = scored.slice(0, k).map((x) => x[2]);
+  for (const id of ["F01", "F03", "F12", "F15", "F06", "F10"]) { if (picked.length >= k) break; if (!picked.some((f) => f.id === id)) picked.push(FACTS[id]); }   // postings outside the old clusters still get verified facts
+  return picked;
 }
 function headline(clusters) {
   const cl = new Set(clusters);
   const a = ["research_mgmt"].filter((c) => cl.has(c)).length + ["federal", "policy_research", "transport_modeling"].filter((c) => cl.has(c)).length;
   const b = HEADS.H2.cluster.filter((c) => cl.has(c)).length;
+  const c3 = HEADS.H3.cluster.filter((c) => cl.has(c)).length;
+  if (c3 > a && c3 > b) return HEADS.H3;
   return a > b ? HEADS.H1 : HEADS.H2;
 }
 function jobTerms(job, clusters, n = 2) {
@@ -545,23 +713,13 @@ function verify(doc, job) {
 const stripTags = (s) => s.replace(/ <!--.*?-->$/gm, "");
 
 // ------------------------------------------------------------------ pipeline
-function rank(jobs) {
-  const ok = [], excl = {};
-  for (const j of jobs) {
-    const r = evaluate(j);
-    if (r.status === "ok" && r.tier !== "C") ok.push({ ...j, match: r });
-    else { const k = (r.reason || "score below threshold").replace(/:.*/, ""); excl[k] = (excl[k] || 0) + 1; }
-  }
-  ok.sort((a, b) => b.match.score - a.match.score);
-  return [ok, excl];
-}
 async function pool(tasks, n) {
   const res = [];
   let i = 0;
   await Promise.all(Array.from({ length: n }, async () => { while (i < tasks.length) { const k = i++; res[k] = await tasks[k](); } }));
   return res;
 }
-async function collectAndRank(onlyGroups) {
+async function collectAndRank(ctx, onlyGroups) {
   const tasks = [], feedsList = [];
   for (const [kind, args] of Object.entries(BOARDS)) {
     if (onlyGroups && !onlyGroups.includes(kind)) continue;
@@ -585,7 +743,7 @@ async function collectAndRank(onlyGroups) {
     for (const jb of r.jobs) jb.company = DISPLAY[jb.company] || jb.company;
     fetched += r.jobs.length;
     feedResults.push({ feed: r.feed, ok: true, count: r.jobs.length });
-    const [ok, ex] = rank(r.jobs);
+    const [ok, ex] = rank(r.jobs, ctx);
     for (const [k, v] of Object.entries(ex)) excl[k] = (excl[k] || 0) + v;
     kept.push(...ok);
   }), 3);
@@ -597,6 +755,92 @@ function artifactsFor(j) {
   const v = verify(res, j).concat(verify(note, j));
   return v.length ? { verified: 0, blocked: v.join("; "), resume: null, note: null } : { verified: 1, blocked: null, resume: stripTags(res), note: stripTags(note) };
 }
+// ------------------------------------------------------------------ preferences, feedback, "check a job" (JOBSEARCH-PROFILE-1)
+async function loadCtx(env) {
+  await ensure(env);
+  let answers = {};
+  const row = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_prefs WHERE k='survey'").first();
+  if (row) { try { answers = JSON.parse(row.v) || {}; } catch (e) { logErr("prefs-parse", e); } }
+  const fb = (await env.JOBS_DB.prepare("SELECT title, verdict FROM jobsearch_feedback ORDER BY id DESC LIMIT 500").all()).results;
+  return makeCtx(answers, fb);
+}
+async function getMeta(env, k) { const r = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_meta WHERE k=?").bind(k).first(); return r ? r.v : null; }
+async function addFeedback(env, title, company, verdict, source) {
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_feedback (ts, title, company, verdict, source) VALUES (?1,?2,?3,?4,?5)").bind(new Date().toISOString(), String(title || "").slice(0, 200), String(company || "").slice(0, 120), verdict, source).run();
+}
+const TECH_TERMS = ["python", "sql", "r ", "tableau", "power bi", "looker", "aws", "azure", "gcp", "kubernetes", "docker", "spark", "snowflake", "dbt", "airflow", "salesforce", "jira", "sap", "workday", "java", "javascript", "typescript", "react", "golang", "rust", "c++", "scala", "stata", "spss", "sas", "arcgis", "qgis", "postgis", "terraform", "excel", "agile", "scrum", "prince2", "six sigma", "lean", "safe"];
+const LEDGER_SKILLS = (LEDGER.skills || []).join(" | ").toLowerCase() + " | agile pmp";
+function gapsFor(desc) {
+  const d = " " + (desc || "").toLowerCase() + " ";
+  const mentioned = TECH_TERMS.filter((t) => new RegExp("[^a-z]" + escRe(t.trim()) + "[^a-z]").test(d));
+  const notInLedger = mentioned.filter((t) => !LEDGER_SKILLS.includes(t.trim()));
+  const out = [];
+  if (notInLedger.length) out.push("named in the posting but not in your ledger (add to the ledger if you have it): " + notInLedger.slice(0, 8).join(", "));
+  const yrs = [...d.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
+  if (yrs.length) out.push(`asks for up to ${Math.max(...yrs)} years of experience (your record starts in ${LEDGER.person.career_start})`);
+  if (/ph\.?d/.test(d)) out.push("mentions a PhD; you hold an M.S. and a B.A.");
+  if (/\bmba\b/.test(d)) out.push("mentions an MBA; not in your ledger");
+  return out;
+}
+function jsonLdPosting(html) {
+  for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    let data; try { data = JSON.parse(m[1]); } catch (e) { continue; }
+    const stack = Array.isArray(data) ? [...data] : [data];
+    while (stack.length) {
+      const o = stack.shift();
+      if (!o || typeof o !== "object") continue;
+      if (o["@graph"]) stack.push(...(Array.isArray(o["@graph"]) ? o["@graph"] : [o["@graph"]]));
+      const type = [].concat(o["@type"] || []).join(",");
+      if (/JobPosting/i.test(type)) {
+        const loc = [].concat(o.jobLocation || []).map((l) => (l && l.address ? [l.address.addressLocality, l.address.addressRegion, l.address.addressCountry && (l.address.addressCountry.name || l.address.addressCountry)].filter(Boolean).join(", ") : "")).filter(Boolean).join(" | ");
+        const remote = /TELECOMMUTE/i.test(JSON.stringify(o.jobLocationType || "")) ? " (Remote)" : "";
+        return { title: o.title || "", company: (o.hiringOrganization && (o.hiringOrganization.name || o.hiringOrganization)) || "", location: (loc + remote).trim(), desc: stripHtml(o.description || "") };
+      }
+    }
+  }
+  return null;
+}
+async function fetchPosting(rawUrl) {
+  let u; try { u = new URL(rawUrl); } catch (e) { throw new Error("not a valid URL"); }
+  if (u.protocol !== "https:") throw new Error("only https links are read");
+  if (/^(localhost|.*\.local|.*\.internal)$/i.test(u.hostname) || /^[\d.]+$/.test(u.hostname) || u.hostname.includes(":")) throw new Error("that host is not a public website");
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 15000);
+  try {
+    const r = await fetch(u.toString(), { headers: { "user-agent": "Mozilla/5.0 (compatible; qnfo-jobsearch/1.3; +https://qnfo.org)", accept: "text/html,application/xhtml+xml,application/json" }, signal: ac.signal, redirect: "follow" });
+    if (!r.ok) throw new Error("the page answered HTTP " + r.status + "; paste the posting text instead");
+    const html = (await r.text()).slice(0, 2000000);
+    const ld = jsonLdPosting(html);
+    if (ld && ld.desc) return { ...ld, url: u.toString() };
+    const title = (html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i) || html.match(/<title[^>]*>([^<]+)/i) || [])[1] || "";
+    const company = (html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)/i) || [])[1] || u.hostname.replace(/^www\./, "");
+    const body = stripHtml(html.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, " ")).slice(0, 30000);
+    if (body.length < 400) throw new Error("the page has no readable text (it is probably built in the browser); paste the posting text instead");
+    return { title: decodeEntities(title).trim(), company, location: "", desc: body, url: u.toString() };
+  } finally { clearTimeout(t); }
+}
+async function analyzeJob(env, body) {
+  const ctx = await loadCtx(env);
+  let p = { title: body.title || "", company: body.company || "", location: body.location || "", desc: "", url: "" };
+  const input = String(body.input || body.text || body.url || "").trim();
+  if (!input) throw Object.assign(new Error("paste a job link or the posting text"), { status: 400 });
+  if (/^https?:\/\/\S+$/.test(input)) { p = { ...p, ...(await fetchPosting(input)) }; if (body.title) p.title = body.title; if (body.company) p.company = body.company; if (body.location) p.location = body.location; }
+  else { p.desc = input.slice(0, 40000); if (!p.title) p.title = (input.split("\n").find((l) => l.trim()) || "").trim().slice(0, 140); }
+  if (!p.title) throw Object.assign(new Error("could not find the job title; add it in the title box"), { status: 400 });
+  const job = { id: "check:" + (await sha256hex(p.title + p.company + p.desc.slice(0, 200))).slice(0, 12), source: "check", company: p.company || "the employer", title: p.title, location: p.location, url: p.url, desc: p.desc };
+  const sc = scoreJob(job, ctx, "analyze");
+  const verdict = sc.fit >= 70 ? "strong fit" : sc.fit >= 45 ? "good fit" : sc.fit >= 35 ? "possible fit" : "weak fit";
+  const strengths = pickFacts(sc.clusters, 5).map((f) => ({ id: f.id, text: f.text }));
+  const m = { clusters: sc.clusters };
+  const res = buildResume(job, m), note = buildNote(job, m), bad = verify(res, job).concat(verify(note, job));
+  return {
+    title: job.title, company: job.company, location: job.location || "(not found; judged on the text)", url: job.url,
+    verdict, fit_score: sc.fit, score_after_preferences: sc.score,
+    would_appear_in_your_search: sc.drops.length ? false : sc.tier !== "C",
+    why_not_in_search: sc.drops.length ? sc.drops : sc.tier === "C" ? ["score below the cut after location and level adjustments"] : [],
+    why: sc.why, flags: sc.flags, strengths, gaps: gapsFor(job.desc),
+    draft: bad.length ? { blocked: bad.join("; ") } : { resume: stripTags(res), note: stripTags(note) },
+  };
+}
 async function run(env) {
   await ensure(env);
   const t0 = Date.now(), started = iso(t0);
@@ -605,7 +849,10 @@ async function run(env) {
     .bind(started, JSON.stringify(["run did not finish: closed by the next run"]), iso(t0 - 15 * 60 * 1000)).run();
   const rid = (await env.JOBS_DB.prepare("INSERT INTO jobsearch_runs (started_at) VALUES (?)").bind(started).run()).meta.last_row_id;
   try {
-    const { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank();
+    const ctx = await loadCtx(env);
+    const prefsHash = await sha256hex(JSON.stringify([ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort()]));
+    const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
+    const { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank(ctx);
     const per = {}, seen = new Set(), picked = [];
     for (const j of kept) {
       const dk = dedupeKey(j);
@@ -632,11 +879,12 @@ async function run(env) {
         : env.JOBS_DB.prepare("INSERT INTO jobsearch_feeds (feed, last_error, last_error_at, consecutive_fail) VALUES (?1,?2,?3,1) ON CONFLICT(feed) DO UPDATE SET last_error=?2, last_error_at=?3, consecutive_fail=consecutive_fail+1").bind(f.feed, f.error.slice(0, 300), now));
     }
     // lifecycle: a pending match whose feed answered this run but did not list it for 48 h is gone upstream or no longer matches
-    const cutoff = iso(t0 - 48 * 3600 * 1000), prefixes = new Set();
+    const cutoff = iso(prefsChanged ? t0 : t0 - 48 * 3600 * 1000), prefixes = new Set();   // new preferences retire what no longer fits at once
     const okFeeds = new Set(feedResults.filter((f) => f.ok).map((f) => f.feed));
     for (const f of feedResults) {
       if (!f.ok) continue;
-      if (f.feed.startsWith("remotive:") && !BOARDS.remotive.every((c) => okFeeds.has("remotive:" + c))) continue;
+      const kind0 = f.feed.split(":")[0];
+      if (["remotive", "muse", "jobicy"].includes(kind0) && !BOARDS[kind0].every((c) => okFeeds.has(kind0 + ":" + c))) continue;   // a grouped source expires nothing unless every part answered
       prefixes.add(feedPrefix(f.feed));
     }
     for (const pre of prefixes) stmts.push(env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='expired', decided_at=?3 WHERE status='pending_owner_approval' AND id LIKE ?1 AND last_seen < ?2").bind(pre + "%", cutoff, now));
@@ -653,6 +901,7 @@ async function run(env) {
       env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='no_reply', decided_at=?2 WHERE " + nrWhere).bind(nrCut, new Date().toISOString()),
     ]);
     try { await writeOutcomeMetrics(env, await outcomes(env)); } catch (e) { logErr("outcome-metrics", e); }
+    await setMeta(env, "prefs_hash", prefsHash);
     await setMeta(env, "ledger_verified_on", LEDGER_VERIFIED_ON);
     await setMeta(env, "ledger_open_questions", (LEDGER.unverified_needs_owner || []).length);
     await setMeta(env, "worker_version", VERSION);
@@ -798,7 +1047,7 @@ const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
     "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "GET /health": "version",
   },
   policy: "nothing is sent; approval is a status change only",
@@ -815,6 +1064,33 @@ const handler = {
     if (p === "/api/ledger" && m === "GET") return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines });
     if (p === "/api/ops" && m === "GET") { const rep = await opsReport(env); return J(rep, rep.status === "ok" ? 200 : 503); }
     if (p === "/api/outcomes" && m === "GET") return J(await outcomes(env));
+    if (p === "/api/prefs" && m === "GET") {
+      const ctx = await loadCtx(env);
+      const fb = (await env.JOBS_DB.prepare("SELECT verdict, title FROM jobsearch_feedback ORDER BY id DESC LIMIT 20").all()).results;
+      return J({ survey: SURVEY.map(([id, group, q, def]) => ({ id, group, q, default: def, answer: ctx.a[id] })), learned: { boost_words: [...ctx.learned.boost].slice(0, 30), block_words: [...ctx.learned.block].slice(0, 30), recent: fb } });
+    }
+    if (p === "/api/prefs" && m === "POST") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
+      const ans = {};
+      for (const [id, v] of Object.entries(b.answers || {})) { if (!SURVEY_IDS.has(id)) return J({ error: "unknown question " + id }, 400); if (v !== true && v !== false && v !== null) return J({ error: "answers are true, false or null" }, 400); ans[id] = v; }
+      await ensure(env);
+      await env.JOBS_DB.prepare("INSERT INTO jobsearch_prefs (k, v, updated_at) VALUES ('survey', ?1, ?2) ON CONFLICT(k) DO UPDATE SET v=?1, updated_at=?2").bind(JSON.stringify(ans), new Date().toISOString()).run();
+      ctx.waitUntil(run(env).catch((e) => logErr("rerun-after-prefs", e)));   // the owner's own change bypasses the run cooldown
+      return J({ ok: true, saved: Object.keys(ans).length, rerun: true });
+    }
+    if (p === "/api/feedback" && m === "POST") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
+      if (!["like", "dislike"].includes(b.verdict) || !b.title) return J({ error: "send {title, company, verdict: like|dislike}" }, 400);
+      await ensure(env); await addFeedback(env, b.title, b.company, b.verdict, "check");
+      return J({ ok: true });
+    }
+    if (p === "/api/analyze" && m === "POST") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
+      try { return J(await analyzeJob(env, b)); } catch (e) { return J({ error: e.message }, e.status || 422); }
+    }
     if (p === "/api/auth/request" && m === "POST") { const [st, body] = await authRequest(env); return J(body, st); }
     if (p === "/api/auth/verify" && m === "POST") {
       let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
@@ -835,11 +1111,12 @@ const handler = {
     }
     if (p === "/api/matches" && m === "GET") {
       const tier = url.searchParams.get("tier"), status = url.searchParams.get("status"), q = (url.searchParams.get("q") || "").toLowerCase();
+      const HIDDEN = ["rejected", "expired", "no_reply"];   // a rejected match stays gone unless asked for with status=all
       const lim = Math.min(200, +url.searchParams.get("limit") || 100);
       const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at FROM jobsearch_matches ORDER BY score DESC, last_seen DESC LIMIT 500").all();
       let rows = r.results.map(parseRow);
       if (tier) rows = rows.filter((x) => x.tier === tier);
-      if (status) rows = rows.filter((x) => x.status === status);
+      if (status === "all") { /* everything */ } else if (status) rows = rows.filter((x) => x.status === status); else rows = rows.filter((x) => !HIDDEN.includes(x.status));
       if (q) rows = rows.filter((x) => (x.title + " " + x.company + " " + x.location).toLowerCase().includes(q));
       return J({ count: rows.length, matches: rows.slice(0, lim) });
     }
@@ -858,6 +1135,10 @@ const handler = {
       if (!cur) return J({ error: "not found" }, 404);
       if (!cur.verified && body.status !== "rejected" && body.status !== "pending_owner_approval") return J({ error: "artifacts failed verification; only rejected is allowed" }, 409);
       const tsNow = new Date().toISOString();
+      if (body.status === "rejected" || body.status === "applied" || body.status === "approved") {
+        const mt = await env.JOBS_DB.prepare("SELECT title, company FROM jobsearch_matches WHERE id=?").bind(id).first();
+        if (mt) await addFeedback(env, mt.title, mt.company, body.status === "rejected" ? "dislike" : "like", "status");
+      }
       await env.JOBS_DB.batch([
         env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status=?, decided_at=? WHERE id=?").bind(body.status, tsNow, id),
         env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1, ?2, ?3, 'owner')").bind(id, body.status, tsNow),
@@ -873,7 +1154,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, LEDGER, dedupeKey, feedPrefix };
+handler.__test = { evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, SURVEY };
 export default handler;
 
 // ------------------------------------------------------------------ web UI (light theme, plain JS, talks only to the API above)
@@ -894,13 +1175,14 @@ main{max-width:900px;margin:0 auto;padding:16px}
 .st{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:1px 8px}.st.approved{border-color:var(--a);color:var(--a)}.st.rejected{border-color:var(--bad);color:var(--bad)}
 pre{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}a{color:var(--acc)}
-.note{background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px}summary{cursor:pointer;font-weight:600}.q{padding:4px 0;border-top:1px solid var(--line)}.q label{margin-left:10px;white-space:nowrap}h4{margin:10px 0 4px}textarea{font:inherit;border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:8px}.note{background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
 </style></head><body>
 <header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
 <div class="bar"><select id="tier"><option value="">All tiers</option><option>A</option><option>B</option></select>
-<select id="status"><option value="">All statuses</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
+<select id="status"><option value="">Active (hides rejected)</option><option value="all">All, including rejected</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
 <input id="q" placeholder="Search title, company, place" size="26"><button id="run" class="p">Run now</button><a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn().catch(e=>alert(e.message))">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
-<main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><div id="list"></div></main>
+<main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
+<details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="list"></div></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
@@ -923,5 +1205,12 @@ async function decide(id,status){
   const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status})});
   try{await call()}catch(e){if(/sign in/.test(e.message)){try{if(await signIn())await call();else return}catch(e2){alert(e2.message);return}}else{alert(e.message);return}}load()}
 $('#run').onclick=async()=>{$('#run').disabled=true;try{await api('/api/run',{method:'POST'});$('#meta').textContent='Run started. Refreshing in 40 s…';setTimeout(()=>{load();$('#run').disabled=false},40000)}catch(e){alert(e.message);$('#run').disabled=false}};
-for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};load();who();
+for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
+async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q"><span>'+esc(q.q)+'</span> '+[['true','Yes'],['false','No'],['null','Skip']].map(o=>'<label><input type="radio" name="q_'+q.id+'" value="'+o[0]+'"'+(String(q.answer)===o[0]?' checked':'')+'> '+o[1]+'</label>').join('')+'</div>').join('')).join('')}
+$('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey input:checked').forEach(i=>{a[i.name.slice(2)]=i.value==='true'?true:i.value==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};
+function li(a){return a&&a.length?'<ul>'+a.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<p class="mute">none</p>'}
+$('#jgo').onclick=async()=>{const r=$('#jres');r.textContent='Reading the posting...';try{const d=await authed(()=>api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input:$('#jin').value,title:$('#jtitle').value,company:$('#jco').value})}));window._last=d;
+ r.innerHTML='<div class="card"><div class="t">'+esc(d.verdict)+' ('+d.fit_score+')  '+esc(d.title)+'</div><div class="mute">'+esc(d.company)+' | '+esc(d.location)+'</div><div>'+(d.would_appear_in_your_search?'Would appear in your search.':'Would NOT appear in your search: '+esc(d.why_not_in_search.join('; ')))+'</div><h4>Why</h4>'+li(d.why)+'<h4>Your record that fits</h4>'+li(d.strengths.map(x=>x.text))+'<h4>Gaps and checks</h4>'+li(d.gaps.concat(d.flags))+'<div class="acts"><button class="fb" data-v="like">More like this</button><button class="fb" data-v="dislike">Not for me</button></div><span id="fbmsg" class="mute"></span>'+(d.draft.resume?'<details><summary>Verified resume and note for this job</summary><pre>'+esc(d.draft.resume)+'</pre><pre>'+esc(d.draft.note)+'</pre></details>':'<p class="flag">Draft blocked: '+esc(d.draft.blocked)+'</p>')+'</div>';
+ r.querySelectorAll('.fb').forEach(b=>b.onclick=async()=>{try{await authed(()=>api('/api/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:d.title,company:d.company,verdict:b.dataset.v})}));$('#fbmsg').textContent='Noted. The next search run uses it.'}catch(e){$('#fbmsg').textContent=e.message}})}catch(e){r.textContent=e.message}};
+load();who();loadPrefs();
 </script></body></html>`;

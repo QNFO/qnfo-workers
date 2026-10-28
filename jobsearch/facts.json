@@ -23,7 +23,9 @@
       "id": "F01",
       "cluster": [
         "research_mgmt",
-        "federal"
+        "federal",
+        "contracting",
+        "program_mgmt"
       ],
       "employer": "U.S. DOT, Federal Highway Administration",
       "period": "2011-2015",
@@ -35,7 +37,9 @@
       "cluster": [
         "transport_modeling",
         "federal",
-        "data_product"
+        "data_product",
+        "urban_planning",
+        "survey_methods"
       ],
       "employer": "U.S. DOT, Federal Highway Administration",
       "period": "2011-2015",
@@ -46,7 +50,10 @@
       "id": "F03",
       "cluster": [
         "policy_research",
-        "data_product"
+        "data_product",
+        "social_policy",
+        "survey_methods",
+        "gis"
       ],
       "employer": "AARP Public Policy Institute",
       "period": "2016-2021",
@@ -56,7 +63,8 @@
     {
       "id": "F04",
       "cluster": [
-        "policy_research"
+        "policy_research",
+        "social_policy"
       ],
       "employer": "AARP Public Policy Institute",
       "period": "2016-2021",
@@ -66,7 +74,8 @@
     {
       "id": "F05",
       "cluster": [
-        "policy_research"
+        "policy_research",
+        "social_policy"
       ],
       "employer": "AARP Public Policy Institute",
       "period": "2016-2021",
@@ -132,7 +141,8 @@
       "id": "F11",
       "cluster": [
         "nonprofit",
-        "leadership"
+        "leadership",
+        "program_mgmt"
       ],
       "employer": "Empowering Change",
       "period": "2023-2024",
@@ -143,7 +153,8 @@
       "id": "F12",
       "cluster": [
         "data_science",
-        "federal"
+        "federal",
+        "consulting"
       ],
       "employer": "Deloitte Consulting LLP",
       "period": "2015-2016",
@@ -154,7 +165,9 @@
       "id": "F13",
       "cluster": [
         "transport_modeling",
-        "policy_research"
+        "policy_research",
+        "survey_methods",
+        "urban_planning"
       ],
       "employer": "Deloitte Consulting LLP",
       "period": "2015-2016",
@@ -165,7 +178,8 @@
       "id": "F14",
       "cluster": [
         "transport_modeling",
-        "policy_research"
+        "policy_research",
+        "urban_planning"
       ],
       "employer": "U.S. DOT, Federal Highway Administration",
       "period": "2011-2015",
@@ -175,7 +189,8 @@
     {
       "id": "F15",
       "cluster": [
-        "product"
+        "product",
+        "data_product"
       ],
       "employer": "iManage; Epsilon (Publicis Groupe); AARP",
       "period": "2016-2023",
@@ -236,6 +251,16 @@
         "research_integrity"
       ],
       "text": "Research systems builder: founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail."
+    },
+    {
+      "id": "H3",
+      "cluster": [
+        "data_product",
+        "product",
+        "data_science",
+        "survey_methods"
+      ],
+      "text": "Data and product leader: 15 years running national research programs and data products at the U.S. Federal Highway Administration and AARP; later product roles at Epsilon and iManage."
     }
   ],
   "closing": "Full CV, papers, and contact: qnfo.org",
