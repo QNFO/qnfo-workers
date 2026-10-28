@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-28 05:48:19",
+  "audited_at": "2026-10-28 07:58:38",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.43.6-reading-jsonld",
+        "version": "1.43.7-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -980,9 +980,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.43.6-reading-jsonld",
+      "before": "1.43.7-codeagent",
       "http": 200,
-      "live": "1.43.6-reading-jsonld",
+      "live": "1.43.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
