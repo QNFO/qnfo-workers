@@ -13,7 +13,7 @@ const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL 
 
 // ---- pure functions -------------------------------------------------------------------------------------------------
 const ymd = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
-const good = () => ({ claim: "The maintainers will publish a hard fork of the library before the vendor ships its rewrite.", probability: 0.55, horizon: ymd(120), resolution: "A public repository named as the successor of the library exists with a tagged release by the horizon date.", alternatives: [{ claim: "The vendor ships its rewrite first and the maintainers fold into it.", probability: 0.25 }, { claim: "Neither happens and the library stays as it is.", probability: 0.1 }], indicators: ["Maintainers announce a separate release channel", "The vendor publishes a rewrite roadmap with dates"], watch_query: "library hard fork maintainers", watch_urls: [] });
+const good = () => ({ claim: "The maintainers will publish a hard fork of the library before the vendor ships its rewrite.", probability: 0.55, horizon: ymd(120), resolution: "Resolves yes if the GitHub release page of a repository named as the successor of the library shows a tagged release dated no later than " + ymd(120) + "; void if the repository is deleted or private.", alternatives: [{ claim: "The vendor ships its rewrite first and the maintainers fold into it.", probability: 0.25 }, { claim: "Neither happens and the library stays as it is.", probability: 0.1 }], indicators: ["Maintainers announce a separate release channel", "The vendor publishes a rewrite roadmap with dates"], watch_query: "library hard fork maintainers", watch_urls: [] });
 const text55 = "A paragraph that says the main scenario is judged at 55 percent by the writer.";
 check("a well-formed forecast has no problems", F.validateForecast(good(), text55, Date.now()).length === 0, F.validateForecast(good(), text55, Date.now()));
 check("missing block is a problem", F.validateForecast(null, text55, Date.now()).length === 1);
@@ -159,6 +159,7 @@ check("a second cron does not publish another forecast straight away", db.prepar
 // resolution: a not-yet-due forecast is left alone, a due one is settled by two agreeing judges with a Brier score
 const before = await F.resolveForecasts(env, 2);
 check("a forecast before its horizon is not checked", before.checked === 0, before);
+db.prepare("DROP TRIGGER q08_forecasts_published_fields_immutable").run(); // test setup moves the dates; production never may
 db.prepare("UPDATE q08_forecasts SET horizon = ?, created_at = ?").run(ymd(-1), new Date(Date.now() - 100 * 864e5).toISOString());
 const res = await F.resolveForecasts(env, 2);
 const settled = db.prepare("SELECT * FROM q08_forecasts").get();
