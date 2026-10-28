@@ -20,7 +20,7 @@ ok(T.verify(res.replace("44+", "400+"), JOB).length > 0, "inflated number reject
 ok(T.verify(res + "- Expert in Kubernetes. <!--F:F06-->\n", JOB).length > 0, "invented skill rejected");
 ok(T.verify(note + "I also hold a PhD.\n", JOB).length > 0, "untagged line rejected");
 ok(T.verify(note.replace(/"[^"]+"/, '"quantum cryptography"'), JOB).length > 0, "foreign quoted term rejected");
-for (const [title, loc] of [["Sales Lead, Research", "Amsterdam"], ["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Staff Engineer, Research Platform", "Amsterdam"]])
+for (const [title, loc] of [["Sales Lead, Research", "Amsterdam"], ["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Staff Engineer, Research Platform", "Amsterdam"], ["Senior AI Governance Counsel", "Amsterdam"], ["Product Marketing, Data Products", "Amsterdam"], ["Forward Deployed Product Manager, Public Sector", "Amsterdam"]])
   ok(T.evaluate({ ...JOB, title, location: loc }).status === "excluded", "gate " + title + " / " + loc);
 const tk = T.evaluate({ ...JOB, location: "Tokyo, Japan" });
 ok(tk.status === "ok" && tk.flags.some((f) => f.includes("visa")), "anywhere is flagged, not dropped", tk);

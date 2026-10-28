@@ -7,7 +7,7 @@
 // JOBSEARCH-OUTCOME-1 (1.2.0): append-only status events, outcome funnel (applied, replies, interviews, offers), reply rate of applications older than 21 days, metrics jobsearch_reply_rate_90d / jobsearch_interview_rate_90d / jobsearch_applied_30d written each run, no_reply after 21 days.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.2.2-codeagent";
+var VERSION = "1.2.3-codeagent";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -314,14 +314,17 @@ function feedPrefix(feed) {
 const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
 
 // ------------------------------------------------------------------ feeds
+// JOBSEARCH-SOURCES-1 (2026-10-28; tier B from 35 so data-product roles at Amsterdam employers surface, legal titles excluded outright): boards chosen for the owner's record (policy and research management, data products, transport and mobility, AI) and for
+// Amsterdam and EU employers; each slug was probed live against the public API before it was added. A board that fails 3 runs in a row shows in /api/ops.
 const BOARDS = {
-  greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe"],
-  lever: ["palantir", "mistral"],
-  ashby: ["openai", "cohere", "notion", "elevenlabs"],
+  greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe", "adyen", "bird", "datadog", "cloudflare", "canonical", "grafanalabs", "mozilla", "wikimedia", "khanacademy",
+    "codeforamerica", "givewell", "dataiku", "fivetran", "nesta", "gallup", "rti", "ideo", "waymo", "nuro", "lyft"],
+  lever: ["palantir", "mistral", "mendix", "brookings", "oliverwyman", "zoox"],
+  ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake"],
   remotive: ["data", "product", "all-others"],
   arbeitnow: true,
 };
-const DISPLAY = { openai: "OpenAI", scaleai: "Scale AI", gitlab: "GitLab", mongodb: "MongoDB", anthropic: "Anthropic", databricks: "Databricks", elastic: "Elastic", stripe: "Stripe", palantir: "Palantir", mistral: "Mistral", cohere: "Cohere", notion: "Notion", elevenlabs: "ElevenLabs" };
+const DISPLAY = { openai: "OpenAI", scaleai: "Scale AI", gitlab: "GitLab", mongodb: "MongoDB", anthropic: "Anthropic", databricks: "Databricks", elastic: "Elastic", stripe: "Stripe", palantir: "Palantir", mistral: "Mistral", cohere: "Cohere", notion: "Notion", elevenlabs: "ElevenLabs", adyen: "Adyen", bird: "Bird", datadog: "Datadog", cloudflare: "Cloudflare", canonical: "Canonical", grafanalabs: "Grafana Labs", mozilla: "Mozilla", wikimedia: "Wikimedia Foundation", khanacademy: "Khan Academy", codeforamerica: "Code for America", givewell: "GiveWell", dataiku: "Dataiku", fivetran: "Fivetran", nesta: "Nesta", gallup: "Gallup", rti: "RTI International", ideo: "IDEO", waymo: "Waymo", nuro: "Nuro", lyft: "Lyft", mendix: "Mendix", brookings: "Brookings Institution", oliverwyman: "Oliver Wyman", zoox: "Zoox", mollie: "Mollie", mapbox: "Mapbox", perplexity: "Perplexity", snowflake: "Snowflake" };
 
 function decodeEntities(s) {
   return String(s || "")
@@ -388,7 +391,7 @@ const CLUSTER_KW = {
 const TITLE_STRONG = ["research manager", "research program", "head of research", "director of research", "research director", "research operations", "research integrity", "ai governance", "ai policy", "research lead", "data product", "ai evaluation", "research strategy", "program manager, research", "research partnerships", "science policy", "responsible ai", "trust and safety research"];
 const TITLE_MEDIUM = ["product manager", "program manager", "principal", "director", "head of", "lead", "research", "policy", "strategist"];
 const TITLE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "sales", "scientist", "account executive", "recruiter", "counsel", "attorney", "engineer", "architect", "solutions", "customer success", "devops", "site reliability", "security engineer", "designer", "marketing", "finance", "accountant", "payroll"];
-const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect"];
+const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect", "counsel", "attorney", "lawyer", "paralegal", "legal", "marketing", "forward deployed", "deployment strategist"];
 const LOC_BAD_REMOTE = ["us only", "united states only", "us-only", "usa only", "canada only", "uk only", "india only", "latam", "apac only"];
 const HOME = ["amsterdam", "netherlands", "nederland", "rotterdam", "utrecht", "eindhoven", "the hague", "europe", "emea", "european", "eu ", "eu-", "worldwide", "anywhere", "global"];
 const EUROPE_OTHER = ["germany", "berlin", "munich", "france", "paris", "london", "uk", "united kingdom", "ireland", "dublin", "spain", "madrid", "barcelona", "portugal", "lisbon", "italy", "belgium", "brussels", "denmark", "copenhagen", "sweden", "stockholm", "norway", "oslo", "finland", "helsinki", "austria", "vienna", "switzerland", "zurich", "poland", "warsaw", "czech", "prague"];
@@ -445,7 +448,7 @@ function evaluate(job) {
   if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; owner lists English only");
   const yrs = [...low.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
   if (yrs.length && Math.max(...yrs) > 22) flags.push(`YEARS: asks ${Math.max(...yrs)}+ years`);
-  const tier = score >= 70 && cl.size ? "A" : score >= 45 ? "B" : "C";
+  const tier = score >= 70 && cl.size ? "A" : score >= 35 ? "B" : "C";
   return { status: "ok", score, tier, clusters: [...cl].sort(), unique: uniq, why, flags };
 }
 
