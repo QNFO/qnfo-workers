@@ -27,6 +27,9 @@ ACTIONS
   d1-restore-drill       BP26-D1-DISCIPLINE-1: a real Time Travel restore drill on a throwaway scratch database (created, written,
                          bookmarked, mutated, restored to the bookmark, verified, deleted), plus a read-only bookmark lookup on qnfo-audit.
                          Writes one qnfo-audit.d1_restore_drills row (outcome pass or fail). Touches no production data.
+  kill-switch-drill      BP26-LEASES-KILLSWITCH-1: flips ops_config fleet_kill_switch on for at most 10 minutes, proves the readers refuse new work
+                         (qnfo-deploy-guard: work claims, deploy and secret leases answer 503 kill-switch and write a kill-switch.observed event), flips it off in
+                         every case, proves the readers resume, and appends one qnfo-audit.kill_switch_tests row (mode live, pass or fail). Never leaves the switch on.
   gen-activitypub-key WORKER
                          Create AP_PRIVATE_KEY and AP_PUBLIC_KEY Worker secrets (RSA-2048) for the ActivityPub actor
                          (ACTIVITYPUB-WEBFINGER-1). WORKER must be in AP_WORKERS. Idempotent, never rotates, runs under
@@ -1410,6 +1413,87 @@ def d1_restore_drill(acct: str, token: str, caller=None, sleep=time.sleep, now=t
     return 0 if outcome == "pass" and okw else 1
 
 
+GUARD_URL = "https://qnfo-deploy-guard.q08.workers.dev"
+# The loops that read fleet_kill_switch today. A reader is added here in the change that teaches its worker to read the flag (docs/KILL-SWITCH-DRILL.md).
+KS_READERS = ("qnfo-deploy-guard",)
+KS_PENDING = ("qnfo-fleet-control", "qnfo-code-orchestrator", "qnfo-ops", "qnfo-social", "qnfo-email-orchestrator", "qnfo-research-exec", "qnfo-cloud-ops", "qnfo-github-steward")
+
+
+def _guard(path: str, body: dict | None = None, timeout: int = 30) -> tuple[int, dict]:
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(GUARD_URL + path, data=data, method="POST" if body is not None else "GET",
+                                 headers={"Content-Type": "application/json", "User-Agent": "qnfo-kill-switch-drill/1"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode() or "{}")
+        except Exception:  # noqa: BLE001
+            return e.code, {}
+    except Exception as e:  # noqa: BLE001
+        return 0, {"error": str(e)[:120]}
+
+
+def kill_switch_drill(acct: str, token: str, guard=None, db=None, sleep=time.sleep, now=time.time, max_on_sec: int = 600) -> int:
+    """BP26-LEASES-KILLSWITCH-1. The drill is the fleet's, run from the repository runner: it writes the one ops_config row, observes, restores, records."""
+    guard = guard or _guard
+    db = db or (lambda sql, params=None: d1x(acct, token, AUDIT_DB, sql, params))
+    ev, steps = {}, []
+
+    def step(name, cond, detail=""):
+        steps.append({"step": name, "ok": bool(cond), "detail": str(detail)[:200]})
+        return bool(cond)
+    okp, live = db("SELECT COUNT(*) AS n FROM deploy_locks WHERE substr(worker, 1, 5) NOT IN ('work:', 'secre') AND typeof(expires_at) IN ('integer','real') AND expires_at > ?1", [int(now() * 1000)])
+    if not okp or int((live or [{}])[0].get("n") or 0) > 0:
+        step("precondition-no-live-deploy-lock", False, live)
+        emit({"action": "kill-switch-drill", "ok": False, "refused": "a deploy lock is live or unreadable", "steps": steps})
+        return 1
+    okt, h0 = db("SELECT value FROM ops_config WHERE key = 'fleet_kill_switch'")
+    before = (h0 or [{}])[0].get("value") if okt else None
+    t0 = now()
+    stopped = resumed = 0
+    stopped_names, resumed_names = [], []
+    try:
+        okw, _ = db("INSERT INTO ops_config (key, value, note) VALUES ('fleet_kill_switch', 'on', 'BP26-LEASES-KILLSWITCH-1 drill') ON CONFLICT(key) DO UPDATE SET value = 'on', updated_at = datetime('now')")
+        step("flag-on", okw)
+        sleep(35)  # the readers cache the flag for 30 s
+        st1, j1 = guard("/work-lock/acquire", {"key": "file:drill/kill-switch", "owner": "kill-switch-drill", "ttl_sec": 60})
+        st2, j2 = guard("/lock/acquire", {"worker": "kill-switch-drill-target", "owner": "kill-switch-drill", "ttl_sec": 60})
+        st3, j3 = guard("/secret-lock/acquire", {"worker": "kill-switch-drill-target", "owner": "kill-switch-drill", "ttl_sec": 60})
+        refused = st1 == 503 and j1.get("reason") == "kill-switch" and st2 == 503 and st3 == 503
+        step("qnfo-deploy-guard-refuses", refused, "work %s, deploy %s, secret %s" % (st1, st2, st3))
+        oke, evr = db("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'kill-switch.observed' AND job = 'qnfo-deploy-guard' AND ts >= ?1", [time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0))])
+        seen = oke and int((evr or [{}])[0].get("n") or 0) >= 1
+        step("qnfo-deploy-guard-observed-event", seen, evr)
+        if refused and seen:
+            stopped += 1
+            stopped_names.append("qnfo-deploy-guard")
+        ev["refusals"] = [st1, st2, st3]
+    finally:
+        # Off in every case, inside the time limit; a failed write is itself a failure (docs/KILL-SWITCH-DRILL.md rollback).
+        restore = "off" if before in (None, "", "on") else before
+        offw, _ = db("INSERT INTO ops_config (key, value, note) VALUES ('fleet_kill_switch', ?1, 'BP26-LEASES-KILLSWITCH-1 drill') ON CONFLICT(key) DO UPDATE SET value = ?1, updated_at = datetime('now')", [restore])
+        step("flag-restored", offw, "restored to " + restore)
+    sleep(35)
+    st4, j4 = guard("/work-lock/acquire", {"key": "file:drill/kill-switch", "owner": "kill-switch-drill", "ttl_sec": 60})
+    ok_resume = st4 == 200 and j4.get("acquired") is True
+    step("qnfo-deploy-guard-resumes", ok_resume, "work claim after off: %s" % st4)
+    if ok_resume:
+        resumed += 1
+        resumed_names.append("qnfo-deploy-guard")
+        guard("/work-lock/release", {"key": "file:drill/kill-switch", "token": j4.get("token"), "outcome": "done"})
+    elapsed = now() - t0
+    step("within-time-limit", elapsed <= max_on_sec + 120, "%.0f s" % elapsed)
+    expected = len(KS_READERS)
+    outcome = "pass" if stopped == expected and resumed == expected and all(x["ok"] for x in steps) else "fail"
+    evidence = json.dumps({"readers": list(KS_READERS), "stopped": stopped_names, "resumed": resumed_names, "readers_pending": list(KS_PENDING), "steps": steps}, separators=(",", ":"))[:3500]
+    okr, _ = db("INSERT INTO kill_switch_tests (flag, mode, loops_expected, loops_observed_stopped, loops_observed_resumed, outcome, evidence, actor) VALUES ('fleet_kill_switch', 'live', ?1, ?2, ?3, ?4, ?5, 'cf-ops-actions:kill-switch-drill')",
+                [expected, stopped, resumed, outcome, evidence])
+    emit({"action": "kill-switch-drill", "ok": outcome == "pass" and okr, "outcome": outcome, "readers": list(KS_READERS), "pending": list(KS_PENDING), "stopped": stopped, "resumed": resumed, "steps": steps, "ledger_written": okr})
+    return 0 if outcome == "pass" and okr else 1
+
+
 AP_WORKERS = {"qnfo-gateway"}
 AP_SECRETS = ("AP_PRIVATE_KEY", "AP_PUBLIC_KEY")
 
@@ -1466,7 +1550,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1495,6 +1579,8 @@ def main() -> int:
             print("::error::delete-vectorize-index needs --target")
             return 2
         return delete_vectorize_index(a.target, acct, token)
+    if a.action == "kill-switch-drill":
+        return kill_switch_drill(acct, token)
     if a.action == "d1-restore-drill":
         return d1_restore_drill(acct, token)
     if a.action == "gen-activitypub-key":

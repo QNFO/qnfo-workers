@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.34-codeagent"; /* LEASE-EXPIRY-SWEEP-1 (2026-10-26, orphaned_leases 215): a work_claims row past expires_at and never released is closed with outcome expired on every acquire and on the 20-minute tick, so the BP26 lease metric counts sessions that died holding a claim and then settles. */ /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
+var VERSION = "1.4.0-leases-killswitch"; /* 1.4.0 BP26-LEASES-KILLSWITCH-1 (2026-10-28, pillar autonomy, agent_issues 1000361; minor: two capabilities and a decision this worker now takes on its own). (a) Global kill switch: ops_config fleet_kill_switch = on makes workAcquire (fresh claims and renewals) and POST /lock/acquire (deploy locks and secret leases) answer 503 reason kill-switch, so no new claim, deploy or secret write starts while it is on; releases, reads, the sweep and /health keep working; the first refusal in five minutes writes one cloud_ops_events row of kind kill-switch.observed; GET /kill-switch reads the state. The flag is read with a 30 second cache, off when the row or table is absent. (b) Fencing tokens: every fresh work claim takes the next fence number for its path (work_claims.fence, migration 2026-10-28-bp26-leases-killswitch.sql; the claim still works while the column is absent), acquire and renew return it, and POST /work-lock/check {key, token, fence} answers valid only when the token holds the live claim and the fence is the live one, so a writer that lost its lease cannot pass. docs/KILL-SWITCH-DRILL.md and docs/LEASES-FENCING.md. prior 1.3.34-codeagent */ /* LEASE-EXPIRY-SWEEP-1 (2026-10-26, orphaned_leases 215): a work_claims row past expires_at and never released is closed with outcome expired on every acquire and on the 20-minute tick, so the BP26 lease metric counts sessions that died holding a claim and then settles. */ /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -559,6 +559,43 @@ async function sweepExpiredClaims(env, nowMs) {
   var r = await auditRun(env, "UPDATE work_claims SET released_at = expires_at, outcome = COALESCE(outcome, 'expired') WHERE released_at IS NULL AND expires_at <= ?1", [isoS(nowMs)]);
   return changes(r) || 0;
 }
+// BP26-LEASES-KILLSWITCH-1: the global kill switch. One ops_config row, read with a 30 second cache; absent or any value but "on" is off.
+var KS_CACHE = { at: 0, on: false };
+async function killSwitchOn(env) {
+  var n = Date.now();
+  if (n - KS_CACHE.at < 30000) return KS_CACHE.on;
+  var rows = await auditAll(env, "SELECT value FROM ops_config WHERE key = 'fleet_kill_switch'");
+  KS_CACHE = { at: n, on: rows.length > 0 && String(rows[0].value).trim().toLowerCase() === "on" };
+  return KS_CACHE.on;
+}
+async function killSwitchObserved(env, what) {
+  var since = new Date(Date.now() - 300000).toISOString();
+  var ex = await auditAll(env, "SELECT id FROM cloud_ops_events WHERE kind = 'kill-switch.observed' AND job = ?1 AND ts > ?2 LIMIT 1", [WORKER, since]);
+  if (ex.length) return;
+  await auditRun(env, "INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'kill-switch.observed', ?3, ?4, 'ok')", ["ks-" + WORKER + "-" + Date.now(), new Date(Date.now()).toISOString(), "refused " + what + " while fleet_kill_switch = on", WORKER]);
+}
+async function killSwitchRefusal(env, what, extra) {
+  await killSwitchObserved(env, what);
+  return [503, Object.assign({ acquired: false, reason: "kill-switch", note: "ops_config fleet_kill_switch is on: no new claim, deploy or secret write starts; releases and reads still work" }, extra || {})];
+}
+// Fencing: the live fence of a claim, null when the column or row is absent.
+async function liveFence(env, path, holder) {
+  var r = await auditAll(env, "SELECT fence FROM work_claims WHERE released_at IS NULL AND path = ?1 AND holder = ?2 ORDER BY id DESC LIMIT 1", [path, holder]);
+  return r.length && r[0].fence != null ? Number(r[0].fence) : null;
+}
+async function workCheck(env, b) {
+  b = (b && typeof b === "object") ? b : {};
+  var wk = workKey(b.key);
+  if (!wk) return [400, { error: WORK_KEY_ERROR }];
+  if (!b.token) return [400, { error: "token required" }];
+  var th = await sha256hex(String(b.token));
+  var rows = await auditAll(env, "SELECT owner FROM deploy_locks WHERE worker = ?1 AND token_hash = ?2 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?3 LIMIT 1", [WORK_PREFIX + wk, th, Date.now()]);
+  if (!rows.length) return [409, { key: wk, valid: false, reason: "token does not hold a live claim" }];
+  var fence = await liveFence(env, claimTarget(wk).path, rows[0].owner);
+  if (b.fence != null && fence != null && Number(b.fence) !== fence) return [409, { key: wk, valid: false, reason: "stale fence", fence: fence }];
+  if (await killSwitchOn(env)) return [503, { key: wk, valid: false, reason: "kill-switch", fence: fence }];
+  return [200, { key: wk, valid: true, holder: rows[0].owner, fence: fence }];
+}
 function ledgerView(x) { return { kind: "session", path: x.path, intent: x.intent, holder: x.holder, issue_id: x.issue_id, pr: x.pr, since: x.claimed_at, expires_at: x.expires_at }; }
 async function workAcquire(env, b) {
   b = (b && typeof b === "object") ? b : {};
@@ -574,6 +611,7 @@ async function workAcquire(env, b) {
   var prN = Number(b.pr); prN = (isFinite(prN) && prN > 0) ? Math.floor(prN) : null;
   var nowA = Date.now();
   await sweepExpiredClaims(env, nowA);
+  if (await killSwitchOn(env)) return await killSwitchRefusal(env, "work claim " + wk, { key: wk });
   var loop = await codeLoopRows(env, wk);
   if (b.token) {
     var up = await auditRun(env, "UPDATE deploy_locks SET expires_at=?1 WHERE worker=?2 AND token_hash=?3 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?4", [nowA + ttl * 1000, lk, await sha256hex(String(b.token)), nowA]);
@@ -581,7 +619,7 @@ async function workAcquire(env, b) {
       var held = await readLock(env, lk);
       var hOwner = held ? held.owner : wo;
       await auditRun(env, "UPDATE work_claims SET expires_at=?1, pr=COALESCE(?2, pr) WHERE released_at IS NULL AND path=?3 AND holder=?4", [isoS(nowA + ttl * 1000), prN, tgt.path, hOwner]);
-      return [200, { acquired: true, renewed: true, key: wk, token: String(b.token), holder: hOwner, expires_at: new Date(nowA + ttl * 1000).toISOString(), in_flight: loop }];
+      return [200, { acquired: true, renewed: true, key: wk, token: String(b.token), holder: hOwner, fence: await liveFence(env, tgt.path, hOwner), expires_at: new Date(nowA + ttl * 1000).toISOString(), in_flight: loop }];
     }
     // The token no longer holds the claim (expired or reaped): fall through to a fresh acquire, which issues a new token.
   }
@@ -596,7 +634,14 @@ async function workAcquire(env, b) {
   if (r[0] === 409 && out.held_since != null) { out.since = isoMs(out.held_since); delete out.held_since; }
   out.in_flight = loop;
   if (r[0] === 200) {
-    await auditRun(env, "INSERT INTO work_claims (path, intent, holder, issue_id, pr, claimed_at, expires_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", [tgt.path, intent, wo, tgt.issue, prN, isoS(nowA), isoS(nowA + ttl * 1000)]);
+    var fr = await auditAll(env, "SELECT COALESCE(MAX(fence), 0) + 1 AS f FROM work_claims WHERE path = ?1", [tgt.path]);
+    var fenceN = fr.length && fr[0].f != null ? Number(fr[0].f) : null;
+    var insW = fenceN == null ? { ok: false } : await auditRun(env, "INSERT INTO work_claims (path, intent, holder, issue_id, pr, claimed_at, expires_at, fence) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", [tgt.path, intent, wo, tgt.issue, prN, isoS(nowA), isoS(nowA + ttl * 1000), fenceN]);
+    if (fenceN == null || (insW && insW.ok === false)) {
+      fenceN = null;
+      await auditRun(env, "INSERT INTO work_claims (path, intent, holder, issue_id, pr, claimed_at, expires_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", [tgt.path, intent, wo, tgt.issue, prN, isoS(nowA), isoS(nowA + ttl * 1000)]);
+    }
+    out.fence = fenceN;
   }
   if (r[0] === 200 && wk.indexOf("issue:") === 0) {
     var iid = Number(wk.slice(6));
@@ -654,13 +699,16 @@ export default {
       }
       return json(Object.assign({ key: wrk }, wr[1]), wr[0]);
     }
+    if (p === "/work-lock/check" && request.method === "POST") { var wck = await workCheck(env, await request.json().catch(function () { return {}; })); return json(wck[1], wck[0]); }
+    if (p === "/kill-switch" && request.method === "GET") { KS_CACHE.at = 0; return json({ kill_switch: (await killSwitchOn(env)) ? "on" : "off", flag: "ops_config fleet_kill_switch", worker: WORKER, version: VERSION, now: nowIso() }); }
     if (p === "/work-locks" && request.method === "GET") { var wl = await workList(env); return json(wl[1], wl[0]); }
-    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso(), capabilities: ["deploy-lock", "secret-lock", "work-claim", "ledger", "mutation-detector", "cost-watchdog", "capability-snapshot"], limitations: ["D1 lease, not a distributed consensus lock", "work claims are advisory: they stop only a session that asks first", "detects a mutation only on the next 20-minute scan", "capability snapshot at most every 6 hours (POST /capability-snapshot forces one, 10-minute floor)"] });
+    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso(), capabilities: ["deploy-lock", "secret-lock", "work-claim", "fencing-token", "kill-switch", "ledger", "mutation-detector", "cost-watchdog", "capability-snapshot"], limitations: ["D1 lease, not a distributed consensus lock", "work claims are advisory: they stop only a session that asks first", "detects a mutation only on the next 20-minute scan", "capability snapshot at most every 6 hours (POST /capability-snapshot forces one, 10-minute floor)"] });
     if (p === "/report" && request.method === "GET") { var rp = await env.FLEET_CONFIG.get(REPORT_KEY); return json(rp ? JSON.parse(rp) : { ts: null }); }
     if (p === "/locks" && request.method === "GET") { var lr = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); return json({ locks: lr, now: nowIso() }); }
     if (p.indexOf("/lock/") === 0 && request.method === "GET") { var w3 = p.slice(6); try { w3 = decodeURIComponent(w3); } catch (e) { w3 = p.slice(6); } return json({ worker: w3, lock: await readLock(env, w3), now: nowIso() }); }
     if (p === "/lock/acquire" && request.method === "POST") {
       var b = await request.json().catch(function () { return {}; });
+      if (await killSwitchOn(env)) { var ksr = await killSwitchRefusal(env, "lock " + String(b.worker || ""), { worker: String(b.worker || "") }); return json(ksr[1], ksr[0]); }
       var la = await acquireLease(env, b, false);
       return json(la[1], la[0]);
     }
