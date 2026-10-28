@@ -126,3 +126,16 @@ First run (bqp paper): the checker rejected the hook for dropping the "with a lo
 Roadmap rows YT-7..YT-13 (quality pass built, director built, voice test, template library, render speed, generative hooks parked, provenance) are in
 `migrations/2026-10-28-yt-shorts-quality-roadmap.sql` under source `yt-shorts-2026`, goal YT-SHORTS. The server worker (YT-3, another session) calls `make_director.py` and
 `make_short.py` inside its Container.
+
+## Update 2026-10-28: the production worker gets the quality pass (qnfo-youtube-shorts 0.2.0, YT-QUALITY-1)
+Finding: the live worker (container + Workers AI) had its own copy of the old scene and captions, melotts voice and a spoken URL, so the owner's complaints applied to what it
+had already published (two public Shorts on 2026-10-27), not only to the laptop scripts. Ported server-side:
+- **Voice:** Workers AI `@cf/deepgram/aura-2-en` (speaker luna, mp3) per sentence, melotts as per-sentence fallback; spend priced $0.03 per 1000 characters (`tts_aura` in `youtube_spend`).
+- **Director:** prompt now offers `bignum`, `flow`, `compare`, `list` beside the old kinds, asks for 110-150 spoken words, speech-written narration and at least four kinds;
+  `shapeOk` and `beatStrings` cover the new kinds, so the number gate also checks bignum values, node labels and compare rows. `numTokens` composes spelled numbers
+  ("three hundred and fifty" is 350) as the Python gate does. The closing line no longer speaks a URL.
+- **Container:** `short_scene.py` is the fitted, themed scene (old `points` and `stat` kinds kept); `render.py` measures captions in DejaVu Bold, picks one of five themes
+  from the slug, loudness-normalises, writes the AI comment tag and `provenance.json` (BP26-AI-ACT-ART50-1).
+- Deploy: merge to main runs deploy-youtube-shorts.yml (wrangler deploy of the worker and the container image, `/health` gate on 0.2.0, `/status` container check).
+- Verify after deploy: `GET /status` shows version 0.2.0-quality; the next queued paper's row reaches `uploaded` with a `beats.json` containing at least four kinds
+  (`youtube/<id>/beats.json` in R2). Known limit: Workers AI TTS returns no word times, so captions split each sentence's measured length by character count.

@@ -1,4 +1,4 @@
-var VERSION = "0.1.5-manim-pin"; /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
+var VERSION = "0.2.0-quality"; /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // Owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse". docs/YOUTUBE-PIPELINE.md has the design.
 // State machine per paper (D1 qnfo-audit.youtube_videos.state): queued -> directed -> audio -> rendering -> rendered -> uploaded;
 // terminal: rejected (director left too few supported beats), failed (4 attempts), uploaded. Every tick resumes an unfinished row before
@@ -10,18 +10,20 @@ var WEEKLY_CAP = 2;
 var MAX_ATTEMPTS = 4;
 var PRIVACY = "public"; // owner directive 2026-10-27: "ALL VIDEOS/SHORTS SHALL BE PUBLIC BY DEFAULT". An API project that has not passed the YouTube audit is forced to private by YouTube; the privacy YouTube returns is what the ledger stores.
 var BASE = "https://papers.qnfo.org";
-var TTS_MODEL = "@cf/myshell-ai/melotts";
+var TTS_MODEL = "@cf/myshell-ai/melotts"; // fallback voice
+var TTS_PRIMARY = "@cf/deepgram/aura-2-en"; // YT-QUALITY-1: the more natural voice; $0.03 per 1000 characters
+var TTS_SPEAKER = "luna";
 var CHECK_MODEL = "@cf/openai/gpt-oss-120b";
 var WRITE_FALLBACK_MODEL = "@cf/moonshotai/kimi-k2.6";
-var KINDS = ["hook", "versus", "payoff", "meter", "dots", "points", "stat"];
+var KINDS = ["hook", "versus", "payoff", "meter", "dots", "points", "stat", "bignum", "flow", "compare", "list"];
 var MAX_NARR_WORDS = 150; // about 55 seconds at the voice's pace; a Short is under 60 s
 var MIN_CONTENT_BEATS = 3;
 var RENDER_POLLS = 40; // x 15 s inside one tick
 // COST-CAP (owner 2026-10-27: at most USD 50 a month added expense, all-in; hard stop at SPEND_STOP_USD). Rates are list prices used as ESTIMATES;
 // youtube_spend stores units next to usd so the rates can be corrected from measured runs (docs/YOUTUBE-PIPELINE.md cost model).
 var SPEND_STOP_USD = 45;
-var PRICES = { neuron_usd: 0.011 / 1000, tts_neurons_per_char: 1.0, llm_neurons_per_call: 3000, container_vcpu_s: 0.000020, container_gib_s: 0.0000025, container_vcpu: 1, container_gib: 6 };
-var NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, twenty: 20, thirty: 30, forty: 40, fifty: 50, hundred: 100, thousand: 1000, million: 1000000 };
+var PRICES = { neuron_usd: 0.011 / 1000, tts_neurons_per_char: 1.0, tts_aura_usd_per_char: 0.00003, llm_neurons_per_call: 3000, container_vcpu_s: 0.000020, container_gib_s: 0.0000025, container_vcpu: 1, container_gib: 6 };
+var NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, thousand: 1000, million: 1000000 };
 
 function json(data, status) {
   return new Response(JSON.stringify(data, null, 2), { status: status || 200, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -46,15 +48,37 @@ function splitSentences(text) {
   return String(text || "").replace(/\s+/g, " ").trim().split(/(?<=[.?!])\s+/).filter(Boolean);
 }
 function numTokens(text) {
+  // digits ("350", "10,000", "2.5") and spelled numbers in text order: every number word on its own ("six in ten" is 6 and 10) and
+  // composed runs ("three hundred and fifty" is also 350, "ten thousand three hundred" 10300). Punctuation ends a run.
   var t = String(text || "").toLowerCase().replace(/(\d),(\d{3})/g, "$1$2");
-  t = t.replace(/\b([a-z]+)\b/g, function (m, w) { return Object.prototype.hasOwnProperty.call(NUM_WORDS, w) ? String(NUM_WORDS[w]) : m; });
-  var out = t.match(/\d+(?:\.\d+)?/g) || [];
-  return out.map(function (x) { return String(parseFloat(x)); });
+  var out = [], total = 0, group = 0, active = false, lastScale = false, words = 0;
+  var flush = function () { if (active && words > 1) out.push(String(total + group)); total = 0; group = 0; active = false; lastScale = false; words = 0; };
+  (t.match(/\d+(?:\.\d+)?|[a-z]+|[^a-z\d\s]/g) || []).forEach(function (w) {
+    if (/^\d/.test(w)) { flush(); out.push(String(parseFloat(w))); return; }
+    if (Object.prototype.hasOwnProperty.call(NUM_WORDS, w)) {
+      var v = NUM_WORDS[w];
+      out.push(String(v));
+      active = true; words++;
+      if (v === 100) { group = (group || 1) * 100; lastScale = true; }
+      else if (v >= 1000) { total += (group || 1) * v; group = 0; lastScale = true; }
+      else { group += v; lastScale = false; }
+    } else if (w === "and" && active && lastScale) {
+      return;   // "three hundred AND fifty" continues a number; "three and ten" does not
+    } else {
+      flush();
+    }
+  });
+  flush();
+  return out;
 }
 function beatStrings(b) {
   var out = [b.narr];
   ["lines", "items"].forEach(function (k) { if (Array.isArray(b[k])) b[k].forEach(function (x) { out.push(x); }); });
   ["left", "right", "value", "label", "need_label", "have_label", "axis_label", "verdict", "a", "b"].forEach(function (k) { if (typeof b[k] === "string") out.push(b[k]); });
+  ["title", "sub"].forEach(function (k) { if (typeof b[k] === "string") out.push(b[k]); });
+  if (typeof b.value === "number") out.push(String(b.value));
+  if (Array.isArray(b.nodes)) b.nodes.forEach(function (x) { out.push(x); });
+  if (Array.isArray(b.items)) b.items.forEach(function (x) { if (Array.isArray(x)) { if (typeof x[0] === "string") out.push(x[0]); if (typeof x[3] === "string") out.push(x[3]); } });
   if (Array.isArray(b.bars)) b.bars.forEach(function (r) { if (Array.isArray(r) && typeof r[3] === "string") out.push(r[3]); });
   return out.filter(function (x) { return typeof x === "string"; });
 }
@@ -76,6 +100,10 @@ function shapeOk(b) {
     case "dots": return n01(b.from) && n01(b.to) && s(b.a) && s(b.b);
     case "points": return strs(b.items, 4);
     case "stat": return s(b.value) && s(b.label);
+    case "bignum": return typeof b.value === "number" && isFinite(b.value) && s(b.label) && (b.frac === undefined || n01(b.frac)) && (b.sub === undefined || s(b.sub));
+    case "flow": return Array.isArray(b.nodes) && b.nodes.length >= 2 && b.nodes.length <= 4 && b.nodes.every(function (x) { return typeof x === "string" && x.length > 0 && x.length <= 28; });
+    case "compare": return Array.isArray(b.items) && b.items.length >= 2 && b.items.length <= 3 && b.items.every(function (r) { return Array.isArray(r) && r.length === 4 && s(r[0]) && n01(r[1]) && s(r[3]); });
+    case "list": return strs(b.items, 4) && b.items.length >= 2;
   }
   return false;
 }
@@ -99,6 +127,7 @@ function validateBeats(beats, article, unsupportedIdx) {
 function monthKey(d) { return (d || new Date()).toISOString().slice(0, 7); }
 function spendUsd(kind, units) {
   if (kind === "tts") return units * PRICES.tts_neurons_per_char * PRICES.neuron_usd;
+  if (kind === "tts_aura") return units * PRICES.tts_aura_usd_per_char;
   if (kind === "llm") return units * PRICES.llm_neurons_per_call * PRICES.neuron_usd;
   if (kind === "container") return units * (PRICES.container_vcpu * PRICES.container_vcpu_s + PRICES.container_gib * PRICES.container_gib_s);
   return 0;
@@ -189,16 +218,18 @@ async function aiJson(env, system, user, maxTokens) {
   throw new Error("director: " + notes.join(" | ").slice(0, 700));
 }
 function directorPrompt() {
-  return "You turn a plain-language article into a 45-55 second vertical video script: 5 to 7 beats. Output JSON only: {\"title\":\"<=70 chars, plain\",\"beats\":[...]}.\n" +
-    "Each beat: {\"kind\":K,\"narr\":\"1-2 short spoken sentences\", ...fields}. Kinds and fields:\n" +
-    "hook {lines:[<=5 short lines shown big], hi:[indexes of lines to highlight]} (first beat, a question or surprising claim from the article)\n" +
-    "points {items:[2-4 short statements, each <=40 chars]}\n" +
-    "stat {value:\"a figure that is in the article\", label:\"what it counts\"}\n" +
-    "versus {left:\"<=20 chars\", right:\"<=20 chars\"} (two things the article contrasts)\n" +
-    "payoff {bars:[[x,value,\"#2EC4B6\",\"label\"],...]} x in -2.4,0,2.4; value -2..3 (only when the article gives outcomes)\n" +
+  return "You turn a plain-language article into a 40-55 second vertical video script (a voice-over plus one animated diagram per beat): 6 to 8 beats and 110-150 spoken words IN TOTAL. Output JSON only: {\"title\":\"<=70 chars, plain\",\"beats\":[...]}.\n" +
+    "Each beat: {\"kind\":K,\"narr\":\"1-3 short spoken sentences\", ...fields}. Kinds and fields:\n" +
+    "hook {lines:[<=5 short lines shown big, each <=16 chars], hi:[indexes of lines to highlight]} (beat 1 only: a concrete question or surprising claim from the article, under 12 spoken words, no greeting)\n" +
+    "flow {nodes:[2-4 labels, each <=22 chars]} (a process or chain: A leads to B leads to C)\n" +
+    "list {title:\"<=24 chars\", items:[2-4 short points, each <=38 chars]} (steps, parts, or the article's caveats)\n" +
+    "compare {title:\"<=30 chars\", items:[[\"label\", fraction 0-1, \"c1\", \"value text <=18 chars\"], ...2-3 rows, colours c1 c2 c3]} (two or three quantities the article gives)\n" +
+    "bignum {value: a NUMBER that is in the article, frac:0-1 ring fill, color:\"c1\"|\"c2\"|\"c3\", label:\"what it counts\", sub:\"<=36 chars\"}\n" +
+    "versus {left:\"<=18 chars\", right:\"<=18 chars\"} (two things the article contrasts)\n" +
+    "payoff {bars:[[x,value,\"c1\",\"label\"],...]} x in -2.4,0,2.4; value -2..3 (only when the article gives outcomes)\n" +
     "meter {need:0-1, have:0-1, need_label, have_label, axis_label, verdict} (only when the article gives a threshold and an actual value)\n" +
     "dots {from:0-1, to:0-1, a:\"group\", b:\"group\"} (only when the article describes a share changing)\n" +
-    "RULES: use ONLY facts, numbers and claims that are written in the article; no new numbers, no outside facts, no hype; plain words; do not write a closing beat (a link card is added after yours); narration reads naturally aloud.";
+    "RULES: use ONLY facts, numbers and claims that are written in the article; keep its caveats (assumed, model, does not show) in one beat; no new numbers, no outside facts, no hype. Write narr for the ear: contractions, sentences of at most 15 words, vary their length, use commas and question marks where a speaker changes pitch, spell numbers as words (\"three hundred and fifty\"), no URLs, no brackets, no unexplained jargon. Use at least four different kinds and never the same kind three times; fit the picture to the idea (a quantity: bignum; a chain: flow; a contrast: versus; a change in mix: dots or compare; caveats: list). Do not write a closing beat (a link card is added after yours).\n";
 }
 async function stageDirect(env, row) {
   var article = await loadArticle(env, row.slug);
@@ -225,30 +256,36 @@ async function stageDirect(env, row) {
     await setState(env, row.id, "rejected", { note: "director left " + v.kept.length + " supported beats; dropped " + JSON.stringify(v.dropped).slice(0, 600) });
     return null;
   }
-  var cta = { kind: "cta", narr: "Read the full plain-language version at papers dot qnfo dot org.", title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." };
+  var cta = { kind: "cta", narr: "Want the full story, in plain language? It is free, and the link is in the description.", title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." };
   var beats = v.kept.concat([cta]);
   await setState(env, row.id, "directed", { title: String(spec.title || article.title).slice(0, 80), note: "beats " + beats.length + ", dropped " + v.dropped.length });
   return beats;
 }
 async function ttsSentence(env, text) {
+  try {   // YT-QUALITY-1: Aura 2 first (natural prosody); any failure falls back to melotts so a run never stops on the voice
+    var resp = await env.AI.run(TTS_PRIMARY, { text: text, speaker: TTS_SPEAKER, encoding: "mp3" }, { returnRawResponse: true });
+    var buf = await resp.arrayBuffer();
+    if (buf && buf.byteLength > 1000) return { b64: b64FromBytes(new Uint8Array(buf)), aura: true };
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "tts-aura", error: String(e && e.message || e).slice(0, 200) }));
+  }
   var r = await env.AI.run(TTS_MODEL, { prompt: text, lang: "en" });
-  if (r && typeof r.audio === "string") return r.audio;
-  if (r instanceof ArrayBuffer) return b64FromBytes(new Uint8Array(r));
-  if (r && r.byteLength !== undefined) return b64FromBytes(new Uint8Array(r));
+  if (r && typeof r.audio === "string") return { b64: r.audio, aura: false };
+  if (r instanceof ArrayBuffer) return { b64: b64FromBytes(new Uint8Array(r)), aura: false };
+  if (r && r.byteLength !== undefined) return { b64: b64FromBytes(new Uint8Array(r)), aura: false };
   throw new Error("TTS returned no audio: " + JSON.stringify(r).slice(0, 120));
 }
 async function stageAudio(env, row, beats) {
-  var out = [];
+  var out = [], auraChars = 0, melChars = 0;
   for (var i = 0; i < beats.length; i++) {
     var b = Object.assign({}, beats[i]), ss = [];
     var sents = splitSentences(b.narr);
-    for (var j = 0; j < sents.length; j++) ss.push({ text: sents[j], audio_b64: await ttsSentence(env, sents[j]) });
+    for (var j = 0; j < sents.length; j++) { var tr = await ttsSentence(env, sents[j]); ss.push({ text: sents[j], audio_b64: tr.b64 }); if (tr.aura) auraChars += sents[j].length; else melChars += sents[j].length; }
     b.sentences = ss;
     out.push(b);
   }
-  var chars = 0;
-  out.forEach(function (b) { b.sentences.forEach(function (s) { chars += s.text.length; }); });
-  await addSpend(env, row.id, "tts", chars, "melotts characters");
+  if (auraChars) await addSpend(env, row.id, "tts_aura", auraChars, "aura-2 characters");
+  if (melChars) await addSpend(env, row.id, "tts", melChars, "melotts characters");
   await env.MEDIA.put("youtube/" + row.id + "/job.json", JSON.stringify({ id: String(row.id), slug: row.slug, title: row.title, beats: out }), { httpMetadata: { contentType: "application/json" } });
   await setState(env, row.id, "audio", { note: "tts " + out.length + " beats" });
 }
@@ -325,7 +362,7 @@ async function advance(env, row, deadline) {
       if (row.state === "queued") { if (!(await stageDirect(env, row))) return row.id; }
       else if (row.state === "directed") {
         var bo = await env.MEDIA.get("youtube/" + row.id + "/beats.json");
-        var beats = JSON.parse(await bo.text()).kept.concat([{ kind: "cta", narr: "Read the full plain-language version at papers dot qnfo dot org.", title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." }]);
+        var beats = JSON.parse(await bo.text()).kept.concat([{ kind: "cta", narr: "Want the full story, in plain language? It is free, and the link is in the description.", title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." }]);
         await stageAudio(env, row, beats);
       }
       else if (row.state === "audio") await stageSubmit(env, row);

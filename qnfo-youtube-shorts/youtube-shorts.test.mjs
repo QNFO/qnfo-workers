@@ -77,3 +77,26 @@ test("videos are public by default (owner directive 2026-10-27)", async () => {
   assert.match(src, /var PRIVACY = "public"/);
   assert.equal(buildMetadata({ title: "T", short: "S" }, "s", "t", 1).privacyStatus, "public");
 });
+
+import { spendUsd as _spend, shapeOk as _shape, validateBeats as _validate } from "./worker.js";
+test("YT-QUALITY-1: new templates validate, bad ones are dropped", () => {
+  assert.equal(_shape({ kind: "bignum", narr: "x", value: 350, frac: 1, label: "bits per second", sub: "normal" }), true);
+  assert.equal(_shape({ kind: "bignum", narr: "x", value: "350", label: "bits" }), false);
+  assert.equal(_shape({ kind: "flow", narr: "x", nodes: ["Source", "Filter", "Experience"] }), true);
+  assert.equal(_shape({ kind: "flow", narr: "x", nodes: ["only one"] }), false);
+  assert.equal(_shape({ kind: "compare", narr: "x", title: "t", items: [["Bandwidth", 0.68, "c1", "a third less"], ["Clarity", 0.5, "c2", "half"]] }), true);
+  assert.equal(_shape({ kind: "compare", narr: "x", items: [["a", 2, "c1", "b"], ["c", 0.5, "c2", "d"]] }), false);
+  assert.equal(_shape({ kind: "list", narr: "x", items: ["one point"] }), false);
+  assert.equal(_shape({ kind: "list", narr: "x", items: ["one", "two"] }), true);
+});
+test("YT-QUALITY-1: a bignum value that is not in the article drops the beat", () => {
+  const art = { title: "t", short: "Capacity is three hundred and fifty bits per second.", sections: [] };
+  const good = { kind: "bignum", narr: "About three hundred and fifty bits per second.", value: 350, label: "bits per second" };
+  const bad = { kind: "bignum", narr: "About five hundred bits per second.", value: 500, label: "bits per second" };
+  const v = _validate([good, bad], art, []);
+  assert.equal(v.kept.length, 1);
+  assert.equal(v.dropped[0].why, "number-not-in-article");
+});
+test("YT-QUALITY-1: Aura spend is priced per character", () => {
+  assert.ok(Math.abs(_spend("tts_aura", 1000) - 0.03) < 1e-9);
+});
