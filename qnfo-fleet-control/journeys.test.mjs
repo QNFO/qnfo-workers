@@ -78,7 +78,7 @@ function mkEnv(db, now, broken = {}) {
     SVC_QNFO_OPS: svc(() => ({ body: { fleet: [
       { name: "idea-hub", healthy: true, version: "1.10.0-topic-clusters-derived", probe: "binding:CH_IDEA_HUB" },
       { name: "qnfo-ai", healthy: true, version: "5.36.2-log-catches" },
-      { name: "personal-api", healthy: broken.blind ? null : true, version: "4.9.1" }] } })),
+      { name: "personal-api", healthy: broken.blind || broken.retired ? null : true, retired: broken.retired ? true : undefined, version: "4.9.1" }] } })),
     SVC_QNFO_DASH: svc((u) => u.pathname === "/api/loop" ? { body: { last_sync: iso(broken.stale ? 300 : 5, now), last_execute: iso(5, now), last_execute_summary: { failed: 0 } } } : { body: { generated_at: iso(5, now), issue_counts: { err: 0 } } }),
     SVC_QNFO_AI_SEARCH: svc((u) => u.pathname === "/api/loop" ? { body: { runs: [{ ts: iso(20, now) }] } } : { body: sse }),
     SVC_QNFO_AI: svc((u) => u.pathname === "/health" ? { body: { bindings: { ai: true, auth: true, query_db: true, qnfo_infra: true, qnfo_intent: true } } } : { body: { data: [{ id: "qnfo" }] } }),
@@ -129,6 +129,13 @@ for (const [k, j] of [["release", "lock-roundtrip"], ["blind", "binding-census"]
   const d = mkDb();
   const rr = await M.journeyTick(mkEnv(d, NOW, { [k]: true }), { now: NOW });
   ok(rr.failing.length === 1 && rr.failing[0] === j, k + " fails " + j + " only", rr);
+}
+
+// 4b. CENSUS-RETIRED-NOT-BLIND-1: a retired row (healthy null, retired true) is the third state of OPS-FLEET-RETIRED-1, not a blind worker; a null row that is not retired still is.
+{
+  const d = mkDb();
+  const rr = await M.journeyTick(mkEnv(d, NOW, { retired: true }), { now: NOW });
+  ok(!rr.failing.includes("binding-census"), "a retired census row does not fail binding-census", rr);
 }
 
 // 5. Real traffic over 6 h: qnfo-ops 250 server errors over ~1166 requests (a quarter of 4664) fails, names the route and carries a
