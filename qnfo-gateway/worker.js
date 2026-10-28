@@ -1,4 +1,4 @@
-var VERSION="3.47.0-provenance-sidecar"; // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
+var VERSION="3.47.1-codeagent"; // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
 // 3.44.2 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): the apex qnfo.org answered HTML pages with no frame protection (measured 2026-10-26: the *.qnfo.org hosts get X-Frame-Options DENY from a zone rule whose expression is the wildcard *.qnfo.org, which does not match the apex). withPagePolicy now adds X-Frame-Options DENY to every HTML response that has none, on every host, so the apex no longer depends on the zone rule; a handler's own value is kept.
 // 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
@@ -6383,6 +6383,40 @@ var LP_QR_JS = [
   "  if (D.q && !D.rendered) load(D.q);",
   "})();"
 ].join("\n");
+// BEGIN TURNSTILE-EDGE-1
+var TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+function turnstileWidget(env, action) {
+  var key = env && (env.TURNSTILE_SITE_KEY || env.TURNSTILE_SITEKEY);
+  if (!key) return "";
+  action = action || "";
+  return '<div class="cf-turnstile" data-sitekey="' + escAttr(key) + '"' + (action ? ' data-action="' + escAttr(action) + '"' : "") + "></div>";
+}
+async function turnstileVerify(env, token, ip, action) {
+  var secret = env && (env.TURNSTILE_SECRET_KEY || env.TURNSTILE_SECRET);
+  if (!secret || !token) return { success: false, error_codes: ["missing-token-or-secret"] };
+  var params = new URLSearchParams();
+  params.set("secret", secret);
+  params.set("response", token);
+  if (ip) params.set("remoteip", ip);
+  if (action) params.set("action", action);
+  var resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: params }).catch(function() { return null; });
+  if (!resp) return { success: false, error_codes: ["network-error"] };
+  try { return await resp.json(); } catch (e) { return { success: false, error_codes: ["bad-response"] }; }
+}
+if (typeof handleSubscribeProxy === 'function') {
+  var _origHandleSubscribeProxy = handleSubscribeProxy;
+  handleSubscribeProxy = async function(request, env) {
+    var body = await request.clone().json().catch(function() { return null; });
+    var token = body && body.cf_turnstile;
+    var ip = request.headers.get('CF-Connecting-IP') || '';
+    var v = await turnstileVerify(env, token, ip, null);
+    if (!v || !v.success) {
+      return new Response('Turnstile verification failed', { status: 400 });
+    }
+    return _origHandleSubscribeProxy.apply(this, arguments);
+  };
+}
+// END TURNSTILE-EDGE-1
 function lpQuickReadHTML(paper, question, fragment) {
   var t = displayTitle(paper.title) || "Untitled";
   var href = "/papers/" + escAttr(paper.slug);
