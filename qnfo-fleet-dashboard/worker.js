@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.74.0";
+var VERSION = "1.74.1"; // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
 /* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
 /* 1.71.1 PSR-NARRATIVE-CAP-SOFT-1 (2026-10-26, agent_issues 1000409, pillar cost; patch): the weekly program-strategic review writes its narrative at a breached ai_spend cap and when the budget cannot be read, on the free Workers AI model only (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06: a breached cap steers model choice and never stops work); the result carries narrative_tier (normal | lean) and narrative_count in place of narrative_allowed, and the summary names the tier. */
@@ -5049,13 +5049,26 @@ function atBlueskyUri(postUri) {
 function atThreadPosts(postsJson) {
   try { const a = JSON.parse(postsJson); return Array.isArray(a) ? a.length : 1; } catch (e) { return 1; }
 }
+// ATTENTION-UNMEASURED-1 (qnfo-fleet-dashboard 1.74.1, agent_issues 1000458, guard metric attention_channels_stopped): an item counts toward items, per_item and
+// the verdict only when it is MEASURED. items is [{ id, at, ref }]; `measured` maps an id to its engagement row (present means measured, even at zero). With dueMs, an
+// item younger than dueMs with no row is not yet due (the collector has not had its day) and is reported apart from the unmeasured ones. Pure.
+function atMeasuredOnly(items, measured, opts) {
+  const o = opts || {}, nowMs = Number(o.nowMs) || Date.now(), dueMs = Number(o.dueMs) || 0;
+  const out = { measured: [], unmeasured: [], not_due: [] };
+  for (const it of items || []) {
+    if (measured && measured[it.id]) { out.measured.push(it); continue; }
+    if (dueMs > 0 && isFinite(it.at) && nowMs - it.at < dueMs) out.not_due.push(it);
+    else out.unmeasured.push(it);
+  }
+  return out;
+}
 // Per-channel stats over [from, to] (UTC days, inclusive). Reads only D1; a source that cannot be read leaves its figure
 // null and a note, never a fabricated zero.
 async function atChannelStats(env, from, to) {
   const A = env.AUDIT, notes = [];
   const fromTs = from + " 00:00:00", toTs = to + " 23:59:59";
   const stats = {};
-  for (const c of AT_CHANNELS) stats[c] = { items: 0, attention: 0, visits: 0, impressions: 0, positives: 0, noticed_items: 0, top: [] };
+  for (const c of AT_CHANNELS) stats[c] = { items: 0, attention: 0, visits: 0, impressions: 0, positives: 0, noticed_items: 0, unmeasured: 0, not_due: 0, top: [] };
   // Bluesky: threads and dissemination posts with an at:// uri in the window; engagement from reach_signals source bluesky.
   try {
     const th = await d1all(A, "SELECT id, slug, title, posts, post_uri, posted_at FROM social_threads WHERE status = 'posted' AND post_uri IS NOT NULL AND post_uri <> '' AND posted_at >= ? AND posted_at <= ?", [fromTs, toTs]);
@@ -5075,6 +5088,12 @@ async function atChannelStats(env, from, to) {
       }
     }
     const s = stats.bluesky;
+    const bm = atMeasuredOnly(items.map(function(i) { return { id: i.uri, ref: i }; }), eng, {});
+    const total = items.length;
+    items.length = 0;
+    for (const m of bm.measured) items.push(m.ref);
+    s.unmeasured = bm.unmeasured.length;
+    if (s.unmeasured) notes.push("bluesky: " + s.unmeasured + " of " + total + " posted item(s) have no reach_signals row and are not counted (unmeasured, never a zero)");
     s.items = items.length;
     try {
       const ut = await d1all(A, "SELECT channel, SUM(value) AS v FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND date >= ? AND date <= ? GROUP BY channel", [from, to]);
@@ -5096,7 +5115,13 @@ async function atChannelStats(env, from, to) {
         for (const r of rows) (met[r.entity_id] = met[r.entity_id] || {})[r.metric] = Number(r.v) || 0;
       }
     }
-    for (const p of posts) {
+    const refMs = Date.parse(to + "T23:59:59Z");
+    const bo = atMeasuredOnly(posts.map(function(p) { return { id: p.buffer_id, at: Date.parse(String(p.published_at).replace(" ", "T") + "Z"), ref: p }; }), met, { nowMs: refMs, dueMs: DAY_MS });
+    for (const u of bo.unmeasured) { const uc = atBufferChannel(u.ref.platform); if (stats[uc]) stats[uc].unmeasured++; }
+    for (const u of bo.not_due) { const uc = atBufferChannel(u.ref.platform); if (stats[uc]) stats[uc].not_due++; }
+    for (const ch of ["linkedin", "mastodon", "x"]) if (stats[ch].unmeasured) notes.push(ch + ": " + stats[ch].unmeasured + " channel post(s) older than 24h with no Buffer metric row are not counted (unmeasured, never a zero; qnfo-cloud-ops jobEngagement reads 20 sent posts per channel daily)");
+    for (const bp of bo.measured) {
+      const p = bp.ref;
       const ch = atBufferChannel(p.platform);
       if (!stats[ch]) continue;
       const m = met[p.buffer_id] || {};
@@ -5107,8 +5132,6 @@ async function atChannelStats(env, from, to) {
       if (a > 0) stats[ch].top.push({ item: p.project_id || p.buffer_id, attention: a });
     }
     for (const ch of ["linkedin", "mastodon", "x"]) stats[ch].top = stats[ch].top.sort(function(a, b) { return b.attention - a.attention; }).slice(0, 5);
-    const unmetered = posts.filter(function(p) { return !met[p.buffer_id] && Date.parse(String(p.published_at).replace(" ", "T") + "Z") < Date.parse(to + "T00:00:00Z") - DAY_MS; }).length;
-    if (unmetered) notes.push("buffer: " + unmetered + " channel post(s) older than 24h with no Buffer metric row (qnfo-cloud-ops jobEngagement reads 20 sent posts per channel daily)");
   } catch (e) { notes.push("buffer: " + reachErr(e)); for (const ch of ["linkedin", "mastodon", "x"]) stats[ch].items = null; }
   // Referred human visits per channel (bot-filtered referrer rows; the unfiltered rows as a labelled fallback).
   let visitsSource = "cf-rum-human";
@@ -5197,7 +5220,7 @@ async function attentionScorecard(env, opts) {
   const stmts = [];
   const rowFor = function(win, c, s, v) {
     return env.AUDIT.prepare("INSERT OR REPLACE INTO attention_scorecard (day, window_days, channel, items, attention, per_item, visits, impressions, verdict, share, reason, retest_at, extra, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)")
-      .bind(day, win, c, s.items, s.attention, s.per_item, s.visits, s.impressions, v ? v.verdict : null, v && isFinite(v.share) ? v.share : null, v ? v.reason : null, v ? v.retest_at || null : null, JSON.stringify({ noticed_items: s.noticed_items, positives: s.positives, top: s.top, stopped_segments: s.stopped_segments }), nowIso);
+      .bind(day, win, c, s.items, s.attention, s.per_item, s.visits, s.impressions, v ? v.verdict : null, v && isFinite(v.share) ? v.share : null, v ? v.reason : null, v ? v.retest_at || null : null, JSON.stringify({ noticed_items: s.noticed_items, positives: s.positives, top: s.top, stopped_segments: s.stopped_segments, unmeasured: s.unmeasured || 0, not_due: s.not_due || 0 }), nowIso);
   };
   for (const c of AT_SOCIAL) { stmts.push(rowFor(AT_LONG, c, L.stats[c], verdicts[c])); stmts.push(rowFor(AT_SHORT, c, S.stats[c], null)); }
   stmts.push(rowFor(AT_LONG, "email", es, emailVerdict)); stmts.push(rowFor(AT_SHORT, "email", S.stats.email, null));
@@ -5257,7 +5280,7 @@ async function attentionScorecard(env, opts) {
   const stopped = AT_SOCIAL.filter(function(c) { return verdicts[c] && verdicts[c].verdict === "STOP"; }).length;
   const metricVals = {
     attention_events_7d: String(atRound(events7)),
-    attention_per_post_7d: social7.items ? String(atRound(social7.att / social7.items)) : "n/a: no social post in the last 7 days",
+    attention_per_post_7d: social7.items ? String(atRound(social7.att / social7.items)) : "n/a: no measured social post in the last 7 days",
     pages_noticed_7d: web.noticed_pages == null ? "n/a: no per-item human rows yet" : String((web.noticed_pages || 0) + (web.noticed_papers || 0)),
     attention_channels_stopped: String(stopped),
     attention_decision_efficacy_30d: out.efficacy && out.efficacy.judged ? String(atRound(out.efficacy.improved / out.efficacy.judged)) : "n/a: no decision verified yet"
