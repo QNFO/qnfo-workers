@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-28 10:26:30",
+  "audited_at": "2026-10-28 11:29:17",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
@@ -655,7 +655,7 @@
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.2.0",
+        "version": "1.2.1",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -680,7 +680,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.59.5-issue-repo-args",
+        "version": "2.59.6-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -1482,9 +1482,9 @@
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.2.0",
+      "before": "1.2.1",
       "http": 200,
-      "live": "1.2.0",
+      "live": "1.2.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
@@ -1540,9 +1540,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.59.5-issue-repo-args",
+      "before": "2.59.6-codeagent",
       "http": 200,
-      "live": "2.59.5-issue-repo-args",
+      "live": "2.59.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
