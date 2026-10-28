@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.3.2-exuvia"; // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
+var VERSION = "2.3.3-codeagent"; // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // NO-REGISTRAR-1: a DOI under the dead 10.5281 prefix is never returned; third-party DOIs pass through.
 function nozDoi(d) { return d && !/10\.5281\//.test(String(d)) ? d : null; }
 var SERVER_VERSION = VERSION;
@@ -184,7 +184,9 @@ async function tool_remember_fact(args, env) {
   const ts = Date.now();
   const id = "mem:" + category + ":" + ts + ":" + (await sha256hex(content)).slice(0, 8);
   const created_at = (/* @__PURE__ */ new Date()).toISOString();
-  const metadata_json = JSON.stringify({ source: "qnfo-memory-mcp", timestamp: created_at });
+  const tier = args.tier ? sanitize(args.tier) : "episodic";
+const role = args.role ? sanitize(args.role) : "agent";
+const metadata_json = JSON.stringify({ source: "qnfo-memory-mcp", timestamp: created_at, tier, role });
   await env.GRAPH_DB.prepare(
     "INSERT OR REPLACE INTO agent_memories (id, category, content, summary, importance, session_id, created_at, expires_at, metadata_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)"
   ).bind(id, category, content, summary, importance, session_id, created_at, metadata_json).run();
@@ -194,7 +196,7 @@ async function tool_remember_fact(args, env) {
     values: vec,
     metadata: { kind: "memory", category, content: sanitize(content).slice(0, 800) }
   }]);
-  return { content: [{ type: "text", text: JSON.stringify({ success: true, id, category, importance, created_at }) }] };
+  return { content: [{ type: "text", text: JSON.stringify({ success: true, id, category, importance, created_at, tier }) }] };
 }
 __name(tool_remember_fact, "tool_remember_fact");
 async function tool_recall_facts(args, env) {
