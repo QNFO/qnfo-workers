@@ -279,6 +279,8 @@ ok(mv && /plain_backfilled/.test(String(sq.prepare("SELECT note FROM ask_loop_ru
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
-ok(/var ANSWER_REV = "r8-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+ok(/var ANSWER_REV = "r\d+-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+// 7. ASK-FIX-1: the plain-language rule says where the everyday words go (the two sentences the plain check reads)
+ok(/The first two sentences are the ones a visitor reads first: state the result there with as few long specialist words as the excerpts allow/.test(src), "the writer prompt asks for the result with few long specialist words in the first two sentences");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
