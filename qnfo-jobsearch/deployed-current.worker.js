@@ -8,7 +8,7 @@
 // JOBSEARCH-PROFILE-1 (1.3.0): yes/no search survey, role families drawn from the whole record (policy, transport and planning, data, product, program, research, consulting, nonprofit, GIS, contracts, social policy), location gates from the owner answers (Netherlands and remote by default, US and other on-site only when selected), likes and dislikes teach the search, rejected matches stay hidden, "check a job" analysis of a pasted link or text.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.3.0";
+var VERSION = "1.3.1";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -300,6 +300,9 @@ const OWNER_EMAIL = LEDGER.person.sign_in_email || LEDGER.person.email;
 const LEDGER_VERIFIED_ON = LEDGER.ledger_verified_on || "2026-10-01";
 const SESSION_MS = 12 * 3600 * 1000, CODE_MS = 15 * 60 * 1000, CODE_MAX_PER_HOUR = 6, CODE_MIN_GAP_MS = 60 * 1000, CODE_MAX_TRIES = 5;
 const DDL = [
+  "CREATE TABLE IF NOT EXISTS jobsearch_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT, feeds INTEGER, fetched INTEGER, passed INTEGER, stored INTEGER, blocked INTEGER, excluded_json TEXT, errors_json TEXT)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_matches (id TEXT PRIMARY KEY, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, run_id INTEGER, company TEXT, title TEXT, location TEXT, url TEXT, tier TEXT, score INTEGER, why_json TEXT, flags_json TEXT, verified INTEGER NOT NULL DEFAULT 0, blocked_reason TEXT, resume_md TEXT, note_md TEXT, status TEXT NOT NULL DEFAULT 'pending_owner_approval', decided_at TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_jobsearch_matches_rank ON jobsearch_matches (score DESC, last_seen DESC)",
   "CREATE TABLE IF NOT EXISTS jobsearch_feeds (feed TEXT PRIMARY KEY, last_ok_at TEXT, last_count INTEGER, last_error TEXT, last_error_at TEXT, consecutive_fail INTEGER NOT NULL DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS jobsearch_meta (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)",
   "CREATE TABLE IF NOT EXISTS jobsearch_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code_hash TEXT NOT NULL, salt TEXT NOT NULL, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, used INTEGER NOT NULL DEFAULT 0)",
@@ -505,7 +508,10 @@ const CORE = new Set(["federal", "policy_research", "transport_modeling", "resea
 const FRONTIER = new Set(["ai_systems", "research_integrity"]);
 const DATA_SIDE = new Set(["data_product", "data_science", "survey_methods", "ai_systems", "gis"]);
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const has = (text, kws) => kws.filter((k) => text.includes(k));
+// a keyword must start a word (so "gis" is not found inside "strategist"); a short one must also end it
+const KW_RE = new Map();
+const kwRe = (k) => { let r = KW_RE.get(k); if (!r) { r = new RegExp("(?<![a-z])" + escRe(k) + (k.trim().length <= 4 ? "(?![a-z])" : "")); KW_RE.set(k, r); } return r; };
+const has = (text, kws) => kws.filter((k) => kwRe(k).test(text));
 const STOP_TOKENS = new Set(["senior", "lead", "head", "manager", "director", "principal", "global", "europe", "remote", "team", "and", "for", "the", "with", "staff", "group", "associate"]);
 const tokens = (title) => [...new Set(String(title || "").toLowerCase().split(/[^a-z]+/).filter((t) => t.length >= 4 && !STOP_TOKENS.has(t)))];
 
@@ -566,7 +572,8 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (!famOn.length && !medium.length) drop("title not in your role families");
   const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000), ctx);
   if (gate === "fail") drop(locNote);
-  if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
+  if (gate === "check" && locNote === "location missing" && mode !== "analyze" && !HOME.some((k) => desc.slice(0, 3000).toLowerCase().includes(k))) drop("no location in the posting; it cannot be placed against your preferences");
+  else if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
   const cl = clustersIn(desc, job.title);
   if (!famOn.length && cl.size < 2) drop("generic title and thin evidence in the posting");
   if (famOn.length && !cl.size) pen += 15;
@@ -777,7 +784,7 @@ function gapsFor(desc) {
   const out = [];
   if (notInLedger.length) out.push("named in the posting but not in your ledger (add to the ledger if you have it): " + notInLedger.slice(0, 8).join(", "));
   const yrs = [...d.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
-  if (yrs.length) out.push(`asks for up to ${Math.max(...yrs)} years of experience (your record starts in ${LEDGER.person.career_start})`);
+  if (yrs.length) out.push(`mentions ${Math.max(...yrs)} years of experience; your record spans ${new Date().getUTCFullYear() - Number(LEDGER.person.career_start)} years (since ${LEDGER.person.career_start})`);
   if (/ph\.?d/.test(d)) out.push("mentions a PhD; you hold an M.S. and a B.A.");
   if (/\bmba\b/.test(d)) out.push("mentions an MBA; not in your ledger");
   return out;
@@ -824,7 +831,7 @@ async function analyzeJob(env, body) {
   const input = String(body.input || body.text || body.url || "").trim();
   if (!input) throw Object.assign(new Error("paste a job link or the posting text"), { status: 400 });
   if (/^https?:\/\/\S+$/.test(input)) { p = { ...p, ...(await fetchPosting(input)) }; if (body.title) p.title = body.title; if (body.company) p.company = body.company; if (body.location) p.location = body.location; }
-  else { p.desc = input.slice(0, 40000); if (!p.title) p.title = (input.split("\n").find((l) => l.trim()) || "").trim().slice(0, 140); }
+  else { p.desc = input.slice(0, 40000); if (!p.location) { const lm = input.match(/\b(?:location|locatie|werklocatie)\s*:\s*([^\n.;|]{2,90})/i); if (lm) p.location = lm[1].trim(); } if (!p.title) { const first = (input.split("\n").find((l) => l.trim()) || "").trim(); p.title = (first.length > 80 ? first.split(/[.:;|]\s/)[0] : first).slice(0, 140); } }
   if (!p.title) throw Object.assign(new Error("could not find the job title; add it in the title box"), { status: 400 });
   const job = { id: "check:" + (await sha256hex(p.title + p.company + p.desc.slice(0, 200))).slice(0, 12), source: "check", company: p.company || "the employer", title: p.title, location: p.location, url: p.url, desc: p.desc };
   const sc = scoreJob(job, ctx, "analyze");
@@ -1180,7 +1187,7 @@ details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:
 <header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
 <div class="bar"><select id="tier"><option value="">All tiers</option><option>A</option><option>B</option></select>
 <select id="status"><option value="">Active (hides rejected)</option><option value="all">All, including rejected</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
-<input id="q" placeholder="Search title, company, place" size="26"><button id="run" class="p">Run now</button><a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn().catch(e=>alert(e.message))">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
+<input id="q" placeholder="Search title, company, place" size="26"><button id="run" class="p">Run now</button><a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
 <main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
 <details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="list"></div></main>
 <script>
@@ -1199,12 +1206,17 @@ async function load(){
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
   el.innerHTML='<h4>Resume</h4><pre>'+esc(d.resume_md)+'</pre><h4>Note</h4><pre>'+esc(d.note_md)+'</pre><button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.note_md)+'">Copy note</button> <button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.resume_md)+'">Copy resume</button>'}
-async function signIn(){let r;try{r=await api('/api/auth/request',{method:'POST'})}catch(e){if(!/limit/.test(e.message))throw e;r={sent:false,note:e.message}}const c=prompt((r.sent===false?r.note:'A 6-digit code was e-mailed to '+r.to)+' Enter the code:');if(!c)return false;await api('/api/auth/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:c})});who();return true}
+function signIn(){return new Promise(async(res)=>{let r;try{r=await api('/api/auth/request',{method:'POST'})}catch(e){if(!/limit/.test(e.message)){alert(e.message);return res(false)}r={sent:false,note:e.message}}
+  let box=$('#signbox');if(!box){box=document.createElement('div');box.id='signbox';box.className='note';$('main').prepend(box)}
+  box.innerHTML='<b>Sign in</b><div>'+esc(r.sent===false?r.note+' A code sent earlier still works.':'A 6-digit code was e-mailed to '+r.to+'.')+'</div><div class="bar"><input id="scode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" size="10"><button class="p" id="sgo">Sign in</button><button id="scancel">Cancel</button><span id="smsg" class="mute"></span></div>';
+  const done=v=>{box.remove();res(v)};$('#scancel').onclick=()=>done(false);
+  const go=async()=>{try{await api('/api/auth/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:$('#scode').value.trim()})});who();done(true)}catch(e){$('#smsg').textContent=e.message}};
+  $('#sgo').onclick=go;$('#scode').onkeydown=e=>{if(e.key==='Enter')go()};$('#scode').focus()})}
 async function who(){try{const m=await api('/api/auth/me');$('#who').textContent=m.signed_in?'Signed in':'Not signed in';$('#signin').style.display=m.signed_in?'none':'';$('#signout').style.display=m.signed_in?'':'none'}catch(e){$('#who').textContent='Sign-in status unavailable: '+e.message}}
 async function decide(id,status){
   const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status})});
   try{await call()}catch(e){if(/sign in/.test(e.message)){try{if(await signIn())await call();else return}catch(e2){alert(e2.message);return}}else{alert(e.message);return}}load()}
-$('#run').onclick=async()=>{$('#run').disabled=true;try{await api('/api/run',{method:'POST'});$('#meta').textContent='Run started. Refreshing in 40 s…';setTimeout(()=>{load();$('#run').disabled=false},40000)}catch(e){alert(e.message);$('#run').disabled=false}};
+$('#run').onclick=async()=>{$('#run').disabled=true;try{await authed(()=>api('/api/run',{method:'POST'}));$('#meta').textContent='Run started. Refreshing in 40 s…';setTimeout(()=>{load();$('#run').disabled=false},40000)}catch(e){alert(e.message);$('#run').disabled=false}};
 for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
 async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q"><span>'+esc(q.q)+'</span> '+[['true','Yes'],['false','No'],['null','Skip']].map(o=>'<label><input type="radio" name="q_'+q.id+'" value="'+o[0]+'"'+(String(q.answer)===o[0]?' checked':'')+'> '+o[1]+'</label>').join('')+'</div>').join('')).join('')}
 $('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey input:checked').forEach(i=>{a[i.name.slice(2)]=i.value==='true'?true:i.value==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};

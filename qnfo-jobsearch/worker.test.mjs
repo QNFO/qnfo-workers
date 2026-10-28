@@ -253,6 +253,13 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   const chk2 = await post("/api/analyze", { input: txt, company: "Acme", location: "Tokyo, Japan" });
   ok(chk2[1].would_appear_in_your_search === false && chk2[1].why_not_in_search.length > 0, "analysis says why a job would not appear");
   ok((await post("/api/analyze", { input: "" }))[0] === 400, "empty input refused");
+  // user test 2026-10-28: pasted text carries its own location, a long one-line paste gets a short title, "gis" is not found inside "strategist"
+  const pasted = await post("/api/analyze", { input: "Senior Transport Policy Analyst, Gemeente Amsterdam. Location: Amsterdam, Netherlands. 8+ years in transport planning and public policy research." });
+  ok(pasted[1].location === "Amsterdam, Netherlands", "location read from pasted text: " + pasted[1].location);
+  ok(pasted[1].title.length < 60, "short title from a one-line paste: " + pasted[1].title);
+  ok(!pasted[1].why.join(" ").includes("gis"), "no gis lane from a transport posting");
+  const strat = await post("/api/analyze", { input: "Senior Creative Strategist for paid social and online video campaigns.", title: "Senior Creative Strategist", company: "Acme", location: "Amsterdam" });
+  ok(!strat[1].why.join(" ").includes("lane: gis"), "gis not matched inside strategist: " + strat[1].why.join(" "));
   ok((await call("/api/analyze", { method: "POST", body: "{}" }, sessEnv))[0] === 401, "analyze needs sign-in");
   const ssrf = await post("/api/analyze", { input: "https://127.0.0.1/admin" });
   ok(ssrf[0] === 422 && /public website/.test(ssrf[1].error), "private hosts are refused", ssrf);
