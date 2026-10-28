@@ -75,3 +75,9 @@ RM-MEMORY-TIERING-1, RM-DETERMINISTIC-GATE-AUDIT-1, RM-AGENT-INJECTION-DEFENSE-1
 RM-RAG-HYBRID-BASELINE-1, RM-PAPER-PROVENANCE-TRACE-1, RM-QWAV-CROSS-SIMULATOR-1. They are to be filed as `agent_issues` rows with a
 doer and a closing probe (OWNER-NO-LOOSE-ENDS-1); not yet filed as of this commit. Failure mode: a scouted idea adopted from an abstract can mislead; every
 adoption PR cites the full text and measures the effect against the pre-change baseline before it is kept.
+
+## Overlap with existing open issues (do not file twice)
+
+- RM-AGENT-INJECTION-DEFENSE-1 extends BP26-PROMPT-INJECTION-1 (agent_issues 1000359, PR 4455): section D is its reading list.
+- RM-DETERMINISTIC-GATE-AUDIT-1 supports BP26-LEASES-KILLSWITCH-1 (1000361) and the self-change protocol.
+- RM-CODEMODE-MCP-SURFACE-1 and RM-RAG-HYBRID-BASELINE-1 have no existing issue; file these two first.
