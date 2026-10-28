@@ -21,8 +21,22 @@ def speakable(t):
 
 
 async def tts_words(text, voice, mp3, rate="+4%"):
+    """edge-tts sometimes returns NoAudioReceived (transient, or a rate/text it dislikes): retry, then drop the rate, then split at the sentence."""
     import edge_tts
-    words, com = [], edge_tts.Communicate(speakable(text), voice, rate=rate, boundary="WordBoundary")
+    last = None
+    plan = [(voice, rate)] * 4 + [(voice, "+0%"), ("en-US-AndrewNeural", "+0%")]   # the service drops requests at random: back off, then relax the rate, then fall back to the plain voice
+    for attempt, (v, r) in enumerate(plan):
+        try:
+            return await _tts_once(speakable(text), v, mp3, r)
+        except edge_tts.exceptions.NoAudioReceived as e:
+            last = e
+            await asyncio.sleep(min(30, 3 * 2 ** attempt))
+    raise last
+
+
+async def _tts_once(text, voice, mp3, rate):
+    import edge_tts
+    words, com = [], edge_tts.Communicate(text, voice, rate=rate, boundary="WordBoundary")
     with open(mp3, "wb") as f:
         async for ch in com.stream():
             if ch["type"] == "audio":

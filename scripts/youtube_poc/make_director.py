@@ -36,6 +36,7 @@ NUMS = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 
         "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40,
         "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
 SCALE = {"hundred": 100, "thousand": 1000, "million": 10**6}
+MAX_WORDS = 160   # about 60 s at the narrator pace; retention drops sharply after that
 STR_LIMITS = {"left": 18, "right": 18, "need_label": 24, "have_label": 24, "axis_label": 40, "verdict": 20, "a": 14, "b": 14, "label": 30, "sub": 40, "title": 30}
 
 
@@ -143,7 +144,7 @@ Reply with ONE JSON object only: {{"title": "...", "beats": [...]}}. No prose, n
 
 HARD RULES
 - Use ONLY facts and numbers that are in the article below. Never add a number, name, study or claim that is not there. Keep its caveats (assumptions, what it does not show) in one beat.
-- {nbeats} beats. Beat 1 is kind "hook": a concrete, surprising claim or question from the article in under 12 spoken words, no greeting, no "welcome". Then build one idea per beat. Penultimate beat states the honest limit. Do not write the closing call to action; the tool adds it.
+- {nbeats} beats and 110-150 spoken words IN TOTAL (a Short people finish is 40-55 seconds). Beat 1 is kind "hook": a concrete, surprising claim or question from the article in under 12 spoken words, no greeting, no "welcome". Then build one idea per beat. Penultimate beat states the honest limit. Do not write the closing call to action; the tool adds it.
 - Every beat has "narr": what the narrator says. Write for the ear: contractions, sentences of at most 15 words, vary length, use commas and question marks where a speaker would change pitch, spell numbers as words in narr ("three hundred and fifty", "two in three"), no URLs, no brackets, no jargon without a plain gloss.
 - Pick a DIFFERENT template for most beats; never use the same kind three times; use at least 4 different kinds. Fit the picture to the idea (a change over time or in mix -> dots or compare; a quantity -> bignum; a process or chain -> flow; a contrast -> versus; a checklist or caveats -> list).
 - Strings shown on screen are short. Numbers on screen must match the article exactly.
@@ -214,6 +215,10 @@ def main():
                 for i in sorted(bad, reverse=True):
                     round_drops.append({"attempt": attempt, "beat": i, "kind": kept[i].get("kind"), "stage": "llm-checker", "why": bad[i][:200]})
                     del kept[i]
+        words = sum(len(b["narr"].split()) for b in kept)
+        if kept and words > MAX_WORDS:
+            round_drops.append({"attempt": attempt, "stage": "length", "why": f"narration is {words} words; cut to at most {MAX_WORDS - 10} by merging or removing the least important beats"})
+            kept = []                          # too long to ship: rewrite, never trim silently
         drops += round_drops
         if kept and kept[0].get("kind") == "hook" and len(kept) >= 5:
             break

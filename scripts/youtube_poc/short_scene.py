@@ -219,7 +219,7 @@ class ShortScene(Scene):
         ring_bg = Circle(radius=2.1, stroke_width=22, color=SOFT, stroke_opacity=0.25).move_to([0, 2.3, 0])
         ring = always_redraw(lambda: Arc(radius=2.1, start_angle=PI / 2, angle=-TAU * frac * trk.get_value(), stroke_width=22, color=color).move_to(ring_bg))
         dec = int(b.get("decimals", 0))
-        num = always_redraw(lambda: T(f"{b.get('prefix', '')}{trk.get_value() * val:.{dec}f}{b.get('suffix', '')}", 84, color, maxw=3.6).move_to(ring_bg))
+        num = always_redraw(lambda: T(f"{b.get('prefix', '')}{trk.get_value() * val:,.{dec}f}{b.get('suffix', '')}", 84, color, maxw=3.6).move_to(ring_bg))
         label = T(b["label"], 36, INK, maxw=7.0).next_to(ring_bg, DOWN, buff=0.7)
         sub = T(b["sub"], 28, SOFT, bold=False, maxw=7.0).next_to(label, DOWN, buff=0.3) if b.get("sub") else VGroup()
         self.play(FadeIn(ring_bg), run_time=0.3)
