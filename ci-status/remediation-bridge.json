@@ -2,13 +2,13 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 44,
- "open_issues": 264,
- "with_contract_before": 264,
+ "open_issues": 266,
+ "with_contract_before": 266,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 943,
- "active_with_executable_probe": 641,
+ "active_contracts": 944,
+ "active_with_executable_probe": 642,
  "active_with_prose_probe": 302,
  "prose_probe_contracts": [
   {
@@ -213,7 +213,7 @@
   }
  ],
  "contracts_needs_machine_probe": 34,
- "open_issues_without_active_contract": 84,
+ "open_issues_without_active_contract": 86,
  "residual_gap_ids": [
   100464,
   100607,
@@ -276,7 +276,7 @@
   1000482,
   1000486
  ],
- "head": "1103a16215de6484ad3f53931a4359b436c3419a",
+ "head": "bfa9d0e5c8e3638b5076bb2c9673f883fd27f949",
  "job_status": "success",
- "ts": "2026-10-28T10:24:32Z"
+ "ts": "2026-10-28T11:26:13Z"
 }
