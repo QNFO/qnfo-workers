@@ -24,6 +24,9 @@ ACTIONS
                          mapping the index to the repo directory of the retired worker that owned it) and that
                          directory carries a RETIRED or FOLDED marker. Added for #272, where the index
                          qnfo-calibration was recreated for the folded qnfo-fleet-calibrator.
+  d1-restore-drill       BP26-D1-DISCIPLINE-1: a real Time Travel restore drill on a throwaway scratch database (created, written,
+                         bookmarked, mutated, restored to the bookmark, verified, deleted), plus a read-only bookmark lookup on qnfo-audit.
+                         Writes one qnfo-audit.d1_restore_drills row (outcome pass or fail). Touches no production data.
   gen-activitypub-key WORKER
                          Create AP_PRIVATE_KEY and AP_PUBLIC_KEY Worker secrets (RSA-2048) for the ActivityPub actor
                          (ACTIVITYPUB-WEBFINGER-1). WORKER must be in AP_WORKERS. Idempotent, never rotates, runs under
@@ -91,6 +94,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 API = "https://api.cloudflare.com/client/v4"
@@ -1349,6 +1353,63 @@ def delete_d1(name: str, acct: str, token: str) -> int:
     return 0 if ok else 1
 
 
+DRILL_PREFIX = "drill-scratch-"
+
+
+def d1_restore_drill(acct: str, token: str, caller=None, sleep=time.sleep, now=time.time) -> int:
+    """BP26-D1-DISCIPLINE-1. Time Travel restores a database in place, so the drill restores a scratch database, never a production one:
+    create it, write 3 rows, take a bookmark, write 2 more, restore to the bookmark, expect exactly 3 rows, delete it. The qnfo-audit
+    bookmark lookup proves a production database can hand out a bookmark (read only)."""
+    call_ = caller or call
+    name = DRILL_PREFIX + time.strftime("%Y%m%d%H%M%S", time.gmtime(now()))
+    steps, db_id, outcome, bookmark, rows = [], None, "fail", None, None
+
+    def q(sql):
+        st, j = call_("POST", f"/accounts/{acct}/d1/database/{db_id}/query", token, {"sql": sql, "params": []}, timeout=90)
+        res = (j.get("result") or [{}])
+        return (200 <= (st or 0) < 300 and bool(j.get("success"))), (res[0].get("results") or [])
+    try:
+        st, j = call_("POST", f"/accounts/{acct}/d1/database", token, {"name": name})
+        db_id = (j.get("result") or {}).get("uuid")
+        steps.append(("create", bool(db_id)))
+        if not db_id:
+            raise RuntimeError("create failed: " + str(j.get("errors"))[:200])
+        okc, _ = q("CREATE TABLE drill (id INTEGER PRIMARY KEY, v TEXT)")
+        oki, _ = q("INSERT INTO drill (v) VALUES ('a'),('b'),('c')")
+        steps.append(("seed", okc and oki))
+        st, j = call_("GET", f"/accounts/{acct}/d1/database/{db_id}/time_travel/bookmark", token)
+        bookmark = (j.get("result") or {}).get("bookmark")
+        steps.append(("bookmark", bool(bookmark)))
+        if not bookmark:
+            raise RuntimeError("no bookmark: " + str(j.get("errors"))[:200])
+        sleep(2)
+        q("INSERT INTO drill (v) VALUES ('d'),('e')")
+        okd, before = q("SELECT COUNT(*) AS n FROM drill")
+        steps.append(("mutate", okd and int(before[0]["n"]) == 5))
+        st, j = call_("POST", f"/accounts/{acct}/d1/database/{db_id}/time_travel/restore?bookmark=" + urllib.parse.quote(bookmark), token, {})
+        steps.append(("restore", 200 <= (st or 0) < 300 and bool(j.get("success"))))
+        sleep(2)
+        oka, after = q("SELECT COUNT(*) AS n FROM drill")
+        rows = int(after[0]["n"]) if oka and after else None
+        steps.append(("verify", rows == 3))
+        outcome = "pass" if all(ok for _, ok in steps) else "fail"
+    except Exception as e:  # noqa: BLE001
+        steps.append(("error", False))
+        emit({"action": "d1-restore-drill", "error": str(e)[:300]})
+    finally:
+        if db_id and name.startswith(DRILL_PREFIX):
+            st, _ = call_("DELETE", f"/accounts/{acct}/d1/database/{db_id}", token)
+            steps.append(("cleanup", 200 <= (st or 0) < 300))
+    st, j = call_("GET", f"/accounts/{acct}/d1/database/{AUDIT_DB}/time_travel/bookmark", token)
+    prod_ok = bool((j.get("result") or {}).get("bookmark"))
+    steps.append(("prod-bookmark-readable", prod_ok))
+    outcome = "pass" if outcome == "pass" and prod_ok and dict(steps).get("cleanup", False) else "fail"
+    ev = json.dumps({"steps": steps})[:900]
+    okw, wr = d1x(acct, token, AUDIT_DB, "INSERT INTO d1_restore_drills (ts, source_db, scratch_db, bookmark, rows_checked, outcome, evidence) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'qnfo-audit (bookmark lookup only)', ?1, ?2, ?3, ?4, ?5)", [name, bookmark, rows, outcome, ev])
+    emit({"action": "d1-restore-drill", "ok": outcome == "pass" and okw, "outcome": outcome, "scratch": name, "rows_after_restore": rows, "steps": steps, "ledger_written": okw})
+    return 0 if outcome == "pass" and okw else 1
+
+
 AP_WORKERS = {"qnfo-gateway"}
 AP_SECRETS = ("AP_PRIVATE_KEY", "AP_PUBLIC_KEY")
 
@@ -1405,7 +1466,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1434,6 +1495,8 @@ def main() -> int:
             print("::error::delete-vectorize-index needs --target")
             return 2
         return delete_vectorize_index(a.target, acct, token)
+    if a.action == "d1-restore-drill":
+        return d1_restore_drill(acct, token)
     if a.action == "gen-activitypub-key":
         return gen_activitypub_key(a.target, acct, token)
     if a.action == "zaraz-remove-tool":
