@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.39.1-codeagent";
+var VERSION = "0.39.2";
+/* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
 /* 0.37.5 (2026-10-26, charter pillar reach, agent_issues 100439, 100607): Q08-THIN-PASSED-OVER-1 marks a candidate that was measured thin and passed over for a richer one, so a paper without an HTML rendering no longer holds the arXiv lane for a day (the lane ran at 02:02 and 03:04 on 2026-10-26 and then not for 16 hours); the 24-hour retry window is the existing one. */
@@ -1458,11 +1459,11 @@ async function compose(env, prompt, banned, order, xform, opts) {
   for (var modelId of (order || await composeOrder(env))) {
     try {
       meterCall(env, "compose");
-      var resp = await env.AI.run(modelId, Object.assign({
+      var resp = await aiGatewayRun(env, modelId, Object.assign({
         messages: [{ role: "user", content: prompt }],
         max_tokens: COMPOSE_MAX_TOKENS,
         temperature: temperature,
-      }, factCheckExtra(modelId)), { signal: AbortSignal.timeout(150000) });
+      }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "compose", signal: AbortSignal.timeout(150000) });
       // Workers AI returns {response: string} for chat models
       var text = aiReplyText(resp);
       if (!text || text.length <= 200) { trail.push({ model: modelId, problems: ["empty or short reply (" + String(text || "").length + " chars)"] }); continue; }
@@ -1513,7 +1514,7 @@ var TITLE_REPAIR_PROMPT = "Here is an essay that passed every editorial check ex
 async function titleMicroCall(env, modelId, essay) {
   var body = String(essay || "").replace(/^#\s+.+$/m, "").trim();
   meterCall(env, "compose");
-  var resp = await env.AI.run(modelId, Object.assign({ messages: [{ role: "user", content: TITLE_REPAIR_PROMPT + "\n--- ESSAY ---\n" + body.slice(0, 6000) + "\n--- END ---" }], max_tokens: 400, temperature: 0.3 }, factCheckExtra(modelId)), { signal: AbortSignal.timeout(60000) });
+  var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: TITLE_REPAIR_PROMPT + "\n--- ESSAY ---\n" + body.slice(0, 6000) + "\n--- END ---" }], max_tokens: 400, temperature: 0.3 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "title-repair", signal: AbortSignal.timeout(60000) });
   var reply = aiReplyText(resp), line = titleLineOf(reply);
   if (!line) return { reply: String(reply || "") };
   return /^#\s+.+$/m.test(String(essay)) ? String(essay).replace(/^#\s+.+$/m, line) : line + "\n\n" + String(essay).replace(/^\s+/, "");
@@ -2640,7 +2641,7 @@ async function repairForecastJson(env, essayText, src, signalText) {
   for (var modelId of COMPOSE_MODELS) {
     try {
       meterCall(env, "compose");
-      var resp = await env.AI.run(modelId, { messages: [{ role: "user", content: prompt }], max_tokens: 1400, temperature: 0.2 }, { signal: AbortSignal.timeout(60000) });
+      var resp = await aiGatewayRun(env, modelId, { messages: [{ role: "user", content: prompt }], max_tokens: 1400, temperature: 0.2 }, { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "forecast", signal: AbortSignal.timeout(60000) });
       var txt = aiReplyText(resp);
       var m = String(txt || "").match(/\{[\s\S]*\}/);
       if (!m) continue;
@@ -3265,7 +3266,7 @@ async function factCheckOne(env, modelId, essay, ground, prompt) {
   meterCall(env, "factcheck");
   try {
     var body = (prompt || FACTCHECK_PROMPT) + "\n\n--- SOURCE MATERIAL ---\n" + String(ground).slice(0, FACTCHECK_GROUND_MAX) + "\n\n--- DRAFT ---\n" + String(essay).replace(/^[ \t]*FORECAST-JSON:.*$/gim, "").replace(/\n?worth your time:[^\n]*$/im, "").trim().slice(0, 9000);
-    var resp = await env.AI.run(modelId, Object.assign({ messages: [{ role: "user", content: body }], max_tokens: FACTCHECK_MAX_TOKENS, temperature: 0.1 }, factCheckExtra(modelId)), { signal: AbortSignal.timeout(75000) });
+    var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: body }], max_tokens: FACTCHECK_MAX_TOKENS, temperature: 0.1 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "factcheck", signal: AbortSignal.timeout(75000) });
     var msg = resp && resp.choices && resp.choices[0] && resp.choices[0].message;
     // reasoning models spend tokens before the answer: a long draft needs room (a verdict is read only from the answer, never from reasoning text)
     var out = aiReplyText(resp);
@@ -3835,7 +3836,7 @@ async function judgeForecast(env, f, evidence) {
   var ids = pickPanel([], 2, seedOf(f.slug));
   var got = await Promise.all(ids.map(async function (id) {
     try {
-      var resp = await env.AI.run(id, { messages: [{ role: "user", content: body }], max_tokens: READER_MAX_TOKENS, temperature: 0.1 }, { signal: AbortSignal.timeout(90000) });
+      var resp = await aiGatewayRun(env, id, { messages: [{ role: "user", content: body }], max_tokens: READER_MAX_TOKENS, temperature: 0.1 }, { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "judge", signal: AbortSignal.timeout(90000) });
       var out = aiReplyText(resp);
       var v = parseJudgeVerdict(out);
       if (v) v.model = id;
