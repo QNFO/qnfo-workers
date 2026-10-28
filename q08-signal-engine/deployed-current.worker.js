@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.38.0-forecast-hygiene";
+var VERSION = "0.38.1-codeagent";
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
 /* 0.37.5 (2026-10-26, charter pillar reach, agent_issues 100439, 100607): Q08-THIN-PASSED-OVER-1 marks a candidate that was measured thin and passed over for a richer one, so a paper without an HTML rendering no longer holds the arXiv lane for a day (the lane ran at 02:02 and 03:04 on 2026-10-26 and then not for 16 hours); the 24-hour retry window is the existing one. */
 /* 0.37.4 (2026-10-26, charter pillar reach, agent_issues 100607, 100439): Q08-GATE-GROUND-BLIND-1 removes the two checks of the writer gate that refused every comma-grouped dollar amount and every score, rating, ratio or reputation of 0.85 as fabricated without reading the source; the grounding check that runs on every draft before any panel call and on the final text already refuses a figure the source does not hold. */
@@ -4826,7 +4826,27 @@ async function q08Fetch(req, env, ctx) {
       var fr2 = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, alternatives_json, status, outcome, brier, checks, created_at, resolved_at, disposition FROM q08_forecasts WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
       var fupd = await env.DB.prepare("SELECT slug, prior_probability, probability, reason, evidence_url, created_at FROM q08_forecast_updates ORDER BY id").all().catch(function () { return { results: [] }; });
       var fby = {}; (fupd.results || []).forEach(function (u) { (fby[u.slug] = fby[u.slug] || []).push({ prior_probability: u.prior_probability, probability: u.probability, reason: u.reason, evidence_url: u.evidence_url, at: u.created_at }); });
-      return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: (fr2.results || []).map(function (f) { f.original_probability = f.probability; f.updates = fby[f.slug] || []; return f; }) });
+      return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: (fr2.results || []).map(function (f) {
+  f.original_probability = f.probability;
+  f.updates = fby[f.slug] || [];
+  // Compute updated_brier: last forecast update before the horizon (if resolved)
+  if (f.resolution != null && f.updates.length) {
+    var horizonMs = Date.parse(f.horizon);
+    var lastUpd = null;
+    f.updates.forEach(function (u) {
+      var uMs = Date.parse(u.at);
+      if (!isNaN(uMs) && (isNaN(horizonMs) || uMs <= horizonMs)) {
+        if (!lastUpd || uMs > Date.parse(lastUpd.at)) lastUpd = u;
+      }
+    });
+    if (lastUpd) {
+      var prob = Number(lastUpd.probability);
+      var outcome = (f.resolution === "true" || f.resolution === "yes" || f.resolution === "1") ? 1 : 0;
+      f.updated_brier = Math.pow(prob - outcome, 2);
+    }
+  }
+  return f;
+}) });
     }
     if (path === "/api/pieces") {
       var rows = await env.DB.prepare("SELECT slug, title, core_concept, published_at, reads" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 50").all();
