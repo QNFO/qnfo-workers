@@ -7,7 +7,7 @@
 // JOBSEARCH-OUTCOME-1 (1.2.0): append-only status events, outcome funnel (applied, replies, interviews, offers), reply rate of applications older than 21 days, metrics jobsearch_reply_rate_90d / jobsearch_interview_rate_90d / jobsearch_applied_30d written each run, no_reply after 21 days.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.2.0";
+var VERSION = "1.2.1";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -651,6 +651,7 @@ async function run(env) {
     ]);
     try { await writeOutcomeMetrics(env, await outcomes(env)); } catch (e) { logErr("outcome-metrics", e); }
     await setMeta(env, "ledger_verified_on", LEDGER_VERIFIED_ON);
+    await setMeta(env, "ledger_open_questions", (LEDGER.unverified_needs_owner || []).length);
     await setMeta(env, "worker_version", VERSION);
     await setMeta(env, "email_binding", env.EMAIL ? "1" : "0");
     log("run-ok", { run_id: rid, fetched, passed: kept.length, blocked, feed_errors: errors.length, ms: Date.now() - t0 });

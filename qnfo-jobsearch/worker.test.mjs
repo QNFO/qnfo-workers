@@ -159,6 +159,7 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(ops[1].checks.find((c) => c.fm === "jobsearch-cron-stalled").ok, "ops: cron fresh");
   ok(db.prepare("SELECT v FROM jobsearch_meta WHERE k='ledger_verified_on'").get().v === "2026-10-01", "ledger date recorded each run");
   ok((await call("/health", {}, env2))[1].ledger_verified_on === "2026-10-01", "health shows ledger date");
+  ok(db.prepare("SELECT v FROM jobsearch_meta WHERE k='ledger_open_questions'").get().v === String(T.LEDGER.unverified_needs_owner.length), "open ledger questions recorded each run for the owner-card probe");
 }
 
 // ---------------- JOBSEARCH-OUTCOME-1
