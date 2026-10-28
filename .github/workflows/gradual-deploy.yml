@@ -33,6 +33,7 @@ concurrency:
 
 jobs:
   rollout:
+    # RUNNER-PIN-1 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest migrates to Ubuntu 26 from 2026-10-19 (the notice is on every run); pinned until a trial run on ubuntu-26.04 is green.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
