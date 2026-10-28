@@ -1,0 +1,60 @@
+name: gradual-deploy
+run-name: gradual-deploy ${{ inputs.worker }}
+# BP26-GRADUAL-DEPLOYS-1 (2026-10-28, charter pillar autonomy). Health-gated staged rollout (10, 50, 100 percent) of one worker's main code through the
+# Workers Versions API with automatic rollback: scripts/gradual_deploy.py, docs/GRADUAL-DEPLOYS.md. The canonical /content path stays the default for
+# bindings, crons and Durable Object changes; this path is for code-only changes and for the control-plane workers once a soak has proven it.
+on:
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: "worker directory name (an existing live script; never created here)"
+        required: true
+        type: string
+      soak_sec:
+        description: "seconds to soak at 10 and 50 percent"
+        required: false
+        default: "120"
+        type: string
+      dry_run:
+        description: "true = read the live state and print the plan only"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gradual-deploy-${{ github.event.inputs.worker }}
+  cancel-in-progress: false
+
+jobs:
+  rollout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IN_WORKER: ${{ github.event.inputs.worker }}
+      IN_SOAK: ${{ github.event.inputs.soak_sec }}
+      IN_DRY: ${{ github.event.inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Staged rollout with automatic rollback
+        run: |
+          set -uo pipefail
+          case "$IN_WORKER" in *[!a-z0-9-]*|"") echo "::error::bad worker name"; exit 2;; esac
+          if [ ! -f "$IN_WORKER/worker.js" ]; then echo "::error::$IN_WORKER/worker.js not found"; exit 2; fi
+          if [ -f "$IN_WORKER/RETIRED" ] || [ -f "$IN_WORKER/FOLDED" ]; then echo "::error::$IN_WORKER is retired or folded"; exit 2; fi
+          python3 scripts/gradual_deploy.py --selftest || exit 1
+          extra=""
+          if [ "$IN_DRY" = "true" ]; then extra="--dry-run"; fi
+          python3 scripts/gradual_deploy.py --worker "$IN_WORKER" --soak-sec "${IN_SOAK:-120}" $extra
