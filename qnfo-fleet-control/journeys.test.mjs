@@ -131,6 +131,9 @@ for (const [k, j] of [["release", "lock-roundtrip"], ["blind", "binding-census"]
   ok(rr.failing.length === 1 && rr.failing[0] === j, k + " fails " + j + " only", rr);
 }
 
+// 4a. CENSUS-FLEET-TIMEOUT-1: the census hop waits 30 s for qnfo-ops /fleet (a slow census is not the fault this journey looks for), every other hop keeps the 12 s default.
+ok(/jrnCall\(env, j, "SVC_QNFO_OPS", "https:\/\/qnfo-ops\.internal\/fleet", \{ timeoutMs: 30000 \}\)/.test(src) && /var JRN_TIMEOUT_MS = 12e3;/.test(src), "the census hop carries a 30 s timeout and the default stays 12 s");
+
 // 4b. CENSUS-RETIRED-NOT-BLIND-1: a retired row (healthy null, retired true) is the third state of OPS-FLEET-RETIRED-1, not a blind worker; a null row that is not retired still is.
 {
   const d = mkDb();
