@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-28 20:34:01",
+  "audited_at": "2026-10-28 21:13:24",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -561,7 +568,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.2-travel-ensure-once",
+        "version": "1.44.4-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -571,7 +578,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.39.2",
+        "version": "0.39.3-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -716,7 +723,7 @@
       },
       {
         "dir": "qnfo-youtube-shorts",
-        "version": "0.2.1-health-contract",
+        "version": "0.3.0-retention",
         "worker": "qnfo-youtube-shorts"
       },
       {
@@ -986,9 +993,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.2-travel-ensure-once",
+      "before": "1.44.4-codeagent",
       "http": 200,
-      "live": "1.44.2-travel-ensure-once",
+      "live": "1.44.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1038,9 +1045,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.39.2",
+      "before": "0.39.3-codeagent",
       "http": 200,
-      "live": "0.39.2",
+      "live": "0.39.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1764,9 +1771,9 @@
       "worker": "qnfo-web-unified"
     },
     "qnfo-youtube-shorts": {
-      "before": "0.2.1-health-contract",
+      "before": "0.3.0-retention",
       "http": 200,
-      "live": "0.2.1-health-contract",
+      "live": "0.3.0-retention",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-youtube-shorts"
