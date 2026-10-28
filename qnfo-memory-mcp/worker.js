@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.3.3-codeagent"; // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
+var VERSION = "2.3.4-codeagent"; // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // NO-REGISTRAR-1: a DOI under the dead 10.5281 prefix is never returned; third-party DOIs pass through.
 function nozDoi(d) { return d && !/10\.5281\//.test(String(d)) ? d : null; }
 var SERVER_VERSION = VERSION;
@@ -688,5 +688,78 @@ var worker_default = {
 };
 export {
   worker_default as default
+};
+
+export const scheduled = {
+  // Run hourly
+  cron: "0 * * * *",
+  async scheduled(event, env, ctx) {
+    // Ensure we have an Exuvia API key
+    if (!env.EXUVIA_API_KEY) return;
+
+    // Enforce at most one flagship paper per day using KV (if available)
+    const today = (new Date()).toISOString().slice(0, 10);
+    const kvKey = `flagship:${today}`;
+    if (env.FLAGSHIP_KV && typeof env.FLAGSHIP_KV.get === "function") {
+      const already = await env.FLAGSHIP_KV.get(kvKey);
+      if (already) return; // Already published today
+    }
+
+    // Fetch posts that need a response
+    const feedRes = await tool_exuvia_feed({ limit: 10, path: "feed/needs-response" }, env);
+    if (feedRes.isError) return;
+    let feedData;
+    try {
+      feedData = JSON.parse(feedRes.content[0].text);
+    } catch {
+      return;
+    }
+    const posts = (feedData && feedData.data && Array.isArray(feedData.data)) ? feedData.data : [];
+
+    for (const post of posts) {
+      // Build KG context for the post
+      const ctxRes = await tool_exuvia_kg_context({ post_id: post.id, limit: 5 }, env);
+      if (ctxRes.isError) continue;
+      let ctx;
+      try {
+        ctx = JSON.parse(ctxRes.content[0].text);
+      } catch {
+        continue;
+      }
+
+      // Construct a search query from the post title/abstract
+      const queryText = `${post.title || ""} ${post.abstract || ""}`.trim() || ctx.query || "";
+      if (!queryText) continue;
+
+      // Search for a relevant QNFO paper
+      const searchRes = await tool_search_papers({ query: queryText, limit: 5 }, env);
+      if (searchRes.isError) continue;
+      let searchOut;
+      try {
+        searchOut = JSON.parse(searchRes.content[0].text);
+      } catch {
+        continue;
+      }
+      const firstResult = (searchOut && Array.isArray(searchOut.results) && searchOut.results[0]) || null;
+      if (!firstResult || !firstResult.slug) continue;
+
+      // Publish the paper as a flagship post (confirm=true)
+      const publishRes = await tool_exuvia_publish_paper({ slug: firstResult.slug, confirm: true, max_chars: 20000 }, env);
+      if (publishRes.isError) continue;
+      // Record that we have published today
+      if (env.FLAGSHIP_KV && typeof env.FLAGSHIP_KV.put === "function") {
+        await env.FLAGSHIP_KV.put(kvKey, "1", { expirationTtl: 24 * 60 * 60 });
+      }
+      // Log the decision
+      console.log(JSON.stringify({
+        action: "exuvia_flagship_publish",
+        post_id: post.id,
+        paper_slug: firstResult.slug,
+        timestamp: new Date().toISOString()
+      }));
+      // Only one flagship per day
+      break;
+    }
+  }
 };
 //# sourceMappingURL=worker.js.map
