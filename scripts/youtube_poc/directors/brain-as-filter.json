@@ -1,0 +1,26 @@
+{
+  "slug": "brain-as-filter-an-information-theoretic-model-of-altered-states-of-consciousnes",
+  "title": "Is your brain a filter? A model of changed consciousness",
+  "theme_name": "violet",
+  "voice": "en-US-AvaMultilingualNeural",
+  "beats": [
+    {"kind": "hook", "narr": "What if your brain works like a filter?",
+     "lines": ["What if your", "brain works", "like a", "FILTER?"], "hi": [3], "size": 76},
+    {"kind": "flow", "narr": "One model pictures the brain as a channel. Information comes from a deeper source, passes through the brain's filter, and becomes what you experience.",
+     "nodes": ["Source layer", "Brain filter", "Experience layer"]},
+    {"kind": "list", "narr": "The filter has two dials. Bandwidth: how many brain frequency channels are open. And clarity: how clean the signal is, against the noise.",
+     "title": "Two dials", "items": ["Bandwidth: open channels", "Clarity: signal vs noise"]},
+    {"kind": "compare", "narr": "In a changed state, the authors assume bandwidth drops by nearly a third, and clarity is cut in half. These are assumptions, not measurements.",
+     "title": "Changed state, assumed", "items": [["Bandwidth", 0.68, "c1", "nearly a third less"], ["Signal clarity", 0.5, "c2", "cut in half"]]},
+    {"kind": "bignum", "narr": "Run the numbers, and normal brain capacity comes out around three hundred and fifty bits per second.",
+     "value": 350, "frac": 1.0, "color": "c1", "label": "bits per second", "sub": "normal state, model estimate"},
+    {"kind": "bignum", "narr": "In a changed state? Around one hundred and eighty. Roughly half.",
+     "value": 180, "frac": 0.51, "color": "c3", "label": "bits per second", "sub": "changed state, about half"},
+    {"kind": "hook", "narr": "Yet the strongest patterns, like slow waves across the whole brain, survive the drop. They match feelings people report in many changed states.",
+     "lines": ["The strongest", "patterns", "SURVIVE"], "hi": [2], "size": 80},
+    {"kind": "list", "narr": "One big caveat. The starting numbers are assumptions. The paper doesn't prove the brain works this way. But it does make a testable prediction.",
+     "title": "Read it carefully", "items": ["Starting numbers are assumptions", "Not proof the brain works this way", "But it makes a testable prediction"]},
+    {"kind": "cta", "narr": "Want the full story, in plain language? It's free, and the link is in the description.",
+     "title": "Read it free", "url": "papers.qnfo.org", "sub": "No jargon. No mathematics."}
+  ]
+}

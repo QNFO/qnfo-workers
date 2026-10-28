@@ -1,20 +1,22 @@
 {
   "slug": "institutionalized-unfalsifiability-as-an-evolutionarily-stable-strategy-in-scien",
   "title": "Why scientists stop making testable predictions",
+  "theme_name": "ocean",
+  "voice": "en-US-AndrewMultilingualNeural",
   "beats": [
-    {"kind": "hook", "narr": "What if science paid you more for telling stories than for testing ideas?",
+    {"kind": "hook", "narr": "What if science paid you more for telling stories... than for testing ideas?",
      "lines": ["What if science", "paid more for", "STORIES", "than for", "TESTS?"], "hi": [2, 4], "size": 70},
-    {"kind": "versus", "narr": "Picture two kinds of researchers. One makes a risky, testable guess. The other tells a flexible story after seeing the data.",
+    {"kind": "versus", "narr": "Picture two researchers. One makes a risky, testable guess. The other waits, sees the data, then tells a flexible story.",
      "left": "Testable guess", "right": "Safe story"},
-    {"kind": "payoff", "narr": "The guesser wins big when right, and pays a price when wrong. The storyteller always gets a smaller, sure reward.",
-     "bars": [[-2.4, 2, "#2EC4B6", "Guess: right"], [0.0, -1, "#FF5A5F", "Guess: wrong"], [2.4, 1, "#FFB703", "Story: always"]]},
+    {"kind": "payoff", "narr": "The guesser wins big when they're right, and pays a price when they're wrong. The storyteller? Always a small, sure reward.",
+     "bars": [[-2.4, 2, "c1", "Guess: right"], [0.0, -1, "c3", "Guess: wrong"], [2.4, 1, "c2", "Story: always"]]},
     {"kind": "meter", "narr": "Here's the catch. A guess has to be right more than two times in three to be worth making. At six in ten, the safe story pays better.",
      "need": 0.667, "have": 0.6, "need_label": "needed: over 2 in 3", "have_label": "actual: 6 in 10", "axis_label": "How often a guess is right", "verdict": "Story wins"},
     {"kind": "dots", "narr": "So testable research slowly dies out. In the model, the testers shrink until only one in ten is left.",
      "from": 0.5, "to": 0.1, "a": "Testers", "b": "Storytellers"},
-    {"kind": "dots", "narr": "But raise the reward for being right enough, and it flips. The safe story strategy dies out instead.",
+    {"kind": "dots", "narr": "But raise the reward for being right, and it flips. Now the safe story is the one that dies out.",
      "from": 0.5, "to": 0.9, "a": "Testers", "b": "Storytellers"},
-    {"kind": "cta", "narr": "Read the full plain-language version at papers dot qnfo dot org.",
+    {"kind": "cta", "narr": "Want the full story, in plain language? It's free, and the link is in the description.",
      "title": "Read it free", "url": "papers.qnfo.org", "sub": "No jargon. No mathematics."}
   ]
 }

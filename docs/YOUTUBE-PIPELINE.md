@@ -86,3 +86,17 @@ Constraints found, not assumed:
   BP26-PROVENANCE-MARKING-1) are part of the render, not an addition.
 - **Channel:** the target is the owner's existing personal channel (2 subscribers, one 2025 community post). Aligning its name, banner and description with the
   content is a visible account change and needs the owner's wording; Shorts stay private until the owner reviews the first batch.
+
+## Update 2026-10-28: overflow, voice, variety (YT-POC-3)
+Owner feedback: text bleeds off screen, the voice is robotic, every video has the same template and visuals.
+- **Overflow:** every Manim `Text` is fitted to a 7.6-unit safe width and each beat group to 8; captions are measured in the real font (Segoe UI Bold) and chunked to
+  at most 4 words and 880 px, breaking at commas and sentence ends (edge-tts word events carry no punctuation, so `punctuate()` restores it from the narration).
+  Layout keeps the top 1.6 and bottom 4.3 units clear for the Shorts UI; captions sit at MarginV 520.
+- **Voice:** default `en-US-AndrewMultilingualNeural` (per-director `voice`; Ava also tested), rate +4 % for short-form pace, `speakable()` normalises dashes and symbols,
+  directors are written for the ear (contractions, short sentences, commas and `?` for inflection, no spoken URLs), trailing silence cut, audio chain
+  highpass + compressor + loudnorm -16 LUFS. Not yet compared by ear against Kokoro-82M (best open model in 2026 reviews, no word times: needs an alignment pass) or ElevenLabs.
+- **Variety:** five themes (palette + animated background: bubbles, grid, rings, waves, stars) picked from the slug hash or `theme_name`; ten templates (added `bignum`,
+  `flow`, `compare`, `list`); varied exits and a slow push-in during holds. Second example: `directors/brain-as-filter.json` (violet, flow/list/compare/bignum).
+- Research basis (vendor blogs, treat figures as rules of thumb): hook in 2-3 s, sentences under 15 words, 30-45 s beats 60 s when the idea fits, a visual change every
+  few seconds, captions in the safe zone, native 9:16, a second hook at the end instead of "subscribe", edit AI drafts before publishing.
+- Gap: render is slow (about 9 min for 64 s; `always_redraw` text and updater backgrounds). Content clusters in the upper half; vertical centring is next.
