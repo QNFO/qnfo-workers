@@ -100,8 +100,11 @@ ok(r.posted === 0 && /^held:spacing/.test(r.channels.linkedin) && /^held:spacing
 calls = [];
 const bp = await mod.bufferPost(env, "JPS: energy per useful answer. https://papers.qnfo.org/papers/joules-per-solution-metric/", "jps-metric");
 ok(bp.results.filter((x) => x.status !== "no-channel").length === 3 && bp.results.filter((x) => x.status !== "no-channel").every((x) => x.status === "skipped" && /carried-30d/.test(x.reason)) && createPosts().length === 0, "bufferPost skips every channel that carried jps-metric in 30 days: " + JSON.stringify(bp.results));
+const bp2h = await mod.bufferPost(env, "New slug. https://papers.qnfo.org/papers/new-one/", "new-one");
+ok(bp2h.results.filter((x) => x.status !== "no-channel").length === 3 && bp2h.results.filter((x) => x.status !== "no-channel").every((x) => x.status === "skipped" && /^held:spacing/.test(x.reason)) && createPosts().length === 0, "bufferPost holds a new slug on a channel that just posted (CROSSPOST-CAP-1: the cross-post follows the channel spacing): " + JSON.stringify(bp2h.results));
+db.exec("UPDATE social_media_posts SET published_at = datetime('now','-30 days'); UPDATE social_threads SET posted_at = datetime('now','-30 days');");
 const bp2 = await mod.bufferPost(env, "New slug. https://papers.qnfo.org/papers/new-one/", "new-one");
-ok(bp2.results.filter((x) => x.post_id).length === 3 && db.prepare("SELECT COUNT(*) AS n FROM social_media_posts WHERE project_id='new-one'").get().n === 3, "bufferPost still posts a new slug to all three and records each in the channel ledger");
+ok(bp2.results.filter((x) => x.post_id).length === 3 && db.prepare("SELECT COUNT(*) AS n FROM social_media_posts WHERE project_id='new-one'").get().n === 3, "bufferPost still posts a new slug to all three once the windows are open and records each in the channel ledger");
 
 // ---------- caps and the pause flag ----------
 db.exec("INSERT OR REPLACE INTO pipeline_flags (key, value) VALUES ('social_channel_caps', '{\"linkedin\":0,\"mastodon\":9,\"twitter\":\"x\"}');");
