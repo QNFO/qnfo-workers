@@ -1,4 +1,4 @@
-var VERSION="3.46.0-paper-pid-hash"; // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
+var VERSION="3.47.0-provenance-sidecar"; // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
 // 3.44.2 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): the apex qnfo.org answered HTML pages with no frame protection (measured 2026-10-26: the *.qnfo.org hosts get X-Frame-Options DENY from a zone rule whose expression is the wildcard *.qnfo.org, which does not match the apex). withPagePolicy now adds X-Frame-Options DENY to every HTML response that has none, on every host, so the apex no longer depends on the zone rule; a handler's own value is kept.
 // 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
@@ -689,7 +689,7 @@ function qdsFooter(brand) {
     '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://qnfo.org/#selected-works">Selected works</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://ideas.qnfo.org/">Ideas</a></li><li><a href="https://archive.qnfo.org/">Archive</a></li><li><a href="https://ipatent.qnfo.org/">Provisional drafting tool</a></li></ul></div>' +
     '<div><h2>Author</h2><ul><li><a href="https://qnfo.org/about">About</a></li><li><a href="https://qnfo.org/work-with-me">Work with me</a></li><li><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a></li><li><a href="https://qnfo.org/work-with-me#contact">Contact</a></li></ul></div>' +
     '<div><h2>Follow</h2><ul><li><a href="https://qnfo.org/#subscribe">New papers by email</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li><li><a href="https://legal.qnfo.org/">License (QNFO-ULA)</a></li><li><a href="https://legal.qnfo.org/privacy">Privacy</a></li></ul></div></div>' +
-    '<div class="q-foot-base"><span>\u00a9 2025\u20132026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><span>Prepared with an AI-assisted research pipeline; the author is responsible for the content.</span></div></div></footer>';
+    '<div class="q-foot-base"><span>\u00a9 2025\u20132026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><span>Papers and summaries on this site are written by AI; a paper counts as fleet-generated unless a named person reviewed it. The author is responsible for the content.</span></div></div></footer>';
 }
 function qdsPage(o, body) {
   return qdsHead(o) + "<body>" + qdsHeader(o.brand || "qnfo", o.active) + '<main id="main">' + body + "</main>" + qdsFooter(o.brand || "qnfo") + (o.scripts || "") + "</body></html>";
@@ -2178,7 +2178,7 @@ function identityJsonLd(pageUrl, opts) {
   Object.assign(person, opts.person || {});
   const org = { "@type": "Organization", "@id": "https://qnfo.org/#org", name: "QNFO", url: "https://qnfo.org", description: "QNFO (independent research): the independent research imprint that publishes the work of Rowan Brad Quni-Gudzinas.", founder: { "@id": "https://qnfo.org/#person" } };
   const site = { "@type": "WebSite", "@id": "https://qnfo.org/#site", url: "https://qnfo.org", name: "QNFO", publisher: { "@id": "https://qnfo.org/#org" } };
-  const page = Object.assign({ "@type": "WebPage", url: pageUrl, isPartOf: { "@id": "https://qnfo.org/#site" }, about: { "@id": "https://qnfo.org/#person" } }, opts.page || {});
+  const page = Object.assign({ "@type": "WebPage", url: pageUrl, isPartOf: { "@id": "https://qnfo.org/#site" }, about: { "@id": "https://qnfo.org/#person" }, creditText: "Papers and summaries on this site are written by AI (QNFO research pipeline); the author is responsible for the content." }, opts.page || {});
   return '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": [person, org, site, page].concat(opts.nodes || []) }).replace(/</g, "\\u003c") + "<\/script>";
 }
 function selectedWorksHTML() {
@@ -2338,6 +2338,132 @@ __name22222(buildPaperJsonLd, "buildPaperJsonLd");
 // one thing an index can detect and penalise. The quality case is made from facts that are checkable: the series, the
 // version and its history, the license, the four encodings, the shelf and tags, and publishingPrinciples -> qnfo.org/about.
 // PAPER-QUALITY-METADATA-1 (3.41.0): the publisher classification and its transparent basis are carried by every public paper representation.
+// PROVENANCE-SIDECAR-1 (BP26-PROVENANCE-MARKING-1, BP26-AI-ACT-ART50-1; 3.45.0): per-paper provenance label, JSON-LD flags and a signed JSON sidecar.
+// The sidecar is Ed25519 over WebCrypto, signed with the worker secret PROVENANCE_SIGNING_KEY (a private JWK, JSON). Without the secret nothing is signed and no
+// manifest link is emitted (absent secret = skip); the label and JSON-LD flags do not need the key. The public key is at /.well-known/provenance-key.json.
+// This is NOT a C2PA credential (that needs an X.509 certificate from a CA on the C2PA Trust List: identity-bound, docs/BP26-SECURITY-CLUSTER.md); the statement carries
+// the C2PA-shaped c2pa.actions assertion so the upgrade is a signing-step change.
+var PROV_PROFILE = "qnfo-provenance-sidecar/1";
+var PROV_IPTC_AI = "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia";
+var PROV_HOME = "https://papers.qnfo.org";
+function provB64u(buf) { var b = new Uint8Array(buf), s = ""; for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function provUnb64u(s) { var t = String(s).replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; var r = atob(t), o = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) o[i] = r.charCodeAt(i); return o; }
+function provCanon(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
+  if (Array.isArray(v)) return "[" + v.map(provCanon).join(",") + "]";
+  return "{" + Object.keys(v).filter(function (k) { return v[k] !== undefined; }).sort().map(function (k) { return JSON.stringify(k) + ":" + provCanon(v[k]); }).join(",") + "}";
+}
+async function provSha256Hex(text) { var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text == null ? "" : text))); return Array.from(new Uint8Array(d)).map(function (x) { return x.toString(16).padStart(2, "0"); }).join(""); }
+async function provThumb(x) { return provB64u(await crypto.subtle.digest("SHA-256", new TextEncoder().encode('{"crv":"Ed25519","kty":"OKP","x":"' + x + '"}'))); }
+// {priv, pub: {kty,crv,x}, kid} or null when the secret is absent or unusable
+async function provKey(env) {
+  if (!env || !env.PROVENANCE_SIGNING_KEY) return null;
+  try {
+    var jwk = JSON.parse(String(env.PROVENANCE_SIGNING_KEY));
+    if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || !jwk.d || !jwk.x) return null;
+    var priv = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x: jwk.x, d: jwk.d }, { name: "Ed25519" }, false, ["sign"]);
+    return { priv: priv, pub: { kty: "OKP", crv: "Ed25519", x: jwk.x }, kid: await provThumb(jwk.x) };
+  } catch (e) { return null; }
+}
+// provenance of a paper: the paper_provenance row, else the fail-safe fleet-generated (a label may never claim a review nobody recorded)
+function provOf(row) {
+  var rev = row && row.provenance === "ai-assisted-human-reviewed" && row.reviewed_by && String(row.reviewed_by).trim();
+  return rev ? { provenance: "ai-assisted-human-reviewed", reviewed_by: String(row.reviewed_by).trim(), basis: row.basis || "" }
+    : { provenance: "fleet-generated", reviewed_by: null, basis: (row && row.basis) || "no human review is recorded for this paper" };
+}
+function provLabel(p) {
+  return p.provenance === "ai-assisted-human-reviewed"
+    ? { badge: "AI-assisted", sentence: "This paper was drafted with an AI research pipeline and reviewed by a named person.", credit: "Drafted by an AI research pipeline (QNFO); reviewed by " + p.reviewed_by + "." }
+    : { badge: "AI-generated", sentence: "This paper was written by an AI research pipeline; no human review is recorded.", credit: "Written by an AI research pipeline (QNFO); no human review is recorded." };
+}
+// the JSON-LD properties of an AI-touched artifact (read by scripts/bp26_web.py ai_flag: creditText naming AI, digitalSourceType)
+function provJsonLd(p, manifestUrl) {
+  var o = { creditText: provLabel(p).credit, digitalSourceType: PROV_IPTC_AI, isAIGenerated: p.provenance === "fleet-generated" };
+  if (manifestUrl) o.subjectOf = { "@type": "MediaObject", encodingFormat: "application/json", contentUrl: manifestUrl, name: "Signed provenance statement" };
+  return o;
+}
+function provVisibleHtml(p) {
+  var l = provLabel(p);
+  return '<p class="prov-label" style="margin:0 0 12px;font-size:.9rem"><strong>' + l.badge + '</strong> <span>' + l.sentence + '</span></p>';
+}
+async function provStatement(paper, p, kid) {
+  var url = PROV_HOME + "/papers/" + paper.slug;
+  var at = String(paper.last_revised_at || paper.updated_at || paper.created_at || "").replace(" ", "T");
+  if (at && !/[zZ]|[+-]\d\d:?\d\d$/.test(at)) at += at.length <= 10 ? "T00:00:00Z" : "Z";
+  return {
+    profile: PROV_PROFILE, issuer: PROV_HOME, key_id: kid,
+    subject: { type: "paper", slug: paper.slug, version: String(paper.version_semver || paper.version || ""), url: url, content_sha256: await provSha256Hex(paper.body_md), content_basis: "body_md (UTF-8), the text served at " + url + ".md" },
+    claims: { digital_source_type: PROV_IPTC_AI, generator: "QNFO research pipeline (AI language models)", provenance: p.provenance, human_review_recorded: p.provenance === "ai-assisted-human-reviewed", reviewed_by: p.reviewed_by },
+    c2pa_shaped: { "c2pa.actions": { actions: [{ action: "c2pa.created", digitalSourceType: PROV_IPTC_AI, softwareAgent: { name: "QNFO research pipeline" } }] }, note: "C2PA-shaped assertion; this sidecar is signed with a QNFO Ed25519 key, not an X.509 certificate from the C2PA Trust List, so it is not a C2PA credential" },
+    issued_at: at || null, timestamp_authority: "none (issued_at is the paper's revision time; no RFC 3161 token)"
+  };
+}
+async function provSign(key, statement) {
+  var sig = await crypto.subtle.sign({ name: "Ed25519" }, key.priv, new TextEncoder().encode(provCanon(statement)));
+  return { statement: statement, signature: { alg: "Ed25519", kid: key.kid, canonicalization: "sorted-key JSON, no whitespace (UTF-8)", value: provB64u(sig) } };
+}
+async function provVerify(sidecar, pubJwk) {
+  try {
+    var pk = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x: pubJwk.x }, { name: "Ed25519" }, false, ["verify"]);
+    return await crypto.subtle.verify({ name: "Ed25519" }, pk, provUnb64u(sidecar.signature.value), new TextEncoder().encode(provCanon(sidecar.statement)));
+  } catch (e) { return false; }
+}
+async function provKeyDoc(env) {
+  var k = await provKey(env);
+  if (!k) return null;
+  return { profile: PROV_PROFILE, issuer: PROV_HOME, keys: [Object.assign({ kid: k.kid, use: "sig", alg: "EdDSA", status: "active" }, k.pub)], note: "Public keys that verify provenance sidecars; rotate by adding a key here before retiring the old one" };
+}
+async function provRow(env, slug) {
+  try { return await env.LIVING_PAPER.prepare("SELECT provenance, reviewed_by, basis FROM paper_provenance WHERE slug = ?").bind(slug).first(); } catch (e) { return null; }
+}
+// one signed sidecar for a paper row that carries body_md; also files the asset_provenance ledger row (the signer's own re-verification is verified_ok)
+async function provSidecarFor(env, key, paper, prow) {
+  var p = provOf(prow);
+  var sc = await provSign(key, await provStatement(paper, p, key.kid));
+  var ok = await provVerify(sc, key.pub);
+  try {
+    if (env.AUDIT) {
+      var s = sc.statement, now = new Date().toISOString();
+      await env.AUDIT.prepare("INSERT INTO asset_provenance (asset_id, kind, url, sha256, published_at, manifest_kind, manifest_url, key_id, signed_at, provenance, verified_ok, verified_at, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) " +
+        "ON CONFLICT(asset_id) DO UPDATE SET url = excluded.url, sha256 = excluded.sha256, manifest_url = excluded.manifest_url, key_id = excluded.key_id, signed_at = excluded.signed_at, provenance = excluded.provenance, verified_ok = excluded.verified_ok, verified_at = excluded.verified_at")
+        .bind("paper:" + paper.slug + "@" + s.subject.version, "paper-text", s.subject.url, s.subject.content_sha256, String(paper.first_published_at || paper.created_at || "") || null, "signed-sidecar",
+          s.subject.url + "/provenance.json", key.kid, now, p.provenance, ok ? 1 : 0, now, "signed by qnfo-gateway " + VERSION + "; verified_ok is the signer's own check, the independent probe is probe_ok").run();
+    }
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "provLedger", error: String(e && e.message || e).slice(0, 160) })); }
+  return sc;
+}
+async function handleProvenance(request, env, slug) {
+  var key = await provKey(env);
+  var H = { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600" };
+  if (!key) return new Response(JSON.stringify({ error: "provenance signing is not configured", profile: PROV_PROFILE }), { status: 503, headers: Object.assign({}, H, { "Cache-Control": "no-store" }) });
+  var paper = await env.LIVING_PAPER.prepare("SELECT slug,body_md,version,version_semver,first_published_at,last_revised_at,created_at,updated_at,status FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint','retracted')").bind(slug).first();
+  if (!paper) return new Response(JSON.stringify({ error: "no such paper" }), { status: 404, headers: H });
+  var sc = await provSidecarFor(env, key, paper, await provRow(env, slug));
+  return new Response(JSON.stringify(sc, null, 2), { headers: H });
+}
+async function provKeyResponse(env) {
+  var d = await provKeyDoc(env);
+  var H = { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": d ? "public, max-age=3600" : "no-store" };
+  return new Response(JSON.stringify(d || { error: "provenance signing is not configured", profile: PROV_PROFILE }), { status: d ? 200 : 503, headers: H });
+}
+// hourly: sign up to 40 published papers that have no ledger row at their current version (absent secret = skip)
+async function provSweep(env) {
+  var key = await provKey(env);
+  if (!key || !env.AUDIT) return { skipped: key ? "no AUDIT" : "no key" };
+  var have = {};
+  var led = await env.AUDIT.prepare("SELECT asset_id FROM asset_provenance WHERE kind = 'paper-text'").all();
+  (led.results || []).forEach(function (r) { have[r.asset_id] = 1; });
+  var all = await env.LIVING_PAPER.prepare("SELECT slug, COALESCE(NULLIF(version_semver,''), NULLIF(version,''), '') AS v FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(first_published_at, created_at) DESC").all();
+  var todo = (all.results || []).filter(function (r) { return !have["paper:" + r.slug + "@" + String(r.v || "")]; }).slice(0, 40);
+  var n = 0;
+  for (var i = 0; i < todo.length; i++) {
+    var paper = await env.LIVING_PAPER.prepare("SELECT slug,body_md,version,version_semver,first_published_at,last_revised_at,created_at,updated_at FROM papers WHERE slug = ?").bind(todo[i].slug).first();
+    if (!paper) continue;
+    await provSidecarFor(env, key, paper, await provRow(env, paper.slug));
+    n++;
+  }
+  return { signed: n, pending_after: Math.max(0, (all.results || []).length - Object.keys(have).length - n) };
+}
 const PAPER_QUALITY_LABEL = "High-quality scholarly research";
 const PAPER_QUALITY_TAGS = [PAPER_QUALITY_LABEL, "open-access scholarly work", "versioned research publication"];
 const PAPER_QUALITY_BASIS = "QNFO publisher classification for open-access, versioned research with a public revision history and reader correction channel; this is not a claim of independent peer review.";
@@ -2415,6 +2541,7 @@ function paperHeadMeta(paper, ctx) {
     about: terms.length ? terms.slice(0, 12).map(function (t) { return { "@type": "Thing", name: t }; }) : undefined,
     audience: shelfLabel ? { "@type": "Audience", audienceType: shelfLabel } : undefined
   };
+  Object.assign(article, provJsonLd(paper._prov || provOf(null), paper._provUrl || null));
   if (!retracted) article.additionalProperty = [
     { "@type": "PropertyValue", name: "Publisher quality classification", value: PAPER_QUALITY_LABEL, description: PAPER_QUALITY_BASIS },
     { "@type": "PropertyValue", name: "Peer review status", value: PAPER_PEER_REVIEW_STATUS }
@@ -2499,6 +2626,7 @@ function paperHeadMeta(paper, ctx) {
   terms.slice(0, 10).forEach(function (t) { meta("dc.subject", t); });
   qualityTags.forEach(function (t) { meta("dc.subject", t); });
   out.push('<link rel="canonical" href="' + escAttr(url) + '">');
+  if (paper._provUrl) out.push('<link rel="c2pa-manifest" type="application/json" href="' + escAttr(paper._provUrl) + '">');
   out.push('<link rel="alternate" type="text/markdown" href="' + escAttr(mdUrl) + '" title="This paper as Markdown">');
   out.push('<link rel="alternate" type="application/json" href="' + escAttr(apiUrl) + '" title="This paper as JSON">');
   if (paper._pdf) out.push('<link rel="alternate" type="application/pdf" href="' + escAttr(pdfUrl) + '" title="This paper as PDF">');
@@ -2732,6 +2860,7 @@ async function handlePaperDetail(request, env, path) {
   if (/^\/papers\/tags\/?$/.test(new URL(request.url).pathname)) return handleTags(request, env);
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
+  if (path.split("/").length === 4 && path.split("/")[3] === "provenance.json") return handleProvenance(request, env, slug);
   if (/\.pdf$/i.test(slug)) {
     try {
       return await handlePaperPdf(env, slug.replace(/\.pdf$/i, ""));
@@ -2747,6 +2876,8 @@ async function handlePaperDetail(request, env, path) {
     // CLAIM-INTEGRITY-1 (3.28.0): a retracted paper keeps its address and serves its retraction notice (its body_md), with
     // no PDF; it is left out of every listing, feed and sitemap, which read the published statuses only.
     if (paper.status === "retracted") paper.pdf_path = null;
+    paper._prov = provOf(await provRow(env, slug));
+    if (await provKey(env)) paper._provUrl = "https://papers.qnfo.org/papers/" + slug + "/provenance.json";
     withShelf(paper, await shelfMap(env));
     { const tindex = await tagIndex(env); paper.tags = tagsFor(paper, tindex); }
     paper.doi = lpDoi(paper.doi); paper._plain = await plainGet(env, paper); paper._article = await articleGet(env, paper);
@@ -5154,7 +5285,7 @@ function lpPaperHTML(paper) { const qrHref = "/papers/" + escAttr(paper.slug) + 
   }).join(", ");
   const toc = lpTocHTML(st.toc);
   const sugg = ["What is the main result, in plain terms?", "What would falsify this?", "Which assumptions does it rest on?", "How does it connect to other QNFO work?"];
-  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p><div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + (vCount > 1 ? " \u00b7 " + vCount + " versions" : "") + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (revStr ? '<span>Revised <time datetime="' + escAttr(revStr) + '">' + esc(lpDate(revStr)) + "</time></span>" : "") + (secondaries.length ? '<span class="pc-meta">Filed under ' + secondaries.map(function(c) { return '<a href="/papers?category=' + c + '" style="color:var(--teal)">' + esc(CATEGORY_LABELS[c]) + "</a>"; }).join(", ") + "</span>" : "") + tagMeta + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><a class="q-btn" href="/papers/' + escAttr(paper.slug) + '/quickread" rel="nofollow" title="The paper in about a minute: its claim, its numbers, its method, what would falsify it, and where to read">' + lpIcon("qr") + 'Quick read</a><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + plainHtml + st.html + '<p class="rr-foot no-print">Spotted a typo or a possible error? Select the passage and choose Report, or <button type="button" class="rr-link" id="b-report">report it here</button>.</p></article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
+  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p>' + provVisibleHtml(paper._prov || provOf(null)) + '<div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + (vCount > 1 ? " \u00b7 " + vCount + " versions" : "") + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (revStr ? '<span>Revised <time datetime="' + escAttr(revStr) + '">' + esc(lpDate(revStr)) + "</time></span>" : "") + (secondaries.length ? '<span class="pc-meta">Filed under ' + secondaries.map(function(c) { return '<a href="/papers?category=' + c + '" style="color:var(--teal)">' + esc(CATEGORY_LABELS[c]) + "</a>"; }).join(", ") + "</span>" : "") + tagMeta + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><a class="q-btn" href="/papers/' + escAttr(paper.slug) + '/quickread" rel="nofollow" title="The paper in about a minute: its claim, its numbers, its method, what would falsify it, and where to read">' + lpIcon("qr") + 'Quick read</a><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + plainHtml + st.html + '<p class="rr-foot no-print">Spotted a typo or a possible error? Select the passage and choose Report, or <button type="button" class="rr-link" id="b-report">report it here</button>.</p></article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
     return '<button type="button" class="q-chip">' + esc(s) + "</button>";
   }).join("") + '</div><div id="ask-out" aria-live="polite"></div><p class="fine">Answers are written from this paper first and other QNFO papers second, with numbered citations. Select any passage in the text to ask about it.</p></section><section class="tp" id="t-ctx" role="tabpanel" aria-labelledby="tb-ctx" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:70%"></span></div></section><section class="tp" id="t-ver" role="tabpanel" aria-labelledby="tb-ver" hidden><div class="ld"><span class="q-skel"></span></div></section><section class="tp" id="t-rel" role="tabpanel" aria-labelledby="tb-rel" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:80%"></span></div></section></div></aside></div>' + lpSubscribe("papers") + '</main><button class="fab no-print" type="button" data-go="ask" aria-label="Ask this paper">' + lpIcon("ask") + '<span>Ask</span></button><div class="selpop no-print" id="selpop" role="toolbar" aria-label="Selection" hidden><button type="button" data-sel="ask">' + lpIcon("ask") + 'Ask about this</button><button type="button" data-sel="quote">' + lpIcon("cite") + 'Copy quote</button><button type="button" data-sel="report" title="Report a typo or a suspected error in this passage">' + lpIcon("flag") + 'Report</button></div><div class="refpop" id="refpop" role="tooltip" hidden></div><dialog id="cite-d" class="q-card"><form method="dialog"><h2>Cite this paper</h2><div class="cite-tabs" role="tablist"><button type="button" class="q-chip on" data-fmt="apa">APA</button><button type="button" class="q-chip" data-fmt="bibtex">BibTeX</button><button type="button" class="q-chip" data-fmt="plain">Plain</button></div><pre id="cite-t" tabindex="0"></pre><div class="cite-a"><button type="button" class="q-btn pri" id="cite-copy">Copy</button><button class="q-btn" value="close">Close</button></div></form></dialog>' + RR_DIALOG + '<script type="application/json" id="lp-data">' + JSON.stringify(data).replace(/</g, "\\u003c") + "<\/script>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "paper", js: LP_PAPER_JS });
@@ -7198,6 +7329,7 @@ var gateway_worker_default = {
     // proof on qnfo.org so the Bluesky account (did:plc:vad2yeqflg5uznmp557zge5c) can carry the domain handle qnfo.org
     // instead of qnfo.bsky.social. Static answers, no binding, answered before the page router.
     if (request.method === "GET" || request.method === "HEAD") {
+      if (new URL(request.url).pathname === "/.well-known/provenance-key.json") return provKeyResponse(env);
       const wk = wellKnownAnswer(new URL(request.url));
       if (wk) return request.method === "HEAD" ? new Response(null, { status: 200, headers: wk.headers }) : wk;
     }
@@ -7422,6 +7554,12 @@ var gateway_worker_default = {
       if (rr.checked || !rr.ok) console.log("READER-REPORT-1 sweep: " + JSON.stringify(rr));
     } catch (e) {
       console.log("READER-REPORT-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
+    }
+    try {
+      const ps = await provSweep(env);
+      if (ps.signed || ps.skipped) console.log("PROVENANCE-SIDECAR-1 sweep: " + JSON.stringify(ps));
+    } catch (e) {
+      console.log("PROVENANCE-SIDECAR-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
     }
     // CRON-FAULT-1 (issue 100371): the run was not registered with waitUntil, so the grid run and its
     // cron_fire_log writes were not guaranteed to finish (worker-silent). Await the run and register it
