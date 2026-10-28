@@ -157,12 +157,19 @@ export const PROFILE_CHARS = 12000;
 export const BASE = "https://reading.q08.org";
 export const PLANNER_URL = "https://travel.q08.org/travel";
 
+// TRAVEL-ENSURE-ONCE-1 (agent_issues 1000678): the schema and default rows are written once per isolate and database handle, not on every request.
+// Every GET of travel.q08.org ran every CREATE and every default INSERT in sequence against the D1 primary; when those writes queued behind the hourly
+// tick the sign-in page answered in 5.3 to 6.0 s (9 of 38 hourly samples, all status 401, over the SLI's 5 s limit).
+const ENSURED_DBS = new WeakSet();
+
 export async function ensureTravel(db, nowIso) {
+  if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
   for (const s of DDL) await db.prepare(s).run();
   const ts = nowIso || new Date().toISOString();
   for (const [k, v] of Object.entries(DEFAULTS)) {
     await db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts).run();
   }
+  if (db && typeof db === "object") ENSURED_DBS.add(db);
 }
 
 export async function cfg(db) {
