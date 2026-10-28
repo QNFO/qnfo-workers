@@ -113,3 +113,13 @@ Owner feedback: text bleeds off screen, the voice is robotic, every video has th
 Decision: scientific shorts stay deterministic (Manim: every number on screen comes from the paper); generative video is at most decoration for the hook.
 
 Next, in order: (1) LLM director with numeric-claim checker (qnfo-ai writer + other-family checker, beats must cite article sentences); (2) five more templates driven by the director; (3) Kokoro vs edge voice blind test by the owner; (4) publish 5 private shorts, read retention, then decide on generative hooks.
+
+## Update 2026-10-28: LLM director and roadmap (YT-POC-4)
+`scripts/youtube_poc/make_director.py <slug>` writes the beats JSON from the plain article: qnfo-ai writer (open endpoint, model `qnfo`; it reasons first, so max_tokens 24000 and
+2-4 min per call; 429s back off), then a deterministic gate (known template, required fields, string lengths, sentences of at most 18 words, no spoken URL, **every number in
+narration, labels and bignum values must occur in the article**, digits or words), then an LLM fact-check of each beat against the article. A failing beat is dropped and listed in
+`<name>.report.json`; if the hook or too many beats fall, the writer is re-prompted with the checker's reasons (up to 4 rounds). Offline test: `test_director_checks.py`.
+First run (bqp paper): the checker rejected the hook for dropping the "with a looser error budget" qualifier, which is the gate doing its job.
+Roadmap rows YT-7..YT-13 (quality pass built, director built, voice test, template library, render speed, generative hooks parked, provenance) are in
+`migrations/2026-10-28-yt-shorts-quality-roadmap.sql` under source `yt-shorts-2026`, goal YT-SHORTS. The server worker (YT-3, another session) calls `make_director.py` and
+`make_short.py` inside its Container.
