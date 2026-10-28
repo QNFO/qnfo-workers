@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-28 14:31:05",
+  "audited_at": "2026-10-28 15:15:38",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
@@ -565,7 +565,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.38.0-forecast-hygiene",
+        "version": "0.38.1-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -630,7 +630,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.46.0-paper-pid-hash",
+        "version": "3.47.0-provenance-sidecar",
         "worker": "qnfo-gateway"
       },
       {
@@ -645,7 +645,7 @@
       },
       {
         "dir": "qnfo-intent-orchestrator",
-        "version": "1.7.1-timer-cleared",
+        "version": "1.7.2-codeagent",
         "worker": "qnfo-intent-orchestrator"
       },
       {
@@ -1037,9 +1037,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.38.0-forecast-hygiene",
+      "before": "0.38.1-codeagent",
       "http": 200,
-      "live": "0.38.0-forecast-hygiene",
+      "live": "0.38.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1419,9 +1419,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.46.0-paper-pid-hash",
+      "before": "3.47.0-provenance-sidecar",
       "http": 200,
-      "live": "3.46.0-paper-pid-hash",
+      "live": "3.47.0-provenance-sidecar",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1479,9 +1479,9 @@
       "worker": "qnfo-infra"
     },
     "qnfo-intent-orchestrator": {
-      "before": "1.7.1-timer-cleared",
+      "before": "1.7.2-codeagent",
       "http": 200,
-      "live": "1.7.1-timer-cleared",
+      "live": "1.7.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-intent-orchestrator"
