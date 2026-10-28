@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-28 22:29:10",
+  "audited_at": "2026-10-28 23:48:55",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-infra"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -703,7 +696,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.40.2-codeagent",
+        "version": "0.40.3-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1650,9 +1643,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.40.2-codeagent",
+      "before": "0.40.3-codeagent",
       "http": 200,
-      "live": "0.40.2-codeagent",
+      "live": "0.40.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
