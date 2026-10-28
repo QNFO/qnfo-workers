@@ -157,6 +157,12 @@ def run(worker, acct, token, path=None, stages=(10, 50, 100), soak=120, dry=Fals
             meta[k] = settings[k]
     if dry:
         return out(outcome="dry-run", why="would upload %s (VERSION %s) over %s and stage %s" % (path, want, prev[:8], list(stages)), previous=prev)
+    # GRADUAL-ALREADY-LIVE-1: a push that re-deploys a VERSION the worker already serves has nothing to stage; the preview smoke test cannot tell the
+    # identical version apart and rolled it back, turning canonical-deploy red on every later push (runs 40749619610..40749988325, qnfo-model-eval 1.8.3).
+    lst, lbody = fetch("https://%s.q08.workers.dev/health" % worker)
+    if want and lst == 200 and want in lbody and len(cur) == 1:
+        res["smoke"] = {"status": lst, "version_seen": True}
+        return out(outcome="rolled-out", version=want, previous=prev, why="VERSION %s is already live: nothing to stage" % want)
     st, j = api("POST", acctp + "/versions", None, {"metadata": ("metadata", "application/json", json.dumps(meta).encode()),
                                                      "worker.js": ("worker.js", "application/javascript+module", code.encode("utf-8"))})
     new = (j.get("result") or {}).get("id") if 200 <= (st or 0) < 300 else None
