@@ -160,16 +160,32 @@ export const PLANNER_URL = "https://travel.q08.org/travel";
 // TRAVEL-ENSURE-ONCE-1 (agent_issues 1000678): the schema and default rows are written once per isolate and database handle, not on every request.
 // Every GET of travel.q08.org ran every CREATE and every default INSERT in sequence against the D1 primary; when those writes queued behind the hourly
 // tick the sign-in page answered in 5.3 to 6.0 s (9 of 38 hourly samples, all status 401, over the SLI's 5 s limit).
+// TRAVEL-ENSURE-BATCH-1 (agent_issues 1000678, second step): the memo alone did not help the hourly availability probe, which always meets a fresh isolate: samples after the
+// 1.44.2 deploy still read 4.8 s (a runner in the US, the D1 primary in Western Europe, about 30 statements one after the other, one round trip each). The statements now go in one
+// db.batch call (one round trip; the sequential loop stays for a handle without batch), and the request path (handleTravel) first asks one read whether the tables exist and writes
+// nothing when they do: the hourly tick (travelTick) still runs the full ensure, so a new column or table in DDL reaches the database within the hour.
 const ENSURED_DBS = new WeakSet();
+const TRAVEL_TABLES = DDL.map((s) => (/CREATE TABLE IF NOT EXISTS (\w+)/.exec(s) || [])[1]).filter(Boolean);
 
 export async function ensureTravel(db, nowIso) {
   if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
-  for (const s of DDL) await db.prepare(s).run();
   const ts = nowIso || new Date().toISOString();
-  for (const [k, v] of Object.entries(DEFAULTS)) {
-    await db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts).run();
-  }
+  const stmts = DDL.map((s) => db.prepare(s)).concat(Object.entries(DEFAULTS).map(([k, v]) => db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts)));
+  if (typeof db.batch === "function") await db.batch(stmts);
+  else for (const s of stmts) await s.run();
   if (db && typeof db === "object") ENSURED_DBS.add(db);
+}
+
+// The request path: one read, no write when the tables are there.
+export async function ensureTravelCheap(db) {
+  if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
+  let have = 0;
+  try {
+    const r = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN (" + TRAVEL_TABLES.map(() => "?").join(",") + ")").bind(...TRAVEL_TABLES).first();
+    have = Number((r && r.n) || 0);
+  } catch (e) { have = 0; }
+  if (have >= TRAVEL_TABLES.length) { if (db && typeof db === "object") ENSURED_DBS.add(db); return; }
+  await ensureTravel(db);
 }
 
 export async function cfg(db) {
@@ -1163,7 +1179,7 @@ export async function handleTravel(request, env, deps = {}) {
   if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run") return null;
   const db = env.PERSONAL;
   if (!db) return jsonRes({ ok: false, error: "no PERSONAL binding" }, 503);
-  await ensureTravel(db);
+  await ensureTravelCheap(db);
   const nowMs = deps.now || Date.now();
   const nowIso = new Date(nowMs).toISOString();
 

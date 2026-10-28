@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { travelBlock } from "../scripts/inline-companion-travel.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
-  DDL, DEFAULTS, ensureTravel, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
+  DDL, DEFAULTS, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
   promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile,
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
@@ -593,6 +593,37 @@ console.log("\n[ensure once, TRAVEL-ENSURE-ONCE-1]");
   await ensureTravel(counted);
   await ensureTravel(counted);
   ok("the second and third ensureTravel on the same handle write nothing", first === DDL.length + Object.keys(DEFAULTS).length && stmts === first, { first, stmts });
+}
+
+console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
+{
+  const { raw, env } = freshEnv();
+  let batches = 0, runs = 0, prepares = 0, batchSize = 0;
+  const wrapped = {
+    prepare(sql) { prepares++; const st = env.PERSONAL.prepare(sql); const orig = st.bind ? st : st; const w = { bind(...a) { st.bind(...a); return w; }, run() { runs++; return st.run(); }, all: () => st.all(), first: () => st.first(), _st: st }; return w; },
+    async batch(list) { batches++; batchSize = list.length; for (const s of list) await s._st.run(); return []; }
+  };
+  await ensureTravel(wrapped);
+  ok("ensureTravel on a handle with batch makes one batch call of every statement and runs none one by one", batches === 1 && batchSize === DDL.length + Object.keys(DEFAULTS).length && runs === 0, { batches, batchSize, runs });
+  const names = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
+  ok("the batch created every table", ["travel_options", "travel_reactions", "travel_notices", "travel_config", "travel_chat", "travel_logins"].every((n) => names.includes(n)), names);
+  ok("and the default rows", Number(raw.prepare("SELECT COUNT(*) n FROM travel_config").get().n) === Object.keys(DEFAULTS).length);
+}
+{
+  // the request path: with the tables present one read and no write; a new handle pays one read, not thirty statements
+  const { env } = freshEnv();
+  await ensureTravel(env.PERSONAL);
+  const log = [];
+  const spy = { prepare(sql) { log.push(sql); return env.PERSONAL.prepare(sql); }, batch() { log.push("BATCH"); return []; } };
+  await ensureTravelCheap(spy);
+  ok("ensureTravelCheap with the tables present makes exactly one statement, a read", log.length === 1 && /^SELECT COUNT\(\*\) AS n FROM sqlite_master/.test(log[0]), log);
+  await ensureTravelCheap(spy);
+  ok("and none on the second call for the same handle", log.length === 1, log.length);
+  const fresh2 = freshEnv();
+  const log2 = [];
+  const spy2 = { prepare(sql) { log2.push(sql); return fresh2.env.PERSONAL.prepare(sql); } };
+  await ensureTravelCheap(spy2);
+  ok("with no tables ensureTravelCheap falls back to the full ensure", log2.length === 1 + DDL.length + Object.keys(DEFAULTS).length && Number(fresh2.raw.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'travel_config'").get().n) === 1, log2.length);
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed");

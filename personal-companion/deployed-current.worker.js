@@ -1518,16 +1518,32 @@ const PLANNER_URL = "https://travel.q08.org/travel";
 // TRAVEL-ENSURE-ONCE-1 (agent_issues 1000678): the schema and default rows are written once per isolate and database handle, not on every request.
 // Every GET of travel.q08.org ran every CREATE and every default INSERT in sequence against the D1 primary; when those writes queued behind the hourly
 // tick the sign-in page answered in 5.3 to 6.0 s (9 of 38 hourly samples, all status 401, over the SLI's 5 s limit).
+// TRAVEL-ENSURE-BATCH-1 (agent_issues 1000678, second step): the memo alone did not help the hourly availability probe, which always meets a fresh isolate: samples after the
+// 1.44.2 deploy still read 4.8 s (a runner in the US, the D1 primary in Western Europe, about 30 statements one after the other, one round trip each). The statements now go in one
+// db.batch call (one round trip; the sequential loop stays for a handle without batch), and the request path (handleTravel) first asks one read whether the tables exist and writes
+// nothing when they do: the hourly tick (travelTick) still runs the full ensure, so a new column or table in DDL reaches the database within the hour.
 const ENSURED_DBS = new WeakSet();
+const TRAVEL_TABLES = DDL.map((s) => (/CREATE TABLE IF NOT EXISTS (\w+)/.exec(s) || [])[1]).filter(Boolean);
 
 async function ensureTravel(db, nowIso) {
   if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
-  for (const s of DDL) await db.prepare(s).run();
   const ts = nowIso || new Date().toISOString();
-  for (const [k, v] of Object.entries(DEFAULTS)) {
-    await db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts).run();
-  }
+  const stmts = DDL.map((s) => db.prepare(s)).concat(Object.entries(DEFAULTS).map(([k, v]) => db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts)));
+  if (typeof db.batch === "function") await db.batch(stmts);
+  else for (const s of stmts) await s.run();
   if (db && typeof db === "object") ENSURED_DBS.add(db);
+}
+
+// The request path: one read, no write when the tables are there.
+async function ensureTravelCheap(db) {
+  if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
+  let have = 0;
+  try {
+    const r = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN (" + TRAVEL_TABLES.map(() => "?").join(",") + ")").bind(...TRAVEL_TABLES).first();
+    have = Number((r && r.n) || 0);
+  } catch (e) { have = 0; }
+  if (have >= TRAVEL_TABLES.length) { if (db && typeof db === "object") ENSURED_DBS.add(db); return; }
+  await ensureTravel(db);
 }
 
 async function cfg(db) {
@@ -2521,7 +2537,7 @@ async function handleTravel(request, env, deps = {}) {
   if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run") return null;
   const db = env.PERSONAL;
   if (!db) return jsonRes({ ok: false, error: "no PERSONAL binding" }, 503);
-  await ensureTravel(db);
+  await ensureTravelCheap(db);
   const nowMs = deps.now || Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
@@ -3202,7 +3218,7 @@ async function pickNo(db, id, nowIso) {
   return { ok: true, changed: true };
 }
 
-return Object.freeze({ DDL, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo });
+return Object.freeze({ DDL, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo });
 })(); // TRAVEL-INLINE-END
 
 var __defProp2 = Object.defineProperty;
@@ -3212,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.2-travel-ensure-once";
+var VERSION = "1.44.3-travel-ensure-batch";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
