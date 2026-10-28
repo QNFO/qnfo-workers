@@ -51,3 +51,7 @@ Dry-run mode (`mode = 'dry-run'`) reads the flag in every reader without flippin
 `kill_switch_test_age_days` is "days since the switch was last exercised and every loop was seen to stop and resume". With no switch there is no last exercise, so the
 value is undefined, not zero. `scripts/bp26_auditchain.py` writes nothing for it, records the reason in `bp26_probe_results`, and the practice issue stays open with the
 build tasks above until a live drill passes and the first row exists.
+
+## Update 2026-10-28 (BP26-LEASES-KILLSWITCH-1)
+
+The switch now exists: `ops_config.fleet_kill_switch` (`off` by default), read by qnfo-deploy-guard 1.4.0 (work claims, renewals, deploy and secret leases answer 503 `kill-switch`; event `kill-switch.observed`). The drill is the cf-ops-actions action `kill-switch-drill` (scripts/cf_ops_actions.py): it holds the switch on for under 10 minutes, checks the refusals and the event, restores it in every case, checks resumption and appends a `kill_switch_tests` row. Its evidence lists `readers` (covered) and `readers_pending`; the loops named above other than qnfo-deploy-guard are pending (roadmap row `ROADMAP-1: QNFO.OPS BP26-KILLSWITCH-READERS-1`). Design and limits: docs/LEASES-FENCING.md.
