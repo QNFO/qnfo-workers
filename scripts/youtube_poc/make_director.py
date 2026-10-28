@@ -41,23 +41,29 @@ STR_LIMITS = {"left": 18, "right": 18, "need_label": 24, "have_label": 24, "axis
 
 
 def numbers_in(text):
-    """Every number in text as a float: digits ('350', '2.5', '10,000') and spelled words ('three hundred and fifty', 'six in ten' -> 6, 10)."""
-    out = {float(m.replace(",", "")) for m in re.findall(r"\d[\d,]*\.?\d*", text) if m.strip(",.")}
-    cur, seen = None, False
-    for w in re.findall(r"[a-z]+", text.lower()):
-        if w in NUMS:
-            cur = (cur or 0) + NUMS[w]; seen = True
-        elif w in SCALE and seen:
-            cur = (cur or 1) * SCALE[w] if cur and cur < SCALE[w] else (cur or 1) * SCALE[w]
-        elif w == "and" and seen:
+    """Every number in text as a float: digits ('350', '2.5', '10,000') and spelled words, each word on its own ('six in ten' -> 6, 10) and composed
+    runs ('three hundred and fifty' -> 350, 'ten thousand three hundred' -> 10300). Punctuation ends a run. Same rules as numTokens in qnfo-youtube-shorts."""
+    t = re.sub(r"(\d),(\d{3})", r"", text.lower())
+    out, total, group, active, last_scale = set(), 0, 0, False, False
+
+    def flush():
+        nonlocal total, group, active, last_scale
+        if active: out.add(float(total + group))
+        total, group, active, last_scale = 0, 0, False, False
+    for w in re.findall(r"\d+(?:\.\d+)?|[a-z]+|[^a-z\d\s]", t):
+        if w[0].isdigit():
+            flush(); out.add(float(w))
+        elif w in NUMS or w in SCALE:
+            v = NUMS.get(w) or SCALE[w]
+            out.add(float(v)); active = True
+            if v == 100: group, last_scale = (group or 1) * 100, True
+            elif v >= 1000: total, group, last_scale = total + (group or 1) * v, 0, True
+            else: group, last_scale = group + v, False
+        elif w == "and" and active and last_scale:
             continue
         else:
-            if seen: out.add(float(cur))
-            cur, seen = None, False
-    if seen: out.add(float(cur))
-    # also each component word on its own ('six in ten' is two numbers, 'three hundred and fifty' also contains 3, 50, 350)
-    for w in re.findall(r"[a-z]+", text.lower()):
-        if w in NUMS: out.add(float(NUMS[w]))
+            flush()
+    flush()
     return out
 
 

@@ -25,26 +25,72 @@ def ass_time(x):
     return f"{int(x//3600)}:{int(x%3600//60):02d}:{x%60:05.2f}"
 
 
-def build_ass(words, path):
-    hdr = ("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\n"
-           "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\n"
-           f"Style: C,{FONT},84,&H00FFFFFF,&H00FFFFFF,&H00301510,&H00000000,1,0,0,0,100,100,0,0,1,7,2,2,60,60,330,1\n\n"
-           "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n")
+THEMES = {   # palette + animated background per paper (same table as scripts/youtube_poc/make_short.py)
+    "midnight": dict(bg="#0F1530", c1="#2EC4B6", c2="#FFB703", c3="#FF5A5F", style="bubbles"),
+    "ember":    dict(bg="#1A0E12", c1="#FF8A5B", c2="#FFD166", c3="#06D6A0", style="grid"),
+    "forest":   dict(bg="#0A1E19", c1="#7AE582", c2="#F9DC5C", c3="#FF6B6B", style="rings"),
+    "ocean":    dict(bg="#06182A", c1="#4CC9F0", c2="#FFD60A", c3="#F72585", style="waves"),
+    "violet":   dict(bg="#160E2D", c1="#B388FF", c2="#FFD54F", c3="#FF6E6E", style="stars"),
+}
+CAP_SIZE, CAP_MAX_W = 84, 880      # frame is 1080 wide; keep 50 px spare for the enlarged active word and the outline
+BOLD_FONTS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "C:/Windows/Fonts/segoeuib.ttf"]
+
+
+def pick_theme(slug, name=None):
+    import zlib
+    name = name if name in THEMES else list(THEMES)[zlib.crc32(str(slug).encode()) % len(THEMES)]
+    return name, dict(THEMES[name])
+
+
+def bgr(h):
+    h = h.lstrip("#")
+    return "&H" + h[4:6] + h[2:4] + h[0:2] + "&"
+
+
+def text_w(text, size, _f={}):
+    """Pixel width in the caption font, so a chunk never leaves the frame."""
+    if size not in _f:
+        _f[size] = None
+        try:
+            from PIL import ImageFont
+            for p in BOLD_FONTS:
+                if os.path.exists(p):
+                    _f[size] = ImageFont.truetype(p, size)
+                    break
+        except Exception:
+            pass
+    f = _f[size]
+    return f.getlength(text) if f else 0.66 * size * len(text)
+
+
+def build_ass(words, path, accent="#FFB703", edge="#0F1530"):
+    """Phrase chunks: at most 4 words, measured to fit, broken at commas and sentence ends; the spoken word is accent-coloured and larger."""
+    outline = "&H00" + bgr(edge)[2:].rstrip("&")
+    hdr = ("[Script Info]" + NL + "ScriptType: v4.00+" + NL + "PlayResX: 1080" + NL + "PlayResY: 1920" + NL + "WrapStyle: 2" + NL + NL + "[V4+ Styles]" + NL +
+           "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding" + NL +
+           f"Style: C,{FONT},{CAP_SIZE},&H00FFFFFF,&H00FFFFFF,{outline},&H00000000,1,0,0,0,100,100,0,0,1,7,2,2,60,60,520,1" + NL + NL +
+           "[Events]" + NL + "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text" + NL)
     chunks, cur = [], []
     for wd in words:
+        trial = cur + [wd]
+        if cur and (len(trial) > 4 or text_w(" ".join(x[0] for x in trial), CAP_SIZE) * 1.1 > CAP_MAX_W):
+            chunks.append(cur)
+            cur = []
         cur.append(wd)
-        if len(cur) == 3 or wd[0][-1:] in ".?!":
+        if wd[0][-1:] in ".?!,;:":
             chunks.append(cur)
             cur = []
     if cur:
         chunks.append(cur)
+    hi = bgr(accent)
+    BS = chr(92)
     ev = []
     for ci, chunk in enumerate(chunks):
         for i, (w, s, d) in enumerate(chunk):
-            nxt = chunk[i + 1][1] if i + 1 < len(chunk) else min(s + d + 0.15, chunks[ci + 1][0][1] if ci + 1 < len(chunks) else 1e9)
-            txt = " ".join((r"{\c&H06B7FF&\fscx118\fscy118}" + x + r"{\r}") if j == i else x for j, (x, _, _) in enumerate(chunk))
+            nxt = chunk[i + 1][1] if i + 1 < len(chunk) else min(s + d + 0.2, chunks[ci + 1][0][1] if ci + 1 < len(chunks) else 1e9)
+            txt = " ".join(("{" + BS + "c" + hi + BS + "fscx112" + BS + "fscy112}" + x + "{" + BS + "r}") if j == i else x for j, (x, _, _) in enumerate(chunk))
             ev.append(f"Dialogue: 0,{ass_time(s)},{ass_time(nxt)},C,,0,0,0,,{txt}")
-    Path(path).write_text(hdr + "\n".join(ev) + "\n", encoding="utf8")
+    Path(path).write_text(hdr + NL.join(ev) + NL, encoding="utf8")
 
 
 def split_words(text, start, dur):
@@ -74,7 +120,7 @@ def render(job, out):
             allw += split_words(s["text"], t + bt, d)
             bt += d
             parts.append(f)
-        dur = round(bt + 0.45, 2)
+        dur = round(bt + 0.3, 2)   # tight beats; the voice already ends on a breath
         b["dur"] = dur
         (out / f"b{i}.txt").write_text("".join(f"file '{p.as_posix()}'\n" for p in parts))
         wav = out / f"b{i}.wav"
@@ -83,8 +129,9 @@ def render(job, out):
         t += dur
     (out / "a.txt").write_text("\n".join(lst) + "\n")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(out / "a.txt"), str(out / "audio.wav")], check=True)
-    build_ass(allw, out / "cap.ass")
-    spec = {"beats": [{k: v for k, v in b.items() if k != "sentences"} for b in beats]}
+    tname, theme = pick_theme(job.get("slug", job.get("title", "")), job.get("theme_name"))
+    build_ass(allw, out / "cap.ass", theme["c2"], theme["bg"])
+    spec = {"theme": theme, "beats": [{k: v for k, v in b.items() if k != "sentences"} for b in beats]}
     (out / "spec.json").write_text(json.dumps(spec), "utf8")
     env = dict(os.environ, SHORT_SPEC=str(out / "spec.json"), SHORT_FONT=FONT)
     m = subprocess.run([sys.executable, "-m", "manim", "render", "-qm", "--fps", "30", "-r", "1080,1920", "--media_dir", str(out / "media"),
@@ -94,9 +141,15 @@ def render(job, out):
         raise RuntimeError("manim exit %s: %s" % (m.returncode, " | ".join(lines)[-900:]))
     silent = next((out / "media").rglob("diagram.mp4"))
     final = out / "short.mp4"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(silent), "-i", str(out / "audio.wav"), "-vf", "subtitles=cap.ass", "-c:v", "libx264",
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(silent), "-i", str(out / "audio.wav"), "-vf", "subtitles=cap.ass",
+                    "-af", "highpass=f=80,acompressor=threshold=0.125:ratio=3:attack=5:release=80,loudnorm=I=-16:TP=-1.5:LRA=7",
+                    "-metadata", "comment=AI-generated: synthetic narration (text-to-speech) and generated animation from a QNFO plain-language paper summary",
+                    "-metadata", "title=" + str(job.get("title", ""))[:80], "-metadata", "artist=QNFO", "-c:v", "libx264",
                     "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", str(final)],
                    check=True, cwd=out)
+    import hashlib, datetime   # BP26-AI-ACT-ART50-1: machine-readable marking next to the file (the on-screen label is burned in)
+    (out / "provenance.json").write_text(json.dumps({"ai_generated": True, "disclosure": "synthetic narration and generated animation", "video_sha256": hashlib.sha256(final.read_bytes()).hexdigest(),
+                                                     "slug": job.get("slug"), "theme": tname, "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}, indent=1), "utf8")
     return {"path": str(final), "duration_s": round(t, 1), "bytes": final.stat().st_size}
 
 
