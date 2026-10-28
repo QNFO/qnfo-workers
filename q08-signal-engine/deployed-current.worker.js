@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.7-codeagent"; // 0.37.5 Q08-THIN-PASSED-OVER-1 (2026-10-26), see the note below.
+var VERSION = "0.38.0-forecast-hygiene";
+/* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
 /* 0.37.5 (2026-10-26, charter pillar reach, agent_issues 100439, 100607): Q08-THIN-PASSED-OVER-1 marks a candidate that was measured thin and passed over for a richer one, so a paper without an HTML rendering no longer holds the arXiv lane for a day (the lane ran at 02:02 and 03:04 on 2026-10-26 and then not for 16 hours); the 24-hour retry window is the existing one. */
 /* 0.37.4 (2026-10-26, charter pillar reach, agent_issues 100607, 100439): Q08-GATE-GROUND-BLIND-1 removes the two checks of the writer gate that refused every comma-grouped dollar amount and every score, rating, ratio or reputation of 0.85 as fabricated without reading the source; the grounding check that runs on every draft before any panel call and on the final text already refuses a figure the source does not hold. */
 /* 0.37.3 (2026-10-26, charter pillar reach, agent_issues 100607): Q08-DOTTED-NAMES-1 stops the grounding check refusing a dotted name (Qwen3.8-27B, PLAN.md, Node.js) or a possessive plural that stands in the source; the ground word set only gains words, so nothing accepted before is refused. */
@@ -2427,6 +2428,33 @@ var FORECAST_EVERY = 3;            // a forecast is due after this many consecut
 var FORECAST_MIN_DAYS = 14, FORECAST_MAX_DAYS = 730;
 var FORECAST_RECHECK_DAYS = 7, FORECAST_MAX_CHECKS = 4;
 var __forecastSchemaDone = false, __forecastSchemaTried = 0;
+// BP26-FORECAST-HYGIENE-1 (Metaculus-style resolution criteria): a resolution names the source that settles it, the date, and what happens in the edge case.
+// Text patterns, the same three scripts/bp26_forecast.py measures as forecast_resolution_criteria_complete: they check the words are present, not that the criteria are good.
+var FC_SOURCE_RX = /https?:\/\/|\b(according to|as reported|reported by|published (by|on|in)|data from|per the|official|filing|release|index|report|statistics|bureau|agency|register|database|census|dashboard|tracker)\b/i;
+var FC_DATE_RX = /\b\d{4}-\d{2}-\d{2}\b|\b(by|before|on|until|through)\s+(the\s+end\s+of\s+)?(\d{1,2}\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|q[1-4]|20\d\d)\b|\b20\d\d\b/i;
+var FC_EDGE_RX = /\b(if|unless|otherwise|void|ambiguous|not (published|available|reported)|no (data|report|announcement)|in the event|fails? to|cannot be|revised|restated)\b/i;
+function forecastResolutionGaps(res) {
+  var t = String(res || ""), g = [];
+  if (!FC_SOURCE_RX.test(t)) g.push("the source that settles it (a named report, release, register or URL)");
+  if (!FC_DATE_RX.test(t)) g.push("the date it is read by");
+  if (!FC_EDGE_RX.test(t)) g.push("an edge-case rule (what counts if the source is late, revised or silent)");
+  return g;
+}
+// An update is a new row: the original probability stays on q08_forecasts and is the one scored; updates are shown beside it.
+async function recordForecastUpdate(env, slug, probability, reason, evidenceUrl) {
+  if (!(await ensureForecastSchema(env))) return { ok: false, error: "schema unavailable" };
+  var pr = Math.round(Number(probability) * 100) / 100, why = String(reason || "").trim();
+  if (!isFinite(pr) || pr < 0.01 || pr > 0.99) return { ok: false, error: "probability must be 0.01-0.99" };
+  if (why.length < 20 || why.length > 600) return { ok: false, error: "reason must be 20-600 characters" };
+  var f = await env.DB.prepare("SELECT id, slug, probability, status FROM q08_forecasts WHERE slug = ?1").bind(String(slug || "")).first();
+  if (!f) return { ok: false, error: "forecast not found" };
+  if (f.status !== "open") return { ok: false, error: "forecast is " + f.status + "; only an open forecast takes an update" };
+  var last = await env.DB.prepare("SELECT probability FROM q08_forecast_updates WHERE forecast_id = ?1 ORDER BY id DESC LIMIT 1").bind(f.id).first();
+  var prior = last ? Number(last.probability) : Number(f.probability);
+  var url = evidenceUrl ? publicHttpsUrl(String(evidenceUrl)) : null;
+  await env.DB.prepare("INSERT INTO q08_forecast_updates (forecast_id, slug, prior_probability, probability, reason, evidence_url, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(f.id, f.slug, prior, pr, why, url || null, nowIso()).run();
+  return { ok: true, slug: f.slug, prior_probability: prior, probability: pr };
+}
 async function ensureForecastSchema(env) {
   if (__forecastSchemaDone) return true;
   if (Date.now() - __forecastSchemaTried < 60000) return false; // a failing schema step is retried once a minute, not on every request
@@ -2440,6 +2468,13 @@ async function ensureForecastSchema(env) {
       catch (e2) { if (!/duplicate column/i.test(String(e2 && e2.message || e2))) throw e2; }
     }
     await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_q08_forecasts_status ON q08_forecasts (status, horizon)").run();
+    // BP26-FORECAST-HYGIENE-1: an update to a forecast is a new row here, never an overwrite of q08_forecasts, and the published claim, probability,
+    // horizon, resolution text and timestamp can no longer be changed in place (the trigger names the rule; status/outcome/brier stay writable).
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_forecast_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, forecast_id INTEGER NOT NULL, slug TEXT NOT NULL, prior_probability REAL NOT NULL, probability REAL NOT NULL, reason TEXT NOT NULL, evidence_url TEXT, created_at TEXT NOT NULL)").run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_q08_forecast_updates_slug ON q08_forecast_updates (slug, id)").run();
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_updates_no_update BEFORE UPDATE ON q08_forecast_updates BEGIN SELECT RAISE(ABORT, 'BP26-FORECAST-HYGIENE-1: q08_forecast_updates is append-only'); END").run();
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_updates_no_delete BEFORE DELETE ON q08_forecast_updates BEGIN SELECT RAISE(ABORT, 'BP26-FORECAST-HYGIENE-1: q08_forecast_updates is append-only'); END").run();
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecasts_published_fields_immutable BEFORE UPDATE OF slug, claim, probability, horizon, resolution, created_at ON q08_forecasts WHEN NEW.slug IS NOT OLD.slug OR NEW.claim IS NOT OLD.claim OR NEW.probability IS NOT OLD.probability OR NEW.horizon IS NOT OLD.horizon OR NEW.resolution IS NOT OLD.resolution OR NEW.created_at IS NOT OLD.created_at BEGIN SELECT RAISE(ABORT, 'BP26-FORECAST-HYGIENE-1: a published forecast is never overwritten; insert a row in q08_forecast_updates'); END").run();
     __forecastSchemaDone = true;
     return true;
   } catch (e) {
@@ -2512,7 +2547,7 @@ var FORECAST_DIRECTIVE = [
   "TITLE: one plain sentence in sentence case that states the forecast as a claim and names the actors and the event, under 90 characters, no colon, no Title Case, not shaped 'The X of Y', never a label ('The Future of X', 'Outlook for Y'). Length: 1100-1700 words. Complete sentences only; the prose ends on a full stop.",
   "",
   "OUTPUT FORMAT, in this order: Markdown with the H1 title first and then the prose; then one line that starts exactly with FORECAST-JSON: followed by a single-line JSON object; then the verdict line.",
-  "The JSON object has these keys: \"claim\" (the main scenario as one checkable sentence, 20-300 characters), \"probability\" (your probability for it as a number from 0.05 to 0.95, equal to the percent you state in the prose), \"horizon\" (the date by which the claim is settled, YYYY-MM-DD, between 30 and 540 days after today), \"resolution\" (one sentence, 30-400 characters: the public, checkable condition that makes the claim true), \"alternatives\" (1 to 3 objects with \"claim\" and \"probability\"), \"indicators\" (2 to 5 short strings), \"watch_query\" (3 to 8 words someone would search to find news that settles it), \"watch_urls\" (0 to 2 https URLs of public pages that would show the outcome; only addresses you are certain exist, otherwise an empty list).",
+  "The JSON object has these keys: \"claim\" (the main scenario as one checkable sentence, 20-300 characters), \"probability\" (your probability for it as a number from 0.05 to 0.95, equal to the percent you state in the prose), \"horizon\" (the date by which the claim is settled, YYYY-MM-DD, between 30 and 540 days after today), \"resolution\" (one sentence, 30-400 characters: the public, checkable condition that makes the claim true; it must name the source that settles it, the date it is read by, and an edge-case rule such as \"void if the figure is not published by then\"), \"alternatives\" (1 to 3 objects with \"claim\" and \"probability\"), \"indicators\" (2 to 5 short strings), \"watch_query\" (3 to 8 words someone would search to find news that settles it), \"watch_urls\" (0 to 2 https URLs of public pages that would show the outcome; only addresses you are certain exist, otherwise an empty list).",
   "VERDICT (mandatory last line, after the FORECAST-JSON line): worth your time: yes|flat|no - one clause of justification. State honestly whether a reader gains something a plain extrapolation of the source would not give them."
 ].join("\n");
 
@@ -2559,6 +2594,7 @@ function validateForecast(f, text, nowMs) {
   }
   var res = String(f.resolution || "").trim();
   if (res.length < 30 || res.length > 400) p.push("resolution condition must be 30-400 characters");
+  forecastResolutionGaps(res).forEach(function (g) { p.push("resolution condition must name " + g); });
   var alts = Array.isArray(f.alternatives) ? f.alternatives : [];
   if (alts.length < 1 || alts.length > 3) p.push("forecast needs 1-3 alternative scenarios");
   var sum = isFinite(pr) ? pr : 0, altOk = alts.length > 0, maxAlt = 0;
@@ -2599,7 +2635,7 @@ function forecastXform(text) {
 async function repairForecastJson(env, essayText, src, signalText) {
   var today = new Date(Date.now()).toISOString().slice(0, 10);
   var schema = '{"claim":"<20-300 chars>","probability":<0.05-0.95>,"horizon":"YYYY-MM-DD","resolution":"<30-400 chars>","alternatives":[{"claim":"<15+ chars>","probability":<0.05-0.9>}],"indicators":["<15+ chars>","<15+ chars>"],"watch_query":"<3-8 words>","watch_urls":[]}';
-  var prompt = "You are repairing the forecast record for a q08.org essay. Read the ESSAY and the SIGNAL and output ONLY one JSON object, no prose and no code fence, with this exact schema:\n" + schema + "\nRules: TODAY is " + today + "; the claim is the single main forecast the ESSAY states, 20-300 characters; the probability is the whole percent the ESSAY states, divided by 100 (0.05-0.95); the horizon is the ISO date by which the claim is settled (30-540 days after TODAY); the resolution is one checkable sentence of 30-400 characters; provide 1-3 alternative scenarios with claims of 15+ characters and probabilities in (0,0.9]; the main probability must be at least every alternative and all probabilities must sum to at most 1; provide 2-5 leading indicators of 15+ characters; watch_query is 3-8 words; watch_urls only real public https URLs stated in the source, otherwise []. Do not add facts that are not in the ESSAY or SIGNAL.\n\nESSAY:\n" + String(essayText || "").slice(0, 6000) + "\n\nSIGNAL:\n" + String(signalText || (src && src.body_md) || "").slice(0, 2000);
+  var prompt = "You are repairing the forecast record for a q08.org essay. Read the ESSAY and the SIGNAL and output ONLY one JSON object, no prose and no code fence, with this exact schema:\n" + schema + "\nRules: TODAY is " + today + "; the claim is the single main forecast the ESSAY states, 20-300 characters; the probability is the whole percent the ESSAY states, divided by 100 (0.05-0.95); the horizon is the ISO date by which the claim is settled (30-540 days after TODAY); the resolution is one checkable sentence of 30-400 characters that names the source that settles it, the date it is read by, and an edge-case rule (for example void if the source is not published by then); provide 1-3 alternative scenarios with claims of 15+ characters and probabilities in (0,0.9]; the main probability must be at least every alternative and all probabilities must sum to at most 1; provide 2-5 leading indicators of 15+ characters; watch_query is 3-8 words; watch_urls only real public https URLs stated in the source, otherwise []. Do not add facts that are not in the ESSAY or SIGNAL.\n\nESSAY:\n" + String(essayText || "").slice(0, 6000) + "\n\nSIGNAL:\n" + String(signalText || (src && src.body_md) || "").slice(0, 2000);
   for (var modelId of COMPOSE_MODELS) {
     try {
       meterCall(env, "compose");
@@ -3837,11 +3873,12 @@ async function resolveForecasts(env, max) {
 function calibration(rows) {
   var r = (rows || []).filter(function (x) { return x && (x.outcome === 0 || x.outcome === 1) && isFinite(Number(x.probability)); });
   var n = r.length;
-  var out = { n: n, brier: null, hit_rate: null, baseline_brier: 0.25, bins: [], reliable: n >= 20 };
+  var out = { n: n, brier: null, log_score: null, hit_rate: null, baseline_brier: 0.25, baseline_log_score: Math.round(Math.log(0.5) * 1000) / 1000, bins: [], reliable: n >= 20 };
   if (!n) return out;
-  var sb = 0, hits = 0;
-  r.forEach(function (x) { sb += Math.pow(Number(x.probability) - x.outcome, 2); hits += x.outcome; });
+  var sb = 0, hits = 0, sl = 0;
+  r.forEach(function (x) { var pp = Math.min(0.999, Math.max(0.001, Number(x.probability))); sb += Math.pow(Number(x.probability) - x.outcome, 2); sl += Math.log(x.outcome === 1 ? pp : 1 - pp); hits += x.outcome; });
   out.brier = Math.round((sb / n) * 1000) / 1000;
+  out.log_score = Math.round((sl / n) * 1000) / 1000;
   out.hit_rate = Math.round((hits / n) * 1000) / 1000;
   [[0.05, 0.3], [0.3, 0.5], [0.5, 0.7], [0.7, 0.96]].forEach(function (b) {
     var g = r.filter(function (x) { var p = Number(x.probability); return p >= b[0] && p < b[1]; });
@@ -3888,6 +3925,16 @@ function renderForecastBox(f) {
     (ind.length ? '<p class="q-meta" style="margin:0 0 6px">Watch: ' + ind.map(function (x) { return escHtml(String(x)); }).join("; ") + '</p>' : "") +
     '<p class="q-meta" style="margin:0"><a href="/forecasts">All forecasts and the scoring record</a></p></section>';
 }
+function renderCalibration(c) {
+  var W = 320, H = 320, P = 36, sx = function (v) { return P + v * (W - 2 * P); }, sy = function (v) { return H - P - v * (H - 2 * P); };
+  var pts = (c.bins || []).map(function (b) { return '<circle cx="' + sx(b.mean_probability).toFixed(1) + '" cy="' + sy(b.observed_frequency).toFixed(1) + '" r="' + (4 + Math.min(8, b.n)) + '" fill="#2d6cdf" fill-opacity="0.7"><title>' + b.n + ' forecasts, said ' + fcPct(b.mean_probability) + ', came true ' + fcPct(b.observed_frequency) + '</title></circle>'; }).join("");
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="320" height="320" role="img" aria-label="Calibration: said probability against observed frequency, with the perfect-calibration diagonal"><rect x="' + P + '" y="' + P + '" width="' + (W - 2 * P) + '" height="' + (H - 2 * P) + '" fill="none" stroke="#999"/><line x1="' + sx(0) + '" y1="' + sy(0) + '" x2="' + sx(1) + '" y2="' + sy(1) + '" stroke="#999" stroke-dasharray="4 3"/>' + pts + '<text x="' + W / 2 + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11">said probability</text><text x="10" y="' + H / 2 + '" font-size="11" transform="rotate(-90 10 ' + H / 2 + ')" text-anchor="middle">came true</text></svg>';
+  var tr = (c.bins || []).map(function (b) { return '<tr><td>' + fcPct(b.from) + '&ndash;' + fcPct(b.to) + '</td><td>' + b.n + '</td><td>' + fcPct(b.mean_probability) + '</td><td>' + fcPct(b.observed_frequency) + '</td></tr>'; }).join("");
+  var body = '<section class="q08-hero"><h1>Forecast calibration</h1><p class="q-lede">Forecasts grouped by the probability q08 gave them, against how often they came true. A calibrated forecaster sits on the diagonal. Scores use the original published probability; later updates are separate rows and never replace it.</p>' +
+    '<p class="q-meta">' + (c.n ? c.n + ' resolved forecast' + (c.n === 1 ? '' : 's') + '. Brier score ' + c.brier + ' (always saying 50% scores ' + c.baseline_brier + '; lower is better). Log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better).' + (c.reliable ? '' : ' Under 20 resolved forecasts a score is mostly noise.') : 'No forecast has resolved yet, so there is nothing to plot.') + '</p></section>' +
+    '<section class="q-panel">' + svg + (tr ? '<table class="q-table"><thead><tr><th>Bucket</th><th>Forecasts</th><th>Mean said</th><th>Came true</th></tr></thead><tbody>' + tr + '</tbody></table>' : '') + '<p class="q-meta"><a href="/forecasts">All forecasts</a> &middot; <a href="/api/forecasts/calibration">JSON</a></p></section>';
+  return q08Page({ title: "Forecast calibration \u00b7 q08", canonical: ORIGIN + "/forecasts/calibration", active: "forecasts", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline." }, body);
+}
 function renderForecasts(rows, stats) {
   var item = function (f) {
     var extra = f.status === "resolved" ? " &middot; " + escHtml(fcStatus(f)) + (f.brier != null ? " &middot; Brier " + escHtml(String(f.brier)) : "") : " &middot; " + escHtml(fcStatus(f));
@@ -3896,7 +3943,7 @@ function renderForecasts(rows, stats) {
   var open = rows.filter(function (f) { return f.status === "open"; }).sort(function (a, b) { return String(a.horizon).localeCompare(String(b.horizon)); });
   var fin = rows.filter(function (f) { return f.status !== "open"; });
   var c = stats.calibration;
-  var cal = c.n ? ('Scored so far: ' + c.n + ' resolved, mean Brier score ' + c.brier + ' (always saying 50% scores 0.25; lower is better)' + (c.reliable ? "" : '. Under 20 resolved forecasts a score is mostly noise') + '. Void: ' + stats.void + (stats.void_share != null ? ' (' + Math.round(stats.void_share * 100) + '% of finished)' : "") + '.') : 'No forecast has been scored yet. Void so far: ' + stats.void + '.';
+  var cal = c.n ? ('Scored so far: ' + c.n + ' resolved, mean Brier score ' + c.brier + ' (always saying 50% scores 0.25; lower is better), mean log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better; <a href="/forecasts/calibration">calibration by probability bucket</a>)' + (c.reliable ? "" : '. Under 20 resolved forecasts a score is mostly noise') + '. Void: ' + stats.void + (stats.void_share != null ? ' (' + Math.round(stats.void_share * 100) + '% of finished)' : "") + '.') : 'No forecast has been scored yet. Void so far: ' + stats.void + '.';
   var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p></section>' +
     '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. They appear after every few essays.</div>') + '</section>' +
     (fin.length ? '<section class="q08-feed" aria-label="Settled forecasts"><h2 class="q-h3">Settled</h2><ul class="q-list">' + fin.map(item).join("") + '</ul></section>' : "") + q08Sub(true);
@@ -4372,7 +4419,7 @@ function cleanNote(v) {
   return t || null;
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
-export const __forecast = { forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
+export const __forecast = { forecastResolutionGaps: forecastResolutionGaps, recordForecastUpdate: recordForecastUpdate, renderCalibration: renderCalibration, forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
 export const __gen = { thinPassedOver: thinPassedOver, parseArxivPool: parseArxivPool, arxivPoolSize: arxivPoolSize, resetArxivPool: function () { __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT }; }, scrapeArxiv: scrapeArxiv, ARXIV_POOL_DEFAULT: ARXIV_POOL_DEFAULT, parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };
@@ -4763,9 +4810,23 @@ async function q08Fetch(req, env, ctx) {
       if (path === "/api/retractions") return json({ ok: true, worker: WORKER, version: VERSION, retractions: rrows.results || [] });
       return html(renderRetractions(rrows.results || []));
     }
+    if (path === "/forecasts/calibration" || path === "/api/forecasts/calibration") {
+      var cst = await forecastStats(env);
+      if (path === "/api/forecasts/calibration") return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), calibration: cst.calibration });
+      return html(renderCalibration(cst.calibration));
+    }
+    if (path === "/api/forecasts/updates" && req.method === "POST") {
+      var ult = req.headers.get("x-loop-token") || "";
+      if (!env.LOOP_TOKEN || !(await safeEqual(ult, env.LOOP_TOKEN))) return json({ ok: false, error: "unauthorized: a forecast update changes a published record; it needs x-loop-token" }, 401);
+      var ub = await req.json().catch(function () { return {}; });
+      var ur = await recordForecastUpdate(env, ub.slug, ub.probability, ub.reason, ub.evidence_url);
+      return json(ur, ur.ok ? 200 : 400);
+    }
     if (path === "/api/forecasts") {
       var fr2 = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, alternatives_json, status, outcome, brier, checks, created_at, resolved_at, disposition FROM q08_forecasts WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
-      return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: fr2.results || [] });
+      var fupd = await env.DB.prepare("SELECT slug, prior_probability, probability, reason, evidence_url, created_at FROM q08_forecast_updates ORDER BY id").all().catch(function () { return { results: [] }; });
+      var fby = {}; (fupd.results || []).forEach(function (u) { (fby[u.slug] = fby[u.slug] || []).push({ prior_probability: u.prior_probability, probability: u.probability, reason: u.reason, evidence_url: u.evidence_url, at: u.created_at }); });
+      return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: (fr2.results || []).map(function (f) { f.original_probability = f.probability; f.updates = fby[f.slug] || []; return f; }) });
     }
     if (path === "/api/pieces") {
       var rows = await env.DB.prepare("SELECT slug, title, core_concept, published_at, reads" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 50").all();

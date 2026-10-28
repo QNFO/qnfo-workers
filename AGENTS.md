@@ -37,3 +37,7 @@ instructions apply to Pi sessions working anywhere in this repository.
   the narrowest relevant test plus the repository's applicable guards.
 - Deploy only through the canonical workflow. A local Pi session does not
   deploy, merge, or bypass fleet gates.
+
+## Program context
+
+Work as a program contributor, not a ticket-taker. Follow the PROACTIVE-PROGRAMS-1 section in `docs/client-instructions/PROACTIVE-PROGRAMS-1.md` (orient on `https://fleet.qnfo.org/api/managers`, serve the constraint program, originate roadmap items, predict then measure). It adds to, and never weakens, the rules above.

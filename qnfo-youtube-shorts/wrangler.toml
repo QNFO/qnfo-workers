@@ -1,0 +1,68 @@
+name = "qnfo-youtube-shorts"
+main = "worker.js"
+# charter-pillar: reach
+# project: YT.SHORTS (program QNFO.REACH, goal YT-SHORTS, roadmap YT-3 worker, YT-4 cost guard, YT-6 retention)
+# net-zero rule: this worker funds the retirement of qnfo-ipatent (same class, reach: a standalone publishing surface whose reads fold into qnfo-gateway);
+# the dependency check (fleet-graph impact worker:qnfo-ipatent: 28 dependents on 2026-10-27) is the first step of that retirement and is filed as an issue, not done here.
+# YT-SERVER-1 (2026-10-27, owner directive: "all of this needs to run 100% server-side on Cloudflare Quniverse"; USD 50 a month cap all-in).
+compatibility_date = "2026-10-10"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+workers_dev = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "qnfo-media"
+
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+props = { caller = "qnfo-youtube-shorts" }
+
+# CRON-SINGLE-TRIGGER-1: one hourly trigger; worker.js CRON_TABLE holds the entries.
+[triggers]
+crons = ["0 * * * *"]
+
+# Render container: python 3.12, manim, ffmpeg, pango/cairo (container/Dockerfile). standard-2 = 1 vCPU, 6 GiB.
+[[containers]]
+class_name = "RenderContainer"
+image = "./container/Dockerfile"
+instance_type = "standard-2"
+max_instances = 1
+
+[[durable_objects.bindings]]
+name = "RENDER"
+class_name = "RenderContainer"
+
+# EXPORTS-DECLARATIVE-1 (YT-EXPORTS-1, 2026-10-27): the class is provisioned, and wrangler refuses an upload that does not declare it in `exports`
+# ([provisioned_class_missing_from_config], run 40498305104 after the secrets were written through the script API). `exports` replaces `migrations`.
+[exports.RenderContainer]
+type = "durable-object"
+storage = "sqlite"
+
+# Secrets (wrangler secret put, under the deploy-guard secret lock): YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN, YT_RUN_TOKEN

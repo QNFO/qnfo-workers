@@ -1,0 +1,35 @@
+name = "qnfo-jobsearch"
+main = "worker.js"
+# charter-pillar: personal
+# JOBSEARCH-1 (2026-10-27): verified-claims job matcher with API + web UI. Funds the net-zero retirement of the empty job-market-watch/ stub
+# (no tracked files; Sept 2026 .wrangler leftovers only). Reads public ATS feeds; writes D1 qnfo-audit jobsearch_matches / jobsearch_runs.
+compatibility_date = "2026-10-10"
+compatibility_flags = ["global_fetch_strictly_public"]
+workers_dev = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05
+
+# CRON-SINGLE-TRIGGER-1: one hourly tick (CRON-HOURLY-FLOOR-1); the pipeline is idempotent (upsert by posting id).
+[triggers]
+crons = ["15 * * * *"]
+
+[[d1_databases]]
+binding = "JOBS_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# JOBSEARCH-OPS-1: owner sign-in code is e-mailed through qnfo-email (CLAUDE.md #1703: service-binding props, no key copy).
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+props = { caller = "qnfo-jobsearch" }

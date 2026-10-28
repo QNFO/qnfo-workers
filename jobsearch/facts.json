@@ -1,0 +1,284 @@
+{
+  "_note": "Claim ledger. Source: Documents/Rowan Brad Quni-Gudzinas - CV (verified, corrected).md (2026-10-01). Every sentence the tool emits must equal a 'text' or 'pitch' here. Edit this file, never the generated output.",
+  "person": {
+    "name": "Rowan Brad Quni-Gudzinas",
+    "also_published_as": "Brad Gudzinas",
+    "location": "Amsterdam, Netherlands",
+    "email": "rowan.quni@qnfo.org",
+    "sign_in_email": "rwnquni@outlook.com",
+    "links": {
+      "site": "https://qnfo.org",
+      "papers": "https://papers.qnfo.org",
+      "linkedin": "https://www.linkedin.com/in/rowan-quni/",
+      "orcid": "https://orcid.org/0009-0002-4317-5604"
+    },
+    "career_start": 2004
+  },
+  "unverified_needs_owner": [
+    "US citizenship vs. work-authorization basis (stated only: authorized in US)",
+    "basis of NL authorization (permit type; whether it extends to other EU states)"
+  ],
+  "facts": [
+    {
+      "id": "F01",
+      "cluster": [
+        "research_mgmt",
+        "federal",
+        "contracting",
+        "program_mgmt"
+      ],
+      "employer": "U.S. DOT, Federal Highway Administration",
+      "period": "2011-2015",
+      "text": "Managed a $1.5M+ federal research portfolio as a certified Contracting Officer's Representative: technical oversight, budgets, milestones, and acceptance of contractor deliverables.",
+      "pitch": "At the Federal Highway Administration I managed a $1.5M+ federal research portfolio as a certified Contracting Officer's Representative."
+    },
+    {
+      "id": "F02",
+      "cluster": [
+        "transport_modeling",
+        "federal",
+        "data_product",
+        "urban_planning",
+        "survey_methods"
+      ],
+      "employer": "U.S. DOT, Federal Highway Administration",
+      "period": "2011-2015",
+      "text": "Led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting.",
+      "pitch": "I led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting."
+    },
+    {
+      "id": "F03",
+      "cluster": [
+        "policy_research",
+        "data_product",
+        "social_policy",
+        "survey_methods",
+        "gis"
+      ],
+      "employer": "AARP Public Policy Institute",
+      "period": "2016-2021",
+      "text": "Led the AARP Livability Index: 50+ data sources across 7 domains, scoring U.S. neighborhoods nationwide, across multiple public releases.",
+      "pitch": "At AARP I led the Livability Index: 50+ data sources across 7 domains, scoring U.S. neighborhoods nationwide."
+    },
+    {
+      "id": "F04",
+      "cluster": [
+        "policy_research",
+        "social_policy"
+      ],
+      "employer": "AARP Public Policy Institute",
+      "period": "2016-2021",
+      "text": "The Index and its method are cited in 20+ academic and policy studies.",
+      "pitch": "The Livability Index and its method are cited in 20+ academic and policy studies."
+    },
+    {
+      "id": "F05",
+      "cluster": [
+        "policy_research",
+        "social_policy"
+      ],
+      "employer": "AARP Public Policy Institute",
+      "period": "2016-2021",
+      "text": "Co-authored the Livability Index 2018 report and AARP policy work on housing affordability, including the 2016 analysis of Low-Income Housing Tax Credits.",
+      "pitch": "I co-authored the Livability Index 2018 report and AARP policy work on housing affordability."
+    },
+    {
+      "id": "F06",
+      "cluster": [
+        "ai_systems",
+        "research_integrity",
+        "research_mgmt"
+      ],
+      "employer": "QNFO",
+      "period": "2024-present",
+      "text": "Built and run an autonomous research system on Cloudflare (44+ live workers) that drafts, referees, revises, versions, publishes, and corrects papers.",
+      "pitch": "I built and run an autonomous research system on Cloudflare (44+ live workers) that drafts, referees, revises, versions, publishes, and corrects papers."
+    },
+    {
+      "id": "F07",
+      "cluster": [
+        "research_integrity",
+        "ai_systems"
+      ],
+      "employer": "QNFO",
+      "period": "2024-present",
+      "text": "Designed the audit method: The Universal Ignorance Audit and Epistemic Legibility in AI-Assisted Science.",
+      "pitch": "I designed a published audit method for AI-assisted research: The Universal Ignorance Audit and Epistemic Legibility in AI-Assisted Science."
+    },
+    {
+      "id": "F08",
+      "cluster": [
+        "ai_systems",
+        "quantum_energy"
+      ],
+      "employer": "QNFO",
+      "period": "2024-present",
+      "text": "Proposed JPCUB, a whole-system energy benchmark for computing (joules per correct answer), with a measurement protocol, estimates for 17 quantum platforms, and an extension to LLM inference.",
+      "pitch": "I proposed JPCUB, a whole-system energy benchmark for computing (joules per correct answer), with estimates for 17 quantum platforms and an extension to LLM inference."
+    },
+    {
+      "id": "F09",
+      "cluster": [
+        "research_integrity"
+      ],
+      "employer": "QNFO",
+      "period": "2024-present",
+      "text": "Publish an open library of preprints with DOIs and a queryable knowledge graph.",
+      "pitch": "I publish an open library of preprints with DOIs and a queryable knowledge graph."
+    },
+    {
+      "id": "F10",
+      "cluster": [
+        "ai_systems",
+        "nonprofit"
+      ],
+      "employer": "Empowering Change",
+      "period": "2023-2024",
+      "text": "Built an LLM legal-navigation tool for self-represented litigants: document drafting, procedural guidance, and plain-language translation of legal terms.",
+      "pitch": "I built an LLM legal-navigation tool for self-represented litigants: document drafting, procedural guidance, and plain-language translation of legal terms."
+    },
+    {
+      "id": "F11",
+      "cluster": [
+        "nonprofit",
+        "leadership",
+        "program_mgmt"
+      ],
+      "employer": "Empowering Change",
+      "period": "2023-2024",
+      "text": "Took the nonprofit from incorporation to public launch.",
+      "pitch": "As Executive Director and Founder of Empowering Change I took the nonprofit from incorporation to public launch."
+    },
+    {
+      "id": "F12",
+      "cluster": [
+        "data_science",
+        "federal",
+        "consulting"
+      ],
+      "employer": "Deloitte Consulting LLP",
+      "period": "2015-2016",
+      "text": "Delivered analytics and machine-learning engagements for federal and public-sector clients.",
+      "pitch": "At Deloitte I delivered analytics and machine-learning engagements for federal and public-sector clients."
+    },
+    {
+      "id": "F13",
+      "cluster": [
+        "transport_modeling",
+        "policy_research",
+        "survey_methods",
+        "urban_planning"
+      ],
+      "employer": "Deloitte Consulting LLP",
+      "period": "2015-2016",
+      "text": "Co-authored a 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data.",
+      "pitch": "I co-authored a 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data."
+    },
+    {
+      "id": "F14",
+      "cluster": [
+        "transport_modeling",
+        "policy_research",
+        "urban_planning"
+      ],
+      "employer": "U.S. DOT, Federal Highway Administration",
+      "period": "2011-2015",
+      "text": "Presented national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop.",
+      "pitch": "I presented national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop."
+    },
+    {
+      "id": "F15",
+      "cluster": [
+        "product",
+        "data_product"
+      ],
+      "employer": "iManage; Epsilon (Publicis Groupe); AARP",
+      "period": "2016-2023",
+      "text": "Product management roles: Platform Data Product Manager at iManage (2022 to 2023), Senior Product Manager at Epsilon (2021 to 2022), Product Manager and Senior Methods Advisor at AARP Public Policy Institute (2016 to 2021).",
+      "pitch": "I have held product roles at iManage (Platform Data Product Manager), Epsilon (Senior Product Manager), and AARP (Product Manager and Senior Methods Advisor)."
+    },
+    {
+      "id": "F16",
+      "cluster": [
+        "credentials"
+      ],
+      "employer": "",
+      "period": "",
+      "text": "Certifications: Project Management Professional (PMP, 2016), Contracting Officer's Representative (COR, 2011), American Institute of Certified Planners (AICP, 2009).",
+      "pitch": "I hold PMP, COR, and AICP certifications."
+    },
+    {
+      "id": "F17",
+      "cluster": [
+        "credentials"
+      ],
+      "employer": "Rutgers University",
+      "period": "2004-2008",
+      "text": "Education: M.S., City and Regional Studies, Rutgers University (2008); B.A., Urban Studies and Community Planning, Rutgers University-Camden (2004).",
+      "pitch": "I hold an M.S. in City and Regional Studies from Rutgers University."
+    }
+  ],
+  "skills": [
+    "research program management",
+    "federal contract oversight",
+    "product management",
+    "statistical modeling",
+    "travel-demand modeling",
+    "gis",
+    "llm agent systems",
+    "cloudflare workers",
+    "d1",
+    "r2",
+    "vectorize",
+    "python",
+    "javascript",
+    "sql",
+    "machine learning",
+    "data science"
+  ],
+  "headlines": [
+    {
+      "id": "H1",
+      "cluster": [
+        "research_mgmt"
+      ],
+      "text": "Research program leader: 15 years running national research programs and data products at the U.S. Federal Highway Administration and AARP."
+    },
+    {
+      "id": "H2",
+      "cluster": [
+        "ai_systems",
+        "research_integrity"
+      ],
+      "text": "Research systems builder: founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail."
+    },
+    {
+      "id": "H3",
+      "cluster": [
+        "data_product",
+        "product",
+        "data_science",
+        "survey_methods"
+      ],
+      "text": "Data and product leader: 15 years running national research programs and data products at the U.S. Federal Highway Administration and AARP; later product roles at Epsilon and iManage."
+    }
+  ],
+  "closing": "Full CV, papers, and contact: qnfo.org",
+  "owner_stated": {
+    "stated": "2026-10-27",
+    "work_authorization": [
+      "NL",
+      "US"
+    ],
+    "salary_floor": "varies by role type and location; no filter applied",
+    "employment_types": [
+      "full-time",
+      "contract"
+    ],
+    "languages": [
+      "English"
+    ],
+    "relocation": "anywhere, no boundary (stated 2026-10-27)"
+  },
+  "ledger_verified_on": "2026-10-01"
+}

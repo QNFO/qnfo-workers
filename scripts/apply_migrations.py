@@ -305,6 +305,65 @@ def _split_top(s):
     return out
 
 
+PROBE_UPDATE = re.compile(r"^\s*UPDATE\s+\"?remediation_contracts\"?\s+SET\b", re.I)
+PROBE_INSERT = re.compile(r"^\s*(?:INSERT|REPLACE)\s+(?:OR\s+\w+\s+)?INTO\s+\"?remediation_contracts\"?\s*\(", re.I)
+_SQL_STR = re.compile(r"^'((?:[^']|'')*)'$", re.S)
+
+
+def _str_lit(expr):
+    m = _SQL_STR.match(expr.strip())
+    return m.group(1).replace("''", "'") if m else None
+
+
+def probe_semicolons(sql):
+    """PROBE-SEMICOLON-LINT-1 (issue 1000507): the string literals a statement stores as remediation_contracts.verify_probe that hold a
+    semicolon while the transport is d1-query (or, for an UPDATE that leaves the transport alone, unset). The D1 triggers
+    remediation_probe_semicolon_ins/_upd turn the semicolon into a comma, so a probe that matches such text fails for ever
+    (verification 332685). A code-read or other JSON probe is exempt: the triggers act on d1-query probes only."""
+    bad = []
+    if PROBE_UPDATE.match(sql):
+        pm = re.search(r"\bverify_probe\s*=\s*('(?:[^']|'')*')", sql, re.I)
+        tm = re.search(r"\bverify_transport\s*=\s*('(?:[^']|'')*')", sql, re.I)
+        if pm:
+            lit = _str_lit(pm.group(1))
+            tr = _str_lit(tm.group(1)) if tm else None
+            if lit and ";" in lit and (tr is None or tr.lower().startswith("d1-query")):
+                bad.append(lit)
+        return bad
+    m = PROBE_INSERT.match(sql)
+    if not m:
+        return bad
+    cstart = m.end() - 1
+    cend = _close(sql, cstart)
+    if cend < 0:
+        return bad
+    cols = [c.strip().strip('"').lower() for c in _split_top(sql[cstart + 1:cend])]
+    if "verify_probe" not in cols:
+        return bad
+    kp = cols.index("verify_probe")
+    kt = cols.index("verify_transport") if "verify_transport" in cols else None
+    rest = sql[cend + 1:].lstrip()
+    if not re.match(r"VALUES\b", rest, re.I):
+        return bad
+    j = 6
+    while j < len(rest):
+        while j < len(rest) and rest[j] in " \t\r\n,":
+            j += 1
+        if j >= len(rest) or rest[j] != "(":
+            break
+        e = _close(rest, j)
+        if e < 0:
+            break
+        vals = _split_top(rest[j + 1:e])
+        if len(vals) == len(cols):
+            lit = _str_lit(vals[kp])
+            tr = _str_lit(vals[kt]) if kt is not None else None
+            if lit and ";" in lit and (tr is None or tr.lower().startswith("d1-query")):
+                bad.append(lit)
+        j = e + 1
+    return bad
+
+
 def metric_cadences(sql):
     """The literal refresh_cadence values a statement writes to metric_registry (INSERT ... VALUES, INSERT ... SELECT,
     UPDATE ... SET). An expression rather than a single string literal is not judged here."""
@@ -684,6 +743,10 @@ def plan(path, text, birth=False):
             if len(lit.encode("utf-8")) > LIKE_MAX_BYTES:
                 problems.append("LIKE/GLOB pattern of " + str(len(lit.encode("utf-8"))) + " bytes (D1 rejects over "
                                 + str(LIKE_MAX_BYTES) + "; use instr()): '" + lit[:60] + "'")
+    for s in stmts if birth else []:  # birth only: files already on main are applied as merged
+        for lit in probe_semicolons(body(s)):
+            problems.append("verify_probe holds a semicolon (D1 triggers remediation_probe_semicolon_* rewrite it to a comma, so a probe that "
+                            "matches it fails for ever; use char(59) or instr on a part without it) (PROBE-SEMICOLON-LINT-1): '" + lit[:60] + "'")
     for s in stmts:
         worst = compound_terms(body(s))
         if worst > COMPOUND_MAX_TERMS:
@@ -736,6 +799,29 @@ def plan(path, text, birth=False):
                             "(BACKUP-SELF-EMPTY-1): remove the BACKUP line if nothing is deleted, or create it AS SELECT from the rows")
     return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "row_destructive": len(row_destructive),
                             "backup": backup, "creates_backup": creates, "parse_lint": parse_note or "ok"}
+
+
+# BP26-D1-DISCIPLINE-1 (2026-10-28, agent_issues 1000349): a Time Travel bookmark is recorded in migration_runs.bookmark before a file
+# runs, so a bad migration can be rolled back to the moment before it with `wrangler d1 time-travel restore`. Best effort by design:
+# a failed bookmark read never blocks a migration (the BACKUP header rules still apply); the column is added on first use.
+def time_travel_bookmark(acct, token, db_id):
+    import cf_ops_actions as C
+    try:
+        st, j = C.call("GET", f"/accounts/{acct}/d1/database/{db_id}/time_travel/bookmark", token, None, timeout=30)
+        if st == 200 and j.get("success", False):
+            return str((j.get("result") or {}).get("bookmark") or "")
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def ensure_bookmark_column(acct, token, ledger_id):
+    try:
+        d1(acct, token, ledger_id, "ALTER TABLE migration_runs ADD COLUMN bookmark TEXT")
+    except Exception as e:  # noqa: BLE001
+        if "duplicate column" not in str(e).lower():
+            return False
+    return True
 
 
 def d1(acct, token, db_id, sql, params=None):
@@ -910,6 +996,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
             return record_failure(path, sha, commit, info, acct, token, ledger_id, why, emit)
         checked = True
     done_n = 0
+    bookmark = time_travel_bookmark(acct, token, db_id) if ensure_bookmark_column(acct, token, ledger_id) else ""
     # D1-TRIGGER-DEPTH-RESTORE-1 (2026-10-18, migration_runs 292): snapshot every trigger definition BEFORE the file runs, so
     # a refused canary can put the table back the way it was. A per-statement read is not enough: a file that does
     # DROP TRIGGER then CREATE TRIGGER has already removed the standing definition by the time the CREATE is checked, and
@@ -961,8 +1048,12 @@ def apply_file(path, text, acct, token, commit, emit=print):
                         restored = " RESTORE FAILED, the table is without this trigger: " + str(e)[:120]
                 return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
                                       "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
-    d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
-       [path, sha, commit or "", info["db"], str(done_n)])
+    try:
+        d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by, bookmark, bookmark_source) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations', ?6, ?7)",
+           [path, sha, commit or "", info["db"], str(done_n), bookmark, "apply-time" if bookmark else ""])
+    except Exception:  # noqa: BLE001
+        d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
+           [path, sha, commit or "", info["db"], str(done_n)])
     resolve_failure(path, sha, acct, token, ledger_id, done_n)
     applied = {"file": path, "ok": True, "statements": done_n, "sha256": sha[:12]}
     if advisories:

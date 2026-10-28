@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-10-27 04:58:16",
+  "audited_at": "2026-10-27 21:58:15",
   "d1_write_failures": [],
-  "d1_writes_ok": 123,
+  "d1_writes_ok": 126,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -40,6 +40,10 @@
         "worker": "funding"
       },
       {
+        "dir": "jobsearch",
+        "worker": "jobsearch"
+      },
+      {
         "dir": "machine-readability",
         "worker": "machine-readability"
       },
@@ -72,7 +76,7 @@
         "worker": "scripts"
       }
     ],
-    "not_a_worker_count": 13,
+    "not_a_worker_count": 14,
     "not_deployed_dirs": [
       "agent-orchestrator",
       "ai-health-prober",
@@ -537,7 +541,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 33,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -571,7 +575,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.40.4-codeagent",
+        "version": "5.40.5-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -586,7 +590,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.42.0-gcp-inventory",
+        "version": "1.42.1-gcp-inventory",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -606,7 +610,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.12.3-codeagent",
+        "version": "2.12.4-codeagent",
         "worker": "qnfo-email"
       },
       {
@@ -648,6 +652,11 @@
         "dir": "qnfo-ipatent",
         "version": "3.19.1-ab-cookieless",
         "worker": "qnfo-ipatent"
+      },
+      {
+        "dir": "qnfo-jobsearch",
+        "version": "1.2.0",
+        "worker": "qnfo-jobsearch"
       },
       {
         "dir": "qnfo-lifecycle",
@@ -698,6 +707,11 @@
         "dir": "qnfo-tools-mcp",
         "version": "1.3.0-agent-send-policy",
         "worker": "qnfo-tools-mcp"
+      },
+      {
+        "dir": "qnfo-youtube-shorts",
+        "version": "0.1.5-manim-pin",
+        "worker": "qnfo-youtube-shorts"
       },
       {
         "dir": "radar-hub",
@@ -863,6 +877,14 @@
       "note": "NOT_DEPLOYED",
       "retired": "RETIRED",
       "worker": "jnl-watch"
+    },
+    "jobsearch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "jobsearch"
     },
     "machine-readability": {
       "before": null,
@@ -1053,9 +1075,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.40.4-codeagent",
+      "before": "5.40.5-codeagent",
       "http": 200,
-      "live": "5.40.4-codeagent",
+      "live": "5.40.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1203,9 +1225,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.42.0-gcp-inventory",
+      "before": "1.42.1-gcp-inventory",
       "http": 200,
-      "live": "1.42.0-gcp-inventory",
+      "live": "1.42.1-gcp-inventory",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1253,9 +1275,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.12.3-codeagent",
+      "before": "2.12.4-codeagent",
       "http": 200,
-      "live": "2.12.3-codeagent",
+      "live": "2.12.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1458,6 +1480,14 @@
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
+    },
+    "qnfo-jobsearch": {
+      "before": "1.2.0",
+      "http": 200,
+      "live": "1.2.0",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-jobsearch"
     },
     "qnfo-kaizen": {
       "before": null,
@@ -1717,6 +1747,14 @@
       "match": 0,
       "note": "NOT_A_WORKER",
       "worker": "qnfo-web-unified"
+    },
+    "qnfo-youtube-shorts": {
+      "before": "0.1.5-manim-pin",
+      "http": 200,
+      "live": "0.1.5-manim-pin",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-youtube-shorts"
     },
     "radar-hub": {
       "before": "1.5.0-venue-recovered",
