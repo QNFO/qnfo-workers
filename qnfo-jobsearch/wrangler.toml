@@ -1,6 +1,6 @@
 name = "qnfo-jobsearch"
 main = "worker.js"
-# charter-pillar: reach
+# charter-pillar: personal
 # JOBSEARCH-1 (2026-10-27): verified-claims job matcher with API + web UI. Funds the net-zero retirement of the empty job-market-watch/ stub
 # (no tracked files; Sept 2026 .wrangler leftovers only). Reads public ATS feeds; writes D1 qnfo-audit jobsearch_matches / jobsearch_runs.
 compatibility_date = "2026-10-10"
