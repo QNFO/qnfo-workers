@@ -1,13 +1,21 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@9fd8546e71a2",
- "due": 800,
- "pass": 599,
- "fail": 161,
- "skipped": 40,
- "deferred": 40,
+ "verifier": "remediation-consumer@2f00284d208b",
+ "due": 680,
+ "pass": 527,
+ "fail": 130,
+ "skipped": 23,
+ "deferred": 23,
  "contracts": [
+  {
+   "class": "issue-100629",
+   "issue_id": 100629,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: queued=192",
+   "reason": "the probe cannot judge yet: pending: queued=192"
+  },
   {
    "class": "issue-1000635",
    "issue_id": 1000635,
@@ -19,25 +27,9 @@
   {
    "class": "issue-1000636",
    "issue_id": 1000636,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-jobsearch/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-100629",
-   "issue_id": 100629,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: queued=192",
-   "reason": "the probe cannot judge yet: pending: queued=192"
-  },
-  {
-   "class": "fm-green-pr-unmerged",
-   "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -57,14 +49,6 @@
    "written": true
   },
   {
-   "class": "fm-judge-context-narrower-than-writer",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-2852",
    "issue_id": 2852,
    "verdict": "fail",
@@ -73,7 +57,7 @@
    "written": true
   },
   {
-   "class": "belief-paper-learn-errata-are-defects",
+   "class": "fm-judge-context-narrower-than-writer",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -81,8 +65,8 @@
    "written": true
   },
   {
-   "class": "fm-errata-remediation-duplicate",
-   "issue_id": 1000293,
+   "class": "fm-green-pr-unmerged",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
@@ -97,19 +81,19 @@
    "written": true
   },
   {
-   "class": "fm-companion-gate-discards-repairable",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
    "class": "issue-1000031",
    "issue_id": 1000031,
    "verdict": "fail",
    "expected": "FIXED: workers_ai_cost_30d_usd < 220 AND research_neurons_per_publication_7d < 45000",
-   "observed": "STILL_DEFECTIVE: workers_ai_cost_30d_usd=327.47 AND research_neurons_per_publication_7d=43300.4",
+   "observed": "STILL_DEFECTIVE: workers_ai_cost_30d_usd=327.87 AND research_neurons_per_publication_7d=43300.4",
+   "written": true
+  },
+  {
+   "class": "belief-paper-learn-errata-are-defects",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -121,18 +105,26 @@
    "written": true
   },
   {
-   "class": "issue-1000310",
-   "issue_id": 1000310,
-   "verdict": "fail",
-   "expected": "1",
+   "class": "fm-errata-remediation-duplicate",
+   "issue_id": 1000293,
+   "verdict": "pass",
+   "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-ticket-quotes-its-own-counted-marker",
+   "class": "fm-companion-gate-discards-repairable",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1000310",
+   "issue_id": 1000310,
+   "verdict": "fail",
+   "expected": "1",
    "observed": "0",
    "written": true
   },
@@ -157,7 +149,15 @@
    "issue_id": null,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: fleet_ai_run_rate_30d_usd 392.67, workers_ai_cost_30d_usd 327.47 (needs <= 40 on 14 days and <= 25)",
+   "observed": "pending: fleet_ai_run_rate_30d_usd 392.67, workers_ai_cost_30d_usd 327.87 (needs <= 40 on 14 days and <= 25)",
+   "written": true
+  },
+  {
+   "class": "fm-ticket-quotes-its-own-counted-marker",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -165,7 +165,7 @@
    "issue_id": null,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "unmet: breach_code_task_pct 9.1, needs-machine probe contracts 34",
+   "observed": "unmet: breach_code_task_pct 9.0, needs-machine probe contracts 34",
    "written": true
   },
   {
@@ -174,22 +174,6 @@
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-silent-drop-unaccounted",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-evolve-wip-planner-alignment",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
    "written": true
   },
   {
@@ -217,10 +201,10 @@
    "written": true
   },
   {
-   "class": "fm-cf-obs-nested-pin-stale",
+   "class": "belief-evolve-wip-planner-alignment",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
+   "verdict": "fail",
+   "expected": "1",
    "observed": "0",
    "written": true
   },
@@ -230,6 +214,22 @@
    "verdict": "fail",
    "expected": "1",
    "observed": "unmet: no went answer with a name in calendar_feedback yet (owner action)",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-nested-pin-stale",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-silent-drop-unaccounted",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -265,14 +265,6 @@
    "written": true
   },
   {
-   "class": "fm-content-sla-misattributed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "fm-head-of-line",
    "issue_id": null,
    "verdict": "pass",
@@ -294,6 +286,14 @@
    "verdict": "fail",
    "expected": "0",
    "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-content-sla-misattributed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -329,16 +329,15 @@
    "written": true
   },
   {
-   "class": "fm-iso-text-compare",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
+   "class": "issue-100622",
+   "issue_id": 100622,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: queued=192",
+   "reason": "the probe cannot judge yet: pending: queued=192"
   },
   {
-   "class": "fm-cf-issues-unconsumed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": 
+   "class": "issue-1000303",
+   "issue_id": 1000303,
+   "verdict": "fail",
+   "expected": "1
