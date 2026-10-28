@@ -89,3 +89,40 @@ Constraints found, not assumed:
   owner act (identity-bound). This supersedes "Shorts stay private until the owner reviews" below.
 - **Channel:** the target is the owner's existing personal channel (2 subscribers, one 2025 community post). Aligning its name, banner and description with the
   content is a visible account change and needs the owner's wording; Shorts stay private until the owner reviews the first batch.
+
+## Update 2026-10-28: overflow, voice, variety (YT-POC-3)
+Owner feedback: text bleeds off screen, the voice is robotic, every video has the same template and visuals.
+- **Overflow:** every Manim `Text` is fitted to a 7.6-unit safe width and each beat group to 8; captions are measured in the real font (Segoe UI Bold) and chunked to
+  at most 4 words and 880 px, breaking at commas and sentence ends (edge-tts word events carry no punctuation, so `punctuate()` restores it from the narration).
+  Layout keeps the top 1.6 and bottom 4.3 units clear for the Shorts UI; captions sit at MarginV 520.
+- **Voice:** default `en-US-AndrewMultilingualNeural` (per-director `voice`; Ava also tested), rate +4 % for short-form pace, `speakable()` normalises dashes and symbols,
+  directors are written for the ear (contractions, short sentences, commas and `?` for inflection, no spoken URLs), trailing silence cut, audio chain
+  highpass + compressor + loudnorm -16 LUFS. Not yet compared by ear against Kokoro-82M (best open model in 2026 reviews, no word times: needs an alignment pass) or ElevenLabs.
+- **Variety:** five themes (palette + animated background: bubbles, grid, rings, waves, stars) picked from the slug hash or `theme_name`; ten templates (added `bignum`,
+  `flow`, `compare`, `list`); varied exits and a slow push-in during holds. Second example: `directors/brain-as-filter.json` (violet, flow/list/compare/bignum).
+- Research basis (vendor blogs, treat figures as rules of thumb): hook in 2-3 s, sentences under 15 words, 30-45 s beats 60 s when the idea fits, a visual change every
+  few seconds, captions in the safe zone, native 9:16, a second hook at the end instead of "subscribe", edit AI drafts before publishing.
+- Gap: render is slow (about 9 min for 64 s; `always_redraw` text and updater backgrounds). Content clusters in the upper half; vertical centring is next.
+
+## Survey 2026-10-28: GitHub video-generator topic (stars, licence, last push read from the GitHub API today; fit is judgement from READMEs, code not audited)
+| Project | Stars / licence / push | Fit |
+|---|---|---|
+| ViMax (HKUDS) | 12.8k / MIT / 2026-09-30 | **Pattern to copy**: screenwriter -> director -> producer agents. Our missing piece is the LLM director; borrow the staging, not the generative-video backend. |
+| Agnes Video Generator | 0.6k / MIT / 2026-10-28 | Closest to our shape (multi-scene, narration, subtitles, web UI). Small and young: read for scene-spec ideas, do not depend on it. Avatars add nothing for papers. |
+| Open Generative AI | 31.7k / MIT / 2026-10-24 | Studio that fronts third-party models and paid APIs ("unrestricted"). No fit: no diagram accuracy, spend outside the fleet, brand-risk. |
+| Wan 2.2 | 18.2k / Apache-2.0 / 2026-09-21 | Best open diffusion video model here. Needs a GPU (no Cloudflare Container GPU in our setup) and cannot draw a correct bar chart or a number. Only candidate: 3-5 s abstract hook b-roll, after the director exists. |
+| VideoCrafter / VGen | 5.1k NOASSERTION / 3.2k no licence | Older (last push 2026-01 / 2025-01), no licence clarity. Skip. |
+| Kokoro-82M | 9.7k / Apache-2.0 / 2025-08 | Voice A/B candidate; no word times, so needs a whisper alignment pass. |
+Decision: scientific shorts stay deterministic (Manim: every number on screen comes from the paper); generative video is at most decoration for the hook.
+
+Next, in order: (1) LLM director with numeric-claim checker (qnfo-ai writer + other-family checker, beats must cite article sentences); (2) five more templates driven by the director; (3) Kokoro vs edge voice blind test by the owner; (4) publish 5 private shorts, read retention, then decide on generative hooks.
+
+## Update 2026-10-28: LLM director and roadmap (YT-POC-4)
+`scripts/youtube_poc/make_director.py <slug>` writes the beats JSON from the plain article: qnfo-ai writer (open endpoint, model `qnfo`; it reasons first, so max_tokens 24000 and
+2-4 min per call; 429s back off), then a deterministic gate (known template, required fields, string lengths, sentences of at most 18 words, no spoken URL, **every number in
+narration, labels and bignum values must occur in the article**, digits or words), then an LLM fact-check of each beat against the article. A failing beat is dropped and listed in
+`<name>.report.json`; if the hook or too many beats fall, the writer is re-prompted with the checker's reasons (up to 4 rounds). Offline test: `test_director_checks.py`.
+First run (bqp paper): the checker rejected the hook for dropping the "with a looser error budget" qualifier, which is the gate doing its job.
+Roadmap rows YT-7..YT-13 (quality pass built, director built, voice test, template library, render speed, generative hooks parked, provenance) are in
+`migrations/2026-10-28-yt-shorts-quality-roadmap.sql` under source `yt-shorts-2026`, goal YT-SHORTS. The server worker (YT-3, another session) calls `make_director.py` and
+`make_short.py` inside its Container.
