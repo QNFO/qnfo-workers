@@ -1,48 +1,33 @@
 {
-  "audited_at": "2026-10-28 19:02:14",
+  "audited_at": "2026-10-28 19:32:42",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
     "_deploy_settle": {
-      "settled": [],
+      "settled": [
+        "qnfo-gateway"
+      ],
       "waited_for": [
-        "qnfo-model-eval"
+        "qnfo-gateway"
       ]
     },
     "_drift_confirm": {
       "first_pass": [
-        "personal-companion",
-        "qnfo-ai",
-        "qnfo-model-eval"
+        "qnfo-agents"
       ],
       "refreshed": true,
       "second_pass": [
-        "qnfo-model-eval"
+        "qnfo-gateway"
       ]
     },
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-model-eval/deployed-current.worker.js",
-        "dir": "qnfo-model-eval",
-        "live": "1.8.2-codeagent",
-        "repo": "1.8.3-codeagent",
-        "worker": "qnfo-model-eval"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
     "cron_only": [],
     "cron_only_count": 0,
-    "drift": [
-      {
-        "dir": "qnfo-model-eval",
-        "live": "1.8.2-codeagent",
-        "repo": "1.8.3-codeagent",
-        "worker": "qnfo-model-eval"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -146,6 +131,7 @@
       "qnfo-backlog-exec",
       "qnfo-blank-audit",
       "qnfo-calendar-intake",
+      "qnfo-cf-one-dashboard",
       "qnfo-chameleon",
       "qnfo-chat-canary",
       "qnfo-citation-watch",
@@ -187,7 +173,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 76,
+    "not_deployed_notdrift": 77,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -368,6 +354,11 @@
         "dir": "qnfo-calendar-intake",
         "marker": "RETIRED",
         "worker": "qnfo-calendar-intake"
+      },
+      {
+        "dir": "qnfo-cf-one-dashboard",
+        "marker": "RETIRED",
+        "worker": "qnfo-cf-one-dashboard"
       },
       {
         "dir": "qnfo-chameleon",
@@ -582,7 +573,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.26.0-ai-disclosure",
+        "version": "4.26.1-a11y-labels",
         "worker": "personal-api"
       },
       {
@@ -597,17 +588,17 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.39.1-codeagent",
+        "version": "0.39.2",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-agents",
-        "version": "0.2.5",
+        "version": "0.2.6",
         "worker": "qnfo-agents"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.40.6-codeagent",
+        "version": "5.40.7-a11y-label",
         "worker": "qnfo-ai"
       },
       {
@@ -617,7 +608,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.12.0",
+        "version": "2.12.1",
         "worker": "qnfo-ai-search"
       },
       {
@@ -661,11 +652,6 @@
         "worker": "qnfo-fleet-dashboard"
       },
       {
-        "dir": "qnfo-gateway",
-        "version": "3.47.0-provenance-sidecar",
-        "worker": "qnfo-gateway"
-      },
-      {
         "dir": "qnfo-github-steward",
         "version": "0.10.0-issue-rollup",
         "worker": "qnfo-github-steward"
@@ -701,6 +687,11 @@
         "worker": "qnfo-memory-mcp"
       },
       {
+        "dir": "qnfo-model-eval",
+        "version": "1.8.3-codeagent",
+        "worker": "qnfo-model-eval"
+      },
+      {
         "dir": "qnfo-observability",
         "version": "1.5.4-outreach-drained",
         "worker": "qnfo-observability"
@@ -717,12 +708,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.39.9-codeagent",
+        "version": "0.40.0",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.21.0-ai-marker",
+        "version": "0.21.1-channel-marker",
         "worker": "qnfo-social"
       },
       {
@@ -737,23 +728,22 @@
       },
       {
         "dir": "qnfo-youtube-shorts",
-        "version": "0.2.0-quality",
+        "version": "0.2.1-health-contract",
         "worker": "qnfo-youtube-shorts"
       },
       {
         "dir": "radar-hub",
         "version": "1.5.0-venue-recovered",
         "worker": "radar-hub"
+      },
+      {
+        "version": "3.47.1-codeagent",
+        "worker": "qnfo-gateway"
       }
     ],
     "unmanaged_tombstones": 1,
     "unmanaged_truncated": false,
     "unmanaged_workers": [
-      {
-        "http": 404,
-        "version": null,
-        "worker": "qnfo-cf-one-dashboard"
-      },
       {
         "http": 200,
         "version": null,
@@ -1004,9 +994,9 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.26.0-ai-disclosure",
+      "before": "4.26.1-a11y-labels",
       "http": 200,
-      "live": "4.26.0-ai-disclosure",
+      "live": "4.26.1-a11y-labels",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1064,9 +1054,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.39.1-codeagent",
+      "before": "0.39.2",
       "http": 200,
-      "live": "0.39.1-codeagent",
+      "live": "0.39.2",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1099,17 +1089,17 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-agents": {
-      "before": "0.2.5",
+      "before": "0.2.6",
       "http": 200,
-      "live": "0.2.5",
+      "live": "0.2.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.40.6-codeagent",
+      "before": "5.40.7-a11y-label",
       "http": 200,
-      "live": "5.40.6-codeagent",
+      "live": "5.40.7-a11y-label",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1123,9 +1113,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.12.0",
+      "before": "2.12.1",
       "http": 200,
-      "live": "2.12.0",
+      "live": "2.12.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1234,7 +1224,8 @@
       "http": 404,
       "live": null,
       "match": 0,
-      "note": "UNMANAGED_NO_HEALTH",
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-cf-one-dashboard"
     },
     "qnfo-chameleon": {
@@ -1446,9 +1437,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.47.0-provenance-sidecar",
+      "before": "3.47.1-codeagent",
       "http": 200,
-      "live": "3.47.0-provenance-sidecar",
+      "live": "3.47.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1566,9 +1557,9 @@
     "qnfo-model-eval": {
       "before": "1.8.3-codeagent",
       "http": 200,
-      "live": "1.8.2-codeagent",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "1.8.3-codeagent",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
@@ -1668,9 +1659,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.39.9-codeagent",
+      "before": "0.40.0",
       "http": 200,
-      "live": "0.39.9-codeagent",
+      "live": "0.40.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1730,9 +1721,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.21.0-ai-marker",
+      "before": "0.21.1-channel-marker",
       "http": 200,
-      "live": "0.21.0-ai-marker",
+      "live": "0.21.1-channel-marker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1789,9 +1780,9 @@
       "worker": "qnfo-web-unified"
     },
     "qnfo-youtube-shorts": {
-      "before": "0.2.0-quality",
+      "before": "0.2.1-health-contract",
       "http": 200,
-      "live": "0.2.0-quality",
+      "live": "0.2.1-health-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-youtube-shorts"
@@ -1856,5 +1847,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 1
+  "stale_rows_purged": 0
 }
