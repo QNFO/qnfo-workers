@@ -36,7 +36,7 @@ function bucket(o = {}) {
 
 // ---------------------------------------------------------------- the code is wired and exported
 ok(/MIRROR-DRIFT-1/.test(src) && /PAPER-BODY-RETENTION-1/.test(src), "the markers of both issues are on main (code-probe)");
-ok(/var VERSION = "0\.(3[8-9]|[4-9]\d)\.\d+-codeagent"/.test(src) || /var VERSION = "[1-9]/.test(src), "the worker is 0.38.0 or later");
+ok(/var VERSION = "0\.(3[8-9]|[4-9]\d)\.\d+(-codeagent)?"/.test(src) || /var VERSION = "[1-9]/.test(src), "the worker is 0.38.0 or later");
 ok(/await mirrorDriftTick\(env\)/.test(src) && /await paperBodyRetentionTick\(env\)/.test(src) && /getUTCMinutes\(\) === 0/.test(src), "the scheduled handler runs the drift tick every tick and the retention tick at minute 0");
 
 // ---------------------------------------------------------------- mirror drift
