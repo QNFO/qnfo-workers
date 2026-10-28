@@ -14,7 +14,7 @@ Charter pillar: autonomy. Program QNFO.OPS, project BP26.AGENTOPS. agent_issues 
 |---|---|
 | SLI: one availability sample per public HTML host per runner pass (answer 2xx, 3xx, 401 or 403 in under 5 s) | `scripts/bp26_web.py` > `bp26_probe_results`, subject `avail:<host>` |
 | SLO per surface (13 hosts): objective 0.995 over 28 days | `slo_definitions` (migrations/2026-10-28-bp26-slo-budgets.sql) |
-| Error-budget state per surface, hourly: samples, bad, attainment, share of budget spent, `ok` / `warn` (50 percent) / `spent` (100 percent) | `slo_budget_state`, written by `scripts/bp26_slo.py` |
+| Error-budget state per surface, hourly: samples, bad, attainment, share of budget spent, `ok` / `warn` (50 percent) / `spent` (100 percent) / `immature` (fewer than 200 samples at 0.995, where one failed sample exceeds the whole budget; the share is shown, the flag waits) | `slo_budget_state`, written by `scripts/bp26_slo.py` |
 | "Budget spent" signal | `ops_config.slo_budget_spent` (comma list, empty when none) |
 | Incidents: availability episodes (consecutive failed samples) and control-plane canary reverts or failures | `incidents` |
 | Automatic blameless postmortem per incident: timeline, root-cause class the evidence supports, contributing facts, actions; an episode of two or more samples or on a spent surface files `SLO-POSTMORTEM-ACTION-1 <surface>` in `agent_issues` | `postmortems` |
