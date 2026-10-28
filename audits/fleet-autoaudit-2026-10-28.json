@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-28 12:30:32",
+  "audited_at": "2026-10-28 12:59:36",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
@@ -545,17 +545,17 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.14.6",
+        "version": "1.15.0",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.25.0-checkin-deliver",
+        "version": "4.26.0-ai-disclosure",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.43.7-codeagent",
+        "version": "1.44.0",
         "worker": "personal-companion"
       },
       {
@@ -565,7 +565,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.37.7-codeagent",
+        "version": "0.38.0-forecast-hygiene",
         "worker": "q08-signal-engine"
       },
       {
@@ -585,7 +585,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.11.4-codeagent",
+        "version": "2.12.0",
         "worker": "qnfo-ai-search"
       },
       {
@@ -605,7 +605,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.34-codeagent",
+        "version": "1.4.0-leases-killswitch",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -625,12 +625,12 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.72.0",
+        "version": "1.73.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.44.2-frame-policy",
+        "version": "3.46.0-paper-pid-hash",
         "worker": "qnfo-gateway"
       },
       {
@@ -650,12 +650,12 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.19.1-ab-cookieless",
+        "version": "3.20.0",
         "worker": "qnfo-ipatent"
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.3.0",
+        "version": "1.3.1",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -690,12 +690,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.39.4-codeagent",
+        "version": "0.39.6-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.20.0-automation-marker",
+        "version": "0.21.0-ai-marker",
         "worker": "qnfo-social"
       },
       {
@@ -835,9 +835,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.14.6",
+      "before": "1.15.0",
       "http": 200,
-      "live": "1.14.6",
+      "live": "1.15.0",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -972,17 +972,17 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.25.0-checkin-deliver",
+      "before": "4.26.0-ai-disclosure",
       "http": 200,
-      "live": "4.25.0-checkin-deliver",
+      "live": "4.26.0-ai-disclosure",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.43.7-codeagent",
+      "before": "1.44.0",
       "http": 200,
-      "live": "1.43.7-codeagent",
+      "live": "1.44.0",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1032,9 +1032,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.37.7-codeagent",
+      "before": "0.38.0-forecast-hygiene",
       "http": 200,
-      "live": "0.37.7-codeagent",
+      "live": "0.38.0-forecast-hygiene",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1091,9 +1091,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.11.4-codeagent",
+      "before": "2.12.0",
       "http": 200,
-      "live": "2.11.4-codeagent",
+      "live": "2.12.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1267,9 +1267,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.34-codeagent",
+      "before": "1.4.0-leases-killswitch",
       "http": 200,
-      "live": "1.3.34-codeagent",
+      "live": "1.4.0-leases-killswitch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1380,9 +1380,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.72.0",
+      "before": "1.73.0",
       "http": 200,
-      "live": "1.72.0",
+      "live": "1.73.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1406,9 +1406,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.44.2-frame-policy",
+      "before": "3.46.0-paper-pid-hash",
       "http": 200,
-      "live": "3.44.2-frame-policy",
+      "live": "3.46.0-paper-pid-hash",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1474,17 +1474,17 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.19.1-ab-cookieless",
+      "before": "3.20.0",
       "http": 200,
-      "live": "3.19.1-ab-cookieless",
+      "live": "3.20.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.3.0",
+      "before": "1.3.1",
       "http": 200,
-      "live": "1.3.0",
+      "live": "1.3.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
@@ -1628,9 +1628,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.39.4-codeagent",
+      "before": "0.39.6-codeagent",
       "http": 200,
-      "live": "0.39.4-codeagent",
+      "live": "0.39.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1690,9 +1690,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.20.0-automation-marker",
+      "before": "0.21.0-ai-marker",
       "http": 200,
-      "live": "0.20.0-automation-marker",
+      "live": "0.21.0-ai-marker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
