@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.19.1-ab-cookieless"; // 3.19.1 BP26-NO-TRACKING-1 (2026-10-26, agent_issues 1000345, pillar security; GDPR and ePrivacy: only strictly necessary cookies): the A/B split no longer sets the cookie ipatent_ab, which is not strictly necessary. Each human page load draws its own arm at random (same share, same redirect), so the two variants are compared per page view and per draft, never per visitor; a browser that still holds the retired cookie is told once to drop it. 3.19.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(1), applicable since 2026-08-02): the landing page states before first use that iPatent is an AI system and that an AI language model writes the draft; the limits list says so too. // 3.18.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 3.17.2 WORKERS-BP-LOGGING-qnfo-ipatent-1 (2026-10-14, agent_issues 2535, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (the 2 browser-script hits are allowlisted) as a structured console.error (worker, where, error); control flow unchanged. // 3.17.1: the version line only (version-bump-guard compares each push; no behaviour change). 3.17.0 IPATENT-UI-OVERHAUL-1 step 3 and IPATENT-COST-PER-DRAFT-1 (2026-10-12, agent_issues 2049, 2055, 1903, 1779; pillars reach and cost; owner: the page must read as a serious one-stop tool for individual inventors, built on what the invention is, what it does and how it works): the drafting page is redesigned for both variants (one HTML, every id, route and function kept): a drawing-sheet system (Archivo for the interface, Source Serif 4 for the document, one action colour, green/amber/red only for support states), a figure of what happens to a description, the description prompt split into what it is / what it does / how it works, the step rail beside the form and result on wide screens and a sticky strip on phones, samples moved behind a disclosure, a limits section (not legal advice, files nothing, no prior-art search, does not supply the invention), a guide index, a skip link, labelled status regions and sentence-case text; /guide, /guide/* and /example take the same tokens. New: GET /api/cost serves the measured model cost per completed draft from qnfo-audit ai_call_counters (neurons, tokens, USD at the published neuron rate; no price is set), every mechanism-card model call is metered as purpose mechanism and every completed draft as purpose draft-done. A draft requested by an automated client is stored as status automated and left out of the drafts and drafters that /api/metrics reports (DRAFT-ROW-AUTOMATED-1). Standards: the admin token is compared in constant time and the benchmark source probe reads a bounded body. Tests: landing.test.mjs, cost.test.mjs. // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.20.0"; // 3.19.1 BP26-NO-TRACKING-1 (2026-10-26, agent_issues 1000345, pillar security; GDPR and ePrivacy: only strictly necessary cookies): the A/B split no longer sets the cookie ipatent_ab, which is not strictly necessary. Each human page load draws its own arm at random (same share, same redirect), so the two variants are compared per page view and per draft, never per visitor; a browser that still holds the retired cookie is told once to drop it. 3.19.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(1), applicable since 2026-08-02): the landing page states before first use that iPatent is an AI system and that an AI language model writes the draft; the limits list says so too. // 3.18.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 3.17.2 WORKERS-BP-LOGGING-qnfo-ipatent-1 (2026-10-14, agent_issues 2535, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (the 2 browser-script hits are allowlisted) as a structured console.error (worker, where, error); control flow unchanged. // 3.17.1: the version line only (version-bump-guard compares each push; no behaviour change). 3.17.0 IPATENT-UI-OVERHAUL-1 step 3 and IPATENT-COST-PER-DRAFT-1 (2026-10-12, agent_issues 2049, 2055, 1903, 1779; pillars reach and cost; owner: the page must read as a serious one-stop tool for individual inventors, built on what the invention is, what it does and how it works): the drafting page is redesigned for both variants (one HTML, every id, route and function kept): a drawing-sheet system (Archivo for the interface, Source Serif 4 for the document, one action colour, green/amber/red only for support states), a figure of what happens to a description, the description prompt split into what it is / what it does / how it works, the step rail beside the form and result on wide screens and a sticky strip on phones, samples moved behind a disclosure, a limits section (not legal advice, files nothing, no prior-art search, does not supply the invention), a guide index, a skip link, labelled status regions and sentence-case text; /guide, /guide/* and /example take the same tokens. New: GET /api/cost serves the measured model cost per completed draft from qnfo-audit ai_call_counters (neurons, tokens, USD at the published neuron rate; no price is set), every mechanism-card model call is metered as purpose mechanism and every completed draft as purpose draft-done. A draft requested by an automated client is stored as status automated and left out of the drafts and drafters that /api/metrics reports (DRAFT-ROW-AUTOMATED-1). Standards: the admin token is compared in constant time and the benchmark source probe reads a bounded body. Tests: landing.test.mjs, cost.test.mjs. // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -296,9 +296,11 @@ var SHARE_TEXT = "iPatent: free, private US provisional patent drafting with a c
 // posts here; the worker forwards to qnfo-subscribers (double opt-in, its own rate limit and honeypot) with source
 // "ipatent", the same path qnfo.org uses. LLMS-1: /llms.txt describes the tool for AI answer engines.
 var SUBSCRIBERS_ENDPOINT = "https://qnfo-subscribers.q08.workers.dev";
-async function handleSubscribe(request) {
+async function handleSubscribe(request, env) {
   let body = {};
   try { body = await request.json(); } catch (e) { body = {}; }
+  const ts = await turnstileVerify(env, body && body.cf_turnstile, request.headers.get("CF-Connecting-IP") || "", "ipatent_subscribe");
+  if (!ts.ok) return json({ ok: false, error: "Verification failed. Reload the page and try again." }, 403);
   const email = String(body.email || "").trim().toLowerCase();
   if (!email || email.length > 254 || !/^[^@\s]{1,64}@[^@\s.]{1,255}\.[^@\s.]{2,}$/.test(email)) return json({ ok: false, error: "Please enter a valid email address." }, 400);
   try {
@@ -978,6 +980,8 @@ async function handleDraft(request, env, ctx) {
   if (!title || !description || description.length < 50) {
     return json({ error: "title and description (min 50 chars) are required" }, 400);
   }
+  const ts = await turnstileVerify(env, body.cf_turnstile, request.headers.get("CF-Connecting-IP") || "", "ipatent_draft");
+  if (!ts.ok) return json({ error: "Verification failed. Reload the page and try again." }, 403);
   const ip = await hashIp(request.headers.get("CF-Connecting-IP") || "unknown");
   const rateLimit = await checkRateLimit(env, ip);
   try {
@@ -1587,6 +1591,31 @@ ${page.sections.map(([h, body]) => "<h2>" + esc(h) + "</h2>" + body).join("\n")}
 __name(renderGuidePage, "renderGuidePage");
 
 var GUIDE_UPDATED = "2026-10-02";
+// TURNSTILE-EDGE-1 (3.20.0, BP26-EDGE-SECURITY-1): the drafting form and both subscribe forms carry a Turnstile widget; handleDraft and handleSubscribe verify its token (fail-open only while TURNSTILE_SECRET is unbound).
+// BEGIN TURNSTILE-EDGE-1
+var TURNSTILE_SITEKEY_DEFAULT = "0x4AAAAAAFpf2WdSG4-h5mu_";
+var TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+function turnstileWidget(env, action) {
+  var key = (env && env.TURNSTILE_SITEKEY) || TURNSTILE_SITEKEY_DEFAULT;
+  return '<div class="cf-turnstile" data-sitekey="' + key + '" data-action="' + String(action || "form").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) + '" data-appearance="interaction-only" data-theme="auto"></div>';
+}
+async function turnstileVerify(env, token, ip, action) {
+  if (!env || !env.TURNSTILE_SECRET) return { ok: true, skipped: true, reason: "no-secret" };
+  if (typeof token !== "string" || token.length === 0 || token.length > 2048) return { ok: false, reason: "missing-token" };
+  try {
+    var body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
+    if (ip) body.set("remoteip", ip);
+    var r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return { ok: false, reason: "siteverify-" + r.status };
+    var j = await r.json();
+    if (!j || j.success !== true) return { ok: false, reason: "rejected:" + String((j && j["error-codes"]) || "").slice(0, 80) };
+    if (action && j.action && j.action !== action) return { ok: false, reason: "action-mismatch" };
+    return { ok: true, reason: "verified" };
+  } catch (e) {
+    return { ok: false, reason: "siteverify-error" };
+  }
+}
+// END TURNSTILE-EDGE-1
 var GUIDE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1697,9 +1726,11 @@ iPatent is a free, open experiment from <a href="https://qnfo.org">QNFO</a> by R
 <h2>Get new guides by email</h2>
 <form id="subscribe-form">
   <input type="email" name="email" required placeholder="Your email address">
+  ${turnstileWidget(null, "ipatent_subscribe")}
   <button type="submit">Subscribe</button>
   <span id="status-message"></span>
 </form>
+${TURNSTILE_SCRIPT}
 <script>
 document.getElementById('subscribe-form').addEventListener('submit', function(event) {
   event.preventDefault();
@@ -1707,7 +1738,7 @@ document.getElementById('subscribe-form').addEventListener('submit', function(ev
   fetch('/api/subscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email, source: 'ipatent-guide' })
+    body: JSON.stringify({ email: email, source: 'ipatent-guide', cf_turnstile: (this.querySelector('[name=cf-turnstile-response]') || {}).value || '' })
   }).then(response => response.json())
     .then(data => {
       document.getElementById('status-message').textContent = 'Check your inbox to confirm your subscription.';
@@ -2239,6 +2270,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       </div>
       <div class="actions"><span id="flow-draft" class="flow-a"></span>
         <label class="keep"><input type="checkbox" id="keepCopy"> <span>Keep a private copy I can reopen by link. Off by default: unless you tick this, your description and draft are not stored (iPatent only counts drafts by broad topic, never their text).</span></label>
+        ${turnstileWidget(null, "ipatent_draft")}
         <div class="actions-row">
           <button type="submit" id="generateBtn">Draft the disclosure</button>
           <button type="button" id="inventBtn" class="invent" title="Load a sample from the reference corpus and draft it">Run a sample draft</button>
@@ -2336,8 +2368,10 @@ var LANDING_HTML = `<!DOCTYPE html>
       <label for="subEmail" class="sr">Email address</label>
       <input id="subEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
       <input id="subHp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" class="sr">
+      ${turnstileWidget(null, "ipatent_subscribe")}
       <button type="submit" id="subBtn">Subscribe</button>
     </form>
+    ${TURNSTILE_SCRIPT}
     <div id="subMsg" role="status" aria-live="polite"></div>
   </section>
 
@@ -2554,11 +2588,11 @@ var LANDING_HTML = `<!DOCTYPE html>
     var m = document.getElementById('subMsg'), b = document.getElementById('subBtn');
     if(!em || em.indexOf('@') < 1){ m.textContent = 'Please enter a valid email address.'; return; }
     b.disabled = true; m.textContent = 'Subscribing\u2026';
-    fetch(API_BASE + '/subscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email: em, hp: hp})})
+    fetch(API_BASE + '/subscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email: em, hp: hp, cf_turnstile: (sf.querySelector('[name=cf-turnstile-response]') || {}).value || ''})})
       .then(function(r){ return r.json().then(function(j){ return {s:r.status, j:j}; }); })
       .then(function(res){ m.textContent = (res.s === 200 && res.j.ok) ? 'Thanks \u2014 check your inbox to confirm.' : ((res.j && res.j.error) || 'Something went wrong. Please try again.'); if(res.s === 200) sf.reset(); })
       .catch(function(){ m.textContent = 'Network error. Please try again.'; })
-      .then(function(){ b.disabled = false; });
+      .then(function(){ b.disabled = false; try{ if(window.turnstile) turnstile.reset(sf.querySelector('.cf-turnstile')); }catch(_){} });
   });
   document.addEventListener('click', function(ev){
     var t = ev.target;
@@ -2694,6 +2728,7 @@ var LANDING_HTML = `<!DOCTYPE html>
           inventor_email: document.getElementById('inventorEmail').value.trim(),
           save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked),
           mechanism: mechCardValue(),
+          cf_turnstile: (form.querySelector('[name=cf-turnstile-response]') || {}).value || '',
           variant: MECH_V2 ? 'v2' : undefined
         })
       });
@@ -2742,6 +2777,7 @@ var LANDING_HTML = `<!DOCTYPE html>
     }finally{
       btn.disabled = false;
       btn.textContent = 'Draft the disclosure';
+      try{ if(window.turnstile) turnstile.reset(form.querySelector('.cf-turnstile')); }catch(_){}
       const ib = document.getElementById('inventBtn');
       if(ib){ ib.disabled = false; ib.textContent = 'Run a sample draft'; }
     }
@@ -2844,7 +2880,7 @@ var qnfo_ipatent_default = {
         return html(GUIDE_HTML);
       }
       if (path === "/api/metrics" && request.method === "GET") return handleMetrics(env);
-      if (path === "/api/subscribe" && request.method === "POST") return handleSubscribe(request);
+      if (path === "/api/subscribe" && request.method === "POST") return handleSubscribe(request, env);
       // BENCH-SOURCE-PROBE-1 (3.9.5, #1779): can the fleet read issued-patent text server-side without a USPTO key? Fetches ONE
       // fixed public Google Patents page and reports only status, size and whether claims and a provisional reference were found.
       // Edge-cached 1 h, so it cannot be used to hammer the source; no user input reaches the URL.

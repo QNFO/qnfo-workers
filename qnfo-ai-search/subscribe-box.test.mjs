@@ -9,7 +9,9 @@ import vm from "node:vm";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const a = src.indexOf("var PAGE = `"), b = src.indexOf("\n`;", a);
 if (a < 0 || b < a) throw new Error("PAGE template literal not found in worker.js");
-const PAGE = vm.runInNewContext(src.slice(a + "var PAGE = ".length, b + 2));
+// TURNSTILE-EDGE-1: the page template calls the shared Turnstile helpers, so they are evaluated first from the same worker source
+const ta = src.indexOf("// BEGIN TURNSTILE-EDGE-1"), tb = src.indexOf("// END TURNSTILE-EDGE-1");
+const PAGE = vm.runInNewContext(src.slice(ta, tb) + ";" + src.slice(a + "var PAGE = ".length, b + 2));
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x) : "")); } };
 
@@ -25,7 +27,7 @@ const code = at >= 0 && end > at ? PAGE.slice(at + "<script>".length, end) : "";
 
 function run(email, hp, respond) {
   const els = {
-    "ask-sub-form": { listeners: {}, addEventListener(t, fn) { this.listeners[t] = fn; }, reset() { els["ask-sub-email"].value = ""; } },
+    "ask-sub-form": { listeners: {}, querySelector() { return null; }, addEventListener(t, fn) { this.listeners[t] = fn; }, reset() { els["ask-sub-email"].value = ""; } },
     "ask-sub-msg": { textContent: "" },
     "ask-sub-btn": { disabled: false },
     "ask-sub-email": { value: email },
