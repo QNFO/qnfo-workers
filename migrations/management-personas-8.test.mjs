@@ -1,0 +1,70 @@
+// MANAGEMENT-PERSONAS-8 / DOER-ASSIGN-1 offline suite: applies migrations -1 to -8 on SQLite (suite 6's preparation) and runs the new steps the way fleet-exec does.
+// Proves: a focus issue with no doer for 2 hours gets one Cloudflare-agent request a day; a well-formed answer is written as the first lines of the issue and logged;
+// control-plane and malformed answers are rejected; NO-CODE-FIX is logged as doer-gap and not asked again; doer_assign = off stops it; a re-apply is a no-op.
+// Run: node migrations/management-personas-8.test.mjs
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+const rd = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
+const suite5 = rd("./management-personas-5.test.mjs");
+const prep = suite5.slice(suite5.indexOf("const db = new DatabaseSync"), suite5.indexOf("const run = (s"));
+const suite1 = rd("./management-personas.test.mjs");
+const schema = suite1.slice(suite1.indexOf("db.exec(`") + 9, suite1.indexOf("`);", suite1.indexOf("db.exec(`")));
+let pass = 0, fail = 0;
+const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
+const sqls = ["./2026-10-26-management-personas.sql", "./2026-10-26-management-personas-2.sql", "./2026-10-26-management-personas-3.sql"].map(rd);
+let db;
+eval(prep.replace("const db = ", "db = "));
+const run = (s, ...a) => db.prepare(s).run(...a);
+const q = (s, ...a) => db.prepare(s).all(...a);
+const one = (s, ...a) => db.prepare(s).get(...a);
+for (const f of ["-4", "-5", "-6"]) db.exec(rd("./2026-10-26-management-personas" + f + ".sql"));
+const sql8 = rd("./2026-10-28-management-personas-8.sql");
+const before = JSON.parse(one("SELECT definition FROM fleet_tasks WHERE id = 'management-personas'").definition).steps.length;
+db.exec(sql8);
+const def = () => JSON.parse(one("SELECT definition FROM fleet_tasks WHERE id = 'management-personas'").definition).steps;
+const NEW = ["dg-request", "dg-parse", "dg-nofix", "dg-reject", "dg-apply", "dg-mark", "dg-log", "dg-brief"];
+ok(def().length === before + NEW.length && def().slice(-NEW.length).map((s) => s.name).join() === NEW.join(), "eight steps are appended", def().map((s) => s.name).slice(-10));
+db.exec(sql8.slice(0, sql8.lastIndexOf("\nINSERT INTO decision_log")));
+ok(def().length === before + NEW.length, "a re-apply changes nothing");
+ok(one("SELECT value FROM ops_config WHERE key = 'doer_assign'").value === "on", "the switch is on");
+
+const old = "2026-10-26T07:36:59Z";
+const mk = (id, prio, desc) => run("INSERT INTO agent_issues (id, title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, ?, 'x', 'bug', ?, 'open', 1, 1)", id, "T" + id, desc, prio);
+mk(1, "critical", "plain"); mk(2, "high", "plain"); mk(3, "high", "plain"); mk(4, "high", "code-task: repo=qnfo-workers path=a/worker.js\ncode-anchor: x"); mk(5, "high", "plain");
+const foc = (p, id, doer, at) => run("INSERT INTO program_focus (program_code, issue_id, rank, tier, reason, has_doer, entered_at) VALUES (?, ?, 1, 1, 'r', ?, ?)", p, id, doer, at);
+foc("QNFO.OPS", 1, 0, old); foc("QNFO.RSCH", 2, 0, old); foc("QNFO.OPS", 3, 0, old); foc("QNFO.OPS", 4, 0, old); foc("QNFO.PERSONAL", 5, 0, old);
+run("INSERT INTO portfolio_allocations (tick, program_code, verdict, risk_score, decision, slots, manager_persona) VALUES ('t1', 'QNFO.OPS', 'RED', 5, 'steady', 5, 'program-manager:QNFO.OPS')");
+run("INSERT INTO persona_briefs (tick, persona_key, level, scope, verdict, decision, summary) VALUES ('t1', 'portfolio-manager', 'portfolio', 'QNFO', 'RED', 'allocate', 'Brief.')");
+const steps = () => def().filter((s) => NEW.includes(s.name));
+const tick = () => { for (const s of steps()) { try { db.prepare(s.sql).all(); } catch (e) { ok(false, "step " + s.name + " runs", String(e)); throw e; } } };
+tick();
+const reqs = q("SELECT * FROM cf_agent_requests WHERE instance LIKE 'doer-%' ORDER BY instance");
+ok(reqs.map((r) => r.instance.split("-")[1]).join() === "1,2,3", "asks for the three eligible issues only (not the one with a code-task line, not QNFO.PERSONAL)", reqs.map((r) => r.instance));
+ok(reqs.every((r) => /^program-manager:QNFO\./.test(r.requester) && /NO-CODE-FIX/.test(r.prompt) && /code-anchor: </.test(r.prompt)), "each request is made by the program manager and states the reply form");
+tick();
+ok(q("SELECT * FROM cf_agent_requests WHERE instance LIKE 'doer-%'").length === 3, "a second tick asks nothing new");
+
+const id = (n) => reqs.find((r) => r.instance.split("-")[1] === String(n)).id;
+run("UPDATE cf_agent_requests SET status = 'done', result = ? WHERE id = ?", "**code-task:** repo=qnfo-workers path=qnfo-fleet-dashboard/worker.js\ncode-anchor: `var FLEET_HANDLED_SOURCES = [\"code-loop\"];`".replace("**code-task:**", "code-task:"), id(1));
+run("UPDATE cf_agent_requests SET status = 'done', result = ? WHERE id = ?", "code-task: repo=qnfo-workers path=qnfo-fleet-control/worker.js\ncode-anchor: function evaluateMetricTriggers(env) {", id(2));
+run("UPDATE cf_agent_requests SET status = 'done', result = ? WHERE id = ?", "NO-CODE-FIX: needs a new worker binding that only the owner's account can create", id(3));
+run("UPDATE persona_briefs SET summary = 'Brief.'");
+tick();
+const d = q("SELECT * FROM doer_assignments ORDER BY issue_id");
+ok(d.length === 3 && d[0].status === "assigned" && d[0].path === "qnfo-fleet-dashboard/worker.js" && d[1].status === "rejected" && /qnfo-fleet-control/.test(d[1].outcome) && d[2].status === "no-code-fix", "assigned, rejected and no-code-fix are recorded", d);
+const desc1 = one("SELECT description FROM agent_issues WHERE id = 1").description.split("\n");
+ok(desc1[0] === "code-task: repo=qnfo-workers path=qnfo-fleet-dashboard/worker.js" && desc1[1] === 'code-anchor: var FLEET_HANDLED_SOURCES = ["code-loop"];' && desc1[desc1.length - 1] === "plain", "the issue starts with its code-task and anchor lines and keeps its old text", desc1);
+ok(one("SELECT description FROM agent_issues WHERE id = 2").description === "plain" && one("SELECT description FROM agent_issues WHERE id = 3").description === "plain", "rejected and no-code-fix issues are untouched");
+const acts = q("SELECT kind, issue_id FROM persona_actions WHERE kind IN ('doer-assign', 'doer-gap') ORDER BY issue_id");
+ok(acts.length === 2 && acts[0].kind === "doer-assign" && acts[0].issue_id === 1 && acts[1].kind === "doer-gap" && acts[1].issue_id === 3, "the assignment and the gap are logged", acts);
+ok(/Doer gaps: 5 open, 1 assigned by the managers, 1 with no single-file fix\./.test(one("SELECT summary FROM persona_briefs WHERE persona_key = 'portfolio-manager'").summary), "the brief reports the doer gaps", one("SELECT summary FROM persona_briefs").summary);
+tick();
+ok(q("SELECT * FROM persona_actions WHERE kind IN ('doer-assign', 'doer-gap')").length === 2 && one("SELECT COUNT(*) AS n FROM doer_assignments").n === 3, "a second tick logs and records nothing twice");
+ok(q("SELECT * FROM cf_agent_requests WHERE instance LIKE 'doer-%'").length === 3, "an answered issue (including NO-CODE-FIX) is not asked again within 3 days");
+
+run("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('doer_assign', 'off')");
+mk(6, "critical", "plain"); foc("QNFO.OPS", 6, 0, old);
+tick();
+ok(q("SELECT * FROM cf_agent_requests WHERE instance LIKE 'doer-6-%'").length === 0, "doer_assign = off stops the requests");
+console.log("management-personas-8: " + pass + " passed, " + fail + " failed");
+process.exit(fail ? 1 : 0);
