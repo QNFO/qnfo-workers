@@ -87,6 +87,9 @@ def budget(good, n, objective):
         return None, None, "no-data"
     bad = n - good
     allowed = (1.0 - objective) * n
+    if allowed < 1.0:
+        # Fewer samples than 1 / (1 - objective): the whole budget is less than one failed sample, so one blip would read as 5000 percent. The share is still reported; the state waits.
+        return good / float(n), round(100.0 * bad / allowed, 1) if allowed > 0 else None, "immature"
     spent = round(100.0 * bad / allowed, 1) if allowed > 0 else (0.0 if bad == 0 else 999.0)
     return good / float(n), spent, "spent" if spent >= 100 else ("warn" if spent >= WARN_PCT else "ok")
 
@@ -222,6 +225,7 @@ def selftest():
     ok(budget(998, 1000, 0.995)[2] == "ok", "2 bad of 1000 is 40 percent")
     ok(budget(997, 1000, 0.995)[2] == "warn", "3 bad of 1000 is 60 percent")
     ok(budget(0, 0, 0.995)[2] == "no-data", "no samples")
+    ok(budget(20, 33, 0.995)[2] == "immature", "33 samples cannot spend a 0.5 percent budget: one sample is 3 times the whole budget")
     eps = episodes([("t1", 1, ""), ("t2", 0, "down: timeout"), ("t3", 0, "status 503"), ("t4", 1, ""), ("t5", 0, "tls:x")])
     ok(len(eps) == 2 and eps[0][3] == 2 and eps[0][2] == "t4" and eps[1][2] is None, "two episodes, the second still open: %r" % (eps,))
     ok(cause_class(["down: timeout"])[0] == "timeout" and cause_class(["status 503 in 12 ms"])[0] == "server-error" and cause_class(["down: tls:bad"])[0] == "tls", "cause classes")
@@ -238,10 +242,10 @@ CREATE TABLE bp26_probe_results (id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TE
     c.executescript(script)
     now = 1790000000.0
     c.execute("INSERT INTO slo_definitions VALUES ('a.example', 'x', 0.995, 28, 's', 'o', 't'), ('b.example', 'x', 0.995, 28, 's', 'o', 't')")
-    for i in range(100):
-        t = iso(now - 3600 * (100 - i))
+    for i in range(250):
+        t = iso(now - 3600 * (250 - i))
         c.execute("INSERT INTO bp26_probe_results (run_at, metric, subject, ok, detail) VALUES (?, 'slo_attainment_28d_min', 'avail:b.example', 1, 'status 200 in 90 ms')", [t])
-        bad = i in (90, 91, 92, 97)
+        bad = i in (240, 241, 242, 247)
         c.execute("INSERT INTO bp26_probe_results (run_at, metric, subject, ok, detail) VALUES (?, 'slo_attainment_28d_min', 'avail:a.example', ?, ?)", [t, 0 if bad else 1, "down: timeout" if bad else "status 200 in 80 ms"])
     c.execute("INSERT INTO agent_issues (title, status, created_at) VALUES ('CONTROL-PLANE-REVERTED-1 reverted, qnfo-ops, push abc', 'open', ?)", [int((now - 86400) * 1000)])
 
