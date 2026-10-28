@@ -1,3 +1,7 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: UPDATE ops_config SET value = replace(value, ',management-personas|ROADMAP-1:', '') WHERE key = 'code_merge_trusted_sources';
+--
 -- MANAGEMENT-PERSONAS-7 / ROADMAP-ORIGINATE-1 merge admission (2026-10-26, pillar autonomy).
 -- Owner approval 2026-10-26 09:38:46Z, verbatim: "APPROVED...THIS SHOULD BE AN AUTOMATIC APPROVAL, NEVER REQUIRE OWNER APPROVAL. ALL ISSUES SHALL ASSUME
 -- AUTO-APPROVE". It answers the question whether the managers' ROADMAP-1 items (MANAGEMENT-PERSONAS-6) may merge on green checks like the other
@@ -5,10 +9,6 @@
 -- manager tick and the merge runner's provenance check accepts the code tasks; canary and automatic revert still cover each deploy.
 -- The standing rule is recorded as ops_config OWNER_DIRECTIVE_2026_10_26_ISSUES_AUTO_APPROVE_1: a reversible fleet item never waits on an owner
 -- approval (DEFAULT-APPROVE-1 already adopts the recommended option on fleet decision cards).
---
--- APPLY-BY: ci
--- DB: qnfo-audit
--- Rollback: UPDATE ops_config SET value = replace(value, ',management-personas|ROADMAP-1:', '') WHERE key = 'code_merge_trusted_sources';
 
 UPDATE ops_config SET value = value || ',management-personas|ROADMAP-1:'
 WHERE key = 'code_merge_trusted_sources' AND instr(value, 'management-personas|ROADMAP-1:') = 0;
