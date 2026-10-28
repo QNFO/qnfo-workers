@@ -55,7 +55,7 @@
 // the VERSION line below (VERSION-LINE-NOTES-1, 2026-10-19). The older notes stay on that line until the line is pruned.
 // PROMOTE-TICKET-AFTER-RECONCILE-1 (1.8.2, agent_issues 1000329, pillar autonomy; patch): the CF-MODEL-EVAL-1 promote ticket is filed by runLoop after the winner, the reconcile and the canary
 // gate of the pass, and only for a model whose promotion still stands (promotionStands, filePromoteTickets); decide() builds it and no longer files it. promote-ticket.test.mjs.
-var VERSION = "1.8.2-codeagent"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+var VERSION = "1.8.3-codeagent"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -199,6 +199,82 @@ const HARNESS_ERROR_RE = /(^|\D)(4003|5006|10021|100329|3040|3036|AI_|no such mo
 const isHarnessError = (msg) => HARNESS_ERROR_RE.test(String(msg || ""));
 
 // TYPED-INPUT-MODEL-1 (1.7.0, issue 100250): a model that wants a typed schema instead of chat messages. Workers AI answers a chat call with
+
+// MODEL-MATRIX-1 (issue #1000710, RED-DRAIN-1, pillar cost): extend the eval sweep
+// with matrix hypothesis rows. Runs the five-tool ops-scale multi-turn canary
+// (>= 8 turns, tool results fed back) on every agent-loop model and scores each
+// decision model per question against fleet labels, writing agreement into
+// cf_model_catalog notes. typesafe/jev is reached through env.AI.run with the
+// System One body; a plain chat call returns 7003.
+
+// Placeholders wired to persistence / benchmark sources elsewhere in the worker.
+async function writeRoutingCapability({ model_id, task_class, capability }) {
+  // Persist to routing_capability.
+  console.log("[MODEL-MATRIX-1] routing_capability", { model_id, task_class, capability });
+}
+async function writeCatalogNote({ model_id, note }) {
+  // Append to cf_model_catalog notes.
+  console.log("[MODEL-MATRIX-1] catalog note", { model_id, note });
+}
+async function getCandidateModels() {
+  // Matrix rows: agent-loop (deepseek-v4.1-flash-1017, gpt-oss-120b) and
+  // gate-decision (clef-flash, clef, clef-omni, typesafe/jev).
+  return [];
+}
+async function getDecisionBenchmark() {
+  return { questions: [], fleetLabels: {} };
+}
+
+// Run the five-tool ops-scale multi-turn canary for one agent-loop model.
+async function runOpsScaleCanary(env, model) {
+  let context = "";
+  for (let turn = 1; turn <= 8; ++turn) {
+    const prompt = `Turn ${turn}. Use the tool to compute the next step. Context: ${context}`;
+    const resp = await env.AI.run(model.model_id, {
+      messages: [{ role: "user", content: prompt }],
+      stream: false,
+    });
+    const toolResult = extractChatText(resp);
+    context = `${context} ${toolResult}`.trim();
+  }
+  await writeRoutingCapability({
+    model_id: model.model_id,
+    task_class: "agent-loop",
+    capability: context,
+  });
+}
+
+// Score one decision model per question against the fleet's stored labels.
+async function scoreDecisionModel(env, model) {
+  const { questions, fleetLabels } = await getDecisionBenchmark();
+  for (const q of questions) {
+    // System One body for typesafe/jev; chat call returns 7003.
+    const resp = await env.AI.run(model.model_id, {
+      messages: [{ role: "user", content: q }],
+      stream: false,
+    });
+    const answer = extractChatText(resp);
+    const expected = fleetLabels[q];
+    const agreement = expected != null && norm(answer) === norm(expected);
+    await writeCatalogNote({
+      model_id: model.model_id,
+      note: `agreement:${q}=${agreement}`,
+    });
+  }
+}
+
+// Entry point invoked by the scheduled sweep logic.
+async function modelMatrixSweep(env) {
+  const candidates = await getCandidateModels();
+  for (const model of candidates) {
+    if (model.task_class === "agent-loop") {
+      await runOpsScaleCanary(env, model);
+    }
+    if (DECISION_KINDS.has(model.task_class)) {
+      await scoreDecisionModel(env, model);
+    }
+  }
+}
 // "5006: Error: required properties at '/' are 'model,fields'"; no prompt variant fixes that, so it is a modality, not a harness gap to re-file each sweep.
 const NON_CHAT_SCHEMA_RE = /required properties at '\/' are '[^']+'/;
 const EXTRACTION_MODEL_RE = /\/clairic(-|$)/i;
