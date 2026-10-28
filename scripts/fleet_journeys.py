@@ -311,7 +311,10 @@ def j_binding_census(h):
     if not j.check("qnfo-ops /fleet answers", st == 200 and rows, "http %s, %d rows" % (st, len(rows))):
         return j
     down = [r.get("name") for r in rows if r.get("healthy") is False]
-    blind = [r.get("name") for r in rows if r.get("healthy") is None]
+    # CENSUS-RETIRED-NOT-BLIND-1 (agent_issues 100166): a row qnfo-ops marks retired (a live stub that answered 410 with a retired marker, OPS-FLEET-RETIRED-1) is a third state, neither up nor down
+    # and left out of the healthy / total ratio; it keeps healthy null by design and skips the heartbeat merge, so counting it as blind failed this journey for as long as the repository-root stub
+    # qnfo-workers (which Workers Builds recreates on every push) answered 410.
+    blind = [r.get("name") for r in rows if r.get("healthy") is None and r.get("retired") is not True]
     j.check("no worker unhealthy through the census", not down, ",".join(down))
     j.check("census sees every worker (blind <= %d)" % BLIND_MAX, len(blind) <= BLIND_MAX, ",".join(blind))
     return j
@@ -577,7 +580,7 @@ def selftest():
             if url == "https://w1.q08.workers.dev/health":
                 return 200, json.dumps({"version": "1.0.1" if break_hop == "deploy" else "1.0.0"})
             if url == OPS + "/fleet":
-                return 200, json.dumps({"fleet": [{"name": "w1", "healthy": None if break_hop == "blind" else True}]})
+                return 200, json.dumps({"fleet": [{"name": "w1", "healthy": None if break_hop == "blind" else True}] + ([{"name": "stub", "healthy": None, "retired": True}] if break_hop == "retired" else [])})
             if url == GUARD + "/work-lock/acquire":
                 state["claims"].append({"holder": b["owner"]})
                 return 200, json.dumps({"acquired": True, "token": "t"})
@@ -639,6 +642,7 @@ def selftest():
     expect("deploy mismatch with main unreadable fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: None).ok)
     expect("census passes", run_one(j_binding_census).ok)
     expect("census blind fails", not run_one(j_binding_census, "blind").ok)
+    expect("census: a retired row (healthy null, retired true) is not blind", run_one(j_binding_census, "retired").ok)
 
     # CENSUS-EXTERNAL-HEARTBEAT-1: the runner attests the workers qnfo-ops cannot probe, and only those it reached.
     hb_rows = [{"name": "w1", "healthy": True},
