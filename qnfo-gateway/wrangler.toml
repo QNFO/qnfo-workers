@@ -15,9 +15,11 @@ head_sampling_rate = 1
 
 # WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
 # traces need [observability.traces]. Traces are sampled at the default rate of 1.
+# BP26-PII-LOGS-1 (cluster D, 2026-10-28, pillar security; metric pii_in_logs, agent_issues 1000486): invocation logs record every request header, and crawlers send an
+# e-mail address in the `From` header (32 raw address matches in a 24 h sample, all qnfo-gateway). Application logs (console.log) stay on. Revert: invocation_logs = true.
 [observability.logs]
 enabled = true
-invocation_logs = true
+invocation_logs = false
 
 [observability.traces]
 enabled = true
