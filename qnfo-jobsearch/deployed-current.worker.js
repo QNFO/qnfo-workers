@@ -8,7 +8,7 @@
 // JOBSEARCH-PROFILE-1 (1.3.0): yes/no search survey, role families drawn from the whole record (policy, transport and planning, data, product, program, research, consulting, nonprofit, GIS, contracts, social policy), location gates from the owner answers (Netherlands and remote by default, US and other on-site only when selected), likes and dislikes teach the search, rejected matches stay hidden, "check a job" analysis of a pasted link or text.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.3.2-codeagent";
+var VERSION = "1.3.3-codeagent";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -340,7 +340,7 @@ async function setMeta(env, k, v) {
 // feed key -> id prefix of the postings it produced (a feed that failed this run never expires anything)
 function feedPrefix(feed) {
   const [kind, arg] = feed.split(":");
-  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:" }[kind];
+  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", publicsector: `ps:${arg}:` }[kind];
 }
 const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -356,6 +356,7 @@ const BOARDS = {
   muse: ["Amsterdam, Netherlands|", "Amsterdam, Netherlands|Data and Analytics", "Amsterdam, Netherlands|Project & Product Management", "Amsterdam, Netherlands|Management", "Flexible / Remote|Data and Analytics", "Flexible / Remote|Project & Product Management", "Flexible / Remote|Management", "Flexible / Remote|Consulting"],
   jobicy: ["netherlands", "europe", "emea"],
   arbeitnow: true,
+  publicsector: ["werkenvoornederland", "academictransfer", "euraxess"],
 };
 const DISPLAY = { openai: "OpenAI", scaleai: "Scale AI", gitlab: "GitLab", mongodb: "MongoDB", anthropic: "Anthropic", databricks: "Databricks", elastic: "Elastic", stripe: "Stripe", palantir: "Palantir", mistral: "Mistral", cohere: "Cohere", notion: "Notion", elevenlabs: "ElevenLabs", adyen: "Adyen", bird: "Bird", datadog: "Datadog", cloudflare: "Cloudflare", canonical: "Canonical", grafanalabs: "Grafana Labs", mozilla: "Mozilla", wikimedia: "Wikimedia Foundation", khanacademy: "Khan Academy", codeforamerica: "Code for America", givewell: "GiveWell", dataiku: "Dataiku", fivetran: "Fivetran", nesta: "Nesta", gallup: "Gallup", rti: "RTI International", ideo: "IDEO", waymo: "Waymo", nuro: "Nuro", lyft: "Lyft", mendix: "Mendix", brookings: "Brookings Institution", oliverwyman: "Oliver Wyman", zoox: "Zoox", mollie: "Mollie", mapbox: "Mapbox", perplexity: "Perplexity", snowflake: "Snowflake" };
 
@@ -375,9 +376,18 @@ async function getJson(url) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 25000);
   try {
-    const r = await fetch(url, { headers: { "user-agent": "qnfo-jobsearch/1.0 (+https://qnfo.org)" }, signal: ac.signal });
+   const r = await fetch(url, { headers: { "user-agent": "qnfo-jobsearch/1.0 (+https://qnfo.org)" }, signal: ac.signal });
     if (!r.ok) throw new Error("HTTP " + r.status);
     return await r.json();
+  } finally { clearTimeout(t); }
+}
+async function getHtml(url) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 25000);
+  try {
+    const r = await fetch(url, { headers: { "user-agent": "qnfo-jobsearch/1.0 (+https://qnfo.org; contact via https://qnfo.org)", "accept": "text/html" }, signal: ac.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.text();
   } finally { clearTimeout(t); }
 }
 const FETCHERS = {
@@ -417,6 +427,38 @@ const FETCHERS = {
     for (let p = 1; p <= 3; p++) {
       const d = await getJson(`https://www.arbeitnow.com/api/job-board-api?page=${p}`);
       for (const j of d.data || []) out.push({ id: `an:${j.slug}`, source: "arbeitnow", company: j.company_name || "", title: j.title || "", location: (j.location || "") + (j.remote ? " (Remote)" : ""), url: j.url || "", desc: stripHtml(j.description || "") });
+    }
+    return out;
+  },
+  // Public-sector boards with no open RSS/API feed (issue #1000643): we read the public listing HTML pages
+  // (robots.txt and site terms were read first; only public listing pages are fetched, one page per board per run,
+  // a 25s timeout, and the site's own job URLs are passed through unchanged). Every arg was probed live before adding.
+  async publicsector(arg) {
+    const sources = {
+      werkenvoornederland: { url: "https://www.werkenvoornederland.nl/vacatures", base: "https://www.werkenvoornederland.nl", company: "Werken voor Nederland (Rijksoverheid)" },
+      academictransfer: { url: "https://www.academictransfer.com/en/jobs/", base: "https://www.academictransfer.com", company: "Academic Transfer (Dutch universities)" },
+      euraxess: { url: "https://euraxess.ec.europa.eu/jobs/search", base: "https://euraxess.ec.europa.eu", company: "EURAXESS (EU research careers)" },
+    };
+    const s = sources[arg];
+    if (!s) return [];
+    const html = await getHtml(s.url);
+    const out = [];
+    const seen = new Set();
+    // listing pages expose each posting as an <a> whose href carries the job path; we keep anchors with a
+    // job-like href and a text length typical of a title, and skip navigation/cookie/script links.
+    const re = /<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = re.exec(html))) {
+      let href = decodeEntities(m[1]);
+      const text = stripHtml(m[2]);
+      if (!/\/(vacature|vacatures|job|jobs|vacancy|vacancies|position)\b/i.test(href)) continue;
+      if (!/^https?:/.test(href)) href = s.base + (href.startsWith("/") ? href : "/" + href);
+      if (!href.startsWith(s.base)) continue;
+      if (text.length < 5 || text.length > 200) continue;
+      const key = (s.company + "|" + text).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: `ps:${arg}:${await sha256hex(href).then((h) => h.slice(0, 16))}`, source: "publicsector", company: s.company, title: text, location: arg === "werkenvoornederland" ? "Netherlands" : (arg === "academictransfer" ? "Netherlands" : "EU"), url: href, desc: "" });
     }
     return out;
   },
@@ -471,7 +513,7 @@ const FAMILIES = {
   fam_edu: ["lecturer", "professor", "teaching fellow", "instructor", "trainer", "education manager", "learning manager", "curriculum"],
 };
 const CLUSTER_KW = {
-  research_mgmt: ["research program", "research portfolio", "research operations", "research management", "program management", "research strategy", "head of research", "research lead", "grant"],
+  research_mgmt: ["research program", "research portfolio", "research operations", "research management", "program management", "research strategy", "head of research", "research lead", "grant", "wetenschappelijk", "onderzoek"],
   federal: ["federal government", "federal agenc", "government agenc", "public sector", "public administration", "government", "ministry", "municipal", "european commission"],
   transport_modeling: ["transportation", "travel demand", "mobility", "transit", "forecasting", "traffic", "infrastructure"],
   urban_planning: ["urban planning", "regional planning", "land use", "spatial planning", "urban development", "city planning", "smart city"],
