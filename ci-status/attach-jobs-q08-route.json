@@ -1,0 +1,14 @@
+{
+  "marker": "DOMAIN-PLANE-1",
+  "host": "jobs.q08.org",
+  "service": "qnfo-jobsearch",
+  "token_present": true,
+  "stage": "verify",
+  "status": "ok",
+  "error": null,
+  "worker_version": "1.3.3-codeagent",
+  "route_id": "dad210973ed4430dbac388032544ab35",
+  "dns_created": "ea7ea106acb582a861036bb1abd9f2fb",
+  "verified": true,
+  "ts": "2026-10-28T19:39:35Z"
+}
