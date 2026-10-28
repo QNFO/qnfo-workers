@@ -1,25 +1,8 @@
 {
-  "audited_at": "2026-10-28 19:32:42",
+  "audited_at": "2026-10-28 20:01:09",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-gateway"
-      ],
-      "waited_for": [
-        "qnfo-gateway"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-agents"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-gateway"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -564,7 +547,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 34,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -578,7 +561,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.1-codeagent",
+        "version": "1.44.2-travel-ensure-once",
         "worker": "personal-companion"
       },
       {
@@ -652,6 +635,11 @@
         "worker": "qnfo-fleet-dashboard"
       },
       {
+        "dir": "qnfo-gateway",
+        "version": "3.48.0",
+        "worker": "qnfo-gateway"
+      },
+      {
         "dir": "qnfo-github-steward",
         "version": "0.10.0-issue-rollup",
         "worker": "qnfo-github-steward"
@@ -678,12 +666,12 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.15.3-backup-paged",
+        "version": "1.16.0-sla-gap",
         "worker": "qnfo-lifecycle"
       },
       {
         "dir": "qnfo-memory-mcp",
-        "version": "2.3.2-exuvia",
+        "version": "2.3.3-codeagent",
         "worker": "qnfo-memory-mcp"
       },
       {
@@ -693,7 +681,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.5.4-outreach-drained",
+        "version": "1.5.5-research-held",
         "worker": "qnfo-observability"
       },
       {
@@ -735,10 +723,6 @@
         "dir": "radar-hub",
         "version": "1.5.0-venue-recovered",
         "worker": "radar-hub"
-      },
-      {
-        "version": "3.47.1-codeagent",
-        "worker": "qnfo-gateway"
       }
     ],
     "unmanaged_tombstones": 1,
@@ -1002,9 +986,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.1-codeagent",
+      "before": "1.44.2-travel-ensure-once",
       "http": 200,
-      "live": "1.44.1-codeagent",
+      "live": "1.44.2-travel-ensure-once",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1437,9 +1421,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.47.1-codeagent",
+      "before": "3.48.0",
       "http": 200,
-      "live": "3.47.1-codeagent",
+      "live": "3.48.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1530,17 +1514,17 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.15.3-backup-paged",
+      "before": "1.16.0-sla-gap",
       "http": 200,
-      "live": "1.15.3-backup-paged",
+      "live": "1.16.0-sla-gap",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
-      "before": "2.3.2-exuvia",
+      "before": "2.3.3-codeagent",
       "http": 200,
-      "live": "2.3.2-exuvia",
+      "live": "2.3.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-memory-mcp"
@@ -1563,9 +1547,9 @@
       "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
-      "before": "1.5.4-outreach-drained",
+      "before": "1.5.5-research-held",
       "http": 200,
-      "live": "1.5.4-outreach-drained",
+      "live": "1.5.5-research-held",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
