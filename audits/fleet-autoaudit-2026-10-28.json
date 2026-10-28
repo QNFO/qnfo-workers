@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-28 13:29:30",
+  "audited_at": "2026-10-28 14:02:22",
   "d1_write_failures": [],
   "d1_writes_ok": 126,
   "guard": {
@@ -545,7 +545,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.15.0",
+        "version": "1.15.1-codeagent",
         "worker": "idea-hub"
       },
       {
@@ -710,7 +710,7 @@
       },
       {
         "dir": "qnfo-youtube-shorts",
-        "version": "0.1.5-manim-pin",
+        "version": "0.2.0-quality",
         "worker": "qnfo-youtube-shorts"
       },
       {
@@ -835,9 +835,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.15.0",
+      "before": "1.15.1-codeagent",
       "http": 200,
-      "live": "1.15.0",
+      "live": "1.15.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1749,9 +1749,9 @@
       "worker": "qnfo-web-unified"
     },
     "qnfo-youtube-shorts": {
-      "before": "0.1.5-manim-pin",
+      "before": "0.2.0-quality",
       "http": 200,
-      "live": "0.1.5-manim-pin",
+      "live": "0.2.0-quality",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-youtube-shorts"
@@ -1816,5 +1816,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 1
 }
