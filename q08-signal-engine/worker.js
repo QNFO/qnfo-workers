@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.38.1-codeagent";
+var VERSION = "0.38.2-codeagent";
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
 /* 0.37.5 (2026-10-26, charter pillar reach, agent_issues 100439, 100607): Q08-THIN-PASSED-OVER-1 marks a candidate that was measured thin and passed over for a richer one, so a paper without an HTML rendering no longer holds the arXiv lane for a day (the lane ran at 02:02 and 03:04 on 2026-10-26 and then not for 16 hours); the 24-hour retry window is the existing one. */
 /* 0.37.4 (2026-10-26, charter pillar reach, agent_issues 100607, 100439): Q08-GATE-GROUND-BLIND-1 removes the two checks of the writer gate that refused every comma-grouped dollar amount and every score, rating, ratio or reputation of 0.85 as fabricated without reading the source; the grounding check that runs on every draft before any panel call and on the final text already refuses a figure the source does not hold. */
@@ -4092,6 +4092,24 @@ footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);font-
 var Q08_QDS = "1.0.0";
 var Q08_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">';
 var Q08_FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23182042'/%3E%3Ctext x='16' y='21.5' text-anchor='middle' font-family='Georgia,serif' font-size='14' fill='%23F2906A'%3Eq08%3C/text%3E%3C/svg%3E";
+// BEGIN TURNSTILE-EDGE-1
+var TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+function turnstileWidget(env, action) {
+  var e = env || {};
+  var sitekey = q08Attr(e.TURNSTILE_SITEKEY || "");
+  return '<div class="cf-turnstile" data-sitekey="' + sitekey + '" data-action="' + q08Attr(action) + '"></div>';
+}
+async function turnstileVerify(env, token, ip, action) {
+  var e = env || {};
+  var secret = e.TURNSTILE_SECRET || "";
+  var res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    body: new URLSearchParams({ secret: secret, response: token, remoteip: ip, action: action })
+  });
+  var data = await res.json();
+  return data.success === true && data.action === action;
+}
+// END TURNSTILE-EDGE-1
 var Q08_CSS = '<style>.q08-mark{font:600 1.15rem/1 var(--q-serif);letter-spacing:-.01em;text-decoration:none;color:var(--q-ink);display:flex;align-items:baseline;gap:10px}.q08-mark b{color:var(--q-accent);font-weight:600}.q08-mark small{font:400 var(--q-fs-sm)/1 var(--q-sans);color:var(--q-muted)}.q08-hero{padding:56px 0 24px;max-width:760px}.q08-hero h1{font:500 clamp(2rem,4.2vw,3.1rem)/1.08 var(--q-serif);letter-spacing:-.02em;margin:0 0 16px}.q08-feed{max-width:760px}.q08-piece{max-width:var(--q-measure);padding:40px 0 24px}.q08-piece h1.q08-t{font:500 clamp(1.85rem,3.4vw,2.6rem)/1.12 var(--q-serif);letter-spacing:-.015em;margin:0 0 14px;text-wrap:balance}.q08-fb{margin:40px 0 0;padding:20px 0 0;border-top:1px solid var(--q-rule);display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:var(--q-fs-sm);color:var(--q-muted)}.q08-fb span{margin-right:6px}.q08-refs{margin:40px 0 0;padding-top:20px;border-top:1px solid var(--q-rule)}.q08-refs h2{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-muted);margin:0 0 12px}.q08-refs ul{margin:0;padding-left:1.2em;font-size:var(--q-fs-sm)}.q08-refs li{margin-bottom:6px}.q08-refs a{color:var(--q-accent)}.q08-msg{padding:72px 0;max-width:620px}.q08-sub form{display:flex;gap:8px;flex-wrap:wrap}.q08-sub .q-input{flex:1;min-width:220px}</style>';
 function q08Attr(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function q08Page(o, body) {
