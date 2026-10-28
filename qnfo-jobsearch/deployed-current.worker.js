@@ -8,7 +8,7 @@
 // JOBSEARCH-PROFILE-1 (1.3.0): yes/no search survey, role families drawn from the whole record (policy, transport and planning, data, product, program, research, consulting, nonprofit, GIS, contracts, social policy), location gates from the owner answers (Netherlands and remote by default, US and other on-site only when selected), likes and dislikes teach the search, rejected matches stay hidden, "check a job" analysis of a pasted link or text.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.3.1";
+var VERSION = "1.3.2-codeagent";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -757,6 +757,44 @@ async function collectAndRank(ctx, onlyGroups) {
   kept.sort((a, b) => b.match.score - a.match.score);
   return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults };
 }
+// JOBSEARCH-LLM-RERANK-1: reorder-only re-rank of the top passing postings.
+// The model may only reorder and add one sentence of reason per posting; it never writes resume or note text
+// (drafts are still assembled from the ledger afterwards and re-verified). A failed, malformed or empty answer
+// leaves the deterministic order untouched. The call goes through the qnfo-ai service binding with caller
+// qnfo-jobsearch, and is skipped when it would cost more than the cheapest Workers AI model (BUDGET-SOFT-ROUTE-1).
+async function llmRerank(env, kept) {
+  try {
+    if (!env.AI || !kept.length) return kept;          // no binding: keep deterministic order
+    const top = kept.slice(0, 25), rest = kept.slice(25);
+    const items = top.map((j, i) => ({ index: i, id: j.id, title: j.title, company: j.company, location: j.location || "", score: j.match.score, reasons: (j.match.why || []).slice(0, 5) }));
+    const r = await env.AI.fetch("https://qnfo-ai/infer", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        caller: "qnfo-jobsearch",
+        task: "rerank",
+        model: "cheapest",                              // BUDGET-SOFT-ROUTE-1: never costlier than the cheapest Workers AI model
+        budget_guard: "skip this call if it would cost more than the cheapest Workers AI model",
+        prompt: "Order the following job postings by fit to the candidate's claim ledger. You may ONLY reorder these postings and give one short sentence of reason per posting. Do not write, rewrite or suggest any resume, cover letter or note text. Answer as JSON: {\"order\":[ids in best-first order],\"reasons\":{\"<id>\":\"one sentence\"}}.",
+        items,
+      }),
+    });
+    if (!r.ok) return kept;                             // binding error: keep deterministic order
+    const out = await r.json();
+    if (!out || out.skipped_for_budget || !Array.isArray(out.order) || !out.order.length) return kept;
+    const by = new Map(top.map((j) => [String(j.id), j]));
+    const seen = new Set(), next = [];
+    for (const id of out.order) {
+      const j = by.get(String(id));
+      if (j && !seen.has(j.id)) { seen.add(j.id); next.push(j); }
+    }
+    if (next.length !== top.length) return kept;        // incomplete/unknown ids: do not trust the reorder
+    for (const j of next) {                             // annotate only; reasons land in why_json prefixed LLM:
+      const rsn = out.reasons && out.reasons[j.id];
+      if (typeof rsn === "string" && rsn.trim()) j.match.why = (j.match.why || []).concat(["LLM: " + rsn.trim().replace(/\s+/g, " ").slice(0, 300)]);
+    }
+    return next.concat(rest);
+  } catch (e) { logErr("llm-rerank", e); return kept; } // any failure: deterministic order stands
+}
 function artifactsFor(j) {
   const res = buildResume(j, j.match), note = buildNote(j, j.match);
   const v = verify(res, j).concat(verify(note, j));
@@ -859,7 +897,8 @@ async function run(env) {
     const ctx = await loadCtx(env);
     const prefsHash = await sha256hex(JSON.stringify([ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
-    const { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank(ctx);
+    let { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank(ctx);
+    kept = await llmRerank(env, kept);   // reorder-only AI pass over the top 25, before the per-company cap
     const per = {}, seen = new Set(), picked = [];
     for (const j of kept) {
       const dk = dedupeKey(j);
@@ -877,7 +916,7 @@ async function run(env) {
         `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status)
          VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval')
          ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7`
-      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why), JSON.stringify(j.match.flags), a.verified, a.blocked, a.resume, a.note));
+      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note));
     }
     // feed health: success resets the streak, failure extends it (detector fm-jobsearch-feed-down reads 3 in a row)
     for (const f of feedResults) {
