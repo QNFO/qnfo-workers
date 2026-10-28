@@ -239,9 +239,14 @@ def selftest():
                 return 200, {"data": {"viewer": {"accounts": [{"workersInvocationsAdaptive": rows}]}}}
             return 404, {}
 
+        pre = []
+
         def fetch(url, headers=None):
             if headers:
                 return 200, '{"version":"9.9.9"}'
+            if not pre:  # GRADUAL-ALREADY-LIVE-1: the live script still serves the previous version before the upload
+                pre.append(1)
+                return 200, '{"version":"9.9.8"}'
             return (500, "") if health_bad else (200, '{"version":"9.9.9"}')
         return calls, api, fetch
     d = tempfile.mkdtemp()
