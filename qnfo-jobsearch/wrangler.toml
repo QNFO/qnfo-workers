@@ -3,6 +3,13 @@ main = "worker.js"
 # charter-pillar: personal
 # JOBSEARCH-1 (2026-10-27): verified-claims job matcher with API + web UI. Funds the net-zero retirement of the empty job-market-watch/ stub
 # (no tracked files; Sept 2026 .wrangler leftovers only). Reads public ATS feeds; writes D1 qnfo-audit jobsearch_matches / jobsearch_runs.
+# COMPAT-ADVANCE-WAVE-4 (2026-10-28, agent_issues 1000583/1000591, worker_compat_state live 2026-08-01): the date moves from
+# 2026-08-01 to 2026-10-10 on the next canonical deploy; /ops/compat said "the file has no compat-advance review line", which is why
+# the declared 2026-10-10 never took effect. Reviewed against qnfo-ops COMPAT_FLIPS between the two dates: 2026-08-04 nodejs_compat
+# default on (worker.js has no node: import, no typeof process/Buffer branch, and its setTimeout ids are only passed to clearTimeout
+# or discarded, never read as numbers); 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy keeps the date only
+# when /health answers with the deployed VERSION and otherwise restores the previous date.
+# compat-advance: reviewed 2026-10-28
 compatibility_date = "2026-10-10"
 compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true

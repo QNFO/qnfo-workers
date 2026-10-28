@@ -1227,6 +1227,27 @@ def next_due_offset(cadence_h):
     return "+%d minutes" % max(15, (int(float(cadence_h) * 60) - 15) // 2)
 
 
+STEADY_RUN = 6  # FM-5: identical passing verifications in a row before a contract backs off
+STEADY_CADENCE_H = 2  # SLA-120M-1: never beyond 120 minutes
+
+
+def steady_state_cadence(cls, verdict, cadence_h):
+    """FM-5 (ROADMAP-1 even-keel-fm-audit, agent_issues 1000721, pillar cost): remediation_verifications took 191,906 rows in
+    7 days (78.6 percent pass) and issue 1000473 was re-verified every 80 minutes with observed=0. A contract whose last
+    STEADY_RUN verifications all passed with the same observed value is re-probed every STEADY_CADENCE_H hours instead of at its
+    own cadence (never beyond 2 hours, SLA-120M-1). Only a pass backs off: a failing, deferred or changing contract keeps its
+    cadence, so recovery and relapse are seen as fast as before. Guard: the runtime-verified share must not fall."""
+    if verdict != "pass" or float(cadence_h) >= STEADY_CADENCE_H:
+        return cadence_h
+    rows = d1("SELECT pass, observed FROM remediation_verifications WHERE class = ? ORDER BY id DESC LIMIT %d" % STEADY_RUN, [cls])
+    if len(rows) < STEADY_RUN:
+        return cadence_h
+    first = rows[0].get("observed")
+    if all(int(r.get("pass") or 0) == 1 and r.get("observed") == first for r in rows):
+        return STEADY_CADENCE_H
+    return cadence_h
+
+
 def consume_one(c, trusted):
     """Probe and stamp one contract with its own counters, so contracts can run in parallel (merge_out folds them)."""
     local = {"pass": 0, "fail": 0, "skipped": 0}
@@ -1262,6 +1283,10 @@ def consume_one(c, trusted):
             pass
     if cadence is None:
         cadence = c.get("expected_cadence_h") or 1
+    try:
+        cadence = steady_state_cadence(cls, rec.get("verdict"), cadence)
+    except Exception:  # noqa: BLE001 - a failed history read keeps the contract's own cadence
+        pass
     try:
         d1(
             "UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, "
