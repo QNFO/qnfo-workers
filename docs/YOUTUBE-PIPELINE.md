@@ -100,3 +100,16 @@ Owner feedback: text bleeds off screen, the voice is robotic, every video has th
 - Research basis (vendor blogs, treat figures as rules of thumb): hook in 2-3 s, sentences under 15 words, 30-45 s beats 60 s when the idea fits, a visual change every
   few seconds, captions in the safe zone, native 9:16, a second hook at the end instead of "subscribe", edit AI drafts before publishing.
 - Gap: render is slow (about 9 min for 64 s; `always_redraw` text and updater backgrounds). Content clusters in the upper half; vertical centring is next.
+
+## Survey 2026-10-28: GitHub video-generator topic (stars, licence, last push read from the GitHub API today; fit is judgement from READMEs, code not audited)
+| Project | Stars / licence / push | Fit |
+|---|---|---|
+| ViMax (HKUDS) | 12.8k / MIT / 2026-09-30 | **Pattern to copy**: screenwriter -> director -> producer agents. Our missing piece is the LLM director; borrow the staging, not the generative-video backend. |
+| Agnes Video Generator | 0.6k / MIT / 2026-10-28 | Closest to our shape (multi-scene, narration, subtitles, web UI). Small and young: read for scene-spec ideas, do not depend on it. Avatars add nothing for papers. |
+| Open Generative AI | 31.7k / MIT / 2026-10-24 | Studio that fronts third-party models and paid APIs ("unrestricted"). No fit: no diagram accuracy, spend outside the fleet, brand-risk. |
+| Wan 2.2 | 18.2k / Apache-2.0 / 2026-09-21 | Best open diffusion video model here. Needs a GPU (no Cloudflare Container GPU in our setup) and cannot draw a correct bar chart or a number. Only candidate: 3-5 s abstract hook b-roll, after the director exists. |
+| VideoCrafter / VGen | 5.1k NOASSERTION / 3.2k no licence | Older (last push 2026-01 / 2025-01), no licence clarity. Skip. |
+| Kokoro-82M | 9.7k / Apache-2.0 / 2025-08 | Voice A/B candidate; no word times, so needs a whisper alignment pass. |
+Decision: scientific shorts stay deterministic (Manim: every number on screen comes from the paper); generative video is at most decoration for the hook.
+
+Next, in order: (1) LLM director with numeric-claim checker (qnfo-ai writer + other-family checker, beats must cite article sentences); (2) five more templates driven by the director; (3) Kokoro vs edge voice blind test by the owner; (4) publish 5 private shorts, read retention, then decide on generative hooks.
