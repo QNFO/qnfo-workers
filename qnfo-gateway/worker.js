@@ -1,4 +1,5 @@
-var VERSION="3.45.0-cite-exports"; // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
+var VERSION="3.46.0-paper-pid-hash"; // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
+/* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
 // 3.44.2 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): the apex qnfo.org answered HTML pages with no frame protection (measured 2026-10-26: the *.qnfo.org hosts get X-Frame-Options DENY from a zone rule whose expression is the wildcard *.qnfo.org, which does not match the apex). withPagePolicy now adds X-Frame-Options DENY to every HTML response that has none, on every host, so the apex no longer depends on the zone rule; a handler's own value is kept.
 // 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
 // 3.43.2 PLAIN-RESIDUE-LIKE-1: the residue gate SQL uses instr (a 54-byte LIKE pattern made D1 refuse every plain-summary fill and paper-page fill from 2026-10-25 19:50); a paper page with no summary builds that one paper only, never the 12-paper hourly batch.
@@ -3760,6 +3761,33 @@ function citeResponse(r, fmt) {
   const t = types[fmt];
   return new Response(t[1](r), { status: 200, headers: { "Content-Type": t[0], "Content-Disposition": 'inline; filename="' + t[2] + '"', "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300" } });
 }
+// PAPER-PIDS-HASH-1 (3.46.0, BP26-PAPER-PIDS-1): every paper version has an immutable address and a content hash. /papers/<slug>/v/<version>
+// (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256; the current version comes from papers, an earlier one
+// from the last paper_change_bodies row recorded for it (PAPER-LEDGER-1), and a version with no recoverable body is 404, never the current text.
+// The hash is taken when the body is served (no per-version hash is stored yet), so it proves the served bytes, not that they equal what was cited before hashing began.
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text)));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function paperVersionOf(row) {
+  return String(row.version_semver || String(row.version || "").replace(/^v/i, "").replace(/-zeno\x64o[-\w]*/i, "")) || "";
+}
+async function handlePaperVersion(env, slug, version, head) {
+  const row = await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + ",body_md FROM papers WHERE " + OPEN_WHERE + " AND slug = ?").bind(slug).first();
+  if (!row) return openJson({ error: "not found" }, 404);
+  const want = String(version || "").replace(/^v/i, "");
+  let body = null, current = false;
+  if (want && (want === paperVersionOf(row) || want === String(row.version || "").replace(/^v/i, ""))) { body = row.body_md; current = true; }
+  else if (want) {
+    const old = await env.LIVING_PAPER.prepare("SELECT b.body_md AS body_md FROM paper_change_ledger l JOIN paper_change_bodies b ON b.seq = l.seq WHERE l.slug = ? AND l.kind = 'update' AND (l.version_before = ? OR l.version_before = ?) ORDER BY l.seq DESC LIMIT 1").bind(slug, want, "v" + want).first();
+    if (old && old.body_md) body = old.body_md;
+  }
+  if (body == null || body === "") return openJson({ error: "no recoverable body for this version", slug, version: want }, 404);
+  const text = retiredLines(String(body));
+  const sha = await sha256Hex(text);
+  const headers = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "X-Content-SHA256": sha, "X-Paper-Version": want, "Link": '<https://papers.qnfo.org/papers/' + slug + '/v/' + want + '>; rel="canonical"', "Cache-Control": current ? "public, max-age=300" : "public, max-age=31536000, immutable" };
+  return new Response(head ? null : text, { status: 200, headers });
+}
 async function handleOpenData(request, env, p) {
   const u = new URL(request.url);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Access-Control-Max-Age": "86400" } });
@@ -3781,6 +3809,8 @@ async function handleOpenData(request, env, p) {
       if (p === "/feed.json") return openJson({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers", home_page_url: "https://papers.qnfo.org/papers", feed_url: "https://papers.qnfo.org/feed.json", language: "en", authors: [{ name: "Rowan Brad Quni-Gudzinas", url: "https://orcid.org/" + OWNER_ORCID }], items: recs.map((r) => ({ id: r.url, url: r.url, title: r.title, summary: paperFeedSummary(r.abstract, ""), date_published: r.date + "T00:00:00Z", date_modified: r.modified, tags: r.keywords.concat(r.quality_tags), external_url: r.doi_url || void 0, _qnfo: { version: r.version, version_count: r.version_count, first_published: r.first_published, last_revised: r.last_revised, quality_label: r.quality_label, quality_basis: r.quality_basis, peer_review_status: r.peer_review_status } })) }, 200, { "Content-Type": "application/feed+json; charset=utf-8" });
       return openJson({ total, limit, offset, next: offset + limit < total ? "https://papers.qnfo.org/api/papers?limit=" + limit + "&offset=" + (offset + limit) + (since ? "&since=" + encodeURIComponent(u.searchParams.get("since")) : "") : null, license_note: "Metadata is CC0 1.0; each paper carries its own license_url.", items: recs });
     }
+    const pv = /^\/(?:api\/)?papers\/([^/]+)\/v\/([^/]+)$/.exec(p);
+    if (pv) return await handlePaperVersion(env, decodeURIComponent(pv[1]), decodeURIComponent(pv[2]), request.method === "HEAD");
     if (p.indexOf("/api/papers/") === 0) {
       let slug = decodeURIComponent(p.slice(12));
       const cite = /\.(cff|bib|csl\.json)$/.exec(slug);
@@ -3789,7 +3819,9 @@ async function handleOpenData(request, env, p) {
       if (!row) return openJson({ error: "not found" }, 404);
       const r = openRecord(row);
       if (cite) return citeResponse(r, cite[1]);
-      return openJson(Object.assign({}, r, { datacite: dataciteOf(r, row) }));
+      const bodyRow = await env.LIVING_PAPER.prepare("SELECT body_md FROM papers WHERE slug = ?").bind(slug).first();
+      const hashed = bodyRow && bodyRow.body_md ? await sha256Hex(retiredLines(String(bodyRow.body_md))) : null;
+      return openJson(Object.assign({}, r, { sha256: hashed, version_url: r.version ? "https://papers.qnfo.org/papers/" + r.slug + "/v/" + r.version : null, datacite: dataciteOf(r, row) }));
     }
   } catch (e) {
     return openJson({ error: "open data endpoint failed", detail: String(e && e.message || e).slice(0, 200) }, 500, { "Cache-Control": "no-store" });
@@ -7254,7 +7286,7 @@ var gateway_worker_default = {
       if (od) return od;
     }
     if (host === "papers.qnfo.org" || host === "qnfo-publications.pages.dev") {
-      if (p === "/oai" || p === "/openapi.json" || p === "/feed.json" || p.indexOf("/api/papers") === 0 && p !== "/api/paper-context") {
+      if (p === "/oai" || p === "/openapi.json" || p === "/feed.json" || p.indexOf("/api/papers") === 0 && p !== "/api/paper-context" || /^\/papers\/[^/]+\/v\/[^/]+$/.test(p)) {
         const od = await handleOpenData(request, env, p);
         if (od) return od;
       }
