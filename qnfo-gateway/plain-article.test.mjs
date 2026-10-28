@@ -11,6 +11,7 @@
 // technical digest, the paper page links to it, the API returns it, and a paper without one says so.
 // Run: node qnfo-gateway/plain-article.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -265,6 +266,6 @@ const audit = await (await callPage(env, "/_audit/quick-read")).json();
 ok(audit.plain_articles === null || typeof audit.plain_articles.publicPapers === "number" || audit.ok === false, "the audit route reports the article counts", audit.plain_articles);
 const health = await (await callPage(env, "/health")).json().catch(() => ({}));
 ok(!health.capabilities || health.capabilities.indexOf("quick-read-plain-article") >= 0, "the health route lists the capability", health.capabilities);
-ok(/3\.44\./.test((src.match(/var VERSION="([^"]+)"/) || [])[1] || ""), "the version is 3.44 or later");
+ok(versionAtLeast((src.match(/var VERSION="([^"]+)"/) || [])[1] || "", "3.44.0"), "the version is 3.44 or later");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

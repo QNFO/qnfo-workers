@@ -84,5 +84,19 @@ ok(/Built on the framework/.test(r.t) && /^[\s\S]*"version": "0\.8\.1"/.test(r.t
   ok(!/10\.5281|zeno\x64o/i.test(out) && out.includes("Intro  keeps  spacing.") && out.includes("x  =  1") && out.includes("10.1103/PhysRevD.1.1"), "body scrub is line-local and keeps third-party DOIs", out);
   ok(retiredTag("0.8.1-zen" + "odo-real") === "0.8.1", "version tag cleaned");
 }
+// PAPER-PIDS-1 (3.45.0): per-paper reference-manager exports from the same open record.
+{
+  const cff = await get("/api/papers/p001.cff");
+  ok(cff.s === 200 && /^cff-version: 1\.2\.0/.test(cff.t) && /text\/yaml/.test(cff.h.get("Content-Type")), "CITATION.cff served", cff.t);
+  ok(/title: "Paper 1"/.test(cff.t) && /orcid: "https:\/\/orcid\.org\/0009-0002-4317-5604"/.test(cff.t) && /doi: "10\.1234\/live\.99999999"/.test(cff.t), "cff has title, owner ORCID and the live DOI", cff.t);
+  const csl = await get("/api/papers/p001.csl.json");
+  const item = JSON.parse(csl.t)[0];
+  ok(csl.s === 200 && /citationstyles/.test(csl.h.get("Content-Type")) && item.type === "article" && item.title === "Paper 1" && item.DOI === "10.1234/live.99999999" && Array.isArray(item.author) && item.author[0].family === "Quni-Gudzinas", "CSL-JSON item", csl.t);
+  const bib = await get("/api/papers/p001.bib");
+  ok(bib.s === 200 && /^@article\{qnfo_p001,/.test(bib.t) && /doi = \{10\.1234\/live\.99999999\}/.test(bib.t) && /author = \{Rowan Brad Quni-Gudzinas and Co Author\}/.test(bib.t), "BibTeX entry", bib.t);
+  ok((await get("/api/papers/nope.cff")).s === 404, "export of an unknown paper is 404");
+  ok(!/10\.5281|zeno\x64o/i.test((await get("/api/papers/p000.cff")).t + (await get("/api/papers/p000.bib")).t), "exports never carry the retired DOI prefix");
+  ok(JSON.parse((await get("/api/papers/p001")).t).slug === "p001", "plain /api/papers/<slug> unchanged");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
