@@ -33,7 +33,9 @@ const rpc = async (e, name, args) => {
 };
 
 const h = await (await w.fetch(new Request("https://x/health"), env())).json();
-assert.ok(versionAtLeast(h.version, "2.3.0"), "version " + h.version);
+assert.ok(versionAtLeast(h.version, "2.3.2"), "version " + h.version);
+assert.equal(h.exuvia_key, false);
+assert.equal((await (await w.fetch(new Request("https://x/health"), env(true))).json()).exuvia_key, true);
 const list = await (await w.fetch(new Request("https://x/mcp", { method: "POST", headers: { Authorization: "Bearer t" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) }), env())).json();
 const names = list.result.tools.map((t) => t.name);
 for (const n of ["exuvia_status", "exuvia_feed", "exuvia_paper_post_draft", "exuvia_publish_paper", "exuvia_kg_context"]) assert.ok(names.includes(n), n);
