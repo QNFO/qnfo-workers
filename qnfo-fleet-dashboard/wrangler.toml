@@ -165,3 +165,13 @@ binding = "SVC_QNFO_FLEET_CONTROL"
 service = "qnfo-fleet-control"
 environment = "production"
 props = { caller = "qnfo-fleet-dashboard" }
+
+# OTP-DO-RATE-1 (BP26-EDGE-SECURITY-1, 1.73.0): per-address sliding-window limit for /api/cmd/code, /api/cmd/verify and /api/owner/login.
+# The canonical deploy installs this binding and the sqlite-backed class (qnfo-ops binding install, the FleetAdvisor pattern in qnfo-fleet-control).
+[[durable_objects.bindings]]
+name = "OTP_LIMITER"
+class_name = "OtpRateLimiter"
+
+[exports.OtpRateLimiter]
+type = "durable-object"
+storage = "sqlite"

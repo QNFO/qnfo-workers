@@ -24,7 +24,7 @@ ok(idx && idx["@type"] === "Blog" && idx.name === "Reading" && idx.url === "http
 ok(src.includes("return page(p.title, shell(body + fb + foot), pieceLd(p));"), "renderPiece puts the block in the head");
 ok(src.includes('return page("Reading", shell(body), readingIndexLd());'), "renderIndex puts the Blog block in the head");
 ok(/var AI_LABEL_HTML = "<span class=ai title=[^\n]*No human reviews pieces before they appear\.[^\n]*>AI-generated<\/span>";/.test(src), "the visible label is still there, with the same sentence");
-ok(/var VERSION = "1\.43\.(?:[6-9]|\d{2,})-/.test(src), "VERSION is at least 1.43.6");
+ok(/var VERSION = "1\.(?:43\.(?:[6-9]|\d{2,})|(?:4[4-9]|[5-9]\d)\.\d+)[-"]/.test(src), "VERSION is at least 1.43.6");
 
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

@@ -32,7 +32,7 @@ ok(r.status === 204 && r.headers.get("X-Frame-Options") === "DENY", "a 204 witho
 
 ok(/\(function edgeAttach\(target\) \{[\s\S]{0,200}edgeSecure\(await inner\.call\(this, request, env, ctx\)\)[\s\S]{0,80}\}\)\(worker_default\);/.test(src), "the final fetch handler is wrapped");
 ok(src.indexOf("wmAttach(worker_default, \"personal-companion\");") < src.indexOf("(function edgeAttach(target) {"), "the wrapper is installed after the WebMCP wrapper, so it sees every response");
-ok(/var VERSION = "1\.43\.(?:[5-9]|\d{2,})-/.test(src), "VERSION is at least 1.43.5");
+ok(/var VERSION = "1\.(?:43\.(?:[5-9]|\d{2,})|(?:4[4-9]|[5-9]\d)\.\d+)[-"]/.test(src), "VERSION is at least 1.43.5");
 
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

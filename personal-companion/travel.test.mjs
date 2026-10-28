@@ -569,7 +569,10 @@ console.log("\n[repository hygiene]");
   ok("module holds no mail address", !/[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(src));
   // the chat page's own script calls only this worker's /travel/api routes; the module itself fetches nothing
   const js = /const CHAT_JS = String\.raw`([\s\S]*?)`;/.exec(src);
-  ok("module never calls a booking or payment API", !/fetch\(/.test(src.replace(js ? js[0] : "", "")));
+  // TURNSTILE-EDGE-1: the shared Turnstile block (between its markers) makes the one allowed call, to the Turnstile siteverify endpoint; nothing else may fetch
+  const noTs = src.replace(js ? js[0] : "", "").replace(/\/\/ BEGIN TURNSTILE-EDGE-1[\s\S]*?\/\/ END TURNSTILE-EDGE-1\n/, "");
+  ok("module never calls a booking or payment API", !/fetch\(/.test(noTs));
+  ok("the only outbound call is the Turnstile siteverify", /fetch\("https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/siteverify"/.test(src));
   ok("the page script fetches only its own relative API", !!js && /fetch\(path/.test(js[1]) && !/https?:\/\//.test(js[1].replace(/https?:\/\/[^"'`\s]*\$\{/g, "")) && /"\/travel\/api\//.test(js[1]));
 }
 

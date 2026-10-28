@@ -2459,16 +2459,41 @@ function htmlRes(body, status, extra) {
   return new Response(body, { status: status || 200, headers: h });
 }
 
+// TURNSTILE-EDGE-1 (1.44.0, BP26-EDGE-SECURITY-1): the travel sign-in forms carry a Turnstile widget and POST /travel/login verifies its token before it mails a code (fail-open only while TURNSTILE_SECRET is unbound).
+// BEGIN TURNSTILE-EDGE-1
+var TURNSTILE_SITEKEY_DEFAULT = "0x4AAAAAAFpf2WdSG4-h5mu_";
+var TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+function turnstileWidget(env, action) {
+  var key = (env && env.TURNSTILE_SITEKEY) || TURNSTILE_SITEKEY_DEFAULT;
+  return '<div class="cf-turnstile" data-sitekey="' + key + '" data-action="' + String(action || "form").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) + '" data-appearance="interaction-only" data-theme="auto"></div>';
+}
+async function turnstileVerify(env, token, ip, action) {
+  if (!env || !env.TURNSTILE_SECRET) return { ok: true, skipped: true, reason: "no-secret" };
+  if (typeof token !== "string" || token.length === 0 || token.length > 2048) return { ok: false, reason: "missing-token" };
+  try {
+    var body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
+    if (ip) body.set("remoteip", ip);
+    var r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return { ok: false, reason: "siteverify-" + r.status };
+    var j = await r.json();
+    if (!j || j.success !== true) return { ok: false, reason: "rejected:" + String((j && j["error-codes"]) || "").slice(0, 80) };
+    if (action && j.action && j.action !== action) return { ok: false, reason: "action-mismatch" };
+    return { ok: true, reason: "verified" };
+  } catch (e) {
+    return { ok: false, reason: "siteverify-error" };
+  }
+}
+// END TURNSTILE-EDGE-1
 function signInPage(msg) {
   return page("Travel planner", "<h1>Travel planner</h1>" + (msg ? "<p>" + msg + "</p>" : "") +
-    "<form method=\"post\" action=\"/travel/login\"><button class=\"pick\">Email me a code</button></form>" +
+    "<form method=\"post\" action=\"/travel/login\">" + turnstileWidget(null, "travel_login") + "<button class=\"pick\">Email me a code</button></form>" + TURNSTILE_SCRIPT +
     "<p class=\"muted\">A 6-digit code goes to your own inbox. Type it in once and this device stays signed in.</p>", 401);
 }
 
 function codePage(msg, status) {
   return page("Enter your code", "<h1>Check your inbox</h1>" + (msg ? "<p>" + msg + "</p>" : "<p>Type the 6-digit code from the email, or tap the link in it.</p>") +
     "<form method=\"post\" action=\"/travel/code\"><input name=\"code\" inputmode=\"numeric\" autocomplete=\"one-time-code\" pattern=\"[0-9 ]{6,7}\" maxlength=\"7\" required autofocus style=\"font:inherit;font-size:1.6rem;letter-spacing:.3rem;width:9rem;padding:.3rem .5rem\"> <button class=\"pick\">Sign in</button></form>" +
-    "<form method=\"post\" action=\"/travel/login\"><button>Send a new code</button></form>", status || 200);
+    "<form method=\"post\" action=\"/travel/login\">" + turnstileWidget(null, "travel_login") + "<button>Send a new code</button></form>" + TURNSTILE_SCRIPT, status || 200);
 }
 
 const codeMac = (key, id, code) => sign(key, "code:" + id + ":" + code);
@@ -2512,6 +2537,10 @@ async function handleTravel(request, env, deps = {}) {
   // Sign-in by mailed link. Asking for a link only ever mails the owner; it is capped per hour.
   if (p === "/travel/login") {
     if (request.method !== "POST") return Response.redirect(u.origin + "/travel", 303);
+    let tsTok = "";
+    try { tsTok = String((await request.clone().formData()).get("cf-turnstile-response") || ""); } catch (e) { tsTok = ""; }
+    const tsv = await turnstileVerify(env, tsTok, request.headers.get("CF-Connecting-IP") || "", "travel_login");
+    if (!tsv.ok) return signInPage("Verification did not complete. Wait a moment and tap the button again.");
     const recent = await db.prepare("SELECT COUNT(*) n FROM travel_logins WHERE created_at >= ?").bind(new Date(nowMs - 3600e3).toISOString()).first();
     if (recent && recent.n >= LOGIN_MAILS_PER_HOUR) return codePage("A few codes went out in the last hour already; use the newest one in your inbox.", 429);
     const key = deps.key !== undefined ? deps.key : await authKey(env, db);
@@ -3176,7 +3205,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.43.7-codeagent";
+var VERSION = "1.44.0";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
