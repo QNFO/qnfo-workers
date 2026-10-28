@@ -15,10 +15,12 @@ const grab = (name) => {
 const vars = ["THIN_BATCH", "THIN_RELATED_MAX", "THIN_RELATED_MIN", "THIN_RELATED_BODY_MAX", "THIN_TARGET_FULL_MAX", "THIN_TARGET_HEAD", "THIN_RETRY_DAYS", "THIN_HEADING", "THIN_STOP"].map((c) => {
   const m = new RegExp("\\nvar " + c + " = ([^\\n]*;)").exec(src); if (!m) throw new Error("missing " + c); return "var " + c + " = " + m[1];
 }).join("\n");
-const fns = ["thinPaperUrl", "thinMatchQuery", "thinBump", "thinTargetText", "thinWorksBlock", "thinPrompt", "thinSectionCheck", "thinRereadPrompt", "insertPriorWork", "thinLog", "thinCandidates", "thinRelated", "thinPriorWork", "thinRun", "thinOff", "parseRereadVerdict", "parseJsonObject", "addChangelog", "applyVersionMarkers", "releaseGateVerdict"];
+const fns = ["thinPaperUrl", "thinMatchQuery", "thinBump", "thinTargetText", "thinWorksBlock", "thinPrompt", "thinSectionCheck", "thinRereadPrompt", "normTitle", "standardizeBody", "insertPriorWork", "thinLog", "thinCandidates", "thinRelated", "thinPriorWork", "thinRun", "thinOff", "parseRereadVerdict", "parseJsonObject", "addChangelog", "applyVersionMarkers", "releaseGateVerdict"];
 // DEGENERATE-TEXT-PRODUCER-1 (0.39.0): releaseGateVerdict reads the DEGENERATE-TEXT block, so the block is part of the function under test.
+// REVISED-STANDARD-1: standardizeBody reads the META_LINE_RX line of the host.
+const metaRx = (src.match(/^var META_LINE_RX = .*$/m) || [""])[0];
 const degenBlock = src.slice(src.indexOf("// DEGENERATE-TEXT-BEGIN"), src.indexOf("// DEGENERATE-TEXT-END"));
-const mod = new Function("aiText", vars + "\nvar __name = function(){};\nvar MODEL = 'writer-model'; var REREAD_MODEL = 'reader-model';\n" + degenBlock + "\n" + fns.map(grab).join("\n") + "\nreturn { " + fns.join(", ") + " };");
+const mod = new Function("aiText", vars + "\nvar __name = function(){};\nvar MODEL = 'writer-model'; var REREAD_MODEL = 'reader-model';\n" + degenBlock + "\n" + metaRx + "\n" + fns.map(grab).join("\n") + "\nreturn { " + fns.join(", ") + " };");
 console.error = () => {};
 
 // The filler is varied text: a sentence repeated back to back is a model loop the release gate now fails as quality:repetition.
@@ -84,7 +86,8 @@ const scripted = (writer, reader) => { const calls = []; return { calls, fn: asy
   const r = await m.thinRun(env);
   ok(r.results.length === 1 && r.results[0].queued === true, "a thin paper with related works is queued", r);
   ok(writes.vq.length === 1 && writes.vq[0][4] === "1.1.0" && /## Prior Work and Related Literature/.test(writes.vq[0][5]), "version_queue gets a drafted 1.1.0 revision with the section", writes.vq.map((v) => v[4]));
-  ok(/Changelog[\s\S]*1\.1\.0/.test(writes.vq[0][5]), "the revision carries a changelog entry");
+  // REVISED-STANDARD-1 (owner directive 2026-10-28): a revised body is typeset like a new paper, so the changelog lives in paper_revision_log, not in the body.
+  ok(!/^#{1,6}[ 	]+Changelog/m.test(writes.vq[0][5]), "the revision body carries no changelog section (the log keeps it)");
   ok(writes.log.length === 1 && writes.log[0][5] === "thin-prior-work-queued", "the outcome is logged as thin-prior-work-queued");
   ok(ai.calls.length === 2 && ai.calls[0].model === "writer-model" && ai.calls[1].model === "reader-model" && ai.calls[1].prompt.indexOf(goodSection) >= 0, "writer then a second model re-reads the section");
   ok(/"spectral"/.test(writes.match), "related works are found by the title's words");
