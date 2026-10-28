@@ -365,8 +365,11 @@ export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
     // STUCK-RUN-WEDGED-1 (agent_issues 4395, run 37655533507 queued since 2026-10-07): GitHub answers 409 "Cannot cancel a workflow run that has not been queued yet" for a run
     // wedged on its side. That is the run's state, not a missing right, so it is recorded and the next candidate is tried; any other refusal still stops the run as before.
     if (!f.ok && f.status === 409 && /not been queued/i.test(String(f.message || ""))) { r.wedged.push({ id: c.id, status: f.status, message: f.message }); continue; }
-    if (!f.ok) { r.refused = { call: "POST force-cancel run " + c.id, status: f.status, message: f.message }; break; }
-    r.force_cancelled.push(c.id);
+    // STUCK-RUN-NOTINPROGRESS-1: 409 "Cannot cancel a workflow run that is not in progress" means the run left the state the list read (run 39698201166, 2026-10-28): it is
+    // read like a cancelled run (polled until completed, then deleted), and one that never reads completed is left, not a refusal.
+    const gone = !f.ok && f.status === 409 && /not in progress/i.test(String(f.message || ""));
+    if (!f.ok && !gone) { r.refused = { call: "POST force-cancel run " + c.id, status: f.status, message: f.message }; break; }
+    if (!gone) r.force_cancelled.push(c.id);
     let done = false;
     for (let i = 0; i < STUCK_RUN_POLL_TRIES && !done; i++) {
       await sleep(pollMs);
