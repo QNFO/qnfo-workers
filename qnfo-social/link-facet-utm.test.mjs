@@ -48,5 +48,5 @@ assert.equal(mod.tagFacets(mod.buildFacets('z ' + pre), 'bluesky')[0].features[0
 const long = 'x '.repeat(200) + link;
 sent.length = 0;
 await mod.postText({ did: 'did:plc:x', accessJwt: 'j' }, long, null, { campaign: 'c' });
-assert.ok(Array.from(sent[0].record.text).length <= 290 && sent[0].record.text.endsWith(link)); ok('over-long draft: prose shortened, link intact');
+assert.ok(Array.from(sent[0].record.text).length <= 290 && sent[0].record.text.endsWith(link + ' [AI-generated]')); ok('over-long draft: prose shortened, link intact');
 console.log(pass + ' passed');

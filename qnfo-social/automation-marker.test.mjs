@@ -10,14 +10,14 @@ function ok(name) { pass++; console.log('ok - ' + name); }
 const len = (t) => Array.from(t).length;
 
 // the helper
-assert.equal(AUTOMATION_MARKER, ' [automated]'); ok('the marker is the short ASCII text the owner card names as the default');
+assert.equal(AUTOMATION_MARKER, ' [AI-generated]'); ok('the marker names AI (Art. 50) and is short ASCII');
 assert.deepEqual(MARKER_MAX_CHARS, { bluesky: 290, linkedin: 3000, mastodon: 280, twitter: 280, substack: 10000 }); ok('the limits are the ones the worker already fits to');
-assert.equal(withAutomationMarker('A new paper', 280), 'A new paper [automated]'); ok('a short post gets the marker');
+assert.equal(withAutomationMarker('A new paper', 280), 'A new paper [AI-generated]'); ok('a short post gets the marker');
 const room = 280 - AUTOMATION_MARKER.length;
 assert.equal(withAutomationMarker('x'.repeat(room), 280), 'x'.repeat(room) + AUTOMATION_MARKER); ok('a post that leaves exactly the marker length gets it');
 assert.equal(len(withAutomationMarker('x'.repeat(room), 280)), 280); ok('and fills the limit, not more');
-assert.equal(withAutomationMarker('x'.repeat(room + 1), 280), 'x'.repeat(room + 1)); ok('a post one character too long for the marker goes out unchanged');
-assert.equal(withAutomationMarker('x'.repeat(280), 280), 'x'.repeat(280)); ok('a post at the limit goes out unchanged');
+assert.equal(len(withAutomationMarker('x'.repeat(room + 1), 280)), 280); assert.ok(withAutomationMarker('x'.repeat(room + 1), 280).endsWith(AUTOMATION_MARKER)); ok('a post one character too long is shortened to carry the marker');
+assert.equal(len(withAutomationMarker('x'.repeat(280), 280)), 280); assert.ok(withAutomationMarker('x'.repeat(280), 280).endsWith(AUTOMATION_MARKER)); ok('a post at the limit is shortened and marked, never unmarked');
 assert.equal(withAutomationMarker('a' + AUTOMATION_MARKER, 280), 'a' + AUTOMATION_MARKER); ok('the helper is idempotent');
 assert.equal(withAutomationMarker('', 280), '') ; assert.equal(withAutomationMarker(null, 280), ''); ok('an empty post stays empty');
 const emoji = '\u{1F9EA}'.repeat(room);
@@ -43,7 +43,7 @@ assert.ok(len(rec.text) <= 290); ok('a long post is still fitted to 290 code poi
 sent.length = 0;
 await mod.postText(sess, 'z'.repeat(285), null, { campaign: 'c' });
 rec = JSON.parse(sent[0].body).record;
-assert.ok(len(rec.text) <= 290 && !rec.text.endsWith(AUTOMATION_MARKER)); ok('a post with no room for the marker is not cut for it');
+assert.ok(len(rec.text) <= 290 && rec.text.endsWith(AUTOMATION_MARKER)); ok('a post with no room is shortened so the marker fits');
 
 // Mastodon direct: the status field
 sent.length = 0;
@@ -56,7 +56,7 @@ assert.equal(new URLSearchParams(sent[0].body).get('status'), 'New open-access p
 assert.equal(m.status, 'ok'); assert.equal(m.text, 'New open-access paper' + AUTOMATION_MARKER); ok('and the result reports the text as posted');
 sent.length = 0;
 await mod.mastodonCreate({ MASTODON_TOKEN: 't' }, 'w'.repeat(275));
-assert.equal(new URLSearchParams(sent[0].body).get('status'), 'w'.repeat(275)); ok('a Mastodon post with no room goes out unchanged');
+{ const st = new URLSearchParams(sent[0].body).get('status'); assert.ok(len(st) <= 280 && st.endsWith(AUTOMATION_MARKER)); } ok('a Mastodon post with no room is shortened and marked');
 
 // Buffer: LinkedIn, X and Substack share bufferCreate
 const bodies = [];
@@ -70,7 +70,7 @@ assert.ok(bodies[0].includes(JSON.stringify('A paper worth reading' + AUTOMATION
 assert.equal(b.text, 'A paper worth reading' + AUTOMATION_MARKER); ok('and the result reports the text as posted');
 bodies.length = 0;
 await mod.bufferCreate(env, { id: 'c1' }, 'twitter', 'v'.repeat(279), 'publish');
-assert.ok(bodies[0].includes(JSON.stringify('v'.repeat(279))) && !bodies[0].includes('[automated]')); ok('an X post with no room goes out unchanged');
+assert.ok(!bodies[0].includes(JSON.stringify('v'.repeat(279))) && bodies[0].includes('[AI-generated]')); ok('an X post with no room is shortened and marked');
 bodies.length = 0;
 const note = 'n'.repeat(9500);
 await mod.bufferCreate(env, { id: 'c2' }, 'substack', note, 'publish');
