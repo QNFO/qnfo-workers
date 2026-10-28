@@ -1,0 +1,16 @@
+qnfo-cf-one-dashboard is RETIRED (2026-10-28, worker_count breach: 38 live Cloudflare scripts against the charter cap of 30, trigger 344, agent_issues 99923;
+also worker_health_failure_rate, trigger 412, agent_issues 100123: the script answered 404 on its health probe and read UNMANAGED_NO_HEALTH in worker_live_audit;
+failure mode script-live-without-source in docs/handoff/2026-10-28-failure-mode-audit.md). Owner standing grant OWNER-STANDING-GRANT-1 / charter decision rule 9: retire a
+low-value worker after a dependency check, no idle proof needed; session cluster-c (metric-trigger drain).
+
+What it did: a bearer-key-gated HTML/JSON snapshot of the Cloudflare One account (Access apps, IdPs, groups, Gateway rules and lists, tunnels, devices, posture), read with
+a CF_API_TOKEN secret and gated by DASH_KEY. It had no repository directory, no health route and no registry row, and it is behind OPEN-ACCESS-1 (reads behind a key).
+
+Dependency check, read 2026-10-28 against the fleet graph (GET https://qnfo-memory-mcp.q08.workers.dev/fleet-graph/impact?id=worker:qnfo-cf-one-dashboard):
+- Binders and callers: count 0, no dependents at depth 3. The only repository references are the 2026-10-28 audit files that report it as unmanaged.
+- Tables, crons, queues, Workers AI: none (worker source below shows one outbound fetch family to api.cloudflare.com and no bindings other than two secrets).
+
+Recovery: the full deployed source is kept in index.js.bak beside this file (read from the live script with workers_get_worker_code before deletion). Bringing the worker
+back is a charter net-zero decision recorded in a PR that removes this file and redeploys that code as worker.js with a wrangler.toml and a health route.
+
+The live script is removed with cf-ops-actions delete-worker (target qnfo-cf-one-dashboard) after this file is on main.
