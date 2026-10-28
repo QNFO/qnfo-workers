@@ -358,10 +358,13 @@ export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
   if (mode !== "live") { r.ok = true; r.note = "dry run: nothing written; " + r.candidates.length + " stuck run(s) would be force-cancelled and then deleted (cap " + STUCK_RUN_MAX_DELETES + " per run)"; return r; }
   const pollMs = env && env.STUCK_RUN_POLL_MS !== undefined && env.STUCK_RUN_POLL_MS !== "" ? Number(env.STUCK_RUN_POLL_MS) : STUCK_RUN_POLL_MS;
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-  r.force_cancelled = []; r.not_completed = [];
+  r.force_cancelled = []; r.not_completed = []; r.wedged = [];
   for (const c of r.candidates.slice(0, STUCK_RUN_MAX_DELETES)) {
     const base = "/repos/" + repo + "/actions/runs/" + c.id;
     const f = await api.call("POST", base + "/force-cancel");
+    // STUCK-RUN-WEDGED-1 (agent_issues 4395, run 37655533507 queued since 2026-10-07): GitHub answers 409 "Cannot cancel a workflow run that has not been queued yet" for a run
+    // wedged on its side. That is the run's state, not a missing right, so it is recorded and the next candidate is tried; any other refusal still stops the run as before.
+    if (!f.ok && f.status === 409 && /not been queued/i.test(String(f.message || ""))) { r.wedged.push({ id: c.id, status: f.status, message: f.message }); continue; }
     if (!f.ok) { r.refused = { call: "POST force-cancel run " + c.id, status: f.status, message: f.message }; break; }
     r.force_cancelled.push(c.id);
     let done = false;
@@ -378,6 +381,7 @@ export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
   r.remaining = r.candidates.length - r.deleted.length;
   r.ok = !r.refused;
   if (r.ok && r.remaining > 0) r.note = r.remaining + " candidate(s) stay: " + r.not_completed.length + " force-cancelled but not completed after " + STUCK_RUN_POLL_TRIES + " reads (a later run deletes them once completed is read), the rest beyond the cap of " + STUCK_RUN_MAX_DELETES;
+  if (r.ok && r.wedged.length) r.note = (r.note ? r.note + "; " : "") + r.wedged.length + " run(s) wedged on GitHub's side (force-cancel answers 409, no API path): " + r.wedged.map((w) => w.id).join(",");
   return r;
 }
 
