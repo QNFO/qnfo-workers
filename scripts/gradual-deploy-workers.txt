@@ -1,0 +1,4 @@
+# BP26-GRADUAL-ADOPT-1: workers deployed by the canonical path as a staged rollout (scripts/gradual_deploy.py) when a push changes only their code.
+# One worker per line. Add a worker after a clean staged proof (gradual-deploy.yml); control-plane workers (qnfo-ops, qnfo-fleet-control, qnfo-deploy-guard) only after two clean proofs.
+# GRADUAL_DEPLOY=off in the workflow environment turns the whole path off without a deploy.
+qnfo-model-eval

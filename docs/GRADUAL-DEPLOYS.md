@@ -38,7 +38,7 @@ a rollback or canary revert inside 24 h counts toward `change_failure_rate`, and
 |---|---|
 | Script, selftest, workflow | done |
 | Live proof on a non-control-plane worker (identical main code, so harmless) | run by this session; result on the issue |
-| Make the canonical path call it for non-control-plane workers (`canonical_deploy.py`) | roadmap row `ROADMAP-1: QNFO.INFRA BP26-GRADUAL-ADOPT-1`; `deploys_via_gradual` reaches 1.0 only when every production deploy uses it |
+| Make the canonical path call it (`canonical_deploy.py` `gradual_attempt`, allowlist `scripts/gradual-deploy-workers.txt`, 2026-10-28) | done for listed workers (starts with `qnfo-model-eval`): a push that changes only the code is a staged rollout, a `wrangler.toml` change, a refusal or an unlisted worker uses `/ops/deploy`; `GRADUAL_DEPLOY=off` disables it. `deploys_via_gradual` reaches 1.0 only when every production deploy is listed and code-only, so the allowlist grows worker by worker after a clean proof |
 | Control-plane workers (qnfo-ops, qnfo-fleet-control, qnfo-deploy-guard) | after two clean proofs; the canary and revert rules in CLAUDE.md stay in force |
 | Workers that need DO migrations, bindings or crons | stay on the canonical path; documented exception |
 
