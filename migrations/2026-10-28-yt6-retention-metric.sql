@@ -1,0 +1,25 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM analytics_metric_triggers WHERE metric_key = 'youtube_avg_view_duration_s' AND notes = 'YT-6 2026-10-28'; DELETE FROM metric_registry WHERE metric = 'youtube_avg_view_duration_s'; DELETE FROM human_actions WHERE slug = 'yt-analytics-consent' AND source = 'session:YT-6'
+--
+-- YT-6 (2026-10-28, charter pillar reach; agent_issues 1000597, refused child 1000599; roadmap YT-6): qnfo-youtube-shorts 0.3.0 reads each uploaded Short's views and average view duration hourly into youtube_videos (views, avg_view_duration_s)
+-- from the YouTube Data and Analytics APIs. This file registers the metric with its trigger (METRIC-CLOSED-LOOP-1: a metric is registered together with its trigger) and opens the one owner step, the extra OAuth consent.
+-- The metric starts UNMEASURED and is written only from a real reading; with no reading no row is written, so it never reads 0. The initial target (>= 10 s of a Short of about 50 s) was set before any reading and is to be revised at the fourth reading.
+-- The consent is IDENTITY-BOUND: the refresh token held as YT_REFRESH_TOKEN was granted for upload; reading needs youtube.readonly and yt-analytics.readonly on the owner's Google account, a grant only the owner can make.
+
+INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES
+ ('youtube_avg_view_duration_s', 'reach', 'leading', 'avg(youtube_videos.avg_view_duration_s WHERE state = uploaded AND avg_view_duration_s IS NOT NULL), seconds', 'qnfo-audit.youtube_videos, written by qnfo-youtube-shorts on its hourly tick from the YouTube Analytics API (averageViewDuration by video); unmeasured until the owner grants youtube.readonly and yt-analytics.readonly (human_actions yt-analytics-consent)', 'new 2026-10-28', '>= 10 (initial, revise at the 4th reading)', 'qnfo-youtube-shorts', 'qnfo-youtube-shorts hourly cron (YT-6)', 'hourly', '< 10', '< 5', 'UNMEASURED', 'fast');
+
+INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
+SELECT 'youtube_avg_view_duration_s', 'YouTube Shorts: average view duration under 10 seconds', 'meta', 'lt', 10, 5,
+ 'Pillar reach. Read qnfo-audit.youtube_videos (views, avg_view_duration_s per Short) and GET https://qnfo-youtube-shorts.q08.workers.dev/status. Under 10 seconds of a Short of about 50 seconds means viewers leave in the first beats: change the lever in qnfo-youtube-shorts (the director prompt opens with the claim, the first beat template, the voice) and compare the next three Shorts with the last three, not one against one. Definition of done: the metric is back at 10 seconds or more at the next hourly tick; the issue closes on its probe.',
+ 'qnfo-youtube-shorts', 'agent_issues', 24, 1, 'YT-6 2026-10-28'
+WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'youtube_avg_view_duration_s' AND x.enabled = 1);
+
+INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, status, source, created_at, updated_at)
+SELECT 'yt-analytics-consent', 'YouTube: grant the Shorts uploader read access to views and average view duration (youtube.readonly and yt-analytics.readonly)',
+ 'IDENTITY-BOUND: the OAuth grant behind YT_REFRESH_TOKEN was made for upload only; reading how viewers watched the Shorts needs the owner to consent to two more scopes on the owner''s Google account, which no session or loop can click, and the new refresh token then goes into the qnfo-youtube-shorts secret store under the secret-lock lease. Needed only if the first hourly read after qnfo-youtube-shorts 0.3.0 reports youtube.retention_scope (cloud_ops_events kind youtube.retention_scope, status warn); if that read succeeds the grant already carries the scopes and this card closes with no action.',
+ 'The worker keeps uploading; views and average view duration stay NULL and the metric youtube_avg_view_duration_s reads unmeasured (never 0).',
+ 'Open the OAuth consent for the QNFO YouTube client again with the scopes https://www.googleapis.com/auth/youtube.upload, https://www.googleapis.com/auth/youtube.readonly and https://www.googleapis.com/auth/yt-analytics.readonly (offline access, prompt consent); take the new refresh token from the answer; take the lease POST https://qnfo-deploy-guard.q08.workers.dev/secret-lock/acquire {"worker": "qnfo-youtube-shorts", "owner": "owner", "ttl_sec": 300}; run npx wrangler secret put YT_REFRESH_TOKEN --name qnfo-youtube-shorts; release the lease. The card closes when https://qnfo-youtube-shorts.q08.workers.dev/status shows a numeric views on the first Short (rhJc9xSP4fs or oQhsQVYanU8).',
+ 'https://console.cloud.google.com/apis/credentials', 'low', 'open', 'session:YT-6', datetime('now'), datetime('now')
+WHERE NOT EXISTS (SELECT 1 FROM human_actions WHERE slug = 'yt-analytics-consent');
