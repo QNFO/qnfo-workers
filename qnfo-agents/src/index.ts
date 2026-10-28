@@ -75,6 +75,14 @@ const CAPABILITIES = [
   "fleet loops reach it through D1 cf_agent_requests (run, sandbox, schedule), drained every 5 minutes in the loop scope"
 ];
 
+const LIMITATIONS = [
+  "public routes (GET /, /health, /tools, POST /mcp) expose only the repository reader; every run, schedule and request route needs a trusted caller",
+  "writes need the write scope; the default scope is read-only",
+  "code changes are filed as code-task proposals for the owner, never merged by this worker",
+  "model calls go through Workers AI and AI Gateway and follow the fleet budget routing (cheaper model at a cap)",
+  "cf_agent_requests are drained every 5 minutes, so a loop request is not answered inside a single request"
+];
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*" } });
 }
@@ -498,6 +506,7 @@ function selfDoc(caller: string, scope: Scope) {
     worker: WORKER, version: VERSION, sdk: SDK, ok: true, you: { caller: caller || null, scope },
     what: "The fleet's Cloudflare Agents SDK agent: coding and operations turns over the whole fleet tool surface, durable, schedulable, with an MCP server and client and a Code Mode sandbox.",
     capabilities: CAPABILITIES,
+    limitations: LIMITATIONS,
     model: { primary: DEFAULT_MODEL, fallback: FALLBACK_MODEL, via: "Workers AI binding through AI Gateway 'default'", override: "ops_config qnfo_agents_model" },
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
@@ -516,7 +525,7 @@ export default {
     const scope = scopeOf(caller, request.headers.get("x-agent-scope")) as Scope;
     try {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, DELETE, OPTIONS", "access-control-allow-headers": "content-type, mcp-session-id, mcp-protocol-version, accept" } });
-      if (path === "/health") return json({ ok: true, worker: WORKER, version: VERSION, sdk: SDK, ts: new Date().toISOString() });
+      if (path === "/health") return json({ ok: true, worker: WORKER, version: VERSION, sdk: SDK, capabilities: CAPABILITIES, limitations: LIMITATIONS, ts: new Date().toISOString() });
       if (path === "/" && request.method === "GET") return json(selfDoc(caller, scope));
       if (path === "/tools" && request.method === "GET") {
         const c: ToolCtx = { env, scope: caller ? "write" : "public", caller, agent: null, proposals: [] };
