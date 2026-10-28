@@ -73,7 +73,7 @@ Fleet gap: memory is flat (D1 rows plus Vectorize); no tiering, consolidation, o
 
 RM-MEMORY-TIERING-1, RM-DETERMINISTIC-GATE-AUDIT-1, RM-AGENT-INJECTION-DEFENSE-1, RM-CODEMODE-MCP-SURFACE-1,
 RM-RAG-HYBRID-BASELINE-1, RM-PAPER-PROVENANCE-TRACE-1, RM-QWAV-CROSS-SIMULATOR-1. They are to be filed as `agent_issues` rows with a
-doer and a closing probe (OWNER-NO-LOOSE-ENDS-1); not yet filed as of this commit. Failure mode: a scouted idea adopted from an abstract can mislead; every
+doer and a closing probe (OWNER-NO-LOOSE-ENDS-1); filed by migrations/2026-10-28-scout-roadmap-items.sql. Failure mode: a scouted idea adopted from an abstract can mislead; every
 adoption PR cites the full text and measures the effect against the pre-change baseline before it is kept.
 
 ## Overlap with existing open issues (do not file twice)
