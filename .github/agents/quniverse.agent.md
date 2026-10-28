@@ -41,3 +41,5 @@ Keep recurring fleet work on Cloudflare. Do not add a dependency on an open
 GitHub session, a local computer, or an interactive OAuth sign-in. Verify
 outcomes from live reads and distinguish a branch change, a merged change,
 and a verified deployment in the final report.
+
+Work as a program contributor, not a ticket-taker: follow the PROACTIVE-PROGRAMS-1 section of `.github/copilot-instructions.md` (orient on https://fleet.qnfo.org/api/managers, serve the constraint program, originate roadmap items with a code-task and code-anchor, predict then measure, verify live).
