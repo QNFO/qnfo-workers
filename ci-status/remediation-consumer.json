@@ -1,31 +1,31 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@eb01109ed8d5",
+ "verifier": "remediation-consumer@bec1e67f587c",
  "due": 680,
- "pass": 532,
- "fail": 114,
- "skipped": 34,
- "deferred": 33,
+ "pass": 472,
+ "fail": 156,
+ "skipped": 52,
+ "deferred": 51,
  "contracts": [
   {
-   "class": "fm-q08-prune-floor-revision-loop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000706",
-   "issue_id": 1000706,
+   "class": "issue-1000678",
+   "issue_id": 1000678,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker",
+   "observed": "status=401",
    "written": true
   },
   {
-   "class": "fm-migration-literal-outside-check-enum",
+   "class": "issue-1000627",
+   "issue_id": 1000627,
+   "verdict": "fail",
+   "expected": "plain share >= 0.5 (out of kill band)",
+   "observed": "plain share = 0.32 in kill band < 0.5 (8/25)",
+   "written": true
+  },
+  {
+   "class": "fm-metric-ticket-twin-split",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -33,239 +33,71 @@
    "written": true
   },
   {
-   "class": "issue-99927-BACKFILL-1",
-   "issue_id": 99927,
+   "class": "fm-stale-hold",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-probe-like-pattern-over-limit",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-mail-draft-fabrication",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-patch-version-line-over-cap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-99909-BACKFILL-1",
+   "issue_id": 99909,
    "verdict": "deferred",
    "expected": "closed-with-evidence",
    "observed": "pending",
    "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "issue-100281-BACKFILL-1",
-   "issue_id": 100281,
+   "class": "issue-99926-BACKFILL-1",
+   "issue_id": 99926,
    "verdict": "deferred",
    "expected": "closed-with-evidence",
    "observed": "pending",
    "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "issue-1000192",
-   "issue_id": 1000192,
-   "verdict": "fail",
-   "expected": "OK",
-   "observed": "breach: workers 38.0/30.0, d1 11.0/10.0, workers-ai 7-day run rate x30 348.33/95.0 (v_cost_run_rate 348.33, 30-day sum 330.83)",
-   "written": true
-  },
-  {
-   "class": "belief-doctor-structured-facts-suffice",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-open-issue-no-doer",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "21",
-   "written": true
-  },
-  {
-   "class": "fm-breach-unmapped",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "30",
-   "written": true
-  },
-  {
-   "class": "fm-trigger-depth",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-byok-provider-counted-unified",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-post-deploy-error-spike",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-proposal-dangling-reference",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-publish-stall-filed-not-fixed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-coe-null-id",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "48",
-   "written": true
-  },
-  {
-   "class": "belief-research-publishes-without-zenodo",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-capability-snapshot-retired-row",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-holding-open-overdue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-hourly-fanout-double",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-99953",
-   "issue_id": 99953,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-registry-version-sweep-regex",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-revise-second-model-timeout",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-paper-fabricated-empirical-claim",
-   "issue_id": null,
+   "class": "issue-1000266",
+   "issue_id": 1000266,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "sweep-stale",
+   "observed": "critical=59 drain=0.661",
    "written": true
   },
   {
-   "class": "fm-code-task-refusal-window-miss",
+   "class": "fm-code-task-dies-at-ci",
    "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "13",
-   "written": true
-  },
-  {
-   "class": "fm-handoffs-vz-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-owner-task-100576-acted-without-approve",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-sla-over-120m-outside-queue-sla",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-github-token-lapse",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-card-default-denies-decision",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-relapse-window-close-anchor",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000341",
-   "issue_id": 1000341,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000572",
-   "issue_id": 1000572,
    "verdict": "fail",
    "expected": "0",
    "observed": "2",
    "written": true
   },
   {
-   "class": "fm-producer-lateness-in-hours",
+   "class": "fm-producer-batch-overshoots-backpressure",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -273,15 +105,31 @@
    "written": true
   },
   {
-   "class": "fm-detector-contract-not-armed",
+   "class": "fm-unconfirmed-citation-published",
    "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "3",
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "fm-relapse-judged-against-target-not-trigger",
+   "class": "issue-3003-BACKFILL-1",
+   "issue_id": 3003,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "fm-roadmap-catalogue-as-issues",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-golden-run-one-quantity-twice",
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
@@ -289,23 +137,199 @@
    "written": true
   },
   {
-   "class": "issue-3001-BACKFILL-1",
-   "issue_id": 3001,
+   "class": "issue-1000344",
+   "issue_id": 1000344,
+   "verdict": "fail",
+   "expected": "pass",
+   "observed": "fail",
+   "written": true
+  },
+  {
+   "class": "issue-2008",
+   "issue_id": 2008,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "defect: a code-loop pull request failed a required check in the last 14 days",
+   "written": true
+  },
+  {
+   "class": "fm-code-loop-empty-reply",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-goals-unevaluated-counts-deferred-probes",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-portfolio-gap-ignores-reconciled-deploy",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1000693",
+   "issue_id": 1000693,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000642 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000642 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-social-channel-drain-silent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-trigger-depth-compile",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale-or-failing",
+   "written": true
+  },
+  {
+   "class": "fm-goal-dod-embeds-placeholder-literal",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "belief-owner-items-have-a-loop",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "holds",
+   "observed": "falsified: 2 of 4 open owner items older than 120 minutes have no live closing contract",
+   "written": true
+  },
+  {
+   "class": "issue-1000463",
+   "issue_id": 1000463,
+   "verdict": "deferred",
+   "expected": "cleared",
+   "observed": "pending: contract goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1 still defers",
+   "reason": "the probe cannot judge yet: pending: contract goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1 still defers"
+  },
+  {
+   "class": "fm-autoclose-flap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "2",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-default-approve-issue-unexecuted",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1000156",
+   "issue_id": 1000156,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-research-config-unlogged",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-drill-probe-blames-budget-pause",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-ops-schema-alter-noise",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-fleet-tick-fanout-abort",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-metric-trigger-disabled-issue-open",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-pn-target-closed-open",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000583",
+   "issue_id": 1000583,
+   "verdict": "fail",
+   "expected": "0 days behind",
+   "observed": "88 days behind",
+   "written": true
+  },
+  {
+   "class": "fm-observability-escalation-drop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-control-alternate-reason-unread",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "issue-99938-BACKFILL-1",
+   "issue_id": 99938,
    "verdict": "deferred",
    "expected": "closed-with-evidence",
    "observed": "pending",
    "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "issue-1000193",
-   "issue_id": 1000193,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "lever in force (q08_daily_neurons 50000), cost_usd_30d = 353.16 USD/30d, above the A9 ceiling 200",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-lease-lost-write",
+   "class": "fm-consumer-pending-recorded-as-failure",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -313,7 +337,7 @@
    "written": true
   },
   {
-   "class": "fm-cron-fault-untriaged",
+   "class": "fm-revise-refs-extend-unrestored",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -321,15 +345,7 @@
    "written": true
   },
   {
-   "class": "issue-100439",
-   "issue_id": 100439,
-   "verdict": "fail",
-   "expected": "pass_rate>=0.5, neurons<=6000, cadence_overdue_count=0",
-   "observed": "pass_rate=0.01, neurons=168304.539, cadence_overdue_count=1 (continuity-snapshot=0, q08.org=1)",
-   "written": true
-  },
-  {
-   "class": "fm-jobsearch-run-unfinished",
+   "class": "fm-control-alternate-undrilled",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -337,15 +353,7 @@
    "written": true
   },
   {
-   "class": "issue-1000700",
-   "issue_id": 1000700,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-cost-metric-includes-owner-spend",
+   "class": "fm-ops-stream-incomplete-long",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -353,21 +361,10 @@
    "written": true
   },
   {
-   "class": "issue-1000732",
-   "issue_id": 1000732,
-   "verdict": "deferred",
-   "expected": "cleared",
-   "observed": "pending: contract issue-2522-BACKFILL-1 still defers",
-   "reason": "the probe cannot judge yet: pending: contract issue-2522-BACKFILL-1 still defers"
+   "class": "fm-il-duplicate-meaning",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
   },
-  {
-   "class": "issue-1000733",
-   "issue_id": 1000733,
-   "verdict": "deferred",
-   "expected": "cleared",
-   "observed": "pending: contract issue-2684-BACKFILL-1 still defers",
-   "reason": "the probe cannot judge yet: pending: contract issue-2684-BACKFILL-1 still defers"
-  },
-  {
-   "class": "belief-owner-queue-identity-only",
-   "iss
