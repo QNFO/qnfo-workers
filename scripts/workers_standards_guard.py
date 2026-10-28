@@ -26,6 +26,7 @@ It fails a change only for what the change ADDS, so existing debt that other ses
   * (GUARD-3) a wrangler.toml change that adds a [[send_email]] block with no destination_address / allowed_destination_addresses /
     allowed_sender_addresses, adds `new_classes` (KV-backed Durable Object storage; new classes use new_sqlite_classes), or moves
     compatibility_date to 2026-08-04 or later while worker.js imports node:* under a `no_nodejs_compat` opt-out (the import then fails).
+  * (BP26-WORKERS-BP-LINT-1) a wrangler.toml change that sets compatibility_date older than 90 days.
 A line can carry `// standards-ok: <reason>` when a hit is a false positive (the reason is the record). A reviewed exception that cannot carry
 a comment (toml, generated code) is a line in scripts/workers-standards-allowlist.txt: `<path> <rule> <text that occurs in the line> # reason`.
 The same run asks SPOF-REVIEW-GATE-1 (scripts/spof_review.py) whether the change adds a cron, D1 trigger, external host or credential
@@ -353,6 +354,9 @@ def check_config(base, path, added=None):
     if re.search(r"^\s*new_classes\s*=", strip_comments(new), re.M) and not re.search(r"^\s*new_classes\s*=", strip_comments(old or ""), re.M):
         bad.append(("legacy-do-storage", 1, "new_classes declares KV-backed Durable Object storage: new classes use new_sqlite_classes", "new_classes"))
     nd = toml_value(new, "compatibility_date"); od = toml_value(old or "", "compatibility_date")
+    # BP26-WORKERS-BP-LINT-1: a new worker, or a change that moves compatibility_date, must not set a date older than 90 days (Workers best practices: keep it current).
+    if nd and nd != od and compat_age_days(nd) is not None and compat_age_days(nd) > COMPAT_MAX_DAYS:
+        bad.append(("compat-date-stale", 1, "compatibility_date %s is %d days old (limit %d): use a current date" % (nd, compat_age_days(nd), COMPAT_MAX_DAYS), "compatibility_date"))
     if nd and nd >= NODE_DEFAULT_DATE and (not od or od < NODE_DEFAULT_DATE):
         flags = toml_flags(new)
         src_path = os.path.join(os.path.dirname(path), "worker.js")
@@ -360,6 +364,13 @@ def check_config(base, path, added=None):
         if "no_nodejs_compat" in flags and NODE_IMPORT.search(src):
             bad.append(("node-opt-out-with-imports", 1, "compatibility_date %s with no_nodejs_compat while worker.js imports node:* (the import fails at that date)" % nd, "compatibility_date"))
     return bad
+
+COMPAT_MAX_DAYS = 90
+
+def compat_age_days(d):
+    import datetime
+    try: return (datetime.date.today() - datetime.date.fromisoformat(d)).days
+    except ValueError: return None
 
 def toml_value(cfg, key):
     m = re.search(r"^\s*" + re.escape(key) + r"\s*=\s*\"([^\"]*)\"", strip_comments(cfg or ""), re.M)

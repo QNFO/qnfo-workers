@@ -178,4 +178,14 @@ with tempfile.TemporaryDirectory() as t5:
     r = guard(t5); ok(r.returncode == 1 and "g/src/index.ts:2" in r.stdout and "math-random-token" in r.stdout, "the bundle's source is checked with the same rules: " + r.stdout)
     (q / "g/src/index.ts").write_text("export default {};\n"); (q / "g/worker.js").write_text('var VERSION = "0.1.1";\nvar id = Math.random().toString(36).slice(2);\nexport default {};\n')
     r = guard(t5); ok(r.returncode == 1 and "math-random-token" in r.stdout, "a worker.js without the generated line is checked as usual: " + r.stdout)
+# BP26-WORKERS-BP-LINT-1: compat date age and nodejs_compat on new workers
+with tempfile.TemporaryDirectory() as t6:
+    q = pathlib.Path(t6); sh(t6, "git", "init", "-q"); sh(t6, "git", "config", "user.email", "a@b.c"); sh(t6, "git", "config", "user.name", "t")
+    obs = "[observability]\nenabled=true\n[observability.traces]\nenabled=true\n"
+    (q / "c").mkdir(); (q / "c/worker.js").write_text("export default {};\n"); (q / "c/wrangler.toml").write_text('name="c"\ncompatibility_date="2026-10-01"\ncompatibility_flags=["nodejs_compat"]\n' + obs)
+    sh(t6, "git", "add", "-A"); sh(t6, "git", "commit", "-qm", "base")
+    (q / "c/wrangler.toml").write_text('name="c"\ncompatibility_date="2025-01-01"\ncompatibility_flags=["nodejs_compat"]\n' + obs)
+    r = guard(t6); ok(r.returncode == 1 and "compat-date-stale" in r.stdout, "moving compatibility_date to an old date fails: " + r.stdout)
+    (q / "c/wrangler.toml").write_text('name="c"\ncompatibility_date="2026-10-01"\ncompatibility_flags=["nodejs_compat"]\n' + obs + "# edit\n")
+    r = guard(t6); ok(r.returncode == 0, "an untouched compatibility_date is not judged: " + r.stdout)
 print("workers_standards_guard: %s" %("FAILED %d" % fails if fails else "all passed")); sys.exit(1 if fails else 0)

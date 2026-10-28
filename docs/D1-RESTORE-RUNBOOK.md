@@ -155,3 +155,17 @@ The gap is filed as `D1-EXPORT-BEYOND-TIME-TRAVEL-1` in `qnfo-audit.agent_issues
 - REST API, restore: `POST /accounts/{account_id}/d1/database/{database_id}/time_travel/restore` (query `bookmark` or
   `timestamp`), https://developers.cloudflare.com/api/resources/d1/subresources/database/subresources/time_travel/
 - Import and export: https://developers.cloudflare.com/d1/best-practices/import-export-data/
+
+## Restore drill every 90 days (BP26-D1-DISCIPLINE-1, 2026-10-28)
+
+Time Travel restores a database in place, so a drill never rewinds a production database. `cf-ops-actions` action `d1-restore-drill`
+(scripts/cf_ops_actions.py `d1_restore_drill`, test scripts/cf_ops_d1_drill_test.py) creates a scratch database `drill-scratch-<ts>`,
+writes 3 rows, takes a bookmark, writes 2 more, restores to the bookmark, expects exactly 3 rows, deletes the scratch database and
+reads (only reads) a Time Travel bookmark of `qnfo-audit`. It writes one `qnfo-audit.d1_restore_drills` row (`pass` or `fail`, the steps as
+evidence); `d1_restore_drill_age_days` (scripts/bp26_repo.py) is the age of the newest `pass`, target <= 90, and its metric trigger files the
+issue when it is due. Run it: Actions > cf-ops-actions > action `d1-restore-drill`.
+
+Cloudflare guidance applied (docs read 2026-10-28): Time Travel bookmarks via REST `time_travel/bookmark` and `time_travel/restore`; the
+Sessions API (`withSession(bookmark)`) is for read-replica consistency on read-heavy public pages and is adopted per worker when read
+replication is switched on, not fleet-wide; batch multi-statement writes with `db.batch()`; chunk large UPDATE/DELETE to about 1,000 rows;
+`pre_migration_bookmark_recorded` is already measured at 1.0 (migration_runs.bookmark).

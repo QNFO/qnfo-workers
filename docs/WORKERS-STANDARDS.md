@@ -56,7 +56,7 @@ dead_letter_queue = "<queue>-dlq"
 | Secrets never in `[vars]` (R1 §4, R3 #5) | Applied: zero secret-like keys in any live `[vars]` (measured 2026-10-12); the root stub was scrubbed 2026-09-29. | SECRET-IN-PUBLIC-REPO-1 history; audit scan of `[vars]` names is a follow-up (section 6). |
 | Cron triggers against the 250-per-account limit (R1 §9, R3 #13) | Measured: 32 across 28 live workers. | metric `fleet_cron_triggers`, trigger at 200; CRON-RATE-CEILING-1 keeps each schedule at or under 144 fires a day. |
 | `[limits] cpu_ms` runaway guard (R1 §13, R2 #25, R3 #4) | Not yet carried by the canonical deploy (only qnfo-ops declares it, and the raw content PUT ignores the key). Declaring it fleet-wide now would be inert config, the class of defect behind #1337. Disposition: LIMITS-DECLARED-APPLY-1 issue (qnfo-ops code task), then values from invocation-log P99 per worker. | audit advisory `limits-not-declared`. |
-| `upload_source_maps` (R3 #2) | Not applicable: workers are single-file `worker.js` uploaded as content, no bundler, no map to upload. | documented here. |
+| `upload_source_maps` (R3 #2) | Applies to generated bundles only (BP26-WORKERS-BP-LINT-1, 2026-10-28): qnfo-agents sets it; a hand-written single-file `worker.js` is its own source and has no map to upload. Metric `workers_with_source_maps` is judged on the bundles. | scripts/bp26_repo.py. |
 | `wrangler.jsonc`, `$schema`, `wrangler types` (R1 §3, R2 §8, R3 #20) | Not applicable now: the fleet is plain JavaScript deployed by API; the toml is the spec the deploy reads (`parseDeclaredObservability`, compat parsing). A format move is a no-op change deferred until a JSON-only Wrangler feature is needed. | documented here. |
 | Smart Placement, gradual deploys, Workflows for crons, D1 batching (R2 §7, R3 #16-18, R4 §4) | Issue 2398 (FLEET-HARDENING-3), per component with canary and revert. Workers Cache is not enabled anywhere: every public page is personalised or authenticated at the edge. | issue 2398. |
 | Observability drift (declared vs live) | Issue 2394 (loopWatch tick in qnfo-fleet-control). | issue 2394. |
@@ -129,3 +129,13 @@ The five research reports of 2026-10-12 (owner upload); Cloudflare Workers Best 
 Workers Logs and Traces; Workers and D1 limits (2026-10-08, 2026-04-21); Queues dead-letter queues; Email Service send bindings;
 Rules of Durable Objects (2026-08-20); Rules of Workflows (2026-10-08). CLAUDE.md sections Deploys, Migrations, Anti-fragile by
 default, Measuring and improving effectiveness.
+
+## BP26-WORKERS-BP-LINT-1 (2026-10-28)
+
+Cloudflare's Workers Best Practices (read 2026-10-28) list: current compatibility_date, `nodejs_compat`, `upload_source_maps`, Env types, secrets through
+`wrangler secret`, streamed bodies, `ctx.waitUntil` without destructuring, bindings over REST, Queues/Workflows for background work, no request-scoped global
+state, no floating promises, Web Crypto for tokens. The fleet already enforces most of them diff-only in `scripts/workers_standards_guard.py` and whole-tree in
+`scripts/fleet_best_practices_audit.py` (one record of reviewed exceptions: `scripts/workers-standards-allowlist.txt`). This change adds the one missing rule,
+`compat-date-stale` (a changed or new `compatibility_date` older than 90 days fails), and makes `workers_with_source_maps` valid by judging it on generated bundles.
+Not adopted, with the reason: `wrangler types`/Env types (plain JavaScript, no type check), `@cloudflare/vitest-plugin` (suites are `*.test.mjs` run by
+`scripts/run-suites.mjs`), a hard `nodejs_compat` requirement on new workers (broke the guard's own fixtures and no fleet worker needs it).

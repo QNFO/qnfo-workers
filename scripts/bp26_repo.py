@@ -144,6 +144,14 @@ def collect_workers_config(ctx):
     workers = live_workers(ctx.root)
     out = []
     # ---- source maps
+    try:
+        eligible = set(bundle_names(ctx.root))
+    except Exception:  # noqa: BLE001
+        eligible = None
+    # BP26-WORKERS-BP-LINT-1 (2026-10-28): a source map maps a bundle to its sources. A hand-written single-file worker.js is its own source, so a map would map the file to itself
+    # and 34 of 35 workers could never "pass". The practice is judged on the generated bundles (qnfo-agents), which is where a deployed stack trace needs a map.
+    if eligible:
+        workers = [w for w in workers if w[0] in eligible]
     if workers:
         rows = [(n, 1 if has_source_maps(cfg) else 0, "upload_source_maps = true" if has_source_maps(cfg) else "upload_source_maps not set") for n, cfg, _ in workers]
         with_maps = sum(r[1] for r in rows)
