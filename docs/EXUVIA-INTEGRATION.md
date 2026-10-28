@@ -48,5 +48,4 @@ from `exuvia-two.vercel.app` measured, and no Exuvia 4xx other than 429.
 
 ## Related paper work shipped in the same session
 
-Per-paper reference exports on `papers.qnfo.org` (gateway 3.45.0, PR 5075): `/api/papers/<slug>.cff`, `.csl.json`, `.bib`. Open on BP26-PAPER-PIDS-1 (agent_issues 1000338):
-immutable `/papers/{id}/v{n}` URLs, the content-hash producer for `paper_version_immutability`, and the Crossref membership card.
+Per-paper reference exports on `papers.qnfo.org` (gateway 3.45.0, PR 5075): `/api/papers/<slug>.cff`, `.csl.json`, `.bib`. Open on BP26-PAPER-PIDS-1 (agent_issues 1000338): the version URL and sha256 shipped in gateway 3.46.0 (session-bp26-research); the alias routes /papers/<slug>/cite.* and the version tag PAPER-PIDS-CITE-1 remain on agent_issues 1000647, and the Crossref membership stays an owner card.
