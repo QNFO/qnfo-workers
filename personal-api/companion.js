@@ -81,7 +81,7 @@
 //      day or a low two days, deeper after a steady week, steady otherwise). Only the lane name leaves this worker, in the link;
 //      no score, date or word of his goes to the reading site.
 
-export const COMPANION_VERSION = "1.12.0";
+export const COMPANION_VERSION = "1.13.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -2384,6 +2384,7 @@ table{width:100%;border-collapse:collapse;font-size:.92rem}td,th{text-align:left
 .tip{background:var(--acc2);border-radius:10px;padding:10px 12px;margin-top:8px}
 </style></head><body><main>
 <h1>Your companion</h1>
+<p class="mute">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <p class="mute">One page. What it is, how to set it up once, and how to use it in under two minutes a day.</p>
 <p><a class="go" href="/companion">Open my companion</a></p>
 
@@ -2477,6 +2478,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 .sheet p{margin:.5rem 0}.sheet h1{font-size:1.25rem}
 @media print{html,body{background:#fff!important;color:#000!important}nav,#q-note,#login,.v,.noprint{display:none!important}#gp-print:not(.hide){display:block!important}.card{border:0;padding:0}.mute{color:#333}main{max-width:none;padding:0}}
 </style></head><body><main>
+<p class="mute" id="ai-note" style="margin:.2rem 0 .6rem;font-size:.9rem">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <div id="q-note"></div>
 <div id="gp-print" class="hide"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
@@ -2486,7 +2488,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
  <div class="row" style="margin-top:8px"><button class="p" onclick="capText()">Save</button><button id="rec" onclick="toggleRec()">Voice note</button><label class="btn">Photo<input id="cap-img" type="file" accept="image/*" capture="environment" class="hide" onchange="capImg(this)"></label></div>
  <div id="cap-out"></div></div>
  <div class="card"><h2>Recently captured</h2><div id="inbox"></div></div></section>
-<section id="v-talk" class="v hide"><h1>Talk</h1><div id="msgs"></div>
+<section id="v-talk" class="v hide"><h1>Talk</h1><p class="mute">You are talking with an AI, not a person.</p><div id="msgs"></div>
  <div class="card"><textarea id="chat-in" placeholder="Say anything. How you are, what's on your mind, what to do next."></textarea><div class="row" style="margin-top:8px"><button class="p" id="chat-send" onclick="sendChat()">Send</button><button onclick="clearChat()">New conversation</button></div></div></section>
 <section id="v-do" class="v hide"><h1>Next actions</h1><div id="do"></div>
  <div class="card"><h2>Add</h2><input id="a-title" placeholder="Next action, starting with a verb"><div class="row" style="margin-top:8px"><select id="a-ctx" class="grow"></select><select id="a-en" class="grow"><option value="low">low energy</option><option value="medium">medium</option><option value="high">high</option></select><input id="a-min" type="number" min="1" value="15" style="width:90px"></div><div class="row" style="margin-top:8px"><button class="p" onclick="addAction()">Add</button></div></div></section>
