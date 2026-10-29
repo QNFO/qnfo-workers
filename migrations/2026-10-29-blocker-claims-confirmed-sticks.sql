@@ -13,6 +13,9 @@
 -- text_sig the red-teamer recorded. A changed issue text re-surfaces the claim. The card: branch is unchanged (a card has no signature column the view can compare).
 -- Nothing lists as hidden by this change today (0 confirmed rows among the 23); it takes effect as the red-team loop writes signed confirmed verdicts.
 --
+-- FIX 2026-10-29 (apply-migrations run 40851908982, statement 4: 10 values for 11 columns): the failure_modes row had no detector text, so the INSERT failed after the view was
+-- recreated (applied_before_failure 3). The detector sentence is added; statements 1-3 are idempotent, so the re-apply on merge completes the row and the decision_log entry.
+--
 -- WHAT THIS FILE DOES
 --   1. bak_20261029_v_blocker_claims keeps the live view text; the view is recreated with 'confirmed-with-evidence' added to the signed-verdict list (otherwise byte for byte).
 --   2. failure mode blocker-verdict-confirmed-expires-daily.
@@ -47,6 +50,7 @@ VALUES ('blocker-verdict-confirmed-expires-daily',
   'a confirmed-with-evidence red-team verdict on a blocker claim counts only 24 hours, so a verified hold re-enters unverified_blocker_claims every day',
   'v_blocker_claims honored a text_sig only for false-belief-removed and workaround-built',
   'BLOCKER-CLAIMS-CONFIRMED-STICKS-1 (migrations/2026-10-29-blocker-claims-confirmed-sticks.sql): confirmed-with-evidence holds while the text signature matches',
+  'no signed confirmed-with-evidence red-team verdict whose text signature still matches is listed by v_blocker_claims',
   'fm-blocker-claims-count-receipts', '2026-10-29', 1000554,
   'a red-team row is written without text_sig or with a verdict the view does not sign',
   'unverified_blocker_claims recurs daily for claims already tested',
