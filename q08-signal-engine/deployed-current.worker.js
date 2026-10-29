@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.39.6-codeagent";
+var VERSION = "0.39.7-codeagent";
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
@@ -601,10 +601,19 @@ async function sweepForecastCriteria(env) {
   if (!env || !env.DB) return 0;
   var n = 0;
   try {
+    // FLEET-JOURNEY-FAILED-1 / issue #1000489: the sweep read resolution_text before older D1
+    // schemas had the column, so every tick threw D1_ERROR at /health. Add it if missing.
+    try {
+      await env.DB.prepare("ALTER TABLE q08_forecasts ADD COLUMN resolution_text TEXT").run();
+    } catch (addErr) {
+      var addMsg = String(addErr && addErr.message || addErr);
+      if (!/duplicate column/i.test(addMsg) && !/already exists/i.test(addMsg)) throw addErr;
+    }
     var rows = await env.DB.prepare("SELECT id, resolution_text FROM q08_forecasts WHERE status = 'open'").all();
     var list = (rows && rows.results) || [];
     for (var i = 0; i < list.length; i++) {
       var row = list[i];
+      if (row.resolution_text == null || row.resolution_text === undefined) continue; // no text to judge yet: never void on absence alone
       var miss = forecastCriteriaMissing(row.resolution_text);
       if (!miss) continue;
       var upd = await env.DB.prepare("UPDATE q08_forecasts SET status = 'void', disposition = 'superseded-incomplete-criteria' WHERE id = ?1 AND status = 'open'").bind(row.id).run();
