@@ -37,8 +37,7 @@ CREATE TABLE IF NOT EXISTS plus_ledger (
   decided_at TEXT
 );
 
-DROP VIEW IF EXISTS v_product_plus_due;
-CREATE VIEW v_product_plus_due AS
+CREATE VIEW IF NOT EXISTS v_product_plus_due AS
 SELECT p.product, p.host, p.program_code, p.last_plus_at,
   CAST((julianday('now') - julianday(COALESCE(p.last_plus_at, p.created_at))) * 24 AS INTEGER) AS hours_since_plus,
   p.plus_cadence_h, p.misses_in_row, p.pluses_since_simplify,
