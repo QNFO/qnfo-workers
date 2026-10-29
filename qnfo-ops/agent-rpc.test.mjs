@@ -21,7 +21,7 @@ ok(/request\.method === "POST"/.test(body), "DO fetch handles POST (HTTP RPC)");
 ok(/op === "history"/.test(body) && /op === "reset"/.test(body) && /op === "run"|const op = String/.test(body), "HTTP RPC ops: run / history / reset");
 ok(/this\.runTurn\(sid, text, body && body\.max_iters\)/.test(body), "HTTP RPC runs a real agent turn with the caller cap");
 
-ok(/async runTurn\(sid, userContent, cap\)/.test(cls), "runTurn is the shared agent loop");
+ok(/async runTurn\(sid, userContent, cap(?:, onStep)?\)/.test(cls), "runTurn is the shared agent loop");
 ok(/webSocketMessage[\s\S]{0,900}await this\.runTurn\(sid, userContent\)/.test(cls), "the WebSocket path delegates to runTurn (no duplicated loop)");
 ok((cls.match(/opsAgentChat\(this\.env/g) || []).length === 2, "exactly two model calls in runTurn (loop + final no-tools round)");
 ok(/opsAgentSpan\("invoke_agent", conversationId/.test(cls), "each durable runTurn emits one invoke_agent span");
@@ -50,7 +50,7 @@ ok(near(agentWhen("1d"), t0 + 86400000), "1d is one day out");
 ok(near(agentWhen(String(t0 + 600000)), t0 + 600000), "an epoch ms value is taken as-is");
 ok(agentWhen("nonsense") === 0 && agentWhen("") === 0 && agentWhen(null) === 0, "an unparseable when is 0, never a silent now");
 
-ok(/async runTurn\(sid, userContent, cap\)/.test(src), "runTurn takes a caller cap");
+ok(/async runTurn\(sid, userContent, cap(?:, onStep)?\)/.test(src), "runTurn takes a caller cap");
 ok(/Math\.min\(_envMax, Math\.floor\(_capN\)\)/.test(src), "the cap is clamped to the worker ceiling, never raised");
 ok(/this\.runTurn\(sid, text, body && body\.max_iters\)/.test(src), "the HTTP run passes body.max_iters");
 ok(/op === "schedule"/.test(src) && /op === "schedules"/.test(src) && /op === "cancel"/.test(src) && /op === "receipts"/.test(src), "schedule / schedules / cancel / receipts ops");
@@ -59,6 +59,12 @@ ok(/storage\.setAlarm\(min\)/.test(src) && /deleteAlarm/.test(src), "the alarm i
 ok(/storage\.put\("receipt:" \+ v\.id/.test(src), "a finished schedule leaves a receipt");
 ok(/storage\.delete\("schedule:" \+ v\.id\)/.test(src), "a due schedule is removed after it runs");
 ok(/"agent-schedule"/.test(src), "capability agent-schedule advertised");
+
+// CMD-AGENT-1 (2.60.0): background runs for the console command line.
+ok(/op === "start"/.test(src) && /op === "result"/.test(src), "start / result ops for background agent runs");
+ok(/storage\.put\("run:" \+ rid/.test(src) && /storage\.put\("schedule:" \+ rid, row\)/.test(src), "start stores the run and a due schedule row, then arms the alarm");
+ok(/if \(v\.run\) \{/.test(src) && /status: r && r\.ok \? "done" : "failed"/.test(src), "alarm() runs a run row and records done or failed with the reply");
+ok(/steps\.push\(\{ tool:/.test(src) && /onStep\(steps\)/.test(src), "each tool round is recorded as a live step");
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
