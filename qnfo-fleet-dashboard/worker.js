@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.75.0"; // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+var VERSION = "1.76.0"; // 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
 /* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
 /* 1.71.1 PSR-NARRATIVE-CAP-SOFT-1 (2026-10-26, agent_issues 1000409, pillar cost; patch): the weekly program-strategic review writes its narrative at a breached ai_spend cap and when the budget cannot be read, on the free Workers AI model only (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06: a breached cap steers model choice and never stops work); the result carries narrative_tier (normal | lean) and narrative_count in place of narrative_allowed, and the summary names the tier. */
@@ -2868,6 +2868,7 @@ function fleetStatusModel(p) {
   const byCode = {};
   for (const g of progs) byCode[g.code] = g;
   let total = null, inBreach = null, worse = null, better = null, stale = null, unmeasured = null;
+  const metricMap = {};
   if (p.metrics) {
     total = 0; inBreach = 0; worse = 0; better = 0; stale = 0; unmeasured = 0;
     for (const r of p.metrics) {
@@ -2878,6 +2879,7 @@ function fleetStatusModel(p) {
       if (value == null) { unmeasured++; continue; }
       g.measured++;
       const trend = statusTrend(r.good, value, r.value_7d_ago);
+      metricMap[r.metric] = { value: value, threshold: statusNum(r.threshold), operator: r.operator, breach: Number(r.breach) === 1 ? 1 : 0, trend: trend, title: String(r.title || r.metric) };
       const age = statusAgeMin(r.measured_at, nowMs);
       const isStale = age != null && age > STATUS_STALE_MIN;
       if (trend === "worse") { worse++; g.worse_7d++; }
@@ -2917,12 +2919,15 @@ function fleetStatusModel(p) {
     sentence = "Nothing needs you." + (activity.decisions_logged != null ? " In the last 24 hours the fleet logged " + activity.decisions_logged + " decisions, its managers took " + (activity.manager_actions || 0) + " actions, " + (activity.issues_closed || 0) + " issues were closed and " + (activity.code_merged || 0) + " code changes merged." : "") +
       (inBreach ? " " + inBreach + " of " + (total - unmeasured) + " measured metrics are off target; " + worse + " got worse this week and " + better + " got better." : " Every measured metric is on target.");
   }
-  return {
+  const vin = p.value_inputs || null;
+  const valueDoc = vin ? valueModel({ spend_7d_usd: vin.spend_7d_usd, daily_usd: vin.daily_usd, fixed_daily_usd: vin.fixed_daily_usd, variable_daily_usd: vin.variable_daily_usd, month_budget_usd: vin.month_budget_usd, month_to_date_usd: vin.month_to_date_usd, work: vin.work, papers_7d: vin.papers_7d, pageviews_7d: vin.pageviews_7d, metrics: metricMap, quality: quality, blind: vin.blind }) : null;
+  const statusDoc = {
     schema_version: "fleet-status/v1",
     worker: NAME,
     version: VERSION,
     generated_at: new Date(nowMs).toISOString(),
     headline: { state: state, sentence: sentence },
+    value: valueDoc,
     needs_you: { count: needs.length, rule: "Only an item that is irreversible and identity-bound is the owner's: money, a credential only the owner can mint, a legal or signing act, the owner's own accounts, mail written by a person, a change to the fleet's goals. Everything else is the fleet's (AUTONOMY-FIRST-1, HUMAN-ITEMS-AUTOMATIC-1).", items: needs, act_at: "/classic#queue" },
     fleet_handling: { count: fleet.length, note: "Parked code tasks and issue-loop dispatches. The fleet finishes them; fm-human-items-waiting flags any older than 120 minutes.", items: fleet },
     activity_24h: activity,
@@ -2936,6 +2941,41 @@ function fleetStatusModel(p) {
     blind: blind,
     notes: (causes ? [] : ["root causes not readable yet (v_breach_by_cause arrives with BREACH-ONE-MEANING-1)"]).concat(quality ? [] : ["output quality not readable (v_output_quality_headline)"]),
     links: { page: "/", json: "/api/status", classic_overview: "/classic", managers: "/managers", api_index: "/api", command_line: "/cmd", areas: AREA_REGISTRY.map(function(x) { return "/area/" + x.id; }) }
+  };
+  // VALUE-DASH-1: every subject on the page has an entry here (what it means, why it is shown, what the fleet does by itself, who does it); POST /api/owner/act {subject, directive?} kicks one back.
+  statusDoc.actions = { contract: "Each key is a subject the page can act on. POST /api/owner/act {subject, directive?} (signed-in owner, x-fleet-ui: 1) files it as fleet work; without a directive the fleet applies fleet_default.", subjects: actionIndex(statusDoc) };
+  return statusDoc;
+}
+var STATUS_WORK_SQL = "SELECT (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 day')) AS code_merged_7d, (SELECT COUNT(*) FROM issue_lifecycle WHERE event = 'closed' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 day')) AS issues_closed_7d";
+// VALUE-DASH-1: the inputs of the value section. Each source is read on its own; one that fails is named in blind and its figure is null.
+async function statusValueInputs(env, now) {
+  const blind = [];
+  const [cost, reach, content, work] = await Promise.all([
+    costFeedData(env).catch(function() { blind.push("spend (cost feed)"); return null; }),
+    reachScorecardData(env).catch(function() { blind.push("pageviews (reach scorecard)"); return null; }),
+    contentData(env, now).catch(function() { blind.push("papers published (content pipeline)"); return null; }),
+    d1all(env.AUDIT, STATUS_WORK_SQL).catch(function() { blind.push("code merged and issues closed"); return null; })
+  ]);
+  const tot = cost && (cost.run_rate || []).filter(function(r) { return r.source_group === "total:all-billing"; })[0];
+  const daily = tot && Number(tot.daily_7d) > 0 ? Number(tot.daily_7d) : null;
+  // Fixed operating cost is the flat daily lines (the plan, flat-rate provider subscriptions); variable is the metered AI spend (Cloudflare + gateway, owner gateway).
+  const grp = function(g) { const r = cost && (cost.run_rate || []).filter(function(x) { return x.source_group === g; })[0]; return r ? Number(r.daily_7d) || 0 : null; };
+  const fx = [grp('cloudflare_plan:daily'), grp('direct_providers_external:daily')], vr = [grp('total:cloudflare+gateway'), grp('total:owner-gateway')];
+  const fixedDaily = fx.every(function(x) { return x == null; }) ? null : fx.reduce(function(a, x) { return a + (x || 0); }, 0);
+  const varDaily = vr.every(function(x) { return x == null; }) ? null : vr.reduce(function(a, x) { return a + (x || 0); }, 0);
+  if (cost && daily == null) blind.push("spend (no 7-day billing rate)");
+  const pv = reach && reach.windows && reach.windows.d7 && reach.windows.d7.pageviews ? Number(reach.windows.d7.pageviews.value) : null;
+  return {
+    spend_7d_usd: daily == null ? null : Math.round(daily * VALUE_WINDOW_DAYS * 100) / 100,
+    daily_usd: daily,
+    fixed_daily_usd: fixedDaily,
+    variable_daily_usd: varDaily,
+    month_budget_usd: cost ? cost.fleet_budget_month_usd : null,
+    month_to_date_usd: cost ? cost.fleet_month_to_date_usd : null,
+    work: work && work[0] ? work[0] : null,
+    papers_7d: content && content.totals ? content.totals.published_7d : null,
+    pageviews_7d: isFinite(pv) ? pv : null,
+    blind: blind
   };
 }
 var STATUS_ACTIVITY_SQL = "SELECT (SELECT COUNT(*) FROM decision_log WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS decisions, (SELECT COUNT(*) FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS manager_actions, (SELECT COUNT(*) FROM breach_selfheal_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS selfheal, (SELECT COUNT(*) FROM issue_lifecycle WHERE event = 'closed' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS issues_closed, (SELECT COUNT(*) FROM issue_lifecycle WHERE event = 'opened' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS issues_opened, (SELECT COUNT(*) FROM agent_issues WHERE status = 'open') AS issues_open, (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS code_merged, (SELECT COUNT(*) FROM deployment_history WHERE deployed_at >= datetime('now','-1 day')) AS deploys";
@@ -2955,7 +2995,8 @@ async function fleetStatusData(env, ctx) {
     safe("programs", "SELECT program_code, name FROM programs"),
     d1all(A, "SELECT cause_key, title, plain, lever, doer, needs_owner, breaches, metrics FROM v_breach_by_cause").catch(function() { return null; })
   ]);
-  const doc = fleetStatusModel({ human: human, metrics: metrics, activity: act && act[0] || null, quality: qual && qual[0] || null, programs: progs, causes: causes, blind: blind, now: now });
+  const vin = await statusValueInputs(env, now).catch(function() { return null; });
+  const doc = fleetStatusModel({ human: human, metrics: metrics, activity: act && act[0] || null, quality: qual && qual[0] || null, programs: progs, causes: causes, blind: blind, value_inputs: vin, now: now });
   if (metrics) STATUS_CACHE = { at: now, env: env, v: doc };
   return doc;
 }
@@ -3014,11 +3055,14 @@ function statusPageHtml(doc, rev, holder, decisions) {
   const e = esc, o = [];
   const h = doc.headline, m = doc.metrics, a = doc.activity_24h;
   const big = h.state === "needs_you" ? doc.needs_you.count + (doc.needs_you.count === 1 ? " thing needs you" : " things need you") : h.state === "blind" ? "Can't confirm" : "Nothing needs you";
-  o.push(fleetHead("QNFO fleet status").replace("<body>", '<body data-rev="' + e(rev) + '">').replace("</style>", STATUS_CSS + "</style>"));
+  o.push(fleetHead("QNFO fleet status").replace("<body>", '<body data-rev="' + e(rev) + '">').replace("</style>", STATUS_CSS + VALUE_CSS + "</style>"));
   o.push(fleetTop("status", false, holder));
   o.push('<main class="wrap fl">');
   o.push(cmdPanelHtml(holder, "", ""));
   o.push('<section class="st-hero ' + e(h.state) + '" id="st-hero" aria-labelledby="st-h1"><p class="q-eyebrow">Fleet status</p><h1 id="st-h1">' + e(big) + "</h1><p>" + e(h.sentence) + "</p></section>");
+  const AE = doc.actions && doc.actions.subjects || {};
+  const bar = function(subj) { return AE[subj] ? actBarHtml(subj, AE[subj], holder, e) : ""; };
+  if (doc.value) o.push(valueSectionHtml(doc.value, holder, AE, e));
   if (doc.needs_you.count) {
     o.push('<section class="st-sec" id="st-needs" aria-labelledby="st-you"><h2 class="fl-h" id="st-you">Needs you <span class="ct">' + doc.needs_you.count + "</span></h2>");
     // ONE-TAP-ACTIONS-1: for the owner, what can be decided in one tap comes first (urgent before that), and the heading says how the list splits
@@ -3046,19 +3090,20 @@ function statusPageHtml(doc, rev, holder, decisions) {
     o.push("</section>");
   }
   const tile = function(n, l) { return '<div class="st-tile"><b>' + e(n == null ? "n/a" : statusNumText(n)) + "</b><span>" + e(l) + "</span></div>"; };
-  o.push('<section class="st-sec" aria-labelledby="st-did"><h2 class="fl-h" id="st-did">What the fleet did, last 24 hours</h2><div class="st-tiles">' + tile(a.decisions_logged, "decisions logged") + tile(a.manager_actions, "manager actions") + tile(a.issues_closed, "issues closed") + tile(a.issues_opened, "issues opened") + tile(a.code_merged, "code changes merged") + tile(a.deploys, "deploys") + '</div><p class="meta">' + e(a.issues_open == null ? "" : a.issues_open + " issues open now. ") + 'Decisions and their reasons: <a href="/managers">managers</a>.</p></section>');
+  o.push('<section class="st-sec" aria-labelledby="st-did"><h2 class="fl-h" id="st-did">What the fleet did, last 24 hours</h2><div class="st-tiles">' + tile(a.decisions_logged, "decisions logged") + tile(a.manager_actions, "manager actions") + tile(a.issues_closed, "issues closed") + tile(a.issues_opened, "issues opened") + tile(a.code_merged, "code changes merged") + tile(a.deploys, "deploys") + '</div><p class="meta">' + e(a.issues_open == null ? "" : a.issues_open + " issues open now. ") + 'Decisions and their reasons: <a href="/managers">managers</a>.</p>' + bar("activity") + "</section>");
   if (doc.causes && doc.causes.length) {
     o.push('<section class="st-sec" aria-labelledby="st-why"><h2 class="fl-h" id="st-why">Why metrics are off target <span class="ct">' + doc.causes.length + (doc.causes.length === 1 ? " cause" : " causes") + '</span></h2><section class="card">');
-    for (const c of doc.causes) o.push('<div class="st-cause"><div class="st-ch"><b>' + e(c.title) + '</b><span class="ct">' + e(c.breaches) + (c.breaches === 1 ? " metric" : " metrics") + "</span>" + (c.owner_decision ? '<span class="tag u">your decision</span>' : "") + "</div><p>" + e(c.plain) + '</p><p class="meta"><b>Lever:</b> ' + e(c.lever) + " <b>Doer:</b> " + e(c.doer) + "</p></div>");
+    for (const c of doc.causes) o.push('<div class="st-cause"><div class="st-ch"><b>' + e(c.title) + '</b><span class="ct">' + e(c.breaches) + (c.breaches === 1 ? " metric" : " metrics") + "</span>" + (c.owner_decision ? '<span class="tag u">your decision</span>' : "") + "</div><p>" + e(c.plain) + '</p><p class="meta"><b>Lever:</b> ' + e(c.lever) + " <b>Doer:</b> " + e(c.doer) + "</p>" + bar("cause:" + c.cause) + "</div>");
     o.push("</section></section>");
   }
   o.push('<section class="st-sec" aria-labelledby="st-prog"><h2 class="fl-h" id="st-prog">Programs <span class="ct">' + (m.in_breach == null ? "can't read metrics" : m.in_breach + " of " + m.measured + " metrics off target") + '</span></h2><section class="card">');
   for (const g of m.by_program) {
     const top = g.breaches.slice(0, 3).map(function(b) { return b.title; });
     o.push('<div class="st-prog"><div class="nm"><b>' + e(g.name) + "</b><span>" + e(g.what) + '</span></div><div class="n">' + e(g.in_breach) + "<small>off target of " + e(g.measured) + '</small></div><div class="n">' + e(g.worse_7d) + '<small>worse this week</small></div><div class="top">' + (g.in_breach ? top.map(e).join(" &middot; ") : "All measured metrics on target.") + "</div>");
+    if (AE["program:" + g.code]) o.push('<div class="st-pact">' + bar("program:" + g.code) + "</div>");
     if (g.breaches.length) {
-      o.push("<details><summary>All " + g.breaches.length + ' off-target metrics</summary><div class="st-scroll"><table class="st-tbl"><thead><tr><th>Metric</th><th>Now</th><th>Target</th><th>7 days</th><th>Measured</th></tr></thead><tbody>');
-      for (const b of g.breaches) o.push("<tr><td>" + e(b.title) + "<br><code>" + e(b.metric) + '</code></td><td class="r">' + e(statusNumText(b.value)) + '</td><td class="r">' + e((STATUS_OP_TEXT[b.operator] || b.operator) + " " + statusNumText(b.threshold)) + '</td><td class="tw ' + e(b.trend) + '">' + e(statusTrendText(b)) + "</td><td>" + (b.age_min == null ? "unknown" : e(b.age_min < 120 ? b.age_min + " min ago" : Math.round(b.age_min / 60) + " h ago") + (b.stale ? " (stale)" : "")) + "</td></tr>");
+      o.push("<details><summary>All " + g.breaches.length + ' off-target metrics</summary><div class="st-scroll"><table class="st-tbl"><thead><tr><th>Metric</th><th>Now</th><th>Target</th><th>7 days</th><th>Measured</th><th>Act</th></tr></thead><tbody>');
+      for (const b of g.breaches) o.push("<tr><td>" + e(b.title) + "<br><code>" + e(b.metric) + '</code></td><td class="r">' + e(statusNumText(b.value)) + '</td><td class="r">' + e((STATUS_OP_TEXT[b.operator] || b.operator) + " " + statusNumText(b.threshold)) + '</td><td class="tw ' + e(b.trend) + '">' + e(statusTrendText(b)) + "</td><td>" + (b.age_min == null ? "unknown" : e(b.age_min < 120 ? b.age_min + " min ago" : Math.round(b.age_min / 60) + " h ago") + (b.stale ? " (stale)" : "")) + '</td><td class="act-cell"><details><summary>Act</summary>' + bar("metric:" + b.metric) + "</details></td></tr>");
       o.push("</tbody></table></div></details>");
     }
     o.push("</div>");
@@ -3066,19 +3111,228 @@ function statusPageHtml(doc, rev, holder, decisions) {
   o.push('</section><p class="meta">' + e(m.definition) + "</p></section>");
   if (doc.quality) {
     const q = doc.quality;
-    o.push('<section class="st-sec" aria-labelledby="st-q"><h2 class="fl-h" id="st-q">Are outputs getting better?</h2><section class="card"><p><b>' + e(String(q.verdict).replace(/_/g, " ")) + "</b>: " + e(q.better + " outcome measures better, " + q.worse + " worse, " + q.flat + " flat against 7 days ago" + (q.unmeasured ? ", " + q.unmeasured + " without enough history" : "") + ".") + (q.gaps.length ? " Surfaces with no outcome measure yet: " + e(q.gaps.join(", ")) + "." : "") + "</p></section></section>");
+    o.push('<section class="st-sec" aria-labelledby="st-q"><h2 class="fl-h" id="st-q">Are outputs getting better?</h2><section class="card"><p><b>' + e(String(q.verdict).replace(/_/g, " ")) + "</b>: " + e(q.better + " outcome measures better, " + q.worse + " worse, " + q.flat + " flat against 7 days ago" + (q.unmeasured ? ", " + q.unmeasured + " without enough history" : "") + ".") + (q.gaps.length ? " Surfaces with no outcome measure yet: " + e(q.gaps.join(", ")) + "." : "") + "</p>" + bar("quality") + "</section></section>");
   }
   if (doc.fleet_handling.count) {
     o.push('<section class="st-sec" aria-labelledby="st-fh"><h2 class="fl-h" id="st-fh">The fleet is handling <span class="ct">' + doc.fleet_handling.count + '</span></h2><section class="card"><details><summary>' + e(doc.fleet_handling.note) + "</summary><ul>");
     for (const it of doc.fleet_handling.items) o.push("<li>" + e(clipWords(it.title, 140)) + (it.why ? ' <span class="meta">' + e(clipWords(it.why, 160)) + "</span>" : "") + "</li>");
-    o.push("</ul></details></section></section>");
+    o.push("</ul></details>" + bar("handling") + "</section></section>");
   }
   if (doc.blind.length) o.push('<div class="note">Could not read: ' + e(doc.blind.join("; ")) + ". Figures that depend on it are missing, not zero.</div>");
   o.push('<p class="st-mach">Machine-readable: <a href="/api/status"><code>/api/status</code></a> is this page as one JSON document (fleet-status/v1, ETag and <code>?since=</code>); <a href="/api"><code>/api</code></a> lists every feed. Detail: <a href="/classic">full overview</a>, <a href="/managers">managers</a>, ' + AREA_REGISTRY.map(function(x) { return '<a href="/area/' + x.id + '">' + e(x.short) + "</a>"; }).join(", ") + ', <a href="/cmd">command line</a>.</p>');
-  o.push('<footer class="fl-foot">v' + e(VERSION) + " &middot; generated " + e(doc.generated_at) + "</footer></main>" + cmdScript(holder) + STATUS_POLL_JS + (holder ? STATUS_OWNER_JS : "") + FLEET_SHELL_JS + "</body></html>");
+  o.push('<footer class="fl-foot">v' + e(VERSION) + " &middot; generated " + e(doc.generated_at) + "</footer></main>" + cmdScript(holder) + STATUS_POLL_JS + (holder ? STATUS_OWNER_JS : "") + (holder ? VALUE_JS : "") + FLEET_SHELL_JS + "</body></html>");
   return o.join("");
 }
 /* FLEET-STATUS-1:END */
+/* VALUE-DASH-1:BEGIN */
+// VALUE-DASH-1 (1.76.0, 2026-10-29, pillar autonomy; owner request 2026-10-29: every item on the dashboard needs what it means, why it is shown and an
+// action; show the value proposition, "my cost per what, my quality"; "review this stuff and then kick it right back to the system ... the system has
+// to know what to do automatically." Correction the same day: "I don't like cost per output because then that implies minimizing cost ... we could have
+// zero outputs and still have a cost. Flip it around. I want to maximize the outputs, maximize the quality, maximize the impact ... per unit of cost.
+// ... There is a cost minimization function in this as well, but you've got to handle both of those.")
+//
+// The objective is a ratio, so it has two sides and the page works both: MAXIMIZE the numerator (outputs, quality, impact: publish more, post more,
+// reach more) and MINIMIZE the denominator where it is waste (variable AI spend; the fixed operating cost is paid whatever the output, so more output
+// is what lowers it per unit). Cost per output alone rewards doing nothing, so the headline is yield per $100 and a change counts only when yield
+// rose, quality did not fall and spend stayed within the budget. Pure functions (no I/O); fleet-value.test.mjs drives them. A figure whose source could
+// not be read is null and named in blind, never zero.
+var VALUE_WINDOW_DAYS = 7;
+var VALUE_RULE = "A change counts only if yield per $100 rose, quality did not fall, and spend stayed within the monthly budget. Spending nothing is not a win: it lowers cost by lowering yield to zero.";
+function valNum(x) {
+  if (x == null || x === "") return null;
+  const n = Number(x);
+  return isFinite(n) ? n : null;
+}
+function usdText(x) {
+  const n = valNum(x);
+  if (n == null) return "n/a";
+  if (n >= 100) return "$" + Math.round(n).toLocaleString("en-US");
+  if (n >= 1) return "$" + n.toFixed(2);
+  return "$" + n.toFixed(3);
+}
+function valYield(outputs, spend) {
+  const s = valNum(spend), o = valNum(outputs);
+  if (s == null || o == null || s <= 0) return null;
+  return Math.round(o / s * 100 * 100) / 100;
+}
+function valCost(spend, outputs) {
+  const s = valNum(spend), o = valNum(outputs);
+  if (s == null || o == null || o <= 0) return null;
+  return Math.round(s / o * 1e4) / 1e4;
+}
+function valYieldText(x) {
+  const n = valNum(x);
+  if (n == null) return "n/a";
+  return n >= 100 ? Math.round(n).toLocaleString("en-US") : String(Math.round(n * 10) / 10);
+}
+function valPct(x) {
+  const n = valNum(x);
+  return n == null ? "n/a" : Math.round(n * 1000) / 10 + "%";
+}
+// metrics: { <metric key>: { value, threshold, operator, breach, trend, title } } from v_fleet_metrics rows (the status model's own shape).
+function valQuality(metrics, key, what) {
+  const m = metrics && metrics[key];
+  if (!m || m.value == null) return { label: what, status: "unmeasured", text: "not measured yet", source: key };
+  const bad = Number(m.breach) === 1;
+  return { label: what, status: bad ? "off_target" : "on_target", trend: m.trend || null, value: m.value, text: valPct(m.value) + (bad ? " (off target" + (m.trend && m.trend !== "no_history" ? ", " + m.trend + " this week" : "") + ")" : " (on target)"), source: key };
+}
+
+// PRECONDITION: p = { spend_7d_usd, daily_usd, fixed_daily_usd, variable_daily_usd, month_budget_usd, month_to_date_usd, work: { code_merged_7d,
+// issues_closed_7d }, papers_7d, pageviews_7d, metrics (map above), quality (outputs headline or null), blind [names] }.
+// POSTCONDITION: { basis, rule, spend, posture, units[] }; every unit has a yield (outputs per $100), the quality beside it, and both levers.
+function valueModel(p) {
+  const spend = valNum(p.spend_7d_usd);
+  const daily = valNum(p.daily_usd);
+  const fixedDaily = valNum(p.fixed_daily_usd);
+  const varDaily = valNum(p.variable_daily_usd);
+  const varWindow = varDaily == null ? null : varDaily * VALUE_WINDOW_DAYS;
+  const w = p.work || {};
+  const q = p.quality || null;
+  const papersGap = !!(q && (q.gaps || []).indexOf("papers") >= 0);
+  const units = [
+    {
+      id: "paper", noun: "papers", outputs: valNum(p.papers_7d), per: "papers published",
+      quality: q ? { label: "Output quality, all surfaces", status: q.verdict === "worse" ? "off_target" : q.verdict === "better" || q.verdict === "improving" ? "on_target" : "mixed", text: String(q.verdict).replace(/_/g, " ") + " (" + q.better + " better, " + q.worse + " worse, " + q.flat + " flat against 7 days ago)" + (papersGap ? "; papers themselves have no outcome measure yet" : ""), source: "v_output_quality_headline" } : { label: "Output quality", status: "unmeasured", text: "not readable", source: "v_output_quality_headline" },
+      meaning: "Papers published in the last 7 days for every $100 the fleet spent in those days (all billing).",
+      why: "Papers are the product. Yield is how much of it each dollar buys; quality says whether the papers are getting better while it grows.",
+      push: "Publish more: work the accepted-and-waiting queue faster (parallel review and revision slots) while the output-quality measures hold.",
+      trim: "Move the most expensive pipeline step to a cheaper capable model and drop duplicate review layers (BUDGET-SOFT-ROUTE-1, ENSEMBLE-POLICY-1)" + (papersGap ? "; add the missing outcome measure for papers so quality can be held." : "."),
+      doer: "qnfo-research-exec, qnfo-fleet-control"
+    },
+    {
+      id: "code", noun: "code changes", outputs: valNum(w.code_merged_7d), per: "code changes merged",
+      quality: valQuality(p.metrics, "code_task_success_rate_30d", "Code tasks that succeed (30 days)"),
+      meaning: "Code changes the code loop merged in the last 7 days for every $100 spent.",
+      why: "The code loop is how the fleet fixes and improves itself. Yield is its throughput per dollar; the success rate says how much of the spend is wasted on tasks that never merge.",
+      push: "Run more code tasks in parallel on the families that merge, so the loop uses its whole budget.",
+      trim: "Stop retrying task families with a low success rate and use the cheapest model that still passes the gate.",
+      doer: "qnfo-code-orchestrator"
+    },
+    {
+      id: "issue", noun: "issues closed", outputs: valNum(w.issues_closed_7d), per: "issues closed with evidence",
+      quality: valQuality(p.metrics, "fix_hold_rate_30d", "Fixes that hold (30 days)"),
+      meaning: "Issues closed in the last 7 days for every $100 spent.",
+      why: "A close is only worth paying for if the fix holds. Quality is the share of metric fixes that did not relapse.",
+      push: "Give every issue family a doer and a closing probe at birth, so more issues close on their own.",
+      trim: "Replace a remedy that did not move its metric in 7 days instead of repeating it (LEARN-APPLY-VERIFY).",
+      doer: "qnfo-fleet-control, remediation consumer"
+    },
+    {
+      id: "pageviews", noun: "pageviews", outputs: valNum(p.pageviews_7d), per: "pageviews",
+      quality: valQuality(p.metrics, "pageviews_30d", "Pageviews, 30 days against its floor"),
+      meaning: "Pageviews the sites served in the last 7 days for every $100 spent.",
+      why: "Reach is what the spend is for. Pushing it is the cheapest lever, because posting and publishing add readers without adding fixed cost.",
+      push: "Post and distribute more: raise cadence on the channels that bring human readers (v_channel_impact_7d) and roll up every published paper.",
+      trim: "Stop posting where nobody reads, and improve the pages that already rank instead of making new ones.",
+      doer: "qnfo-social, qnfo-fleet-control"
+    }
+  ];
+  for (const u of units) {
+    u.subject = "unit:" + u.id;
+    u.title = "Yield: " + u.per + " per $100";
+    u.window_days = VALUE_WINDOW_DAYS;
+    u.yield_per_100usd = valYield(u.outputs, spend);
+    u.per_100usd_variable = valYield(u.outputs, varWindow);
+    u.cost_each_usd = valCost(spend, u.outputs);
+  }
+  const mtd = valNum(p.month_to_date_usd), budget = valNum(p.month_budget_usd);
+  const headroom = mtd != null && budget != null ? Math.round((budget - mtd) * 100) / 100 : null;
+  const offTarget = units.filter(function(u) { return u.quality && u.quality.status === "off_target"; }).map(function(u) { return u.noun; });
+  let mode, sentence;
+  if (headroom != null && headroom < 0) {
+    mode = "over_budget";
+    sentence = "Over the monthly budget by " + usdText(-headroom) + ": hold volume and raise yield by trimming the lowest-yield spend.";
+  } else if (offTarget.length) {
+    mode = "fix_quality";
+    sentence = "Quality is off target for " + offTarget.join(", ") + ": raise quality before pushing volume.";
+  } else if (headroom != null) {
+    mode = "grow";
+    sentence = usdText(headroom) + " of budget is left this month and quality is on target: push volume (publish more, post more).";
+  } else {
+    mode = "unknown";
+    sentence = "The monthly budget could not be read, so the fleet cannot say whether to push volume or trim.";
+  }
+  return {
+    basis: "Yield = outputs of the last " + VALUE_WINDOW_DAYS + " days per $100 of all billing in the same days (list-price estimate, 7-day daily average). Rows overlap and do not add up.",
+    rule: VALUE_RULE,
+    window_days: VALUE_WINDOW_DAYS,
+    spend: { window_usd: spend, daily_usd: daily, fixed_daily_usd: fixedDaily, variable_daily_usd: varDaily, fixed_share: fixedDaily != null && daily ? Math.round(fixedDaily / daily * 1000) / 1000 : null, month_to_date_usd: mtd, month_budget_usd: budget, headroom_usd: headroom },
+    posture: { mode: mode, sentence: sentence },
+    units: units,
+    blind: (p.blind || []).slice()
+  };
+}
+
+// ---- the action contract ----
+// The index of every subject the page can act on: { <subject>: { title, meaning, why, fleet_default, doer, lever } }.
+// PRECONDITION: doc = the status document with doc.value, doc.causes, doc.metrics.by_program, doc.quality. Pure.
+function actionIndex(doc) {
+  const ix = {};
+  const v = doc && doc.value;
+  for (const u of (v && v.units) || []) ix[u.subject] = { title: u.title, meaning: u.meaning, why: u.why, fleet_default: "Push: " + u.push + " Trim: " + u.trim, doer: u.doer, lever: "Push: " + u.push + " Trim: " + u.trim };
+  for (const c of (doc && doc.causes) || []) {
+    ix["cause:" + c.cause] = { title: c.title, meaning: c.plain, why: "It explains " + c.breaches + (c.breaches === 1 ? " metric" : " metrics") + " that are off target; fixing it once is cheaper than fixing each.", fleet_default: c.lever, doer: c.doer, lever: c.lever };
+  }
+  for (const g of (doc && doc.metrics && doc.metrics.by_program) || []) {
+    ix["program:" + g.code] = { title: g.name + " program", meaning: g.what + ". " + g.in_breach + " of " + g.measured + " measured metrics are off target and " + g.worse_7d + " got worse this week.", why: "One program manager owns this and picks its worst metric first.", fleet_default: "The " + g.manager + " works its off-target metrics worst-first and files a doer for any that have none.", doer: g.manager, lever: "Worst-first through the program's metric triggers." };
+    for (const b of g.breaches) {
+      ix["metric:" + b.metric] = { title: b.title, meaning: b.title + " is " + b.value + " against a target of " + (b.operator || "") + " " + b.threshold + ", and was " + (b.value_7d_ago == null ? "unrecorded" : b.value_7d_ago) + " a week ago (" + b.trend + ").", why: "It is past its threshold, so its trigger has filed work for it.", fleet_default: "Its metric trigger's lever runs; a remedy that does not move it in 7 days is replaced.", doer: g.manager, lever: "analytics_metric_triggers.action for " + b.metric };
+    }
+  }
+  if (doc && doc.activity_24h) ix["activity"] = { title: "What the fleet did, last 24 hours", meaning: "Counts from the fleet's own ledgers: decisions logged, manager actions, issues opened and closed, code merged, deploys.", why: "It shows the fleet is working and whether issues close faster than they open.", fleet_default: "When issues open faster than they close, the fleet adds a doer or a closing probe to the largest family (ISSUE-THROUGHPUT-1).", doer: "qnfo-fleet-control", lever: "Throughput of the largest net-inflow issue family (v_issue_family_throughput)." };
+  if (doc && doc.fleet_handling && doc.fleet_handling.count) ix["handling"] = { title: "Items the fleet is handling", meaning: "Parked code tasks and issue-loop dispatches that are the fleet's to finish, not yours.", why: "They are listed so nothing is hidden, not because they need you.", fleet_default: "The fleet finishes them oldest first; fm-human-items-waiting flags any older than 120 minutes.", doer: "qnfo-code-orchestrator, qnfo-fleet-control", lever: "Clear the oldest parked item first." };
+  if (doc && doc.quality) ix["quality"] = { title: "Are outputs getting better?", meaning: "Outcome measures (readers, reviewers, probes) compared with 7 days ago, per surface: " + doc.quality.better + " better, " + doc.quality.worse + " worse.", why: "Clearing breaches is not quality; this is the check that outputs improve.", fleet_default: "The fleet fixes the worse surface at its producer and adds an outcome measure for each surface with a gap" + (doc.quality.gaps.length ? " (" + doc.quality.gaps.join(", ") + ")" : "") + ".", doer: "qnfo-fleet-control, the producing worker", lever: "Fix the worse surface at its producer; register the missing measures in output_quality_measures." };
+  return ix;
+}
+
+// The ticket text for one subject. Stable on purpose (no live figures, no clock) so a second tap on the same subject with the same words is the same
+// ticket (ownerTaskFile dedupes on identical text). The doer reads the live figures itself.
+function actTicket(subject, entry, directive) {
+  const d = String(directive || "").trim().slice(0, 600);
+  return "OWNER-ACT " + subject + ": " + entry.title + "\n" +
+    "Owner request from the dashboard (one tap, decided by the system under AUTONOMY-FIRST-1): " + (d ? d : "fix it: " + entry.fleet_default) + "\n" +
+    "What it means: " + entry.meaning + "\n" +
+    "Why it was shown: " + entry.why + "\n" +
+    "Doer: " + entry.doer + ". Lever: " + entry.lever + "\n" +
+    "Objective (both sides, VALUE-DASH-1): " + VALUE_RULE + "\n" +
+    "Definition of done: act on it, measure the same figure after the change, keep it only if the target moved and no guard worsened, and close with evidence in issue_triage.close_evidence. Record the decision in decision_log with its revert path.";
+}
+
+// ---- rendering ----
+var VALUE_SUBJECT_RE = /^(unit|cause|program|metric):[A-Za-z0-9._-]{1,80}$|^(quality|activity|handling)$/;
+function validSubject(s) {
+  return typeof s === "string" && VALUE_SUBJECT_RE.test(s);
+}
+
+// One action bar. holder false: the page says what the fleet does and that acting needs sign-in; nothing is hidden from a reader.
+function actBarHtml(subject, entry, holder, e) {
+  const info = '<details class="act-info"><summary>What is this, why am I seeing it, what can I do?</summary><dl><dt>What it means</dt><dd>' + e(entry.meaning) + "</dd><dt>Why you see it</dt><dd>" + e(entry.why) + "</dd><dt>What the fleet does on its own</dt><dd>" + e(entry.fleet_default) + "</dd><dt>Who does it</dt><dd>" + e(entry.doer) + "</dd></dl></details>";
+  if (!holder) return '<div class="act" data-subject="' + e(subject) + '">' + info + '<p class="act-hint">The fleet is already doing the above. To send it new instructions, <a href="/cmd">sign in with your emailed code</a>.</p></div>';
+  return '<div class="act" data-subject="' + e(subject) + '">' + info + '<div class="act-b"><button type="button" class="p" data-vact="fix">Fix it</button><button type="button" data-vact="tell">Tell the system&hellip;</button><span class="act-res" role="status" aria-live="polite"></span></div><div class="act-tell" hidden><input type="text" maxlength="600" placeholder="What should the system do about this? One sentence is enough." aria-label="Instruction for the system"><button type="button" class="p" data-vact="send">Send</button></div></div>';
+}
+
+function valueSectionHtml(value, holder, entries, e) {
+  const o = [];
+  const s = value.spend;
+  o.push('<section class="st-sec" id="st-value" aria-labelledby="st-val"><h2 class="fl-h" id="st-val">What you get for the money <span class="ct">last ' + e(value.window_days) + " days</span></h2>");
+  o.push('<p class="vl-post ' + e(value.posture.mode) + '"><b>Posture:</b> ' + e(value.posture.sentence) + "</p>");
+  o.push('<p class="meta"><b>Push the top, trim the bottom.</b> Yield is outputs per $100, so the page works both sides: raise the outputs (publish, post, reach) and cut the spend that buys nothing. ' + e(value.rule) + "</p>");
+  o.push('<p class="meta">Spend ' + e(usdText(s.window_usd)) + " in " + e(value.window_days) + " days" + (s.daily_usd != null ? " (" + e(usdText(s.daily_usd)) + " a day" : "") + (s.fixed_daily_usd != null && s.variable_daily_usd != null ? ": " + e(usdText(s.fixed_daily_usd)) + " fixed operating cost, paid whatever the output" + (s.fixed_share != null ? " (" + e(Math.round(s.fixed_share * 100)) + "%)" : "") + ", " + e(usdText(s.variable_daily_usd)) + " metered AI spend you can trim" : "") + (s.daily_usd != null ? ")" : "") + (s.month_to_date_usd != null && s.month_budget_usd != null ? "; month to date " + e(usdText(s.month_to_date_usd)) + " of a " + e(usdText(s.month_budget_usd)) + " budget" : "") + ". " + e(value.basis) + "</p>");
+  o.push('<div class="vl-grid">');
+  for (const u of value.units) {
+    const qs = u.quality || {};
+    o.push('<article class="card vl"><p class="q-eyebrow">' + e(u.per) + ' per $100</p><b class="vl-n">' + e(u.yield_per_100usd == null ? "n/a" : valYieldText(u.yield_per_100usd)) + '</b><p class="meta">' + (u.outputs == null ? "outputs could not be read" : e(Math.round(u.outputs * 10) / 10 + " " + u.noun + " in " + u.window_days + " days") + (u.cost_each_usd != null ? "; at today's spend each costs " + e(usdText(u.cost_each_usd)) : "")) + '</p><p class="vl-q ' + e(qs.status || "unmeasured") + '"><b>Quality:</b> ' + e(qs.label || "") + " &mdash; " + e(qs.text || "not measured") + '</p><p class="vl-lv"><b>Push:</b> ' + e(u.push) + '</p><p class="vl-lv"><b>Trim:</b> ' + e(u.trim) + "</p>" + actBarHtml(u.subject, entries[u.subject], holder, e) + "</article>");
+  }
+  o.push("</div>");
+  if (value.blind.length) o.push('<p class="meta">Could not read: ' + e(value.blind.join("; ")) + ". Those figures show n/a, not zero.</p>");
+  o.push("</section>");
+  return o.join("");
+}
+
+var VALUE_CSS = ".vl-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}.vl{padding:14px 16px}.vl-n{display:block;font:500 30px/1.1 var(--serif);font-variant-numeric:tabular-nums;margin:4px 0}.vl-q{font-size:13px;margin:8px 0 0;line-height:1.45}.vl-q.on_target b{color:var(--green)}.vl-q.off_target b{color:var(--red)}.vl-q.mixed b,.vl-q.unmeasured b{color:var(--amber)}.vl-lv{font-size:12.5px;margin:6px 0 0;line-height:1.45;color:var(--muted)}.vl-post{margin:6px 0;padding:10px 12px;border-left:4px solid var(--muted);background:var(--surface);border-radius:8px}.vl-post.grow{border-left-color:var(--green)}.vl-post.over_budget{border-left-color:var(--red)}.vl-post.fix_quality{border-left-color:var(--amber)}.act{margin-top:10px;border-top:1px solid var(--rule);padding-top:8px}.act-info summary{cursor:pointer;font-size:12.5px;color:var(--muted)}.act-info dl{margin:8px 0 0;font-size:13px;line-height:1.5}.act-info dt{font-weight:600;margin-top:6px}.act-info dd{margin:0;color:var(--muted)}.act-b{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.act-tell{display:flex;gap:8px;margin-top:8px}.act-tell[hidden]{display:none}.act-tell input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--rule);border-radius:8px;background:var(--bg);color:var(--ink)}.act-res{font-size:12.5px;color:var(--muted)}.act-hint{font-size:12.5px;color:var(--muted);margin:8px 0 0}@media (max-width:1100px){.vl-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.vl-grid{grid-template-columns:1fr}}";
+
+var VALUE_JS = "<script>(function(){var H={'Content-Type':'application/json','x-fleet-ui':'1'};function post(b){return fetch('/api/owner/act',{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify(b)}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}document.addEventListener('click',function(ev){var t=ev.target&&ev.target.closest&&ev.target.closest('[data-vact]');if(!t)return;var bar=t.closest('.act');if(!bar)return;var res=bar.querySelector('.act-res'),tell=bar.querySelector('.act-tell'),kind=t.getAttribute('data-vact'),directive='';if(kind==='tell'){tell.hidden=!tell.hidden;if(!tell.hidden)tell.querySelector('input').focus();return}if(kind==='send'){directive=tell.querySelector('input').value.trim();if(!directive)return}t.disabled=true;if(res)res.textContent='Sending to the fleet\\u2026';post({subject:bar.getAttribute('data-subject'),directive:directive}).then(function(j){if(res)res.textContent=j.ok?'\\u2713 Handed to the fleet'+(j.issue_id?' as issue '+j.issue_id:'')+(j.duplicate?' (already filed, nothing duplicated)':'')+'. '+(j.next||''):(j.error||'It did not go through.')+(j.error&&/token|sign|closed/i.test(j.error)?' Sign in with the command line (type login).':'');if(j.ok&&tell){tell.hidden=true;tell.querySelector('input').value=''}t.disabled=false}).catch(function(){if(res)res.textContent='Network error: nothing was sent.';t.disabled=false})})})()<\/script>";
+/* VALUE-DASH-1:END */
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -10796,6 +11050,19 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     if (decision === "reject") return ownerJson({ ok: true, id, status: "rejected", decided_by: credLabel });
     const applied = await objectiveRevisionApply(env, id, "route", cred);
     return ownerJson({ ok: applied.ok, id, status: "ratified", decided_by: credLabel, outcome: applied.outcome, detail: applied.detail || null, issue_id: applied.issue_id || null, error: applied.ok ? null : applied.detail || applied.error || null });
+  }
+  // VALUE-DASH-1: one tap on any item of the status page. The subject is looked up in the current status document, so the ticket is built from what the
+  // page showed (meaning, why, the fleet's default, the doer), never from client text; the owner's own words ride along as the directive.
+  if (path === "/api/owner/act") {
+    const subject = String(b && b.subject || "");
+    const directive = String(b && b.directive || "").trim();
+    if (!validSubject(subject)) return ownerJson({ error: "bad subject" }, 400);
+    if (directive.length > 600) return ownerJson({ error: "directive over 600 characters" }, 400);
+    const sdoc = await fleetStatusData(env, ctx);
+    const entry = sdoc && sdoc.actions && sdoc.actions.subjects[subject];
+    if (!entry) return ownerJson({ error: "that item is no longer on the page (" + subject + "); it may have cleared by itself" }, 404);
+    const filed = await ownerTaskFile(env, actTicket(subject, entry, directive), { handoff: true, reuse: true });
+    return ownerJson({ ok: true, subject, issue_id: filed.issue_id || null, intent_id: filed.intent_id, duplicate: !!filed.duplicate, next: "Doer: " + entry.doer + ". It is measured again after the change and kept only if the target moved." });
   }
   if (path === "/api/owner/prompt") {
     const text = String(b && b.text || "").trim();
