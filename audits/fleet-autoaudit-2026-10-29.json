@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-29 10:11:32",
+  "audited_at": "2026-10-29 12:32:48",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
@@ -626,12 +626,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.56.5-census-timeout",
+        "version": "0.57.0-wfi-green-streak",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.75.0",
+        "version": "1.77.1",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -686,7 +686,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.59.6-codeagent",
+        "version": "2.60.0-cmdagent",
         "worker": "qnfo-ops"
       },
       {
@@ -1387,17 +1387,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.56.5-census-timeout",
+      "before": "0.57.0-wfi-green-streak",
       "http": 200,
-      "live": "0.56.5-census-timeout",
+      "live": "0.57.0-wfi-green-streak",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.75.0",
+      "before": "1.77.1",
       "http": 200,
-      "live": "1.75.0",
+      "live": "1.77.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1555,9 +1555,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.59.6-codeagent",
+      "before": "2.60.0-cmdagent",
       "http": 200,
-      "live": "2.59.6-codeagent",
+      "live": "2.60.0-cmdagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
