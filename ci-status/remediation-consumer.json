@@ -1,23 +1,127 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1547dc600e7f",
- "due": 480,
- "pass": 259,
- "fail": 202,
- "skipped": 19,
- "deferred": 18,
+ "verifier": "remediation-consumer@34cb3af04898",
+ "due": 440,
+ "pass": 430,
+ "fail": 10,
+ "skipped": 0,
+ "deferred": 0,
  "contracts": [
   {
-   "class": "issue-1000316",
-   "issue_id": 1000316,
-   "verdict": "pass",
+   "class": "issue-1000699",
+   "issue_id": 1000699,
+   "verdict": "fail",
+   "expected": "recent per-page AE reach events > 0",
+   "observed": "recent per-page AE reach events = 0 (any AE latest=2026-09-05T20:20:40.533Z)",
+   "written": true
+  },
+  {
+   "class": "issue-2957",
+   "issue_id": 2957,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "regressed: 7d mean 301.3 vs prior 7d 199.7",
    "written": true
   },
   {
-   "class": "fm-blocker-claims-untested",
+   "class": "issue-1000821",
+   "issue_id": 1000821,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2827",
+   "issue_id": 2827,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "code-task-merge breach/breach 290.4 min vs 120, finished_7d 120, last 24h 166.7",
+   "written": true
+  },
+  {
+   "class": "fm-wai-spend-per-paper",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-100362-BACKFILL-1",
+   "issue_id": 100362,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100362 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-1000838",
+   "issue_id": 1000838,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-paper-fabricated-empirical-claim",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "sweep-stale",
+   "written": true
+  },
+  {
+   "class": "issue-1000492",
+   "issue_id": 1000492,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "12",
+   "written": true
+  },
+  {
+   "class": "issue-1000301",
+   "issue_id": 1000301,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000696",
+   "issue_id": 1000696,
+   "verdict": "fail",
+   "expected": "workers-ai 30d spend at or below $95 cap",
+   "observed": "workers-ai 30d spend over cap: $347.08 as of 2026-10-29T18:01:04.810Z",
+   "written": true
+  },
+  {
+   "class": "fm-code-review-noise-defect",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-consumer-gate-starvation",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-portfolio-umbrella-flap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "belief-portfolio-gap-deployable-owner",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -25,7 +129,7 @@
    "written": true
   },
   {
-   "class": "fm-issue-dup-abort",
+   "class": "fm-code-plan-wip-terminal-omitted",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -33,7 +137,15 @@
    "written": true
   },
   {
-   "class": "fm-merge-not-deployed",
+   "class": "fm-probe-author-later-pass-free-text",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": 0,
+   "observed": 0,
+   "written": true
+  },
+  {
+   "class": "fm-sla-metric-overlap",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -41,7 +153,7 @@
    "written": true
   },
   {
-   "class": "fm-green-pr-unmerged",
+   "class": "fm-publish-rate-collapse",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -49,7 +161,7 @@
    "written": true
   },
   {
-   "class": "fm-outreach-chain-enum",
+   "class": "fm-census-heartbeat-ages-out",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -57,7 +169,7 @@
    "written": true
   },
   {
-   "class": "fm-standing-detector-superseded",
+   "class": "fm-head-of-line",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -65,23 +177,7 @@
    "written": true
   },
   {
-   "class": "fm-measured-pending-deferred",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-research-exec-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-review-hard-findings-advanced",
+   "class": "fm-migration-unapplied",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -89,15 +185,7 @@
    "written": true
   },
   {
-   "class": "fm-schema-index-stale",
-   "issue_id": 100072,
-   "verdict": "pass",
-   "expected": "8",
-   "observed": "8",
-   "written": true
-  },
-  {
-   "class": "fm-health-ok-but-empty",
+   "class": "fm-jobsearch-stale-pending",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -105,7 +193,7 @@
    "written": true
   },
   {
-   "class": "fm-producer-batch-overshoots-backpressure",
+   "class": "fm-probe-source-moved",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -113,7 +201,7 @@
    "written": true
   },
   {
-   "class": "fm-parked-contract-unprobed",
+   "class": "fm-research-width-rate-limit",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -121,7 +209,7 @@
    "written": true
   },
   {
-   "class": "fm-code-patch-version-line-over-cap",
+   "class": "fm-portfolio-gap-close-without-evidence",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -129,7 +217,7 @@
    "written": true
   },
   {
-   "class": "fm-probe-review-refuses-detector",
+   "class": "fm-meta-issue-outlives-subject",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -137,39 +225,7 @@
    "written": true
   },
   {
-   "class": "fm-probe-like-pattern-over-limit",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-migration-literal-outside-check-enum",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-learner-probe-exclusion-scope",
-   "issue_id": 2722,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-empty-reply-glm",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-claim-reaper-stalled",
+   "class": "fm-evolve-wip-planner-mismatch",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -177,143 +233,7 @@
    "written": true
   },
   {
-   "class": "fm-iso-text-compare",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-cf-issues-unconsumed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-cf-obs-untracked",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-verification-deferral-unaged",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-research-extract-parse",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-metric-view-never-refreshed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-owner-routed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-calibration-ping-swapped",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-ab-length-empty-scored-as-loss",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-quality-proxy-population-average",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-cf-obs-nested-pin-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-reset-on-description-append",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "2",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "fm-silent-drop-unaccounted",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-dissemination-queue-over-cadence",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-dispatch-resolved-gh-open",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-pr-conflict-silent-close",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-pr-open-over-10m",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-author-silent",
+   "class": "fm-reasoning-starves-small-answer",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -321,15 +241,7 @@
    "written": true
   },
   {
-   "class": "fm-code-publish-registry-doi",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-owner-queue-objects-outside-repo",
+   "class": "fm-code-task-repo-slug",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -337,7 +249,7 @@
    "written": true
   },
   {
-   "class": "fm-refile-reopen-leaves-triage-closed",
+   "class": "fm-code-task-whole-file-over-window",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -345,7 +257,7 @@
    "written": true
   },
   {
-   "class": "fm-contract-cadence-drift",
+   "class": "fm-triage-gap",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -353,31 +265,7 @@
    "written": true
   },
   {
-   "class": "fm-ticket-quotes-its-own-counted-marker",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-schema-index-mixed-refresh",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-metric-refresh-null-component",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-tracker-state-lag",
+   "class": "fm-companion-critic-list-capped",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -385,29 +273,134 @@
    "written": true
   },
   {
-   "class": "fm-idle-metric-counts-non-scripts",
+   "class": "fm-q08-lede-provenance-unprunable",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-owner-approval-without-handoff",
-   "issue_id": null,
+   "class": "issue-2605",
+   "issue_id": 2605,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-pr-attempt-unlinked",
-   "issue_id": null,
+   "class": "issue-2755",
+   "issue_id": 2755,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-probe-author-unreachable",
-   "issue_id":
+   "class": "fm-companion-heading-unprunable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-prune-short-revise-unpruned",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2779",
+   "issue_id": 2779,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2780",
+   "issue_id": 2780,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1000710",
+   "issue_id": 1000710,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2782",
+   "issue_id": 2782,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2811",
+   "issue_id": 2811,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2818",
+   "issue_id": 2818,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2833",
+   "issue_id": 2833,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2847",
+   "issue_id": 2847,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2800",
+   "issue_id": 2800,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2824",
+   "issue_id": 2824,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-99912",
+   "issue_id": 99912,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-pdf-typeset-bibliography-dropped",
+   "issue_id": null,
+  
