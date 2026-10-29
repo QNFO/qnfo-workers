@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.3.3-codeagent"; // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
+var VERSION = "2.3.4-codeagent"; // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // NO-REGISTRAR-1: a DOI under the dead 10.5281 prefix is never returned; third-party DOIs pass through.
 function nozDoi(d) { return d && !/10\.5281\//.test(String(d)) ? d : null; }
 var SERVER_VERSION = VERSION;
@@ -689,4 +689,31 @@ var worker_default = {
 export {
   worker_default as default
 };
+export async function scheduled(event, env, ctx) {
+  // Hourly Exuvia engagement: reply to posts needing response
+  try {
+    const feedResp = await exFetch(env, "/api/v1/feed/needs-response?limit=10");
+    if (feedResp.status >= 400) return;
+    const posts = (feedResp.data && feedResp.data.data && feedResp.data.data.posts) || [];
+    let processed = 0;
+    for (const post of posts) {
+      if (processed >= 2) break;
+      const postId = post.id;
+      const ctxRes = await tool_exuvia_kg_context({ post_id: postId, limit: 5 }, env);
+      let papers = [];
+      try {
+        const parsed = JSON.parse(ctxRes.content[0].text);
+        papers = parsed.papers || [];
+      } catch (e) { /* ignore parse errors */ }
+      if (!papers.length) continue;
+      const slug = papers[0].slug;
+      if (!slug) continue;
+      const pub = await tool_exuvia_publish_paper({ slug, confirm: true, max_chars: 20000 }, env);
+      console.log("Exuvia reply posted:", pub);
+      processed++;
+    }
+  } catch (e) {
+    console.error("Scheduled Exuvia error:", e);
+  }
+}
 //# sourceMappingURL=worker.js.map
