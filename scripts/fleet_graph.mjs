@@ -39,8 +39,9 @@ import { join, relative } from "node:path";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { addRepoDocs, loadManifest, repoFindings, fetchGithubRepos, selftestRepos } from "./fleet_graph_repos.mjs";
 
-export const VERSION = "1.0.4"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): root-level Workers are inventoried by wrangler.toml name
+export const VERSION = "1.1.0"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): root-level Workers are inventoried by wrangler.toml name
 export const GRAPH_DB_ID = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"; // qnfo-graph (also in qnfo-memory-mcp/wrangler.toml)
 export const AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"; // qnfo-audit
 export const SNAPSHOT_BUCKET = "qnfo-backups";
@@ -974,8 +975,10 @@ export async function buildCode(root, deps, live) {
   }
   addMigrations(g, root);
   addWorkflows(g, root, liveTables);
-  g.stats.workers = workers.length;
-  return { g, codeWorkers, codeSql, liveTables };
+  const retired = readdirSync(root).filter((d) => !d.startsWith(".") && (existsSync(join(root, d, "RETIRED")) || existsSync(join(root, d, "FOLDED"))));
+  const repoDocs = addRepoDocs(g, root, codeNames, retired); // REPO-GRAPH-1: repo:* and doc:* nodes from repos.json and the Markdown tree
+  g.stats.workers = workers.length; g.stats.repos = repoDocs.repos; g.stats.docs = repoDocs.docs;
+  return { g, codeWorkers, codeSql, liveTables, repoDocs };
 }
 
 export function liveTableIndex(live) {
@@ -1025,6 +1028,11 @@ export async function main(argv) {
       report.code = code.g.stats;
     }
     const findings = computeFindings({ codeWorkers: code ? code.codeWorkers : new Map(), snap: code ? live : null, triggersByDb, codeSql: code ? code.codeSql : null, liveTables: code ? code.liveTables : null });
+    if (code && code.repoDocs) {
+      let liveRepos = null;
+      try { liveRepos = await fetchGithubRepos([{ kind: "org", name: "QNFO" }, { kind: "user", name: "rwnq8" }], process.env.GITHUB_TOKEN || "", null); } catch (eGh) { report.repo_registry = { skipped: String(eGh && eGh.message || eGh).slice(0, 120) }; }
+      for (const f of repoFindings(loadManifest(root), code.repoDocs, liveRepos)) findings.push(f);
+    }
     report.findings = findings.reduce((m, f) => { m[f.kind] = (m[f.kind] || 0) + 1; return m; }, {});
     report.findings_warn = findings.filter((f) => f.severity === "warn").length;
     const built = {};
@@ -1076,6 +1084,7 @@ export async function main(argv) {
 export async function selftest(log = console.log) {
   let fail = 0;
   const ok = (c, m) => { if (!c) { fail++; log("FAIL " + m); } };
+  await selftestRepos(log, ok);
   const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..");
   ok(liveWorkerDirs(repoRoot).includes("."), "root-level Worker source is inventoried");
   // FLEET-GRAPH-SECRET-1: a secret's value can never reach the graph.
