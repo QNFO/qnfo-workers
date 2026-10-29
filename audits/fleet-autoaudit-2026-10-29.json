@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-29 00:40:30",
+  "audited_at": "2026-10-29 02:18:45",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
@@ -561,7 +561,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.4-codeagent",
+        "version": "1.44.6-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -581,7 +581,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.40.8-codeagent",
+        "version": "5.40.9-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -661,7 +661,7 @@
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.3.3-codeagent",
+        "version": "1.3.4-codeagent",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -986,9 +986,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.4-codeagent",
+      "before": "1.44.6-codeagent",
       "http": 200,
-      "live": "1.44.4-codeagent",
+      "live": "1.44.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1081,9 +1081,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.40.8-codeagent",
+      "before": "5.40.9-codeagent",
       "http": 200,
-      "live": "5.40.8-codeagent",
+      "live": "5.40.9-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1497,9 +1497,9 @@
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.3.3-codeagent",
+      "before": "1.3.4-codeagent",
       "http": 200,
-      "live": "1.3.3-codeagent",
+      "live": "1.3.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
