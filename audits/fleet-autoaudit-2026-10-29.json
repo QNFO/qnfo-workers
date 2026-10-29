@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-10-29 13:01:20",
+  "audited_at": "2026-10-29 14:49:03",
   "d1_write_failures": [],
-  "d1_writes_ok": 127,
+  "d1_writes_ok": 128,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -547,7 +547,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -563,6 +563,11 @@
         "dir": "personal-companion",
         "version": "1.44.6-codeagent",
         "worker": "personal-companion"
+      },
+      {
+        "dir": "personal-watch",
+        "version": "1.0.0",
+        "worker": "personal-watch"
       },
       {
         "dir": "q08-mind",
@@ -581,7 +586,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.40.9-codeagent",
+        "version": "5.40.10-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -686,7 +691,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.60.0-cmdagent",
+        "version": "2.60.1-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -1029,6 +1034,14 @@
       "retired": "RETIRED",
       "worker": "personal-life-search"
     },
+    "personal-watch": {
+      "before": "1.0.0",
+      "http": 200,
+      "live": "1.0.0",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-watch"
+    },
     "q08-mind": {
       "before": "2.2.1",
       "http": 200,
@@ -1081,9 +1094,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.40.9-codeagent",
+      "before": "5.40.10-codeagent",
       "http": 200,
-      "live": "5.40.9-codeagent",
+      "live": "5.40.10-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1555,9 +1568,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.60.0-cmdagent",
+      "before": "2.60.1-codeagent",
       "http": 200,
-      "live": "2.60.0-cmdagent",
+      "live": "2.60.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
