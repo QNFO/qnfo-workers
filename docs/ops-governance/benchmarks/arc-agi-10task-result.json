@@ -1,0 +1,82 @@
+{
+  "probe": "arc-agi-10task",
+  "source": "arc-agi-10task-probe.json",
+  "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "scored_at": "2026-09-10T12:30:56.760Z",
+  "run_at": "2026-09-10T12:30:23.744Z",
+  "score": 2,
+  "max": 10,
+  "ratio": 0.2,
+  "detail": [
+    {
+      "id": "arc01",
+      "name": "fill_with_color",
+      "ok": true,
+      "got": "5 5 5 / 5 5 5 / 5 5 5",
+      "expected": "5 5 5 / 5 5 5 / 5 5 5"
+    },
+    {
+      "id": "arc02",
+      "name": "recolor",
+      "ok": false,
+      "got": "4 4 4 / 4 4 4 / 4 4 4",
+      "expected": "4 0 0 / 0 4 0 / 0 0 0"
+    },
+    {
+      "id": "arc03",
+      "name": "mirror_horizontal",
+      "ok": false,
+      "got": "2 0 1",
+      "expected": "2 0 0 1"
+    },
+    {
+      "id": "arc04",
+      "name": "translate_to_topleft",
+      "ok": false,
+      "got": "0 0 0 / 0 0 0 / 0 1 0",
+      "expected": "1 0 0 / 0 0 0 / 0 0 0"
+    },
+    {
+      "id": "arc05",
+      "name": "fill_row",
+      "ok": false,
+      "got": "4 4 / 4 4",
+      "expected": "4 4 / 0 0"
+    },
+    {
+      "id": "arc06",
+      "name": "connect_diagonal",
+      "ok": true,
+      "got": "3 0 0 0 / 0 3 0 0 / 0 0 3 0 / 0 0 0 3",
+      "expected": "3 0 0 0 / 0 3 0 0 / 0 0 3 0 / 0 0 0 3"
+    },
+    {
+      "id": "arc07",
+      "name": "count_to_line",
+      "ok": false,
+      "got": "1 2 3",
+      "expected": "1 1 1"
+    },
+    {
+      "id": "arc08",
+      "name": "repeat_double",
+      "ok": false,
+      "got": "1 2 1 2 1 2",
+      "expected": "1 2 3 1 2 3"
+    },
+    {
+      "id": "arc09",
+      "name": "remove_isolated",
+      "ok": false,
+      "got": "1 0 0 / 1 0 0 / 0 2 0",
+      "expected": "1 0 0 / 1 0 0 / 0 0 0"
+    },
+    {
+      "id": "arc10",
+      "name": "rotate_cw",
+      "ok": false,
+      "got": "4 5 6 / 1 2 3",
+      "expected": "4 1 / 5 2 / 6 3"
+    }
+  ]
+}

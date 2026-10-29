@@ -1,0 +1,60 @@
+{
+  "title": "Duplicate-title + math-data remediation 2026-09-08",
+  "session": "CMD EXECUTE duplicate-titles + latex-math",
+  "changes": [
+    {
+      "kind": "status->duplicate",
+      "slugs": [
+        "trapped-ions-ultrametric",
+        "non-anthropocentric-natural-units-v2",
+        "wbs-6-synthesis",
+        "hidden-radix-pqc",
+        "noise-augmented-sre",
+        "master-work-plan-v2-x-phase",
+        "harmonische-paradigma",
+        "syntactic-token-calculus-m1-foundational-syntax",
+        "syntactic-token-calculus-m7-gravity",
+        "geometric-factorization-v2",
+        "geometric-factorization",
+        "ultrametric-physics-from-discrete-hierarchical-geometry-to-intrinsic-fault-tolerance-and-quantum-gra"
+      ],
+      "why": "each is an alias/dup/stub of a canonical visible row (same DOI, same body, module sibling, or bodyless stub); canonical rows remain published"
+    },
+    {
+      "kind": "retitle",
+      "slug": "the-ultrametric-foundation-a-unified-thesis-on-number-time-knowledge-and-computa",
+      "from": "Ultrametric Quantum Computation and the Langlands Program v2",
+      "to": "The Ultrametric Foundation: A Unified Thesis on Number, Time, Knowledge, and Computation",
+      "why": "matches Zenodo 10.5281/zenodo.21208346 + body H1 + r2_key"
+    },
+    {
+      "kind": "math-tex-normalize",
+      "rows": 11,
+      "why": "un-doubled TeX macro backslashes inside $..$/$$..$$ math segments + decoded chr() template leaks (2 zbw rows)",
+      "rowsAffected": [
+        "fine-structure-constant-cross-ratio",
+        "zbw-majorana-tqc-p1-zbw-padic-observable",
+        "zbw-majorana-tqc",
+        "radix-to-ultrametrics-to-page-wootters-to-wheeler-dewitt-to-bruhat-tits-a-convergent-synthesis",
+        "conditional-state-distances-in-page-wootters-quantum-clocks-when-does-ultrametricity-emerge",
+        "bqnn-classical-baseline",
+        "compton-ontology-bt-coordinates",
+        "measurable-vs-imaginable",
+        "trapped-ion-page-wootters-experiment-protocol-for-testing-ultrametricity",
+        "ultrametric-quantum-computation-langlands",
+        "adelic-core-synthesis"
+      ]
+    },
+    {
+      "kind": "known-remaining",
+      "note": "Continuum Trilogy 01/02/03 intentionally share DOI 21672990 (Zenodo bundle 'Papers I-III')"
+    }
+  ],
+  "verified": {
+    "visibleTotal": 700,
+    "remainingTitleCollisions": 0,
+    "remainingDoiDupGroups": [
+      "21672990 trilogy (intentional bundle)"
+    ]
+  }
+}

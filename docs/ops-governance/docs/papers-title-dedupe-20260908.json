@@ -1,0 +1,566 @@
+{
+  "created": "2026-09-08T11:43:21Z",
+  "scope": "living-paper D1 70a58cb3 papers duplicate-title canonicalization QNFO.OPS.008",
+  "changes": [
+    {
+      "identifier": "qnfo-2025-00-2-original-sin",
+      "slug": "2-original-sin",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-3-cascade-of-complexity",
+      "slug": "3-cascade-of-complexity",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-4-foundational-postulates",
+      "slug": "4-foundational-postulates",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-6-quantum-effects",
+      "slug": "6-quantum-effects",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-7-confronting-past-failures",
+      "slug": "7-confronting-past-failures",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-8-distinguishing-hypotheses",
+      "slug": "8-distinguishing-hypotheses",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-9-restoring-physicality",
+      "slug": "9-restoring-physicality",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-outline",
+      "slug": "outline",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-autaxys-defined",
+      "slug": "autaxys-defined",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "beyond-the-qubit",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-12-chtp-4-kelvin-twistronic-architecture",
+      "slug": "chtp-4-kelvin-twistronic-architecture",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "conditional-state-distances-in-page-wootters-quantum-clocks-when-does-ultrametricity-emerge",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "consilience-physics-numtheory",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-converging-quests",
+      "slug": "1-converging-quests",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-3-exploring-formlessness",
+      "slug": "3-exploring-formlessness",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-5-pathways-to-transformation",
+      "slug": "5-pathways-to-transformation",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-7-probing-inner-space",
+      "slug": "7-probing-inner-space",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-4-impacts",
+      "slug": "4-impacts",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-5-mitigation",
+      "slug": "5-mitigation",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-6-questions",
+      "slug": "6-questions",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-7-conclusion",
+      "slug": "7-conclusion",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-4-fundamental-constants",
+      "slug": "4-fundamental-constants",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-5-empirical-validation",
+      "slug": "5-empirical-validation",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-9-origin-event",
+      "slug": "9-origin-event",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-1-introduction",
+      "slug": "1-1-introduction",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-3-number-constructs",
+      "slug": "1-3-number-constructs",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-4-linearity",
+      "slug": "1-4-linearity",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-5-natural-constants",
+      "slug": "1-5-natural-constants",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-2-7-standard-units",
+      "slug": "2-7-standard-units",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-3-10-synthesis",
+      "slug": "3-10-synthesis",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "ultrametric-foundations",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-why-does-physics-need-philosophy",
+      "slug": "1-why-does-physics-need-philosophy",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-10-who-is-following-the-path",
+      "slug": "10-who-is-following-the-path",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-11-what-can-we-know",
+      "slug": "11-what-can-we-know",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-12-where-do-we-stand",
+      "slug": "12-where-do-we-stand",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-13-the-path-forward",
+      "slug": "13-the-path-forward",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-2-how-do-we-define-reality",
+      "slug": "2-how-do-we-define-reality",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-4-what-is-the-world-made-of",
+      "slug": "4-what-is-the-world-made-of",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-6-does-chance-rule-the-cosmos",
+      "slug": "6-does-chance-rule-the-cosmos",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-7-what-is-realitys-architecture",
+      "slug": "7-what-is-realitys-architecture",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "radix-to-ultrametrics-to-page-wootters-to-wheeler-dewitt-to-bruhat-tits-a-convergent-synthesis",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "silent-radix-cryptography",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-10-meaning-in-motion",
+      "slug": "10-meaning-in-motion",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-11-perceiving-through-the-loop",
+      "slug": "11-perceiving-through-the-loop",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-12-the-feeling-of-reality",
+      "slug": "12-the-feeling-of-reality",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-13-ritual-and-confirmation",
+      "slug": "13-ritual-and-confirmation",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-14-institutional-power-and-enforcement",
+      "slug": "14-institutional-power-and-enforcement",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-15-derivative-abstractions",
+      "slug": "15-derivative-abstractions",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-16-loop-evolution-and-contestation",
+      "slug": "16-loop-evolution-and-contestation",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-2-symbolic-prerequisites",
+      "slug": "2-symbolic-prerequisites",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-3-thinking-in-symbols",
+      "slug": "3-thinking-in-symbols",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-4-systematizing-symbols",
+      "slug": "4-systematizing-symbols",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-5-beyond-words",
+      "slug": "5-beyond-words",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-6-architecture-introduced",
+      "slug": "6-architecture-introduced",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-7-narrative-engines",
+      "slug": "7-narrative-engines",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-00-8-unspoken-contracts",
+      "slug": "8-unspoken-contracts",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m10-fault-tolerance",
+      "slug": "syntactic-token-calculus-m10-fault-tolerance",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m11-cognitive-isomorphisms",
+      "slug": "syntactic-token-calculus-m11-cognitive-isomorphisms",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m12-adelic-ontology-of-form",
+      "slug": "syntactic-token-calculus-m12-adelic-ontology-of-form",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m2-projective-invariants",
+      "slug": "syntactic-token-calculus-m2-projective-invariants",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m3-particle-lexicon",
+      "slug": "syntactic-token-calculus-m3-particle-lexicon",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m4-gauge-symmetry",
+      "slug": "syntactic-token-calculus-m4-gauge-symmetry",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m5-ultrametric-topology",
+      "slug": "syntactic-token-calculus-m5-ultrametric-topology",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m6-adelic-physics",
+      "slug": "syntactic-token-calculus-m6-adelic-physics",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m8-discrete-scale-invariance",
+      "slug": "syntactic-token-calculus-m8-discrete-scale-invariance",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-syntactic-token-calculus-m9-observer-theory",
+      "slug": "syntactic-token-calculus-m9-observer-theory",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "adelic-grand-synthesis",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "measurable-vs-imaginable",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": null,
+      "slug": "the-qubit-delusion",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-ultrametric-physics-m10-cosmological-dynamics",
+      "slug": "ultrametric-physics-m10-cosmological-dynamics",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-ultrametric-physics-m11-monna-map",
+      "slug": "ultrametric-physics-m11-monna-map",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-ultrametric-physics-m2-bruhat-tits-tree-construction",
+      "slug": "ultrametric-physics-m2-bruhat-tits-tree-construction",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-ultrametric-physics-m3-vladimirov-operator",
+      "slug": "ultrametric-physics-m3-vladimirov-operator",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-ultrametric-physics-m4-adelic-theory-for-general-number-fields",
+      "slug": "ultrametric-physics-m4-adelic-theory-for-general-number-fields",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-04-ultrametric-physics-m5-ratio-based-qec",
+      "slug": "ultrametric-physics-m5-ratio-based-qec",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2025-11-reassessing-the-foundations-of-quantum-computation",
+      "slug": "reassessing-the-foundations-of-quantum-computation",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "qnfo-2026-02-ultrametric-relaxation-dynamics-in-topological-quantum-memory-expanded-narrative",
+      "slug": "ultrametric-relaxation-dynamics-in-topological-quantum-memory-expanded-narrative",
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "title-duplicate canonicalization: duplicate/stub row within duplicate-title group (kept canonical sibling)"
+    },
+    {
+      "identifier": "adelic-core-synthesis",
+      "slug": null,
+      "oldStatus": "published",
+      "newStatus": "duplicate",
+      "reason": "slug NULL row duplicating adelic-core-synthesis"
+    },
+    {
+      "identifier": "qnfo-2025-00-1-crisis-of-abstraction",
+      "slug": "1-crisis-of-abstraction",
+      "oldTitle": "**The Simplicity of Reality: Deconstructing the Mathematical Epicycles of Modern Physics**",
+      "newTitle": "The Simplicity of Reality: Deconstructing the Mathematical Epicycles of Modern Physics",
+      "reason": "strip markdown bold artifacts from canonical title"
+    },
+    {
+      "identifier": "10.5281/zenodo.15705831",
+      "slug": "imperfectly-defining-reality-1",
+      "oldTitle": "Imperfectly Defining Reality",
+      "newTitle": "(Imperfectly) Defining Reality: Our Human Quest to Construct Reality from Science",
+      "reason": "retitle to own Zenodo record 10.5281/zenodo.15708823 (distinct from 10.5281/zenodo.21016853)"
+    }
+  ]
+}

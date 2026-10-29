@@ -1,0 +1,87 @@
+-- NORMALIZE-TIMESTAMP-FORMATS-2026-09-13.sql
+-- Author: qnfo-ops endpoint. Target: qnfo-audit (QNFO_AUDIT).
+--
+-- WHY
+-- ---
+-- `alerts` is declared:
+--     created_at TEXT DEFAULT (datetime('now'))
+-- i.e. the default writes `'2026-09-13 14:01:22'` (space, second precision). Two producers
+-- instead bind an explicit ISO-8601 value from `new Date().toISOString()`:
+--     qnfo-error-selfheal  (67 rows)   -> INSERT INTO alerts (source, level, message, created_at) VALUES (?,?,?,?)
+--     health-guard         (1 row)
+--
+-- Because `' '` (0x20) sorts BELOW `'T'` (0x54), a predicate such as
+--     WHERE created_at >= '2026-09-13T12:00'
+-- silently excludes EVERY space-form row - i.e. 1032 of 1100 rows, including all 931 from
+-- qnfo-pipeline-ops. This is not hypothetical: it produced a false "0 rearm alerts" finding
+-- during the 2026-09-13 audit, which had to be retracted (see
+-- docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-3.md §2).
+--
+-- Note the producing worker is NOT at fault: qnfo-error-selfheal v1.0.2+ documents the hazard
+-- in scanAlertStorms() - "id order is format-independent; created_at mixes ISO-T and space
+-- formats - never string-range compare" - and parses defensively. The defect is that the table
+-- PERMITS two formats, so any new consumer gets bitten. Hygiene fix, not a bug fix.
+--
+-- ===========================================================================
+-- §1  alerts - APPLIED 2026-09-13 by qnfo-ops. 68 rows changed.
+-- ===========================================================================
+-- Measurement before:
+--   SELECT CASE WHEN created_at LIKE '%T%' THEN 'iso-T' ELSE 'space' END fmt, COUNT(*) c
+--     FROM alerts GROUP BY fmt;
+--     -> space 1032 (2026-08-29 06:00:26 .. 2026-09-13 14:01:22)
+--        iso-T   68 (2026-09-01T18:29:02.494Z .. 2026-09-11T09:19:14.728Z)
+--
+-- Applied statement (non-destructive: UPDATE ... WHERE, bounded to the 68 offenders):
+--
+--   UPDATE alerts
+--      SET created_at = substr(replace(created_at, 'T', ' '), 1, 19)
+--    WHERE created_at LIKE '%T%';
+--   -- -> ok, changes: 68
+--
+-- Verification after:
+--   SELECT CASE WHEN created_at LIKE '%T%' THEN 'iso-T' ELSE 'space' END fmt, COUNT(*) c,
+--          MIN(created_at) oldest, MAX(created_at) newest FROM alerts GROUP BY fmt;
+--     -> space 1100, 2026-08-29 06:00:26 .. 2026-09-13 14:01:22     [single format]
+--
+-- Trade-off, stated: sub-second precision and the trailing 'Z' are dropped from those 68 rows
+-- to match the column's own DEFAULT and the other 94%. Reversible only approximately - the
+-- original millisecond value is not recoverable from the normalised form.
+--
+-- ---------------------------------------------------------------------------
+-- §1.1  FORWARD FIX (not applied - requires a deploy, which this endpoint cannot perform)
+-- ---------------------------------------------------------------------------
+-- Normalising rows does not stop recurrence: qnfo-error-selfheal will write ISO-T again on its
+-- next hourly run (`17 * * * *`). One of these is needed:
+--   (a) drop the explicit created_at from its two alert INSERTs and let the column DEFAULT
+--       apply (smallest change, matches 94% of the table); or
+--   (b) change the column DEFAULT to ISO-8601 and normalise all 1100 rows the other way.
+-- (a) is preferred: it is one-line per INSERT and needs no data rewrite.
+--
+-- ===========================================================================
+-- §2  agent_issues - STAGED, NOT APPLIED. Read §2.3 before running.
+-- ===========================================================================
+-- §2.1 Measurement (2026-09-13):
+--   SELECT typeof(created_at) t_ca, typeof(updated_at) t_ua, COUNT(*) c
+--     FROM agent_issues GROUP BY t_ca, t_ua ORDER BY c DESC;
+--     -> integer/text 336 | text/text 169 | integer/integer 126 | text/integer 55
+--
+-- Four combinations, and the text values are themselves in two formats (ISO-T from
+-- qnfo-error-selfheal / qnfo-backlog-exec; space-form from older datetime('now') writers).
+-- Canonical qnfo-pipeline-ops v0.5.5 moved ITS writer to epoch-ms integers, which reduces new
+-- pollution from one writer but adds a THIRD convention. Any date-range predicate on this table
+-- is currently ill-defined - which is exactly what v0.5.5's own header warns about.
+--
+-- §2.2 Candidate normalisation (NOT RUN):
+--   UPDATE agent_issues
+--      SET created_at = CAST(strftime('%s', replace(replace(created_at,'T',' '),'Z','')) AS INTEGER) * 1000
+--    WHERE typeof(created_at) = 'text' AND created_at LIKE '____-__-__%';
+--   -- and the equivalent for updated_at
+--
+-- §2.3 Why this is NOT applied from here:
+--   * It rewrites 224+ rows of a table carrying OPEN tickets (677, 687, 688).
+--   * It is only safe once §2.2 is confirmed to agree with the epoch-ms convention v0.5.5
+--     writes, and that agreement has not been verified against a live writer.
+--   * A half-migrated agent_issues is worse than a mixed one: the current mixture is at least
+--     self-documenting via typeof(), whereas a botched cast is silent.
+--   This needs the same fail-closed patcher treatment as the other worker fixes, run against a
+--   writer that is actually deployed - not a blind UPDATE.

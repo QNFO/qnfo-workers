@@ -1,0 +1,314 @@
+[
+ {
+  "ts": "2026-09-10T11:50:08Z",
+  "sai": 66.6,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.581,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 42,
+   "drift_bad": 66,
+   "density": 0.0078,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T11:50:20Z",
+  "sai": 66.6,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.581,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 42,
+   "drift_bad": 66,
+   "density": 0.0078,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T12:01:34Z",
+  "sai": 68.0,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.72,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 42,
+   "drift_bad": 67,
+   "density": 0.0078,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T12:07:41Z",
+  "sai": 68.0,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.72,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 42,
+   "drift_bad": 67,
+   "density": 0.0078,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T12:13:13Z",
+  "sai": 68.0,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.72,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 42,
+   "drift_bad": 67,
+   "density": 0.0078,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T12:13:38Z",
+  "sai": 68.3,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.745,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 35,
+   "drift_bad": 67,
+   "density": 0.0103,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T12:21:50Z",
+  "sai": 68.7,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.5,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.786,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 34,
+   "drift_bad": 11,
+   "density": 0.0103,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T12:31:13Z",
+  "sai": 70.0,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.6,
+   "decision": 0.737,
+   "self_improv": 0.515,
+   "reliability": 0.905,
+   "integration": 0.766,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 4,
+   "user_wait": 0,
+   "islands": 41,
+   "drift_bad": 11,
+   "density": 0.0084,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T15:37:13Z",
+  "sai": 59.2,
+  "grade": "D",
+  "scores": {
+   "autonomy": 0.6,
+   "thinking": 0.6,
+   "decision": 0.737,
+   "self_improv": 0.575,
+   "reliability": 0.5,
+   "integration": 0.3,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 0.0,
+   "chain_ratio": 0.0,
+   "issues_err": 0,
+   "issues_warn": 0,
+   "open_agent_issues": -1,
+   "user_wait": -1,
+   "islands": 0,
+   "drift_bad": 0,
+   "density": 0.0,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T15:40:46Z",
+  "sai": 68.5,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.7,
+   "thinking": 0.6,
+   "decision": 0.737,
+   "self_improv": 0.53,
+   "reliability": 0.925,
+   "integration": 0.577,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 0.714,
+   "issues_err": 1,
+   "issues_warn": 0,
+   "open_agent_issues": 3,
+   "user_wait": 0,
+   "islands": 0,
+   "drift_bad": 6,
+   "density": 0.0084,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T18:09:23Z",
+  "sai": 74.0,
+  "grade": "C",
+  "scores": {
+   "autonomy": 0.85,
+   "thinking": 0.6,
+   "decision": 0.737,
+   "self_improv": 0.485,
+   "reliability": 0.905,
+   "integration": 0.76,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 6,
+   "user_wait": 0,
+   "islands": 37,
+   "drift_bad": 12,
+   "density": 0.0083,
+   "no_run": []
+  }
+ },
+ {
+  "ts": "2026-09-10T18:21:47Z",
+  "sai": 78.5,
+  "grade": "B",
+  "scores": {
+   "autonomy": 1.0,
+   "thinking": 0.6,
+   "decision": 0.737,
+   "self_improv": 0.485,
+   "reliability": 0.905,
+   "integration": 0.76,
+   "governance": 0.9
+  },
+  "signals": {
+   "probe_ratio": 1.0,
+   "chain_ratio": 1.0,
+   "issues_err": 1,
+   "issues_warn": 1,
+   "open_agent_issues": 6,
+   "user_wait": 0,
+   "islands": 37,
+   "drift_bad": 12,
+   "density": 0.0083,
+   "no_run": []
+  }
+ }
+]
