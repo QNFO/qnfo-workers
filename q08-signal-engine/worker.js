@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.39.5-codeagent";
+var VERSION = "0.39.6-codeagent";
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
@@ -4844,8 +4844,11 @@ async function q08Fetch(req, env, ctx) {
       await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, note, created_at) VALUES (?,?,?,?,?)").bind(fslug, s, ipKey, fnote, nowIso()).run();
       return json({ ok: true, recorded: s, note_stored: !!fnote });
     }
-    if (path === "/feed.xml") {
+    if (path === "/feed.xml" || path === "/atom.xml") {
       var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all();
+      if (path === "/atom.xml") {
+        return new Response(renderAtomFeed(rows.results || []), { headers: { "Content-Type": "application/atom+xml; charset=utf-8" } });
+      }
       return new Response(renderFeed(rows.results || []), { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
     }
 
@@ -4969,6 +4972,42 @@ async function q08Fetch(req, env, ctx) {
     // Index
     var pieces = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all().catch(() => ({results:[]}));
     return html(renderIndex(pieces.results || []));
+}
+
+function renderAtomFeed(rows) {
+  function esc(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  var updated = "";
+  if (rows.length > 0) {
+    var d = new Date(rows[0].published_at);
+    updated = isNaN(d) ? "" : d.toISOString();
+  }
+  var out = '<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n';
+  out += '  <title>q08</title>\n';
+  out += '  <link href="' + esc(ORIGIN) + '"/>\n';
+  out += '  <id>' + esc(ORIGIN) + '/</id>\n';
+  if (updated) out += '  <updated>' + updated + '</updated>\n';
+  out += '  <author><name>q08</name></author>\n';
+  rows.forEach(function(r) {
+    var link = ORIGIN + "/p/" + r.slug;
+    var pd = new Date(r.published_at);
+    var pub = isNaN(pd) ? "" : pd.toISOString();
+    out += "  <entry>\n";
+    out += '    <id>' + esc(link) + "</id>\n";
+    out += '    <title>' + esc(r.title || r.slug) + "</title>\n";
+    out += '    <link rel="alternate" href="' + esc(link) + '"/>\n';
+    if (pub) out += '    <published>' + pub + "</published>\n";
+    if (pub) out += '    <updated>' + pub + "</updated>\n";
+    out += '    <author><name>q08</name></author>\n';
+    var summary = esc(r.core_concept || "").slice(0, 500);
+    if (summary) out += '    <summary>' + summary + "</summary>\n";
+    var content = esc(r.body_md || "").slice(0, 10000);
+    if (content) out += '    <content type="text">' + content + "</content>\n";
+    out += "  </entry>\n";
+  });
+  out += "</feed>";
+  return out;
 }
 
 // Q08-STALL-RETRY-1 (0.14.0, agent_issues 2286; owner 2026-10-12: "start generating Q08 content immediately"): one candidate an hour, each
