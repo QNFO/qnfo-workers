@@ -42,7 +42,7 @@ let L = X.wfiLatest([run(1, "deploy-gate", "failure", "2026-10-20T01:00:00Z"), r
 ok(L["deploy-gate"].id === 2 && !L.lint, "the newest decided run wins; cancelled and unfinished runs are no verdict", L);
 ok(X.wfiFailedStep([{ name: "g", conclusion: "failure", steps: [{ number: 3, name: "s", conclusion: "failure" }] }]).step === "3 s", "the failed step is named with its number");
 ok(X.wfiFailedStep([]).job === null, "no jobs: nothing named");
-ok(X.wfiProbe("a'b") === "SELECT 'success' AS expected, (SELECT conclusion FROM workflow_main_state WHERE workflow = 'a''b') AS observed", "the probe quotes the workflow name");
+ok(/workflow = 'a''b'/.test(X.wfiProbe("a'b")) && /failure-within-24h/.test(X.wfiProbe("x")), "the probe quotes the workflow name and reads the 24-hour streak");
 
 // a red deploy-gate and a green lint: one issue, a recorded run with its step, a live probe
 runs = [run(10, "deploy-gate", "failure", "2026-10-20T05:00:00Z"), run(11, "lint", "success", "2026-10-20T05:00:00Z")];
@@ -65,10 +65,19 @@ ok(o.filed === 0 && o.recorded === 0 && jobReads === reads && db.prepare("SELECT
 runs = [run(12, "deploy-gate", "cancelled", "2026-10-20T05:30:00Z")].concat(runs);
 o = await X.workflowFailureIntake(env, Date.parse("2026-10-20T05:40:00Z"), io);
 ok(o.closed === 0 && db.prepare("SELECT status FROM agent_issues").get().status === "open", "a cancelled run does not close the issue", o);
+// WFI-GREEN-STREAK-1: a green run 50 minutes after the failure does not close the issue
 runs = [run(13, "deploy-gate", "success", "2026-10-20T05:50:00Z")].concat(runs);
 o = await X.workflowFailureIntake(env, Date.parse("2026-10-20T06:00:00Z"), io);
+ok(o.closed === 0 && (o.green_wait || []).join() === "deploy-gate" && db.prepare("SELECT status FROM agent_issues").get().status === "open", "one green run does not close: the 24-hour streak is not met", o);
+// a flap: red again at 06:10, green at 06:20 -> still open, one issue, no refile
+runs = [run(14, "deploy-gate", "success", "2026-10-20T06:20:00Z"), run(15, "deploy-gate", "failure", "2026-10-20T06:10:00Z")].concat(runs);
+o = await X.workflowFailureIntake(env, Date.parse("2026-10-20T06:30:00Z"), io);
+ok(o.closed === 0 && o.filed === 0 && db.prepare("SELECT COUNT(*) n FROM agent_issues").get().n === 1 && db.prepare("SELECT COUNT(*) n FROM workflow_failures WHERE run_id = 15").get().n === 1, "a failure hidden between ticks is recorded and restarts the streak", o);
+// 24 hours and 5 minutes after the last failure with a green run: closes
+runs = [run(16, "deploy-gate", "success", "2026-10-21T06:15:00Z")].concat(runs);
+o = await X.workflowFailureIntake(env, Date.parse("2026-10-21T06:20:00Z"), io);
 const tr = db.prepare("SELECT * FROM issue_triage").get();
-ok(o.closed === 1 && db.prepare("SELECT status FROM agent_issues").get().status === "closed" && /succeeded: https:\/\/github.com\/QNFO\/qnfo-workers\/actions\/runs\/13/.test(tr.close_evidence), "a green main run closes it with close_evidence", tr);
+ok(o.closed === 1 && db.prepare("SELECT status FROM agent_issues").get().status === "closed" && /succeeded: https:\/\/github.com\/QNFO\/qnfo-workers\/actions\/runs\/16.*WFI-GREEN-STREAK-1/.test(tr.close_evidence), "a green main run closes it with close_evidence", tr);
 ok(db.prepare("SELECT conclusion FROM workflow_main_state WHERE workflow = 'deploy-gate'").get().conclusion === "success", "workflow_main_state follows the newest decided run");
 
 // the kill switch, and an unreadable GitHub answer
