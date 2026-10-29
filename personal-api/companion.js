@@ -1838,8 +1838,8 @@ export async function agenda(env, deps, st) {
     if (deps && typeof deps.calendar === "function") {
       const r = await Promise.race([deps.calendar(env, st.day, to), new Promise((res) => setTimeout(() => res(null), 4000))]);
       if (r && r.ok) {
-        out.calendar = { state: r.google || "unknown", note: r.note || null };
-        const shape = (e) => ({ title: s(e.title, 120), start: e.dtstart || null, end: e.dtend || null, all_day: !!e.all_day, where: e.location ? s(e.location, 80) : null, source: e.source || null });
+        out.calendar = { state: r.google || "unknown", note: r.note || null, feeds: (r.feeds || []).concat([{ label: "Qniverse", ok: true, count: (r.events || []).filter((x) => x && x.calendar === "twin-store").length, error: null }]) };
+        const shape = (e) => ({ title: s(e.title, 120), start: e.dtstart || null, end: e.dtend || null, all_day: !!e.all_day, where: e.location ? s(e.location, 80) : null, source: e.source || null, cal: e.calendar_name || (e.source === "calendar-api" || e.calendar === "twin-store" ? "Qniverse" : null) });
         for (const e of r.events || []) {
           if (!e || !e.title) continue;
           if (e.calendar === "suggestion" || e.source === "personal-radar") { if (out.radar.length < 4) out.radar.push(shape(e)); continue; }
@@ -2598,11 +2598,12 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(!t.paused_until)v.appendChild(el('div',{cls:'row',style:'margin:0 0 10px'},[el('span',{cls:'mute',text:'Need quiet? Pause reach-outs:'}),el('button',{cls:'chip',text:'4 h',onclick:function(){pause(4)}}),el('button',{cls:'chip',text:'1 day',onclick:function(){pause(24)}}),el('button',{cls:'chip',text:'3 days',onclick:function(){pause(72)}})]));
  v.appendChild(el('div',{cls:'mute',text:'Companion '+VERSION+'. Nudges today: '+t.nudges_today+' of '+t.cap+'.'+(t.tick_age_min!==null&&t.tick_age_min>45?' Reach-outs are delayed: my last check ran '+t.tick_age_min+' minutes ago. Everything here still works.':'')}))}
 function fmtWhen(e){if(!e.start)return '';if(e.all_day||String(e.start).length<=10){var d0=new Date(String(e.start).slice(0,10)+'T00:00:00');return d0.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' (all day)'}var d=new Date(e.start);if(isNaN(d))return '';return d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
-function evRow(e,withDay){var t=e.start&&!e.all_day&&String(e.start).length>10?new Date(e.start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';var bits=[el('div',{text:(withDay?fmtWhen(e)+'  ':(t?t+'  ':''))+e.title})];if(e.where)bits.push(el('div',{cls:'mute',text:e.where}));return el('div',{style:'margin:6px 0'},bits)}
+function evRow(e,withDay){var t=e.start&&!e.all_day&&String(e.start).length>10?new Date(e.start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';var bits=[el('div',{text:(withDay?fmtWhen(e)+'  ':(t?t+'  ':''))+e.title})];var sub=[e.where,e.cal].filter(Boolean).join(' · ');if(sub)bits.push(el('div',{cls:'mute',text:sub}));return el('div',{style:'margin:6px 0'},bits)}
 function renderAgenda(v,t){var a=t.agenda;if(!a)return;
  var dc=el('div',{cls:'card'},[el('h2',{text:'Your day'})]);
  if(a.today.length)a.today.forEach(function(e){dc.appendChild(evRow(e,false))});
  else dc.appendChild(el('div',{text:a.calendar.state==='none'||a.calendar.state==='no-client'||a.calendar.state==='unknown'?'Nothing on your calendar that I can see. Your Google Calendar is not connected yet, so this only shows what you have told me.':'Nothing planned today. That leaves room.'}));
+ if(a.calendar.feeds&&a.calendar.feeds.length)dc.appendChild(el('div',{cls:'mute',style:'margin-top:8px',text:'Calendars: '+a.calendar.feeds.map(function(f){return f.label+(f.ok?'':' (not answering)')}).join(', ')}));
  v.appendChild(dc);
  if((t.next_actions||[]).length){var nc=el('div',{cls:'card'},[el('h2',{text:'To do'})]);t.next_actions.slice(0,5).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.title+(x.minutes?' ('+x.minutes+' min)':'')}),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:x.id}}).then(function(){row.remove()}).catch(warn)}})]);nc.appendChild(row)});nc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'All next actions',onclick:function(){go('do')}})]));v.appendChild(nc)}
  if(a.soon.length){var sc=el('div',{cls:'card'},[el('h2',{text:'Coming up this week'})]);a.soon.forEach(function(e){sc.appendChild(evRow(e,true))});v.appendChild(sc)}
