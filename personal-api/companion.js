@@ -1809,6 +1809,54 @@ export async function companionTick(env, deps, opts) {
 
 // ---------------------------------------------------------------- read models
 
+// TODAY-DASHBOARD-1 (4.27.0, 2026-10-29, pillar personal, owner: "as soon as I open my browser I feel inspired. Here is what is going on
+// today ... actual events ... to-do items ... things in your email ... a personal dashboard"): the Today tab showed counts, not the day.
+// agenda() gives it the day itself: today's events, the next week, radar ideas (never booked), recent mail from the index, and one
+// question to carry. Every part degrades to a plain statement of what is not connected, never to an empty card.
+const TODAY_PROMPTS = [
+  "What would make today feel a little lighter, even by 5%?",
+  "Who would be glad to hear from you today?",
+  "What is one small thing you could finish before lunch?",
+  "What did you enjoy the last time you felt like yourself?",
+  "What would you tell a friend who felt the way you do this morning?",
+  "Where could you be outside today, even for ten minutes?",
+  "What is one thing you are looking forward to, however small?",
+  "What have you already done this week that you have not given yourself credit for?",
+  "What is one thing you could stop carrying today?",
+  "Which part of today is yours to choose?",
+  "What does your body need right now: water, food, movement, rest?",
+  "What is something you are curious about at the moment?",
+  "What is one kind thing you could do for someone else today?",
+  "If today went just okay, what would okay look like?"
+];
+export async function agenda(env, deps, st) {
+  const out = { calendar: { state: "unknown", note: null }, today: [], soon: [], radar: [], mail: { items: [], note: null }, prompt: null };
+  const dayNo = Math.floor(Date.parse(st.day + "T00:00:00Z") / 864e5);
+  out.prompt = TODAY_PROMPTS[((dayNo % TODAY_PROMPTS.length) + TODAY_PROMPTS.length) % TODAY_PROMPTS.length];
+  const to = new Date(Date.parse(st.day + "T00:00:00Z") + 7 * 864e5).toISOString().slice(0, 10);
+  try {
+    if (deps && typeof deps.calendar === "function") {
+      const r = await Promise.race([deps.calendar(env, st.day, to), new Promise((res) => setTimeout(() => res(null), 4000))]);
+      if (r && r.ok) {
+        out.calendar = { state: r.google || "unknown", note: r.note || null };
+        const shape = (e) => ({ title: s(e.title, 120), start: e.dtstart || null, end: e.dtend || null, all_day: !!e.all_day, where: e.location ? s(e.location, 80) : null, source: e.source || null });
+        for (const e of r.events || []) {
+          if (!e || !e.title) continue;
+          if (e.calendar === "suggestion" || e.source === "personal-radar") { if (out.radar.length < 4) out.radar.push(shape(e)); continue; }
+          if (String(e.dtstart || "").slice(0, 10) === st.day) out.today.push(shape(e));
+          else if (out.soon.length < 8) out.soon.push(shape(e));
+        }
+        out.today = out.today.slice(0, 10);
+      } else out.calendar = { state: "unreachable", note: "The calendar did not answer in time." };
+    }
+  } catch (e) { out.calendar = { state: "unreachable", note: "The calendar could not be read." }; }
+  try {
+    const m = await all(env.PERSONAL, "SELECT sender, subject, received_at, category FROM email_index WHERE received_at >= ? ORDER BY received_at DESC LIMIT 6", new Date(Date.now() - 3 * 864e5).toISOString());
+    out.mail.items = m.map((x) => ({ from: s(x.sender, 60), subject: s(x.subject, 100), at: x.received_at, category: x.category || null }));
+    if (!m.length) out.mail.note = "No mail has reached me yet. Mail is not connected, so nothing from your inbox shows here.";
+  } catch (e) { out.mail.note = "Mail is not connected yet."; }
+  return out;
+}
 export async function today(env, deps) {
   await ensureSchema(env.PERSONAL);
   const st = await gatherState(env, undefined, deps);
@@ -1845,7 +1893,8 @@ export async function today(env, deps) {
     email_mode: EMAIL_MODES.includes(st.cfg.email_mode) ? st.cfg.email_mode : "off",
     stale_reminders: await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'open' AND NOT " + FRESH_DUE_SQL).first().then((x) => (x ? Number(x.n) : 0)).catch(() => 0),
     tick_age_min: st.cfg.cmp_last_tick ? Math.round((Date.parse(st.nowIso) - Date.parse(st.cfg.cmp_last_tick)) / 60000) : null,
-    plan_preview: (() => { const p = planNudge(Object.assign({}, st, { pushReady: true })); return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason }; })()
+    plan_preview: (() => { const p = planNudge(Object.assign({}, st, { pushReady: true })); return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason }; })(),
+    agenda: await agenda(env, deps, st)
   };
 }
 export async function dashboard(env) {
@@ -2539,6 +2588,7 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
  (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','cmp-after','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
  v.appendChild(moodCard(t));
+ renderAgenda(v,t);
  if(!t.push_ready&&!startShown)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
  if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);if(r.ok)rateBox(o,{action_id:t.one_thing.id})})}})]));v.appendChild(o)}
  if(t.reading){v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to read'}),el('div',{cls:'mute',text:t.reading.why}),el('div',{cls:'row',style:'margin-top:8px'},[el('a',{href:t.reading.url,text:'Open today\u2019s pick'}),el('a',{href:'https://mind.q08.org/',text:'The whole list'})])]))}
@@ -2547,6 +2597,21 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Today'})].concat(info.map(function(x){return el('div',{cls:'mute',text:x})}))));
  if(!t.paused_until)v.appendChild(el('div',{cls:'row',style:'margin:0 0 10px'},[el('span',{cls:'mute',text:'Need quiet? Pause reach-outs:'}),el('button',{cls:'chip',text:'4 h',onclick:function(){pause(4)}}),el('button',{cls:'chip',text:'1 day',onclick:function(){pause(24)}}),el('button',{cls:'chip',text:'3 days',onclick:function(){pause(72)}})]));
  v.appendChild(el('div',{cls:'mute',text:'Companion '+VERSION+'. Nudges today: '+t.nudges_today+' of '+t.cap+'.'+(t.tick_age_min!==null&&t.tick_age_min>45?' Reach-outs are delayed: my last check ran '+t.tick_age_min+' minutes ago. Everything here still works.':'')}))}
+function fmtWhen(e){if(!e.start)return '';if(e.all_day||String(e.start).length<=10){var d0=new Date(String(e.start).slice(0,10)+'T00:00:00');return d0.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' (all day)'}var d=new Date(e.start);if(isNaN(d))return '';return d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
+function evRow(e,withDay){var t=e.start&&!e.all_day&&String(e.start).length>10?new Date(e.start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';var bits=[el('div',{text:(withDay?fmtWhen(e)+'  ':(t?t+'  ':''))+e.title})];if(e.where)bits.push(el('div',{cls:'mute',text:e.where}));return el('div',{style:'margin:6px 0'},bits)}
+function renderAgenda(v,t){var a=t.agenda;if(!a)return;
+ var dc=el('div',{cls:'card'},[el('h2',{text:'Your day'})]);
+ if(a.today.length)a.today.forEach(function(e){dc.appendChild(evRow(e,false))});
+ else dc.appendChild(el('div',{text:a.calendar.state==='none'||a.calendar.state==='no-client'||a.calendar.state==='unknown'?'Nothing on your calendar that I can see. Your Google Calendar is not connected yet, so this only shows what you have told me.':'Nothing planned today. That leaves room.'}));
+ v.appendChild(dc);
+ if((t.next_actions||[]).length){var nc=el('div',{cls:'card'},[el('h2',{text:'To do'})]);t.next_actions.slice(0,5).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.title+(x.minutes?' ('+x.minutes+' min)':'')}),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:x.id}}).then(function(){row.remove()}).catch(warn)}})]);nc.appendChild(row)});nc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'All next actions',onclick:function(){go('do')}})]));v.appendChild(nc)}
+ if(a.soon.length){var sc=el('div',{cls:'card'},[el('h2',{text:'Coming up this week'})]);a.soon.forEach(function(e){sc.appendChild(evRow(e,true))});v.appendChild(sc)}
+ if(a.radar.length){var rc=el('div',{cls:'card'},[el('h2',{text:'Worth a look'}),el('div',{cls:'mute',text:'Ideas only. None of these are booked.'})]);a.radar.forEach(function(e){rc.appendChild(evRow(e,true))});v.appendChild(rc)}
+ var mc=el('div',{cls:'card'},[el('h2',{text:'In your inbox'})]);
+ if(a.mail.items.length)a.mail.items.forEach(function(m){mc.appendChild(el('div',{style:'margin:6px 0'},[el('div',{text:m.subject||'(no subject)'}),el('div',{cls:'mute',text:m.from})]))});
+ else mc.appendChild(el('div',{cls:'mute',text:a.mail.note||'Nothing new.'}));
+ v.appendChild(mc);
+ if(a.prompt)v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to think about'}),el('div',{text:a.prompt})]))}
 function answer(id,state,box,rate){api('/companion/api/nudge',{json:{id:id,state:state}}).then(function(r){box.innerHTML='';say(box,r.reply||r.error);if(rate&&state==='done')rateBox(box,rate)})}
 function pause(h){api('/companion/api/pause',{json:{hours:h}}).then(function(r){alert(r.reply||r.error);load()})}
 function rateBox(box,ref){var p={pleasure:null,mastery:null};var w=el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'How was it? This is how I learn what helps you.'}),el('div',{cls:'mute',text:'enjoyment',style:'margin-top:6px'})]);
