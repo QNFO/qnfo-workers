@@ -52,3 +52,15 @@ Risks and counter-arguments, stated plainly:
 ## 4. Files
 
 Roadmap items are filed by `migrations/2026-10-29-composio-roadmap-items.sql`.
+
+## 5. Alternatives that fit Cloudflare and cost nothing (checked 2026-10-29)
+
+| Option | Runs on Cloudflare? | Cost | Verdict |
+|:--|:--|:--|:--|
+| Own OAuth broker in a Worker (Google OAuth, `workers-oauth-provider`, tokens in D1, refresh on the hourly tick) | Yes, native | Free (Google APIs are free) | Best fit; the fleet already holds Google links. Build for Google, GitHub, Slack first (RM-OAUTH-BROKER-1). |
+| Agents SDK MCP client in `qnfo-agents` calling remote MCP servers | Yes, native | Free | Use for any service that publishes a remote MCP server. |
+| Nango (Elastic License 2.0) | No: Node plus Postgres, needs a container host | Auth and proxy free self-hosted; full platform is Enterprise | Only if a container host is acceptable. |
+| n8n, Activepieces | No: Node plus a database | Free self-hosted | Workflow engines, heavier than a tool layer. |
+| Pipedream Connect, Arcade, Paragon | No: hosted, closed engines | Free tiers with caps | Same custody risk as Composio, no advantage. |
+
+Most comparisons found are vendor blogs (Nango's among them), so treat their rankings as marketing. Recommendation: build the in-Worker broker and keep Composio as the long-tail fallback inside its free 100k calls.
