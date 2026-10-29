@@ -1,4 +1,4 @@
-var VERSION="3.48.0"; // 3.48.0 PLAIN-STANDARD-1 (2026-10-28, pillar reach, agent_issues 1000476; minor: the plain-language summary now has a hard readability gate): plainPrompt asks for at most two figures, one everyday comparison, terms defined inline and sentences under 20 words; plainBuild regenerates once and flags a result above Flesch-Kincaid grade 9 as gated, which is never stored or shown (a gated build keeps the old row and waits 6 hours); plainFill queues stored summaries above grade 9 for regeneration, hardest first. qnfo-gateway/plain-standard.test.mjs. // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
+var VERSION="3.48.1-codeagent"; // 3.48.0 PLAIN-STANDARD-1 (2026-10-28, pillar reach, agent_issues 1000476; minor: the plain-language summary now has a hard readability gate): plainPrompt asks for at most two figures, one everyday comparison, terms defined inline and sentences under 20 words; plainBuild regenerates once and flags a result above Flesch-Kincaid grade 9 as gated, which is never stored or shown (a gated build keeps the old row and waits 6 hours); plainFill queues stored summaries above grade 9 for regeneration, hardest first. qnfo-gateway/plain-standard.test.mjs. // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
 // 3.44.2 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): the apex qnfo.org answered HTML pages with no frame protection (measured 2026-10-26: the *.qnfo.org hosts get X-Frame-Options DENY from a zone rule whose expression is the wildcard *.qnfo.org, which does not match the apex). withPagePolicy now adds X-Frame-Options DENY to every HTML response that has none, on every host, so the apex no longer depends on the zone rule; a handler's own value is kept.
 // 3.43.3 GATEWAY-DAILY-SLOT-1: the daily bundle (IndexNow submits incl. the Monday full pass, render-health sweep, Browser Run math sample) ran every hour since the hourly cron replaced the daily one on 2026-10-20 and drew http 429 from api.indexnow.org, bing.com and seznam; the hourly job now does only hourly work plus a 90-minute IndexNow delta, and seo_indexnow_engines_ok counts distinct accepting endpoints over 26 hours instead of the single newest row.
@@ -2408,6 +2408,46 @@ async function provVerify(sidecar, pubJwk) {
     return await crypto.subtle.verify({ name: "Ed25519" }, pk, provUnb64u(sidecar.signature.value), new TextEncoder().encode(provCanon(sidecar.statement)));
   } catch (e) { return false; }
 }
+async function paperBodySha256(body) { return provSha256Hex(String(body == null ? "" : body)); }
+// PAPER-PIDS-HASH-1 (issue 1000646): serve a content hash and an immutable version URL per paper version.
+// GET /papers/<slug>/v/<version> -> the stored body of that version with X-Content-SHA256; 410 when the stored hash no longer matches the body.
+async function handlePaperVersionPid(request, env, slug, version) {
+  var H = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=31536000, immutable" };
+  var v = String(version || "").replace(/^v/i, "");
+  try {
+    var row = await env.LIVING_PAPER.prepare("SELECT version, version_semver, body_md FROM papers WHERE slug = ?").bind(slug).first();
+    var cur = String((row && (row.version_semver || row.version)) || "").replace(/^v/i, "");
+    if (row && cur === v) {
+      var h = await paperBodySha256(row.body_md);
+      return new Response(String(row.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h }) });
+    }
+    var ch = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM paper_change_bodies WHERE slug = ? AND version = ?").bind(slug, v).first();
+    if (!ch) return new Response(JSON.stringify({ error: "no such paper version" }), { status: 404, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    var h2 = await paperBodySha256(ch.body_md);
+    if (ch.sha256 && String(ch.sha256).toLowerCase() !== h2) {
+      return new Response(JSON.stringify({ error: "stored content hash no longer matches this version; it was withdrawn", sha256: String(ch.sha256), actual: h2 }), { status: 410, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
+    }
+    return new Response(String(ch.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h2 }) });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "paper version lookup failed" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
+  }
+}
+// the sha256 of a paper's current body, published into GET /api/papers/<slug>
+async function paperCurrentSha256(env, slug) {
+  try {
+    var row = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM papers WHERE slug = ?").bind(slug).first();
+    if (!row) return null;
+    var h = await paperBodySha256(row.body_md);
+    if (row.sha256 && String(row.sha256).toLowerCase() !== h) return { sha256: h, hash_status: "mismatch_with_stored_hash" };
+    return { sha256: h };
+  } catch (e) { return null; }
+}
+// route dispatcher for the immutable-version surface: returns a Response when the URL is one of the new routes, else null
+async function paperPidsRoutes(request, env, urlObj) {
+  var m = String((urlObj && urlObj.pathname) || "").match(/^\/papers\/([^\/]+)\/v\/([^\/]+)\/?$/);
+  if (!m) return null;
+  return handlePaperVersionPid(request, env, decodeURIComponent(m[1]), decodeURIComponent(m[2]));
+}
 async function provKeyDoc(env) {
   var k = await provKey(env);
   if (!k) return null;
@@ -2468,6 +2508,7 @@ const PAPER_QUALITY_LABEL = "High-quality scholarly research";
 const PAPER_QUALITY_TAGS = [PAPER_QUALITY_LABEL, "open-access scholarly work", "versioned research publication"];
 const PAPER_QUALITY_BASIS = "QNFO publisher classification for open-access, versioned research with a public revision history and reader correction channel; this is not a claim of independent peer review.";
 const PAPER_PEER_REVIEW_STATUS = "Not independently peer-reviewed";
+const PAPER_PIDS_HASH_TAG = "PAPER-PIDS-HASH-1"; // version line: papers.qnfo.org serves a content hash and an immutable version URL per paper version (issue 1000646)
 
 function paperHeadMeta(paper, ctx) {
   const c = ctx || {};
