@@ -1,0 +1,2808 @@
+{
+ "generated": "2026-09-09T13:38:20.813450+00:00",
+ "account": "edb167b78c9fb901ea5bca3ce58ccc4b",
+ "worker_count": 75,
+ "errors": [
+  {
+   "name": "qnfo-infra",
+   "err": "Remote end closed connection without response"
+  }
+ ],
+ "workers": [
+  {
+   "name": "calendar-api",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "CAL_DB"
+    },
+    {
+     "t": "sec",
+     "n": "CAL_TOKEN"
+    },
+    {
+     "t": "r2",
+     "n": "ICS_R2",
+     "b": "qnfo-assets"
+    }
+   ]
+  },
+  {
+   "name": "events-radar",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "svc",
+     "n": "EMAIL",
+     "s": "qnfo-email",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "OBSIDIAN_WRITER",
+     "s": "obsidian-writer",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "RADAR_DB"
+    }
+   ]
+  },
+  {
+   "name": "jnl-referee",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2025-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "txt",
+     "n": "JNL_DAILY_CAP"
+    },
+    {
+     "t": "txt",
+     "n": "JNL_MODELS"
+    },
+    {
+     "t": "sec",
+     "n": "JNL_TOKEN"
+    },
+    {
+     "t": "kv",
+     "n": "STATE",
+     "id": "0cf89b469bcb47058e343611d9117897"
+    }
+   ]
+  },
+  {
+   "name": "jnl-reviser",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2025-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "JNL_OPS_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "REF",
+     "s": "jnl-referee",
+     "env": "production"
+    },
+    {
+     "t": "kv",
+     "n": "STATE",
+     "id": "0cf89b469bcb47058e343611d9117897"
+    },
+    {
+     "t": "sec",
+     "n": "ZENODO_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "jnl-watch",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2025-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "vz",
+     "n": "CORPUS",
+     "idx": "jnl-corpus"
+    },
+    {
+     "t": "r2",
+     "n": "PARSE_CACHE",
+     "b": "jnl-parse-cache"
+    },
+    {
+     "t": "kv",
+     "n": "STATE",
+     "id": "0cf89b469bcb47058e343611d9117897"
+    }
+   ]
+  },
+  {
+   "name": "jnl-zenodo",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2025-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "JNL_OPS_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "REFEREE",
+     "s": "jnl-referee",
+     "env": "production"
+    },
+    {
+     "t": "kv",
+     "n": "STATE",
+     "id": "0cf89b469bcb47058e343611d9117897"
+    },
+    {
+     "t": "sec",
+     "n": "ZENODO_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "job-market-watch",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-01-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "workflow",
+     "n": "JOB_MARKET_WATCH"
+    },
+    {
+     "t": "r2",
+     "n": "VAULT",
+     "b": "obsidian-vault"
+    }
+   ]
+  },
+  {
+   "name": "obsidian-writer",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "r2",
+     "n": "VAULT",
+     "b": "obsidian-vault"
+    }
+   ]
+  },
+  {
+   "name": "osf-integrity-check",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    }
+   ]
+  },
+  {
+   "name": "personal-api",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "API_KEY"
+    },
+    {
+     "t": "svc",
+     "n": "CAL_API",
+     "s": "calendar-api",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "CAL_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "CF_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "INFRA_TOKEN"
+    },
+    {
+     "t": "r2",
+     "n": "MEDIA",
+     "b": "personal-media"
+    },
+    {
+     "t": "d1",
+     "n": "PERSONAL"
+    },
+    {
+     "t": "vz",
+     "n": "VZ",
+     "idx": "personal-life"
+    }
+   ]
+  },
+  {
+   "name": "personal-events-radar",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "svc",
+     "n": "CAL_API",
+     "s": "calendar-api",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "CAL_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "OBSIDIAN_WRITER",
+     "s": "obsidian-writer",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "PERSONAL_DB"
+    }
+   ]
+  },
+  {
+   "name": "personal-life-indexer",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "r2",
+     "n": "DDRIVE",
+     "b": "d-drive"
+    },
+    {
+     "t": "sec",
+     "n": "INDEX_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "PERSONAL"
+    },
+    {
+     "t": "vz",
+     "n": "VZ",
+     "idx": "personal-life"
+    }
+   ]
+  },
+  {
+   "name": "personal-life-maintain",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2024-09-23",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "PERSONAL"
+    },
+    {
+     "t": "vz",
+     "n": "VZ",
+     "idx": "personal-life"
+    }
+   ]
+  },
+  {
+   "name": "personal-life-search",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "r2",
+     "n": "DDRIVE",
+     "b": "d-drive"
+    },
+    {
+     "t": "sec",
+     "n": "INDEX_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "PERSONAL"
+    },
+    {
+     "t": "vz",
+     "n": "VZ",
+     "idx": "personal-life"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-agent-orchestrator",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "do",
+     "n": "AGENT_TASK",
+     "id": "7866342318194d95a122a8b734365e19",
+     "cls": "AgentTask"
+    },
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "DISPATCH_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "GITHUB_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "vz",
+     "n": "PAPER_VZ",
+     "idx": "qwav-research-v2"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_GRAPH"
+    },
+    {
+     "t": "r2",
+     "n": "QNFO_PROJECTS",
+     "b": "qnfo-projects"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "TEST_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "ZENODO_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-agent-ws",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "send_email",
+     "n": "EMAIL"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "vz",
+     "n": "PAPER_VZ",
+     "idx": "qwav-research-v2"
+    },
+    {
+     "t": "do",
+     "n": "QnfoAgent",
+     "id": "16ff451aaaed4bd09072f93dcc96dd4a",
+     "cls": "QnfoAgent"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_GRAPH"
+    },
+    {
+     "t": "sec",
+     "n": "ROUTER_AUTH_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-ai",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "svc",
+     "n": "CAL_API",
+     "s": "calendar-api",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "vz",
+     "n": "CLOUD_OPS_VZ",
+     "idx": "qnfo-cloud-ops"
+    },
+    {
+     "t": "sec",
+     "n": "DEEPSEEK_API_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "vz",
+     "n": "HANDOFFS_VZ",
+     "idx": "qnfo-handoffs"
+    },
+    {
+     "t": "sec",
+     "n": "INFRA_TOKEN"
+    },
+    {
+     "t": "vz",
+     "n": "INFRA_VZ",
+     "idx": "qnfo-infra"
+    },
+    {
+     "t": "sec",
+     "n": "INTENT_TOKEN"
+    },
+    {
+     "t": "vz",
+     "n": "IPATENT_VZ",
+     "idx": "ipatent-corpus"
+    },
+    {
+     "t": "worker_loader",
+     "n": "LOADER"
+    },
+    {
+     "t": "vz",
+     "n": "LOG_VZ",
+     "idx": "qnfo-ai-log"
+    },
+    {
+     "t": "r2",
+     "n": "MEDIA",
+     "b": "qnfo-media"
+    },
+    {
+     "t": "vz",
+     "n": "NOTES_VZ",
+     "idx": "qnfo-notes"
+    },
+    {
+     "t": "vz",
+     "n": "PAPER_VZ",
+     "idx": "qwav-research-v2"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_INFRA",
+     "s": "qnfo-infra",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_INTENT",
+     "s": "qnfo-intent-orchestrator",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "ROUTER_AUTH_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "ROUTER_AUTH_KEY_2"
+    },
+    {
+     "t": "sec",
+     "n": "SOCIAL_TOKEN"
+    },
+    {
+     "t": "vz",
+     "n": "TASKS_VZ",
+     "idx": "qnfo-tasks"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-ai-calibration",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "DEEPSEEK_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "OPS_KEY"
+    },
+    {
+     "t": "svc",
+     "n": "PT_API",
+     "s": "personal-api",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "PT_KEY"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_OPS",
+     "s": "qnfo-ops",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "QNFO_ROUTER_KEY"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-ai-search",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-07-09",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai_search_namespace",
+     "n": "AI_SEARCH"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-analytics",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2024-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ae",
+     "n": "ANALYTICS"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "sec",
+     "n": "INGEST_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-archive",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-07-30",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "vz",
+     "n": "HANDOFFS_VZ",
+     "idx": "qnfo-handoffs"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "d1",
+     "n": "PORTFOLIO_STATE"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "r2",
+     "n": "QNFO_BUCKET",
+     "b": "qnfo"
+    },
+    {
+     "t": "vz",
+     "n": "TASKS_VZ",
+     "idx": "qnfo-tasks"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-arxiv-radar",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-01-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "r2",
+     "n": "VAULT",
+     "b": "obsidian-vault"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-auditor",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "AUDITOR_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "DIGEST_TO"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-backlog-exec",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2024-11-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-blank-audit",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-chat-canary",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "d1",
+     "n": "OUTREACH"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "ROUTER_AUTH_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "RUN_TOKEN"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-citation-watch",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-01-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "r2",
+     "n": "VAULT",
+     "b": "obsidian-vault"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-cloud-ops",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "BSKY_APP_PASS"
+    },
+    {
+     "t": "sec",
+     "n": "BSKY_HANDLE"
+    },
+    {
+     "t": "sec",
+     "n": "BUFFER_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "CF_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "DIGEST_TO"
+    },
+    {
+     "t": "svc",
+     "n": "EMAIL",
+     "s": "qnfo-email",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "GH_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "GMAIL_PASS"
+    },
+    {
+     "t": "d1",
+     "n": "GRAPH"
+    },
+    {
+     "t": "sec",
+     "n": "INFRA_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING"
+    },
+    {
+     "t": "sec",
+     "n": "OPS_ADMIN_TOKEN"
+    },
+    {
+     "t": "vz",
+     "n": "OPS_VZ",
+     "idx": "qnfo-cloud-ops"
+    },
+    {
+     "t": "d1",
+     "n": "OUTREACH"
+    },
+    {
+     "t": "sec",
+     "n": "PL_API_KEY"
+    },
+    {
+     "t": "d1",
+     "n": "PORTFOLIO"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_INFRA",
+     "s": "qnfo-infra",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_OPS",
+     "s": "qnfo-ops",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "REGISTRY_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "ROUTER_AUTH_KEY"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    },
+    {
+     "t": "r2",
+     "n": "VAULT",
+     "b": "d-drive"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-code-agent",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "CODE_AGENT_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "GITHUB_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-code-orchestrator",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "sec",
+     "n": "CODE_AGENT_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "ORCH_TOKEN"
+    },
+    {
+     "t": "do",
+     "n": "PY_CONTAINER",
+     "id": "9c341dbc451744fcb0fc804c196cce12",
+     "cls": "PyContainer"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-container-executor",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "do",
+     "n": "EXECUTOR",
+     "id": "ee01e902b3ad49f38678c68129587760",
+     "cls": "CodeExecutor"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-containers-pilot",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "PILOT_TOKEN"
+    },
+    {
+     "t": "do",
+     "n": "PY_CONTAINER",
+     "id": "3a7159e948e64eb0b2bbcccf328ae24f",
+     "cls": "PyContainer"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-ddocs-indexer",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "txt",
+     "n": "DDOC_PREFIX"
+    },
+    {
+     "t": "r2",
+     "n": "DDOCS",
+     "b": "qnfo-ddocs"
+    },
+    {
+     "t": "vz",
+     "n": "DDOC_VZ",
+     "idx": "qnfo-ddocs"
+    },
+    {
+     "t": "txt",
+     "n": "INDEX_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-email",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-03",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "txt",
+     "n": "API_KEY"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "sec",
+     "n": "GATEWAY_EMAIL_KEY"
+    },
+    {
+     "t": "txt",
+     "n": "NOTIFY_WEBHOOK"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-email-orchestrator",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "txt",
+     "n": "DRY_RUN"
+    },
+    {
+     "t": "svc",
+     "n": "EMAIL",
+     "s": "qnfo-email",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "d1",
+     "n": "OUTREACH_DB"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-errata-orchestrator",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "svc",
+     "n": "ERRATA_PUBLISH",
+     "s": "qnfo-errata-publish",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "ERRATA_RESPOND",
+     "s": "qnfo-errata-respond",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "ERRATA_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "ERRATA_WATCH",
+     "s": "qnfo-errata-watch",
+     "env": "production"
+    },
+    {
+     "t": "workflow",
+     "n": "ERRATA_WORKFLOW"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-errata-publish",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "browser",
+     "n": "BROWSER"
+    },
+    {
+     "t": "sec",
+     "n": "ERRATA_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "GRAPH_DB"
+    },
+    {
+     "t": "r2",
+     "n": "MIRROR",
+     "b": "qnfo-releases"
+    },
+    {
+     "t": "d1",
+     "n": "PAPERS_DB"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    },
+    {
+     "t": "d1",
+     "n": "WATCH_DB"
+    },
+    {
+     "t": "sec",
+     "n": "ZENODO_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-errata-respond",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "ERRATA_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "PAPERS_DB"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    },
+    {
+     "t": "d1",
+     "n": "WATCH_DB"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-errata-watch",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "ERRATA_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "WATCH_DB"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-error-selfheal",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-events",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "EVENTS_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-fleet-advisor",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-08",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "txt",
+     "n": "ADVISOR_ITERS"
+    },
+    {
+     "t": "txt",
+     "n": "ADVISOR_MODEL"
+    },
+    {
+     "t": "sec",
+     "n": "ADVISOR_TOKEN"
+    },
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "txt",
+     "n": "CF_ACCOUNT_ID"
+    },
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "do",
+     "n": "FleetAdvisor",
+     "id": "3c39f88084a04f51b84780e9cc937a29",
+     "cls": "FleetAdvisor"
+    },
+    {
+     "t": "txt",
+     "n": "PROBE_WORKERS"
+    },
+    {
+     "t": "txt",
+     "n": "REVIEW_MODEL"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-fleet-calibrator",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "DB_AUDIT"
+    },
+    {
+     "t": "kv",
+     "n": "KV_CAL",
+     "id": "d3768b93a76640be83151b00a8b42717"
+    },
+    {
+     "t": "r2",
+     "n": "R2_AUDIT",
+     "b": "qnfo-audit"
+    },
+    {
+     "t": "sec",
+     "n": "RUN_SECRET"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_PERSONAL_API",
+     "s": "personal-api",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_AUDITOR",
+     "s": "qnfo-auditor",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_INFRA",
+     "s": "qnfo-infra",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_INTENT",
+     "s": "qnfo-intent-orchestrator",
+     "env": "production"
+    },
+    {
+     "t": "vz",
+     "n": "VEC_CAL",
+     "idx": "qnfo-calibration"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-fleet-dashboard",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "CF_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING"
+    },
+    {
+     "t": "d1",
+     "n": "OUTREACH"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_PERSONAL_API",
+     "s": "personal-api",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_PERSONAL_EVENTS_RADAR",
+     "s": "personal-events-radar",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_GATEWAY",
+     "s": "qnfo-gateway",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_KAIZEN",
+     "s": "qnfo-kaizen",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_OPS",
+     "s": "qnfo-ops",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_OUTREACH",
+     "s": "qnfo-outreach",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_PAPER_REVISER",
+     "s": "qnfo-paper-reviser",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "SVC_QNFO_SOCIAL",
+     "s": "qnfo-social",
+     "env": "production"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-fleet-deploy",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "r2",
+     "n": "CANONICAL",
+     "b": "qnfo-canonical"
+    },
+    {
+     "t": "sec",
+     "n": "CF_DEPLOY_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "DEPLOY_ADMIN_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "SELFHEAL_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-gateway",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "DB"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "r2",
+     "n": "QNFO_BUCKET",
+     "b": "qnfo"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "TURNSTILE_SECRET"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-idea-factory",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-idea-miner",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-idea-triage",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "svc",
+     "n": "AGENT_ORCH",
+     "s": "qnfo-agent-orchestrator",
+     "env": "production"
+    },
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "AUTO_PAUSE"
+    },
+    {
+     "t": "sec",
+     "n": "DISPATCH_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "INDEXNOW_KEY"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "TRIAGE_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-impact",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "sec",
+     "n": "IMPACT_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-intent-orchestrator",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "svc",
+     "n": "CAL_API",
+     "s": "calendar-api",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "CAL_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "CF_ACCOUNT"
+    },
+    {
+     "t": "sec",
+     "n": "CF_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "D1"
+    },
+    {
+     "t": "sec",
+     "n": "DIGEST_FROM"
+    },
+    {
+     "t": "sec",
+     "n": "DIGEST_TO"
+    },
+    {
+     "t": "sec",
+     "n": "DISPATCH_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "INDEX_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "INTENT_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "PLS",
+     "s": "personal-life-search",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_OPS",
+     "s": "qnfo-ops",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "REGISTRY_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "RT"
+    },
+    {
+     "t": "vz",
+     "n": "VZ_P",
+     "idx": "personal-life"
+    },
+    {
+     "t": "vz",
+     "n": "VZ_R",
+     "idx": "qnfo-ai-log"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-ipatent",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "vz",
+     "n": "DISCLOSURES_VZ",
+     "idx": "ipatent-corpus"
+    },
+    {
+     "t": "d1",
+     "n": "IPATENT_DB"
+    },
+    {
+     "t": "r2",
+     "n": "IPATENT_R2",
+     "b": "ipatent"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-kaizen",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "GITHUB_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "KAIZEN_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "r2",
+     "n": "SKILLS_BUCKET",
+     "b": "qnfo-skills"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-lifecycle",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "r2",
+     "n": "BACKUP_BUCKET",
+     "b": "qnfo-backups"
+    },
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "IPATENT_DB"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "vz",
+     "n": "PAPER_VZ",
+     "idx": "qwav-research-v2"
+    },
+    {
+     "t": "d1",
+     "n": "PORTFOLIO_STATE"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_GRAPH"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-memory-mcp",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "GRAPH_DB"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "vz",
+     "n": "PAPER_VZ",
+     "idx": "qwav-research-v2"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-ops",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "svc",
+     "n": "AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "vz",
+     "n": "AILOG_VZ",
+     "idx": "qnfo-ai-log"
+    },
+    {
+     "t": "svc",
+     "n": "AISEARCH",
+     "s": "qnfo-ai-search",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "ARCHIVE",
+     "s": "qnfo-archive",
+     "env": "production"
+    },
+    {
+     "t": "r2",
+     "n": "AUDIT_R2",
+     "b": "qnfo-audit"
+    },
+    {
+     "t": "svc",
+     "n": "BACKLOG",
+     "s": "qnfo-backlog-exec",
+     "env": "production"
+    },
+    {
+     "t": "r2",
+     "n": "BACKUPS_R2",
+     "b": "qnfo-backups"
+    },
+    {
+     "t": "sec",
+     "n": "CF_API_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "DEEPSEEK_API_KEY"
+    },
+    {
+     "t": "svc",
+     "n": "EMAIL",
+     "s": "qnfo-email",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "kv",
+     "n": "EQCACHE_KV",
+     "id": "2fbbb9fa2d774a6e80d3a3d2547f8b5f"
+    },
+    {
+     "t": "svc",
+     "n": "GATEWAY",
+     "s": "qnfo-gateway",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "GITHUB_TOKEN"
+    },
+    {
+     "t": "vz",
+     "n": "HANDOFFS_VZ",
+     "idx": "qnfo-handoffs"
+    },
+    {
+     "t": "svc",
+     "n": "INDEXER",
+     "s": "qnfo-paper-indexer",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "INTENT_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "IPATENT"
+    },
+    {
+     "t": "svc",
+     "n": "KAIZEN",
+     "s": "qnfo-kaizen",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "LIFECYCLE",
+     "s": "qnfo-lifecycle",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "worker_loader",
+     "n": "LOADER"
+    },
+    {
+     "t": "svc",
+     "n": "MEMORY",
+     "s": "qnfo-memory-mcp",
+     "env": "production"
+    },
+    {
+     "t": "vz",
+     "n": "NOTES_VZ",
+     "idx": "qnfo-notes"
+    },
+    {
+     "t": "sec",
+     "n": "OPS_DAILY_CAP"
+    },
+    {
+     "t": "workflow",
+     "n": "OPS_EXEC_WORKFLOW"
+    },
+    {
+     "t": "q",
+     "n": "OPS_JOBS_QUEUE",
+     "q": "qnfo-ops-jobs"
+    },
+    {
+     "t": "sec",
+     "n": "OPS_ROUTER_AUTH_KEY"
+    },
+    {
+     "t": "svc",
+     "n": "ORCH",
+     "s": "qnfo-email-orchestrator",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "PERSONAL"
+    },
+    {
+     "t": "d1",
+     "n": "PORTFOLIO"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_CMS"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_GRAPH"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_INTENT",
+     "s": "qnfo-intent-orchestrator",
+     "env": "production"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_OUTREACH"
+    },
+    {
+     "t": "sec",
+     "n": "REGISTRY_TOKEN"
+    },
+    {
+     "t": "r2",
+     "n": "RELEASES_R2",
+     "b": "qnfo-releases"
+    },
+    {
+     "t": "vz",
+     "n": "RESEARCH_VZ",
+     "idx": "qwav-research-v2"
+    },
+    {
+     "t": "r2",
+     "n": "SKILLS_R2",
+     "b": "qnfo-skills"
+    },
+    {
+     "t": "svc",
+     "n": "SKILLSYNC",
+     "s": "qnfo-skill-sync",
+     "env": "production"
+    },
+    {
+     "t": "vz",
+     "n": "TASKS_VZ",
+     "idx": "qnfo-tasks"
+    },
+    {
+     "t": "ai",
+     "n": "WAI"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-outreach",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "d1",
+     "n": "OUTREACH_D1"
+    },
+    {
+     "t": "sec",
+     "n": "OUTREACH_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "send_email",
+     "n": "SEND_EMAIL"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-paper-explainer",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "BSKY_APP_PASS"
+    },
+    {
+     "t": "sec",
+     "n": "BSKY_HANDLE"
+    },
+    {
+     "t": "sec",
+     "n": "BUFFER_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "DB"
+    },
+    {
+     "t": "sec",
+     "n": "EXPLAIN_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-paper-indexer",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "txt",
+     "n": "INDEX_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "vz",
+     "n": "PAPER_VZ",
+     "idx": "qwav-research-v2"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-paper-reviser",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "PAPERS_DB"
+    },
+    {
+     "t": "sec",
+     "n": "REVISER_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "WATCH_DB"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-pdf",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "browser",
+     "n": "BROWSER"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING"
+    },
+    {
+     "t": "r2",
+     "n": "RELEASES",
+     "b": "qnfo-releases"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-pipeline-ops",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-proof",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "PROOF_DB"
+    },
+    {
+     "t": "sec",
+     "n": "PROOF_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_OPS",
+     "s": "qnfo-ops",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "REGISTRY_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-qwav",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "vz",
+     "n": "QWAV_VZ",
+     "idx": "qwav-research-v2"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-research-exec",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "GITHUB_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "GRAPH_DB"
+    },
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "r2",
+     "n": "MIRROR",
+     "b": "qnfo-releases"
+    },
+    {
+     "t": "svc",
+     "n": "PDF_SVC",
+     "s": "qnfo-pdf",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "PILOT_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "RESEARCH_HALT"
+    },
+    {
+     "t": "sec",
+     "n": "ROUTER_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "ZENODO_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-research-radar",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-01-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "r2",
+     "n": "VAULT",
+     "b": "obsidian-vault"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-research-supervisor",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-10",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "LIVING_PAPER"
+    },
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "svc",
+     "n": "RESEARCH_EXEC",
+     "s": "qnfo-research-exec",
+     "env": "production"
+    },
+    {
+     "t": "workflow",
+     "n": "RESEARCH_SUPERVISOR"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-skill-sync",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-09-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "d1",
+     "n": "AUDIT_DB"
+    },
+    {
+     "t": "sec",
+     "n": "GITHUB_TOKEN"
+    },
+    {
+     "t": "r2",
+     "n": "SKILLS_BUCKET",
+     "b": "qnfo-skills"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-skills-discovery",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-11",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "r2",
+     "n": "SKILLS_BUCKET",
+     "b": "qnfo-skills"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-social",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "ai",
+     "n": "AI"
+    },
+    {
+     "t": "sec",
+     "n": "BSKY_APP_PASS"
+    },
+    {
+     "t": "sec",
+     "n": "BSKY_HANDLE"
+    },
+    {
+     "t": "sec",
+     "n": "BUFFER_TOKEN"
+    },
+    {
+     "t": "d1",
+     "n": "DB"
+    },
+    {
+     "t": "sec",
+     "n": "GATEWAY_SOCIAL_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "SOCIAL_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-thread-ingest",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "QNFO_AUDIT"
+    },
+    {
+     "t": "sec",
+     "n": "SYNC_TOKEN"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-tools-mcp",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "AUDIT"
+    },
+    {
+     "t": "svc",
+     "n": "EMAIL",
+     "s": "qnfo-email",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "sec",
+     "n": "INFRA_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "INTENT_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "MCP_TOKEN"
+    },
+    {
+     "t": "svc",
+     "n": "PL_SEARCH",
+     "s": "personal-life-search",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_AI",
+     "s": "qnfo-ai",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_INFRA",
+     "s": "qnfo-infra",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_INTENT",
+     "s": "qnfo-intent-orchestrator",
+     "env": "production"
+    },
+    {
+     "t": "svc",
+     "n": "QNFO_OPS",
+     "s": "qnfo-ops",
+     "env": "production"
+    },
+    {
+     "t": "sec",
+     "n": "REGISTRY_TOKEN"
+    },
+    {
+     "t": "sec",
+     "n": "RT"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-twin-maintain",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "PERSONAL_DB"
+    },
+    {
+     "t": "vz",
+     "n": "VZ",
+     "idx": "personal-life"
+    }
+   ]
+  },
+  {
+   "name": "qnfo-venue-radar",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "2026-08-01",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "d1",
+     "n": "RADAR_DB"
+    }
+   ]
+  },
+  {
+   "name": "research-daily-brief",
+   "modified": null,
+   "usage_model": "standard",
+   "compatibility_date": "",
+   "crons": [],
+   "routes": [],
+   "queue_consumers": [],
+   "bindings": [
+    {
+     "t": "sec",
+     "n": "EMAIL_API_KEY"
+    },
+    {
+     "t": "d1",
+     "n": "OUTREACH_DB"
+    },
+    {
+     "t": "svc",
+     "n": "qnfo-email",
+     "s": "qnfo-email",
+     "env": "production"
+    }
+   ]
+  }
+ ]
+}

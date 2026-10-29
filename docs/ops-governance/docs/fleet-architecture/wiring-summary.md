@@ -1,0 +1,82 @@
+# QNFO FLEET WIRING MATRIX (live)
+
+> Auto-generated 2026-09-09T13:38:20.813450+00:00 by fleet-wiring-sweep.py v1.0 from the Workers Scripts API.
+> Trigger+binding layer. Consumers: FLEET-CONSUMER-MAP.md; purposes: qnfo-audit.service_registry.
+
+| Worker | Crons | Routes | D1 | KV | R2 | VZ | Queues | SVC calls | Secrets |
+|---|---|---|---|---|---|---|---|---|---|
+| calendar-api | 0 | 0 | CAL_DB | - | ICS_R2 | - | - | - | 1 |
+| events-radar | 0 | 0 | RADAR_DB | - | - | - | - | EMAIL,OBSIDIAN_WRITER | 0 |
+| jnl-referee | 0 | 0 | AUDIT | STATE | - | - | - | - | 1 |
+| jnl-reviser | 0 | 0 | - | STATE | - | - | - | REF | 2 |
+| jnl-watch | 0 | 0 | AUDIT | STATE | PARSE_CACHE | CORPUS | - | - | 0 |
+| jnl-zenodo | 0 | 0 | - | STATE | - | - | - | REFEREE | 2 |
+| job-market-watch | 0 | 0 | AUDIT | - | VAULT | - | - | - | 0 |
+| obsidian-writer | 0 | 0 | - | - | VAULT | - | - | - | 0 |
+| osf-integrity-check | 0 | 0 | AUDIT | - | - | - | - | - | 0 |
+| personal-api | 0 | 0 | PERSONAL | - | MEDIA | VZ | - | CAL_API | 4 |
+| personal-events-radar | 0 | 0 | AUDIT_DB,PERSONAL_DB | - | - | - | - | CAL_API,OBSIDIAN_WRITER | 1 |
+| personal-life-indexer | 0 | 0 | PERSONAL | - | DDRIVE | VZ | - | - | 1 |
+| personal-life-maintain | 0 | 0 | PERSONAL | - | - | VZ | - | - | 0 |
+| personal-life-search | 0 | 0 | PERSONAL | - | DDRIVE | VZ | - | - | 1 |
+| qnfo-agent-orchestrator | 0 | 0 | LIVING_PAPER,QNFO_AUDIT,QNFO_GRAPH | - | QNFO_PROJECTS | PAPER_VZ | - | - | 5 |
+| qnfo-agent-ws | 0 | 0 | LIVING_PAPER,QNFO_GRAPH | - | - | PAPER_VZ | - | QNFO_AI | 3 |
+| qnfo-ai | 0 | 0 | QNFO_AUDIT | - | MEDIA | CLOUD_OPS_VZ,HANDOFFS_VZ,INFRA_VZ,IPATENT_VZ,LOG_VZ,NOTES_VZ,PAPER_VZ,TASKS_VZ | - | CAL_API,QNFO_INFRA,QNFO_INTENT | 8 |
+| qnfo-ai-calibration | 0 | 0 | QNFO_AUDIT | - | - | - | - | PT_API,QNFO_AI,QNFO_OPS | 5 |
+| qnfo-ai-search | 0 | 0 | - | - | - | - | - | - | 1 |
+| qnfo-analytics | 0 | 0 | AUDIT_DB | - | - | - | - | - | 1 |
+| qnfo-archive | 0 | 0 | LIVING_PAPER,PORTFOLIO_STATE,QNFO_AUDIT | - | QNFO_BUCKET | HANDOFFS_VZ,TASKS_VZ | - | - | 0 |
+| qnfo-arxiv-radar | 0 | 0 | AUDIT | - | VAULT | - | - | - | 0 |
+| qnfo-auditor | 0 | 0 | AUDIT | - | - | - | - | - | 2 |
+| qnfo-backlog-exec | 0 | 0 | AUDIT | - | - | - | - | - | 0 |
+| qnfo-blank-audit | 0 | 0 | AUDIT | - | - | - | - | - | 0 |
+| qnfo-chat-canary | 0 | 0 | AUDIT,OUTREACH | - | - | - | - | QNFO_AI | 2 |
+| qnfo-citation-watch | 0 | 0 | - | - | VAULT | - | - | - | 0 |
+| qnfo-cloud-ops | 0 | 0 | AUDIT,GRAPH,LIVING,OUTREACH,PORTFOLIO | - | VAULT | OPS_VZ | - | EMAIL,QNFO_INFRA,QNFO_OPS | 13 |
+| qnfo-code-agent | 0 | 0 | - | - | - | - | - | - | 2 |
+| qnfo-code-orchestrator | 0 | 0 | AUDIT_DB | - | - | - | - | - | 2 |
+| qnfo-container-executor | 0 | 0 | - | - | - | - | - | - | 0 |
+| qnfo-containers-pilot | 0 | 0 | AUDIT | - | - | - | - | - | 1 |
+| qnfo-ddocs-indexer | 0 | 0 | AUDIT | - | DDOCS | DDOC_VZ | - | - | 0 |
+| qnfo-email | 0 | 0 | AUDIT_DB | - | - | - | - | - | 1 |
+| qnfo-email-orchestrator | 0 | 0 | AUDIT_DB,OUTREACH_DB | - | - | - | - | EMAIL | 1 |
+| qnfo-errata-orchestrator | 0 | 0 | - | - | - | - | - | ERRATA_PUBLISH,ERRATA_RESPOND,ERRATA_WATCH | 1 |
+| qnfo-errata-publish | 0 | 0 | GRAPH_DB,PAPERS_DB,WATCH_DB | - | MIRROR | - | - | - | 2 |
+| qnfo-errata-respond | 0 | 0 | PAPERS_DB,WATCH_DB | - | - | - | - | - | 1 |
+| qnfo-errata-watch | 0 | 0 | WATCH_DB | - | - | - | - | - | 1 |
+| qnfo-error-selfheal | 0 | 0 | QNFO_AUDIT | - | - | - | - | - | 1 |
+| qnfo-events | 0 | 0 | AUDIT | - | - | - | - | - | 1 |
+| qnfo-fleet-advisor | 0 | 0 | AUDIT_DB | - | - | - | - | - | 2 |
+| qnfo-fleet-calibrator | 0 | 0 | DB_AUDIT | KV_CAL | R2_AUDIT | VEC_CAL | - | SVC_PERSONAL_API,SVC_QNFO_AI,SVC_QNFO_AUDITOR,SVC_QNFO_INFRA,SVC_QNFO_INTENT | 1 |
+| qnfo-fleet-dashboard | 0 | 0 | AUDIT,LIVING,OUTREACH | - | - | - | - | SVC_PERSONAL_API,SVC_PERSONAL_EVENTS_RADAR,SVC_QNFO_AI,SVC_QNFO_GATEWAY,SVC_QNFO_KAIZEN,SVC_QNFO_OPS,SVC_QNFO_OUTREACH,SVC_QNFO_PAPER_REVISER,SVC_QNFO_SOCIAL | 1 |
+| qnfo-fleet-deploy | 0 | 0 | AUDIT | - | CANONICAL | - | - | - | 3 |
+| qnfo-gateway | 0 | 0 | DB,LIVING_PAPER | - | QNFO_BUCKET | - | - | - | 2 |
+| qnfo-idea-factory | 0 | 0 | QNFO_AUDIT | - | - | - | - | - | 1 |
+| qnfo-idea-miner | 0 | 0 | QNFO_AUDIT | - | - | - | - | - | 0 |
+| qnfo-idea-triage | 0 | 0 | LIVING_PAPER,QNFO_AUDIT | - | - | - | - | AGENT_ORCH | 4 |
+| qnfo-impact | 0 | 0 | LIVING_PAPER,QNFO_AUDIT | - | - | - | - | - | 1 |
+| qnfo-intent-orchestrator | 0 | 0 | D1 | - | - | VZ_P,VZ_R | - | CAL_API,PLS,QNFO_AI,QNFO_OPS | 11 |
+| qnfo-ipatent | 0 | 0 | IPATENT_DB | - | IPATENT_R2 | DISCLOSURES_VZ | - | - | 0 |
+| qnfo-kaizen | 0 | 0 | QNFO_AUDIT | - | SKILLS_BUCKET | - | - | - | 2 |
+| qnfo-lifecycle | 0 | 0 | IPATENT_DB,LIVING_PAPER,PORTFOLIO_STATE,QNFO_AUDIT,QNFO_GRAPH | - | BACKUP_BUCKET | PAPER_VZ | - | - | 1 |
+| qnfo-memory-mcp | 0 | 0 | GRAPH_DB,LIVING_PAPER | - | - | PAPER_VZ | - | - | 0 |
+| qnfo-ops | 0 | 0 | IPATENT,LIVING_PAPER,PERSONAL,PORTFOLIO,QNFO_AUDIT,QNFO_CMS,QNFO_GRAPH,QNFO_OUTREACH | EQCACHE_KV | AUDIT_R2,BACKUPS_R2,RELEASES_R2,SKILLS_R2 | AILOG_VZ,HANDOFFS_VZ,NOTES_VZ,RESEARCH_VZ,TASKS_VZ | OPS_JOBS_QUEUE | AI,AISEARCH,ARCHIVE,BACKLOG,EMAIL,GATEWAY,INDEXER,KAIZEN,LIFECYCLE,MEMORY,ORCH,QNFO_INTENT,SKILLSYNC | 8 |
+| qnfo-outreach | 0 | 0 | LIVING_PAPER,OUTREACH_D1,QNFO_AUDIT | - | - | - | - | - | 1 |
+| qnfo-paper-explainer | 0 | 0 | DB | - | - | - | - | - | 4 |
+| qnfo-paper-indexer | 0 | 0 | LIVING_PAPER | - | - | PAPER_VZ | - | - | 0 |
+| qnfo-paper-reviser | 0 | 0 | PAPERS_DB,WATCH_DB | - | - | - | - | - | 1 |
+| qnfo-pdf | 0 | 0 | LIVING | - | RELEASES | - | - | - | 0 |
+| qnfo-pipeline-ops | 0 | 0 | QNFO_AUDIT | - | - | - | - | - | 0 |
+| qnfo-proof | 0 | 0 | PROOF_DB | - | - | - | - | QNFO_OPS | 2 |
+| qnfo-qwav | 0 | 0 | LIVING_PAPER | - | - | QWAV_VZ | - | - | 0 |
+| qnfo-research-exec | 0 | 0 | GRAPH_DB,LIVING_PAPER,QNFO_AUDIT | - | MIRROR | - | - | PDF_SVC | 5 |
+| qnfo-research-radar | 0 | 0 | - | - | VAULT | - | - | - | 0 |
+| qnfo-research-supervisor | 0 | 0 | LIVING_PAPER,QNFO_AUDIT | - | - | - | - | RESEARCH_EXEC | 0 |
+| qnfo-skill-sync | 0 | 0 | AUDIT_DB | - | SKILLS_BUCKET | - | - | - | 2 |
+| qnfo-skills-discovery | 0 | 0 | - | - | SKILLS_BUCKET | - | - | - | 0 |
+| qnfo-social | 0 | 0 | DB | - | - | - | - | - | 5 |
+| qnfo-thread-ingest | 0 | 0 | QNFO_AUDIT | - | - | - | - | - | 1 |
+| qnfo-tools-mcp | 0 | 0 | AUDIT | - | - | - | - | EMAIL,PL_SEARCH,QNFO_AI,QNFO_INFRA,QNFO_INTENT,QNFO_OPS | 6 |
+| qnfo-twin-maintain | 0 | 0 | PERSONAL_DB | - | - | VZ | - | - | 0 |
+| qnfo-venue-radar | 0 | 0 | RADAR_DB | - | - | - | - | - | 0 |
+| research-daily-brief | 0 | 0 | OUTREACH_DB | - | - | - | - | qnfo-email | 1 |
