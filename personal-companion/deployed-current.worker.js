@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.5-codeagent";
+var VERSION = "1.44.6-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -6101,6 +6101,37 @@ function aiReplyText(resp) {
   if (Array.isArray(c)) c = c.map(function (p) { return typeof p === "string" ? p : (p && p.text) || ""; }).join("");
   if (c && typeof c !== "string") c = JSON.stringify(c);
   return c || "";
+}
+var BALANCE_FAMILY = "ensemble-policy-1";
+var BALANCE_PROMPT = "You are an even-keel balance reviewer from a different editorial family. Score the draft for one-sidedness on a 0-100 scale, where 100 means the strongest opposing argument is stated at full strength, every disputed claim is attributed, and loaded terms are avoided. Return only JSON: {\"score\":<int>,\"pass\":<bool>,\"reason\":<string>}. A piece passes with score >= 70.";
+var BALANCE_MIN_SCORE = 70;
+function parseBalanceScore(text) {
+  var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
+  var o = null, m = t.match(/\{[\s\S]*\}/);
+  if (m) { try { o = JSON.parse(m[0]); } catch (e) { o = null; } }
+  if (!o) { var sm = t.match(/"score"\s*:\s*(\d+)/); if (!sm) return null; o = { score: parseInt(sm[1], 10) }; }
+  var score = Number(o.score);
+  if (!Number.isFinite(score) || score < 0 || score > 100) return null;
+  var pass = typeof o.pass === "boolean" ? o.pass : score >= BALANCE_MIN_SCORE;
+  return { score: score, pass: pass, reason: String(o.reason || "").slice(0, 260) };
+}
+async function balanceCheckOne(env, modelId, draft) {
+  try {
+    var body = BALANCE_PROMPT + "\n\n" + todayLine() + "\n\n--- DRAFT ---\n" + String(draft).trim().slice(0, 30000);
+    var resp = await aiRunAttr(env, "personal-companion", "balance", modelId, { messages: [{ role: "user", content: body }], max_tokens: REVIEW_MAX_TOKENS, temperature: 0.1 }, { gateway: { id: "default", skipCache: true }, signal: AbortSignal.timeout(REVIEW_TIMEOUT_MS) });
+    var out = aiReplyText(resp);
+    var s = parseBalanceScore(out);
+    if (s) { s.model = modelId; s.family = familyOf(modelId); return s; }
+    return { failed: true, model: modelId, error: "no balance score in reply (" + String(out).length + " chars)" };
+  } catch (e) { return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
+}
+async function balanceCheck(env, draft, writerModel, seedText) {
+  var wf = writerModel ? familyOf(writerModel) : "";
+  var ids = orderByHealth(pickReviewers(wf ? [wf] : [], 20, seedOf(seedText)).filter(function (id) { return familyOf(id) === BALANCE_FAMILY && (!wf || familyOf(id) !== wf); }), await sickReviewers(env));
+  if (!ids.length) return { unavailable: true, reason: "no " + BALANCE_FAMILY + " reviewer available", score: null };
+  var res = await balanceCheckOne(env, ids[0], draft);
+  if (res.failed) return { unavailable: true, reason: res.error, score: null, model: res.model };
+  return { unavailable: false, ok: res.pass !== false, score: res.score, pass: res.pass, reason: res.reason, model: res.model, family: res.family };
 }
 // FACTCHECK-NOTHINK-1 (measured 2026-10-12 against the live models with the same fact-check prompt): reasoning reviewers spent 4-9 s thinking about a
 // task that needs a comparison. These per-model switches return the same verdict in 0.7-2.6 s. Models without a measured switch get none.
