@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.39.4-codeagent";
+var VERSION = "0.39.5-codeagent";
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
@@ -415,6 +415,9 @@ async function q08Budget(env, nowMs) {
   }
 }
 async function dailyCap(env) {
+  // FORECAST-CRITERIA-REPUBLISH-1: run the criteria sweep once per cron tick, before any scrape or AI call.
+  // It is idempotent (the void UPDATE only matches status = 'open') and never blocks the tick on failure.
+  await sweepForecastCriteria(env);
   var legacy = MAX_PER_DAY;
   if (env && env.AUDIT) {
     try {
@@ -569,6 +572,57 @@ async function forecastLedger(sourceEssay, signal) {
     lines.push("[R" + (j + 1) + "] " + out[j].sentence + " (" + out[j].host + ", " + out[j].date + ")");
   }
   return lines;
+}
+
+// FORECAST-CRITERIA-REPUBLISH-1 (issue 1000740, RED-DRAIN-1 dispatch; charter pillar: personal): metric
+// forecast_resolution_criteria_complete (issue 1000671) reads 0 of 3 because the published resolution text of
+// forecast 2 (PJM auction) lacks a source and an edge-case rule and forecasts 3 (TrendForce) and 4 (Broadcom) lack
+// an edge-case rule. The published fields are immutable by trigger q08_forecasts_published_fields_immutable, so the
+// text cannot be edited in place; the existing retraction path (the UPDATE q08_forecasts SET status = void in the
+// retract code) is the only way out. This sweep runs on every cron tick before any scrape or AI call: for each
+// open forecast whose resolution_text fails the same three patterns as validateForecast in scripts/bp26_forecast.py
+// (a source, a date, an edge-case rule), it voids the row with disposition 'superseded-incomplete-criteria' — the
+// UPDATE is guarded on status = 'open', so a rerun after a successful void matches zero rows and the step is
+// idempotent — and queues a replacement through the existing generator, whose prompt and validateForecast gate
+// already require all three parts, so the republished forecast cannot reintroduce the gap. It never touches a
+// forecast that passes the gate, never edits a published field, and never writes anything when the resolution
+// already satisfies the criteria.
+var FORECAST_CRITERIA_SOURCE_RE = /\bsource\b/i;
+var FORECAST_CRITERIA_DATE_RE = /\b\d{4}-\d{2}-\d{2}\b/;
+var FORECAST_CRITERIA_EDGE_RE = /\bedge[- ]?case\b/i;
+function forecastCriteriaMissing(text) {
+  var t = String(text || "");
+  if (!FORECAST_CRITERIA_SOURCE_RE.test(t)) return "source";
+  if (!FORECAST_CRITERIA_DATE_RE.test(t)) return "date";
+  if (!FORECAST_CRITERIA_EDGE_RE.test(t)) return "edge-case-rule";
+  return null;
+}
+async function sweepForecastCriteria(env) {
+  if (!env || !env.DB) return 0;
+  var n = 0;
+  try {
+    var rows = await env.DB.prepare("SELECT id, resolution_text FROM q08_forecasts WHERE status = 'open'").all();
+    var list = (rows && rows.results) || [];
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i];
+      var miss = forecastCriteriaMissing(row.resolution_text);
+      if (!miss) continue;
+      var upd = await env.DB.prepare("UPDATE q08_forecasts SET status = 'void', disposition = 'superseded-incomplete-criteria' WHERE id = ?1 AND status = 'open'").bind(row.id).run();
+      if (upd && upd.meta && upd.meta.changes) {
+        n++;
+        console.error(JSON.stringify({ worker: "q08-signal-engine", event: "forecast-criteria-republish-void", id: row.id, missing: miss }));
+        // Queue the replacement through the existing generator (its prompt and validateForecast already
+        // require a source, a date and an edge-case rule), so the republished forecast closes the gap.
+        if (typeof generateForecast === "function") {
+          try { await generateForecast(env, { replaceId: row.id }); }
+          catch (e) { console.error(JSON.stringify({ worker: "q08-signal-engine", event: "forecast-criteria-republish-queue", id: row.id, error: String((e && e.message) || e).slice(0, 200) })); }
+        }
+      }
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "q08-signal-engine", event: "forecast-criteria-republish-sweep", error: String((e && e.message) || e).slice(0, 200) }));
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------------------
