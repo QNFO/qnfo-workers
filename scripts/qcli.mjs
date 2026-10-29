@@ -78,12 +78,16 @@ async function signIn(rl) {
 async function send(text, rl) {
   let j = await post("/api/cmd", { text, from: "" });
   if (j.kind === "pending" && j.id) {
+    // CMD-CLI-POLL-1: keep the job id; the poll answer carries none, so reading j.id again polled /job/undefined ("bad id").
+    const jobId = j.id;
     const t0 = Date.now();
     do {
       await new Promise((r) => setTimeout(r, 1200));
-      j = await call("/api/cmd/job/" + j.id, { headers: headers() });
+      j = await call("/api/cmd/job/" + jobId, { headers: headers() });
     } while (j.status === "running" && Date.now() - t0 < 90000);
   }
+  // A one-shot run without a terminal cannot answer the code prompt; say how to sign in instead of crashing (readline closed).
+  if (j.need && rl && !process.stdin.isTTY) { console.log("Sign in first: node scripts/qcli.mjs login"); return show(j); }
   if (j.need && rl && (await signIn(rl))) return send(text, rl);
   show(j);
 }
