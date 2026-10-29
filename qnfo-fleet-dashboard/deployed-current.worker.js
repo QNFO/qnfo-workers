@@ -12684,7 +12684,7 @@ function cmdToolText(name, r) {
 function cmdAgentTrace(steps) {
   return (steps || []).map(function(s) {
     const a = String(s.args || "").replace(/\s+/g, " ").slice(0, 110);
-    return "▸ " + s.tool + (a ? " " + a : "") + "  (" + (s.ms || 0) + "ms)";
+    return "> " + s.tool + (a ? " " + a : "") + "  (" + (s.ms || 0) + "ms)";
   }).join("\n");
 }
 async function cmdAgentPoll(env, id) {
