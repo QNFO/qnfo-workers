@@ -2920,7 +2920,7 @@ function fleetStatusModel(p) {
       (inBreach ? " " + inBreach + " of " + (total - unmeasured) + " measured metrics are off target; " + worse + " got worse this week and " + better + " got better." : " Every measured metric is on target.");
   }
   const vin = p.value_inputs || null;
-  const valueDoc = vin ? valueModel({ spend_7d_usd: vin.spend_7d_usd, daily_usd: vin.daily_usd, month_budget_usd: vin.month_budget_usd, month_to_date_usd: vin.month_to_date_usd, work: vin.work, papers_7d: vin.papers_7d, pageviews_7d: vin.pageviews_7d, metrics: metricMap, quality: quality, blind: vin.blind }) : null;
+  const valueDoc = vin ? valueModel({ spend_7d_usd: vin.spend_7d_usd, daily_usd: vin.daily_usd, fixed_daily_usd: vin.fixed_daily_usd, variable_daily_usd: vin.variable_daily_usd, month_budget_usd: vin.month_budget_usd, month_to_date_usd: vin.month_to_date_usd, work: vin.work, papers_7d: vin.papers_7d, pageviews_7d: vin.pageviews_7d, metrics: metricMap, quality: quality, blind: vin.blind }) : null;
   const statusDoc = {
     schema_version: "fleet-status/v1",
     worker: NAME,
@@ -2958,11 +2958,18 @@ async function statusValueInputs(env, now) {
   ]);
   const tot = cost && (cost.run_rate || []).filter(function(r) { return r.source_group === "total:all-billing"; })[0];
   const daily = tot && Number(tot.daily_7d) > 0 ? Number(tot.daily_7d) : null;
+  // Fixed operating cost is the flat daily lines (the plan, flat-rate provider subscriptions); variable is the metered AI spend (Cloudflare + gateway, owner gateway).
+  const grp = function(g) { const r = cost && (cost.run_rate || []).filter(function(x) { return x.source_group === g; })[0]; return r ? Number(r.daily_7d) || 0 : null; };
+  const fx = [grp('cloudflare_plan:daily'), grp('direct_providers_external:daily')], vr = [grp('total:cloudflare+gateway'), grp('total:owner-gateway')];
+  const fixedDaily = fx.every(function(x) { return x == null; }) ? null : fx.reduce(function(a, x) { return a + (x || 0); }, 0);
+  const varDaily = vr.every(function(x) { return x == null; }) ? null : vr.reduce(function(a, x) { return a + (x || 0); }, 0);
   if (cost && daily == null) blind.push("spend (no 7-day billing rate)");
   const pv = reach && reach.windows && reach.windows.d7 && reach.windows.d7.pageviews ? Number(reach.windows.d7.pageviews.value) : null;
   return {
     spend_7d_usd: daily == null ? null : Math.round(daily * VALUE_WINDOW_DAYS * 100) / 100,
     daily_usd: daily,
+    fixed_daily_usd: fixedDaily,
+    variable_daily_usd: varDaily,
     month_budget_usd: cost ? cost.fleet_budget_month_usd : null,
     month_to_date_usd: cost ? cost.fleet_month_to_date_usd : null,
     work: work && work[0] ? work[0] : null,
@@ -3118,21 +3125,19 @@ function statusPageHtml(doc, rev, holder, decisions) {
 }
 /* FLEET-STATUS-1:END */
 /* VALUE-DASH-1:BEGIN */
-// VALUE-DASH-1 (1.75.0, 2026-10-29, pillar autonomy; owner request 2026-10-29: "Everything I see on the fleet dashboard should have an action
-// attached to it. What does it mean? Why are you showing it to me? And what can I do with that? ... I need a streamlined dashboard that shows
-// me my value proposition, essentially, my cost per what, my quality ... I want to be able to review this stuff and then kick it right back
-// to the system to do something about it. But the system has to know what to do automatically.")
+// VALUE-DASH-1 (1.76.0, 2026-10-29, pillar autonomy; owner request 2026-10-29: every item on the dashboard needs what it means, why it is shown and an
+// action; show the value proposition, "my cost per what, my quality"; "review this stuff and then kick it right back to the system ... the system has
+// to know what to do automatically." Correction the same day: "I don't like cost per output because then that implies minimizing cost ... we could have
+// zero outputs and still have a cost. Flip it around. I want to maximize the outputs, maximize the quality, maximize the impact ... per unit of cost.
+// ... There is a cost minimization function in this as well, but you've got to handle both of those.")
 //
-// Two things, both pure (no I/O) so fleet-value.test.mjs can drive them:
-//   1. valueModel(): the value proposition as unit economics. Fully loaded cost per output (total spend over the window / outputs of the
-//      window) next to the quality measure that belongs to that output. Not an allocation: the rows do not add up and the page says so.
-//   2. The action contract. Every item the status page shows carries a subject key, what it means, why it is shown, and what the fleet does
-//      by itself; the signed-in owner can kick any subject back with one tap ("Fix it") or with a sentence ("Tell the system"). The server
-//      turns the subject into a ticket from the document alone (actTicket), so the fleet needs nothing from the owner but the tap.
-// A figure whose source could not be read is null and named in blind, never zero.
-
+// The objective is a ratio, so it has two sides and the page works both: MAXIMIZE the numerator (outputs, quality, impact: publish more, post more,
+// reach more) and MINIMIZE the denominator where it is waste (variable AI spend; the fixed operating cost is paid whatever the output, so more output
+// is what lowers it per unit). Cost per output alone rewards doing nothing, so the headline is yield per $100 and a change counts only when yield
+// rose, quality did not fall and spend stayed within the budget. Pure functions (no I/O); fleet-value.test.mjs drives them. A figure whose source could
+// not be read is null and named in blind, never zero.
 var VALUE_WINDOW_DAYS = 7;
-
+var VALUE_RULE = "A change counts only if yield per $100 rose, quality did not fall, and spend stayed within the monthly budget. Spending nothing is not a win: it lowers cost by lowering yield to zero.";
 function valNum(x) {
   if (x == null || x === "") return null;
   const n = Number(x);
@@ -3145,17 +3150,26 @@ function usdText(x) {
   if (n >= 1) return "$" + n.toFixed(2);
   return "$" + n.toFixed(3);
 }
-function valPer(spend, outputs) {
+function valYield(outputs, spend) {
+  const s = valNum(spend), o = valNum(outputs);
+  if (s == null || o == null || s <= 0) return null;
+  return Math.round(o / s * 100 * 100) / 100;
+}
+function valCost(spend, outputs) {
   const s = valNum(spend), o = valNum(outputs);
   if (s == null || o == null || o <= 0) return null;
   return Math.round(s / o * 1e4) / 1e4;
+}
+function valYieldText(x) {
+  const n = valNum(x);
+  if (n == null) return "n/a";
+  return n >= 100 ? Math.round(n).toLocaleString("en-US") : String(Math.round(n * 10) / 10);
 }
 function valPct(x) {
   const n = valNum(x);
   return n == null ? "n/a" : Math.round(n * 1000) / 10 + "%";
 }
-
-// metrics: { <metric key>: { value, threshold, operator, breach, trend, title } } from v_fleet_metrics rows (status model's own shape).
+// metrics: { <metric key>: { value, threshold, operator, breach, trend, title } } from v_fleet_metrics rows (the status model's own shape).
 function valQuality(metrics, key, what) {
   const m = metrics && metrics[key];
   if (!m || m.value == null) return { label: what, status: "unmeasured", text: "not measured yet", source: key };
@@ -3163,57 +3177,87 @@ function valQuality(metrics, key, what) {
   return { label: what, status: bad ? "off_target" : "on_target", trend: m.trend || null, value: m.value, text: valPct(m.value) + (bad ? " (off target" + (m.trend && m.trend !== "no_history" ? ", " + m.trend + " this week" : "") + ")" : " (on target)"), source: key };
 }
 
-// PRECONDITION: p = { spend_7d_usd, daily_usd, month_budget_usd, month_to_date_usd, work: { code_merged_7d, issues_closed_7d }, papers_7d, pageviews_7d,
-// metrics (map above), quality (the outputs headline or null), blind [names] }. POSTCONDITION: { basis, spend, units[], caveats[] }.
+// PRECONDITION: p = { spend_7d_usd, daily_usd, fixed_daily_usd, variable_daily_usd, month_budget_usd, month_to_date_usd, work: { code_merged_7d,
+// issues_closed_7d }, papers_7d, pageviews_7d, metrics (map above), quality (outputs headline or null), blind [names] }.
+// POSTCONDITION: { basis, rule, spend, posture, units[] }; every unit has a yield (outputs per $100), the quality beside it, and both levers.
 function valueModel(p) {
   const spend = valNum(p.spend_7d_usd);
+  const daily = valNum(p.daily_usd);
+  const fixedDaily = valNum(p.fixed_daily_usd);
+  const varDaily = valNum(p.variable_daily_usd);
+  const varWindow = varDaily == null ? null : varDaily * VALUE_WINDOW_DAYS;
   const w = p.work || {};
   const q = p.quality || null;
   const papersGap = !!(q && (q.gaps || []).indexOf("papers") >= 0);
   const units = [
     {
-      id: "paper", label: "published paper", plural: "papers published", outputs: valNum(p.papers_7d),
+      id: "paper", noun: "papers", outputs: valNum(p.papers_7d), per: "papers published",
       quality: q ? { label: "Output quality, all surfaces", status: q.verdict === "worse" ? "off_target" : q.verdict === "better" || q.verdict === "improving" ? "on_target" : "mixed", text: String(q.verdict).replace(/_/g, " ") + " (" + q.better + " better, " + q.worse + " worse, " + q.flat + " flat against 7 days ago)" + (papersGap ? "; papers themselves have no outcome measure yet" : ""), source: "v_output_quality_headline" } : { label: "Output quality", status: "unmeasured", text: "not readable", source: "v_output_quality_headline" },
-      meaning: "Everything the fleet spent in the last 7 days divided by the papers it published in the same days.",
-      why: "Papers are the product. This is what one costs, with the quality measure that says whether they are getting better.",
-      fleet_default: "The fleet moves the most expensive step of the paper pipeline to a cheaper capable model and keeps it only when the output-quality measures do not worsen (BUDGET-SOFT-ROUTE-1, ENSEMBLE-POLICY-1)." + (papersGap ? " It also adds the missing outcome measure for papers." : ""),
-      doer: "qnfo-research-exec, qnfo-fleet-control", lever: "Cheaper capable model per pipeline step; drop duplicate layers; add the papers outcome measure (output_quality_measures)."
+      meaning: "Papers published in the last 7 days for every $100 the fleet spent in those days (all billing).",
+      why: "Papers are the product. Yield is how much of it each dollar buys; quality says whether the papers are getting better while it grows.",
+      push: "Publish more: work the accepted-and-waiting queue faster (parallel review and revision slots) while the output-quality measures hold.",
+      trim: "Move the most expensive pipeline step to a cheaper capable model and drop duplicate review layers (BUDGET-SOFT-ROUTE-1, ENSEMBLE-POLICY-1)" + (papersGap ? "; add the missing outcome measure for papers so quality can be held." : "."),
+      doer: "qnfo-research-exec, qnfo-fleet-control"
     },
     {
-      id: "code", label: "merged code change", plural: "code changes merged", outputs: valNum(w.code_merged_7d),
+      id: "code", noun: "code changes", outputs: valNum(w.code_merged_7d), per: "code changes merged",
       quality: valQuality(p.metrics, "code_task_success_rate_30d", "Code tasks that succeed (30 days)"),
-      meaning: "Total spend over the code changes the code loop merged in 7 days.",
-      why: "The code loop is how the fleet fixes and improves itself. This is what one change costs and how often a task ends in a merge.",
-      fleet_default: "The code loop prefers the cheapest model that still passes the gate and retires task families that keep failing.",
-      doer: "qnfo-code-orchestrator", lever: "Model choice per task family; fewer retries on families with a low success rate."
+      meaning: "Code changes the code loop merged in the last 7 days for every $100 spent.",
+      why: "The code loop is how the fleet fixes and improves itself. Yield is its throughput per dollar; the success rate says how much of the spend is wasted on tasks that never merge.",
+      push: "Run more code tasks in parallel on the families that merge, so the loop uses its whole budget.",
+      trim: "Stop retrying task families with a low success rate and use the cheapest model that still passes the gate.",
+      doer: "qnfo-code-orchestrator"
     },
     {
-      id: "issue", label: "issue closed with evidence", plural: "issues closed", outputs: valNum(w.issues_closed_7d),
+      id: "issue", noun: "issues closed", outputs: valNum(w.issues_closed_7d), per: "issues closed with evidence",
       quality: valQuality(p.metrics, "fix_hold_rate_30d", "Fixes that hold (30 days)"),
-      meaning: "Total spend over the issues closed in 7 days.",
-      why: "Closing is only worth paying for if the fix holds. The quality figure is the share of metric fixes that did not relapse.",
-      fleet_default: "The fleet replaces a remedy that did not move its metric in 7 days instead of repeating it (LEARN-APPLY-VERIFY).",
-      doer: "qnfo-fleet-control, remediation consumer", lever: "Replace remedies that relapse; give every issue family a doer and a closing probe."
+      meaning: "Issues closed in the last 7 days for every $100 spent.",
+      why: "A close is only worth paying for if the fix holds. Quality is the share of metric fixes that did not relapse.",
+      push: "Give every issue family a doer and a closing probe at birth, so more issues close on their own.",
+      trim: "Replace a remedy that did not move its metric in 7 days instead of repeating it (LEARN-APPLY-VERIFY).",
+      doer: "qnfo-fleet-control, remediation consumer"
     },
     {
-      id: "pageviews", label: "1,000 pageviews", plural: "pageviews, in thousands", outputs: valNum(p.pageviews_7d) == null ? null : valNum(p.pageviews_7d) / 1000,
+      id: "pageviews", noun: "pageviews", outputs: valNum(p.pageviews_7d), per: "pageviews",
       quality: valQuality(p.metrics, "pageviews_30d", "Pageviews, 30 days against its floor"),
-      meaning: "Total spend over every 1,000 pageviews the sites served in 7 days.",
-      why: "Reach is what the spend is for. This is the price of a reader's visit, with the volume measure it must stay above.",
-      fleet_default: "The fleet shifts effort to the channels that bring human readers and stops posting where nobody reads (v_channel_impact_7d).",
-      doer: "qnfo-social, qnfo-fleet-control", lever: "Weight outreach cadence by human clicks per channel; improve the pages that already rank."
+      meaning: "Pageviews the sites served in the last 7 days for every $100 spent.",
+      why: "Reach is what the spend is for. Pushing it is the cheapest lever, because posting and publishing add readers without adding fixed cost.",
+      push: "Post and distribute more: raise cadence on the channels that bring human readers (v_channel_impact_7d) and roll up every published paper.",
+      trim: "Stop posting where nobody reads, and improve the pages that already rank instead of making new ones.",
+      doer: "qnfo-social, qnfo-fleet-control"
     }
   ];
   for (const u of units) {
     u.subject = "unit:" + u.id;
-    u.title = "Cost per " + u.label;
-    u.cost_usd = valPer(spend, u.outputs);
+    u.title = "Yield: " + u.per + " per $100";
     u.window_days = VALUE_WINDOW_DAYS;
+    u.yield_per_100usd = valYield(u.outputs, spend);
+    u.per_100usd_variable = valYield(u.outputs, varWindow);
+    u.cost_each_usd = valCost(spend, u.outputs);
+  }
+  const mtd = valNum(p.month_to_date_usd), budget = valNum(p.month_budget_usd);
+  const headroom = mtd != null && budget != null ? Math.round((budget - mtd) * 100) / 100 : null;
+  const offTarget = units.filter(function(u) { return u.quality && u.quality.status === "off_target"; }).map(function(u) { return u.noun; });
+  let mode, sentence;
+  if (headroom != null && headroom < 0) {
+    mode = "over_budget";
+    sentence = "Over the monthly budget by " + usdText(-headroom) + ": hold volume and raise yield by trimming the lowest-yield spend.";
+  } else if (offTarget.length) {
+    mode = "fix_quality";
+    sentence = "Quality is off target for " + offTarget.join(", ") + ": raise quality before pushing volume.";
+  } else if (headroom != null) {
+    mode = "grow";
+    sentence = usdText(headroom) + " of budget is left this month and quality is on target: push volume (publish more, post more).";
+  } else {
+    mode = "unknown";
+    sentence = "The monthly budget could not be read, so the fleet cannot say whether to push volume or trim.";
   }
   return {
-    basis: "Fully loaded: all billing for the last " + VALUE_WINDOW_DAYS + " days (list-price estimate, 7-day daily average) divided by each output of the same days. Rows are not an allocation and do not add up.",
+    basis: "Yield = outputs of the last " + VALUE_WINDOW_DAYS + " days per $100 of all billing in the same days (list-price estimate, 7-day daily average). Rows overlap and do not add up.",
+    rule: VALUE_RULE,
     window_days: VALUE_WINDOW_DAYS,
-    spend: { window_usd: spend, daily_usd: valNum(p.daily_usd), month_to_date_usd: valNum(p.month_to_date_usd), month_budget_usd: valNum(p.month_budget_usd) },
+    spend: { window_usd: spend, daily_usd: daily, fixed_daily_usd: fixedDaily, variable_daily_usd: varDaily, fixed_share: fixedDaily != null && daily ? Math.round(fixedDaily / daily * 1000) / 1000 : null, month_to_date_usd: mtd, month_budget_usd: budget, headroom_usd: headroom },
+    posture: { mode: mode, sentence: sentence },
     units: units,
     blind: (p.blind || []).slice()
   };
@@ -3225,7 +3269,7 @@ function valueModel(p) {
 function actionIndex(doc) {
   const ix = {};
   const v = doc && doc.value;
-  for (const u of (v && v.units) || []) ix[u.subject] = { title: u.title, meaning: u.meaning, why: u.why, fleet_default: u.fleet_default, doer: u.doer, lever: u.lever };
+  for (const u of (v && v.units) || []) ix[u.subject] = { title: u.title, meaning: u.meaning, why: u.why, fleet_default: "Push: " + u.push + " Trim: " + u.trim, doer: u.doer, lever: "Push: " + u.push + " Trim: " + u.trim };
   for (const c of (doc && doc.causes) || []) {
     ix["cause:" + c.cause] = { title: c.title, meaning: c.plain, why: "It explains " + c.breaches + (c.breaches === 1 ? " metric" : " metrics") + " that are off target; fixing it once is cheaper than fixing each.", fleet_default: c.lever, doer: c.doer, lever: c.lever };
   }
@@ -3249,7 +3293,8 @@ function actTicket(subject, entry, directive) {
     "Owner request from the dashboard (one tap, decided by the system under AUTONOMY-FIRST-1): " + (d ? d : "fix it: " + entry.fleet_default) + "\n" +
     "What it means: " + entry.meaning + "\n" +
     "Why it was shown: " + entry.why + "\n" +
-    "Doer: " + entry.doer + ". Lever: " + entry.lever + ".\n" +
+    "Doer: " + entry.doer + ". Lever: " + entry.lever + "\n" +
+    "Objective (both sides, VALUE-DASH-1): " + VALUE_RULE + "\n" +
     "Definition of done: act on it, measure the same figure after the change, keep it only if the target moved and no guard worsened, and close with evidence in issue_triage.close_evidence. Record the decision in decision_log with its revert path.";
 }
 
@@ -3268,13 +3313,15 @@ function actBarHtml(subject, entry, holder, e) {
 
 function valueSectionHtml(value, holder, entries, e) {
   const o = [];
-  o.push('<section class="st-sec" id="st-value" aria-labelledby="st-val"><h2 class="fl-h" id="st-val">What you get for the money <span class="ct">last ' + e(value.window_days) + " days</span></h2>");
   const s = value.spend;
-  o.push('<p class="meta">Spend ' + e(usdText(s.window_usd)) + " in " + e(value.window_days) + " days" + (s.daily_usd != null ? " (" + e(usdText(s.daily_usd)) + " a day)" : "") + (s.month_to_date_usd != null && s.month_budget_usd != null ? "; month to date " + e(usdText(s.month_to_date_usd)) + " of a " + e(usdText(s.month_budget_usd)) + " budget" : "") + ". " + e(value.basis) + "</p>");
+  o.push('<section class="st-sec" id="st-value" aria-labelledby="st-val"><h2 class="fl-h" id="st-val">What you get for the money <span class="ct">last ' + e(value.window_days) + " days</span></h2>");
+  o.push('<p class="vl-post ' + e(value.posture.mode) + '"><b>Posture:</b> ' + e(value.posture.sentence) + "</p>");
+  o.push('<p class="meta"><b>Push the top, trim the bottom.</b> Yield is outputs per $100, so the page works both sides: raise the outputs (publish, post, reach) and cut the spend that buys nothing. ' + e(value.rule) + "</p>");
+  o.push('<p class="meta">Spend ' + e(usdText(s.window_usd)) + " in " + e(value.window_days) + " days" + (s.daily_usd != null ? " (" + e(usdText(s.daily_usd)) + " a day" : "") + (s.fixed_daily_usd != null && s.variable_daily_usd != null ? ": " + e(usdText(s.fixed_daily_usd)) + " fixed operating cost, paid whatever the output" + (s.fixed_share != null ? " (" + e(Math.round(s.fixed_share * 100)) + "%)" : "") + ", " + e(usdText(s.variable_daily_usd)) + " metered AI spend you can trim" : "") + (s.daily_usd != null ? ")" : "") + (s.month_to_date_usd != null && s.month_budget_usd != null ? "; month to date " + e(usdText(s.month_to_date_usd)) + " of a " + e(usdText(s.month_budget_usd)) + " budget" : "") + ". " + e(value.basis) + "</p>");
   o.push('<div class="vl-grid">');
   for (const u of value.units) {
     const qs = u.quality || {};
-    o.push('<article class="card vl"><p class="q-eyebrow">Cost per ' + e(u.label) + '</p><b class="vl-n">' + e(u.cost_usd == null ? "n/a" : usdText(u.cost_usd)) + '</b><p class="meta">' + (u.outputs == null ? "outputs could not be read" : e(Math.round(u.outputs * 10) / 10 + " " + u.plural + " in " + u.window_days + " days")) + '</p><p class="vl-q ' + e(qs.status || "unmeasured") + '"><b>Quality:</b> ' + e(qs.label || "") + " &mdash; " + e(qs.text || "not measured") + "</p>" + actBarHtml(u.subject, entries[u.subject], holder, e) + "</article>");
+    o.push('<article class="card vl"><p class="q-eyebrow">' + e(u.per) + ' per $100</p><b class="vl-n">' + e(u.yield_per_100usd == null ? "n/a" : valYieldText(u.yield_per_100usd)) + '</b><p class="meta">' + (u.outputs == null ? "outputs could not be read" : e(Math.round(u.outputs * 10) / 10 + " " + u.noun + " in " + u.window_days + " days") + (u.cost_each_usd != null ? "; at today's spend each costs " + e(usdText(u.cost_each_usd)) : "")) + '</p><p class="vl-q ' + e(qs.status || "unmeasured") + '"><b>Quality:</b> ' + e(qs.label || "") + " &mdash; " + e(qs.text || "not measured") + '</p><p class="vl-lv"><b>Push:</b> ' + e(u.push) + '</p><p class="vl-lv"><b>Trim:</b> ' + e(u.trim) + "</p>" + actBarHtml(u.subject, entries[u.subject], holder, e) + "</article>");
   }
   o.push("</div>");
   if (value.blind.length) o.push('<p class="meta">Could not read: ' + e(value.blind.join("; ")) + ". Those figures show n/a, not zero.</p>");
@@ -3282,9 +3329,8 @@ function valueSectionHtml(value, holder, entries, e) {
   return o.join("");
 }
 
-var VALUE_CSS = ".vl-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}.vl{padding:14px 16px}.vl-n{display:block;font:500 30px/1.1 var(--serif);font-variant-numeric:tabular-nums;margin:4px 0}.vl-q{font-size:13px;margin:8px 0 0;line-height:1.45}.vl-q.on_target b{color:var(--green)}.vl-q.off_target b{color:var(--red)}.vl-q.mixed b,.vl-q.unmeasured b{color:var(--amber)}.act{margin-top:10px;border-top:1px solid var(--rule);padding-top:8px}.act-info summary{cursor:pointer;font-size:12.5px;color:var(--muted)}.act-info dl{margin:8px 0 0;font-size:13px;line-height:1.5}.act-info dt{font-weight:600;margin-top:6px}.act-info dd{margin:0;color:var(--muted)}.act-b{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.act-tell{display:flex;gap:8px;margin-top:8px}.act-tell[hidden]{display:none}.act-tell input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--rule);border-radius:8px;background:var(--bg);color:var(--ink)}.act-res{font-size:12.5px;color:var(--muted)}.act-hint{font-size:12.5px;color:var(--muted);margin:8px 0 0}@media (max-width:1100px){.vl-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.vl-grid{grid-template-columns:1fr}}";
+var VALUE_CSS = ".vl-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}.vl{padding:14px 16px}.vl-n{display:block;font:500 30px/1.1 var(--serif);font-variant-numeric:tabular-nums;margin:4px 0}.vl-q{font-size:13px;margin:8px 0 0;line-height:1.45}.vl-q.on_target b{color:var(--green)}.vl-q.off_target b{color:var(--red)}.vl-q.mixed b,.vl-q.unmeasured b{color:var(--amber)}.vl-lv{font-size:12.5px;margin:6px 0 0;line-height:1.45;color:var(--muted)}.vl-post{margin:6px 0;padding:10px 12px;border-left:4px solid var(--muted);background:var(--surface);border-radius:8px}.vl-post.grow{border-left-color:var(--green)}.vl-post.over_budget{border-left-color:var(--red)}.vl-post.fix_quality{border-left-color:var(--amber)}.act{margin-top:10px;border-top:1px solid var(--rule);padding-top:8px}.act-info summary{cursor:pointer;font-size:12.5px;color:var(--muted)}.act-info dl{margin:8px 0 0;font-size:13px;line-height:1.5}.act-info dt{font-weight:600;margin-top:6px}.act-info dd{margin:0;color:var(--muted)}.act-b{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.act-tell{display:flex;gap:8px;margin-top:8px}.act-tell[hidden]{display:none}.act-tell input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--rule);border-radius:8px;background:var(--bg);color:var(--ink)}.act-res{font-size:12.5px;color:var(--muted)}.act-hint{font-size:12.5px;color:var(--muted);margin:8px 0 0}@media (max-width:1100px){.vl-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.vl-grid{grid-template-columns:1fr}}";
 
-// One delegated handler for every .act bar on the page. Needs the signed-in cookie (same-origin); a refusal is shown in place with the way to sign in.
 var VALUE_JS = "<script>(function(){var H={'Content-Type':'application/json','x-fleet-ui':'1'};function post(b){return fetch('/api/owner/act',{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify(b)}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}document.addEventListener('click',function(ev){var t=ev.target&&ev.target.closest&&ev.target.closest('[data-vact]');if(!t)return;var bar=t.closest('.act');if(!bar)return;var res=bar.querySelector('.act-res'),tell=bar.querySelector('.act-tell'),kind=t.getAttribute('data-vact'),directive='';if(kind==='tell'){tell.hidden=!tell.hidden;if(!tell.hidden)tell.querySelector('input').focus();return}if(kind==='send'){directive=tell.querySelector('input').value.trim();if(!directive)return}t.disabled=true;if(res)res.textContent='Sending to the fleet\\u2026';post({subject:bar.getAttribute('data-subject'),directive:directive}).then(function(j){if(res)res.textContent=j.ok?'\\u2713 Handed to the fleet'+(j.issue_id?' as issue '+j.issue_id:'')+(j.duplicate?' (already filed, nothing duplicated)':'')+'. '+(j.next||''):(j.error||'It did not go through.')+(j.error&&/token|sign|closed/i.test(j.error)?' Sign in with the command line (type login).':'');if(j.ok&&tell){tell.hidden=true;tell.querySelector('input').value=''}t.disabled=false}).catch(function(){if(res)res.textContent='Network error: nothing was sent.';t.disabled=false})})})()<\/script>";
 /* VALUE-DASH-1:END */
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
