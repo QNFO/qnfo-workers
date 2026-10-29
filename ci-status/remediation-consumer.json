@@ -1,15 +1,23 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@59c9a26b7630",
- "due": 321,
- "pass": 62,
- "fail": 239,
- "skipped": 20,
- "deferred": 19,
+ "verifier": "remediation-consumer@1547dc600e7f",
+ "due": 480,
+ "pass": 259,
+ "fail": 202,
+ "skipped": 19,
+ "deferred": 18,
  "contracts": [
   {
-   "class": "belief-repo-token-writes-routes",
+   "class": "issue-1000316",
+   "issue_id": 1000316,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-blocker-claims-untested",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -17,7 +25,7 @@
    "written": true
   },
   {
-   "class": "fm-grounding-single-source-refused",
+   "class": "fm-issue-dup-abort",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -25,23 +33,7 @@
    "written": true
   },
   {
-   "class": "fm-autoaudit-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-one-producer-two-paths",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-probe-vacuous-open-fail",
+   "class": "fm-merge-not-deployed",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -49,7 +41,7 @@
    "written": true
   },
   {
-   "class": "fm-d1-like-pattern-length",
+   "class": "fm-green-pr-unmerged",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -57,15 +49,271 @@
    "written": true
   },
   {
-   "class": "belief-pn-r2-owner-outcome-unmeasured",
+   "class": "fm-outreach-chain-enum",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "holds",
-   "observed": "holds",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "rt-page-fleet-area-autonomy",
+   "class": "fm-standing-detector-superseded",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-measured-pending-deferred",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-research-exec-stalled",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-review-hard-findings-advanced",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-schema-index-stale",
+   "issue_id": 100072,
+   "verdict": "pass",
+   "expected": "8",
+   "observed": "8",
+   "written": true
+  },
+  {
+   "class": "fm-health-ok-but-empty",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-producer-batch-overshoots-backpressure",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-parked-contract-unprobed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-patch-version-line-over-cap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-probe-review-refuses-detector",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-probe-like-pattern-over-limit",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-migration-literal-outside-check-enum",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-learner-probe-exclusion-scope",
+   "issue_id": 2722,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-empty-reply-glm",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-claim-reaper-stalled",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-iso-text-compare",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-cf-issues-unconsumed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-untracked",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-verification-deferral-unaged",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-research-extract-parse",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-metric-view-never-refreshed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-owner-routed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-calibration-ping-swapped",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-ab-length-empty-scored-as-loss",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-quality-proxy-population-average",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-nested-pin-stale",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-probe-reset-on-description-append",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "2",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-silent-drop-unaccounted",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-dissemination-queue-over-cadence",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-dispatch-resolved-gh-open",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-pr-conflict-silent-close",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-pr-open-over-10m",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-probe-author-silent",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -73,7 +321,7 @@
    "written": true
   },
   {
-   "class": "fm-code-multi-file-refused",
+   "class": "fm-code-publish-registry-doi",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -81,7 +329,7 @@
    "written": true
   },
   {
-   "class": "fm-verify-comparator-stricter-than-stated",
+   "class": "fm-owner-queue-objects-outside-repo",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -89,7 +337,7 @@
    "written": true
   },
   {
-   "class": "fm-code-window-long-line",
+   "class": "fm-refile-reopen-leaves-triage-closed",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -97,15 +345,7 @@
    "written": true
   },
   {
-   "class": "fm-research-draft-below-floor",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-cost-forecast-view-clobbered",
+   "class": "fm-contract-cadence-drift",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -113,7 +353,31 @@
    "written": true
   },
   {
-   "class": "fm-ask-plainness-unmeasured",
+   "class": "fm-ticket-quotes-its-own-counted-marker",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-schema-index-mixed-refresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-metric-refresh-null-component",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-tracker-state-lag",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -121,15 +385,7 @@
    "written": true
   },
   {
-   "class": "fm-closure-without-disposition",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-code-patch-stale-dead-end",
+   "class": "fm-idle-metric-counts-non-scripts",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -137,7 +393,7 @@
    "written": true
   },
   {
-   "class": "fm-errata-confirm-stalled",
+   "class": "fm-owner-approval-without-handoff",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -145,23 +401,7 @@
    "written": true
   },
   {
-   "class": "fm-sla-shorter-than-consumer-cycle",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-prd-funnel-evidence",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": 0,
-   "observed": 0,
-   "written": true
-  },
-  {
-   "class": "fm-breach-doctor-case-age",
+   "class": "fm-pr-attempt-unlinked",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -169,213 +409,5 @@
    "written": true
   },
   {
-   "class": "fm-breach-doctor-second-path-undrilled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-standing-report-issue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-d1-like-pattern-limit",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-awaits-missing-heartbeat",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-research-revise-shrink",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-subscribe-send-failure-silent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-reader-report-pending",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-portfolio-gap-ticket-outlives-gap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000809",
-   "issue_id": 1000809,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-ask-circular-explanation",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "fail: ask_plain_share_7d 0.3333 is in its kill band (under 0.5)",
-   "written": true
-  },
-  {
-   "class": "issue-1000627",
-   "issue_id": 1000627,
-   "verdict": "fail",
-   "expected": "plain share >= 0.5 (out of kill band)",
-   "observed": "plain share = 0.33 in kill band < 0.5 (6/18)",
-   "written": true
-  },
-  {
-   "class": "issue-1000720",
-   "issue_id": 1000720,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "13",
-   "written": true
-  },
-  {
-   "class": "issue-2852",
-   "issue_id": 2852,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "below target",
-   "written": true
-  },
-  {
-   "class": "fm-code-plan-untrusted-starves",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "64",
-   "written": true
-  },
-  {
-   "class": "issue-1000427",
-   "issue_id": 1000427,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "no ops_d1_query syntax error was logged rejected in the last 24 hours",
-   "written": true
-  },
-  {
-   "class": "fm-detector-contract-not-armed",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "6",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-refusal-window-miss",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "32",
-   "written": true
-  },
-  {
-   "class": "fm-code-plan-trusted-behind-untrusted",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "60",
-   "written": true
-  },
-  {
-   "class": "belief-alt-unexercisable-research-model-skip-gauge",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "an ai-skip event now exists, so the research model skip gauge has tripped and its fallback or wait can be read as an event in a window: add a control_alternate_probes row for research-model-skip-gauge and retire its ALTERNATE-NOT-EXERCISABLE reason",
-   "written": true
-  },
-  {
-   "class": "issue-100439",
-   "issue_id": 100439,
-   "verdict": "fail",
-   "expected": "pass_rate>=0.5, neurons<=6000, cadence_overdue_count=0",
-   "observed": "pass_rate=0.011, neurons=151475.981, cadence_overdue_count=1 (continuity-snapshot=0, q08.org=1)",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-unplaceable-large-file",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "13",
-   "written": true
-  },
-  {
-   "class": "issue-1000347",
-   "issue_id": 1000347,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "fm-ops-capped-reply-logged-ok",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000678",
-   "issue_id": 1000678,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "a sample failed in the last 24 h",
-   "written": true
-  },
-  {
-   "class": "issue-1000721",
-   "issue_id": 1000721,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-search-outside-window",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
-   "written": true
-  },
-  {
-   "class": "fm-q08-reviewer-error-share",
-   "issu
+   "class": "fm-probe-author-unreachable",
+   "issue_id":
