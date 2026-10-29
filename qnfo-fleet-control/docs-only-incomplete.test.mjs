@@ -1,0 +1,24 @@
+// DOCS-ONLY-INCOMPLETE-1: the lane and the code loop send a documentation-only pull request back for implementation.
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "worker.js"), "utf8");
+const a = src.indexOf("var CM_DOCS_ONLY_RE"), b = src.indexOf('__name(cmDocsOnly, "cmDocsOnly");');
+const sb = { __name: () => {} };
+vm.createContext(sb);
+vm.runInContext(src.slice(a, b) + "\n__export = { cmDocsOnly };", sb);
+const { cmDocsOnly } = sb.__export;
+let fails = 0;
+const check = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
+check(cmDocsOnly(["docs/X.md"], "").docs_only === true, "docs/*.md alone is docs-only");
+check(cmDocsOnly(["CLAUDE.md", "docs/Y.md"], "").docs_only === true, "CLAUDE.md plus docs is docs-only");
+check(cmDocsOnly(["docs/X.md", "migrations/a.sql"], "").docs_only === false, "a migration makes it code");
+check(cmDocsOnly(["w/worker.js"], "").docs_only === false, "worker.js is code");
+check(cmDocsOnly(["docs/PORTFOLIO.md"], "").docs_only === false, "lane-regenerated docs are exempt");
+check(cmDocsOnly(["docs/X.md"], "x\nImplemented in: #5300").docs_only === false, "Implemented in: #n exempts");
+check(cmDocsOnly(["docs/X.md"], "docs-exempt: generated").docs_only === false, "docs-exempt: reason exempts");
+check(cmDocsOnly([], "").docs_only === false, "no files is not docs-only");
+check(/bhMergeDecide[\s\S]{0,2500}cmDocsOnly\(names, pr\.body\)/.test(src), "lane calls the check");
+check(/var dod = cmDocsOnly\(names, pr\.body\); if \(dod\.docs_only\) return refuse/.test(src), "code loop calls the check");
+process.exit(fails ? 1 : 0);
