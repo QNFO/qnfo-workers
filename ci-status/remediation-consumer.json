@@ -1,255 +1,159 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6f12ffd6a0ce",
- "due": 560,
- "pass": 440,
- "fail": 106,
- "skipped": 14,
- "deferred": 14,
+ "verifier": "remediation-consumer@29dd1965f20a",
+ "due": 440,
+ "pass": 274,
+ "fail": 151,
+ "skipped": 15,
+ "deferred": 15,
  "contracts": [
   {
-   "class": "issue-1000712",
-   "issue_id": 1000712,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-code-plan-trusted-behind-untrusted",
-   "issue_id": null,
+   "class": "issue-1000534",
+   "issue_id": 1000534,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "61",
+   "expected": "plain_article_coverage_pct value present",
+   "observed": "missing: last_value=NULL val=94.1 verdict=on-target",
    "written": true
   },
   {
-   "class": "belief-alt-unexercisable-research-model-skip-gauge",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "an ai-skip event now exists, so the research model skip gauge has tripped and its fallback or wait can be read as an event in a window: add a control_alternate_probes row for research-model-skip-gauge and retire its ALTERNATE-NOT-EXERCISABLE reason",
-   "written": true
-  },
-  {
-   "class": "issue-1000720",
-   "issue_id": 1000720,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "13",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-search-outside-window",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "3",
-   "written": true
-  },
-  {
-   "class": "issue-100439",
-   "issue_id": 100439,
-   "verdict": "fail",
-   "expected": "pass_rate>=0.5, neurons<=6000, cadence_overdue_count=0",
-   "observed": "pass_rate=0.011, neurons=151475.981, cadence_overdue_count=1 (continuity-snapshot=0, q08.org=1)",
-   "written": true
-  },
-  {
-   "class": "fm-ops-capped-reply-logged-ok",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000809",
-   "issue_id": 1000809,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000345",
-   "issue_id": 1000345,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000427",
-   "issue_id": 1000427,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "no ops_d1_query syntax error was logged rejected in the last 24 hours",
-   "written": true
-  },
-  {
-   "class": "fm-q08-reviewer-error-share",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "erroring models took 43 of 92 q08 calls today",
-   "written": true
-  },
-  {
-   "class": "issue-1000678",
-   "issue_id": 1000678,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000721",
-   "issue_id": 1000721,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-unplaceable-large-file",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "13",
-   "written": true
-  },
-  {
-   "class": "belief-alt-unexercisable-research-fallback-price-guard",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "an ai-skip event now exists, so a rate limited call has met the gauge and the price guard can be read as an event in a window: add a control_alternate_probes row for research-fallback-price-guard and retire its ALTERNATE-NOT-EXERCISABLE reason",
-   "written": true
-  },
-  {
-   "class": "issue-1000341",
-   "issue_id": 1000341,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-100299",
-   "issue_id": 100299,
-   "verdict": "fail",
-   "expected": "7",
-   "observed": "0 of the last 7 daily reads are 0 (latest read 185)",
-   "written": true
-  },
-  {
-   "class": "issue-1000338",
-   "issue_id": 1000338,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000347",
-   "issue_id": 1000347,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000352",
-   "issue_id": 1000352,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "fm-breach-unmapped",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "9",
-   "written": true
-  },
-  {
-   "class": "issue-100458",
-   "issue_id": 100458,
-   "verdict": "fail",
-   "expected": "confirm-reaches-model: last tick deferred=0 with >0 verdicts and not stalled",
-   "observed": "deferred=3 verdicts=0 models={}",
-   "written": true
-  },
-  {
-   "class": "issue-1000351",
-   "issue_id": 1000351,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000399",
-   "issue_id": 1000399,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "still installed: deploy_merge_age_tick,breach_selfheal_heavy_tick",
-   "written": true
-  },
-  {
-   "class": "belief-doctor-structured-facts-suffice",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-100138-BACKFILL-1",
-   "issue_id": 100138,
+   "class": "issue-2192",
+   "issue_id": 2192,
    "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: 14 metrics older than twice their refresh cadence or never refreshed, the rule qnfo-lifecycle files this issue on (papers_fabricated_claims_open, papers_claim_unaudited, paper_loop_revisions_24h, papers_awaiting_revision, seo_crawl_googlebot_7d, seo_crawl_bingbot_7d, seo_indexnow_engines_ok, seo_sitemap_urls, pr_open_over_10m, a11y_violations_serious, social_bot_label_enabled, pii_in_logs, secrets_in_repo, product_plus_deployed_7d)",
+   "reason": "the probe cannot judge yet: pending: 14 metrics older than twice their refresh cadence or never refreshed, the rule qnfo-lifecycle files this issue on (papers_fabricated_claims_open, paper"
+  },
+  {
+   "class": "issue-1000827",
+   "issue_id": 1000827,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 746 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 746 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "goal-PRG-QNFO-RSCH-DEFECTS-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "open defects in QNFO.RSCH: 18",
+   "written": true
+  },
+  {
+   "class": "issue-1000193",
+   "issue_id": 1000193,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "lever in force (q08_daily_neurons 50000), cost_usd_30d = 364.07 USD/30d, above the A9 ceiling 200",
+   "written": true
+  },
+  {
+   "class": "issue-1000305",
+   "issue_id": 1000305,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000325",
+   "issue_id": 1000325,
+   "verdict": "fail",
+   "expected": "@cf/zai-org/glm-5.3-flash",
+   "observed": "no model-order event in 90 minutes",
+   "written": true
+  },
+  {
+   "class": "goal-WORKERS-STANDARDS-ADVISORY-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "above target: the newest workers best-practice audit reads 1 fail and 83 advisory findings at 2026-10-29T20:08:27Z (target 0)",
+   "written": true
+  },
+  {
+   "class": "issue-1000832",
+   "issue_id": 1000832,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000780 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000780 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-companion-draft-cache-replay",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-3001-BACKFILL-1",
+   "issue_id": 3001,
+   "verdict": "fail",
    "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
+   "observed": "open: issue 3001 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
   },
   {
-   "class": "issue-1000005",
-   "issue_id": 1000005,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: published in the last 1440 minutes = 3 (need 10)",
-   "reason": "the probe cannot judge yet: pending: published in the last 1440 minutes = 3 (need 10)"
+   "class": "issue-1000038",
+   "issue_id": 1000038,
+   "verdict": "fail",
+   "expected": "defect fixed: breach_code_task_pct denominator narrowed to code-shaped breaches OR target <= honest routed code-task share",
+   "observed": "defect present: 7/91 breaching triggers carry a code-task line at line start (7.7%), but metric_registry still targets 30% of all breaching triggers",
+   "written": true
   },
   {
-   "class": "issue-1000459",
-   "issue_id": 1000459,
+   "class": "issue-2582",
+   "issue_id": 2582,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000463",
-   "issue_id": 1000463,
-   "verdict": "deferred",
-   "expected": "cleared",
-   "observed": "pending: contract goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1 still defers",
-   "reason": "the probe cannot judge yet: pending: contract goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1 still defers"
-  },
-  {
-   "class": "issue-1000769",
-   "issue_id": 1000769,
-   "verdict": "deferred",
+   "class": "goal-PRG-QNFO-REACH-DEFECTS-0",
+   "issue_id": null,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: issue 1000647 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000647 has no probe of its own yet, a doer writes one"
+   "observed": "open defects in QNFO.REACH: 15",
+   "written": true
   },
   {
-   "class": "fm-cold-human-silent-drop",
+   "class": "issue-100286-BACKFILL-1",
+   "issue_id": 100286,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100286 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-99916-BACKFILL-1",
+   "issue_id": 99916,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 99916 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-99941-BACKFILL-1",
+   "issue_id": 99941,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 99941 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-99929-BACKFILL-1",
+   "issue_id": 99929,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 99929 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "belief-research-drains-in-3h",
    "issue_id": null,
    "verdict": "fail",
    "expected": "1",
@@ -257,78 +161,119 @@
    "written": true
   },
   {
-   "class": "fm-internal-errata-dead-end",
-   "issue_id": null,
+   "class": "issue-99940-BACKFILL-1",
+   "issue_id": 99940,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "3",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 99940 is not closed with close_evidence yet (doer: qnfo-ops)",
    "written": true
   },
   {
-   "class": "fm-loop-close-vs-probe-disagree",
-   "issue_id": null,
+   "class": "issue-100084-BACKFILL-1",
+   "issue_id": 100084,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "35",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100084 is not closed with close_evidence yet (doer: qnfo-ops)",
    "written": true
   },
   {
-   "class": "issue-1000745",
-   "issue_id": 1000745,
+   "class": "issue-1000357",
+   "issue_id": 1000357,
    "verdict": "fail",
-   "expected": "0 unmeasured qnfo-youtube-shorts triggers",
-   "observed": "1 unmeasured qnfo-youtube-shorts trigger",
+   "expected": "pass",
+   "observed": "fail",
    "written": true
   },
   {
-   "class": "issue-100629",
-   "issue_id": 100629,
-   "verdict": "deferred",
+   "class": "issue-1000431-outcome",
+   "issue_id": 1000431,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: queued=192",
-   "reason": "the probe cannot judge yet: pending: queued=192"
+   "observed": "the code part of this issue has no passing verification yet",
+   "written": true
   },
   {
-   "class": "issue-1000156",
-   "issue_id": 1000156,
+   "class": "issue-100310-BACKFILL-1",
+   "issue_id": 100310,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100310 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-1000640",
+   "issue_id": 1000640,
+   "verdict": "fail",
+   "expected": "record of ASK-LOOP-1 hybrid+rerank A/B with latency and token cost",
+   "observed": "no ask_evals row tagged hybrid/rerank/cross-encoder",
+   "written": true
+  },
+  {
+   "class": "issue-1000644",
+   "issue_id": 1000644,
+   "verdict": "fail",
+   "expected": "at least 1 automated verification artifact",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "belief-nothing-stuck",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "belief-no-spof-on-critical-path",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000182",
+   "issue_id": 1000182,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "goal-TWIN-NATIVE-TOOLS-1",
-   "issue_id": null,
+   "class": "issue-1000667",
+   "issue_id": 1000667,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:personal-api/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-code-review-noise-defect",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
+   "expected": "3",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-consumer-gate-starvation",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "class": "issue-1000668",
+   "issue_id": 1000668,
+   "verdict": "fail",
+   "expected": "q08.org#/subscribe and q08.org#q08-fb both Turnstile-protected (ok=1)",
+   "observed": "q08.org#/subscribe ok=0 (POST form on home:q08.org; Turnstile widget absent) | q08.org#q08-fb ok=0 (POST form on q08_piece; Turnstile widget absent)",
    "written": true
   },
   {
-   "class": "fm-portfolio-umbrella-flap",
-   "issue_id": null,
+   "class": "issue-1000562",
+   "issue_id": 1000562,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "belief-portfolio-gap-deployable-owner",
-   "issue_id": null,
-   "verdict": "pass"
+   "class": "issue-1000356",
+   "issue_id": 1000356,
+   "verdict": "fail",
+   "expected": "pass",
+   "observed": "fail",
+   "written": true
+  },
+  {
+   "class": "issue-1000664",
+   "issue_id": 1000664,
+   "verdict": "fail",
+   "expected": "claim_coverage has non-empty las
