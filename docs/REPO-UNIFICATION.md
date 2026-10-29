@@ -42,6 +42,8 @@ The disjointedness is therefore not 130 live projects. It is five things:
 4. **Personal account (REPO-UNIFY-4).** The archived `rwnq8` copies are left archived and are listed in the map as superseded by the organisation repository of the same name; none is deleted. The private ones stay private and unnamed.
 5. **Cross-links.** Each live repository README gets one generated line pointing to `REPO-MAP.md`; the portfolio loop adds it, not a hand edit.
 
+Result of the step 3 comparison (2026-10-29): `qwav-platform` stays active. It carries WBS code QWAV.PLT, and 546 of its paper files and all eight member directories have no copy in the hub, so it is not a duplicate.
+
 ## 4. Portfolio registration
 
 q08 and the personal plane each get a `program_registry` row so the loop lists them: `QNFO.Q08` (tier platform, domain `q08.org`, workers `q08-*`) and `QNFO.PERSONAL` (tier platform, private, counted not named). Done by migration with a rollback line.
