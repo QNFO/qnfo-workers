@@ -1,0 +1,14 @@
+{
+  "marker": "DOMAIN-PLANE-1",
+  "host": "watch.q08.org",
+  "service": "personal-watch",
+  "token_present": true,
+  "stage": "verify",
+  "status": "ok",
+  "error": null,
+  "worker_version": "1.0.0",
+  "route_id": "fb1edad476224899ae24f28627ce4600",
+  "dns_created": "4108e093114d15a14e4461b0a7bf3bc3",
+  "verified": true,
+  "ts": "2026-10-29T13:11:49Z"
+}
