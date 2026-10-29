@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-29 03:08:56",
+  "audited_at": "2026-10-29 07:28:21",
   "d1_write_failures": [],
   "d1_writes_ok": 127,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -578,7 +571,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.39.6-codeagent",
+        "version": "0.39.7-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -1045,9 +1038,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.39.6-codeagent",
+      "before": "0.39.7-codeagent",
       "http": 200,
-      "live": "0.39.6-codeagent",
+      "live": "0.39.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
