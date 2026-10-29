@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.4-codeagent";
+var VERSION = "1.44.5-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -4003,7 +4003,41 @@ function cutAtSentence(text, max) {
 // lede names) now keeps PRIMARY_SHARE of the budget when there are others, and the rest share what is left; the total is unchanged, so
 // the writer, the grounding check, the critic and the reviewers still read the same material, and no judge or bar changes.
 var PRIMARY_SHARE = 0.7; // FULLTEXT-BUDGET-1 (1.26.2): was 0.55 of 18000
+// EK-2 (issue 1000713, RED-DRAIN-1, 1.27.0): the 2026-10-27 Afghanistan piece grounded an contested subject on a single
+// Wikipedia anchor; its balance came from the writer prompt's objection rule, not from source diversity. Policy, history,
+// geopolitics, health and economics topics now need at least 3 independent sources spanning differing viewpoints, and at
+// least one source that is not US-domiciled, before drafting; when the anchors cannot meet that bar the topic is dropped
+// (fitAnchors returns no anchors, so no draft is written on one anchor).
+var CONTESTED_TOPIC_RE = /\b(?:policy|policies|politics|political|election|elections|parliament|congress|government|governance|war|wars|conflict|invasion|occupation|insurgen\w*|geopolitic\w*|foreign relations|international relations|history|historical|history of|empire|colonial\w*|treaty|treaties|sanction\w*|health|medicine|medical|disease|diseases|epidemic|pandemic|vaccin\w*|econom\w*|inflation|recession|trade|tariff\w*|taxation|market|markets|budget|debt|poverty)\b/i;
+var US_SOURCE_HOSTS = /^(?:en\.wikipedia\.org|en\.m\.wikipedia\.org|simple\.wikipedia\.org|www\.whitehouse\.gov|[a-z0-9.-]+\.gov|[a-z0-9.-]+\.mil|[a-z0-9.-]+\.edu|arxiv\.org|ar5iv\.labs\.arxiv\.org|export\.arxiv\.org|www\.nytimes\.com|www\.washingtonpost\.com)$/i;
+function isContestedTopic(text) { return CONTESTED_TOPIC_RE.test(String(text || "").slice(0, 4000)); }
+function sourceHost(ref) { try { return new URL(String(ref || "")).hostname.toLowerCase(); } catch (e) { return ""; } }
+function contestedSourcesOk(anchors) {
+  var seen = {}, list = [];
+  for (var i = 0; i < (anchors || []).length; i++) {
+    var a = anchors[i];
+    if (!a || !a.ref || seen[a.ref]) continue;
+    if (String(a.text || "").length < ANCHOR_MIN_CHARS) continue;
+    seen[a.ref] = 1; list.push(a);
+  }
+  var nonUS = 0;
+  for (var k = 0; k < list.length; k++) { var h = sourceHost(list[k].ref); if (h && !US_SOURCE_HOSTS.test(h)) nonUS++; }
+  // viewpoints differ only when the sources are independent (distinct hosts), not one outlet three times
+  var hosts = {};
+  for (var k2 = 0; k2 < list.length; k2++) hosts[sourceHost(list[k2].ref)] = 1;
+  var indep = Object.keys(hosts).length;
+  if (list.length < 3) return { ok: false, why: "only " + list.length + " full-text sources" };
+  if (indep < 3) return { ok: false, why: "sources span " + indep + " outlets, not 3 independent ones" };
+  if (!nonUS) return { ok: false, why: "no non-US source" };
+  return { ok: true, why: "" };
+}
 function fitAnchors(anchors) {
+  // EK-2: a contested subject never drafts on fewer than three independent, viewpoint-spanning, full-text sources
+  // with one non-US source among them; the topic is dropped instead (CITE-FULLTEXT-1: no abstract or excerpt counts).
+  if (anchors && anchors.length && isContestedTopic(anchors[0] && anchors[0].text)) {
+    var gate = contestedSourcesOk(anchors);
+    if (!gate.ok) { diagNote("contested-topic gate: " + gate.why + " \u2014 topic dropped"); return []; }
+  }
   var n = anchors.length || 1, per = Math.max(900, Math.floor(GROUND_MAX / n));
   var prim = n > 1 ? Math.max(per, Math.floor(GROUND_MAX * PRIMARY_SHARE)) : per;
   var rest = n > 1 ? Math.max(900, Math.floor((GROUND_MAX - prim) / (n - 1))) : per;
