@@ -8856,11 +8856,24 @@ function improvementEvaluate(f, nowMs) {
     var key = IL_REG_PREFIX + r.metric;
     var keepOpen = open[key] && good <= -IL_REGRESS_PCT * IL_HYSTERESIS;
     if (t.verdict === "regressed" || keepOpen) {
-      var offTarget = rows.length && rows[rows.length - 1].meets === 0;
-      // IL-DEFECT-ONLY-1: a decline inside the target (or with no target) is an early warning, kept in the run state and GET /improvement,
-      // never an issue; only a regression that is off target now is filed (file: true)
+      var latest = rows[rows.length - 1];
+      var triggerPreds = Object.keys(f.trigger_metric || {}).filter(function(id) { return f.trigger_metric[id] === r.metric; })
+        .map(function(id) { return ilTriggerPred(id, f.trigger_pred || {}); }).filter(function(tp) { return !!tp; });
+      var offTarget = latest && latest.meets === 0;
+      if (latest && triggerPreds.length) offTarget = triggerPreds.some(function(tp) { return ilTriggerHit(tp, latest.value); });
+      var triggerText = triggerPreds.map(function(tp) { return tp.operator + " " + tp.threshold; }).join(", ");
+      var warning = triggerPreds.length
+        ? "; enabled triggers (" + triggerText + ") are clear, early warning"
+        : "; still inside target, early warning";
+      var offTargetText = triggerPreds.length ? "; enabled trigger (" + triggerText + ") is hit" : "; now OFF target";
+      var closeEvidence = triggerPreds.length && !offTarget
+        ? r.metric + " latest value " + latest.value + " does not hit any enabled trigger (" + triggerText + "); the 7-day regression is an early warning, not a fileable trigger breach."
+        : null;
+      // IL-TRIGGER-AWARE-1: enabled trigger predicates define the defect boundary when readable; otherwise the registry target does.
+      // A clear trigger keeps a regression as an early warning in the run state and GET /improvement, never as a fileable issue.
       findings.push({ key: key, metric: r.metric, severity: offTarget ? "high" : "medium", covered_by: covered[r.metric] || null, file: !!offTarget,
-        text: r.metric + " worsened " + Math.round(-good * 100) + "% week on week (7d mean " + t.recent + " vs prior 7d " + t.prior + "; good direction " + dir + "; target " + String(r.target || "").split("(")[0].trim() + (offTarget ? "; now OFF target" : "; still inside target, early warning") + ")." });
+        close_evidence: closeEvidence,
+        text: r.metric + " worsened " + Math.round(-good * 100) + "% week on week (7d mean " + t.recent + " vs prior 7d " + t.prior + "; good direction " + dir + "; target " + String(r.target || "").split("(")[0].trim() + (offTarget ? offTargetText : warning) + ")." });
     }
     trends.push(t);
   });
