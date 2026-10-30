@@ -1,67 +1,195 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@e237db96a8ca",
- "due": 520,
- "pass": 311,
- "fail": 187,
- "skipped": 22,
- "deferred": 22,
+ "verifier": "remediation-consumer@ba5b156c10bb",
+ "due": 600,
+ "pass": 422,
+ "fail": 157,
+ "skipped": 21,
+ "deferred": 21,
  "contracts": [
   {
-   "class": "fm-default-approve-issue-unexecuted",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-100299",
-   "issue_id": 100299,
-   "verdict": "fail",
-   "expected": "7",
-   "observed": "0 of the last 7 daily reads are 0 (latest read 240)",
-   "written": true
-  },
-  {
-   "class": "issue-1000778",
-   "issue_id": 1000778,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-unplaceable-large-file",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "9",
-   "written": true
-  },
-  {
-   "class": "belief-alt-unexercisable-research-fallback-price-guard",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "an ai-skip event now exists, so a rate limited call has met the gauge and the price guard can be read as an event in a window: add a control_alternate_probes row for research-fallback-price-guard and retire its ALTERNATE-NOT-EXERCISABLE reason",
-   "written": true
-  },
-  {
-   "class": "fm-remediation-over-budget-metric-lifetime-count",
+   "class": "fm-code-task-search-invented",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-ask-plainness-unmeasured",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-tick-reopen-dup-title",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-compat-date-inert",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1000742",
+   "issue_id": 1000742,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-dissemination-queue-over-cadence",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-health-ok-but-empty",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-nested-pin-stale",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-refusal-window-miss",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-empty-reply-glm",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-metric-refresh-null-component",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-companion-critic-list-capped",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-lede-provenance-unprunable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-heading-unprunable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-prune-short-revise-unpruned",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2605",
+   "issue_id": 2605,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2755",
+   "issue_id": 2755,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2779",
+   "issue_id": 2779,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2782",
+   "issue_id": 2782,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2818",
+   "issue_id": 2818,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-pdf-typeset-bibliography-dropped",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2780",
+   "issue_id": 2780,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2833",
+   "issue_id": 2833,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -73,6 +201,86 @@
    "reason": "the probe cannot judge yet: pending: contract goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1 still defers"
   },
   {
+   "class": "belief-issues-probed-hourly",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2811",
+   "issue_id": 2811,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2824",
+   "issue_id": 2824,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2847",
+   "issue_id": 2847,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2940",
+   "issue_id": 2940,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-unplaceable-large-file",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "9",
+   "written": true
+  },
+  {
+   "class": "fm-default-approve-issue-unexecuted",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-alt-unexercisable-research-fallback-price-guard",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "an ai-skip event now exists, so a rate limited call has met the gauge and the price guard can be read as an event in a window: add a control_alternate_probes row for research-fallback-price-guard and retire its ALTERNATE-NOT-EXERCISABLE reason",
+   "written": true
+  },
+  {
+   "class": "issue-100299",
+   "issue_id": 100299,
+   "verdict": "fail",
+   "expected": "7",
+   "observed": "0 of the last 7 daily reads are 0 (latest read 241)",
+   "written": true
+  },
+  {
+   "class": "issue-1000778",
+   "issue_id": 1000778,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "issue-2402",
    "issue_id": 2402,
    "verdict": "fail",
@@ -81,8 +289,16 @@
    "written": true
   },
   {
-   "class": "issue-1000880",
-   "issue_id": 1000880,
+   "class": "issue-2800",
+   "issue_id": 2800,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2909",
+   "issue_id": 2909,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -97,19 +313,51 @@
    "written": true
   },
   {
-   "class": "issue-1000341",
-   "issue_id": 1000341,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
+   "class": "issue-99912",
+   "issue_id": 99912,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1000790",
-   "issue_id": 1000790,
-   "verdict": "fail",
+   "class": "issue-100008",
+   "issue_id": 100008,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "missing-marker",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100020",
+   "issue_id": 100020,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100025",
+   "issue_id": 100025,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-quick-read-digest-spend",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-remediation-over-budget-metric-lifetime-count",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -130,192 +378,4 @@
   },
   {
    "class": "fm-loop-close-vs-probe-disagree",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "37",
-   "written": true
-  },
-  {
-   "class": "owner-card-jobsearch-ledger",
-   "issue_id": null,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: 2 ledger question(s) still open",
-   "reason": "the probe cannot judge yet: pending: 2 ledger question(s) still open"
-  },
-  {
-   "class": "issue-2521-radar",
-   "issue_id": 2521,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:radar-hub/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2521-outreach",
-   "issue_id": 2521,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000345",
-   "issue_id": 1000345,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000769",
-   "issue_id": 1000769,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: issue 1000647 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000647 has no probe of its own yet, a doer writes one"
-  },
-  {
-   "class": "fm-relapse-judged-against-target-not-trigger",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-100458",
-   "issue_id": 100458,
-   "verdict": "fail",
-   "expected": "confirm-reaches-model: last tick deferred=0 with >0 verdicts and not stalled",
-   "observed": "deferred=3 verdicts=0 models={}",
-   "written": true
-  },
-  {
-   "class": "fm-metric-close-flap",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000583",
-   "issue_id": 1000583,
-   "verdict": "fail",
-   "expected": "0 days behind",
-   "observed": "20 days behind",
-   "written": true
-  },
-  {
-   "class": "fm-reopen-without-live-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "22",
-   "written": true
-  },
-  {
-   "class": "issue-1000338",
-   "issue_id": 1000338,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000347",
-   "issue_id": 1000347,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000779",
-   "issue_id": 1000779,
-   "verdict": "fail",
-   "expected": "yield_rising=1 AND quality_ok=1 AND budget_ok=1",
-   "observed": "defect present: yield_rising=0 (current 391 merges per $100 7d vs prior 535), quality_ok=0 (1 breached code-loop quality triggers), budget_ok=0 (ai_spend:workers-ai=384.72>95)",
-   "written": true
-  },
-  {
-   "class": "issue-1000885",
-   "issue_id": 1000885,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: issue 1000662 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000662 has no probe of its own yet, a doer writes one"
-  },
-  {
-   "class": "issue-1000859",
-   "issue_id": 1000859,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: issue 1000803 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000803 has no probe of its own yet, a doer writes one"
-  },
-  {
-   "class": "fm-control-alternate-reason-unread",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
-   "written": true
-  },
-  {
-   "class": "issue-1000156",
-   "issue_id": 1000156,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000351",
-   "issue_id": 1000351,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000352",
-   "issue_id": 1000352,
-   "verdict": "fail",
-   "expected": "pass",
-   "observed": "fail",
-   "written": true
-  },
-  {
-   "class": "issue-1000831",
-   "issue_id": 1000831,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-metric-refresher-replaced",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
-   "written": true
-  },
-  {
-   "class": "issue-100293",
-   "issue_id": 100293,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: code-task-merge queue 252.7 min > 120 min SLA",
-   "written": true
-  },
-  {
-   "class": "fm-breach-unmapped",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "8",
-   "written": true
+   "issue_id": 
