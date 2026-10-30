@@ -99,9 +99,11 @@ CLOBBER_WRITE = re.compile(r"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|REPLACE\s+INTO|
 REAPPLY_OK = re.compile(r"^--[ \t]*REAPPLY-OK:[ \t]*\S", re.M)
 
 
-def clobber_problems(text, base_text):
-    """base_text is the file as it stands on the base branch (None for a new file). Returns the refusal lines for an edited file that rewrites a live
-    definition row without a REAPPLY-OK line; an edit that only adds comments or touches other statements passes."""
+def clobber_problems(text, base_text, history=()):
+    """base_text is the file as it stands on the base branch (None for a new file); history is the content the file had at earlier commits.
+    Returns the refusal lines for an edited file that rewrites a live definition row without a REAPPLY-OK line; an edit that only adds comments or touches
+    other statements passes. So does restoring a content the file already had (a revert of an edit): the runner keys an applied file by (file, sha256), so that
+    sha256 is already applied and the file is skipped, not re-run."""
     if base_text is None or text == base_text or REAPPLY_OK.search(text):
         return []
     if header_value(header(base_text), "APPLY-BY") != "ci":
@@ -111,7 +113,7 @@ def clobber_problems(text, base_text):
         m = CLOBBER_WRITE.match(body(st))
         if m:
             bad.append(m.group(1))
-    if not bad:
+    if not bad or text in history:
         return []
     return ["edited migration rewrites live " + ", ".join(sorted(set(bad))) + " row(s): the runner re-applies an edited file on merge and would overwrite the "
             "newer definition (MIGRATION-NO-CLOBBER-1, issue 3009). Put the change in a new migration file, or add a '-- REAPPLY-OK: <reason>' line "
@@ -122,6 +124,21 @@ def base_text_of(path, base):
     import subprocess
     r = subprocess.run(["git", "show", base + ":" + path], capture_output=True, text=True)
     return r.stdout if r.returncode == 0 else None
+
+
+def history_texts_of(path, base):
+    """Every content path had at a commit reachable from base (newest first); empty when git holds no history for it. RESTORE-APPLIED-CONTENT-1: a revert of
+    an edit to an already-applied migration (#5366 edited 2026-10-29-plussing-3.sql, which the runner then replayed) is a file the runner skips."""
+    import subprocess
+    r = subprocess.run(["git", "log", "--format=%H", base, "--", path], capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        return []
+    out = []
+    for sha in r.stdout.split():
+        s = subprocess.run(["git", "show", sha + ":" + path], capture_output=True, text=True, encoding="utf-8")
+        if s.returncode == 0:
+            out.append(s.stdout)
+    return out
 
 
 STEP_TYPES = ("sql", "http")
@@ -1173,7 +1190,8 @@ def main(argv=None):
             text = open(f, encoding="utf-8").read()
             ok, problems, info = plan(f, text, birth=not a.history)
             if ok and a.base:
-                problems = list(problems) + clobber_problems(text, base_text_of(f, a.base))
+                bt = base_text_of(f, a.base)
+                problems = list(problems) + clobber_problems(text, bt, history_texts_of(f, a.base) if bt is not None and bt != text else ())
             if not ok:
                 verdict, note = headerless_verdict(f, text)
                 if verdict == "refused":

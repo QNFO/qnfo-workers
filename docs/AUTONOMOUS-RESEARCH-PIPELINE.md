@@ -44,6 +44,24 @@ Audit trail (2026-10-01, #1622):
 - The legacy WBS-era `research_plans` table (0 rows, no reader or writer) was dropped
   (migrations/2026-10-01-drop-research-plans.sql).
 
+### Publication structure and incident revisions (STRUCTURE-NUMBERING-1)
+
+In source version `qnfo-research-exec 0.40.8-structure-numbering`, `finalGates`
+emits the HARD finding `gate-structure-numbering` when a numbered H3 subsection
+belongs to a different numbered H2 section. Backtick and tilde fenced examples
+are excluded; an unnumbered H2 or a new H1 clears the parent section.
+
+`migrations/2026-10-30-structure-numbering-revisions.sql` schedules the eight
+papers named in issue 1000540 through the existing remediation pipeline. The
+incident token in `revision:<slug>@structure-numbering#1` identifies this repair,
+not an asserted live version; publication reads the actual current version and
+creates its successor with history and non-regression checks. Replaying the
+migration does not duplicate work or replace an in-flight remediation. It does
+not modify or withdraw published papers, change spend controls, or relax release
+gates. Merge, successful migration application, queue readback and subsequent
+publication evidence are separate milestones; source inclusion proves none of
+the live milestones.
+
 ## 4. Dissemination policy (L3)
 
 Channels, cadence and owner-voice rules are set by docs/STRATEGY.md sections 4 and 5 (aligned 2026-10-01, STRATEGY-1).

@@ -278,7 +278,8 @@ const merged = act(task(), g({ pr: prJson({ merged: true, state: "closed", merge
 ok(merged.action === "reconcile" && merged.status === "merged" && merged.by === "gh:rwnq8", "a PR a person merged is reconciled with who merged it");
 ok(act(task(), g({ pr: prJson({ state: "closed" }) })).status === "closed", "a PR a person closed is reconciled as closed");
 const docT = task({ path: "docs/x.md", ctx: JSON.stringify({ patch: WHOLE }) });
-const docG = g({ files: [{ filename: "docs/x.md", status: "modified" }], checks: green("h1", ["gate", "mirror-guard", "comparator"]), integrity: { ok: true } });
+const docG = g({ pr: prJson({ body: "Implemented in: #400" }), files: [{ filename: "docs/x.md", status: "modified" }], checks: green("h1", ["gate", "mirror-guard", "comparator"]), integrity: { ok: true } });
+ok(act(docT, { ...docG, pr: prJson() }).action === "refuse", "documentation without implementing evidence stays incomplete");
 ok(act(docT, docG).action === "merge" && act(docT, docG).kind === "doc", "a doc merges on gate, mirror-guard and comparator");
 const scrT = task({ path: "scripts/cf_ops_actions.py", ctx: JSON.stringify({ patch: WHOLE }) });
 const scrG = g({ files: [{ filename: "scripts/cf_ops_actions.py", status: "modified" }], checks: green("h1", ["gate", "mirror-guard", "comparator"]), integrity: { ok: true } });
@@ -497,7 +498,7 @@ freshDb(); freshGh();
 for (const [i, id] of ["ct_doc000000001", "ct_doc000000002"].entries()) {
   const num = 410 + i, br = "codeagent-" + id.slice(3, 15);
   db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES (?, 'qnfo-workers', 'docs/x.md', 'doc', 'published', 'done', 0, ?, ?, ?, ?, ?)").run(id, JSON.stringify({ patch: WHOLE }), br, "https://github.com/QNFO/qnfo-workers/pull/" + num, ago(5), ago(5 - i));
-  gh.pulls[num] = prJson({ number: num, head: { ref: br, sha: "d" + i, repo: { full_name: "QNFO/qnfo-workers" } } });
+  gh.pulls[num] = prJson({ number: num, body: "Implemented in: #400", head: { ref: br, sha: "d" + i, repo: { full_name: "QNFO/qnfo-workers" } } });
   gh.files[num] = [{ filename: "docs/x.md", status: "modified" }];
   gh.checks["d" + i] = green("d" + i, ["gate", "mirror-guard", "comparator"]);
   gh.contents["base0:docs/x.md"] = "one\ntwo\n"; gh.contents["d" + i + ":docs/x.md"] = "one\ntwo\nthree\n";
@@ -516,7 +517,7 @@ ok(gh.merges.length === 2 && one("SELECT status FROM code_tasks WHERE id = 'ct_d
   for (const [i, id] of ["ct_doc000000003", "ct_doc000000004"].entries()) {
     const num = 420 + i, br = "codeagent-" + id.slice(3, 15);
     db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES (?, 'qnfo-workers', ?, 'doc', 'published', 'done', 0, ?, ?, ?, ?, ?)").run(id, "docs/y" + i + ".md", JSON.stringify({ patch: WHOLE.split("docs/x.md").join("docs/y" + i + ".md") }), br, "https://github.com/QNFO/qnfo-workers/pull/" + num, "2026-10-02T00:00:00Z", "2026-10-02T00:00:00Z");
-    gh.pulls[num] = prJson({ number: num, head: { ref: br, sha: "e" + i, repo: { full_name: "QNFO/qnfo-workers" } } });
+    gh.pulls[num] = prJson({ number: num, body: "Implemented in: #400", head: { ref: br, sha: "e" + i, repo: { full_name: "QNFO/qnfo-workers" } } });
     gh.files[num] = [{ filename: "docs/y" + i + ".md", status: "modified" }];
     gh.checks["e" + i] = green("e" + i, ["gate", "mirror-guard", "comparator"]);
     gh.contents["base0:docs/y" + i + ".md"] = "one\ntwo\n"; gh.contents["e" + i + ":docs/y" + i + ".md"] = "one\ntwo\nthree\n";
