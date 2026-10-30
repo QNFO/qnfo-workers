@@ -138,17 +138,6 @@ because each one was broken at least once; the linked issue holds the evidence.
 - The claim is written to the D1 ledger `qnfo-audit.work_claims` (WORK-CLAIMS-1, migrations/2026-10-02-work-claims.sql) and
   released there too; a row another session inserted there directly also refuses your acquire. Do not keep a second claim
   procedure: the endpoint is the only writer a session needs.
-- CLOUD-CLAIM-FALLBACK-1 (2026-10-30): a GitHub cloud session (Copilot cloud agent, Quniverse custom agent) runs behind the cloud-agent
-  firewall and cannot resolve qnfo-deploy-guard.q08.workers.dev. On 2026-10-30 more than 40 such sessions ended as empty draft pull
-  requests titled "work claim unavailable" and were closed, so no issue was worked. An endpoint that gives no answer at all (DNS failure,
-  refused connection, a firewall notice) is an environment limit, not an `acquired:false` answer: read the open pull requests and `copilot/`
-  branches for the paths you will change (REST: `gh api "repos/QNFO/qnfo-workers/pulls?state=open&per_page=100"`), review the one that changes
-  the same file instead of writing a second, otherwise continue with a small change, and write "work-claim endpoint unreachable from the
-  cloud sandbox" in the pull request description. An `acquired:false` answer, a live secret lease and a `HOLD:` comment stay binding.
-- ASSIGN-COPILOT-ISSUES-1 (2026-10-30, owner directive): every new issue in every QNFO repository is assigned to GitHub Copilot with the
-  Quniverse custom agent, never to a person, by .github/workflows/assign-copilot-on-issue.yml (scripts/assign-copilot-sweep.mjs, secret
-  QNFO_GH_PAT; the workflow GITHUB_TOKEN cannot assign Copilot). The sweep also publishes this profile at QNFO/.github agents/. Only issues
-  written by an owner, member, collaborator or github-actions[bot] are assigned. Do not add per-repository copies of the workflow or of the secret.
 - Before you bump a worker's VERSION, list what main and the open PRs claim (REST: `gh pr list` is GraphQL, refused in
   sessions) and take a numeric core above the last line. version-bump-guard fails one that is not ahead (VERSION-AHEAD-1).
   ```
@@ -539,3 +528,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   a self-heal ledger copy, a repeated owner prompt) closes with the fact that resolved it: the hourly D1 workflow `issue-meta-fold` (fleet_tasks, :20) saves the before-state in
   `issue_fold_ledger` and closes through the triage row with "moot: ..." or "superseded by <id> ..." evidence. A new filer of such tickets gets a rule in that workflow and in
   `migrations/issue-hygiene.test.mjs`; never a trigger on `agent_issues` (AGENT-ISSUES-TRIGGER-DEPTH-1: D1 refuses writes whose trigger programs nest more than 10 levels).
+- ASSIGN-COPILOT-ISSUES-1 (2026-10-30, owner directive: "ALWAYS ASSIGN GITHUB COPILOT ... TO ALL NEW ISSUES ... NEVER ASSIGN ISSUES TO THE USER"): every new issue in every
+  QNFO repository is assigned to GitHub Copilot running the Quniverse custom agent, never to a person, by `.github/workflows/assign-copilot-on-issue.yml`
+  (`scripts/assign-copilot-sweep.mjs`, secret `QNFO_GH_PAT`; the workflow `GITHUB_TOKEN` cannot assign Copilot). The sweep also publishes the profile at
+  `QNFO/.github` `agents/`. It is bounded: only issues written by an owner, member, collaborator or `github-actions[bot]`, created in the look-back window,
+  never one Copilot ever had, at most `--max` per run. A session that cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is
+  removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1 (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository
+  copies of the workflow or of the secret.
