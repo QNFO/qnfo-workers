@@ -4,6 +4,12 @@ Version 2026-09-29 · owner `qnfo-ops` · canonical store `R2 qnfo-skills/prompt
 Machine-readable sibling: `prompt-stores/stock-prompts-fleet-2026-09-29.json`
 Schema: DeepChat `PromptSchema` (see `prompt-stores/README.md`). Int timestamps mandatory.
 
+All commands also load the [shared operating library](agent-library/README.md)
+(`FLEET-SHARED-LIBRARY-1`); discover task-specific standards through the
+[central directory](README.md) and [catalog](agent-catalog.json). This source
+pointer does not update the historical R2/client copies by itself; verify a
+consumer's loaded revision before reporting instruction rollout.
+
 ---
 
 ## 0. The loop grammar

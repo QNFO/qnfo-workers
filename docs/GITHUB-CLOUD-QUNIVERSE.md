@@ -4,6 +4,17 @@ Charter pillar: **autonomy**. GitHub cloud sessions are engineering clients,
 not fleet runtime dependencies. Existing Cloudflare loops remain responsible
 for recurring work.
 
+## Common instructions and discovery
+
+All clients use [the shared operating library](agent-library/README.md),
+not a separate GitHub-only doctrine. [The documentation directory](README.md),
+[complete index](INDEX.md), [catalog](agent-catalog.json) and
+[llms.txt](../llms.txt) expose the system documentation to agents with or
+without a checkout. Pin retrieval to one commit and verify catalog hashes.
+The Quniverse profile consumes these same entry points. External tools and
+deployed fleet agents need verified client-side adoption; publishing the
+library alone does not establish that they loaded it.
+
 ## Two independent failures
 
 The GitHub API read on 2026-10-25 confirmed that `QNFO/qnfo-workers` is
