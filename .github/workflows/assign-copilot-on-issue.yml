@@ -1,0 +1,77 @@
+name: assign-copilot-on-issue
+
+# ASSIGN-COPILOT-ISSUES-1 (2026-10-30, owner directive, pillar autonomy): every new issue in every QNFO repository is assigned to GitHub Copilot
+# running the Quniverse custom agent (.github/agents/quniverse.agent.md), and no issue is ever assigned to a person.
+#
+# ONE WORKFLOW FOR THE WHOLE ORGANIZATION. Assigning Copilot needs a user token: the workflow GITHUB_TOKEN is refused (GitHub docs, "Using Copilot
+# cloud agent via the API"). The fleet's user credential is the repository secret QNFO_GH_PAT, which exists only in this repository, and CLAUDE.md
+# forbids copying a sibling credential into other repositories. So scripts/assign-copilot-sweep.mjs reads every active QNFO repository from here,
+# assigns each new trusted issue, and publishes the agent profile at organization level (QNFO/.github agents/quniverse.agent.md) so that
+# custom_agent resolves in every repository. A workflow in each repository could only hold GITHUB_TOKEN and would never start a session.
+#
+# CADENCE (SCHEDULE-EVENT-NEVER-FIRES-1): `issues` fires at once for an issue filed here with a user credential. `workflow_run` chained off
+# remediation-consumer (it completes every few minutes) is the load-bearing cadence for every other repository and for issues filed with
+# GITHUB_TOKEN (ci-watchdog), which never fire `issues`. The cron is an opportunistic extra.
+#
+# LOOP SAFETY: the sweep writes no file and files no issue, and remediation-consumer does not listen to this workflow, so the workflow_run chain
+# is acyclic. The script exits 0 on every failure (it prints ::warning:: lines and one RESULT_JSON line), so a failed sweep cannot file a
+# WORKFLOW-FAILED-1 issue that the next sweep would assign again.
+#
+# BACKFILL BY HAND: Run workflow with hours (for example 720) and max. An issue Copilot was ever assigned to is never assigned again.
+# Style: step names colon-free, no heredocs, no inline python, inputs travel through env (workflow-lint.py).
+
+on:
+  issues:
+    types: [opened]
+  workflow_run:
+    workflows: ["remediation-consumer"]
+    types: [completed]
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "Look-back window in hours (default 24; raise it to backfill older open issues)"
+        required: false
+        default: "24"
+      max:
+        description: "Most assignments in this run (default 25)"
+        required: false
+        default: "25"
+      mode:
+        description: "live (default) or dry (reads only)"
+        required: false
+        type: choice
+        default: live
+        options:
+          - live
+          - dry
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assign-copilot-on-issue
+  cancel-in-progress: false
+
+jobs:
+  assign:
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_PAT_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      IN_HOURS: ${{ github.event.inputs.hours }}
+      IN_MAX: ${{ github.event.inputs.max }}
+      IN_MODE: ${{ github.event.inputs.mode }}
+      ISSUE_REPO: ${{ github.event.issue && github.repository || '' }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Assign Copilot to new issues
+        run: node scripts/assign-copilot-sweep.mjs --hours "${IN_HOURS:-24}" --max "${IN_MAX:-25}" --mode "${IN_MODE:-live}"
