@@ -41,6 +41,11 @@ as a substitute for fleet credentials.
 Cloudflare API access does not replace the fleet's change controls. Take a
 work claim before editing files or working an issue, inspect the fleet graph
 before dependency changes, and deploy only through the canonical workflow.
+If the claim endpoint cannot be reached from this sandbox, follow
+CLAIM-UNREACHABLE-1 in `CLAUDE.md`: check the open pull requests for the same
+paths, open one non-draft pull request with the change, and name the
+unreachable claim in its body. Never leave an empty or draft pull request as
+the result of an issue.
 Do not upload Worker bundles directly through MCP. Put applicable D1 changes
 in CI-applied migrations rather than applying them a second time by hand.
 Use existing allowlisted workflows for operations they already own.

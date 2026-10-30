@@ -138,6 +138,14 @@ because each one was broken at least once; the linked issue holds the evidence.
 - The claim is written to the D1 ledger `qnfo-audit.work_claims` (WORK-CLAIMS-1, migrations/2026-10-02-work-claims.sql) and
   released there too; a row another session inserted there directly also refuses your acquire. Do not keep a second claim
   procedure: the endpoint is the only writer a session needs.
+- CLAIM-UNREACHABLE-1 (2026-10-30): a claim endpoint that cannot be reached (DNS failure, a firewall refusal such as the GitHub cloud sandbox's host
+  allowlist, or a timeout on three tries a few minutes apart) is an operational blocker, never a stop and never a reason to open an empty or draft pull
+  request: the 2026-10-30 cloud-agent run left 67 draft pull requests (#5294 to #5363), most with no file changed, for exactly this. Run the check the claim
+  exists for instead. For every path you will change, list the open pull requests that touch it (`gh api "repos/QNFO/qnfo-workers/pulls?state=open&per_page=100"`
+  then `.../pulls/<n>/files`) and `git log origin/main -5 -- <path>`; take the path only when no open pull request changes it, otherwise review that one. Work on a branch of
+  your own and open one non-draft pull request that contains the change; write `work claim unreachable: <the exact error>` in its body, and retry the claim before you
+  merge. When the endpoint answers with a `holder`, that holder wins as before. A pull request with no changed file is not a result: close it and state the blocker on
+  the issue. This moves no other limit: the secret lock, the canonical deploy path, VERSION-AHEAD-1 and the mirror still apply, and it never licenses a hand deploy.
 - Before you bump a worker's VERSION, list what main and the open PRs claim (REST: `gh pr list` is GraphQL, refused in
   sessions) and take a numeric core above the last line. version-bump-guard fails one that is not ahead (VERSION-AHEAD-1).
   ```
