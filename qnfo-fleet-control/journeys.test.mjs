@@ -15,7 +15,8 @@ if (a < 0 || b < a) throw new Error("FLEET-JOURNEYS-2 markers not found");
 globalThis.__tel = [];
 globalThis.__tf = async (url, opts) => {
   if (/telemetry\/query$/.test(url)) return new Response(JSON.stringify({ success: true, result: { events: globalThis.__tel } })); const m = /qnfo-workers\/main\/([a-z0-9-]+)\/worker\.js/.exec(url); try { return new Response(readFileSync(new URL("../" + m[1] + "/worker.js", import.meta.url), "utf8")); } catch (e) { return new Response("", { status: 404 }); } };
-const M = new Function("var VERSION = '0.27.0-test'; var timedFetch = globalThis.__tf;\n" + src.slice(a, b) + "\nreturn { journeyTick, journeysStatus, jrnParseSse, jrnAgeMin, jrnAnchor };")();
+const closeGuard = src.slice(src.indexOf("async function closeBlockedByContract("), src.indexOf("async function improvementLoopTick("));
+const M = new Function("var VERSION = '0.27.0-test'; var timedFetch = globalThis.__tf;\n" + closeGuard + "\n" + src.slice(a, b) + "\nreturn { journeyTick, journeysStatus, jrnParseSse, jrnAgeMin, jrnAnchor };")();
 
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 400))); } };
@@ -31,6 +32,7 @@ function mkDb() {
   s.exec(`CREATE TABLE journey_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, runner TEXT NOT NULL, journey TEXT NOT NULL, ok INTEGER NOT NULL, steps INTEGER, failed INTEGER, ms INTEGER, failed_json TEXT, path_json TEXT, healed_json TEXT, version TEXT);
   CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, close_channel TEXT, created_at INTEGER, updated_at INTEGER);
   CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, close_evidence TEXT);
+  CREATE TABLE remediation_contracts (issue_id INTEGER, status TEXT, last_verdict TEXT);
   CREATE TRIGGER t AFTER INSERT ON agent_issues BEGIN INSERT INTO issue_triage (issue_id) VALUES (NEW.id); END;
   CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
   INSERT INTO metric_registry (metric) VALUES ('fleet_journeys_failing');
@@ -123,6 +125,20 @@ db.raw.prepare("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'g
 await M.journeyTick(mkEnv(db, NOW + 4800e3), { now: NOW + 4800e3 });
 iss = q(db, "SELECT a.status, a.close_channel, t.close_evidence FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id");
 ok(iss[0].status === "closed" && iss[0].close_channel === "auto-recovery" && /passed all 4 steps/.test(iss[0].close_evidence) && /qnfo-gateway 200/.test(iss[0].close_evidence), "closes on recovery with the passing path as evidence", iss[0]);
+
+for (const verdict of ["fail", "vacuous-probe-result", "probe-error", "probe-not-machine-executable", "probe-same-account-host"]) {
+  const d = mkDb();
+  await M.journeyTick(mkEnv(d, NOW, { page: true }), { now: NOW });
+  const id = q(d, "SELECT id FROM agent_issues")[0].id;
+  d.raw.prepare("INSERT INTO remediation_contracts VALUES (?, 'active', ?)").run(id, verdict);
+  d.raw.exec("CREATE TRIGGER forbid_close BEFORE UPDATE ON agent_issues WHEN NEW.status = 'closed' AND EXISTS (SELECT 1 FROM remediation_contracts WHERE issue_id = NEW.id AND status IN ('active', 'holding') AND last_verdict <> 'pass') BEGIN SELECT RAISE(ABORT, 'close-while-contract-fails'); END");
+  const recovered = await M.journeyTick(mkEnv(d, NOW + 1200e3), { now: NOW + 1200e3 });
+  const row = q(d, "SELECT a.status, t.close_evidence FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id")[0];
+  ok(recovered.failing.length === 0 && row.status === "open" && row.close_evidence === null, verdict + ": passing journey leaves blocked issue and evidence untouched");
+  d.raw.exec("UPDATE remediation_contracts SET last_verdict = 'pass'");
+  await M.journeyTick(mkEnv(d, NOW + 2400e3), { now: NOW + 2400e3 });
+  ok(q(d, "SELECT status FROM agent_issues")[0].status === "closed", verdict + ": passing contract permits later evidence-backed closure");
+}
 
 // 4. Other broken hops: a lock left behind, a blind census, a stale loop each fail their own journey.
 for (const [k, j] of [["release", "lock-roundtrip"], ["blind", "binding-census"], ["stale", "loop-heartbeats"]]) {

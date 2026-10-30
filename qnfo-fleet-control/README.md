@@ -8,6 +8,16 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
+## JOURNEY-CLOSE-CONTRACT-AWARE-1 (source 0.58.1-journey-contract)
+
+When a journey recovers, `jrnIssue` calls the shared `closeBlockedByContract`
+helper with the actual audit database before writing close evidence or closing
+its issue. A failing remediation contract keeps both the issue and its existing
+evidence unchanged; closure can proceed after the contract passes. The journey
+probe still runs, so a close guard does not hide operational recovery or stop
+subsequent verification. Canonical deployment and live closing-probe evidence,
+not the source version, establish rollout.
+
 ## BREACH-DOCTOR-1 (0.52.0, reviewed in 0.53.0 BREACH-DOCTOR-FIX-1; pillar autonomy; agent_issues 1000266)
 
 `breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
