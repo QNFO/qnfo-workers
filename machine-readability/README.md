@@ -8,6 +8,18 @@ so agents, ops-exec, kaizen and Cloudflare advisors can (a) discover what exists
 component is for and how to drive it, (c) map issues to products, and (d) improve configurations -
 without reading human prose or guessing.
 
+## Shared documentation bootstrap
+
+All agent clients use the repository's [llms.txt](../llms.txt),
+[central directory](../docs/README.md), [complete index](../docs/INDEX.md)
+and [machine-readable catalog](../docs/agent-catalog.json) to discover the
+[shared operating library](../docs/agent-library/README.md) and task-specific
+standards. Pin one Git revision and verify library/bootstrap hashes before
+caching. Service manifests and runtime skill/context adapters should link
+to this common source rather than copying instructions. A repository link
+does not establish that an existing deployed service already loaded it;
+adoption requires the consumer's version/contract readback.
+
 ## Layers
 
 1. **Self-description** - every service publishes a JSON document matching

@@ -1,0 +1,1932 @@
+{
+  "schema_version": 1,
+  "contract": "FLEET-SHARED-LIBRARY-1",
+  "library_version": "1.0.0",
+  "repository": "QNFO/qnfo-workers",
+  "retrieval": "Resolve main to one commit; replace main in every URL with that commit. SHA-256 covers bootstrap/library bytes where present; other documents rely on the pinned Git revision.",
+  "authority": "Inventory is discovery, not adoption or proof of live state. Read CLAUDE.md and the charter/doctrine precedence rules.",
+  "entrypoints": [
+    "CLAUDE.md",
+    "AGENTS.md",
+    ".github/copilot-instructions.md",
+    ".github/agents/quniverse.agent.md",
+    "llms.txt",
+    "docs/README.md",
+    "docs/agent-library/README.md"
+  ],
+  "documents": [
+    {
+      "path": ".github/agents/quniverse.agent.md",
+      "title": ".github/agents/quniverse.agent.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/.github/agents/quniverse.agent.md"
+    },
+    {
+      "path": ".github/copilot-instructions.md",
+      "title": "Copilot instructions for qnfo-workers (GitHub cloud agent, Copilot code review, Copilot Chat)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/.github/copilot-instructions.md"
+    },
+    {
+      "path": "AGENTS.md",
+      "title": "Agent instructions for qnfo-workers",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/AGENTS.md"
+    },
+    {
+      "path": "CLAUDE.md",
+      "title": "qnfo-workers: rules for agent sessions",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/CLAUDE.md"
+    },
+    {
+      "path": "README.md",
+      "title": "qnfo-workers",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/README.md"
+    },
+    {
+      "path": "TOKEN-BOOTSTRAP.md",
+      "title": "QNFO Worker Token Bootstrap",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/TOKEN-BOOTSTRAP.md"
+    },
+    {
+      "path": "agent-orchestrator/README.md",
+      "title": "agent-orchestrator",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/agent-orchestrator/README.md"
+    },
+    {
+      "path": "audits/2026-09-13-FLEET-CONSOLIDATION-PLAN.md",
+      "title": "Fleet Consolidation Plan — 2026-09-13",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/2026-09-13-FLEET-CONSOLIDATION-PLAN.md"
+    },
+    {
+      "path": "audits/2026-10-01-credential-rotation-runbook.md",
+      "title": "ROTATE-EXPOSED-CREDENTIALS-1 — execution runbook (#1676, CRITICAL)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/2026-10-01-credential-rotation-runbook.md"
+    },
+    {
+      "path": "audits/2026-10-01-master-build-out-backlog-v2.md",
+      "title": "QNFO QUNIVERSE — MASTER BUILD-OUT BACKLOG v2",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/2026-10-01-master-build-out-backlog-v2.md"
+    },
+    {
+      "path": "audits/2026-10-01-master-build-out-backlog-v3.md",
+      "title": "QNFO QUNIVERSE — MASTER BUILD-OUT BACKLOG v3",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/2026-10-01-master-build-out-backlog-v3.md"
+    },
+    {
+      "path": "audits/2026-10-02-ipatent-audit.md",
+      "title": "iPatent audit and redesign plan (2026-10-02)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/2026-10-02-ipatent-audit.md"
+    },
+    {
+      "path": "audits/2026-10-13-gha-audit.md",
+      "title": "GHA-AUDIT-1: GitHub Actions audit, 2026-10-13",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/2026-10-13-gha-audit.md"
+    },
+    {
+      "path": "audits/BRANCH-TRIAGE-2026-09-23.md",
+      "title": "Branch triage — 2026-09-23 (BRANCH-SALVAGE-1 / BRANCH-TRIAGE-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/BRANCH-TRIAGE-2026-09-23.md"
+    },
+    {
+      "path": "audits/applier-rot-reconciliation-2026-09-29.md",
+      "title": "APPLIER-ROT reconciliation — 2026-09-29",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/applier-rot-reconciliation-2026-09-29.md"
+    },
+    {
+      "path": "audits/closeout-2026-10-17-fleet-remediation.md",
+      "title": "Closeout — fleet-wide error audit and remediation, 2026-10-17",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/closeout-2026-10-17-fleet-remediation.md"
+    },
+    {
+      "path": "audits/ops-probe-2026-10-24.md",
+      "title": "qnfo-ops live tool probe — 2026-10-24T15:16Z",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/audits/ops-probe-2026-10-24.md"
+    },
+    {
+      "path": "calendar-api/README.md",
+      "title": "calendar-api Worker (QNFO.OPS.010)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/calendar-api/README.md"
+    },
+    {
+      "path": "docs/2026-09-08-exec-probe.md",
+      "title": "2026-09-08 — exec probe (Sanna ops session)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/2026-09-08-exec-probe.md"
+    },
+    {
+      "path": "docs/AI-GATEWAY-UNIFIED-BILLING.md",
+      "title": "AI Gateway Unified Billing — single Cloudflare endpoint for agentic/coding LLM traffic",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AI-GATEWAY-UNIFIED-BILLING.md"
+    },
+    {
+      "path": "docs/AI-SEARCH-INSTANCES.md",
+      "title": "AI Search instances and the 2026-11-01 usage billing (RM-AISEARCH-GA-MIGRATE-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AI-SEARCH-INSTANCES.md"
+    },
+    {
+      "path": "docs/AI-USE-POLICY.md",
+      "title": "AI use policy, AI-literacy evidence and AI Act classification record — DRAFT for owner review",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AI-USE-POLICY.md"
+    },
+    {
+      "path": "docs/ARCHITECTURE-CONSTRAINTS-2026-10-19.md",
+      "title": "Measured architecture constraints — 2026-10-19",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ARCHITECTURE-CONSTRAINTS-2026-10-19.md"
+    },
+    {
+      "path": "docs/ARCHITECTURE-SELF-MODEL.md",
+      "title": "ARCHITECTURE-SELF-MODEL — the fleet's machine-readable picture of itself",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ARCHITECTURE-SELF-MODEL.md"
+    },
+    {
+      "path": "docs/ARCHIVE-PAGES-UNDEPLOYABLE-1.md",
+      "title": "ARCHIVE-PAGES-UNDEPLOYABLE-1",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ARCHIVE-PAGES-UNDEPLOYABLE-1.md"
+    },
+    {
+      "path": "docs/AUDIT-LOG.md",
+      "title": "The agent action audit log (BP26-AUDIT-LOG-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AUDIT-LOG.md"
+    },
+    {
+      "path": "docs/AUTONOMOUS-OPERATION-DOCTRINE.md",
+      "title": "Autonomous Operation Doctrine (DOCTRINE-1, revision 5)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AUTONOMOUS-OPERATION-DOCTRINE.md"
+    },
+    {
+      "path": "docs/AUTONOMOUS-RESEARCH-PIPELINE.md",
+      "title": "QNFO Autonomous Research Pipeline — Architecture & Operating Policy",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AUTONOMOUS-RESEARCH-PIPELINE.md"
+    },
+    {
+      "path": "docs/AUTONOMOUS-USE-CASES.md",
+      "title": "QNFO Quniverse — Autonomous Use Cases & Best Practices",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AUTONOMOUS-USE-CASES.md"
+    },
+    {
+      "path": "docs/AUTONOMY-DECISION-POLICY.md",
+      "title": "AUTONOMY-DECISION-POLICY-1: a human is an override, never a dependency",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AUTONOMY-DECISION-POLICY.md"
+    },
+    {
+      "path": "docs/BEST-PRACTICES-2026.md",
+      "title": "Fleet best-practice catalogue 2026 (BP26)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BEST-PRACTICES-2026.md"
+    },
+    {
+      "path": "docs/BP26-EDGE-SECURITY-1.md",
+      "title": "BP26-EDGE-SECURITY-1: secure headers, Turnstile on public forms, per-address limit on the fleet's OTP endpoints",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BP26-EDGE-SECURITY-1.md"
+    },
+    {
+      "path": "docs/BP26-PAPER-PIDS-AND-FORECAST-HYGIENE.md",
+      "title": "BP26-PAPER-PIDS-1 and BP26-FORECAST-HYGIENE-1: research, design, state (2026-10-28)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BP26-PAPER-PIDS-AND-FORECAST-HYGIENE.md"
+    },
+    {
+      "path": "docs/BP26-PROMPT-INJECTION.md",
+      "title": "BP26-PROMPT-INJECTION-1 and BP26-NO-TRACKING-1: research and state (2026-10-28)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BP26-PROMPT-INJECTION.md"
+    },
+    {
+      "path": "docs/BP26-SECURITY-CLUSTER.md",
+      "title": "BP26 security cluster",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BP26-SECURITY-CLUSTER.md"
+    },
+    {
+      "path": "docs/BUSINESS-PLAN.md",
+      "title": "QNFO / QUNIVERSE — BUSINESS PLAN v1.1 (2026-09-26, aligned 2026-10-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BUSINESS-PLAN.md"
+    },
+    {
+      "path": "docs/CAPABILITY-ADVERTISING-CONTRACT.md",
+      "title": "CAPABILITY-ADVERTISING-CONTRACT-1 (v1.0, 2026-09-19)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CAPABILITY-ADVERTISING-CONTRACT.md"
+    },
+    {
+      "path": "docs/CF-ACCESS-ROLLOUT-1277.md",
+      "title": "CF-ACCESS-ROLLOUT-1277: putting Cloudflare Access in front of the admin surface",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CF-ACCESS-ROLLOUT-1277.md"
+    },
+    {
+      "path": "docs/CLAUDE-CODE-CLOUD-VS-QUNIVERSE.md",
+      "title": "Claude Code cloud execution vs the Quniverse (2026-10-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLAUDE-CODE-CLOUD-VS-QUNIVERSE.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-01-NO-CLAUDE-RUNTIME.md",
+      "title": "Closeout, 2026-10-01: no Claude dependency at runtime",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-01-NO-CLAUDE-RUNTIME.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-01-ROUND2.md",
+      "title": "Closeout, 2026-10-01 round 2: drain without waiting on the owner",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-01-ROUND2.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-01.md",
+      "title": "Closeout, 2026-10-01 autonomy and drain session",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-01.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-02.md",
+      "title": "Closeout 2026-10-02: every open issue, and identity upkeep on Cloudflare",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-02.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-03-OUTLOOK-OWNER-QUEUE.md",
+      "title": "Closeout 2026-10-03: Outlook.com mail via Microsoft Graph, and the owner queue from MCP clients",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-03-OUTLOOK-OWNER-QUEUE.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-17-autonomy-organs.md",
+      "title": "CLOSEOUT — 2026-10-17 — autonomy organs (EVOLVE-1) and the planner starvation",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-17-autonomy-organs.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-17.md",
+      "title": "CLOSEOUT — 2026-10-17 (session oper-20261017)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-17.md"
+    },
+    {
+      "path": "docs/CLOSEOUT-2026-10-19-handoff-incomplete-items.md",
+      "title": "Closeout: every incomplete item in `docs/` HANDOFFs, and R2 coverage in Basin Catalog (2026-10-19)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOSEOUT-2026-10-19-handoff-incomplete-items.md"
+    },
+    {
+      "path": "docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md",
+      "title": "Cloudflare Self-Knowledge Integration for QNFO",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md"
+    },
+    {
+      "path": "docs/CLOUDFLARE-INTEGRATION-VERIFICATION-2026-09-07.md",
+      "title": "Cloudflare Integration — Verification Follow-up (2026-09-07)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CLOUDFLARE-INTEGRATION-VERIFICATION-2026-09-07.md"
+    },
+    {
+      "path": "docs/CODE-AGENT-CONSOLE.md",
+      "title": "Code-agent console (CODE-AGENT-CONSOLE-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CODE-AGENT-CONSOLE.md"
+    },
+    {
+      "path": "docs/CODE-REACH-PROGRAM.md",
+      "title": "Research code as reach (CODE-REACH-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CODE-REACH-PROGRAM.md"
+    },
+    {
+      "path": "docs/COMPOSIO-INTEGRATION.md",
+      "title": "Composio and the DeepSeek harness (COMPOSIO-1, DSH-LESSONS-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/COMPOSIO-INTEGRATION.md"
+    },
+    {
+      "path": "docs/CONTENT-PIPELINE.md",
+      "title": "The content pipeline (CONTENT-PIPELINE-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CONTENT-PIPELINE.md"
+    },
+    {
+      "path": "docs/COST-OPTIMIZED-MODEL-CALLS.md",
+      "title": "COST-OPTIMIZED MODEL-CALL STACK (fleet v2 — IMPLEMENTED)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/COST-OPTIMIZED-MODEL-CALLS.md"
+    },
+    {
+      "path": "docs/CRON-RATE-CEILING-1.md",
+      "title": "CRON-RATE-CEILING-1 — Worker cron rate ceiling",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CRON-RATE-CEILING-1.md"
+    },
+    {
+      "path": "docs/D1-RESTORE-RUNBOOK.md",
+      "title": "D1 restore runbook (D1-RESTORE-RUNBOOK-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/D1-RESTORE-RUNBOOK.md"
+    },
+    {
+      "path": "docs/DATA-PLANE-DISPOSITIONS-2026-10-01.md",
+      "title": "Data plane dispositions (2026-10-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DATA-PLANE-DISPOSITIONS-2026-10-01.md"
+    },
+    {
+      "path": "docs/DEGENERATE-TEXT.md",
+      "title": "DEGENERATE-TEXT-1: a model loop never stays on a paper page",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DEGENERATE-TEXT.md"
+    },
+    {
+      "path": "docs/DEPLOY-RUNBOOK-2026-09-07.md",
+      "title": "DEPLOY RUNBOOK — 2026-09-07 (audit + machine-readability + CF capability integration)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DEPLOY-RUNBOOK-2026-09-07.md"
+    },
+    {
+      "path": "docs/DETERMINISTIC-GATE-AUDIT.md",
+      "title": "Deterministic gate audit (RM-DETERMINISTIC-GATE-AUDIT-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DETERMINISTIC-GATE-AUDIT.md"
+    },
+    {
+      "path": "docs/DISSEMINATION-AUDIT.md",
+      "title": "Dissemination and open-data audit (OPEN-DATA-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DISSEMINATION-AUDIT.md"
+    },
+    {
+      "path": "docs/DOCTRINE-KERNEL.md",
+      "title": "Doctrine kernel (DOCTRINE-1 kernel, owner version 8.2.1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DOCTRINE-KERNEL.md"
+    },
+    {
+      "path": "docs/DOI-ZENODO-INVENTORY.md",
+      "title": "Closed-registry and DOI inventory (DOI-ZENODO-INVENTORY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DOI-ZENODO-INVENTORY.md"
+    },
+    {
+      "path": "docs/DOMAINS.md",
+      "title": "Which domain a surface lives on (DOMAIN-PLANE-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/DOMAINS.md"
+    },
+    {
+      "path": "docs/ENSEMBLE-HANDOFF.md",
+      "title": "HANDOFF: ENSEMBLE-POLICY-1 (agent_issues 1918), written 2026-10-03",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ENSEMBLE-HANDOFF.md"
+    },
+    {
+      "path": "docs/ENSEMBLE-POLICY.md",
+      "title": "Ensemble policy for fleet writing (ENSEMBLE-POLICY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ENSEMBLE-POLICY.md"
+    },
+    {
+      "path": "docs/EXEC-2026-09-08-listIssues-fix-pending.md",
+      "title": "EXEC-2026-09-08 — Backlog drain executed; listIssues one-line fix (pending deploy)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/EXEC-2026-09-08-listIssues-fix-pending.md"
+    },
+    {
+      "path": "docs/EXUVIA-INTEGRATION.md",
+      "title": "Exuvia integration (EXUVIA-1, EXUVIA-HANDOFF-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/EXUVIA-INTEGRATION.md"
+    },
+    {
+      "path": "docs/FIX-2026-09-07-ops_issues_list-await.md",
+      "title": "FIX-2026-09-07 — ops_issues_list returns 0 rows (missing await on D1 .all())",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FIX-2026-09-07-ops_issues_list-await.md"
+    },
+    {
+      "path": "docs/FLEET-BUDGET.md",
+      "title": "FLEET-BUDGET (canonical, 2026-09-26) -- the consolidation wave plan",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-BUDGET.md"
+    },
+    {
+      "path": "docs/FLEET-GRAPH.md",
+      "title": "FLEET-GRAPH-1: the fleet code and topology graph",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-GRAPH.md"
+    },
+    {
+      "path": "docs/FLEET-NODE-MAP.md",
+      "title": "FLEET-NODE-MAP (canonical, 2026-09-26)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-NODE-MAP.md"
+    },
+    {
+      "path": "docs/FLEET-REPORT-CARD.md",
+      "title": "FLEET REPORT CARD — Objective Function & Constraints (canonical)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-REPORT-CARD.md"
+    },
+    {
+      "path": "docs/GITHUB-CLOUD-QUNIVERSE.md",
+      "title": "GitHub cloud access to Quniverse",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/GITHUB-CLOUD-QUNIVERSE.md"
+    },
+    {
+      "path": "docs/GRADUAL-DEPLOYS.md",
+      "title": "Gradual deploys with automatic rollback (BP26-GRADUAL-DEPLOYS-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/GRADUAL-DEPLOYS.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-03-PERSONAL-TWIN-AND-PRIORITY-QUEUE.md",
+      "title": "Handoff 2026-10-03: personal twin + priority queue (session_0166enPmfw7U4JuwhPciSCSG)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-03-PERSONAL-TWIN-AND-PRIORITY-QUEUE.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-18-VERIFICATION-AUDIT.md",
+      "title": "Handoff — remediation verification audit (2026-10-18)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-18-VERIFICATION-AUDIT.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-18-papers-and-fleet.md",
+      "title": "Handoff — 2026-10-18",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-18-papers-and-fleet.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-18-red-gate.md",
+      "title": "Handoff — 2026-10-18",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-18-red-gate.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-18.md",
+      "title": "HANDOFF — 2026-10-18 (autonomy + red-drain closeout)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-18.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-19-ops-thread.md",
+      "title": "Handoff — qnfo-ops thread, 2026-10-19 (closed 08:2x UTC)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-19-ops-thread.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-19-personal-companion.md",
+      "title": "Handoff: the Personal Companion runs on the fleet (2026-10-19)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-19-personal-companion.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-19-quick-read.md",
+      "title": "Handoff: Quick Read on the living papers (2026-10-19)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-19-quick-read.md"
+    },
+    {
+      "path": "docs/HANDOFF-2026-10-19-red-drain.md",
+      "title": "HANDOFF — 2026-10-19 (handoff backlog + R2 Basin Catalog + red drain)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/HANDOFF-2026-10-19-red-drain.md"
+    },
+    {
+      "path": "docs/KILL-SWITCH-DRILL.md",
+      "title": "Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/KILL-SWITCH-DRILL.md"
+    },
+    {
+      "path": "docs/LEASES-FENCING.md",
+      "title": "Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/LEASES-FENCING.md"
+    },
+    {
+      "path": "docs/MODEL-MATRIX.md",
+      "title": "MODEL-MATRIX-1: which Cloudflare model for which job",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MODEL-MATRIX.md"
+    },
+    {
+      "path": "docs/OPS-CLIENT-KEY-SETUP.md",
+      "title": "OPS_CLIENT_KEY Setup for ChatBox / SannaBot / Android",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/OPS-CLIENT-KEY-SETUP.md"
+    },
+    {
+      "path": "docs/OPS-EXEC-MULTI-CLIENT-GUIDE.md",
+      "title": "QNFO Quniverse — Autonomous Use Cases & Best Practices",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/OPS-EXEC-MULTI-CLIENT-GUIDE.md"
+    },
+    {
+      "path": "docs/OUTPUT-QUALITY-LEDGER.md",
+      "title": "Output quality ledger (OUTPUT-QUALITY-LEDGER-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/OUTPUT-QUALITY-LEDGER.md"
+    },
+    {
+      "path": "docs/PAPER-AUTHORING-GUIDELINES.md",
+      "title": "Paper authoring guidelines: the plain-language standard (PLAIN-STANDARD-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PAPER-AUTHORING-GUIDELINES.md"
+    },
+    {
+      "path": "docs/PAPER-LEDGER.md",
+      "title": "Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PAPER-LEDGER.md"
+    },
+    {
+      "path": "docs/PATCH-ARTIFACT-DISPOSITIONS-2026-10-01.md",
+      "title": "PATCH artifact dispositions (PATCH-ARTIFACTS-RECONCILED-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PATCH-ARTIFACT-DISPOSITIONS-2026-10-01.md"
+    },
+    {
+      "path": "docs/PI-INTEGRATION.md",
+      "title": "Pi integration",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PI-INTEGRATION.md"
+    },
+    {
+      "path": "docs/PIPELINE-FLOW-POLICY-1.md",
+      "title": "PIPELINE-FLOW-POLICY-1",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PIPELINE-FLOW-POLICY-1.md"
+    },
+    {
+      "path": "docs/PLUSSING.md",
+      "title": "Plussing: every product gets better without being asked (PLUSSING-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PLUSSING.md"
+    },
+    {
+      "path": "docs/PORTFOLIO-OPERATIONS.md",
+      "title": "Portfolio operations (PORTFOLIO-OPS-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PORTFOLIO-OPERATIONS.md"
+    },
+    {
+      "path": "docs/PORTFOLIO.md",
+      "title": "The QNFO portfolio (QNFO-PORTFOLIO-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PORTFOLIO.md"
+    },
+    {
+      "path": "docs/PROBE-WRITE-DEAD-1.md",
+      "title": "PROBE-WRITE-DEAD-1 — the remediation verifier cannot write evidence",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PROBE-WRITE-DEAD-1.md"
+    },
+    {
+      "path": "docs/Q08-PUBLICATION-RECOVERY-2026-09-26.md",
+      "title": "Q08 publication recovery and preflight procedure",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/Q08-PUBLICATION-RECOVERY-2026-09-26.md"
+    },
+    {
+      "path": "docs/Q08-ROOT-CAUSE-2026-09-27.md",
+      "title": "Q08 root cause + remediation record (2026-09-27)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/Q08-ROOT-CAUSE-2026-09-27.md"
+    },
+    {
+      "path": "docs/Q08-ROUTE-1-CORRECTION-2026-09-27.md",
+      "title": "Q08-ROUTE-1 — correction to this PR's evidence (2026-09-27)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/Q08-ROUTE-1-CORRECTION-2026-09-27.md"
+    },
+    {
+      "path": "docs/QUNIVERSE-BACKLOG.md",
+      "title": "Quniverse fleet backlog",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/QUNIVERSE-BACKLOG.md"
+    },
+    {
+      "path": "docs/QUNIVERSE-CHARTER.md",
+      "title": "The Quniverse charter (QUNIVERSE-CHARTER-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/QUNIVERSE-CHARTER.md"
+    },
+    {
+      "path": "docs/QUNIVERSE-PRD.md",
+      "title": "Cloudflare Quniverse product requirements",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/QUNIVERSE-PRD.md"
+    },
+    {
+      "path": "docs/QWAV-CROSS-SIMULATOR.md",
+      "title": "qwav demo cross-check (RM-QWAV-CROSS-SIMULATOR-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/QWAV-CROSS-SIMULATOR.md"
+    },
+    {
+      "path": "docs/RADAR-TITLE-CLEANUP-2026-10-04.md",
+      "title": "RADAR-TITLE-NOISE-1 one-off cleanup (2026-10-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/RADAR-TITLE-CLEANUP-2026-10-04.md"
+    },
+    {
+      "path": "docs/RADAR-TITLE-CLEANUP-2026-10-05.md",
+      "title": "Radar title cleanup 2026-10-05 (RADAR-TITLE-NOISE-2, #1885, pillar: personal)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/RADAR-TITLE-CLEANUP-2026-10-05.md"
+    },
+    {
+      "path": "docs/README.md",
+      "title": "Quniverse documentation directory",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/README.md",
+      "sha256": "564fb867e3f42799f65fb9d643fae386194c796f8091ea3ea91d41a9b5a99760"
+    },
+    {
+      "path": "docs/REGISTER-EXECUTION-ARCHITECTURE.md",
+      "title": "Register Execution Architecture (remediated 2026-09-09)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/REGISTER-EXECUTION-ARCHITECTURE.md"
+    },
+    {
+      "path": "docs/REPO-MAP.md",
+      "title": "Repository map (REPO-UNIFY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/REPO-MAP.md"
+    },
+    {
+      "path": "docs/REPO-UNIFICATION.md",
+      "title": "Repository unification (REPO-UNIFY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/REPO-UNIFICATION.md"
+    },
+    {
+      "path": "docs/RESEARCH-PROVENANCE.md",
+      "title": "Research provenance: how the fleet keeps the research record complete (RESEARCH-PROVENANCE-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/RESEARCH-PROVENANCE.md"
+    },
+    {
+      "path": "docs/RETENTION.md",
+      "title": "Data minimisation and retention policy — DRAFT for owner review",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/RETENTION.md"
+    },
+    {
+      "path": "docs/ROPA.md",
+      "title": "Record of processing activities (GDPR Art. 30) — DRAFT for owner review",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ROPA.md"
+    },
+    {
+      "path": "docs/SCOUT-ROADMAP-2026-10.md",
+      "title": "Scouted external work for the Qniverse roadmap (SCOUT-1, 2026-10-28)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SCOUT-ROADMAP-2026-10.md"
+    },
+    {
+      "path": "docs/SLA-AND-PATHS-1.md",
+      "title": "SLA-AND-PATHS-1 — every step carries an SLA and more than one path to done",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SLA-AND-PATHS-1.md"
+    },
+    {
+      "path": "docs/SLA-METRICS.md",
+      "title": "SLA metrics: what each figure counts (SLA-METRICS-1, SLA-STAGES-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SLA-METRICS.md"
+    },
+    {
+      "path": "docs/SLO-ERROR-BUDGETS.md",
+      "title": "SLOs, error budgets and automatic postmortems (BP26-SLO-ERROR-BUDGETS-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SLO-ERROR-BUDGETS.md"
+    },
+    {
+      "path": "docs/STOCK-PROMPTS.md",
+      "title": "QNFO Fleet Stock Prompts — reusable autonomous-execution commands",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/STOCK-PROMPTS.md"
+    },
+    {
+      "path": "docs/STRATEGY.md",
+      "title": "QNFO unified strategy (STRATEGY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/STRATEGY.md"
+    },
+    {
+      "path": "docs/TEMPO-POLICY-120M-5M-1.md",
+      "title": "TEMPO-POLICY-120M-5M-1 — the 120-minute cap and the 5-minute tick",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/TEMPO-POLICY-120M-5M-1.md"
+    },
+    {
+      "path": "docs/TRANSFORMATION-PROGRAM.md",
+      "title": "Quniverse transformation program (TRANSFORMATION-PROGRAM-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/TRANSFORMATION-PROGRAM.md"
+    },
+    {
+      "path": "docs/VALUE-FOR-MONEY.md",
+      "title": "Value for money (VALUE-FOR-MONEY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/VALUE-FOR-MONEY.md"
+    },
+    {
+      "path": "docs/WEBMCP.md",
+      "title": "WebMCP on the QNFO fleet (WEBMCP-FLEET-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/WEBMCP.md"
+    },
+    {
+      "path": "docs/WORKER-LOGS-CONTRACT.md",
+      "title": "worker_logs sampling contract (WORKER-LOGS-CONTRACT-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/WORKER-LOGS-CONTRACT.md"
+    },
+    {
+      "path": "docs/WORKERS-STANDARDS.md",
+      "title": "Workers standards (WORKERS-STANDARDS-DOC-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/WORKERS-STANDARDS.md"
+    },
+    {
+      "path": "docs/YOUTUBE-PIPELINE-COST.md",
+      "title": "YouTube Shorts pipeline: cost model and tool choices (YT-SERVER-1, 2026-10-27)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/YOUTUBE-PIPELINE-COST.md"
+    },
+    {
+      "path": "docs/YOUTUBE-PIPELINE.md",
+      "title": "YouTube pipeline from plain-language papers (YT-POC-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/YOUTUBE-PIPELINE.md"
+    },
+    {
+      "path": "docs/agent-library/README.md",
+      "title": "Shared fleet operating library",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/agent-library/README.md",
+      "sha256": "a2940f7377e6429e5fcfd493e59254962c81caff5ffeb28f95b7aa65a82fd41e"
+    },
+    {
+      "path": "docs/breach-doctor/ENGINE-DESIGN.md",
+      "title": "docs/breach-doctor/ENGINE-DESIGN.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/ENGINE-DESIGN.md"
+    },
+    {
+      "path": "docs/breach-doctor/FAMILY-CODE-MERGE.md",
+      "title": "docs/breach-doctor/FAMILY-CODE-MERGE.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/FAMILY-CODE-MERGE.md"
+    },
+    {
+      "path": "docs/breach-doctor/FAMILY-METRIC-CLASSIFICATION.md",
+      "title": "Metric-breach family: classification of every distinct metric (89) and the 94 open issues",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/FAMILY-METRIC-CLASSIFICATION.md"
+    },
+    {
+      "path": "docs/breach-doctor/FAMILY-METRIC.md",
+      "title": "METRIC-DOCTOR rules (family: METRIC-TRIGGER-*, METRIC-REGRESSION-1, METRIC-FIX-RELAPSED-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/FAMILY-METRIC.md"
+    },
+    {
+      "path": "docs/breach-doctor/FAMILY-PROBE-NEEDED.md",
+      "title": "PROBE-DOCTOR-1: family PROBE-NEEDED-1 and broken closing paths",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/FAMILY-PROBE-NEEDED.md"
+    },
+    {
+      "path": "docs/breach-doctor/FAMILY-TOOL-LOOP.md",
+      "title": "BREACH-DOCTOR-1 playbooks: tool, loop and owner-request families",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/FAMILY-TOOL-LOOP.md"
+    },
+    {
+      "path": "docs/breach-doctor/LOOP-MAP.md",
+      "title": "docs/breach-doctor/LOOP-MAP.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/LOOP-MAP.md"
+    },
+    {
+      "path": "docs/breach-doctor/PROBE-AUTHOR-HARDENING.md",
+      "title": "docs/breach-doctor/PROBE-AUTHOR-HARDENING.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/PROBE-AUTHOR-HARDENING.md"
+    },
+    {
+      "path": "docs/breach-doctor/README.md",
+      "title": "BREACH-DOCTOR-1: the fleet diagnoses and remediates its own breaches",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/breach-doctor/README.md"
+    },
+    {
+      "path": "docs/client-instructions/PROACTIVE-PROGRAMS-1.md",
+      "title": "docs/client-instructions/PROACTIVE-PROGRAMS-1.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/client-instructions/PROACTIVE-PROGRAMS-1.md"
+    },
+    {
+      "path": "docs/client-instructions/README.md",
+      "title": "Client instruction suite (2026-10-28)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/client-instructions/README.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-RESUME-publication.md",
+      "title": "PROMPT — Resume: unblock research publication (QNFO fleet)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-RESUME-publication.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-deploy-cleanup-closeout.md",
+      "title": "Closeout — merge branches, cleanup deployments, ensure workers up to date (2026-10-17)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-deploy-cleanup-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-fleet-closeout.md",
+      "title": "Fleet closeout — 2026-10-17",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-fleet-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-model-floor-and-github-failures.md",
+      "title": "CLOSEOUT — 2026-10-17 — GitHub failure modes + MODEL-FLOOR-1 (session chatbox-closeout-20261017)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-model-floor-and-github-failures.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-publication-pipeline-closeout.md",
+      "title": "Closeout — publication pipeline audit + efficiency fixes (2026-10-17)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-publication-pipeline-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-reach-direct-traffic-and-workers-bp-closeout.md",
+      "title": "Closeout — fleet dashboard direct-traffic visibility + Workers best practices (2026-10-17)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-reach-direct-traffic-and-workers-bp-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-tick-throughput-closeout.md",
+      "title": "Closeout — code-loop throughput and the two backlogs (2026-10-17)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-tick-throughput-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-17-trigger-depth-closeout.md",
+      "title": "Closeout — D1 trigger-depth deadlock and the 55-metric breach (2026-10-17)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-17-trigger-depth-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-18-feeds-by-functional-area-closeout.md",
+      "title": "Closeout — fleet dashboard and API feeds refactored by functional area (2026-10-18)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-18-feeds-by-functional-area-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-18-paper-pdf-typesetting-closeout.md",
+      "title": "Closeout — professional paper typesetting with full bibliographic information and author/affiliation (2026-10-18)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-18-paper-pdf-typesetting-closeout.md"
+    },
+    {
+      "path": "docs/closeouts/2026-10-19-headerless-migrations.md",
+      "title": "Headerless migrations audit (MIGRATION-HEADER-GUARD-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/closeouts/2026-10-19-headerless-migrations.md"
+    },
+    {
+      "path": "docs/dpia/email-agent.md",
+      "title": "DPIA — the server-side e-mail agent (qnfo-email, qnfo-email-orchestrator) — DRAFT for owner review",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/dpia/email-agent.md"
+    },
+    {
+      "path": "docs/dpia/ipatent.md",
+      "title": "DPIA — iPatent (qnfo-ipatent, ipatent.qnfo.org) — DRAFT for owner review",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/dpia/ipatent.md"
+    },
+    {
+      "path": "docs/dpia/personal-twin.md",
+      "title": "DPIA — the personal twin and companion (personal-api, personal-companion) — DRAFT for owner review",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/dpia/personal-twin.md"
+    },
+    {
+      "path": "docs/handoff/2026-10-19-closeout-2.md",
+      "title": "Closeout 2 and server-side handoff, 2026-10-19",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/2026-10-19-closeout-2.md"
+    },
+    {
+      "path": "docs/handoff/2026-10-19-closeout-3.md",
+      "title": "Closeout 3 and server-side handoff, 2026-10-19 to 2026-10-20",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/2026-10-19-closeout-3.md"
+    },
+    {
+      "path": "docs/handoff/2026-10-19-closeout.md",
+      "title": "Closeout and server-side handoff, 2026-10-19",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/2026-10-19-closeout.md"
+    },
+    {
+      "path": "docs/handoff/2026-10-26-closeout-4.md",
+      "title": "Closeout 4 and server-side handoff, 2026-10-26: BREACH-DOCTOR-1",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/2026-10-26-closeout-4.md"
+    },
+    {
+      "path": "docs/handoff/2026-10-28-failure-mode-audit.md",
+      "title": "Failure-mode audit, 2026-10-28 (read-only, 55 modes)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/2026-10-28-failure-mode-audit.md"
+    },
+    {
+      "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
+      "title": "COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md"
+    },
+    {
+      "path": "docs/handoff/issues/by-window-8-buckets.md",
+      "title": "COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/by-window-8-buckets.md"
+    },
+    {
+      "path": "docs/handoff/issues/rum-zero-13.md",
+      "title": "RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/rum-zero-13.md"
+    },
+    {
+      "path": "docs/keys/owner-api-keys.md",
+      "title": "Owner API keys: which exist, where they live, how they are issued",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/keys/owner-api-keys.md"
+    },
+    {
+      "path": "docs/license/README.md",
+      "title": "QNFO-ULA v2.1: Software Terms (draft for QNFO/license)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/license/README.md"
+    },
+    {
+      "path": "docs/license/for-QNFO-license/QNFO-ULA-v2.1.md",
+      "title": "QNFO Unified License Agreement (QNFO-ULA) — Version 2.1",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/license/for-QNFO-license/QNFO-ULA-v2.1.md"
+    },
+    {
+      "path": "docs/license/for-QNFO-license/README.md",
+      "title": "QNFO License Repository",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/license/for-QNFO-license/README.md"
+    },
+    {
+      "path": "docs/ops-governance/AUDT/ADR-storage-events-architecture-2026-09-02.md",
+      "title": "ADR: QNFO storage & events architecture (2026-09-02)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/AUDT/ADR-storage-events-architecture-2026-09-02.md"
+    },
+    {
+      "path": "docs/ops-governance/AUDT/FLEET-AUDIT-AND-ACT-PROCEDURE.md",
+      "title": "FLEET AUDIT & ACT PROCEDURE - automated review/audit/act/learn over ALL QNFO events and logs",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/AUDT/FLEET-AUDIT-AND-ACT-PROCEDURE.md"
+    },
+    {
+      "path": "docs/ops-governance/AUDT/autonomous-pipeline-audit-2026-09-01.md",
+      "title": "AUDT — Autonomous Cloud Research Pipeline Audit & Architecture Assessment (2026-09-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/AUDT/autonomous-pipeline-audit-2026-09-01.md"
+    },
+    {
+      "path": "docs/ops-governance/AUDT/autonomous-pipeline-verify-2026-09-01.md",
+      "title": "AUDT — Autonomous Pipeline Verification & Operationalization (2026-09-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/AUDT/autonomous-pipeline-verify-2026-09-01.md"
+    },
+    {
+      "path": "docs/ops-governance/HAND/CLOSEOUT-2026-08-03-skill-remediation.md",
+      "title": "SESSION CLOSEOUT — 4zUXsdB6PbriTKoCjR9n- (2026-08-03)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/HAND/CLOSEOUT-2026-08-03-skill-remediation.md"
+    },
+    {
+      "path": "docs/ops-governance/HAND/RECONCILIATION-2026-09-02.md",
+      "title": "WBS/Handoff Reconciliation — 2026-09-02 (v2: + standing sweep + red-team)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/HAND/RECONCILIATION-2026-09-02.md"
+    },
+    {
+      "path": "docs/ops-governance/PLCY/ARP-OPERATIONS-POLICY.md",
+      "title": "PLCY — ARP Operations Policy (Autonomous Research Program)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/PLCY/ARP-OPERATIONS-POLICY.md"
+    },
+    {
+      "path": "docs/ops-governance/PLCY/EXECUTION-MANDATE.md",
+      "title": "PLCY — Decide-Implement-Deploy Mandate (DID)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/PLCY/EXECUTION-MANDATE.md"
+    },
+    {
+      "path": "docs/ops-governance/PLCY/MAP-TERRITORY-REALIZATION-GATE.md",
+      "title": "PLCY — Map–Territory Realization Gate & Ontic Gate (DPRF G1/G2)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/PLCY/MAP-TERRITORY-REALIZATION-GATE.md"
+    },
+    {
+      "path": "docs/ops-governance/PLCY/SECRETS-INVENTORY.md",
+      "title": "SECRETS-INVENTORY — QNFO Token/Key/Password Map (2026-09-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/PLCY/SECRETS-INVENTORY.md"
+    },
+    {
+      "path": "docs/ops-governance/README.md",
+      "title": "Operations governance (folded from QNFO/qnfo-ops)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/README.md"
+    },
+    {
+      "path": "docs/ops-governance/SKIL/FRAMEWORK-LEVEL-DISCIPLINE.md",
+      "title": "SKIL — Framework Level Discipline (DPRF)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/SKIL/FRAMEWORK-LEVEL-DISCIPLINE.md"
+    },
+    {
+      "path": "docs/ops-governance/SOURCE-README.md",
+      "title": "QNFO Operations & Governance (QNFO.OPS)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/SOURCE-README.md"
+    },
+    {
+      "path": "docs/ops-governance/WBS/GITHUB-SYNC.md",
+      "title": "GitHub ↔ Cloudflare Sync Contract (QNFO.GOV)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/WBS/GITHUB-SYNC.md"
+    },
+    {
+      "path": "docs/ops-governance/WBS/WBS-AGENT-PROTOCOL.md",
+      "title": "WBS-AGENT-PROTOCOL — Agent Execution Standard",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/WBS/WBS-AGENT-PROTOCOL.md"
+    },
+    {
+      "path": "docs/ops-governance/WBS/WBS.TAXONOMY.md",
+      "title": "WBS.TAXONOMY — Canonical Program/Project Registry",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/WBS/WBS.TAXONOMY.md"
+    },
+    {
+      "path": "docs/ops-governance/audits/2026-09-13-ACUTE-monitor-silent.md",
+      "title": "ACUTE: the fleet's only monitor went silent at 14:16:31Z",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/audits/2026-09-13-ACUTE-monitor-silent.md"
+    },
+    {
+      "path": "docs/ops-governance/audits/2026-09-13-CORRECTION-probe-coverage-collapse.md",
+      "title": "CORRECTION ADDENDUM — 2026-09-13T14:35Z",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/audits/2026-09-13-CORRECTION-probe-coverage-collapse.md"
+    },
+    {
+      "path": "docs/ops-governance/audits/2026-09-13-FIX-ORDERING-HAZARD-registry-deploy.md",
+      "title": "FIX-ORDERING HAZARD — do not deploy the repo registry.js",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/audits/2026-09-13-FIX-ORDERING-HAZARD-registry-deploy.md"
+    },
+    {
+      "path": "docs/ops-governance/audits/2026-09-13-FLEETWIDE-PRODUCTIVITY-CONSOLIDATION.md",
+      "title": "Fleetwide worker productivity audit + consolidation plan",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/audits/2026-09-13-FLEETWIDE-PRODUCTIVITY-CONSOLIDATION.md"
+    },
+    {
+      "path": "docs/ops-governance/audits/2026-09-13-LOOP-EXECUTOR-ACCOUNTS-FOR-NOTHING.md",
+      "title": "LOOP EXECUTOR ACCOUNTS FOR NOTHING — why fleet errors never resolve",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/audits/2026-09-13-LOOP-EXECUTOR-ACCOUNTS-FOR-NOTHING.md"
+    },
+    {
+      "path": "docs/ops-governance/audits/2026-09-13-RETRACTION-monitor-outage-false.md",
+      "title": "RETRACTION — the \"acute monitor outage\" was FALSE",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/audits/2026-09-13-RETRACTION-monitor-outage-false.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/ADVERSARIAL-REASONING.md",
+      "title": "ADVERSARIAL-REASONING-1 — Error-Mitigation Standard (anti-sycophancy / anti-confirmation-bias)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/ADVERSARIAL-REASONING.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/AI-HAPPY-PATH.md",
+      "title": "AI HAPPY PATH (QNFO) — canonical endpoints & models",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/AI-HAPPY-PATH.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/AUTONOMOUS-FLEET-ARCHITECTURE.md",
+      "title": "QNFO Autonomous Fleet Architecture (AF-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/AUTONOMOUS-FLEET-ARCHITECTURE.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/AUTONOMY-REPORT-CARD-2026-09-10.md",
+      "title": "QNFO AUTONOMY REPORT CARD — 2026-09-10",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/AUTONOMY-REPORT-CARD-2026-09-10.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/AUTOPILOT-GIT-PROOF.md",
+      "title": "Cloud git proof",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/AUTOPILOT-GIT-PROOF.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/AUTOPILOT-REPORT-2026-09-10.md",
+      "title": "QNFO Autopilot Report 2026-09-10",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/AUTOPILOT-REPORT-2026-09-10.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/CLOUD-NATIVE-AUTONOMY-PLAN.md",
+      "title": "Cloud-Native Autonomous Operations Plan — Entire Ecosystem",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/CLOUD-NATIVE-AUTONOMY-PLAN.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/CODE-ONLY-EXEC-MODE.md",
+      "title": "CODE-ONLY EXEC MODE — ops-exec spec (draft)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/CODE-ONLY-EXEC-MODE.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/CONTAINERS-EXECUTOR.md",
+      "title": "Cloudflare Containers Executor — Fleet-Autonomy Implementation Spec",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/CONTAINERS-EXECUTOR.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/COST-OPTIMIZED-ROUTING-STACK.md",
+      "title": "COST-OPTIMIZED MODEL-ROUTING STACK (QNFO fleet)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/COST-OPTIMIZED-ROUTING-STACK.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/DEPLOY-SUBSYSTEM-AUDIT-2026-09-13.md",
+      "title": "Deploy-subsystem audit — 2026-09-13",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/DEPLOY-SUBSYSTEM-AUDIT-2026-09-13.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/ENGAGEMENT-STRATEGY.md",
+      "title": "QNFO Analytics, Marketing & User Engagement Strategy",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/ENGAGEMENT-STRATEGY.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/ENSEMBLE-RESEARCH-PILOT.md",
+      "title": "ENSEMBLE RESEARCH PILOT",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/ENSEMBLE-RESEARCH-PILOT.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/EXPERIMENTATION-PROGRAM.md",
+      "title": "QNFO Experimentation Program",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/EXPERIMENTATION-PROGRAM.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FATEBOOK-INTEGRATION.md",
+      "title": "QNFO Fatebook Integration - Strategy and Options",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FATEBOOK-INTEGRATION.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-CALIBRATION.md",
+      "title": "FLEET CALIBRATION & STRESS-TESTING — qnfo-fleet-calibrator",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-CALIBRATION.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-CONSOLIDATION-ANALYSIS-2026-09-10.md",
+      "title": "Fleet Consolidation Analysis — 2026-09-10",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-CONSOLIDATION-ANALYSIS-2026-09-10.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-CONSUMER-MAP.md",
+      "title": "QNFO FLEET CONSUMER MAP — 2026-09-09",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-CONSUMER-MAP.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-CAPSTONE-deploy-blindspot.md",
+      "title": "VERIFICATION 8 — CAPSTONE: the storm fix is unreachable because the worker is invisible to the deploy machinery",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-CAPSTONE-deploy-blindspot.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-CORRECTION-1.md",
+      "title": "CORRECTION 1 — `docs/FLEET-ERROR-AUDIT-2026-09-13.md` §3 H8 is wrong",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-CORRECTION-1.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-CORRECTION-2.md",
+      "title": "CORRECTION 2 — my deploy claims were wrong; the prior session's fixes verified",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-CORRECTION-2.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-10-registry-keyed-scan.md",
+      "title": "VERIFICATION 10 — the scan set is registry-keyed; my CAPSTONE was wrong about one remedy",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-10-registry-keyed-scan.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-11-pipeline-ops-dropped.md",
+      "title": "VERIFICATION 11 — `qnfo-pipeline-ops` was DROPPED; my CAPSTONE remedy is wrong; and I closed 677 prematurely",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-11-pipeline-ops-dropped.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-12-inert-remediation-loop.md",
+      "title": "VERIFICATION 12 — the fleet's own issue ledger, and the inert remediation loop",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-12-inert-remediation-loop.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-13-repo-behind-production.md",
+      "title": "VERIFICATION 13 — source-level confirmations, and the loop's source is not in the repo",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-13-repo-behind-production.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-2.md",
+      "title": "VERIFICATION 2 — H1 proven by direct test; two of my own hypotheses retracted",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-2.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-3.md",
+      "title": "VERIFICATION 3 — two of my own audit claims are wrong; the deployed revision is unresolved",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-3.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-4.md",
+      "title": "VERIFICATION 4 — H7 retracted; `alerts` timestamps normalised; a third write convention added",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-4.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-5.md",
+      "title": "VERIFICATION 5 — a runner for the staged patchers, and the rev-3 classifier",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-5.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-6.md",
+      "title": "VERIFICATION 6 — what applying the NL patch would and would not fix; two column-semantics corrections",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-6.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-7.md",
+      "title": "VERIFICATION 7 — ticket 712's hypothesis refuted; a 12-name ghost roster found",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-7.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-9-autoheal-disabled.md",
+      "title": "VERIFICATION 9 — the deploy healer is disabled, so nothing can ship",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13-VERIFICATION-9-autoheal-disabled.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13.md",
+      "title": "Fleet error / warning / alert audit — 2026-09-13T14:08Z",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-ERROR-AUDIT-2026-09-13.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-MANIFEST.md",
+      "title": "QNFO FLEET MANIFEST — Cloudflare Workers Ecosystem",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-MANIFEST.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-REPORT-CARD.md",
+      "title": "QNFO System-Level Report Card",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-REPORT-CARD.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-RUNTIME-CENSUS-2026-09-10.md",
+      "title": "QNFO FLEET RUNTIME CENSUS — 2026-09-10 (schedules + 7d activity + chains)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-RUNTIME-CENSUS-2026-09-10.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-SLA.md",
+      "title": "Fleet SLA / Level-of-Service Policy (2026-09-06)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-SLA.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/FLEET-TAXONOMY-2026-09-09.md",
+      "title": "QNFO FLEET TAXONOMY — 2026-09-09 (code-evidence census of all 76 workers)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/FLEET-TAXONOMY-2026-09-09.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/INFRASTRUCTURE-AUDIT-2026-09-03.md",
+      "title": "QNFO INFRASTRUCTURE AUDIT 2026-09-03 — Gaps, Weaknesses, Blind Spots",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/INFRASTRUCTURE-AUDIT-2026-09-03.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/INTEGRATION-DEFECTS-2026-09-13.md",
+      "title": "QNFO/QWAV Full-Stack Integration Defects — 2026-09-13",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/INTEGRATION-DEFECTS-2026-09-13.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/INTEGRATION-ITEM-HRAW-2026-09-14.md",
+      "title": "INT-HRAW-001 — Heterogeneous Redundant AI Workflow (HRAW)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/INTEGRATION-ITEM-HRAW-2026-09-14.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/INTEGRATION-PLAN-2026-09-13.md",
+      "title": "QNFO/QWAV Full-Stack Integration Plan — 2026-09-13",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/INTEGRATION-PLAN-2026-09-13.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/LESSWRONG-INTEGRATION.md",
+      "title": "QNFO LessWrong Integration - Strategy and Options (Spec for Review)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/LESSWRONG-INTEGRATION.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/MODEL-FLOOR-1.md",
+      "title": "MODEL-FLOOR-1 - QNFO Fleet Minimum Model Standard",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/MODEL-FLOOR-1.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/MODEL-STANDARDS-GATE.md",
+      "title": "MODEL STANDARDS GATE — 32K OUTPUT / 128K CONTEXT",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/MODEL-STANDARDS-GATE.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/OBSIDIAN-VAULT-CLOUD-SYNC.md",
+      "title": "Obsidian Vault → Cloud Sync & Knowledge Integration (2026-09-04, v1.1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/OBSIDIAN-VAULT-CLOUD-SYNC.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/OPS-SELF-DOC.md",
+      "title": "QNFO OPS SELF-DOCUMENTATION — Master Index (2026-09-01)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/OPS-SELF-DOC.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/OUTREACH-AMPLIFICATION-CATALOG.md",
+      "title": "QNFO/QWAV Outreach Amplification Catalog — WHO ELSE / WHAT OTHER KINDS",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/OUTREACH-AMPLIFICATION-CATALOG.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/OUTREACH-AUTOMATION-STRATEGY.md",
+      "title": "QNFO/QWAV Automated Outreach & Dissemination Strategy",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/OUTREACH-AUTOMATION-STRATEGY.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/OUTREACH-EXHAUSTIVE-INVENTORY.md",
+      "title": "QNFO/QWAV Outreach — Exhaustive Inventory (LIST / SAVE / RECORD EVERYTHING)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/OUTREACH-EXHAUSTIVE-INVENTORY.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/OUTREACH-SUCCESS-MAXIMIZATION.md",
+      "title": "QNFO/QWAV Success Maximization — Master Playbook (ALL POSSIBILITIES, HONEST)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/OUTREACH-SUCCESS-MAXIMIZATION.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/PIPELINE-QUALITY-AUDIT-2026-09-09.md",
+      "title": "AUDIT — Autonomous Research Pipeline vs Established Ops Procedures",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/PIPELINE-QUALITY-AUDIT-2026-09-09.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/PROJECT-MANAGEMENT.md",
+      "title": "QNFO Project Management System — v1.0",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/PROJECT-MANAGEMENT.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/PUBLIC-WEB-REACH-STRATEGY.md",
+      "title": "QNFO/QWAV Public Web Reach Strategy — Browser Automation & the API-less Long Tail",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/PUBLIC-WEB-REACH-STRATEGY.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/RELATED-SITES-SURVEY.md",
+      "title": "QNFO Related-Sites Survey - LessWrong Neighbors + Autonomous Multi-Venue Radar",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/RELATED-SITES-SURVEY.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SECURITY-FINDING-2026-09-13-backups-binding-credential-exposure.md",
+      "title": "SECURITY FINDING — qnfo-ops `backups` binding exposes a fleet-deploy admin token",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SECURITY-FINDING-2026-09-13-backups-binding-credential-exposure.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SELF-AUDIT-GAPS-2026-09-03.md",
+      "title": "SELF-AUDIT-GAPS-2026-09-03 — WHAT ELSE? honest fleet/ecosystem gap analysis + backlog",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SELF-AUDIT-GAPS-2026-09-03.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SELF-AUTHORED-GOALS.md",
+      "title": "Self-Authored Goals (SAG) — closing the deepest autonomy gap",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SELF-AUTHORED-GOALS.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SERVER-SIDE-EXEC-CLIENT-MATRIX-2026-09-09.md",
+      "title": "ops-exec: 100% Server-Side Execution Across All Chat Clients",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SERVER-SIDE-EXEC-CLIENT-MATRIX-2026-09-09.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SIGNAL-ORGANISM-ARCHITECTURE.md",
+      "title": "QNFO Signal-Organism Architecture — L8 Loop Closure & 8-Layer Model",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SIGNAL-ORGANISM-ARCHITECTURE.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SILO-BREAKING-STRATEGY.md",
+      "title": "QNFO/QWAV Silo-Breaking & Trust-Transitivity Strategy",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SILO-BREAKING-STRATEGY.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SLA.md",
+      "title": "Fleetwide Service-Level Policy (SLA/SLO) — QNFO autonomous fleet",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SLA.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SUGGESTION-ENGINE-RD.md",
+      "title": "Adaptive Suggestion Engine — Ideas/ASK + iPATENT (R&D wave 2026-09-03)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SUGGESTION-ENGINE-RD.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SYSTEMS-CHAOS-INTEGRATION.md",
+      "title": "Systems & Chaos Theory Applied to QNFO Integration",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SYSTEMS-CHAOS-INTEGRATION.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SYSTEMS-REPORT-CARD.md",
+      "title": "QNFO Systems-Level Report Card — Fleet Autonomy & Intelligence",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SYSTEMS-REPORT-CARD.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/SYSTEMS-THEORY-RUBRIC.md",
+      "title": "Systems Theory Rubric - QNFO Objective Function",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/SYSTEMS-THEORY-RUBRIC.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/VISIBILITY-VERSIONING-CYCLE1-SHORTLIST.md",
+      "title": "Visibility Program — Cycle 1: Tier-1 Flagship v-Next Shortlist",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/VISIBILITY-VERSIONING-CYCLE1-SHORTLIST.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/VISIBILITY-VERSIONING-PROGRAM.md",
+      "title": "QNFO Visibility & Continuous-Versioning Program",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/VISIBILITY-VERSIONING-PROGRAM.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/VISION-STRATEGY-ARCHITECTURE.md",
+      "title": "QNFO — Vision, Strategy, Architecture (the big picture)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/VISION-STRATEGY-ARCHITECTURE.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/WORKER-CONSOLIDATION-PLAN.md",
+      "title": "WORKER CONSOLIDATION PLAN (2026-09-11)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/WORKER-CONSOLIDATION-PLAN.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/fleet-architecture/wiring-summary.md",
+      "title": "QNFO FLEET WIRING MATRIX (live)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/fleet-architecture/wiring-summary.md"
+    },
+    {
+      "path": "docs/ops-governance/docs/fleet-dashboard/README.md",
+      "title": "QNFO Fleet Operations Dashboard",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ops-governance/docs/fleet-dashboard/README.md"
+    },
+    {
+      "path": "docs/outreach/ipatent-launch-kit.md",
+      "title": "iPatent launch kit (2026-10-02, STRATEGY-1 s2.4a)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/outreach/ipatent-launch-kit.md"
+    },
+    {
+      "path": "docs/outreach/launch-queue-2026-10.md",
+      "title": "Launch queue, October 2026 (STRATEGY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/outreach/launch-queue-2026-10.md"
+    },
+    {
+      "path": "docs/outreach/living-papers-launch-2026-10.md",
+      "title": "Living Papers launch, October 2026 (LIVING-PAPERS-LAUNCH-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/outreach/living-papers-launch-2026-10.md"
+    },
+    {
+      "path": "docs/posters/statements-to-questions-ai-epistemic-repair/index.md",
+      "title": "From Statements to Questions: AI as Epistemic Repair Infrastructure",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/posters/statements-to-questions-ai-epistemic-repair/index.md"
+    },
+    {
+      "path": "docs/research-memos/2026-10-02-clock-time-ontology-falsification.md",
+      "title": "Inflation, clocks and relational time: falsification memo",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/research-memos/2026-10-02-clock-time-ontology-falsification.md"
+    },
+    {
+      "path": "docs/research-memos/2026-10-02-qm-notation-commissioning-audit.md",
+      "title": "Notation-Commissioning Audit: Five Quantum Formulations",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/research-memos/2026-10-02-qm-notation-commissioning-audit.md"
+    },
+    {
+      "path": "docs/research-memos/README.md",
+      "title": "Research memos",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/research-memos/README.md"
+    },
+    {
+      "path": "docs/root-cause-contract/README.md",
+      "title": "ROOT-CAUSE-CONTRACT-1: the kept design for agent_issues 1000419",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/root-cause-contract/README.md"
+    },
+    {
+      "path": "events-radar/README.md",
+      "title": "events-radar worker (QNFO.OPS.009 — supersedes conference-radar QNFO.OPS.008, 2026-09-02)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/events-radar/README.md"
+    },
+    {
+      "path": "jnl-referee/README.md",
+      "title": "jnl-referee",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/jnl-referee/README.md"
+    },
+    {
+      "path": "jnl-reviser/README.md",
+      "title": "jnl-reviser",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/jnl-reviser/README.md"
+    },
+    {
+      "path": "jnl-watch/README.md",
+      "title": "jnl-watch",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/jnl-watch/README.md"
+    },
+    {
+      "path": "jobsearch/README.md",
+      "title": "jobsearch: verified-claims job matcher (JOBSEARCH-POC-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/jobsearch/README.md"
+    },
+    {
+      "path": "llms.txt",
+      "title": "Quniverse",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/llms.txt",
+      "sha256": "7228e6e4ccc46c4fdbe5897b02af9574417e0b088f01a869476d7d5f76944199"
+    },
+    {
+      "path": "machine-readability/README.md",
+      "title": "Machine-Readability Expansion (QNFO x Cloudflare self-knowledge)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/machine-readability/README.md"
+    },
+    {
+      "path": "machine-readability/self-documentation.prompt.md",
+      "title": "Self-Documenting Prompt Template (machine-readable, machine-optimized)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/machine-readability/self-documentation.prompt.md"
+    },
+    {
+      "path": "obsidian-writer/README.md",
+      "title": "obsidian-writer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/obsidian-writer/README.md"
+    },
+    {
+      "path": "ops-gateway/README.md",
+      "title": "ops-gateway",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/ops-gateway/README.md"
+    },
+    {
+      "path": "ops-workspace/closeouts/2026-10-17-fleet-capacity-quotas.md",
+      "title": "CLOSEOUT — fleet capacity, quotas, triage (session 2026-10-17)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/ops-workspace/closeouts/2026-10-17-fleet-capacity-quotas.md"
+    },
+    {
+      "path": "osf-integrity-check/README.md",
+      "title": "osf-integrity-check",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/osf-integrity-check/README.md"
+    },
+    {
+      "path": "personal-api/COMPANION-BEST-PRACTICES.md",
+      "title": "Companion best practices: what the research says and what changed",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-api/COMPANION-BEST-PRACTICES.md"
+    },
+    {
+      "path": "personal-api/README-deploy.md",
+      "title": "personal-api deploy",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-api/README-deploy.md"
+    },
+    {
+      "path": "personal-api/README.md",
+      "title": "personal-api - Agentic Personal Twin (v4.11.0)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-api/README.md"
+    },
+    {
+      "path": "personal-api/msgraph/README.md",
+      "title": "Outlook.com mail in the twin (Microsoft Graph, read-only)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-api/msgraph/README.md"
+    },
+    {
+      "path": "personal-companion/README.md",
+      "title": "personal-companion",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-companion/README.md"
+    },
+    {
+      "path": "personal-events-radar/README.md",
+      "title": "personal-events-radar worker (QNFO.OPS.010 Stage B, 2026-09-02)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-events-radar/README.md"
+    },
+    {
+      "path": "personal-life-indexer/README.md",
+      "title": "personal-life-indexer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-life-indexer/README.md"
+    },
+    {
+      "path": "personal-life-maintain/README.md",
+      "title": "personal-life-maintain",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-life-maintain/README.md"
+    },
+    {
+      "path": "personal-life-search/README.md",
+      "title": "personal-life-search",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-life-search/README.md"
+    },
+    {
+      "path": "q08-signal-engine/README.md",
+      "title": "q08-signal-engine",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/q08-signal-engine/README.md"
+    },
+    {
+      "path": "qnfo-agent-ws/README.md",
+      "title": "qnfo-agent-ws",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-agent-ws/README.md"
+    },
+    {
+      "path": "qnfo-agents/README.md",
+      "title": "qnfo-agents",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-agents/README.md"
+    },
+    {
+      "path": "qnfo-ai-calibration/README.md",
+      "title": "qnfo-ai-calibration",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai-calibration/README.md"
+    },
+    {
+      "path": "qnfo-ai-search/README.md",
+      "title": "qnfo-ai-search (ask.qwav.tech)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai-search/README.md"
+    },
+    {
+      "path": "qnfo-ai/CHATBOX-SETUP.md",
+      "title": "Chatbox (Windows) — Full QNFO Setup",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/CHATBOX-SETUP.md"
+    },
+    {
+      "path": "qnfo-ai/QUICKSTART.md",
+      "title": "QNFO Notes API — Quickstart (2026-08-28)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/QUICKSTART.md"
+    },
+    {
+      "path": "qnfo-ai/README-deploy.md",
+      "title": "qnfo-ai deployment (canonical-state, updated 2026-09-03)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/README-deploy.md"
+    },
+    {
+      "path": "qnfo-ai/README.md",
+      "title": "qnfo-ai",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/README.md"
+    },
+    {
+      "path": "qnfo-ai/ROUTER-CONTEXT-GAP-1.md",
+      "title": "ROUTER-CONTEXT-GAP-1 — QNFO-internal feature gloss for qnfo-ai DEFAULT_SYSTEM_PROMPT",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/ROUTER-CONTEXT-GAP-1.md"
+    },
+    {
+      "path": "qnfo-ai/prompts-qnfo.md",
+      "title": "QNFO Prompts for Chatbox",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/prompts-qnfo.md"
+    },
+    {
+      "path": "qnfo-ai/system-prompt-qnfo.md",
+      "title": "QNFO agentic system prompt (paste as the conversation system prompt on QNFO Router chats)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai/system-prompt-qnfo.md"
+    },
+    {
+      "path": "qnfo-artifact-agent/README.md",
+      "title": "qnfo-artifact-agent",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-artifact-agent/README.md"
+    },
+    {
+      "path": "qnfo-arxiv-radar/README.md",
+      "title": "qnfo-arxiv-radar",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-arxiv-radar/README.md"
+    },
+    {
+      "path": "qnfo-auditor/README.md",
+      "title": "qnfo-auditor",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-auditor/README.md"
+    },
+    {
+      "path": "qnfo-calendar-intake/README.md",
+      "title": "qnfo-calendar-intake",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-calendar-intake/README.md"
+    },
+    {
+      "path": "qnfo-chameleon/README.md",
+      "title": "qnfo-chameleon — Autonomous Preference-Adaptive Output System",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-chameleon/README.md"
+    },
+    {
+      "path": "qnfo-citation-watch/README.md",
+      "title": "qnfo-citation-watch",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-citation-watch/README.md"
+    },
+    {
+      "path": "qnfo-cloud-ops/README.md",
+      "title": "qnfo-cloud-ops — scheduled cloud operations (2026-08-28)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-cloud-ops/README.md"
+    },
+    {
+      "path": "qnfo-code-orchestrator/README.md",
+      "title": "qnfo-code-orchestrator v0.3.0",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-code-orchestrator/README.md"
+    },
+    {
+      "path": "qnfo-containers-pilot/CONTAINER-RESTORE-1.md",
+      "title": "CONTAINER-RESTORE-1 — qnfo-containers-pilot [[containers]] restore (issue #1485)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/CONTAINER-RESTORE-1.md"
+    },
+    {
+      "path": "qnfo-containers-pilot/README.md",
+      "title": "qnfo-containers-pilot v0.2.0",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/README.md"
+    },
+    {
+      "path": "qnfo-containers-pilot/RESTORE-1485.md",
+      "title": "RESTORE-1485 — deploy trigger + endpoint-side blocker record",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/RESTORE-1485.md"
+    },
+    {
+      "path": "qnfo-containers-pilot/RETRIGGER-3-qnfo-ops.md",
+      "title": "RETRIGGER-3 (qnfo-ops) — issue #1485",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/RETRIGGER-3-qnfo-ops.md"
+    },
+    {
+      "path": "qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md",
+      "title": "RETRIGGER-4 — CONTAINER-DO-BINDING-LOST-1 (2026-09-29, issue #1485)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md"
+    },
+    {
+      "path": "qnfo-containers-pilot/ops-retrigger-1485.md",
+      "title": "CONTAINER-CONFIG-RESTORE-1 retrigger (issue #1485)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/ops-retrigger-1485.md"
+    },
+    {
+      "path": "qnfo-email-orchestrator/MANIFEST.md",
+      "title": "qnfo-email-orchestrator — Worker Manifest",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-email-orchestrator/MANIFEST.md"
+    },
+    {
+      "path": "qnfo-email-orchestrator/RECOVERY.md",
+      "title": "qnfo-email-orchestrator — Recovery & Backup Procedure",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-email-orchestrator/RECOVERY.md"
+    },
+    {
+      "path": "qnfo-email/MIME-PARSER-FIX-20260921.md",
+      "title": "qnfo-email MIME parser fix — 2026-09-21",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-email/MIME-PARSER-FIX-20260921.md"
+    },
+    {
+      "path": "qnfo-email/README.md",
+      "title": "qnfo-email",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-email/README.md"
+    },
+    {
+      "path": "qnfo-errata-publish/README.md",
+      "title": "qnfo-errata-publish - deployed-current.worker.js (byte-exact snapshot of the API-deployed bundle)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-errata-publish/README.md"
+    },
+    {
+      "path": "qnfo-errata-respond/README.md",
+      "title": "qnfo-errata-respond - deployed-current.worker.js (byte-exact snapshot of the API-deployed bundle)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-errata-respond/README.md"
+    },
+    {
+      "path": "qnfo-errata-watch/README.md",
+      "title": "qnfo-errata-watch - deployed-current.worker.js (byte-exact snapshot of the API-deployed bundle)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-errata-watch/README.md"
+    },
+    {
+      "path": "qnfo-events/README.md",
+      "title": "qnfo-events",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-events/README.md"
+    },
+    {
+      "path": "qnfo-evolve/README.md",
+      "title": "qnfo-evolve — EVOLVE-1",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-evolve/README.md"
+    },
+    {
+      "path": "qnfo-fleet-advisor/README.md",
+      "title": "qnfo-fleet-advisor",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-fleet-advisor/README.md"
+    },
+    {
+      "path": "qnfo-fleet-control/README.md",
+      "title": "qnfo-fleet-control",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-fleet-control/README.md"
+    },
+    {
+      "path": "qnfo-fleet-dashboard/README.md",
+      "title": "qnfo-fleet-dashboard",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-fleet-dashboard/README.md"
+    },
+    {
+      "path": "qnfo-fleet-deploy/README.md",
+      "title": "qnfo-fleet-deploy — fleet self-heal control plane",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-fleet-deploy/README.md"
+    },
+    {
+      "path": "qnfo-gateway/README.md",
+      "title": "qnfo-gateway — QNFO site router (papers.qnfo.org, ideas, archive, ipatent, graph-api, legal)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/README.md"
+    },
+    {
+      "path": "qnfo-github-steward/README.md",
+      "title": "qnfo-github-steward",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-github-steward/README.md"
+    },
+    {
+      "path": "qnfo-idea-factory/README.md",
+      "title": "qnfo-idea-factory — QNFO Ideas (ideas.qnfo.org)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-idea-factory/README.md"
+    },
+    {
+      "path": "qnfo-intent-orchestrator/README.md",
+      "title": "qnfo-intent-orchestrator",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-intent-orchestrator/README.md"
+    },
+    {
+      "path": "qnfo-ipatent/README.md",
+      "title": "qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ipatent/README.md"
+    },
+    {
+      "path": "qnfo-kaizen/README.md",
+      "title": "qnfo-kaizen",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-kaizen/README.md"
+    },
+    {
+      "path": "qnfo-model-eval/README.md",
+      "title": "qnfo-model-eval",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-model-eval/README.md"
+    },
+    {
+      "path": "qnfo-observability/README.md",
+      "title": "qnfo-observability",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-observability/README.md"
+    },
+    {
+      "path": "qnfo-ops/CHATBOX-SETUP.md",
+      "title": "QNFO endpoints in ChatBox (and DeepChat)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/CHATBOX-SETUP.md"
+    },
+    {
+      "path": "qnfo-ops/FINDING-2026-09-13-five-ledgers-and-the-dedupe-that-already-works.md",
+      "title": "FINDING — 2026-09-13 — five ledgers, four different open counts, and the dedupe that already works",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/FINDING-2026-09-13-five-ledgers-and-the-dedupe-that-already-works.md"
+    },
+    {
+      "path": "qnfo-ops/FINDING-2026-09-13-issue-ledger-dedupe-enforced-at-db-layer.md",
+      "title": "FINDING — 2026-09-13 — agent_issues dedupe is now enforced at the DB layer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/FINDING-2026-09-13-issue-ledger-dedupe-enforced-at-db-layer.md"
+    },
+    {
+      "path": "qnfo-ops/FINDING-2026-09-13-ops-jobs-concurrency-is-client-resubmission.md",
+      "title": "FINDING — 2026-09-13 — the ops job fan-out is client re-submission, not a server loop",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/FINDING-2026-09-13-ops-jobs-concurrency-is-client-resubmission.md"
+    },
+    {
+      "path": "qnfo-ops/FINDING-2026-09-13-resolved-is-not-evidence-of-resolution.md",
+      "title": "FINDING — 2026-09-13 — \"resolved\" is not evidence of resolution",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/FINDING-2026-09-13-resolved-is-not-evidence-of-resolution.md"
+    },
+    {
+      "path": "qnfo-ops/FINDING-2026-09-13-tool-reliability-and-the-discarded-reconciliation.md",
+      "title": "FINDING — 2026-09-13 — the fleet's top tool defect is intermittent, and the reconciliation is discarded one layer up",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/FINDING-2026-09-13-tool-reliability-and-the-discarded-reconciliation.md"
+    },
+    {
+      "path": "qnfo-ops/FINDING-2026-09-30-response-truncation-three-mechanisms.md",
+      "title": "FINDING 2026-09-30 — Response truncation: three independent mechanisms",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/FINDING-2026-09-30-response-truncation-three-mechanisms.md"
+    },
+    {
+      "path": "qnfo-ops/PATCH-2026-09-15-registry-deps-preserve.md",
+      "title": "PATCH — preserve declared deps in service_registry (2026-09-15, qnfo-ops)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/PATCH-2026-09-15-registry-deps-preserve.md"
+    },
+    {
+      "path": "qnfo-ops/README-deploy.md",
+      "title": "qnfo-ops — OPS/INFRASTRUCTURE AI EXECUTION ENDPOINT",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/README-deploy.md"
+    },
+    {
+      "path": "qnfo-ops/REMEDIATION-2026-09-30-applier-rot-disposition.md",
+      "title": "REMEDIATION — applier rot has a detector and a filer, but no disposition (2026-09-30)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/REMEDIATION-2026-09-30-applier-rot-disposition.md"
+    },
+    {
+      "path": "qnfo-ops/REMEDIATION-2026-09-30-schema-first-and-output-cap.md",
+      "title": "REMEDIATION 2026-09-30 — Schema-First D1 Access + Output-Cap Decoupling",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/REMEDIATION-2026-09-30-schema-first-and-output-cap.md"
+    },
+    {
+      "path": "qnfo-ops/TRIAGE-2026-09-13T1448Z-live-vs-falsified.md",
+      "title": "TRIAGE — 2026-09-13T14:48Z — which open issues are live, and which are falsified",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/TRIAGE-2026-09-13T1448Z-live-vs-falsified.md"
+    },
+    {
+      "path": "qnfo-ops/VERIFY-2026-09-13T1450Z-security-and-config-confirmations.md",
+      "title": "VERIFY — 2026-09-13T14:50Z — three security/config issues confirmed directly",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/VERIFY-2026-09-13T1450Z-security-and-config-confirmations.md"
+    },
+    {
+      "path": "qnfo-ops/VERIFY-2026-09-13T1451Z-work-attribution-and-canonical-source.md",
+      "title": "VERIFY — 2026-09-13T14:51Z — who does the work, and which file is canonical",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/VERIFY-2026-09-13T1451Z-work-attribution-and-canonical-source.md"
+    },
+    {
+      "path": "qnfo-ops/ai-gateway/gateway-upstream.patch.md",
+      "title": "ops-exec upstream rewire: api.deepseek.com -> AI Gateway",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/ai-gateway/gateway-upstream.patch.md"
+    },
+    {
+      "path": "qnfo-ops/docs/2026-09-15-ADDENDUM-concurrent-session-and-ticket-ids.md",
+      "title": "ADDENDUM — 2026-09-15 outreach closeout: concurrent-session corroboration (FM-8)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/2026-09-15-ADDENDUM-concurrent-session-and-ticket-ids.md"
+    },
+    {
+      "path": "qnfo-ops/docs/2026-09-15-outreach-evidence-and-failure-mode-closeout.md",
+      "title": "Outreach evidence + failure-mode audit — 2026-09-15 (qnfo-ops / ops-exec)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/2026-09-15-outreach-evidence-and-failure-mode-closeout.md"
+    },
+    {
+      "path": "qnfo-ops/docs/CODE-AGENT-ORCHESTRATOR-SPEC.md",
+      "title": "qnfo-code-orchestrator v0.1.0 — SPEC (autonomous self-verifying cloud code agent)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/CODE-AGENT-ORCHESTRATOR-SPEC.md"
+    },
+    {
+      "path": "qnfo-ops/docs/FIX-listIssues-await-2026-09-08.md",
+      "title": "FIX — listIssues await bug (invisible ops backlog)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/FIX-listIssues-await-2026-09-08.md"
+    },
+    {
+      "path": "qnfo-ops/docs/RUN-CODE-HARDENING.md",
+      "title": "run_code hardening — audit + patch spec",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/RUN-CODE-HARDENING.md"
+    },
+    {
+      "path": "qnfo-ops/docs/RUN-TO-COMPLETION-1.md",
+      "title": "OPS-RUN-TO-COMPLETION-1 (qnfo-ops v2.15.0, 2026-09-12)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/RUN-TO-COMPLETION-1.md"
+    },
+    {
+      "path": "qnfo-ops/docs/SELF-REGISTRATION-ADOPTION.md",
+      "title": "SELF-REGISTRATION ADOPTION RUNBOOK (SELF-REGISTER-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/docs/SELF-REGISTRATION-ADOPTION.md"
+    },
+    {
+      "path": "qnfo-ops/status/PROBE-2026-09-13-fleet-census-55.md",
+      "title": "PROBE — 2026-09-13T14:44Z — full-fleet reachability census, 55 of 55",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/status/PROBE-2026-09-13-fleet-census-55.md"
+    },
+    {
+      "path": "qnfo-outreach/README.md",
+      "title": "qnfo-outreach",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-outreach/README.md"
+    },
+    {
+      "path": "qnfo-paper-explainer/PR-4-VERIFICATION-NOTE.md",
+      "title": "PR #4 — verification note and correction",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-paper-explainer/PR-4-VERIFICATION-NOTE.md"
+    },
+    {
+      "path": "qnfo-paper-explainer/README.md",
+      "title": "qnfo-paper-explainer — plain-English arXiv explainer (POC/pilot)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-paper-explainer/README.md"
+    },
+    {
+      "path": "qnfo-pdf/README.md",
+      "title": "qnfo-pdf — cloud-native PDF renderer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-pdf/README.md"
+    },
+    {
+      "path": "qnfo-proof/README.md",
+      "title": "qnfo-proof - adversarial proof verification ledger",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-proof/README.md"
+    },
+    {
+      "path": "qnfo-research-exec/CLOSEOUT-2026-10-17.md",
+      "title": "CLOSEOUT — 2026-10-17 · publication pipeline (qnfo-research-exec)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-research-exec/CLOSEOUT-2026-10-17.md"
+    },
+    {
+      "path": "qnfo-research-exec/README.md",
+      "title": "qnfo-research-exec",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-research-exec/README.md"
+    },
+    {
+      "path": "qnfo-research-radar/README.md",
+      "title": "qnfo-research-radar",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-research-radar/README.md"
+    },
+    {
+      "path": "qnfo-scorecard/README.md",
+      "title": "qnfo-scorecard",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-scorecard/README.md"
+    },
+    {
+      "path": "qnfo-social/README.md",
+      "title": "qnfo-social",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-social/README.md"
+    },
+    {
+      "path": "qnfo-subscribers/README.md",
+      "title": "qnfo-subscribers",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-subscribers/README.md"
+    },
+    {
+      "path": "qnfo-thread-ingest/README.md",
+      "title": "qnfo-thread-ingest",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-thread-ingest/README.md"
+    },
+    {
+      "path": "qnfo-tools-mcp/README.md",
+      "title": "qnfo-tools-mcp",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-tools-mcp/README.md"
+    },
+    {
+      "path": "qnfo-twin-maintain/README.md",
+      "title": "qnfo-twin-maintain",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-twin-maintain/README.md"
+    },
+    {
+      "path": "qnfo-venue-radar/README.md",
+      "title": "qnfo-venue-radar",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-venue-radar/README.md"
+    },
+    {
+      "path": "qnfo-web-unified/README.md",
+      "title": "qnfo-web-unified — the QNFO design system (QDS-1, 2026-10-02)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-web-unified/README.md"
+    },
+    {
+      "path": "research-code/README.md",
+      "title": "research-code",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/research-code/README.md"
+    },
+    {
+      "path": "research-code/agentic-collapse/README.md",
+      "title": "agentic-collapse",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/research-code/agentic-collapse/README.md"
+    },
+    {
+      "path": "research-code/ignorance-audit/README.md",
+      "title": "ignorance-audit",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/research-code/ignorance-audit/README.md"
+    },
+    {
+      "path": "research-code/ultrametric-lean/README.md",
+      "title": "ultrametric-lean",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/research-code/ultrametric-lean/README.md"
+    },
+    {
+      "path": "research-daily-brief/README.md",
+      "title": "research-daily-brief",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/research-daily-brief/README.md"
+    },
+    {
+      "path": "retired-deposit-stage/README.md",
+      "title": "Retired journal deposit stage",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/retired-deposit-stage/README.md"
+    }
+  ]
+}

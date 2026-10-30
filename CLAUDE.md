@@ -3,6 +3,19 @@
 Several agent sessions work this fleet concurrently with shared credentials. These rules exist
 because each one was broken at least once; the linked issue holds the evidence.
 
+## Shared operating library and documentation discovery (FLEET-SHARED-LIBRARY-1)
+- Every agent loads `docs/agent-library/README.md` for cost-aware Cloudflare,
+  included GitHub and authorized external-service selection, research/publication
+  throughput, issue resolution, program upgrades and measured autonomy/quality.
+- `llms.txt` and `docs/README.md` are the common bootstrap; `docs/INDEX.md` and
+  `docs/agent-catalog.json` inventory system documents and component READMEs.
+  Retrieve a single source revision and verify hashes; historical designs are
+  not live authority. Regenerate the catalog when its source documentation changes.
+- This library is additive: the doctrine, charter, harness permissions, live
+  claims, secret leases, privacy/consent boundaries and canonical deployment
+  controls retain their existing precedence. A source link is not proof that
+  a deployed runtime agent or an external client has loaded the new instructions.
+
 ## The Autonomous Operation Doctrine (DOCTRINE-1)
 - `docs/AUTONOMOUS-OPERATION-DOCTRINE.md` (owner directive 2026-10-08, verbatim; charter rule 13) binds every session and
   loop and wins over the sections below where they differ, except that the harness's own permission checks and the

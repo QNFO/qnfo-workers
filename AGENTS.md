@@ -1,7 +1,7 @@
-# Pi instructions for qnfo-workers
+# Agent instructions for qnfo-workers
 
-Pi loads this file as project context from the repository root, so these
-instructions apply to Pi sessions working anywhere in this repository.
+Agents that support `AGENTS.md`, including Pi, load this file as project
+context. These instructions apply throughout this repository.
 
 ## Repository authority
 
@@ -9,6 +9,10 @@ instructions apply to Pi sessions working anywhere in this repository.
   doctrine, shared-secret and work-claim procedures, deploy path, and testing
   rules. This file supplements those rules; it does not replace them or change
   any harness permission.
+- Load `docs/agent-library/README.md`, the shared operating library for every
+  agent. Discover system documentation through `llms.txt`, `docs/README.md`
+  and `docs/agent-catalog.json`; retrieve task-specific standards rather than
+  duplicating client-specific policy or assuming every catalog entry is live.
 - Read `docs/QUNIVERSE-CHARTER.md` and `GET
   https://qnfo-fleet-control.q08.workers.dev/charter` before changing the
   fleet's workers, bindings, tables, crons, or routes.

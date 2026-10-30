@@ -6,6 +6,7 @@ The source of the Quniverse: the Cloudflare Workers fleet that operates, heals, 
 - **Product requirements:** [docs/QUNIVERSE-PRD.md](docs/QUNIVERSE-PRD.md), user outcomes, acceptance criteria, success metrics and a phased roadmap mapped to existing initiatives; subordinate to the charter and strategy.
 - **Portfolio:** [docs/PORTFOLIO.md](docs/PORTFOLIO.md), every repository of the [QNFO organisation](https://github.com/QNFO) classified, linked and kept hygienic by the same loop (`GET /portfolio`).
 - **Rules for agent sessions:** [CLAUDE.md](CLAUDE.md). Several sessions work the fleet concurrently; the rules exist because each one was broken at least once.
+- **Shared agent library and system documentation:** [docs/README.md](docs/README.md), [fleet operating library](docs/agent-library/README.md), [complete index](docs/INDEX.md), [machine-readable catalog](docs/agent-catalog.json), and [llms.txt](llms.txt). Common research, issue, program, quality and cost-aware service guidance for every agent.
 - **Live surfaces:** [fleet.qnfo.org](https://fleet.qnfo.org) (owner dashboard), [qnfo.org](https://qnfo.org) and [papers.qnfo.org](https://papers.qnfo.org) (home of record), `GET /loops` on the kernel (the fleet verifying its own loops).
 
 ## Repository layout

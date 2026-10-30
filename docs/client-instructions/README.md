@@ -1,5 +1,23 @@
 # Client instruction suite (2026-10-28)
 
+## Common library (FLEET-SHARED-LIBRARY-1)
+
+Every client now has one public, provider-neutral source to load:
+[`../agent-library/README.md`](../agent-library/README.md). Discover it through
+[`../../llms.txt`](../../llms.txt), [`../README.md`](../README.md) and the
+hash-verifiable [`../agent-catalog.json`](../agent-catalog.json).
+Repository `AGENTS.md`, `CLAUDE.md`, Copilot instructions and the Quniverse
+profile point to it; they retain their existing rules.
+
+For DeepChat, Chatbox or another client outside this repository, load the
+same pinned bootstrap/library through its existing context mechanism,
+verify content hashes and record a test-run readback of
+`FLEET-SHARED-LIBRARY-1` and its version. The historical table below is not
+proof that external settings or deployed runtime prompts consumed this
+new library. No desktop settings are changed by a repository commit.
+
+## Historical client rollout snapshot (2026-10-28)
+
 One core block, `PROACTIVE-PROGRAMS-1.md`, goes into every client below. Each client keeps its existing instructions; the block is appended, nothing is replaced.
 
 | Client | Existing instructions found (read 2026-10-28) | Where the block goes | State |
