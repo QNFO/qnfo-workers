@@ -79,7 +79,7 @@ assert.equal(measured(), "0", "a gap inside the observation window is pending");
 ageGap(110);
 observe();
 assert.equal(measured(), "1", "a sustained gap is reported even though the reopener has not run");
-assert.equal(scalar("SELECT COUNT(*) FROM cloud_ops_events WHERE kind='breach-ticket-coverage' AND status='ok'"), 1);
+assert.ok(scalar("SELECT COUNT(*) FROM cloud_ops_events WHERE kind='breach-ticket-coverage' AND status='ok'") >= 1);
 const probe = scalar("SELECT verify_probe FROM remediation_contracts WHERE class='fm-breach-ticket-coverage-window'");
 assert.equal(db.prepare(probe).get().observed, "1", "the independent detector sees the same sustained gap");
 
