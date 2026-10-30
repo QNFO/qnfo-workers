@@ -17,8 +17,13 @@ name: assign-copilot-on-issue
 # is acyclic. The script exits 0 on every failure (it prints ::warning:: lines and one RESULT_JSON line), so a failed sweep cannot file a
 # WORKFLOW-FAILED-1 issue that the next sweep would assign again.
 #
+# BOUNDED AND CLAIM-AWARE: at most 10 assignments per run, never more than 12 open Copilot pull requests org-wide, an issue the work-claim service shows
+# as claimed or in the code loop is left to that doer, and a stalled assignment (Copilot assigned, no open or merged pull request, session older than
+# 2 hours) is re-driven once, and only after the claim fallback is documented on main (sessions that cannot reach the claim service otherwise end as
+# empty draft pull requests). The repository variable ASSIGN_COPILOT_SWEEP stops the sweep (off) or only the re-drive (new-only).
+#
 # BACKFILL: the look-back window defaults to 720 hours (30 days), so an open issue that Copilot never had is assigned even if an hourly run was missed;
-# raise `hours` by hand for older ones. An issue Copilot was ever assigned to is never assigned again, and `max` (25) bounds every run.
+# raise `hours` by hand for older ones. An issue Copilot was assigned to and a person later unassigned is never assigned again.
 # Style: step names colon-free, no heredocs, no inline python, inputs travel through env (workflow-lint.py).
 
 on:
@@ -36,9 +41,9 @@ on:
         required: false
         default: "720"
       max:
-        description: "Most assignments in this run (default 25)"
+        description: "Most assignments in this run (default 10)"
         required: false
-        default: "25"
+        default: "10"
       mode:
         description: "live (default) or dry (reads only)"
         required: false
@@ -62,6 +67,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_PAT_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      ASSIGN_COPILOT_SWEEP: ${{ vars.ASSIGN_COPILOT_SWEEP }}
       IN_HOURS: ${{ github.event.inputs.hours }}
       IN_MAX: ${{ github.event.inputs.max }}
       IN_MODE: ${{ github.event.inputs.mode }}
@@ -75,4 +81,4 @@ jobs:
           node-version: "22"
 
       - name: Assign Copilot to new issues
-        run: node scripts/assign-copilot-sweep.mjs --hours "${IN_HOURS:-720}" --max "${IN_MAX:-25}" --mode "${IN_MODE:-live}"
+        run: node scripts/assign-copilot-sweep.mjs --hours "${IN_HOURS:-720}" --max "${IN_MAX:-10}" --mode "${IN_MODE:-live}"

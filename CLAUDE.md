@@ -540,7 +540,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - ASSIGN-COPILOT-ISSUES-1 (2026-10-30, owner directive: "ALWAYS ASSIGN GITHUB COPILOT ... TO ALL NEW ISSUES ... NEVER ASSIGN ISSUES TO THE USER"): every new issue in every
   QNFO repository is assigned to GitHub Copilot running the Quniverse custom agent, never to a person, by `.github/workflows/assign-copilot-on-issue.yml`
   (`scripts/assign-copilot-sweep.mjs`, secret `QNFO_GH_PAT`; the workflow `GITHUB_TOKEN` cannot assign Copilot). The sweep also publishes the profile at
-  `QNFO/.github` `agents/`. It is bounded: only issues written by an owner, member, collaborator or `github-actions[bot]`, created in the look-back window,
-  never one Copilot ever had, at most `--max` per run. A session that cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is
-  removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1 (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository
-  copies of the workflow or of the secret.
+  `QNFO/.github` `agents/` (measured live 2026-10-30: with only that organization-level profile, sessions started in repositories that hold none). The API call also assigns the token's
+  owner, which the sweep removes again. It is bounded: only issues written by an owner, member, collaborator or `github-actions[bot]`, created in the look-back window, at most
+  `--max` (10) per run and never more than 12 open Copilot pull requests org-wide; an issue the work-claim service shows as claimed or in flight is left to that doer; an issue
+  a person unassigned Copilot from is never assigned again. A stalled assignment (Copilot assigned, no open or merged pull request, session older than 2 hours) is re-driven once,
+  and only while CLAIM-UNREACHABLE-FALLBACK-1 above is on main. The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
+  cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1
+  (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository copies of the workflow or of the secret.
