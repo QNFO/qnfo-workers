@@ -43,6 +43,9 @@ export const COPILOT_BOT = "copilot-swe-agent[bot]";
 export const AGENT_SOURCE = { repo: "QNFO/qnfo-workers", path: ".github/agents/quniverse.agent.md", ref: "main" };
 export const AGENT_TARGET = { repo: "QNFO/.github", path: "agents/quniverse.agent.md", branch: "master" };
 export const FALLBACK_DOC = { path: "CLAUDE.md", marker: /CLAIM-UNREACHABLE/ };
+// Repositories that hold only issues. A session there ends as an empty draft pull request (QNFO/qnfo-fleet-issues holds a LICENSE and nothing else,
+// measured 2026-10-30: seven "Blocked" drafts), so the issue is assigned with target_repo set to the repository whose code it describes.
+export const TARGET_OVERRIDES = { "QNFO/qnfo-fleet-issues": "QNFO/qnfo-workers" };
 export const LOCKS_URL = "https://qnfo-deploy-guard.q08.workers.dev/work-locks";
 export const TRUSTED_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
 export const TRUSTED_BOTS = ["github-actions[bot]"];
@@ -226,6 +229,13 @@ export async function run(opts, deps) {
     stalled.items.map(normalize).sort(byAge).forEach(add);
   }
   const repos = new Map(), refused = new Set();
+  const repoInfo = async (slug) => {
+    if (!repos.has(slug)) {
+      const r = await api.req("GET", "/repos/" + slug);
+      repos.set(slug, r.status === 200 && r.body ? { ok: true, branch: r.body.default_branch, archived: !!r.body.archived, disabled: !!r.body.disabled } : { ok: false, http: r.status, message: r.message });
+    }
+    return repos.get(slug);
+  };
   let attempts = 0, redrives = 0, stopped = false;
   for (let idx = 0; idx < candidates.length; idx++) {
     const n = candidates[idx];
@@ -243,13 +253,13 @@ export async function run(opts, deps) {
     const mid = mirrorId(n.title);
     if (mid && doers.ids.has(mid)) { skip("has-doer", n); continue; }
     if (hasCopilot && redrives >= o.redriveMax) { sum.deferred++; continue; }
-    if (!repos.has(slug)) {
-      const r = await api.req("GET", "/repos/" + slug);
-      repos.set(slug, r.status === 200 && r.body ? { ok: true, branch: r.body.default_branch, archived: !!r.body.archived, disabled: !!r.body.disabled } : { ok: false, http: r.status, message: r.message });
-    }
-    const info = repos.get(slug);
+    const info = await repoInfo(slug);
     if (!info.ok) { skip("repo-unreadable", n); sum.errors.push({ where: slug, http: info.http, message: info.message }); continue; }
     if (info.archived || info.disabled) { skip("repo-archived", n); continue; }
+    // An issue-only repository is worked where the code lives (measured live: target_repo may differ from the issue's repository).
+    const work = TARGET_OVERRIDES[slug] || slug;
+    const winfo = work === slug ? info : await repoInfo(work);
+    if (!winfo.ok || winfo.archived || winfo.disabled) { skip("repo-unreadable", n); sum.errors.push({ where: work, http: winfo.http, message: winfo.message || "the work repository is archived or disabled" }); continue; }
     const ev = await api.req("GET", "/repos/" + slug + "/issues/" + n.number + "/events?per_page=100");
     if (ev.status !== 200 || !Array.isArray(ev.body)) { skip("history-unreadable", n); continue; }
     const given = ev.body.filter((e) => e.event === "assigned" && e.assignee && isCopilot(e.assignee.login));
@@ -274,7 +284,7 @@ export async function run(opts, deps) {
       if (u.status < 200 || u.status >= 300) { sum.errors.push({ where: slug + "#" + n.number, http: u.status, message: "could not unassign Copilot for the re-drive: " + u.message }); if (stopsRun(u)) { stopped = true; sum.stopped = "http " + u.status + ": " + u.message; } continue; }
       if (o.pauseMs) await d.sleep(o.pauseMs);
     }
-    const body = { assignees: [COPILOT_BOT], agent_assignment: { target_repo: slug, base_branch: info.branch, custom_agent: AGENT, custom_instructions: INSTRUCTIONS } };
+    const body = { assignees: [COPILOT_BOT], agent_assignment: { target_repo: work, base_branch: winfo.branch, custom_agent: AGENT, custom_instructions: INSTRUCTIONS } };
     const r = await api.req("POST", "/repos/" + slug + "/issues/" + n.number + "/assignees", body);
     const now = r.body && Array.isArray(r.body.assignees) ? r.body.assignees.map((a) => a.login) : [];
     if ((r.status === 200 || r.status === 201) && now.some(isCopilot)) {

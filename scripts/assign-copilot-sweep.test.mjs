@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { run, normalize, trusted, isCopilot, mirrorId, parseRefs, agentProblems, sinceIso, makeApi, syncOrgAgent, INSTRUCTIONS, AGENT, COPILOT_BOT, AGENT_SOURCE, AGENT_TARGET, LOCKS_URL, DEFAULTS } from "./assign-copilot-sweep.mjs";
+import { run, normalize, trusted, isCopilot, mirrorId, parseRefs, agentProblems, sinceIso, makeApi, syncOrgAgent, INSTRUCTIONS, AGENT, COPILOT_BOT, AGENT_SOURCE, AGENT_TARGET, LOCKS_URL, DEFAULTS, TARGET_OVERRIDES } from "./assign-copilot-sweep.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -30,7 +30,7 @@ const withCopilot = (n, over) => item(n, Object.assign({ assignees: [{ login: "C
 
 function fakeGh(cfg) {
   const log = [];
-  const repos = Object.assign({ "QNFO/qnfo-ops": { default_branch: "main", archived: false }, "QNFO/qnfo-skills": { default_branch: "master", archived: false } }, cfg.repos || {});
+  const repos = Object.assign({ "QNFO/qnfo-ops": { default_branch: "main", archived: false }, "QNFO/qnfo-skills": { default_branch: "master", archived: false }, "QNFO/qnfo-workers": { default_branch: "main", archived: false }, "QNFO/qnfo-fleet-issues": { default_branch: "main", archived: false } }, cfg.repos || {});
   const files = Object.assign({}, cfg.files || {});
   const fetchImpl = async (url, init) => {
     if (url === LOCKS_URL) { log.push({ method: "GET", path: "LOCKS" }); if (!cfg.locks) throw new Error("getaddrinfo ENOTFOUND qnfo-deploy-guard.q08.workers.dev"); return { status: 200, text: async () => JSON.stringify(cfg.locks) }; }
@@ -199,6 +199,13 @@ ok(s.redriven === 0 && s.skipped["has-doer"] === 1, "a claimed issue is not re-d
 ok(s.status === "disabled" && g.log.length === 0, "ASSIGN_COPILOT_SWEEP=off sends nothing");
 ({ s, g } = await go({ issues: [item(121)] }, { sweep: "garbage" }));
 ok(s.sweep === "on" && s.assigned === 1, "an unknown switch value means on");
+
+// 4e. an issue-only repository is worked where the code lives (measured live: target_repo may differ from the issue's repository)
+({ s, g } = await go({ issues: [item(131, { repository_url: "https://api.github.com/repos/QNFO/qnfo-fleet-issues", title: "[general] Worker observability (live)" })], repos: { "QNFO/qnfo-workers": { default_branch: "trunk", archived: false } } }));
+ok(posts(g)[0] && posts(g)[0].path === "/repos/QNFO/qnfo-fleet-issues/issues/131/assignees" && posts(g)[0].body.agent_assignment.target_repo === "QNFO/qnfo-workers" && posts(g)[0].body.agent_assignment.base_branch === "trunk", "an issue in the issue-only repository is assigned where it lives but worked in qnfo-workers, on that repository's default branch", posts(g)[0] && posts(g)[0].body);
+({ s, g } = await go({ issues: [item(132, { repository_url: "https://api.github.com/repos/QNFO/qnfo-fleet-issues" })], repos: { "QNFO/qnfo-workers": { default_branch: "main", archived: true } } }));
+ok(posts(g).length === 0 && s.skipped["repo-unreadable"] === 1, "an archived work repository assigns nothing", s);
+ok(TARGET_OVERRIDES["QNFO/qnfo-fleet-issues"] === "QNFO/qnfo-workers" && Object.keys(TARGET_OVERRIDES).length === 1, "only the issue-feed repository is redirected");
 
 // 5. failures never throw and never loop
 ({ s, g } = await go({ issues: [item(71, { created_at: "2026-10-30T01:00:00Z" }), item(72, { created_at: "2026-10-30T02:00:00Z" }), item(73, { created_at: "2026-10-30T03:00:00Z" })], assignStatus: { "QNFO/qnfo-ops#71": 401 }, assignMessage: { "QNFO/qnfo-ops#71": "Bad credentials" } }));
