@@ -123,6 +123,39 @@ Do not report the automation error fixed while the repository is public, or
 cloud control verified until the selected cloud agent has performed the
 resource read successfully.
 
+## Network boundary and the work-claim fallback
+
+The cloud agent's firewall allows GitHub hosts and the recommended package
+allowlist only. Measured on 2026-10-30 from a cloud-agent sandbox: `api.github.com`
+and `raw.githubusercontent.com` resolve; `fleet.qnfo.org`,
+`qnfo-fleet-control.q08.workers.dev`, `qnfo-deploy-guard.q08.workers.dev`,
+`qnfo-memory-mcp.q08.workers.dev` and `mcp.cloudflare.com` do not
+(`curl: (6) Could not resolve host`). The work-claim endpoint was the first
+mandatory step of every edit, so about 20 sessions ended with a no-change
+draft pull request that said the claim service "did not resolve" (pull
+requests 5304, 5305, 5347 and others; 66 draft pull requests were open at
+08:26Z). That was one path to every edit with no second path
+(ANTIFRAGILE-1).
+
+`CLAIM-UNREACHABLE-FALLBACK-1` (`CLAUDE.md`, "Work claims") is the second
+path: a claim that returns `acquired: false` still binds, but a claim that
+cannot be attempted does not stop the work. The session coordinates through
+GitHub (open pull requests that touch the same paths, a `copilot/<issue>-<slug>`
+branch), records `work-claim: unreachable (<verbatim error>)` in the pull
+request body and finishes the change; conflict repair is the second line
+against overlap. Fleet reads that need a Worker host are made by the fleet's
+own runners, so a session names the closing probe instead of running it.
+
+Making the host reachable is an optional third path, not a prerequisite: a
+repository administrator adds `qnfo-deploy-guard.q08.workers.dev` under
+Settings > Copilot > Internet access ("Copilot in the cloud" custom
+allowlist). Do not disable the firewall or the recommended allowlist. The
+current values are readable with
+`gh api repos/QNFO/qnfo-workers/copilot/cloud-agent/configuration` (fields
+`is_firewall_enabled`, `custom_allowlist`, `require_actions_workflow_approval`);
+the endpoint answers 403 to an app token without the repository
+administration right.
+
 ## References
 
 - [GitHub automation availability](https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/about-automations)

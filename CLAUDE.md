@@ -129,6 +129,14 @@ because each one was broken at least once; the linked issue holds the evidence.
   `POST https://qnfo-deploy-guard.q08.workers.dev/work-lock/acquire {"key":"file:<repo path>","owner":"<session>","intent":"<what you will change>","ttl_sec":3600}`
   (`issue:<id>` for an issue; `ttl_sec` at most 7200). If `acquired` is false, `holder` is on it until `expires_at`
   (`intent` says what it is doing): skip it and take other work, or review that change instead of writing a second one.
+- CLAIM-UNREACHABLE-FALLBACK-1 (2026-10-30): the endpoint above resolves only from a session with fleet network access. A GitHub cloud-agent
+  sandbox reaches GitHub hosts only (`curl: (6) Could not resolve host: qnfo-deploy-guard.q08.workers.dev`, about 20 sessions on 2026-10-30, each
+  ending in a no-change draft pull request: the claim was the single path to every edit). `acquired: false` still binds. A claim that cannot be
+  attempted (DNS failure, refusal, timeout) does not stop the work: coordinate through GitHub (open pull requests that touch the same paths, read
+  with REST `pulls` and `pulls/<n>/files`; a `copilot/<issue>-<slug>` branch), write `work-claim: unreachable (<verbatim error>); no other open PR
+  touches <paths>` in the pull request body, and finish the change. CONFLICT-REPAIR-INPLACE-1 is the second line against overlapping edits. The
+  repository administrator can also allowlist the claim host under Settings > Copilot > Internet access ("Copilot in the cloud" custom allowlist,
+  `qnfo-deploy-guard.q08.workers.dev`); the fallback does not wait for it.
 - `in_flight` in the answer lists the code loop's unfinished tasks on the same path or issue; they do not block you, but a
   task that fixes the same defect means you review it, not duplicate it. `GET /work-locks` lists every live claim and
   in-flight task (open, never a token).
