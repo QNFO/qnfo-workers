@@ -51,12 +51,13 @@ add("MODEL-DEGRADED model-a", "model issue");
 add("legacy health is failing", "No probe opt-in: probe_target is absent");
 add("ERROR-DETAIL-CAPTURE-1: worker exceptions are counted but not recorded", "Residual code defect");
 add("Worker availability degraded", "probe_target=qnfo-worker-x probe_class=network-endpoint");
+add("Unhealthy worker shutdown", "probe_target=qnfo-worker-y probe_class=worker-process");
 
 {
   const summary = await assessment();
   const chain = summary.chains.find((candidate) => candidate.id === "issues");
   ok(chain && chain.n === 10 && chain.status === "healthy", "only the ten supported drainable issue families count", chain);
-  ok(chain && chain.total === 13, "the monitor retains the full medium total separately", chain && chain.total);
+  ok(chain && chain.total === 14, "the monitor retains the full medium total separately", chain && chain.total);
   ok(chain && chain.consumer === "qnfo-lifecycle (qnfo-backlog-exec member)", "the chain names the actual folded consumer", chain && chain.consumer);
 }
 
