@@ -296,6 +296,12 @@ function opsToolBudgetBail(env, scope, iter, maxIters, deadlineHit, reason) {
   } catch (e) { return null; }
 }
 __name(opsToolBudgetBail, "opsToolBudgetBail");
+function opsJobToolBudgetGuard(env, iter, maxIters, reason) {
+  try {
+    return env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_job_tool_budget_guard", "job-workflow", snippet({ iter: iter, maxIters: maxIters, reason: reason || void 0, version: VERSION }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { return null; }
+}
+__name(opsJobToolBudgetGuard, "opsJobToolBudgetGuard");
 // BUDGET-AUTO-PROMOTE-1 (#1680, 2026-10-01): an owner turn that hits the interactive tool budget
 // (300 s wall clock or the round cap) used to end with "INCOMPLETE: ..." and the remaining work was
 // dropped; measured 514 of 950 mobile agent-tools turns on 2026-09-24..30. At the first bail the loop
@@ -670,14 +676,12 @@ async function logEscalation(env, taskClass, fromModel, toModel, kind, reason) {
   } catch (e) { console.log("model_ladder_escalations insert failed:", e && e.message || e); }
 }
 __name(logEscalation, "logEscalation");
-// TOOLBUDGET-BAIL-1 (2026-09-30): D3a machine-readable bail record. The bail path
-// already writes a model_ladder_escalations row (kind='tool-budget-exhausted'); this
-// adds the cloud_ops_events row so a bail is countable in the fleet event stream
-// instead of only being visible as the user-facing 'tool budget exhausted' symptom.
+// TOOLBUDGET-BAIL-1 (2026-09-30): durable agent-session budget telemetry. Keep this
+// separate from interactive chat bails, which drive ops_tool_budget_bail_7d.
 async function logToolBudgetBail(env, strategy, n, names, maxIters, deadlineHit) {
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-      .bind(randId("evt-"), iso(), "ops_tool_budget_bail", "tool-budget-exhausted", snippet({ strategy, pending: n, tools: names, maxIters, deadlineHit: !!deadlineHit }, 600), "qnfo-ops", "ok").run();
+      .bind(randId("evt-"), iso(), "ops_agent_session_budget", "tool-budget-exhausted", snippet({ strategy, pending: n, tools: names, maxIters, deadlineHit: !!deadlineHit }, 600), "qnfo-ops", "ok").run();
   } catch (e) { console.log("ops_tool_budget_bail insert failed:", e && e.message || e); }
 }
 __name(logToolBudgetBail, "logToolBudgetBail");
@@ -7451,7 +7455,6 @@ async function handleChatCore(env, body, ua, ctx, pub) {
         const capNow = toolsNow ? toolRoundCap : answerCap;
         if (!withTools) {
           const _firstBail = !work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; });
-          if (_firstBail) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
           work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
           if (_firstBail && !pub && !promotedJobId && !clientTools && !execUpstream && (source === "mobile" || source === "deepchat") && toolLog.length >= 3) {
             const _pj = await opsBudgetPromote(env, work, toolLog, iter, deadlineHit);
@@ -7460,6 +7463,7 @@ async function handleChatCore(env, body, ua, ctx, pub) {
               work.push({ role: "system", content: BUDGET_PROMOTED_DIRECTIVE.replace(/\{job\}/g, _pj.id) });
             }
           }
+          if (_firstBail && !promotedJobId) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
           // OPS-PUBLIC-READ-1: a public turn never leaves a checkpoint; opsSurfaceCheckpoints would replay it into a keyed turn.
           if (_firstBail && !pub && !promotedJobId) await opsBudgetCheckpoint(env, lastUserText(messages), toolLog, iter, deadlineHit);
         }
@@ -8912,7 +8916,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       const withTools = turn < maxTurns && !_promptCapHit;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
       if (!withTools) {
-        if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "job-workflow", turn, maxTurns, false, _promptCapHit ? "prompt-cap" : void 0);
+        if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsJobToolBudgetGuard(env, turn, maxTurns, _promptCapHit ? "prompt-cap" : void 0);
         work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
       }
       let resp = null;
