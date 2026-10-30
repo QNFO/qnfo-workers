@@ -215,6 +215,9 @@ vm.createContext(jx);
 vm.runInContext(cloudSrc.slice(cA, cB) + "\n__x = { jobBreachDoctorWatch };", jx);
 const watchJob = jx.__x.jobBreachDoctorWatch;
 ok(typeof watchJob === "function", "jobBreachDoctorWatch is loaded");
+// A run id is "breach-doctor-watch-run-<s|d>-" + Date.now() in base 36, so a second claim made in the same millisecond as an earlier row of this database collides on the primary key (claim-failed).
+// Production ticks are minutes apart; two calls made back to back by a fast test worker are not, so wait for the clock to move before the second claim.
+const nextMs = async () => { const t = Date.now(); while (Date.now() === t) await new Promise((r) => setTimeout(r, 1)); };
 const iso = (minAgo) => new Date(Date.now() - minAgo * 60000).toISOString().slice(0, 19) + "Z";
 function e2e(o = {}) {
   const raw = world();
@@ -268,6 +271,7 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   ok(w.calls.length === 1, "no second drill the next tick");
   w.raw.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id LIKE 'breach-doctor-watch-run-%'").run(iso(1441));
   w.raw.prepare("UPDATE control_registry SET alternate_tested_at = NULL").run();
+  await nextMs();
   const next = await watchJob(w.env);
   ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control !== null && runs(w.raw).length === 2, "1441 minutes later the drill runs again and stamps again", next.notes.acting);
 }
@@ -280,6 +284,7 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   const s = stamps(w.raw);
   ok(s.control === null && s.spof === null && s.cap === null && tickEvents(w.raw).filter((e) => /source=watch/.test(e.detail)).length === 0, "and nothing is stamped (no tick row, no stamp)", s);
   w.raw.prepare("DELETE FROM loop_lock").run();
+  await nextMs();
   const next = await watchJob(w.env);
   ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control, "a skipped run is not counted against the 30-minute rate: the next tick calls again and verifies", next.notes.acting);
 }
