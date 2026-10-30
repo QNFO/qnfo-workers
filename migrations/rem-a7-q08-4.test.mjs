@@ -1,5 +1,5 @@
 // REM-A7-Q08-4 offline suite: replays migrations/2026-10-26-rem-a7-q08-4.sql on node:sqlite over the live-shaped base schema of qnfo-fleet-control/breach-doctor.test.mjs.
-// Proves: the header opts in; the placeholder contract of issue 1000512 becomes the code-read probe (valid JSON, no semicolon, red on the committed worker until researchLedger lands, green on a worker that has it);
+// Proves: the header opts in; the placeholder contract of issue 1000512 becomes the code-read probe (valid JSON, no semicolon; it was red until researchLedger landed in q08-signal-engine 0.40.0 and is green on a worker that has it);
 // only that contract changes, only while the issue is open and the placeholder is still there; a replay changes nothing; the Rollback header re-parks the contract; nothing is deleted.
 // Output MUST contain "0 failed" on success.   node migrations/rem-a7-q08-4.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -41,7 +41,7 @@ const snap = (w) => JSON.stringify(w.prepare("SELECT * FROM remediation_contract
   ok(c.status === "active" && c.verify_transport === "code-read" && c.last_verdict === null && c.attempts === 0 && /REM-A7-Q08-4/.test(c.precondition), "the placeholder becomes the active code-read closing probe", c);
   let j = null; try { j = JSON.parse(c.verify_probe); } catch (e) { j = null; }
   ok(j && j.paths.length === 1 && j.paths[0] === "q08-signal-engine/worker.js" && j.contains === "function researchLedger(" && !/;/.test(c.verify_probe), "the probe is valid JSON on the worker, with no semicolon", c.verify_probe);
-  ok(!worker.includes(j.contains), "the probe is red on the committed worker until the slice lands (researchLedger is not there yet)");
+  ok(worker.includes(j.contains), "the probe is green on the committed worker now that the slice has landed (researchLedger is there)");
   ok((worker + "\nfunction researchLedger(env, src, signalText) { return { lines: [], sources: [] }; }\n").includes(j.contains), "and green on a worker that carries researchLedger");
   ok(JSON.stringify(con(w, "issue-1000999")) === other, "another contract is untouched");
   const s_1 = snap(w);

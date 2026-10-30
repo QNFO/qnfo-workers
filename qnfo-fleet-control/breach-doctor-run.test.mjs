@@ -276,6 +276,7 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   ok(w.calls.length === 1, "no second drill the next tick");
   w.raw.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id LIKE 'breach-doctor-watch-run-%'").run(iso(1441));
   w.raw.prepare("UPDATE control_registry SET alternate_tested_at = NULL").run();
+  await nextMs();
   const next = await watchJob(w.env);
   ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control !== null && runs(w.raw).length === 2, "1441 minutes later the drill runs again and stamps again", next.notes.acting);
 }
@@ -288,6 +289,7 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   const s = stamps(w.raw);
   ok(s.control === null && s.spof === null && s.cap === null && tickEvents(w.raw).filter((e) => /source=watch/.test(e.detail)).length === 0, "and nothing is stamped (no tick row, no stamp)", s);
   w.raw.prepare("DELETE FROM loop_lock").run();
+  await nextMs();
   const next = await watchJob(w.env);
   ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control, "a skipped run is not counted against the 30-minute rate: the next tick calls again and verifies", next.notes.acting);
 }

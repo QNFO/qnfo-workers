@@ -94,7 +94,6 @@ const snap = (w) => JSON.stringify([tables(w), qa(w, "SELECT * FROM agent_issues
 
 {
   const w = world();
-  const before = tables(w);
   const p0 = qa(w, ORIGINAL_PROBE)[0];
   ok(p0.expected === "0" && Number(p0.observed) > 0, "before: the contract probe of 100587 reads a positive count", p0);
   w.exec(sql);
@@ -146,9 +145,10 @@ const snap = (w) => JSON.stringify([tables(w), qa(w, "SELECT * FROM agent_issues
   ok(snap(w) === s1, "a replay changes nothing");
   // rollback
   const w2 = world();
+  const before2 = tables(w2); // its own baseline: world() stamps created_at / last_synced_at with datetime('now'), so another world built a second later is never byte-equal
   w2.exec(sql);
   w2.exec(sql.split("\n").find((l) => l.startsWith("-- Rollback: ")).slice("-- Rollback: ".length).split("; ").join(";\n"));
-  ok(tables(w2) === before, "Rollback restores all four tables exactly");
+  ok(tables(w2) === before2, "Rollback restores all four tables exactly");
   ok(q1(w2, "SELECT close_evidence e FROM issue_triage WHERE issue_id = 100587").e === null, "Rollback clears the staged evidence");
   ok(qa(w2, "SELECT status FROM agent_issues WHERE title LIKE 'NOZ-DOI-SWEEP-%'").every((r) => r.status === "closed"), "Rollback closes the two successor issues through their triage rows");
   ok(q1(w2, "SELECT status s FROM remediation_contracts WHERE class = 'fm-code-publish-registry-doi'").s === "superseded", "Rollback supersedes the detector");

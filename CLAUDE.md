@@ -129,6 +129,15 @@ because each one was broken at least once; the linked issue holds the evidence.
   `POST https://qnfo-deploy-guard.q08.workers.dev/work-lock/acquire {"key":"file:<repo path>","owner":"<session>","intent":"<what you will change>","ttl_sec":3600}`
   (`issue:<id>` for an issue; `ttl_sec` at most 7200). If `acquired` is false, `holder` is on it until `expires_at`
   (`intent` says what it is doing): skip it and take other work, or review that change instead of writing a second one.
+- CLAIM-UNREACHABLE-FALLBACK-1 (2026-10-30): the endpoint above resolves only from a session with fleet network access. A GitHub cloud-agent
+  sandbox reaches GitHub hosts only (`curl: (6) Could not resolve host: qnfo-deploy-guard.q08.workers.dev`, about 20 sessions on 2026-10-30, each
+  ending in a no-change draft pull request: the claim was the single path to every edit). `acquired: false` still binds. A claim that cannot be
+  attempted (DNS failure, refusal, timeout) does not stop the work: coordinate through GitHub (open pull requests that touch the same paths, read
+  with REST `pulls` and `pulls/<n>/files`; a `copilot/<issue>-<slug>` branch), write `work-claim: unreachable (<verbatim error>); no other open PR
+  touches <paths>` in the pull request body, and finish the change. A live secret lease and a `HOLD:` comment stay binding. CONFLICT-REPAIR-INPLACE-1
+  is the second line against overlapping edits. The
+  repository administrator can also allowlist the claim host under Settings > Copilot > Internet access ("Copilot in the cloud" custom allowlist,
+  `qnfo-deploy-guard.q08.workers.dev`); the fallback does not wait for it.
 - `in_flight` in the answer lists the code loop's unfinished tasks on the same path or issue; they do not block you, but a
   task that fixes the same defect means you review it, not duplicate it. `GET /work-locks` lists every live claim and
   in-flight task (open, never a token).
@@ -528,3 +537,13 @@ because each one was broken at least once; the linked issue holds the evidence.
   a self-heal ledger copy, a repeated owner prompt) closes with the fact that resolved it: the hourly D1 workflow `issue-meta-fold` (fleet_tasks, :20) saves the before-state in
   `issue_fold_ledger` and closes through the triage row with "moot: ..." or "superseded by <id> ..." evidence. A new filer of such tickets gets a rule in that workflow and in
   `migrations/issue-hygiene.test.mjs`; never a trigger on `agent_issues` (AGENT-ISSUES-TRIGGER-DEPTH-1: D1 refuses writes whose trigger programs nest more than 10 levels).
+- ASSIGN-COPILOT-ISSUES-1 (2026-10-30, owner directive: "ALWAYS ASSIGN GITHUB COPILOT ... TO ALL NEW ISSUES ... NEVER ASSIGN ISSUES TO THE USER"): every new issue in every
+  QNFO repository is assigned to GitHub Copilot running the Quniverse custom agent, never to a person, by `.github/workflows/assign-copilot-on-issue.yml`
+  (`scripts/assign-copilot-sweep.mjs`, secret `QNFO_GH_PAT`; the workflow `GITHUB_TOKEN` cannot assign Copilot). The sweep also publishes the profile at
+  `QNFO/.github` `agents/` (measured live 2026-10-30: with only that organization-level profile, sessions started in repositories that hold none). The API call also assigns the token's
+  owner, which the sweep removes again. It is bounded: only issues written by an owner, member, collaborator or `github-actions[bot]`, created in the look-back window, at most
+  `--max` (10) per run and never more than 12 open Copilot pull requests org-wide; an issue the work-claim service shows as claimed or in flight is left to that doer; an issue
+  a person unassigned Copilot from is never assigned again. A stalled assignment (Copilot assigned, no open or merged pull request, session older than 2 hours) is re-driven once,
+  and only while CLAIM-UNREACHABLE-FALLBACK-1 above is on main. The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
+  cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1
+  (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository copies of the workflow or of the secret.

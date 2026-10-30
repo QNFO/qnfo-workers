@@ -1,0 +1,74 @@
+name: copilot-pr-lifecycle
+
+# COPILOT-PR-LIFECYCLE-1 (2026-10-30, owner directive, pillar autonomy): the owner never reviews, is never assigned and never approves a Copilot pull
+# request. GitHub makes the person who triggered the Copilot cloud agent its reviewer and assignee, and holds every workflow run of the agent's pushes
+# until a person clicks "Approve and run workflows", so on 2026-10-30 the merge lane saw no green check on any Copilot pull request (268 runs left
+# `action_required`). scripts/copilot-pr-lifecycle.mjs removes the owner from review and assignment and, once the agent has finished, approves the
+# gated runs of a pull request that changes none of the paths CI executes with more than read access (DENY_PATHS). The merge lane merges the result.
+#
+# TOKEN: the workflow GITHUB_TOKEN (pull-requests, issues, actions write) does the repository work. ORG_TOKEN is QNFO_GH_PAT, the fleet user credential, handed to the script
+# only off a pull_request_target run (the same guard deploy-gate uses for its secrets): the script uses it to remove the owner from the Copilot pull requests and the issues of
+# every other QNFO repository (search by author app/copilot-swe-agent, review-requested and assignee), never for an approval. COPILOT_PR_APPROVE (repository variable) set to
+# off restores "nothing is approved"; OWNER_LOGINS (repository variable, comma separated) overrides the default owner login.
+# PULL_REQUEST_TARGET IS SAFE HERE: the job runs only for a pull request written by Copilot, checks out the base branch (never the pull request), and
+# the script puts nothing from the pull request in a shell line, a path or a query except integers and SHAs read from the API.
+# CADENCE: the pull_request_target events are the fast path. When GitHub holds a Copilot-triggered run for approval, the push to main and the
+# workflow_run chain off remediation-consumer (the schedule event never fires here) sweep every open Copilot pull request within minutes, and dispatch
+# does it by hand (inputs pr, mode). The sweep writes no file and files no issue, so the chain is acyclic.
+# Style: step names colon-free, no heredocs, no inline python, inputs travel through env (workflow-lint.py).
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, review_requested, assigned]
+  workflow_run:
+    workflows: ["remediation-consumer"]
+    types: [completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number (empty: every open Copilot pull request)"
+        required: false
+        default: ""
+      mode:
+        description: "live (default) or dry (reads only)"
+        required: false
+        type: choice
+        default: live
+        options:
+          - live
+          - dry
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: copilot-pr-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.user.login == 'Copilot'
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ORG_TOKEN: ${{ github.event_name != 'pull_request_target' && secrets.QNFO_GH_PAT || '' }}
+      TARGET_PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
+      LIFECYCLE_MODE: ${{ github.event.inputs.mode }}
+      COPILOT_PR_APPROVE: ${{ vars.COPILOT_PR_APPROVE }}
+      OWNER_LOGINS: ${{ vars.OWNER_LOGINS }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Sweep the Copilot pull requests
+        run: node scripts/copilot-pr-lifecycle.mjs

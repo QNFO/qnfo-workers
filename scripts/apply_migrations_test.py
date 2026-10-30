@@ -610,6 +610,33 @@ for stmt in ("UPDATE fleet_crons SET cron_expr='*/10 * * * *' WHERE name='x';", 
     ok(len(r2) == 1, "an edited file with '" + stmt[:28] + "' is refused", r2)
 ok(M.clobber_problems(HDR.replace("APPLY-BY: ci", "APPLY-BY: none (hand applied)") + "UPDATE fleet_tasks SET enabled=1;\n-- e\n", HDR.replace("APPLY-BY: ci", "APPLY-BY: none (hand applied)") + "UPDATE fleet_tasks SET enabled=1;\n") == [], "a file that never opted in to CI is not the runner's to re-apply, so it is not refused")
 ok(M.clobber_problems(HDR + "UPDATE agent_issues SET status='open' WHERE id=1;\n-- edit\n", HDR + "UPDATE agent_issues SET status='open' WHERE id=1;\n") == [], "other tables are not covered by this guard")
+# RESTORE-APPLIED-CONTENT-1: reverting an edit puts back a content the runner already applied (its sha256 has an ok row), so the file is skipped, not re-run
+ok(M.clobber_problems(BASE_TXT, edited, [BASE_TXT]) == [], "restoring a content the file already had is not refused")
+r3 = M.clobber_problems(BASE_TXT + "-- never merged\n", edited, [BASE_TXT])
+ok(len(r3) == 1 and "MIGRATION-NO-CLOBBER-1" in r3[0], "a content that was never in the history is still refused", r3)
+ok(len(M.clobber_problems(edited + "-- again\n", BASE_TXT, [])) == 1, "an edit with no history match is still refused")
+# the history helper against a real repository: v1 merged, v2 edited it, v3 restores v1
+import subprocess
+_repo = tempfile.mkdtemp()
+def _git(*a):
+    return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"] + list(a), cwd=_repo, capture_output=True, text=True, check=True)
+_git("init", "-q", "-b", "main")
+os.makedirs(os.path.join(_repo, "migrations"))
+for _txt in (BASE_TXT, edited):
+    open(os.path.join(_repo, "migrations", "x.sql"), "w", encoding="utf-8").write(_txt)
+    _git("add", "migrations/x.sql")
+    _git("commit", "-q", "-m", "v")
+_cwd = os.getcwd()
+os.chdir(_repo)
+try:
+    _hist = M.history_texts_of("migrations/x.sql", "HEAD")
+    _base = M.base_text_of("migrations/x.sql", "HEAD")
+    ok(_hist == [edited, BASE_TXT], "history_texts_of lists every earlier content, newest first", [len(h) for h in _hist])
+    ok(M.clobber_problems(BASE_TXT, _base, _hist) == [], "restoring v1 over the edited v2 passes against real git history")
+    ok(len(M.clobber_problems(BASE_TXT + "-- new\n", _base, _hist)) == 1, "a genuinely new edit still fails against real git history")
+    ok(M.history_texts_of("migrations/none.sql", "HEAD") == [], "a path with no history yields no texts")
+finally:
+    os.chdir(_cwd)
 # the repository's own edited files pass: the lifecycle migration carries its REAPPLY-OK line and no longer rewrites the row
 lf = open(os.path.join(mig_dir, "2026-10-18-portfolio-lifecycle.sql"), encoding="utf-8").read()
 ok(M.REAPPLY_OK.search(lf) and "INSERT OR REPLACE INTO fleet_tasks" not in lf and "INSERT OR IGNORE INTO fleet_tasks" in lf, "the portfolio-lifecycle migration no longer rewrites its fleet_tasks row on a re-run")

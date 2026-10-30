@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.39.8-compose-cache";
+var VERSION = "0.40.0-forecast-ledger";
+/* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
 /* 0.38.0 BP26-FORECAST-HYGIENE-1 (2026-10-28, charter pillar research, agent_issues 1000337; minor): a forecast resolution must name the source that settles it, the date it is read by and an edge-case rule (gate + both prompts); q08_forecast_updates holds probability updates as append-only rows; a trigger refuses in-place change of a published forecast's claim, probability, horizon, resolution and timestamp; log score beside Brier; /forecasts/calibration and /api/forecasts/calibration. */
@@ -443,135 +444,186 @@ var ORIGIN = "https://q08.org";
 // IndexNow: search-engine instant indexing (Bing, Yandex, Seznam, Naver).
 var INDEXNOW_KEY = "3f8a1c9e7b2d6045a1f3c8e5b9d20147";
 
-// Q08-FORECAST-LEDGER-1 (issue 1000512, RED-DRAIN-1 dispatch; charter pillar: reach): forecast ground = the source essay
-// plus a research ledger of verbatim sentences. Slice 1, default off (enabled only when ops_config q08_forecast_ledger
-// is "1"). No model writes or rewords a ledger line.
-var FORECAST_LEDGER_MAX_LINES = 60;
-var FORECAST_LEDGER_MAX_DOCS = 10;
-var FORECAST_LEDGER_MAX_CHARS = 40000;
-var FORECAST_LEDGER_TIMEOUT_MS = 15000;
+// Q08-FORECAST-LEDGER-1 (issue 1000512, charter pillar reach; slice 1, default off): the forecast ground is the source essay plus a research ledger of
+// verbatim sentences. FETCH SCOPE: the four evidence APIs (Hacker News Algolia, GDELT doc, Wikipedia search, arXiv), queried with at most 6 capitalised
+// names taken from the essay and its signal, then the public https pages those results link (publicHttpsUrl: no private or local host), at most 10
+// documents, at most 40000 characters read of each, 15 s timeout each, every fetch failing on its own. LEDGER: sentences of 25 to 280 characters copied
+// from the fetched text that name one of those names, at most 60 lines, "[R<n>] <sentence> (<host>, <date>)" numbered in order; no model writes or
+// rewords a ledger line. A fact in a draft may come from the essay, the signal or a ledger line cited by its tag; stripLedgerTags removes [R<n>] like
+// [S<n>] before any check reads the draft. Switch: ops_config q08_forecast_ledger = on (absent or anything else is off: no request is made and the
+// forecast path is unchanged). The ledger is stored in q08_forecasts.ground_json, so the re-audit of a published forecast reads the same ledger.
+var LEDGER_MAX_NAMES = 6;
+var LEDGER_MAX_DOCS = 10;
+var LEDGER_DOC_CHARS = 40000;
+var RLEDGER_MAX_LINES = 60; // not LEDGER_MAX_LINES: that name is the [S<n>] source ledger's cap (80), declared further down, and would overwrite this one
+var LEDGER_FETCH_MS = 15000;
+var LEDGER_STOP = ("The This That These Those There Then When While Where Which What Who Why How But And For Nor Yet With Without After Before During Since Until Because Although However Instead Each Every Some Many Most Such Not Our Your Its Their They Them You She Her His Has Have Had Was Were Will Would Could Should Can May Might Must Also Both Either Neither Other Another Over Under Into Onto From About Above Below Between Among Across Through Within Whether Once Still Just Even Only Here Now Today Yesterday Tomorrow Monday Tuesday Wednesday Thursday Friday Saturday Sunday January February March April June July August September October November December").split(" ").reduce(function (o, w) { o[w] = 1; return o; }, {});
 
-var FORECAST_EVIDENCE_SOURCES = [
-  {
-    name: "Policy",
-    buildUrl: function (term) { return ""; },
-    parse: function () { return []; }
-  },
-  {
-    name: "Science",
-    buildUrl: function (term) { return ""; },
-    parse: function () { return []; }
-  },
-  {
-    name: "HackerNews",
-    buildUrl: function (term) { return "https://hn.algolia.com/api/v1/search?query=" + encodeURIComponent(term) + "&hitsPerPage=10"; },
-    parse: function (data) {
-      return (data.hits || []).map(function (hit) {
-        return { text: hit.title || "", url: hit.url || "", date: hit.created_at || "" };
-      });
-    }
-  },
-  {
-    name: "GDELT",
-    buildUrl: function (term) { return "https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(term) + "&mode=artlist&maxrecords=10&format=json"; },
-    parse: function (data) {
-      return (data.articles || []).map(function (a) {
-        return { text: a.title || "", url: a.url || "", date: a.seendate || "" };
-      });
-    }
-  },
-  {
-    name: "Wikipedia",
-    buildUrl: function (term) { return "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(term) + "&format=json&utf8=&srlimit=10&origin=*"; },
-    parse: function (data) {
-      return ((data.query && data.query.search) || []).map(function (entry) {
-        return { text: entry.snippet ? String(entry.snippet).replace(/<\/?[^>]+(>|$)/g, "") : "", url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(entry.title || ""), date: "" };
-      });
-    }
-  },
-  {
-    name: "arXiv",
-    buildUrl: function (term) { return "https://export.arxiv.org/api/query?search_query=all:" + encodeURIComponent(term) + "&max_results=10"; },
-    parse: function (text) {
-      var out = [];
-      var blocks = String(text).split(/<entry>/).slice(1);
-      for (var i = 0; i < blocks.length; i++) {
-        var b = blocks[i];
-        var pick = function (tag) {
-          var m = b.match(new RegExp("<" + tag + ">([\\s\\S]*?)</" + tag + ">"));
-          return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
-        };
-        out.push({ text: pick("title"), url: pick("id"), date: pick("published") });
-      }
-      return out;
-    }
+// At most 6 capitalised names from the essay and its signal: a word capitalised mid-sentence, or with a second capital or a digit (TrendForce, PJM, GPT4);
+// a sentence-initial common word is not a name. Ranked by how often it occurs, then by first position.
+function ledgerNames(src, signalText) {
+  var text = String(src && src.title || "") + "\n" + String(src && src.body_md || "") + "\n" + String(signalText || "");
+  var seen = {}, order = [], m, re = /\b[A-Z][A-Za-z0-9&-]{2,}\b/g;
+  while ((m = re.exec(text)) !== null) {
+    var w = m[0];
+    if (LEDGER_STOP[w]) continue;
+    var mid = !(m.index === 0 || /[.!?:#>*\n-]\s*$/.test(text.slice(Math.max(0, m.index - 3), m.index)));
+    var e = seen[w];
+    if (!e) { e = seen[w] = { w: w, n: 0, ok: false, at: order.length }; order.push(e); }
+    e.n++;
+    if (mid || /[A-Z0-9]/.test(w.slice(1))) e.ok = true;
   }
+  return order.filter(function (x) { return x.ok; }).sort(function (a, b) { return b.n - a.n || a.at - b.at; }).slice(0, LEDGER_MAX_NAMES).map(function (x) { return x.w; });
+}
+
+// Sentences of 25 to 280 characters that name one of the query names, copied as they stand (whitespace collapsed, nothing else changed).
+function ledgerSentences(text, names) {
+  var low = (names || []).map(function (n) { return String(n).toLowerCase(); });
+  var out = [], seen = {}, parts = String(text || "").split(/(?<=[.!?]["')\]]?)\s+(?=[A-Z0-9"'(\[])/);
+  for (var i = 0; i < parts.length; i++) {
+    var s = parts[i].replace(/\s+/g, " ").trim();
+    if (s.length < 25 || s.length > 280 || seen[s] || !/[.!?]["')\]]?$/.test(s)) continue;
+    var l = s.toLowerCase();
+    if (!low.some(function (n) { return l.indexOf(n) >= 0; })) continue;
+    seen[s] = 1;
+    out.push(s);
+  }
+  return out;
+}
+
+// The four evidence APIs again, in the structured form the ledger needs (the page each result links and its date); EVIDENCE_SOURCES returns prose lines.
+var LEDGER_SEARCHES = [
+  { name: "Hacker News", run: async function (q) {
+    var d = await (await evidenceFetch("https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=5&query=" + encodeURIComponent(q), LEDGER_FETCH_MS)).json();
+    return (d.hits || []).slice(0, 5).map(function (h) { return { url: String(h.url || ""), date: String(h.created_at || "").slice(0, 10) }; });
+  } },
+  { name: "news", run: async function (q) {
+    var d = await (await evidenceFetch("https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json&maxrecords=5&sort=datedesc&query=" + encodeURIComponent(q), LEDGER_FETCH_MS)).json();
+    return (d.articles || []).slice(0, 5).map(function (a) { var sd = String(a.seendate || ""); return { url: String(a.url || ""), date: sd.length >= 8 ? sd.slice(0, 4) + "-" + sd.slice(4, 6) + "-" + sd.slice(6, 8) : "" }; });
+  } },
+  { name: "Wikipedia", run: async function (q) {
+    var d = await (await evidenceFetch("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=" + encodeURIComponent(q), LEDGER_FETCH_MS)).json();
+    return ((d.query && d.query.search) || []).slice(0, 3).map(function (h) { return { url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(String(h.title || "").replace(/ /g, "_")), date: String(h.timestamp || "").slice(0, 10) }; });
+  } },
+  { name: "arXiv", run: async function (q) {
+    var x = await (await evidenceFetch("https://export.arxiv.org/api/query?sortBy=relevance&max_results=3&search_query=all:" + encodeURIComponent('"' + q + '"'), LEDGER_FETCH_MS)).text();
+    var out = [];
+    for (var m of x.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+      var id = (m[1].match(/<id>([^<]*)<\/id>/) || [])[1] || "", pub = (m[1].match(/<published>([^<]*)<\/published>/) || [])[1] || "";
+      if (id) out.push({ url: id.trim().replace(/^http:/, "https:"), date: pub.slice(0, 10) });
+    }
+    return out;
+  } }
 ];
 
-// At most 6 capitalised names from the source essay and its signal.
-function forecastLedgerNames(sourceEssay, signal) {
-  var combined = String(sourceEssay || "") + "\n" + String(signal || "");
-  var seen = {}, names = [];
-  var m, re = /\b[A-Z][a-zA-Z]{2,}\b/g;
-  while ((m = re.exec(combined)) !== null) {
-    if (!seen[m[0]]) {
-      seen[m[0]] = 1;
-      names.push(m[0]);
-      if (names.length >= 6) break;
+// One linked page: at most LEDGER_DOC_CHARS characters are read, then tags are removed.
+async function ledgerReadPage(url) {
+  var r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(LEDGER_FETCH_MS), redirect: "follow" });
+  if (!r.ok) throw new Error("http " + r.status);
+  var txt = "";
+  if (r.body && typeof r.body.getReader === "function") {
+    var rd = r.body.getReader(), dec = new TextDecoder();
+    while (txt.length < LEDGER_DOC_CHARS) {
+      var ch = await rd.read();
+      if (ch.done) break;
+      txt += dec.decode(ch.value, { stream: true });
     }
-  }
-  return names;
+    try { await rd.cancel(); } catch (e) { /* the stream is already closed */ }
+  } else txt = await r.text();
+  return plainText(txt.slice(0, LEDGER_DOC_CHARS));
 }
 
-// Verbatim sentences of 25 to 280 characters copied from fetched text; no rewording.
-function forecastLedgerSentences(text, host, date, out, maxLines) {
-  var sentences = String(text || "").match(/[^.!?]+[.!?]+/g) || [];
-  for (var i = 0; i < sentences.length && out.length < maxLines; i++) {
-    var trimmed = sentences[i].replace(/\s+/g, " ").trim();
-    if (trimmed.length >= 25 && trimmed.length <= 280) {
-      out.push({ sentence: trimmed, host: host, date: date || "unknown" });
+// researchLedger(env, src, signalText) -> { lines, sources }. Every search and every page fails on its own; documents are taken round-robin across the
+// names and APIs (so one source cannot fill the ledger), lines round-robin across the documents.
+async function researchLedger(env, src, signalText) {
+  var names = ledgerNames(src, signalText), lines = [], sources = [];
+  if (!names.length) return { lines: lines, sources: sources };
+  var jobs = [];
+  names.forEach(function (n) { LEDGER_SEARCHES.forEach(function (s) { jobs.push(s.run(n).catch(function () { return []; })); }); });
+  var found = await Promise.all(jobs);
+  var cands = [], seenUrl = {};
+  for (var rank = 0; rank < 5 && cands.length < LEDGER_MAX_DOCS; rank++) {
+    for (var k = 0; k < found.length && cands.length < LEDGER_MAX_DOCS; k++) {
+      var it = found[k][rank];
+      var pu = it ? publicHttpsUrl(it.url) : "";
+      if (!pu || seenUrl[pu]) continue;
+      seenUrl[pu] = 1;
+      cands.push({ url: pu, date: String(it.date || "") });
     }
   }
+  var docs = await Promise.all(cands.map(function (c) {
+    return ledgerReadPage(c.url).then(function (t) { return { c: c, sentences: ledgerSentences(t, names) }; }).catch(function () { return null; });
+  }));
+  docs = docs.filter(function (d) { return d && d.sentences.length; });
+  var used = {};
+  for (var round = 0; lines.length < RLEDGER_MAX_LINES; round++) {
+    var any = false;
+    for (var di = 0; di < docs.length && lines.length < RLEDGER_MAX_LINES; di++) {
+      var sn = docs[di].sentences[round];
+      if (sn === undefined) continue;
+      any = true;
+      var host = "";
+      try { host = new URL(docs[di].c.url).hostname; } catch (e) { host = ""; }
+      lines.push("[R" + (lines.length + 1) + "] " + sn + " (" + host + ", " + (docs[di].c.date || "undated") + ")");
+      if (!used[docs[di].c.url]) { used[docs[di].c.url] = 1; sources.push({ label: "Research ledger source: " + host, url: docs[di].c.url }); }
+    }
+    if (!any) break;
+  }
+  return { lines: lines, sources: sources };
 }
 
-// One evidence source, one term: at most 10 documents, 40000 chars read each, 15 s timeout, failures independent.
-async function forecastLedgerFetchTerm(src, term, out, maxLines) {
-  var docs = 0;
+// ops_config q08_forecast_ledger = on; absent, any other value or a read error is off.
+async function forecastLedgerOn(env) {
   try {
-    var resp = await fetch(src.buildUrl(term), { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(FORECAST_LEDGER_TIMEOUT_MS) });
-    if (!resp.ok) return;
-    var body = src.name === "arXiv" ? await resp.text() : await resp.json();
-    var items = src.parse(body);
-    for (var i = 0; i < items.length && docs < FORECAST_LEDGER_MAX_DOCS && out.length < maxLines; i++) {
-      var it = items[i];
-      if (!it.url || !/^https:\/\//i.test(it.url)) continue; // publicHttpsUrl only; no http or private/local host
-      var u = null;
-      try { u = new URL(it.url); } catch (e) { continue; }
-      if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname)) continue;
-      var text = String(it.text || "");
-      if (!text) continue;
-      forecastLedgerSentences(text.slice(0, FORECAST_LEDGER_MAX_CHARS), u.host, it.date, out, maxLines);
-      docs++;
+    if (!env || !env.AUDIT || typeof env.AUDIT.prepare !== "function") return false;
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'q08_forecast_ledger'").first();
+    return String(r && r.value || "").trim().toLowerCase() === "on";
+  } catch (e) { return false; }
+}
+
+// q08_forecasts.ground_json (nullable): the ensure-column pattern of RUN_COLUMNS. Called only when the ledger is on; a failure turns the ledger off.
+var __groundColumnDone = false;
+async function ensureForecastGroundColumn(env) {
+  if (__groundColumnDone) return true;
+  try {
+    await ensureForecastSchema(env);
+    var info = await env.DB.prepare("PRAGMA table_info(q08_forecasts)").all();
+    var have = {};
+    (info.results || []).forEach(function (c) { have[c.name] = 1; });
+    if (!have.ground_json) {
+      try { await env.DB.prepare("ALTER TABLE q08_forecasts ADD COLUMN ground_json TEXT").run(); }
+      catch (e) { if (!/duplicate column|already exists/i.test(String(e && e.message || e))) throw e; }
     }
+    __groundColumnDone = true;
+    return true;
   } catch (e) {
-    console.error(JSON.stringify({ evt: "q08-signal-engine:forecastLedgerFetchTerm:caught", error: String((e && e.message) || e) }));
+    console.error(JSON.stringify({ evt: "q08-signal-engine:ensureForecastGroundColumn:caught", error: String((e && e.message) || e).slice(0, 200) }));
+    return false;
   }
 }
 
-// Ledger lines "[R<n>] <sentence> (<host>, <date>)", numbered in order, at most 60.
-async function forecastLedger(sourceEssay, signal) {
-  var out = [], maxLines = FORECAST_LEDGER_MAX_LINES;
-  var names = forecastLedgerNames(sourceEssay, signal);
-  for (var i = 0; i < names.length && out.length < maxLines; i++) {
-    for (var s = 0; s < FORECAST_EVIDENCE_SOURCES.length && out.length < maxLines; s++) {
-      await forecastLedgerFetchTerm(FORECAST_EVIDENCE_SOURCES[s], names[i], out, maxLines);
-    }
+// What generateForecast calls: off (or a column that cannot be added) makes no request and returns an empty ledger.
+async function forecastLedgerFor(env, src, signalText) {
+  var empty = { lines: [], sources: [] };
+  try {
+    if (!(await forecastLedgerOn(env))) return empty;
+    if (!(await ensureForecastGroundColumn(env))) return empty;
+    var led = await researchLedger(env, src, signalText);
+    return led && Array.isArray(led.lines) ? led : empty;
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "q08-signal-engine:forecastLedgerFor:caught", error: String((e && e.message) || e).slice(0, 200) }));
+    return empty;
   }
-  var lines = [];
-  for (var j = 0; j < out.length; j++) {
-    lines.push("[R" + (j + 1) + "] " + out[j].sentence + " (" + out[j].host + ", " + out[j].date + ")");
-  }
-  return lines;
+}
+
+// The stored ledger of a published forecast, as ground text for its re-audit; "" when there is none or the column does not exist (no schema change on a read path).
+async function storedForecastLedger(env, slug) {
+  try {
+    var r = await env.DB.prepare("SELECT ground_json FROM q08_forecasts WHERE slug = ?").bind(slug).first();
+    var j = r && r.ground_json ? JSON.parse(r.ground_json) : null;
+    var ls = j && Array.isArray(j.lines) ? j.lines.filter(function (l) { return typeof l === "string"; }) : [];
+    return ls.length ? "\n" + ls.join("\n") : "";
+  } catch (e) { return ""; }
 }
 
 // FORECAST-CRITERIA-REPUBLISH-1 (issue 1000740, RED-DRAIN-1 dispatch; charter pillar: personal): metric
@@ -1713,6 +1765,7 @@ async function verdictMicroCall(env, essay) {
 // The parenthesised "(S3)" is left alone on purpose: it is not a tag the ledger prints, groundingProblems does not flag it, and it is how
 // real text writes Amazon S3.
 var LEDGER_TAG_RE = /[ \t]*\[S\d{1,3}(?:\s*[,;\u2013\u2014-]\s*S?\d{1,3}|\s+S\d{1,3})*\]/g;
+var LEDGER_R_TAG_RE = /[ \t]*\[R\d{1,3}(?:\s*[,;\u2013\u2014-]\s*R?\d{1,3}|\s+R\d{1,3})*\]/g;
 // Q08-LEDGER-TAG-FORMS-2 (0.36.0, 2026-10-26): 517 gate failures in 14 days; the pre-check listed ledger numbers as figures ("figure not in the
 // source: 40," with the comma that a "(S39, S40, S41)" list leaves behind) and tags as names ("name not in the source: S28 S29") in 38 accuracy
 // failures, and "prune located nothing" because no sentence holds a bare "33". A writer prints a tag in more forms than [S3]: in round,
@@ -1723,6 +1776,8 @@ var LEDGER_TAG_ALT_RE = /[ \t]*[\u3010\u3014\uFF3B\u27E6\[({]\s*(?:(?:source|led
 function stripLedgerTags(t) {
   var s = String(t), before = s;
   if (/\[S\d/.test(s)) s = s.replace(LEDGER_TAG_RE, "");
+  // Q08-FORECAST-LEDGER-1: a research-ledger tag ([R3], [R1, R2]) is removed the same way, with the space before it; a bare "[3]" or a year is not a tag.
+  if (/\[R\d/.test(s)) s = s.replace(LEDGER_R_TAG_RE, "");
   if (/[\u3010\u3014\uFF3B\u27E6\[({]\s*(?:(?:source|ledger)\s+)?\**S\s?\d/i.test(s)) {
     s = s.replace(LEDGER_TAG_ALT_RE, function (m) {
       var nums = m.match(/\d{1,3}/g) || [];
@@ -1863,7 +1918,7 @@ async function persistPiece(env, piece, signal, story, model) {
   ).bind(
     pieceId, "sig-" + salt, slug, title, body,
     signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso(),
-    JSON.stringify(buildSources(story)), PROPERTY
+    JSON.stringify(buildSources(story).concat(Array.isArray(story.ledgerSources) ? story.ledgerSources : [])), PROPERTY
   ).run();
   // Q08-FORECAST-1: a forecast piece also gets its q08_forecasts record (the claim, probability, horizon and resolution
   // condition the judges later settle). Its skeleton stays out of the essay prompt pool, which feeds essay few-shots only.
@@ -2749,6 +2804,13 @@ function buildForecastPrompt(src, signalText, opts) {
   parts.push("title: " + src.title);
   parts.push(String(src.body_md || "").slice(0, 6000));
   if (signalText) { parts.push("\n--- SIGNAL BEHIND IT (internal, never mention) ---"); parts.push(signalText); }
+  // Q08-FORECAST-LEDGER-1: with the ledger on, a fact may also come from a ledger line, cited by its tag; with it off this block adds nothing.
+  var ledgerLines = opts && opts.ledger || [];
+  if (ledgerLines.length) {
+    parts.push("\n--- RESEARCH LEDGER (verbatim sentences copied from public pages; internal source, never mention it as 'the ledger') ---");
+    parts.push("FACTS rule, extended: a claim about the real world may also come from a ledger line below, stated verbatim or as a direct paraphrase and cited in your draft by its tag, for example [R3]. A claim found in neither the ESSAY, the SIGNAL nor a ledger line is not allowed. The tags are removed before publication.");
+    for (var li = 0; li < ledgerLines.length; li++) parts.push(String(ledgerLines[li]));
+  }
   return parts.join("\n");
 }
 async function generateForecast(env, t0) {
@@ -2759,7 +2821,9 @@ async function generateForecast(env, t0) {
   var recentF = await env.DB.prepare("SELECT claim FROM q08_forecasts ORDER BY id DESC LIMIT 6").all().catch(function () { return { results: [] }; });
   var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
   var banned = []; // Q08-VERIFY-1: outside precedents are rejected by the grounding check, so no precedent is named to the writer
-  var prompt = buildForecastPrompt(src, signalText, { banned: banned, ownerNotes: await ownerDirectives(env), recent: (recentF.results || []).map(function (r) { return r.claim; }) });
+  // Q08-FORECAST-LEDGER-1 (default off): with ops_config q08_forecast_ledger = on the ground also holds a research ledger; off makes no request.
+  var ledger = await forecastLedgerFor(env, src, signalText);
+  var prompt = buildForecastPrompt(src, signalText, { banned: banned, ownerNotes: await ownerDirectives(env), recent: (recentF.results || []).map(function (r) { return r.claim; }), ledger: ledger.lines });
   var topSig = ("q08-forecast:" + src.slug).slice(0, 80);
   var fcSrcChars = String(src.title || "").length + String(src.body_md || "").length + signalText.length; // Q08-YIELD-1: the size of the ground the forecast is checked against
   var piece = null, problems = [];
@@ -2789,6 +2853,7 @@ async function generateForecast(env, t0) {
   var readerRows = [], gateResult = { ok: !!piece && problems.length === 0, problems: problems };
   // Q08-FACT-LEDGER-1: the forecast ground is built before the panel and the same free grounding check runs ahead of it (no prune: a forecast keeps its text)
   var fcGround = [src.title || "", src.body_md || "", signalText].join("\n");
+  if (ledger.lines.length) fcGround += "\n" + ledger.lines.join("\n"); // Q08-FORECAST-LEDGER-1: the ledger is ground too (only when the switch is on)
   if (gateResult.ok) {
     var fgpMode = await groundPreCheckMode(env); // the same switch: prune never refuses a forecast, off makes no pre-check call
     if (fgpMode !== "off") {
@@ -2814,8 +2879,13 @@ async function generateForecast(env, t0) {
     return null; // the analysis path still runs this tick
   }
   piece.text = stripAnalysisMark(piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim());
-  var pseudo = { source: "q08", id: src.id, slug: src.slug, title: src.title, url: ORIGIN + "/p/" + src.slug, points: 0, num_comments: 0, ratio: 0, volatility_score: 0 };
+  var pseudo = { source: "q08", id: src.id, slug: src.slug, title: src.title, url: ORIGIN + "/p/" + src.slug, points: 0, num_comments: 0, ratio: 0, volatility_score: 0, ledgerSources: ledger.sources };
   var saved = await persistPiece(env, piece, { core_concept: src.core_concept || src.title, friction_point: signalText || String(src.title || ""), signal_strength: "Forecast" }, pseudo, piece.model);
+  if (ledger.lines.length) {
+    // the stored ledger is what the re-audit of this forecast reads (groundForPublished); a failure here is logged, the forecast is already published
+    await env.DB.prepare("UPDATE q08_forecasts SET ground_json = ?1 WHERE slug = ?2").bind(JSON.stringify({ lines: ledger.lines, sources: ledger.sources }), saved.slug).run()
+      .catch(function (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:generateForecast:ground_json:caught", error: String((e && e.message) || e).slice(0, 200) })); });
+  }
   if (fcVr) await recordAudit(env, saved.slug, "pass", "publish", fcVr).catch(function (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:generateForecast:caught", error: String((e && e.message) || e) })); });
   await saveReaderTests(env, saved.slug, readerRows);
   var fcRow = await env.DB.prepare("SELECT claim, probability, horizon FROM q08_forecasts WHERE slug = ?").bind(saved.slug).first().catch(function () { return null; });
@@ -3745,7 +3815,10 @@ async function groundForPublished(env, p) {
   } else if (sig && sig.url) {
     parts.push(await fetchArticleText(articleUrlFor(sig)));
   }
-  return parts.join("\n").slice(0, GROUND_MAX + 8000);
+  var ground = parts.join("\n").slice(0, GROUND_MAX + 8000);
+  // Q08-FORECAST-LEDGER-1: the re-audit of a forecast reads the ledger it was published against, appended after the cap so a long essay cannot cut it off
+  if (p.kind === "forecast") ground += await storedForecastLedger(env, p.slug);
+  return ground;
 }
 // Repair before retract (Q08-REPAIR-1): an essay that fails the audit is first revised to delete the unsupported claims; if the
 // revision passes the full check it is updated in place with a visible correction note, otherwise it is retracted. A piece whose
@@ -4516,6 +4589,7 @@ export const __forecast = { forecastResolutionGaps: forecastResolutionGaps, reco
 export const __gen = { thinPassedOver: thinPassedOver, parseArxivPool: parseArxivPool, arxivPoolSize: arxivPoolSize, resetArxivPool: function () { __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT }; }, scrapeArxiv: scrapeArxiv, ARXIV_POOL_DEFAULT: ARXIV_POOL_DEFAULT, parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };
+export const __fledger = { researchLedger: researchLedger, ledgerNames: ledgerNames, ledgerSentences: ledgerSentences, forecastLedgerOn: forecastLedgerOn, forecastLedgerFor: forecastLedgerFor, ensureForecastGroundColumn: ensureForecastGroundColumn, storedForecastLedger: storedForecastLedger, groundForPublished: groundForPublished, buildForecastPrompt: buildForecastPrompt, stripLedgerTags: stripLedgerTags, groundPreCheck: groundPreCheck, resetGroundColumn: function () { __groundColumnDone = false; }, LEDGER_MAX_LINES: RLEDGER_MAX_LINES, LEDGER_MAX_DOCS: LEDGER_MAX_DOCS, LEDGER_DOC_CHARS: LEDGER_DOC_CHARS };
 export const __cuts = { readerCutIndices: readerCutIndices, applyReaderCuts: applyReaderCuts };
 export const __order = { orderCandidates: orderCandidates };
 export const __ground = { labelledGround: labelledGround };

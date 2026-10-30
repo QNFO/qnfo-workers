@@ -250,6 +250,38 @@ const scenario = () => ({
   eq(lg.length === 1 && lg[0].pr === 41 && lg[0].ok === 1 && /superseded by merged pull request #42 \(issue #100211\)/.test(lg[0].why), true, "the close is logged with the successor's number");
 }
 
+{ // BH-EMPTY-DRAFT-1 (0.59.0): an idle draft that GitHub reports with changed_files 0 is archived, commented and closed; every other draft is kept
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const d = (n, ref, h, over) => Object.assign({ number: n, state: "open", draft: true, updated_at: hAgo(h), title: "draft " + n, head: { ref, sha: sha(60 + n), repo: R } }, over || {});
+  const mk = () => ({
+    branches: [br("main", 0, true)],
+    pulls: [d(71, "copilot/empty-old", 8), d(72, "copilot/has-files", 8), d(73, "copilot/empty-young", 2), d(74, "copilot/live-task", 8), d(75, "copilot/merged-in", 8)],
+    prs: { 71: { number: 71, state: "open", draft: true, changed_files: 0 }, 72: { number: 72, state: "open", draft: true, changed_files: 2 }, 73: { number: 73, state: "open", draft: true, changed_files: 0 }, 74: { number: 74, state: "open", draft: true, changed_files: 0 }, 75: { number: 75, state: "open", draft: true, changed_files: 0, merged: true } },
+    liveTasks: ["copilot/live-task"],
+    config: [["stale_pr_merge_enabled", "0"]],
+    compare: {}
+  });
+  const { out, calls, d1 } = await run(mk());
+  eq(out.empty_draft_prs, [71], "only the idle draft with changed_files 0 is closed");
+  eq(out.closed_prs, [71], "it counts as a closed pull request");
+  eq(calls.some((c) => c === "POST /git/refs"), true, "its tip is archived first");
+  eq(calls.some((c) => c === "POST /issues/71/comments"), true, "a comment says the issue is not resolved");
+  eq(calls.some((c) => c === "PATCH /pulls/71"), true, "it is closed through REST PATCH");
+  eq(calls.filter((c) => /^PATCH \/pulls\/(72|73|74|75)$/.test(c)).length, 0, "a draft with files, a young draft, a live task and a merged one are kept");
+  eq(calls.includes("GET /pulls/73"), false, "a young draft costs no read");
+  const lg = d1.db.prepare("SELECT pr, ok, archive_ref FROM branch_hygiene_log WHERE action = 'close-empty-draft-pr'").all();
+  eq(lg.length === 1 && lg[0].pr === 71 && lg[0].ok === 1 && /^refs\/archive\//.test(lg[0].archive_ref), true, "the close is logged with its archive ref");
+  const off = mk(); off.config.push(["empty_draft_pr_close", "off"]);
+  eq((await run(off)).out.closed_prs, [], "ops_config empty_draft_pr_close = off stops it");
+  const dry = await run(mk(), { dry: true });
+  eq([dry.out.closed_prs, dry.calls.some((c) => c === "PATCH /pulls/71")], [[], false], "a dry run closes nothing");
+  const lane = await run(mk(), { laneOnly: true });
+  eq(lane.calls.some((c) => c === "PATCH /pulls/71"), false, "the lane tick never closes a draft");
+  const fail = mk(); fail.archiveFails = true;
+  const rf = await run(fail);
+  eq([rf.out.closed_prs, rf.calls.some((c) => c === "PATCH /pulls/71"), rf.d1.db.prepare("SELECT ok FROM branch_hygiene_log WHERE action = 'close-empty-draft-pr'").get().ok], [[], false, 0], "a failed archive stops the close and is logged ok=0");
+}
+
 // ---- STALE-PR-MERGE-FIRST-1: a quiet, green, clean session PR is merged before the closer would close it ----
 {
   const R = { full_name: "QNFO/qnfo-workers" };

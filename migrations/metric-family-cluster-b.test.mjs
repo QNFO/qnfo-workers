@@ -1,7 +1,8 @@
 // METRIC-FAMILY-CLUSTER-B offline suite: replays migrations/2026-10-28-metric-family-cluster-b.sql on node:sqlite.
 // Proves: the header opts in; nothing is deleted or dropped; the 35 cause mappings use known causes, are unique and are idempotent; the new metric and its trigger exist once;
 // the issue-1000645 probe passes with no recent reopen of a sample-bound ticket, fails on one, and ignores qnfo-gateway; the producer in qnfo-research-exec writes the metric.
-// Also the registration rule of METRIC-CAUSE-AT-REGISTRATION-1 (deploy gate): a migration dated 2026-10-29 or later that registers a metric also maps its cause.
+// Also the registration rule of METRIC-CAUSE-AT-REGISTRATION-1 (deploy gate): a migration dated 2026-10-29 or later that registers a metric also maps its cause, in the same file
+// or, for a file that already merged, in a listed forward migration.
 // Run: node migrations/metric-family-cluster-b.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
@@ -63,14 +64,29 @@ ok(mirror === src, "deployed-current.worker.js mirrors worker.js");
 const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(ver && (+ver[1] > 0 || +ver[2] >= 40), "VERSION is at least 0.40.0");
 
-// registration rule (deploy gate): a migration dated after this one that registers a metric maps its cause
+// registration rule (deploy gate): a migration dated after this one that registers a metric maps its cause in the same file.
+// A file that already merged may not be edited to add the row (MIGRATION-NO-CLOBBER-1: the runner re-applies an edited file, and 2026-10-29-plussing-3.sql also rewrites the live
+// management-personas workflow), so a later migration may map the metric instead. Each such file is listed here with the metric and the forward file, and this test reads the
+// forward file to prove the mapping exists. A new registration still maps its cause in its own file.
+const MAPPED_FORWARD = { "2026-10-29-plussing-3.sql": { file: "2026-10-30-product-plus-cause.sql", metric: "product_plus_deployed_7d" } };
 const files = readdirSync(new URL("./", import.meta.url)).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.sql$/.test(f) && f.slice(0, 10) >= "2026-10-29");
 for (const f of files) {
   const t = readFileSync(new URL("./" + f, import.meta.url), "utf8");
   const reg = /INSERT\s+(?:OR\s+\w+\s+)?INTO\s+metric_registry\b/i.test(t);
   if (!reg) continue;
-  ok(/INTO\s+metric_breach_cause\b/i.test(t) || /^-- (?:CAUSE-EXEMPT|CAUSE-MAPPED): .{10,}/m.test(t),
+  const here = /INTO\s+metric_breach_cause\b/i.test(t) || /^-- (?:CAUSE-EXEMPT|CAUSE-MAPPED): .{10,}/m.test(t);
+  const fwd = MAPPED_FORWARD[f];
+  let later = false;
+  if (fwd) {
+    const ft = readFileSync(new URL("./" + fwd.file, import.meta.url), "utf8");
+    later = fwd.file > f && t.includes("'" + fwd.metric + "'") && new RegExp("INTO\\s+metric_breach_cause\\b[\\s\\S]*'" + fwd.metric + "'", "i").test(ft) && /^-- APPLY-BY: ci\s*$/m.test(ft);
+  }
+  ok(here || later,
     f + " registers a metric: add INSERT INTO metric_breach_cause in the same file (METRIC-CAUSE-AT-REGISTRATION-1), or a '-- CAUSE-MAPPED: <where and why>' line");
+}
+for (const f of Object.keys(MAPPED_FORWARD)) {
+  const t = readFileSync(new URL("./" + f, import.meta.url), "utf8");
+  ok(!/INTO\s+metric_breach_cause\b/i.test(t), f + " stays as merged: its cause mapping lives in " + MAPPED_FORWARD[f].file + " (MIGRATION-NO-CLOBBER-1)");
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
