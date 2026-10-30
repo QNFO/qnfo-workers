@@ -63,12 +63,16 @@ eq(x.findings[0] && x.findings[0].severity, "medium", "no target: medium");
 eq(x.findings[0] && x.findings[0].file, false, "IL-DEFECT-ONLY-1: a decline with no target is an early warning, not filed");
 eq(x.metric_regressions_7d, 1, "regression count");
 
-// derived loop scores are reported but do not recursively count as outcome regressions
-const selfHistory = I.IL_SELF_METRICS.map((m) => hist(m.metric, step(20, 10))).flat();
+// derived loop scores keep their own trend but do not recursively affect outcome scoring
+const selfHistory = I.IL_SELF_METRICS.map((m) => {
+  const recent = I.ilDirection(m.target) === "up" ? 10 : 20;
+  const prior = I.ilDirection(m.target) === "up" ? 20 : 10;
+  return hist(m.metric, step(recent, prior));
+}).flat();
 x = I.improvementEvaluate({ registry: I.IL_SELF_METRICS.map((m) => reg(m.metric, m.target)), history: selfHistory }, NOW);
 eq(x.evaluable, 0, "derived loop metrics are excluded from outcome scoring");
 eq(x.regressed, 0, "derived loop metrics do not create recursive regressions");
-eq(x.trends.filter((t) => t.verdict === "self_metric").length, I.IL_SELF_METRICS.length, "self metrics remain visible as non-outcomes");
+eq(x.trends.filter((t) => t.verdict === "regressed").length, I.IL_SELF_METRICS.length, "self metrics keep their actual trend for issue recovery");
 
 // small discrete count changes are not material regression signals
 x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: hist("queue_count", step(12, 10)) }, NOW);
