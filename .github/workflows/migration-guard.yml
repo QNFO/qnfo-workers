@@ -1,0 +1,51 @@
+name: migration-guard
+
+# MIGRATION-GUARD-1 (2026-10-30, pillar autonomy): the header and no-clobber check of every added or changed migration, as a check of its own that FAILS the pull
+# request. deploy-gate runs the same command, but every deploy-gate step is advisory on a pull request by design (its `gate` check never holds a merge), so on
+# 2026-10-30 #5366 merged an edit to the already-applied migrations/2026-10-29-plussing-3.sql that MIGRATION-NO-CLOBBER-1 refuses: apply-migrations replayed the
+# file against production D1 and the push run of deploy-gate went red. The merge lane never merges a pull request with a failing check, so this turns that
+# refusal into a block before the merge. scripts/apply_migrations.py --check is read-only (no D1 access, no secret).
+# Restoring a content the file already had (a revert) passes: the runner skips a sha256 it has applied (RESTORE-APPLIED-CONTENT-1).
+# The job is named migration-guard on purpose: the lane reads checks by name, and `guard` is version-bump-guard's.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'migrations/**'
+      - 'scripts/apply_migrations.py'
+      - '.github/workflows/migration-guard.yml'
+
+permissions:
+  contents: read
+
+# a superseded pull request head is cancelled (GHA-AUDIT-1)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  migration-guard:
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # full history: the guard reads every earlier content of a changed file, because restoring one of them is not a clobber
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Check the added and changed migrations
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          files=$(git diff --name-only --diff-filter=AM "origin/$BASE_REF" HEAD -- 'migrations/*.sql')
+          if [ -z "$files" ]; then
+            echo "no migration changed"
+            exit 0
+          fi
+          python3 scripts/apply_migrations.py --check --base "origin/$BASE_REF" $files
