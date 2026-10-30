@@ -46,7 +46,9 @@ function fakeGh(cfg) {
       const page = Number(u.searchParams.get("page") || 1);
       return reply(200, { total_count: list.length, items: list.slice((page - 1) * 100, page * 100) });
     }
-    let m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/events$/.exec(path);
+    let m = /^\/repos\/([^/]+\/[^/]+)\/actions\/workflows\/assign-copilot-on-issue\.yml\/runs$/.exec(path);
+    if (m) return cfg.runsStatus ? reply(cfg.runsStatus, { message: "boom" }) : reply(200, { workflow_runs: cfg.runs || [] });
+    m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/events$/.exec(path);
     if (m) return reply(200, (cfg.events || {})[m[1] + "#" + m[2]] || []);
     m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/timeline$/.exec(path);
     if (m) return cfg.timelineStatus ? reply(cfg.timelineStatus, { message: "boom" }) : reply(200, (cfg.timeline || {})[m[1] + "#" + m[2]] || []);
@@ -206,6 +208,27 @@ ok(posts(g)[0] && posts(g)[0].path === "/repos/QNFO/qnfo-fleet-issues/issues/131
 ({ s, g } = await go({ issues: [item(132, { repository_url: "https://api.github.com/repos/QNFO/qnfo-fleet-issues" })], repos: { "QNFO/qnfo-workers": { default_branch: "main", archived: true } } }));
 ok(posts(g).length === 0 && s.skipped["repo-unreadable"] === 1, "an archived work repository assigns nothing", s);
 ok(TARGET_OVERRIDES["QNFO/qnfo-fleet-issues"] === "QNFO/qnfo-workers" && Object.keys(TARGET_OVERRIDES).length === 1, "only the issue-feed repository is redirected");
+
+// 4f. throttle: only the first run of each window sweeps, and a throttled run never starves the next window
+const gate = (event, runId) => ({ gate: { event, runId, repo: "QNFO/qnfo-workers", minutes: 10 } });
+const run_ = (id, created) => ({ id, created_at: created, conclusion: "success" });
+({ s, g } = await go({ issues: [item(141)], runs: [run_(3, "2026-10-30T09:35:30Z"), run_(2, "2026-10-30T09:32:00Z"), run_(1, "2026-10-30T09:31:00Z")] }, gate("workflow_run", 3)));
+ok(s.status === "throttled" && s.assigned === 0 && g.log.length === 1 && /earlier run/.test(s.note), "a run with an earlier run in its own window is throttled and costs one read", s);
+({ s, g } = await go({ issues: [item(142)], runs: [run_(5, "2026-10-30T09:40:30Z"), run_(4, "2026-10-30T09:39:59Z"), run_(3, "2026-10-30T09:35:30Z")] }, gate("workflow_run", 5)));
+ok(s.status === "ok" && s.assigned === 1, "the first run of a window sweeps, whatever ran in the previous window (no starvation)", s);
+({ s, g } = await go({ issues: [item(143)], runs: [run_(3, "2026-10-30T09:35:30Z"), run_(2, "2026-10-30T09:32:00Z")] }, gate("issues", 3)));
+ok(s.status === "ok" && s.assigned === 1 && !g.log.some((c) => /actions\/workflows/.test(c.path)), "an issues run always sweeps and reads no run list");
+({ s, g } = await go({ issues: [item(144)], runs: [run_(3, "2026-10-30T09:35:30Z"), run_(2, "2026-10-30T09:32:00Z")] }, gate("workflow_dispatch", 3)));
+ok(s.status === "ok" && s.assigned === 1, "a manual run always sweeps");
+({ s, g } = await go({ issues: [item(145)], runs: [run_(2, "2026-10-30T09:32:00Z")] }, gate("workflow_run", 3)));
+ok(s.status === "ok" && s.assigned === 1, "a run that is not in the list yet is not throttled");
+({ s, g } = await go({ issues: [item(146)], runsStatus: 500 }, gate("schedule", 3)));
+ok(s.status === "ok" && s.assigned === 1, "an unreadable run list never blocks the sweep");
+({ s, g } = await go({ issues: [item(147)], runs: [run_(3, "2026-10-30T09:35:30Z"), run_(2, "2026-10-30T09:35:30Z")] }, gate("workflow_run", 3)));
+ok(s.status === "throttled", "two runs created in the same second: the lower id sweeps, the other is throttled", s);
+({ s, g } = await go({ issues: [item(148)], runs: [run_(3, "2026-10-30T09:35:30Z"), run_(2, "2026-10-30T09:35:30Z")] }, gate("workflow_run", 2)));
+ok(s.status === "ok" && s.assigned === 1, "the lower id of two simultaneous runs sweeps", s);
+ok(DEFAULTS.windowMinutes === 10, "the throttle window is ten minutes");
 
 // 5. failures never throw and never loop
 ({ s, g } = await go({ issues: [item(71, { created_at: "2026-10-30T01:00:00Z" }), item(72, { created_at: "2026-10-30T02:00:00Z" }), item(73, { created_at: "2026-10-30T03:00:00Z" })], assignStatus: { "QNFO/qnfo-ops#71": 401 }, assignMessage: { "QNFO/qnfo-ops#71": "Bad credentials" } }));

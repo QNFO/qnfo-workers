@@ -31,6 +31,8 @@
 //          refusal for one repository skips that repository's other issues. Every failure is a ::warning:: and the exit code stays 0, so a
 //          failed sweep cannot file a WORKFLOW-FAILED-1 issue that the next sweep would assign again.
 //        * Kill switch: the repository variable ASSIGN_COPILOT_SWEEP = off stops the sweep, new-only stops the re-drive.
+//        * Throttle: workflow_run fires about once a minute while the fleet merges, so only the first run of each --window-minutes (10) window
+//          sweeps; issues and manual runs always do. A throttled run costs one read.
 // USAGE  GH_PAT_TOKEN=... node scripts/assign-copilot-sweep.mjs [--hours 720] [--max 10] [--max-open 12] [--redrive-max 5] [--stalled-hours 2]
 //        [--mode live|dry] [--no-agent-sync]; ISSUE_REPO=QNFO/x ISSUE_NUMBER=7 (set by the `issues` trigger) puts that one issue first in the run.
 import { appendFileSync } from "node:fs";
@@ -49,7 +51,7 @@ export const TARGET_OVERRIDES = { "QNFO/qnfo-fleet-issues": "QNFO/qnfo-workers" 
 export const LOCKS_URL = "https://qnfo-deploy-guard.q08.workers.dev/work-locks";
 export const TRUSTED_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
 export const TRUSTED_BOTS = ["github-actions[bot]"];
-export const DEFAULTS = { hours: 720, max: 10, maxOpen: 12, redriveMax: 5, stalledHours: 2, maxRedrives: 1, pages: 5, pauseMs: 1000 };
+export const DEFAULTS = { hours: 720, max: 10, maxOpen: 12, redriveMax: 5, stalledHours: 2, maxRedrives: 1, pages: 5, pauseMs: 1000, windowMinutes: 10 };
 
 // Static text only: nothing from the issue is copied into it.
 export const INSTRUCTIONS = "Resolve this issue with code changes in a pull request, not with a plan or a report. Reference the issue in the pull request, run the repository's tests and linters, and mark the pull request ready for review when the work is complete. Never hand the work back to a person and never assign the issue to a user. If the work-claim service (qnfo-deploy-guard) cannot be reached from this sandbox because of the cloud-agent firewall, that is an environment limit and not a refusal: read the open pull requests and copilot/ branches through the GitHub API for the paths you will change, skip any file another open pull request changes, write 'work-claim: unreachable (<verbatim error>)' in the pull request body (CLAUDE.md, CLAIM-UNREACHABLE-FALLBACK-1), and continue. An explicit acquired:false answer from the service, a live secret lease and a HOLD: comment are still binding.";
@@ -185,6 +187,20 @@ function hasLivePr(timeline) {
 
 const stopsRun = (r) => r.status === 401 || (r.status === 403 && /rate limit|abuse/i.test(r.message)) || r.status === 429;
 
+// workflow_run fires about once a minute while the fleet is merging, and a full sweep costs ~90 reads of the shared PAT, so only the FIRST run of each
+// window sweeps (a throttled run is a success and must not count as the previous sweep, or the window would starve: every run is judged against the
+// ones created before it in its own window, never against a throttled one). issues and manual runs always sweep.
+export async function throttle(api, gate) {
+  if (!gate || !/^(workflow_run|schedule)$/.test(String(gate.event || "")) || !gate.runId || !gate.repo || !(gate.minutes > 0)) return "";
+  const r = await api.req("GET", "/repos/" + gate.repo + "/actions/workflows/assign-copilot-on-issue.yml/runs?per_page=30");
+  if (r.status !== 200 || !r.body || !Array.isArray(r.body.workflow_runs)) return "";
+  const mine = r.body.workflow_runs.find((w) => String(w.id) === String(gate.runId));
+  if (!mine || !mine.created_at) return "";
+  const span = gate.minutes * 60000, win = (w) => Math.floor(Date.parse(w.created_at) / span);
+  const earlier = r.body.workflow_runs.some((w) => String(w.id) !== String(gate.runId) && w.created_at && win(w) === win(mine) && (String(w.created_at) < String(mine.created_at) || (w.created_at === mine.created_at && w.id < mine.id)));
+  return earlier ? "an earlier run in this " + gate.minutes + "-minute window already swept" : "";
+}
+
 export async function run(opts, deps) {
   const o = Object.assign({}, DEFAULTS, opts || {});
   const d = Object.assign({ fetchImpl: fetch, now: Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)), env: process.env }, deps || {});
@@ -196,6 +212,8 @@ export async function run(opts, deps) {
   if (!o.token) { sum.status = "no-credential"; sum.note = "the repository secret QNFO_GH_PAT is empty or unset: assigning Copilot needs a user token, the workflow GITHUB_TOKEN is refused"; return sum; }
   const api = makeApi(d.fetchImpl, o.token);
   const org = o.org || ORG;
+  const wait = await throttle(api, o.gate);
+  if (wait) { sum.status = "throttled"; sum.note = wait; sum.calls = api.calls.length; return sum; }
   if (o.agentSync !== false) sum.agent_sync = await syncOrgAgent(api, dry);
 
   // Back-pressure: the open Copilot pull requests bound the work, so sessions that stall cannot pile up without limit.
@@ -253,6 +271,7 @@ export async function run(opts, deps) {
     const mid = mirrorId(n.title);
     if (mid && doers.ids.has(mid)) { skip("has-doer", n); continue; }
     if (hasCopilot && redrives >= o.redriveMax) { sum.deferred++; continue; }
+    if (hasCopilot && pr.ok && pr.refs.has(slug + "#" + n.number)) { skip("has-open-copilot-pr", n); continue; }
     const info = await repoInfo(slug);
     if (!info.ok) { skip("repo-unreadable", n); sum.errors.push({ where: slug, http: info.http, message: info.message }); continue; }
     if (info.archived || info.disabled) { skip("repo-archived", n); continue; }
@@ -269,7 +288,6 @@ export async function run(opts, deps) {
       if (given.length > o.maxRedrives) { skip("redrive-exhausted", n); continue; }
       const last = given.reduce((t, e) => Math.max(t, Date.parse(e.created_at) || 0), 0);
       if (!last || d.now - last < o.stalledHours * 3600000) { skip("session-recent", n); continue; }
-      if (pr.ok && pr.refs.has(slug + "#" + n.number)) { skip("has-open-copilot-pr", n); continue; }
       const tl = await api.req("GET", "/repos/" + slug + "/issues/" + n.number + "/timeline?per_page=100");
       if (tl.status !== 200 || !Array.isArray(tl.body)) { skip("history-unreadable", n); continue; }
       if (hasLivePr(tl.body)) { skip("has-live-pr", n); continue; }
@@ -322,7 +340,8 @@ async function main() {
     token: env.GH_PAT_TOKEN || "", sweep: env.ASSIGN_COPILOT_SWEEP || "on",
     hours: num(arg("--hours"), DEFAULTS.hours), max: num(arg("--max"), DEFAULTS.max), maxOpen: num(arg("--max-open"), DEFAULTS.maxOpen),
     redriveMax: num(arg("--redrive-max"), DEFAULTS.redriveMax), stalledHours: num(arg("--stalled-hours"), DEFAULTS.stalledHours),
-    mode: arg("--mode", "live") === "dry" ? "dry" : "live", agentSync: !argv.includes("--no-agent-sync")
+    mode: arg("--mode", "live") === "dry" ? "dry" : "live", agentSync: !argv.includes("--no-agent-sync"),
+    gate: { event: env.GITHUB_EVENT_NAME || "", runId: env.GITHUB_RUN_ID || "", repo: env.GITHUB_REPOSITORY || "", minutes: num(arg("--window-minutes"), DEFAULTS.windowMinutes) }
   };
   if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(env.ISSUE_REPO || "") && /^\d+$/.test(env.ISSUE_NUMBER || "")) opts.priority = { repo: env.ISSUE_REPO, number: Number(env.ISSUE_NUMBER) };
   let s;
