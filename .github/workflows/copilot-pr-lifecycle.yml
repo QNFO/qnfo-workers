@@ -6,7 +6,9 @@ name: copilot-pr-lifecycle
 # `action_required`). scripts/copilot-pr-lifecycle.mjs removes the owner from review and assignment and, once the agent has finished, approves the
 # gated runs of a pull request that changes none of the paths CI executes with more than read access (DENY_PATHS). The merge lane merges the result.
 #
-# TOKEN: the workflow GITHUB_TOKEN only (pull-requests, issues, actions write). No other secret is read. COPILOT_PR_APPROVE (repository variable) set to
+# TOKEN: the workflow GITHUB_TOKEN (pull-requests, issues, actions write) does the repository work. ORG_TOKEN is QNFO_GH_PAT, the fleet user credential, handed to the script
+# only off a pull_request_target run (the same guard deploy-gate uses for its secrets): the script uses it to remove the owner from the Copilot pull requests and the issues of
+# every other QNFO repository (search by author app/copilot-swe-agent, review-requested and assignee), never for an approval. COPILOT_PR_APPROVE (repository variable) set to
 # off restores "nothing is approved"; OWNER_LOGINS (repository variable, comma separated) overrides the default owner login.
 # PULL_REQUEST_TARGET IS SAFE HERE: the job runs only for a pull request written by Copilot, checks out the base branch (never the pull request), and
 # the script puts nothing from the pull request in a shell line, a path or a query except integers and SHAs read from the API.
@@ -56,6 +58,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ORG_TOKEN: ${{ github.event_name != 'pull_request_target' && secrets.QNFO_GH_PAT || '' }}
       TARGET_PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
       LIFECYCLE_MODE: ${{ github.event.inputs.mode }}
       COPILOT_PR_APPROVE: ${{ vars.COPILOT_PR_APPROVE }}
