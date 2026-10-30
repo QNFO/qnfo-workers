@@ -213,8 +213,16 @@ ok(cA > 0 && cB > cA, "the BREACH-DOCTOR-WATCH-1 block is marked in qnfo-cloud-o
 const jx = { Date, Math, Number, JSON, String, Promise, isFinite, setTimeout, clearTimeout, VERSION: "1.40.0-test", __name: () => {}, console: quiet };
 vm.createContext(jx);
 vm.runInContext(cloudSrc.slice(cA, cB) + "\n__x = { jobBreachDoctorWatch };", jx);
-const watchJob = jx.__x.jobBreachDoctorWatch;
-ok(typeof watchJob === "function", "jobBreachDoctorWatch is loaded");
+const rawWatchJob = jx.__x.jobBreachDoctorWatch;
+// BDR-CLAIM-ID-RACE-1 (2026-10-30, agent_issues 5013): a run row's id is "breach-doctor-watch-run-<kind>-" + the millisecond in base 36, and two real ticks are 10 minutes apart. A scenario that calls the job
+// twice in a row (a skipped lock-held call, then the retry) could land both in one millisecond under CPU load (1 of 24 concurrent runs); the second claim then hit the primary key, threw, and was
+// reported as claim-failed: red in the full parallel suite, green alone. Each call now starts strictly after the previous one ended, so no two calls share a millisecond.
+let lastWatchMs = 0;
+const watchJob = async (...args) => {
+  while (Date.now() <= lastWatchMs) await new Promise((r) => setTimeout(r, 1));
+  try { return await rawWatchJob(...args); } finally { lastWatchMs = Date.now(); }
+};
+ok(typeof rawWatchJob === "function", "jobBreachDoctorWatch is loaded");
 const iso = (minAgo) => new Date(Date.now() - minAgo * 60000).toISOString().slice(0, 19) + "Z";
 function e2e(o = {}) {
   const raw = world();

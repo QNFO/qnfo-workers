@@ -77,6 +77,14 @@ function world(o = {}) {
   w.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (100587, 'AUTOTRIAGE-1', 'triaged', 'qnfo-ops', '2026-10-01')").run();
   w.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, module) VALUES ('issue-100587', 100587, 'p', 'VACUOUS-PROBE-V3-1: placeholder text kept by the live row', ?, 'd1-query', 'qnfo-fleet-control', 'active', 'x')").run(ORIGINAL_PROBE);
   if (o.birth !== false) w.exec(BIRTH);
+  // WORLD-CLOCK-PIN-1 (2026-10-30, agent_issues 5013): the legacy tables default created_at and last_synced_at to datetime('now'), and the Rollback check compares tables() of a world built earlier with
+  // one built later. In different seconds (a loaded CI runner, or here a 1.1 s gap) the two differ in columns the migration never touches: "Rollback restores all four tables exactly" went red on CI
+  // main and green locally. Every defaulted clock column is pinned to one instant, so a snapshot depends on the rows and not on the second they were built in.
+  for (const t of ["paper_index", "content_entries", "discovery_projects", "research_code_libraries"]) {
+    for (const col of w.prepare("PRAGMA table_info(" + t + ")").all().filter((c) => /datetime\(|strftime\(|CURRENT_TIMESTAMP/i.test(String(c.dflt_value || "")))) {
+      w.exec("UPDATE " + t + " SET " + col.name + " = '2026-10-26 00:00:00'");
+    }
+  }
   return w;
 }
 const q1 = (w, s, ...p) => w.prepare(s).get(...p);
