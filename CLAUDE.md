@@ -134,7 +134,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   ending in a no-change draft pull request: the claim was the single path to every edit). `acquired: false` still binds. A claim that cannot be
   attempted (DNS failure, refusal, timeout) does not stop the work: coordinate through GitHub (open pull requests that touch the same paths, read
   with REST `pulls` and `pulls/<n>/files`; a `copilot/<issue>-<slug>` branch), write `work-claim: unreachable (<verbatim error>); no other open PR
-  touches <paths>` in the pull request body, and finish the change. CONFLICT-REPAIR-INPLACE-1 is the second line against overlapping edits. The
+  touches <paths>` in the pull request body, and finish the change. A live secret lease and a `HOLD:` comment stay binding. CONFLICT-REPAIR-INPLACE-1
+  is the second line against overlapping edits. The
   repository administrator can also allowlist the claim host under Settings > Copilot > Internet access ("Copilot in the cloud" custom allowlist,
   `qnfo-deploy-guard.q08.workers.dev`); the fallback does not wait for it.
 - `in_flight` in the answer lists the code loop's unfinished tasks on the same path or issue; they do not block you, but a
