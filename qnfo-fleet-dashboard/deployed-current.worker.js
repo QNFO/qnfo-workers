@@ -1156,6 +1156,10 @@ async function dispatchIssue(env, i, gh_number) {
   }
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_issue_dispatch (fingerprint, category, sev, owner, action, payload, gh_number, state, created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET state='queued', action=?, created_at=?, exec_state=CASE WHEN fleet_issue_dispatch.exec_state IN ('no-action','executed','needs-human') THEN fleet_issue_dispatch.exec_state ELSE NULL END, exec_result=CASE WHEN fleet_issue_dispatch.exec_state IN ('no-action','executed','needs-human') THEN fleet_issue_dispatch.exec_result ELSE NULL END").bind(i.id, i.category, i.sev, i.owner || "fleet", action, JSON.stringify({ title: i.title, detail: i.detail, remediation: i.remediation, resource: i.resource }).slice(0, 1500), gh_number || null, "queued", ts, action, ts).run();
+    const target = execTargetFor(i.category, i.resource || i.title || "", env);
+    if (target.safe && target.svc === "SVC_ERRATA_HUB") {
+      await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=NULL, exec_ts=NULL, exec_result=NULL, exec_attempts=0 WHERE fingerprint=?").bind(i.id).run();
+    }
   } catch (e) {
   }
 }

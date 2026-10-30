@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { DatabaseSync } from "node:sqlite";
 
 const source = readFileSync(new URL("./worker.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const start = source.indexOf("function execTargetFor(");
@@ -43,4 +44,32 @@ const execute = runInNewContext(
 );
 await execute({});
 assert.deepEqual(retried, ["no-action", "needs-human"], "previously parked errata receipts retry after deployment, regardless of migration ordering");
+const db = new DatabaseSync(":memory:");
+db.exec(`CREATE TABLE fleet_issue_dispatch (
+  fingerprint TEXT PRIMARY KEY, category TEXT, sev TEXT, owner TEXT, action TEXT, payload TEXT,
+  gh_number INTEGER, state TEXT, created_at TEXT, exec_state TEXT, exec_ts TEXT, exec_result TEXT, exec_attempts INTEGER
+)`);
+db.exec("INSERT INTO fleet_issue_dispatch (fingerprint, exec_state, exec_attempts) VALUES ('errata','executed',1), ('other','executed',1)");
+const audit = { prepare(sql) {
+  let args = [];
+  const stmt = {
+    bind(...values) { args = values; return stmt; },
+    async run() { return sql.includes("self_heal_actions") ? {} : db.prepare(sql).run(...args); }
+  };
+  return stmt;
+} };
+const dispatchStart = source.indexOf("async function dispatchIssue(");
+const dispatch = runInNewContext(
+  source.slice(dispatchStart, source.indexOf('\n__name(dispatchIssue,', dispatchStart)) + "\ndispatchIssue",
+  { execTargetFor: target }
+);
+await dispatch({ AUDIT: audit }, {
+  id: "errata", category: "integration-chain", sev: "err", owner: "research",
+  resource: "Integration chain Errata watch -> respond -> publish", remediation: { suggested_action: "chain-produce" }
+}, null);
+assert.equal(db.prepare("SELECT exec_state FROM fleet_issue_dispatch WHERE fingerprint='errata'").get().exec_state, null,
+  "a verified-clear then recurrence must wake the consumer again, not preserve the old executed receipt");
+await dispatch({ AUDIT: audit }, { id: "other", category: "probe", sev: "warn", owner: "fleet" }, null);
+assert.equal(db.prepare("SELECT exec_state FROM fleet_issue_dispatch WHERE fingerprint='other'").get().exec_state, "executed");
+db.close();
 console.log("ERRATA-CHAIN-DISPATCH-1: target, binding, authentication and unrelated targets passed");
