@@ -49,9 +49,11 @@ test("moving or deleting a ledger row reconciles old groups without corrupting o
     db.prepare(upsert).run("2026-10-30", "qnfo-ai", "m1", 2, 0.2, 1);
     db.prepare(upsert).run("2026-10-30", "qnfo-ai-search", "m1", 3, 0.3, 0);
     db.exec("UPDATE ai_spend_ledger SET caller = 'qnfo-ai-moved', day = '2026-11-06' WHERE caller = 'qnfo-ai'");
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM finops_digest WHERE caller = 'qnfo-ai' AND week = strftime('%Y-W%W', '2026-10-30')").get().n, 1, "the emptied group keeps one zero-valued row");
     assert.deepEqual(totals(db), { calls: 0, usd: 0, downgraded: 0 });
     assert.equal(db.prepare("SELECT calls FROM finops_digest WHERE caller = 'qnfo-ai-moved'").get().calls, 2);
     db.exec("DELETE FROM ai_spend_ledger WHERE caller = 'qnfo-ai-moved'");
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM finops_digest WHERE caller = 'qnfo-ai-moved' AND week = strftime('%Y-W%W', '2026-11-06')").get().n, 1, "the group emptied by a delete keeps one zero-valued row");
     assert.equal(db.prepare("SELECT calls FROM finops_digest WHERE caller = 'qnfo-ai-moved'").get().calls, 0);
     assert.equal(totals(db, "qnfo-ai-search").calls, 3);
     assert.doesNotThrow(() => db.exec(migration.match(/^-- Rollback: (.+)$/m)[1]));
