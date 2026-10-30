@@ -2,7 +2,7 @@
 // scripts/assign-copilot-sweep.mjs: ASSIGN-COPILOT-ISSUES-1 (owner directive 2026-10-30, pillar autonomy: every new issue in every repository is
 // assigned to GitHub Copilot running the Quniverse custom agent, and no issue is ever assigned to a person).
 //
-// WHAT   Finds the open issues created in the last N hours (default 24) in every active QNFO repository and assigns Copilot to each one that
+// WHAT   Finds the open issues created in the last N hours (default 720, 30 days) in every active QNFO repository and assigns Copilot to each one that
 //        has no Copilot assignee yet, with REST POST /repos/{owner}/{repo}/issues/{n}/assignees and an agent_assignment of
 //        {target_repo, base_branch, custom_agent: "quniverse", custom_instructions}. Before that it publishes the agent profile at
 //        organization level (QNFO/.github agents/quniverse.agent.md, byte-identical to .github/agents/quniverse.agent.md here) so that
@@ -24,7 +24,7 @@
 //        * One credential (GH_PAT_TOKEN = QNFO_GH_PAT), never printed. Per-run cap (--max). A 401 or a rate limit stops the run; a
 //          refusal for one repository skips that repository's other issues. Every failure is a ::warning:: and the exit code stays 0, so a
 //          failed sweep cannot file a WORKFLOW-FAILED-1 issue that the next sweep would assign again.
-// USAGE  GH_PAT_TOKEN=... node scripts/assign-copilot-sweep.mjs [--hours 24] [--max 25] [--mode live|dry] [--no-agent-sync]
+// USAGE  GH_PAT_TOKEN=... node scripts/assign-copilot-sweep.mjs [--hours 720] [--max 25] [--mode live|dry] [--no-agent-sync]
 //        ISSUE_REPO=QNFO/x ISSUE_NUMBER=7 (set by the `issues` trigger) puts that one issue first in the run.
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -37,7 +37,7 @@ export const AGENT_SOURCE = { repo: "QNFO/qnfo-workers", path: ".github/agents/q
 export const AGENT_TARGET = { repo: "QNFO/.github", path: "agents/quniverse.agent.md", branch: "master" };
 export const TRUSTED_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
 export const TRUSTED_BOTS = ["github-actions[bot]"];
-export const DEFAULTS = { hours: 24, max: 25, pages: 5, pauseMs: 1000 };
+export const DEFAULTS = { hours: 720, max: 25, pages: 5, pauseMs: 1000 };
 
 // Static text only: nothing from the issue is copied into it.
 export const INSTRUCTIONS = "Resolve this issue with code changes in a pull request, not with a plan or a report. Reference the issue in the pull request, run the repository's tests and linters, and mark the pull request ready for review when the work is complete. Never hand the work back to a person and never assign the issue to a user. If the work-claim service (qnfo-deploy-guard) cannot be reached from this sandbox because of the cloud-agent firewall, that is an environment limit and not a refusal: read the open pull requests and copilot/ branches through the GitHub API for the paths you will change, skip any file another open pull request changes, write 'work-claim: unreachable (<verbatim error>)' in the pull request body (CLAUDE.md, CLAIM-UNREACHABLE-FALLBACK-1), and continue. An explicit acquired:false answer from the service, a live secret lease and a HOLD: comment are still binding.";

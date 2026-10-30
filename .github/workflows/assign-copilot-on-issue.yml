@@ -17,7 +17,8 @@ name: assign-copilot-on-issue
 # is acyclic. The script exits 0 on every failure (it prints ::warning:: lines and one RESULT_JSON line), so a failed sweep cannot file a
 # WORKFLOW-FAILED-1 issue that the next sweep would assign again.
 #
-# BACKFILL BY HAND: Run workflow with hours (for example 720) and max. An issue Copilot was ever assigned to is never assigned again.
+# BACKFILL: the look-back window defaults to 720 hours (30 days), so an open issue that Copilot never had is assigned even if an hourly run was missed;
+# raise `hours` by hand for older ones. An issue Copilot was ever assigned to is never assigned again, and `max` (25) bounds every run.
 # Style: step names colon-free, no heredocs, no inline python, inputs travel through env (workflow-lint.py).
 
 on:
@@ -31,9 +32,9 @@ on:
   workflow_dispatch:
     inputs:
       hours:
-        description: "Look-back window in hours (default 24; raise it to backfill older open issues)"
+        description: "Look-back window in hours (default 720, 30 days: an open issue Copilot never had is still assigned within it)"
         required: false
-        default: "24"
+        default: "720"
       max:
         description: "Most assignments in this run (default 25)"
         required: false
@@ -74,4 +75,4 @@ jobs:
           node-version: "22"
 
       - name: Assign Copilot to new issues
-        run: node scripts/assign-copilot-sweep.mjs --hours "${IN_HOURS:-24}" --max "${IN_MAX:-25}" --mode "${IN_MODE:-live}"
+        run: node scripts/assign-copilot-sweep.mjs --hours "${IN_HOURS:-720}" --max "${IN_MAX:-25}" --mode "${IN_MODE:-live}"
