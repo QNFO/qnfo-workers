@@ -25,6 +25,10 @@ on:
   issue_comment:
     types: [created]
   workflow_run:
+    # COPILOT-PR-LIFECYCLE-1: the checks of a Copilot pull request finish under the Copilot actor, and GitHub holds a run triggered by that actor for approval, so this
+    # workflow never started for them and left 98 runs `action_required` in a day. The 10-minute lane tick is their wake-up; no poke is lost.
+    branches-ignore:
+      - "copilot/**"
     workflows:
       - deploy-gate
       - mirror-guard
