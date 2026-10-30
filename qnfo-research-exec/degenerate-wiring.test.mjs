@@ -56,10 +56,9 @@ ok(block(src) === block(libSrc), "the DEGENERATE-TEXT block in worker.js is byte
   ok(!clean.fixes.some((x) => x.id === "gate-degenerate"), "finalGates raises nothing of the kind for a clean paper", clean.fixes.map((x) => x.id));
 }
 // STRUCTURE-NUMBERING-1 (item 8 of agent_issues 1000535): a numbered subsection (### a.b) under a different numbered section (## c) is a HARD gate-structure-numbering fix for a new paper.
-// Paper qnf-d66c40b5 had 4.3 to 4.9 under "## 6. Extended Derivations and Worked Examples". Until worker.js carries the gate this part prints PENDING and passes (the file was under the code loop's live work claim).
-if (!/gate-structure-numbering/.test(src)) {
-  console.log("PENDING STRUCTURE-NUMBERING-1: qnfo-research-exec/worker.js has no gate-structure-numbering yet (agent_issues 1000540, item 8 of 1000535); the checks below run once it does.");
-} else {
+// Paper qnf-d66c40b5 had 4.3 to 4.9 under "## 6. Extended Derivations and Worked Examples".
+ok(/gate-structure-numbering/.test(src), "STRUCTURE-NUMBERING-1 is required, never a pending success");
+{
   const sect = (h, subs) => "## " + h + "\n\nA sentence that states the section.\n\n" + subs.map((s) => "### " + s + "\n\nA sentence that states the subsection.\n").join("\n") + "\n";
   const num = (...parts) => "# A Paper\n\n" + parts.join("\n");
   const fixesOf = (md, structure) => finalGates(md, structure ? { structure: true } : {}).fixes.filter((x) => x.id === "gate-structure-numbering");

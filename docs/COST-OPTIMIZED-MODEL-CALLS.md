@@ -61,6 +61,23 @@ agent loops is a REGRESSION. The recurrence-guard row: `fleet_loop_meta.model_pi
 - Live first-day sample (2026-09-26): deterministic $0 · chat-cache-exact-kv $0 (hit rate 1.0) ·
   agent-tools validity 1.0 · T2 spend $0.008 across 5 paid calls.
 
+## Spend aggregation and creative cache policy
+
+`migrations/2026-10-30-finops-digest-upsert.sql` repairs the weekly
+`finops_digest` triggers with explicit `ON CONFLICT(week, caller) DO UPDATE`.
+Do not restore trigger-level `INSERT OR REPLACE`: an outer ledger UPSERT can
+override that conflict policy and fail the model-call accounting write.
+Aggregates are recomputed from the ledger, including both caller/week groups
+when a row moves and the remaining total after a deletion. Trigger definitions
+are backed up; the migration includes a rollback and is replay-safe.
+
+In source version `q08-signal-engine 0.39.8-compose-cache`, creative compose
+calls explicitly request `skipCache: true`. `aiGatewayRun` only enables caching
+for deterministic calls without that override; gateway routing and attribution
+remain in place. A cache-hit target must never cause a creative request to reuse
+an earlier response. These source changes require canonical rollout and live
+accounting/cache readback before being described as deployed.
+
 ## Anti-patterns (do not reintroduce)
 
 Price-only routing (retries cost more) · paid ensembles · re-sending full history · unbounded tool

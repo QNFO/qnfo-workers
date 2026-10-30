@@ -89,7 +89,7 @@ async function run(sc, opts, d1In) {
   const gh = makeGh(sc);
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
-  const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_CONTROL_PLANE = ", "var CM_LOOP_CANARIED = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
+  const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_CONTROL_PLANE = ", "var CM_LOOP_CANARIED = ", "var CM_DENY = ", "var CM_DOCS_ONLY_RE = ", "var CM_DOCS_GENERATED_RE = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmDocsOnly", "cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
   vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, bhNudgeDecide, bhHoldDecide, branchHygieneTick, BH_MAX_ACTIONS, BH_NUDGE_MAX, BH_HOLD_EXPIRE_H };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
@@ -314,7 +314,8 @@ const scenario = () => ({
   eq(dec(prj(47, "x", "h", { labels: [{ name: "hold" }] }), W2(), green("h", ALL)).merge, false, "pure: a hold label blocks the merge");
   eq(dec(prj(48, "x", "h", { body: "Please do not merge until the owner looks." }), W2(), green("h", ALL)).merge, false, "pure: 'do not merge' in the body blocks the merge");
   eq(dec(prj(49, "x", "h", { title: "HOLD-LIST-1: holdout set" }), W2(), green("h", ALL)).merge, true, "pure: the word hold inside a title tag does not block");
-  eq(JSON.stringify(dec(prj(50, "x", "h"), [{ filename: "docs/a.md" }], green("h", ["gate", "mirror-guard", "comparator"]))).indexOf('"merge":true') >= 0, true, "pure: a docs PR needs gate, mirror-guard and comparator only");
+  eq(dec(prj(50, "x", "h"), [{ filename: "docs/a.md" }], green("h", ["gate", "mirror-guard", "comparator"])).merge, false, "pure: a docs PR without implementing evidence remains incomplete");
+  eq(dec(prj(50, "x", "h", { body: "Implemented in: #40" }), [{ filename: "docs/a.md" }], green("h", ["gate", "mirror-guard", "comparator"])).merge, true, "pure: implemented docs need mirror-guard and comparator");
   eq(dec(prj(51, "x", "h"), [{ filename: "docs/QUNIVERSE-CHARTER.md" }], green("h", ALL)).why.indexOf("charter never ran") >= 0, true, "pure: a charter PR also needs charter-guard");
   // CONTROL-PLANE-SELF-MERGE-1 (0.7.0, owner directive 2026-10-06) replaces CONTROL-PLANE-MANUAL-1: a control-plane worker
   // merges when ops_config control_plane_self_merge is on (the default), it has a /health canary and the PR carries
@@ -329,12 +330,12 @@ const scenario = () => ({
   eq(noMirror.merge === false && /without deployed-current\.worker\.js/.test(noMirror.why), true, "pure: worker.js without its mirror is not merged (the canary reverts the pair)");
   const noCanary = dec(prj(60, "x", "h"), [{ filename: "qnfo-containers-pilot/worker.js" }, { filename: "qnfo-containers-pilot/deployed-current.worker.js" }], green("h", ALL));
   eq(noCanary.merge === false && /no \/health canary/.test(noCanary.why), true, "pure: a control-plane worker without a /health canary is never merged");
-  const docsOnly = dec(prj(57, "x", "h"), [{ filename: "docs/a.md" }, { filename: "qnfo-ops/README.md" }], green("h", ["gate", "mirror-guard", "comparator"]));
+  const docsOnly = dec(prj(57, "x", "h", { body: "Implemented in: #40" }), [{ filename: "docs/a.md" }, { filename: "qnfo-ops/README.md" }], green("h", ["gate", "mirror-guard", "comparator"]));
   eq(docsOnly.merge === true && (docsOnly.control_plane || []).length === 0, true, "pure: a non-deployable file under a control-plane worker dir is not a control-plane change");
 }
 { // STALE-PR-LANE-READS-HOLDS-1 (agent_issues 2389): a review comment newer than the head that asks for changes refuses the merge
   const R = { full_name: "QNFO/qnfo-workers" };
-  const mkpr = (n, sha) => ({ number: n, state: "open", draft: false, merged: false, mergeable: true, mergeable_state: "clean", title: "docs " + n, body: "", labels: [], updated_at: hAgo(3), head: { ref: "claude/h" + n, sha, repo: R }, base: { ref: "main", repo: R } });
+  const mkpr = (n, sha) => ({ number: n, state: "open", draft: false, merged: false, mergeable: true, mergeable_state: "clean", title: "docs " + n, body: "Implemented in: #40", labels: [], updated_at: hAgo(3), head: { ref: "claude/h" + n, sha, repo: R }, base: { ref: "main", repo: R } });
   const prs = { 62: mkpr(62, "h62"), 63: mkpr(63, "h63"), 64: mkpr(64, "h64"), 65: mkpr(65, "h65"), 66: mkpr(66, "h66") };
   const docs = [{ filename: "docs/a.md" }];
   const chk = (sha) => ["gate", "mirror-guard", "comparator"].map((nm, i) => ({ id: 200 + i, name: nm, status: "completed", conclusion: "success", head_sha: sha }));
@@ -393,7 +394,7 @@ const scenario = () => ({
 }
 { // kill switch and dry run: no merge
   const R = { full_name: "QNFO/qnfo-workers" };
-  const pr = { number: 61, state: "open", draft: false, mergeable: true, mergeable_state: "clean", title: "t", labels: [], updated_at: hAgo(3), head: { ref: "claude/k", sha: "k1", repo: R }, base: { ref: "main", repo: R } };
+  const pr = { number: 61, state: "open", draft: false, mergeable: true, mergeable_state: "clean", title: "t", body: "Implemented in: #40", labels: [], updated_at: hAgo(3), head: { ref: "claude/k", sha: "k1", repo: R }, base: { ref: "main", repo: R } };
   const mk = () => ({ branches: [br("main", 0, true)], compare: {}, prs: { 61: pr }, pulls: [{ number: 61, state: "open", updated_at: hAgo(3), head: pr.head }], files: { 61: [{ filename: "docs/a.md" }] }, checks: { k1: ["gate", "mirror-guard", "comparator"].map((n, i) => ({ id: i, name: n, status: "completed", conclusion: "success" })) } });
   const s1 = mk(); s1.config = [["stale_pr_merge_enabled", "0"]];
   const r1 = await run(s1);

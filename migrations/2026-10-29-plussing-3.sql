@@ -44,6 +44,9 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
    'plusses (plus_ledger rows) merged and verified live in the last 7 days. Trigger exemption: the product managers research, file and close these items themselves every hour (PLUSSING-3) and the portfolio brief reports the count, which is the action a trigger would take',
    'qnfo-audit.plus_ledger (PLUSSING-3), written hourly by fleet_tasks management-personas', '>= 3 a week', 'qnfo-fleet-control', 'agent:management-personas', 'hourly', 'PENDING');
 
+INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
+  ('product_plus_deployed_7d', 'code-loop', 'METRIC-CAUSE-AT-REGISTRATION-1: the product plus is delivered by the roadmap/code/deploy loop; repair its stalled execution, not the count');
+
 UPDATE roadmap_implementation SET status = 'built', evidence = 'migrations/2026-10-29-plussing-3.sql: steps pl-research..pl-brief in fleet_tasks management-personas' WHERE source = 'plussing-2026' AND item = 'PLUS-3';
 
 INSERT OR IGNORE INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, evidence)

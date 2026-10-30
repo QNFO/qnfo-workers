@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finalGates, danglingCitations, citeRangeOn } from "./worker.js";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
@@ -272,7 +273,7 @@ CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, i
   ok(src.indexOf("spot-check 2-3 derivations") < 0 && /check every headline number \(Abstract, Introduction, Results, Conclusion\)/.test(src), "item 3 checks every headline number, not 2-3 derivations");
   ok(src.indexOf("daily publication cap of 5 reached") < 0, "the dead 5-a-day publication cap is gone (code-probe absent)");
   ok(/await logEvent\(env, "park-rearm-heartbeat"/.test(src) && /_sMin === 0\) await logEvent\(env, "park-rearm-heartbeat"/.test(src), "the hourly park sweep leaves a park-rearm-heartbeat event whether or not it re-armed a row");
-  ok(/var VERSION = "0\.(3[7-9]|[4-9]\d)\.\d+(-codeagent)?"/.test(src) || /var VERSION = "[1-9]/.test(src), "the host is 0.37.0 or later");
+  ok(versionAtLeast(src.match(/var VERSION = "([^"]+)"/)?.[1], "0.37.0"), "the host is 0.37.0 or later");
   ok(/ERRATA_VERSION = "1\.9\.\d+-folded"/.test(src) && /var VERSION = "1\.9\.\d+-[a-z-]+"/.test(hub), "the member is 1.9.x in the host and in errata-hub");
 }
 

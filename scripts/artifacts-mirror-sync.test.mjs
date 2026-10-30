@@ -24,7 +24,11 @@ const c2 = commit(src, "b.txt");
 const run = (args, env, cwd) => { const r = sh("python3", [script, ...args], cwd || src, env); return { code: r.status, out: (r.stdout || "") + (r.stderr || "") }; };
 const E = { ARTIFACTS_TOKEN: TOKEN };
 const A = ["--remote", bare, "--allow-local"];
-const refOf = () => { try { return g(bare, "rev-parse", "refs/heads/github-main"); } catch (e) { return null; } };
+const refOf = () => {
+  const r = sh("git", ["--git-dir=" + bare, "rev-parse", "--verify", "refs/heads/github-main"], root);
+  if (r.status !== 0) throw new Error("Cannot verify mirror ref: " + r.stderr);
+  return r.stdout.trim();
+};
 
 let r = run(A, E);
 ok(r.code === 0 && /pushed/.test(r.out) && refOf() === c2, "first run pushes HEAD to the mirror branch and reads it back", r);
