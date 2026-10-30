@@ -62,9 +62,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # CODEQL-DEFAULT-PRECHECK-2 (2026-10-30): the dynamic workflow stays listed as active after default setup is switched off, so "active"
+          # alone skipped the analysis for good: the last scan of main was 2026-10-13 (17 days, 220 stale alerts). Default setup counts as
+          # configured only while that workflow has actually run in the last 7 days (it runs on every push to main). Any failed read runs it.
           if out=$(gh api "repos/${{ github.repository }}/actions/workflows" --paginate \
-                --jq '.workflows[] | select(.path == "dynamic/github-code-scanning/codeql") | .state' 2>/dev/null); then
-            if printf '%s\n' "$out" | grep -qx active; then s=configured; else s=not-configured; fi
+                --jq '.workflows[] | select(.path == "dynamic/github-code-scanning/codeql") | select(.state == "active") | .id' 2>/dev/null); then
+            wf=$(printf '%s\n' "$out" | head -n 1)
+            if [ -z "$wf" ]; then
+              s=not-configured
+            elif latest=$(gh api "repos/${{ github.repository }}/actions/workflows/$wf/runs?per_page=1" --jq '.workflow_runs[0].created_at // ""' 2>/dev/null); then
+              since=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+              if [ -n "$latest" ] && [[ "$latest" > "$since" ]]; then s=configured; else s=not-configured; fi
+            else
+              s=unknown
+            fi
           else
             s=unknown
           fi
