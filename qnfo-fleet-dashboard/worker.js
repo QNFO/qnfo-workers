@@ -1506,6 +1506,14 @@ __name2222(loopMaybeSync, "loopMaybeSync");
 // ==== AREA-MAP reliability: fleet state: buildState, the integration view and report-card data ====
 // OUTREACH-WEEKDAY-1 (#1940): whole hours between raw and nowMs that fall on a weekday (UTC); Saturdays and Sundays do
 // not count. Outreach sends Monday to Friday only, so its queue's freshness is judged in these hours.
+async function workerObservability(env, nowMs) {
+  const rows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, GROUP_CONCAT(DISTINCT x.svc) AS workers FROM (SELECT l.fingerprint, COALESCE((SELECT CASE WHEN json_valid(d.payload) THEN CAST(json_extract(d.payload, '$.lastObserved') AS REAL) END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint), (CASE WHEN CAST(l.last_seen AS REAL) > 1e12 THEN CAST(l.last_seen AS REAL) ELSE (julianday(l.last_seen) - 2440587.5) * 864e5 END)) AS seen_ms, (SELECT CASE WHEN json_valid(d.payload) THEN json_extract(d.payload, '$.service') END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint) AS svc FROM fleet_issue_loop l WHERE l.category='worker-observability' AND l.closed_at IS NULL) x WHERE x.seen_ms >= ? AND NOT EXISTS (SELECT 1 FROM fleet_deploys f WHERE x.svc IS NOT NULL AND f.worker = x.svc AND f.ok = 1 AND COALESCE(f.note,'') NOT LIKE 'SETTINGS-ONLY%' AND (julianday(f.ts) - 2440587.5) * 864e5 > x.seen_ms)", [nowMs - ERR_ACTIVE_MS]);
+  const row = rows && rows.length ? rows[0] : {};
+  const workers = String(row.workers || "").split(",").filter((worker) => /^[a-z0-9][a-z0-9_-]{0,62}$/.test(worker));
+  return { count: row.n || 0, workers };
+}
+__name(workerObservability, "workerObservability");
+
 function weekdayHoursSince(raw, nowMs) {
   if (raw == null) return null;
   let ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T"));
@@ -1560,11 +1568,11 @@ async function buildState(env, ctx) {
     // OBS-LASTOBSERVED-1 (2026-10-01): loop.last_seen advances on every re-poll of an Observability API issue that is
     // still "active", so a 502 from 2026-09-30 16:19Z read as "observed in the last 3h" the next morning. Date each issue
     // by the payload's lastObserved (when the error actually happened) and fall back to last_seen without a payload.
-    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM (SELECT l.fingerprint, COALESCE((SELECT CASE WHEN json_valid(d.payload) THEN CAST(json_extract(d.payload, '$.lastObserved') AS REAL) END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint), (CASE WHEN CAST(l.last_seen AS REAL) > 1e12 THEN CAST(l.last_seen AS REAL) ELSE (julianday(l.last_seen) - 2440587.5) * 864e5 END)) AS seen_ms, (SELECT CASE WHEN json_valid(d.payload) THEN json_extract(d.payload, '$.service') END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint) AS svc FROM fleet_issue_loop l WHERE l.category='worker-observability' AND l.closed_at IS NULL) x WHERE x.seen_ms >= ? AND NOT EXISTS (SELECT 1 FROM fleet_deploys f WHERE x.svc IS NOT NULL AND f.worker = x.svc AND f.ok = 1 AND COALESCE(f.note,'') NOT LIKE 'SETTINGS-ONLY%' AND (julianday(f.ts) - 2440587.5) * 864e5 > x.seen_ms)", [nowMs - ERR_ACTIVE_MS]);
+    const obs = await workerObservability(env, nowMs);
     const n = w && w.length ? (w[0].n || 0) : 0;
     const req = w && w.length ? (w[0].req || 0) : 0;
-    const inObs = iss && iss.length ? (iss[0].n || 0) : 0;
-    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) observed in the last " + ERR_ACTIVE_MS / 36e5 + "h", ts: null });
+    const inObs = obs.count;
+    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) observed in the last " + ERR_ACTIVE_MS / 36e5 + "h" + (obs.workers.length ? " (" + obs.workers.join(", ") + ")" : ""), ts: null });
   });
   await safeAudit("errata_queue", "Errata queue", async function() {
     const g = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS c FROM errata_queue GROUP BY status");
