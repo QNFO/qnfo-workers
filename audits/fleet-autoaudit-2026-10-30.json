@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-30 05:48:50",
+  "audited_at": "2026-10-30 08:58:26",
   "d1_write_failures": [],
   "d1_writes_ok": 128,
   "guard": {
@@ -576,7 +576,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.39.7-codeagent",
+        "version": "0.39.8-compose-cache",
         "worker": "q08-signal-engine"
       },
       {
@@ -631,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.58.0-docs-only-incomplete",
+        "version": "0.58.1-journey-contract",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.40.7-codeagent",
+        "version": "0.40.8-structure-numbering",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1051,9 +1051,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.39.7-codeagent",
+      "before": "0.39.8-compose-cache",
       "http": 200,
-      "live": "0.39.7-codeagent",
+      "live": "0.39.8-compose-cache",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1400,9 +1400,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.58.0-docs-only-incomplete",
+      "before": "0.58.1-journey-contract",
       "http": 200,
-      "live": "0.58.0-docs-only-incomplete",
+      "live": "0.58.1-journey-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1656,9 +1656,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.40.7-codeagent",
+      "before": "0.40.8-structure-numbering",
       "http": 200,
-      "live": "0.40.7-codeagent",
+      "live": "0.40.8-structure-numbering",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
