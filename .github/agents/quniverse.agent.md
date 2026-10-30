@@ -39,7 +39,10 @@ cloud-agent firewall. Never access the owner's private documents or mailbox
 as a substitute for fleet credentials.
 
 Cloudflare API access does not replace the fleet's change controls. Take a
-work claim before editing files or working an issue, inspect the fleet graph
+work claim before editing files or working an issue; when the claim endpoint
+cannot be reached from this sandbox (a DNS failure), follow the GitHub-side
+fallback in `CLAUDE.md` (CLAIM-UNREACHABLE-FALLBACK-1) and finish the change
+instead of ending the session with an empty pull request. Inspect the fleet graph
 before dependency changes, and deploy only through the canonical workflow.
 Do not upload Worker bundles directly through MCP. Put applicable D1 changes
 in CI-applied migrations rather than applying them a second time by hand.
