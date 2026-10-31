@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-31 04:05:12",
+  "audited_at": "2026-10-31 14:47:52",
   "d1_write_failures": [],
   "d1_writes_ok": 128,
   "guard": {
@@ -576,7 +576,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.0-forecast-ledger",
+        "version": "0.40.1-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -1051,9 +1051,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.0-forecast-ledger",
+      "before": "0.40.1-codeagent",
       "http": 200,
-      "live": "0.40.0-forecast-ledger",
+      "live": "0.40.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
