@@ -63,6 +63,25 @@ eq(x.findings[0] && x.findings[0].severity, "medium", "no target: medium");
 eq(x.findings[0] && x.findings[0].file, false, "IL-DEFECT-ONLY-1: a decline with no target is an early warning, not filed");
 eq(x.metric_regressions_7d, 1, "regression count");
 
+// derived loop scores keep their own trend but do not recursively affect outcome scoring
+const selfHistory = I.IL_SELF_METRICS.map((m) => {
+  const recent = I.ilDirection(m.target) === "up" ? 10 : 20;
+  const prior = I.ilDirection(m.target) === "up" ? 20 : 10;
+  return hist(m.metric, step(recent, prior));
+}).flat();
+x = I.improvementEvaluate({ registry: I.IL_SELF_METRICS.map((m) => reg(m.metric, m.target)), history: selfHistory }, NOW);
+eq(x.evaluable, 0, "derived loop metrics are excluded from outcome scoring");
+eq(x.regressed, 0, "derived loop metrics do not create recursive regressions");
+eq(x.trends.filter((t) => t.verdict === "regressed").length, I.IL_SELF_METRICS.length, "self metrics keep their actual trend for issue recovery");
+
+// small discrete count changes are not material regression signals
+x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: hist("queue_count", step(12, 10)) }, NOW);
+eq(x.evaluable, 1, "discrete count metric remains measurable");
+eq(x.regressed, 0, "two-count increase is below the materiality floor");
+eq(x.trends[0] && x.trends[0].verdict, "flat", "small count movement is flat");
+x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: hist("queue_count", step(13, 10)) }, NOW);
+eq(x.regressed, 1, "three-count increase is material");
+
 // a cost metric that went DOWN 30% improved; one that went up 10% is flat (under the 15% bar)
 x = I.improvementEvaluate({ registry: [reg("cost_usd_30d", "<= 200"), reg("worker_count", "<= 24")], history: hist("cost_usd_30d", step(315, 450)).concat(hist("worker_count", step(44, 40))) }, NOW);
 eq(x.improved, 1, "cost down 30% improved");
