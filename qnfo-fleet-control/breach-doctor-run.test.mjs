@@ -222,6 +222,9 @@ const watchJob = async (...args) => {
   while (Date.now() <= lastWatchMs) await new Promise((r) => setTimeout(r, 1));
   try { return await rawWatchJob(...args); } finally { lastWatchMs = Date.now(); }
 };
+// SUITE-CLOCK-FLAKE-1: wait out the current millisecond before a second claim; a run id is Date.now() in base 36
+// and two claims in one millisecond collide on cloud_ops_events.id (reported claim-failed on CI).
+const nextMs = async () => { const t = Date.now(); while (Date.now() <= t) await new Promise((r) => setTimeout(r, 1)); };
 ok(typeof rawWatchJob === "function", "jobBreachDoctorWatch is loaded");
 const iso = (minAgo) => new Date(Date.now() - minAgo * 60000).toISOString().slice(0, 19) + "Z";
 function e2e(o = {}) {
