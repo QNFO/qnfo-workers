@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-31 15:41:09",
+  "audited_at": "2026-10-31 16:13:50",
   "d1_write_failures": [],
   "d1_writes_ok": 128,
   "guard": {
@@ -676,7 +676,7 @@
       },
       {
         "dir": "qnfo-memory-mcp",
-        "version": "2.4.0-codeagent",
+        "version": "2.5.0-fullscope",
         "worker": "qnfo-memory-mcp"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.40.9-errata-claim-fair",
+        "version": "0.40.10-complete-structural",
         "worker": "qnfo-research-exec"
       },
       {
@@ -716,7 +716,7 @@
       },
       {
         "dir": "qnfo-tools-mcp",
-        "version": "1.3.0-agent-send-policy",
+        "version": "1.4.0-fullscope",
         "worker": "qnfo-tools-mcp"
       },
       {
@@ -1535,9 +1535,9 @@
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
-      "before": "2.4.0-codeagent",
+      "before": "2.5.0-fullscope",
       "http": 200,
-      "live": "2.4.0-codeagent",
+      "live": "2.5.0-fullscope",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-memory-mcp"
@@ -1656,9 +1656,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.40.9-errata-claim-fair",
+      "before": "0.40.10-complete-structural",
       "http": 200,
-      "live": "0.40.9-errata-claim-fair",
+      "live": "0.40.10-complete-structural",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1743,9 +1743,9 @@
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
-      "before": "1.3.0-agent-send-policy",
+      "before": "1.4.0-fullscope",
       "http": 200,
-      "live": "1.3.0-agent-send-policy",
+      "live": "1.4.0-fullscope",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-tools-mcp"
