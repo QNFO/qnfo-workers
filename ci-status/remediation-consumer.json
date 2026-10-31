@@ -1,123 +1,27 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@e5876923d182",
- "due": 557,
- "pass": 263,
- "fail": 254,
- "skipped": 40,
- "deferred": 39,
+ "verifier": "remediation-consumer@28f5d9b848ed",
+ "due": 648,
+ "pass": 395,
+ "fail": 221,
+ "skipped": 32,
+ "deferred": 31,
  "contracts": [
-  {
-   "class": "issue-1000654",
-   "issue_id": 1000654,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-workflow-state-retired",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-breach-doctor-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-loop-breaker-counts-excluded-tool-errors",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "belief-learner-exclusion-reasons-labelled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-drill-probe-blames-budget-pause",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-register-row-reescalated",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-q08-reviewer-error-share",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-post-deploy-error-spike",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "goal-TP-1-AUTONOMY-ENGINE-1",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: code_task_success_rate_30d 0.52 (needs >= 0.6 on 14 days)",
-   "written": true
-  },
-  {
-   "class": "issue-2192",
-   "issue_id": 2192,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: 15 metrics older than twice their refresh cadence or never refreshed, the rule qnfo-lifecycle files this issue on (goal_review_refusal_share_7d, papers_fabricated_claims_open, papers_claim_unaudited, paper_loop_revisions_24h, papers_awaiting_revision, seo_crawl_googlebot_7d, seo_crawl_bingbot_7d, seo_indexnow_engines_ok, seo_sitemap_urls, a11y_violations_serious, pii_in_logs, plus_debt_oldest_weeks, product_plus_rate_7d, plus_keep_rate_30d, product_plus_deployed_7d)",
-   "reason": "the probe cannot judge yet: pending: 15 metrics older than twice their refresh cadence or never refreshed, the rule qnfo-lifecycle files this issue on (goal_review_refusal_share_7d, papers"
-  },
-  {
-   "class": "issue-1000912",
-   "issue_id": 1000912,
-   "verdict": "deferred",
-   "expected": "resolved",
-   "observed": "pending: 1 of 1 gap rows still open",
-   "reason": "the probe cannot judge yet: pending: 1 of 1 gap rows still open"
-  },
   {
    "class": "issue-100457",
    "issue_id": 100457,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "errors 3/4 in 24h",
+   "observed": "errors 4/11 in 24h",
    "written": true
   },
   {
-   "class": "issue-100595",
-   "issue_id": 100595,
+   "class": "issue-1000655",
+   "issue_id": 1000655,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "11",
+   "expected": "ok",
+   "observed": "present-marker",
    "written": true
   },
   {
@@ -129,62 +33,6 @@
    "written": true
   },
   {
-   "class": "issue-1000814",
-   "issue_id": 1000814,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "97",
-   "written": true
-  },
-  {
-   "class": "issue-100629",
-   "issue_id": 100629,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: queued=192",
-   "reason": "the probe cannot judge yet: pending: queued=192"
-  },
-  {
-   "class": "issue-1000655",
-   "issue_id": 1000655,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker",
-   "written": true
-  },
-  {
-   "class": "issue-1000667",
-   "issue_id": 1000667,
-   "verdict": "fail",
-   "expected": "3",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000913",
-   "issue_id": 1000913,
-   "verdict": "deferred",
-   "expected": "resolved",
-   "observed": "pending: 1 of 1 gap rows still open",
-   "reason": "the probe cannot judge yet: pending: 1 of 1 gap rows still open"
-  },
-  {
-   "class": "issue-2954",
-   "issue_id": 2954,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "23",
-   "written": true
-  },
-  {
-   "class": "issue-1000005",
-   "issue_id": 1000005,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: published in the last 1440 minutes = 1 (need 10)",
-   "reason": "the probe cannot judge yet: pending: published in the last 1440 minutes = 1 (need 10)"
-  },
-  {
    "class": "issue-1000790",
    "issue_id": 1000790,
    "verdict": "fail",
@@ -193,47 +41,63 @@
    "written": true
   },
   {
-   "class": "fm-code-plan-untrusted-starves",
+   "class": "issue-2402",
+   "issue_id": 2402,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000561",
+   "issue_id": 1000561,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000696",
+   "issue_id": 1000696,
+   "verdict": "fail",
+   "expected": "workers-ai 30d spend at or below $95 cap",
+   "observed": "workers-ai 30d spend over cap: $372.05 as of 2026-10-31T16:01:03.509Z",
+   "written": true
+  },
+  {
+   "class": "issue-1000817",
+   "issue_id": 1000817,
+   "verdict": "fail",
+   "expected": "0 unmapped breach metrics",
+   "observed": "8 unmapped breach metric(s): guard_rcs, ask_p95_total_ms_7d, migrations_unapplied, program_focus_without_doer, compat_date_age_days_max, agent_tool_calls_outside_allowlist, orphaned_leases, fleet_quality_change_7d",
+   "written": true
+  },
+  {
+   "class": "fm-internal-errata-dead-end",
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
-   "observed": "63",
+   "observed": "3",
    "written": true
   },
   {
-   "class": "issue-1000035",
-   "issue_id": 1000035,
+   "class": "issue-2521-radar",
+   "issue_id": 2521,
    "verdict": "fail",
-   "expected": "healthy",
-   "observed": "defect: publish collapsed (9.8h since publish, 2 pubs/24h)",
+   "expected": "ok",
+   "observed": "present-marker:radar-hub/worker.js",
    "written": true
   },
   {
-   "class": "issue-1000668",
-   "issue_id": 1000668,
+   "class": "issue-2521-intent",
+   "issue_id": 2521,
    "verdict": "fail",
-   "expected": "q08.org#/subscribe and q08.org#q08-fb both Turnstile-protected (ok=1)",
-   "observed": "q08.org#/subscribe ok=0 (POST form on home:q08.org; Turnstile widget absent) | q08.org#q08-fb ok=0 (POST form on q08_piece; Turnstile widget absent)",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-intent-orchestrator/worker.js",
    "written": true
   },
   {
-   "class": "issue-1000815",
-   "issue_id": 1000815,
-   "verdict": "fail",
-   "expected": "papers_published_last_24h >= 10",
-   "observed": "papers_published_last_24h = 2",
-   "written": true
-  },
-  {
-   "class": "issue-100120",
-   "issue_id": 100120,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "19",
-   "written": true
-  },
-  {
-   "class": "fm-superseded-closure-reopened",
+   "class": "fm-default-approve-issue-unexecuted",
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
@@ -241,7 +105,31 @@
    "written": true
   },
   {
-   "class": "fm-detector-contract-not-armed",
+   "class": "issue-1000643",
+   "issue_id": 1000643,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-jobsearch/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000884",
+   "issue_id": 1000884,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000657 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000657 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-2521-outreach",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-unplaceable-large-file",
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
@@ -249,69 +137,184 @@
    "written": true
   },
   {
-   "class": "issue-1000794",
-   "issue_id": 1000794,
-   "verdict": "fail",
-   "expected": "tool_allowlist>0,human_actions>0,capability>0,agent_actions>0,analytics_events>0,ae_events>0,fleet_agent_tools>0",
-   "observed": "tool_allowlist=0,human_actions=0,capability=0,agent_actions=0,analytics_events=0,ae_events=0,fleet_agent_tools=0",
-   "written": true
-  },
-  {
-   "class": "issue-1000795",
-   "issue_id": 1000795,
-   "verdict": "fail",
-   "expected": "deepseek-v4-*-wa calls are routed through the AI Gateway cache (cached > 0)",
-   "observed": "9 deepseek-v4-*-wa calls logged, but 0 cached rows",
-   "written": true
-  },
-  {
-   "class": "issue-1000801",
-   "issue_id": 1000801,
-   "verdict": "fail",
-   "expected": "ask,job applications,papers",
-   "observed": "job applications,papers",
-   "written": true
-  },
-  {
-   "class": "issue-1000802",
-   "issue_id": 1000802,
-   "verdict": "fail",
-   "expected": "<= 20000",
-   "observed": "> 20000 (83945.5)",
-   "written": true
-  },
-  {
-   "class": "issue-1000888",
-   "issue_id": 1000888,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "errors 3/4 in 24h",
-   "written": true
-  },
-  {
-   "class": "issue-1000917",
-   "issue_id": 1000917,
+   "class": "owner-card-jobsearch-ledger",
+   "issue_id": null,
    "verdict": "deferred",
    "expected": "ok",
-   "observed": "pending: issue 1000715 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000715 has no probe of its own yet, a doer writes one"
+   "observed": "pending: 2 ledger question(s) still open",
+   "reason": "the probe cannot judge yet: pending: 2 ledger question(s) still open"
   },
   {
-   "class": "belief-issues-probed-hourly",
+   "class": "issue-100294",
+   "issue_id": 100294,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "unmet: 7 families have net inflow above 0 with three or more open, largest PROBE-NEEDED-1 +6, PORTFOLIO-GAP +2, PORTFOLIO-UPGRADE-1 +2",
+   "written": true
+  },
+  {
+   "class": "issue-1000303",
+   "issue_id": 1000303,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000822",
+   "issue_id": 1000822,
+   "verdict": "fail",
+   "expected": "none",
+   "observed": "social_bot_label_enabled, dmarc_aligned_pass_rate",
+   "written": true
+  },
+  {
+   "class": "fm-trigger-depth-compile",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "belief-alt-unexercisable-model_floor_pr_check",
    "issue_id": null,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "a table or view that records workflow runs now exists, so a green run of the model-floor-guard workflow can be read: add a control_alternate_probes row for model_floor_pr_check and retire its ALTERNATE-NOT-EXERCISABLE reason",
    "written": true
   },
   {
-   "class": "issue-100317-BACKFILL-1",
-   "issue_id": 100317,
+   "class": "fm-q08-writer-yield-order",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:q08-signal-engine/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000210",
+   "issue_id": 1000210,
+   "verdict": "deferred",
+   "expected": "quarantined",
+   "observed": "pending: malformed paper has not been quarantined by the publication gate",
+   "reason": "the probe cannot judge yet: pending: malformed paper has not been quarantined by the publication gate"
+  },
+  {
+   "class": "issue-1000339",
+   "issue_id": 1000339,
+   "verdict": "fail",
+   "expected": "pass",
+   "observed": "fail",
+   "written": true
+  },
+  {
+   "class": "issue-1000429",
+   "issue_id": 1000429,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-fleet-control/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000565",
+   "issue_id": 1000565,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000337",
-   "issue_i
+   "class": "issue-1000651",
+   "issue_id": 1000651,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:docs/AI-SEARCH-INSTANCES.md",
+   "written": true
+  },
+  {
+   "class": "issue-1000513",
+   "issue_id": 1000513,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "8",
+   "written": true
+  },
+  {
+   "class": "issue-1000882",
+   "issue_id": 1000882,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000648 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000648 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000784",
+   "issue_id": 1000784,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-1000430",
+   "issue_id": 1000430,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-fleet-control/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000431",
+   "issue_id": 1000431,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-fleet-control/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000658",
+   "issue_id": 1000658,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-ops/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-open-issue-no-doer",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "25",
+   "written": true
+  },
+  {
+   "class": "issue-100366",
+   "issue_id": 100366,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "unmet: metric worker_requests_nonpublic_per_day is not registered, so requests on workers with no public route cannot be graded",
+   "written": true
+  },
+  {
+   "class": "issue-1000335",
+   "issue_id": 1000335,
+   "verdict": "fail",
+   "expected": "pass",
+   "observed": "fail",
+   "written": true
+  },
+  {
+   "class": "fm-jobsearch-feed-down",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "issue-1000699",
+   "issue_id": 1000699,
+   "verdict": "fail",
+   "expected": "recent per-page AE reach events > 0",
+   "observed": "recent per-page AE reach events = 0 (any AE latest=2026-09-05T20:20:40.
