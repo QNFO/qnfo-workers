@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-31 14:47:52",
+  "audited_at": "2026-10-31 15:41:09",
   "d1_write_failures": [],
   "d1_writes_ok": 128,
   "guard": {
@@ -556,7 +556,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.28.0-multi-ics",
+        "version": "4.29.0-one-thing",
         "worker": "personal-api"
       },
       {
@@ -983,9 +983,9 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.28.0-multi-ics",
+      "before": "4.29.0-one-thing",
       "http": 200,
-      "live": "4.28.0-multi-ics",
+      "live": "4.29.0-one-thing",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
