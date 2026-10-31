@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-10-31 16:13:50",
+  "audited_at": "2026-10-31 16:44:24",
   "d1_write_failures": [],
-  "d1_writes_ok": 128,
+  "d1_writes_ok": 129,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.40.10-complete-structural",
+        "version": "0.40.11-slot-crash-trace",
         "worker": "qnfo-research-exec"
       },
       {
@@ -733,6 +733,11 @@
     "unmanaged_tombstones": 1,
     "unmanaged_truncated": false,
     "unmanaged_workers": [
+      {
+        "http": 404,
+        "version": null,
+        "worker": "qnfo-fleet-lee"
+      },
       {
         "http": 200,
         "version": null,
@@ -1433,6 +1438,14 @@
       "retired": "RETIRED",
       "worker": "qnfo-fleet-feed"
     },
+    "qnfo-fleet-lee": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "qnfo-fleet-lee"
+    },
     "qnfo-gateway": {
       "before": "3.48.1-codeagent",
       "http": 200,
@@ -1656,9 +1669,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.40.10-complete-structural",
+      "before": "0.40.11-slot-crash-trace",
       "http": 200,
-      "live": "0.40.10-complete-structural",
+      "live": "0.40.11-slot-crash-trace",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
