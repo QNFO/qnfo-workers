@@ -1,11 +1,11 @@
 {
-  "audited_at": "2026-11-01 20:44:19",
+  "audited_at": "2026-11-01 21:20:19",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "q08-signal-engine"
+        "qnfo-ops"
       ],
       "refreshed": true,
       "second_pass": []
@@ -698,7 +698,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.62.0-policy-gate-shadow",
+        "version": "2.62.2-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -1588,9 +1588,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.62.0-policy-gate-shadow",
+      "before": "2.62.2-codeagent",
       "http": 200,
-      "live": "2.62.0-policy-gate-shadow",
+      "live": "2.62.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
