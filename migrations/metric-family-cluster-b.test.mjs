@@ -68,7 +68,10 @@ ok(ver && (+ver[1] > 0 || +ver[2] >= 40), "VERSION is at least 0.40.0");
 // A file that already merged may not be edited to add the row (MIGRATION-NO-CLOBBER-1: the runner re-applies an edited file, and 2026-10-29-plussing-3.sql also rewrites the live
 // management-personas workflow), so a later migration may map the metric instead. Each such file is listed here with the metric and the forward file, and this test reads the
 // forward file to prove the mapping exists. A new registration still maps its cause in its own file.
-const MAPPED_FORWARD = { "2026-10-29-plussing-3.sql": { file: "2026-10-30-product-plus-cause.sql", metric: "product_plus_deployed_7d" } };
+const MAPPED_FORWARD = {
+  "2026-10-29-plussing-3.sql": { file: "2026-10-30-product-plus-cause.sql", metrics: ["product_plus_deployed_7d"] },
+  "2026-11-01-plussing-4.sql": { file: "2026-11-01-plussing-4a-cause.sql", metrics: ["plus_shipped_7d", "plus_kept_share_30d"] },
+};
 const files = readdirSync(new URL("./", import.meta.url)).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.sql$/.test(f) && f.slice(0, 10) >= "2026-10-29");
 for (const f of files) {
   const t = readFileSync(new URL("./" + f, import.meta.url), "utf8");
@@ -79,7 +82,7 @@ for (const f of files) {
   let later = false;
   if (fwd) {
     const ft = readFileSync(new URL("./" + fwd.file, import.meta.url), "utf8");
-    later = fwd.file > f && t.includes("'" + fwd.metric + "'") && new RegExp("INTO\\s+metric_breach_cause\\b[\\s\\S]*'" + fwd.metric + "'", "i").test(ft) && /^-- APPLY-BY: ci\s*$/m.test(ft);
+    later = fwd.file > f && fwd.metrics.every((metric) => t.includes("'" + metric + "'") && new RegExp("INTO\\s+metric_breach_cause\\b[\\s\\S]*'" + metric + "'", "i").test(ft)) && /^-- APPLY-BY: ci\s*$/m.test(ft);
   }
   ok(here || later,
     f + " registers a metric: add INSERT INTO metric_breach_cause in the same file (METRIC-CAUSE-AT-REGISTRATION-1), or a '-- CAUSE-MAPPED: <where and why>' line");
