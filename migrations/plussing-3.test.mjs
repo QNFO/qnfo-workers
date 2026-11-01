@@ -56,8 +56,27 @@ const sql4 = rd("./2026-11-01-plussing-4.sql");
 db.exec(sql4.split("\n").filter((line) => !line.startsWith("--")).join("\n"));
 const sql10 = rd("./2026-11-01-management-personas-10.sql");
 db.exec(sql10.split("\n").filter((line) => !line.startsWith("--")).join("\n"));
+const sql6 = rd("./2026-11-01-plussing-6.sql");
+db.exec(sql6);
 const legacy = one("SELECT product, kind, title, metric, predicted_outcome, outcome, created_at FROM plus_ledger WHERE product = 'companion-today'");
 ok(legacy.product === "companion-today" && legacy.kind === "plus" && legacy.title === "Legacy plus proposal" && legacy.metric === "legacy_metric" && legacy.predicted_outcome === "legacy prediction" && legacy.outcome === "legacy outcome" && legacy.created_at === "2026-10-29 12:00:00", "the legacy ledger row is preserved and mapped to the PLUSSING-3/4 columns", legacy);
+ok(def().find((s) => s.name === "pl-research").sql.includes("latest kept plus") && def().find((s) => s.name === "pl-research").sql.includes("misses_in_row >= 3"), "the plus prompt extends a kept change and gives a fresh angle after a rest");
+ok(!def().find((s) => s.name === "pl-deployed").sql.includes("misses_in_row = 0, pluses_since_simplify =") && def().find((s) => s.name === "pl-shipped-metric").sql.includes("p.rest_until IS NULL"), "ordinary deployments preserve miss streaks and resting products leave the shipment denominator");
+run("INSERT INTO product_registry (product, program_code, last_plus_at) VALUES ('plus6-fixture', 'QNFO.REACH', '2026-09-01T00:00:00Z')");
+run("INSERT INTO plus_outcome_checks (plus_id, product, outcome) VALUES (9000, 'plus6-fixture', 'pending')");
+run("UPDATE plus_outcome_checks SET outcome = 'unmeasured' WHERE plus_id = 9000");
+run("INSERT INTO plus_outcome_checks (plus_id, product, outcome) VALUES (9001, 'plus6-fixture', 'pending')");
+run("UPDATE plus_outcome_checks SET outcome = 'kept' WHERE plus_id = 9001");
+ok(one("SELECT misses_in_row FROM product_registry WHERE product = 'plus6-fixture'").misses_in_row === 0, "unmeasured checks do not count and a kept plus clears the streak");
+for (const plusId of [9002, 9003, 9004]) {
+  run("INSERT INTO plus_outcome_checks (plus_id, product, outcome) VALUES (?, 'plus6-fixture', 'pending')", plusId);
+  run("UPDATE plus_outcome_checks SET outcome = 'revert_required' WHERE plus_id = ?", plusId);
+}
+const restedProduct = one("SELECT misses_in_row, rest_until FROM product_registry WHERE product = 'plus6-fixture'");
+ok(restedProduct.misses_in_row === 3 && Date.parse(restedProduct.rest_until) > Date.now(), "three measured misses set a seven-day product rest", restedProduct);
+ok(!q("SELECT product FROM v_product_plus_due").includes("plus6-fixture"), "a product on rest is not due");
+run("UPDATE plus_outcome_checks SET outcome = 'reverted' WHERE plus_id = 9004");
+ok(one("SELECT misses_in_row FROM product_registry WHERE product = 'plus6-fixture'").misses_in_row === 3, "completing a revert does not count the same miss twice");
 for (const step of def().filter((s) => s.name.startsWith("pl-"))) {
   try {
     db.prepare(step.sql);
@@ -81,7 +100,7 @@ const reqs = q("SELECT * FROM cf_agent_requests WHERE instance LIKE 'roadmap-%-p
 ok(reqs.length === 3, "at most three products a day are asked", reqs.map((r) => r.instance));
 ok(reqs.every((r) => !/qnfo-ops|qnfo-fleet-control/.test(r.prompt)) && !reqs.some((r) => /-plus-ops-executor-/.test(r.instance)), "a control-plane product is never asked");
 const me = reqs.find((r) => /-plus-companion-today-/.test(r.instance));
-ok(me && /personal-api\/worker\.js/.test(me.prompt) && /Legacy plus proposal \[rejected\]/.test(me.prompt) && /Never read or quote personal data/.test(me.prompt) && /exactly one plus/.test(me.prompt), "the me.q08.org request builds on the preserved legacy plus and keeps its privacy boundary");
+ok(me && /personal-api\/worker\.js/.test(me.prompt) && /Legacy plus proposal \[rejected\]/.test(me.prompt) && /latest kept plus/.test(me.prompt) && /Never read or quote personal data/.test(me.prompt) && /exactly one plus/.test(me.prompt), "the me.q08.org request builds on prior plusses and keeps its privacy boundary");
 tick();
 ok(q("SELECT * FROM cf_agent_requests WHERE instance LIKE 'roadmap-%-plus-%'").length === 3, "a second tick the same day asks nothing new");
 
@@ -134,6 +153,12 @@ run("DELETE FROM cf_agent_requests WHERE instance NOT LIKE '%companion-today%'")
 tick();
 const again = one("SELECT prompt FROM cf_agent_requests WHERE instance LIKE 'roadmap-%-plus-companion-today-%'");
 ok(again && /Greet the owner with what changed since yesterday \[deployed\]/.test(again.prompt) && /SIMPLIFY pass/.test(again.prompt), "the next request names the earlier plus and is a simplify pass after four plusses", again && again.prompt.slice(0, 300));
+
+run("UPDATE product_registry SET misses_in_row = 3, rest_until = '2000-01-01T00:00:00Z' WHERE product = 'plus6-fixture'");
+run("INSERT INTO plus_ledger (product, kind, title, status) VALUES ('plus6-fixture', 'plus', 'Fresh-angle plus', 'deployed')");
+db.prepare(def().find((s) => s.name === "pl-deployed").sql).run();
+const resumedProduct = one("SELECT misses_in_row, rest_until FROM product_registry WHERE product = 'plus6-fixture'");
+ok(resumedProduct.misses_in_row === 0 && resumedProduct.rest_until === null, "the first deployed cycle after rest starts a fresh miss streak", resumedProduct);
 
 run("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('product_plus', 'off')");
 run("DELETE FROM cf_agent_requests");
