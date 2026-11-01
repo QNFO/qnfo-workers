@@ -124,6 +124,23 @@ export function toolTranscript(steps, maxChars) {
   return t.length > maxChars ? t.slice(t.length - maxChars) : t;
 }
 
+const CODE_SESSION_NEURON_RATES = {
+  "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000],
+  "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000]
+};
+
+export function codeSessionNeurons(model, inputTokens, outputTokens) {
+  const rates = CODE_SESSION_NEURON_RATES[String(model || "")];
+  if (!rates) return 0;
+  const input = Math.max(0, Number(inputTokens) || 0);
+  const output = Math.max(0, Number(outputTokens) || 0);
+  return (input * rates[0] + output * rates[1]) / 1000000;
+}
+
+export function codeSessionCost(neurons) {
+  return Math.max(0, Number(neurons) || 0) * 11 / 1000000;
+}
+
 export function runId() {
   const b = new Uint8Array(6);
   crypto.getRandomValues(b);
