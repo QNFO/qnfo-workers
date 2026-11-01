@@ -1,12 +1,15 @@
 # qnfo-agent-ws
 
+Archived source; the Worker is absent from the live fleet. The `RETIRED` marker
+prevents canonical deployment from recreating it.
+
 > Self-doc header (FLEET-SELF-DOC-1)
 > Purpose: Agent websocket workspace (durable QnfoAgent)
 > Canonical source: this directory (QNFO/qnfo-workers)
 > Version: worker.js VERSION + /health (see fleet-drift scan)
 
-Deployed-current discipline: deployed-current.worker.js mirrors the live bundle;
-regenerate via: wrangler deploy --dry-run --outdir dist && cp dist/worker.js deployed-current.worker.js
+The source and `deployed-current.worker.js` are retained as an archival snapshot,
+not as a live deployment target.
 
 Runtime contract:
 - `GET /health` reports `capabilities`, `limitations`, and non-secret binding availability.

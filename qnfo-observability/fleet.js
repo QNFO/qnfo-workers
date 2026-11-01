@@ -17,7 +17,6 @@ export const FLEET = [
   "personal-life-maintain",
   "personal-life-search",
   "qnfo-agent-orchestrator",
-  "qnfo-agent-ws",
   "qnfo-ai",
   "qnfo-ai-calibration",
   "qnfo-ai-search",
