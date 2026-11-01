@@ -40,7 +40,7 @@ test("reports only fresh unresolved issues not followed by a successful deployme
       new Date(now - 20 * 60_000).toISOString()
     );
 
-    const result = await activeIssues({ db }, now);
+    const result = await activeIssues({ AUDIT: { db } }, now);
     assert.equal(result.count, 3);
     assert.deepEqual(new Set(result.workers), new Set(["qnfo-ai", "qnfo-ai-search"]));
   } finally {
