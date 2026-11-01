@@ -74,9 +74,13 @@ eq(P.perfDeployFail({ deploys: null }).value, null, "unreadable ledger: unmeasur
 
 // --- worker health ------------------------------------------------------------------------------------------------
 const wla = (w, http, note, ageH) => ({ worker: w, http, note, probed_at: new Date(NOW - ageH * 36e5).toISOString().replace("T", " ").slice(0, 19) });
-r = P.perfWorkerHealth({ live_audit: [wla("a", 200, "SYNC", 1), wla("b", null, "CRON_ONLY", 1), wla("c", 500, "DOWN", 1), wla("d", 404, "NOT_DEPLOYED", 1), wla("e", 404, "NOT_A_WORKER", 1)] }, NOW);
+r = P.perfWorkerHealth({ live_audit: [wla("a", 200, "SYNC", 1), wla("b", null, "CRON_ONLY", 1), wla("c", 500, "DOWN", 1), wla("d", 404, "NOT_DEPLOYED", 1), wla("e", 404, "NOT_A_WORKER", 1), wla("retired", 410, "TOMBSTONE_410 selfstate-probe http up=retired", 1)] }, NOW);
 eq(r.value, 0.3333, "one failing of three live (CRON_ONLY is healthy; NOT_DEPLOYED and NOT_A_WORKER are not live)");
 eq(r.detail.failing.join(), "c", "the failing worker is named");
+r = P.perfWorkerHealth({ live_audit: [wla("a", 200, "SYNC", 1), wla("b", null, "CRON_ONLY", 1), wla("c", 500, "DOWN", 1), wla("no-health", 404, "UNMANAGED_NO_HEALTH", 1), wla("retired", 410, "TOMBSTONE_410 selfstate-probe http up=retired", 1)] }, NOW);
+eq(r.value, 0.5, "a retired tombstone is excluded, while an unmanaged worker without /health remains a live failure");
+eq(r.detail.live, 4, "only active workers contribute to the health rate denominator");
+eq(r.detail.failing.join(), "c,no-health", "both live health failures remain visible");
 eq(P.perfWorkerHealth({ live_audit: [wla("a", 200, "SYNC", 30)] }, NOW).value, null, "a live audit over 26h old: unmeasured");
 eq(P.perfWorkerHealth({ live_audit: [wla("d", 404, "NOT_DEPLOYED", 1)] }, NOW).value, null, "no live worker: unmeasured");
 
