@@ -27,12 +27,18 @@ card(4, "INTENT-TASK-d: delete the old public drafts", "licen review");
 card(5, "Post the Bluesky thread", "needs your account");
 card(6, "OWNER-TASK-e: pay the invoice", "a payment");
 card(7, "INTENT-TASK-f: fix kpi.test.mjs offline", "plain code");
+d.prepare("INSERT INTO human_actions (id, slug, title, why, action, default_in_effect, source, created_at) VALUES (?, ?, ?, ?, '', '', ?, ?)").run(
+  8, "closed-owner-request", "MODEL-FLOOR-1 handoff", "worker.js model floor", "owner-request-issue", new Date().toISOString());
 const gate = (id) => d.prepare("SELECT gate FROM v_human_action_gate WHERE id = ?").get(id).gate;
-const before = [1, 2, 3, 4, 5, 6, 7].map(gate);
-ok(before.join() === "owner,owner,owner,owner,owner,owner,fleet", "earlier grading: the weak keywords hold cards 1 and 4 for the owner", before);
+const before = [1, 2, 3, 4, 5, 6, 7, 8].map(gate);
+ok(before.join() === "owner,owner,owner,owner,owner,owner,fleet,receipt", "earlier grading: the weak keywords hold cards 1 and 4 for the owner", before);
 d.exec(sql);
 const after = [1, 2, 3, 4, 5, 6, 7].map(gate);
 ok(after.join() === "fleet,owner,owner,fleet,owner,owner,fleet", "intake cards on a weak keyword go fleet; hard markers and IDENTITY-BOUND stay owner; a card outside the intake keeps its grade", after);
+ok(gate(8) === "receipt", "a closed owner-request notice stays outside fleet grading despite technical text", gate(8));
+ok(d.prepare("SELECT COUNT(*) AS n FROM human_actions h JOIN v_human_action_gate g ON g.id = h.id WHERE g.gate = 'fleet' AND COALESCE(h.status, '') <> 'rerouted' AND h.created_at > datetime('now', '-7 days')").get().n === 3,
+  "owner_dispatched_items_7d excludes an open closure notice while counting genuine fleet cards");
+ok(d.prepare("SELECT status FROM human_actions WHERE id = 8").get().status === "open", "the closure notice remains available to the owner");
 ok(d.prepare("SELECT COUNT(*) AS n FROM ops_config WHERE key = 'OWNER_DIRECTIVE_2026_10_20_HUMAN_ITEMS_AUTOMATIC_1'").get().n === 1 && JSON.parse(d.prepare("SELECT value FROM ops_config").get().value).id === "HUMAN-ITEMS-AUTOMATIC-1", "the directive row is written and parses");
 const probe = () => d.prepare(d.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-human-items-waiting'").get().verify_probe).get();
 const old = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 19) + "Z";
@@ -47,6 +53,6 @@ const rows = (t) => d.prepare("SELECT COUNT(*) AS n FROM " + t).get().n;
 d.exec(sql);
 ok(rows("decision_log") === 1 && rows("failure_modes") === 1 && rows("remediation_contracts") === 1 && rows("ops_config") === 1, "a second apply changes nothing");
 d.exec(rollback);
-ok([1, 2, 3, 4, 5, 6, 7].map(gate).join() === before.join() && rows("ops_config") === 0 && rows("remediation_contracts") === 0 && rows("failure_modes") === 0, "Rollback restores the earlier grading and removes the rows");
+ok([1, 2, 3, 4, 5, 6, 7, 8].map(gate).join() === before.join() && rows("ops_config") === 0 && rows("remediation_contracts") === 0 && rows("failure_modes") === 0, "Rollback restores the earlier grading and removes the rows");
 console.log("human-items-automatic: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
