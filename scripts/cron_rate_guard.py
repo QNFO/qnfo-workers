@@ -35,6 +35,8 @@ WHAT (fail-closed)
   WARNS (exit unchanged) when a WORKER's crons combined fall inside 10 minutes -- two
   triggers landing on the same minute, or (canonically) jnl-pipeline's `23 */2` and
   `*/30` producing a 7-minute spacing. Pass --strict-worker to escalate those to failures.
+  Also audits .github/workflows schedule triggers: one run per rolling 24 hours by
+  default, with named limits for the hourly assignment backfill and 6-hour IndexNow fallback.
 
 USAGE
   python3 scripts/cron_rate_guard.py                   # sweep ./<worker>/wrangler.toml
@@ -135,6 +137,19 @@ CF_API = "https://api.cloudflare.com/client/v4"
 
 CRONS_RE = re.compile(r"(?m)^\s*crons\s*=\s*\[(.*?)\]", re.S)
 STR_RE = re.compile(r"[\"']([^\"']+)[\"']")
+ACTIONS_SCHEDULE_MAX_FIRES_24H = 1
+ACTIONS_SCHEDULE_OVERRIDES = {
+    # The event and workflow_run triggers are primary; the hourly cron is a bounded backfill.
+    "assign-copilot-on-issue.yml": {
+        "max_fires_24h": 24,
+        "reason": "hourly bounded assignment backfill",
+    },
+    # Independent GitHub-egress fallback for IndexNow complements the worker submission path.
+    "indexnow-fallback.yml": {
+        "max_fires_24h": 4,
+        "reason": "6-hour independent IndexNow fallback",
+    },
+}
 
 
 def expand(field, lo, hi):
@@ -279,6 +294,87 @@ def toml_crons(path):
     return out
 
 
+def workflow_crons(path):
+    """Cron expressions under a GitHub Actions workflow's top-level `on.schedule`."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return []
+    in_on = False
+    schedule_indent = None
+    out = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            in_on = bool(re.fullmatch(r"""(?:on|'on'|"on")\s*:\s*(?:#.*)?""", stripped))
+            schedule_indent = None
+            continue
+        if not in_on:
+            continue
+        if schedule_indent is not None and indent <= schedule_indent:
+            schedule_indent = None
+        if schedule_indent is None:
+            if re.fullmatch(r"schedule\s*:\s*(?:#.*)?", stripped):
+                schedule_indent = indent
+            continue
+        match = re.match(r"^-\s*cron\s*:\s*(.*?)\s*$", stripped)
+        if match:
+            value = match.group(1).strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            else:
+                value = value.split("#", 1)[0].strip()
+            if value:
+                out.append(value)
+    return out
+
+
+def audit_actions_schedules(root):
+    """Enforce the per-workflow GitHub Actions schedule ceiling."""
+    report = {"workflows": 0, "expressions": 0, "violations": []}
+    workflow_dir = os.path.join(root, ".github", "workflows")
+    try:
+        paths = sorted(
+            os.path.join(workflow_dir, name)
+            for name in os.listdir(workflow_dir)
+            if name.endswith((".yml", ".yaml"))
+        )
+    except OSError:
+        return report
+    for path in paths:
+        crons = workflow_crons(path)
+        if not crons:
+            continue
+        name = os.path.basename(path)
+        report["workflows"] += 1
+        report["expressions"] += len(crons)
+        fires = []
+        parse_errors = []
+        for cron in crons:
+            try:
+                fires.extend(cron_fires(cron))
+            except Exception as exc:
+                parse_errors.append({"workflow": name, "cron": cron, "reason": "PARSE:%s" % exc})
+        report["violations"].extend(parse_errors)
+        if parse_errors:
+            continue
+        stats = cron_stats(sorted(fires))
+        override = ACTIONS_SCHEDULE_OVERRIDES.get(name)
+        limit = int((override or {}).get("max_fires_24h", ACTIONS_SCHEDULE_MAX_FIRES_24H))
+        if stats["max_fires_24h"] > limit:
+            reason = "ACTIONS_DAILY_CEILING>%d" % limit
+            if override:
+                reason += " (%s)" % override["reason"]
+            report["violations"].append(
+                dict({"workflow": name, "crons": crons, "reason": reason, "limit": limit}, **stats)
+            )
+    return report
+
+
 TEMPO_ALLOWLIST = os.path.join("scripts", "cron-tempo-allowlist.txt")
 
 
@@ -328,7 +424,15 @@ def apply_tempo_allowlist(report, allow, today):
 
 
 def audit_repo(root, strict_worker=False):
-    report = {"violations": [], "warnings": [], "tempo": [], "workers": 0, "expressions": 0}
+    actions = audit_actions_schedules(root)
+    report = {
+        "violations": list(actions["violations"]),
+        "warnings": [],
+        "tempo": [],
+        "workers": 0,
+        "expressions": 0,
+        "actions": actions,
+    }
     for name in sorted(os.listdir(root)):
         wdir = os.path.join(root, name)
         if name.startswith(".") or not os.path.isdir(wdir):
@@ -473,11 +577,16 @@ def render(report, source):
              % (MAX_FIRES_24H, MIN_GAP_MINUTES, source),
              "audited %d workers / %d cron expressions"
              % (report["workers"], report["expressions"])]
+    actions = report.get("actions") or {}
+    lines.append("audited %d Actions workflows / %d scheduled cron expressions (default ceiling: %d/day)"
+                 % (actions.get("workflows", 0), actions.get("expressions", 0),
+                    ACTIONS_SCHEDULE_MAX_FIRES_24H))
     for o in report.get("overrides") or []:
         lines.append("  OVERRIDE  %s  limits=%s  %s"
                      % (o.get("worker"), o.get("limits"), o.get("owner_directive")))
     for v in report["violations"]:
-        lines.append("  VIOLATION %s  cron=%s  %s" % (v.get("worker"), v.get("cron"),
+        subject = v.get("worker") or v.get("workflow")
+        lines.append("  VIOLATION %s  cron=%s  %s" % (subject, v.get("cron") or v.get("crons"),
                                                      v.get("reason")))
     for w in report["warnings"]:
         lines.append("  WARN      %s  crons=%s  %s" % (w.get("worker"), w.get("crons"),
