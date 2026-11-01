@@ -1,11 +1,11 @@
 {
-  "audited_at": "2026-11-01 20:13:59",
+  "audited_at": "2026-11-01 21:20:19",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-github-steward"
+        "qnfo-ops"
       ],
       "refreshed": true,
       "second_pass": []
@@ -568,7 +568,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.9-codeagent",
+        "version": "1.44.10-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -583,7 +583,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.7-codeagent",
+        "version": "0.40.8-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -698,7 +698,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.62.0-policy-gate-shadow",
+        "version": "2.62.2-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -1003,9 +1003,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.9-codeagent",
+      "before": "1.44.10-codeagent",
       "http": 200,
-      "live": "1.44.9-codeagent",
+      "live": "1.44.10-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1063,9 +1063,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.7-codeagent",
+      "before": "0.40.8-codeagent",
       "http": 200,
-      "live": "0.40.7-codeagent",
+      "live": "0.40.8-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1588,9 +1588,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.62.0-policy-gate-shadow",
+      "before": "2.62.2-codeagent",
       "http": 200,
-      "live": "2.62.0-policy-gate-shadow",
+      "live": "2.62.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"

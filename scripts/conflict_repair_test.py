@@ -154,10 +154,10 @@ for wf_name in cr.DISPATCHABLE:
     check(re.search(r"^  workflow_dispatch:", wf_text, re.M) is not None, "%s exists and declares workflow_dispatch, so `gh workflow run` can start it (repair() runs that command with check=False, a workflow without the trigger would fail silently)" % wf_name)
 
 
-def drive(in_place):
-    """Run repair() for one conflicting pull request with git, GitHub and the checks stubbed; return (result, argv of every `gh workflow run`)."""
-    calls = []
-    pr = {"number": 5, "state": "open", "title": "fix x", "body": "", "head": {"sha": "abcdef1234567", "ref": "fix/x"}}
+def drive(in_place, base_branch="main"):
+    """Run repair() for one PR with git, GitHub and checks stubbed."""
+    calls, git_calls, trace = [], [], {}
+    pr = {"number": 5, "state": "open", "title": "fix x", "body": "", "head": {"sha": "abcdef1234567", "ref": "fix/x"}, "base": {"ref": base_branch}}
 
     def fake_gh(path, method="GET", fields=None, raw=False):
         if path.endswith("/pulls/5"):
@@ -165,19 +165,30 @@ def drive(in_place):
         if "/files" in path:
             return []
         if path.endswith("/pulls") and method == "POST":
+            trace["replacement_base"] = fields.get("base")
             return {"number": 9}
         return {}
 
     def fake_sh(args, cwd=None, check=True, timeout=900, env=None):
         calls.append(list(args))
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
-    names = ["gh", "eligible", "attempted", "landed_on_main", "reapply", "bump_workers", "git", "run_checks", "ledger", "sh"]
+    def fake_git(args, cwd=None, check=True):
+        git_calls.append(list(args))
+        return "0123456789abcdef\n"
+    def fake_reapply(head, base, branch, cwd=None, message=None, in_place=False):
+        trace["reapply_base"] = base
+        return {"outcome": "reapplied", "workers": [], "resolved": []}
+    def fake_bump(workers, number, cwd=None, claims=cr.claimed_versions, base_branch="main"):
+        trace["bump_base"] = base_branch
+        return []
+    def fake_checks(workers, base, cwd=None):
+        trace["check_base"] = base
+        return [("suites", True)]
+    names = ["gh", "eligible", "attempted", "landed_on_base", "reapply", "bump_workers", "git", "run_checks", "ledger", "sh"]
     saved = {n: getattr(cr, n) for n in names}
-    cr.gh, cr.eligible, cr.attempted, cr.landed_on_main = fake_gh, (lambda p: None), (lambda n, s: False), (lambda *a, **k: [])
-    cr.reapply = lambda *a, **k: {"outcome": "reapplied", "workers": [], "resolved": []}
-    cr.bump_workers = lambda w, n: []
-    cr.git = lambda args, cwd=None, check=True: "0123456789abcdef\n"
-    cr.run_checks = lambda w, b, cwd=None: [("suites", True)]
+    cr.gh, cr.eligible, cr.attempted = fake_gh, (lambda p: None), (lambda n, s: False)
+    cr.landed_on_base = lambda head, base, cwd=None: (trace.update({"landed_base": base}) or [])
+    cr.reapply, cr.bump_workers, cr.git, cr.run_checks = fake_reapply, fake_bump, fake_git, fake_checks
     cr.ledger = lambda *a, **k: None
     cr.sh = fake_sh
     try:
@@ -185,15 +196,20 @@ def drive(in_place):
     finally:
         for n, f in saved.items():
             setattr(cr, n, f)
-    return res, [c for c in calls if c[:3] == ["gh", "workflow", "run"]]
+    return res, [c for c in calls if c[:3] == ["gh", "workflow", "run"]], trace, git_calls
 
 
-res, runs = drive(True)
+res, runs, trace, git_calls = drive(True, "release/next")
 check(res.get("outcome") == "updated", "in-place repair of a conflicting pull request ends updated", res)
+check(trace.get("landed_base") == "refs/remotes/origin/pr-base-5" and trace.get("reapply_base") == trace.get("landed_base")
+      and trace.get("check_base") == trace.get("landed_base") and trace.get("bump_base") == "release/next"
+      and ["fetch", "-q", "origin", "+refs/heads/release/next:refs/remotes/origin/pr-base-5"] in git_calls,
+      "in-place repair fetches, resolves, bumps and checks against the pull request's actual base branch", [trace, git_calls])
 check([c[3] for c in runs] == cr.DISPATCHABLE and "mirror-guard.yml" in [c[3] for c in runs], "in place: every DISPATCHABLE workflow, mirror-guard.yml included, is dispatched", runs)
 check(all(c[c.index("--ref") + 1] == "fix/x" for c in runs), "in place: each dispatch targets the pull request's own branch", runs)
-res, runs = drive(False)
+res, runs, trace, git_calls = drive(False, "release/next")
 check(res.get("outcome") == "replaced", "a replacement pull request is opened and the old one superseded", res)
+check(trace.get("replacement_base") == "release/next", "a replacement pull request preserves the original base branch", trace)
 check([c[3] for c in runs] == cr.DISPATCHABLE and "mirror-guard.yml" in [c[3] for c in runs], "replacement: every DISPATCHABLE workflow, mirror-guard.yml included, is dispatched", runs)
 check(all(c[c.index("--ref") + 1] == "repair/pr-5-abcdef1" for c in runs), "replacement: each dispatch targets the repair branch", runs)
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conflict_repair.py"), encoding="utf-8").read()

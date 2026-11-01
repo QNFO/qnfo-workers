@@ -37,7 +37,7 @@ ok(r.ok && r.disabled, "budget 0 disables the gate (explicit override)");
 r = await researchBudget(mk(200000, [["2026-10-21", "qnfo-research-exec", 150000]]), T(23));
 ok(r.ok && r.budget === 200000 && r.pace === 200000, "ops_config budget is read; pace never exceeds the budget");
 r = await researchBudget(mk(200000, [["2026-10-21", "qnfo-research-exec", 200000]]), T(23));
-ok(!r.ok, "the hard daily budget holds when spent reaches it");
+ok(r.ok && r.overBudget, "reaching the daily target routes work through the lean path without holding it");
 r = await researchBudget({ QNFO_AUDIT: { prepare() { throw new Error("d1 down"); } } }, T(3));
 ok(r.ok && r.unreadable, "unreadable counters fail open (verified work is not stopped by a D1 fault)");
 const today = new Date().toISOString().slice(0, 10);
