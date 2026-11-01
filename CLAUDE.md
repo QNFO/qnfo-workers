@@ -216,6 +216,19 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A worker's `*.test.mjs` suites run on every PR that touches the worker (scripts/run-suites.mjs). The full set runs for
   control-plane, `scripts/`, `.github/` and `migrations/` changes. A new suite needs no deploy-gate line. A suite that
   pins an exact VERSION breaks on the next bump; assert a minimum instead.
+- Two migration rules fail only in the full set after the merge (deploy-gate is advisory on a pull request, MERGE-STREAMLINE-1), so read them before you write the file;
+  each broke main more than once in the week of 2026-10-29 (RED-MAIN-RECURRENCE-1):
+  - A migration that registers a metric (`INSERT ... INTO metric_registry`) maps its breach cause in the same file (`INSERT ... INTO metric_breach_cause`, with a cause key
+    the vocabulary already uses: look at the sibling metrics, for example `issue-backlog`, `code-loop`, `structure`) or carries a `-- CAUSE-MAPPED: <where and why>` line
+    (METRIC-CAUSE-AT-REGISTRATION-1, migrations/metric-family-cluster-b.test.mjs). A file that already merged is never edited to add it (the runner re-applies an edited
+    file, MIGRATION-NO-CLOBBER-1): add a later migration and list the pair in `MAPPED_FORWARD` in that test. plussing-3, plussing-4 and issue-family-throughput-action each needed one.
+  - A trigger's `code-anchor:` line is a function signature (`async function name(...) {`), never a `return {...}` or other body line: sessions and the code loop edit body
+    lines, the anchor then occurs 0 times and migrations/code-anchor-once.test.mjs fails (trigger 10931 twice, 2026-10-27 and 2026-11-01). Repoint a stale one by a later
+    migration; migrations/2026-11-01-anchor-10931-repoint.sql is the pattern.
+- `scripts/narrative-prompt-guard.py` (NARRATIVE-PROMPT-GUARD-1) is a deploy-gate step, so it is advisory on a pull request like the suites and shows only after the merge. It searches
+  the whole text of every `<dir>/worker.js` and `<dir>/deployed-current.worker.js`, comments and tag names included, for the phrases it bans (`program placement`, `fit table`,
+  `primary home`, ...). A comment that uses one turns main red until it is reworded in the source and its mirror (#5526 added one on 2026-11-01): run
+  `python3 scripts/narrative-prompt-guard.py` (about 8 s) before you push a worker change; a failure names `file:line`.
 - A `METRIC-TRIGGER-<id>-...` issue's contract gets its trigger's probe at birth (D1 trigger
   `contract_probe_templates_v1`). Write a probe by hand only for other families.
 
@@ -544,6 +557,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   owner, which the sweep removes again. It is bounded: only issues written by an owner, member, collaborator or `github-actions[bot]`, created in the look-back window, at most
   `--max` (10) per run and never more than 12 open Copilot pull requests org-wide; an issue the work-claim service shows as claimed or in flight is left to that doer; an issue
   a person unassigned Copilot from is never assigned again. A stalled assignment (Copilot assigned, no open or merged pull request, session older than 2 hours) is re-driven once,
-  and only while CLAIM-UNREACHABLE-FALLBACK-1 above is on main. The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
+  and only while CLAIM-UNREACHABLE-FALLBACK-1 above is on main. An assignment Copilot refused to start (a Copilot comment "unable to start working on this issue", and the issue
+  stays assigned to it) is not a session: 109 of 153 assigned issues were in that state on 2026-11-01, 107 for lack of AI credits, and counting them as sessions had left 87 of
+  them, the red-main issue among them, unworkable; a credit refusal never counts against an issue, any other refusal is bounded at three, the first assignment of a run is checked
+  for a refusal (credits exhausted stops the run and the next 30 minutes), a `ci-watchdog` issue is dispatched first, and a run spends at most 170 reads of the shared PAT.
+  The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
   cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1
   (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository copies of the workflow or of the secret.
