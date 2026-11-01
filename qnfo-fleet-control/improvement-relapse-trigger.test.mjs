@@ -13,7 +13,7 @@
  *     exactly as before, so the two rates agree there;
  *   - a real relapse replaces an early warning on the same metric whichever closed issue is seen first;
  *   - the tick closes an open METRIC-FIX-RELAPSED-1 issue whose trigger is clear with early-warning evidence (not "back inside its target"),
- *     files nothing for it, keeps a genuine relapse open, and writes both rates to metric_registry.
+ *     files nothing for it, keeps a genuine relapse open, writes both rates, and installs per-closure probes that catch relapses.
  * Output MUST contain "0 failed" on success.
  *
  *   node qnfo-fleet-control/improvement-relapse-trigger.test.mjs
@@ -21,6 +21,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +35,7 @@ if (ca < 0 || cb < 0) { console.error("FAIL charter block markers missing"); con
 const sandbox = { fetch: async () => { throw new Error("offline"); }, AbortSignal, VERSION: "test", timedFetch: null, b64encode: null, sha256: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, isFinite, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(ca, cb + "// ---- CHARTER-LOOP-1:END ----".length) + "\n" + src.slice(a, b + END.length) +
-  "\n__export = { improvementEvaluate, improvementLoopTick, IL_SELF_METRICS, ilTriggerHit: typeof ilTriggerHit === 'function' ? ilTriggerHit : null, ilTriggerPred: typeof ilTriggerPred === 'function' ? ilTriggerPred : null, ilIssueTriggerId: typeof ilIssueTriggerId === 'function' ? ilIssueTriggerId : null };", sandbox, { filename: "improvement-block.js" });
+  "\n__export = { improvementEvaluate, improvementLoopTick, ilRelapseContract, IL_SELF_METRICS, ilTriggerHit: typeof ilTriggerHit === 'function' ? ilTriggerHit : null, ilTriggerPred: typeof ilTriggerPred === 'function' ? ilTriggerPred : null, ilIssueTriggerId: typeof ilIssueTriggerId === 'function' ? ilIssueTriggerId : null };", sandbox, { filename: "improvement-block.js" });
 const I = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -162,6 +163,39 @@ eq(I.ilTriggerPred ? I.ilTriggerPred("9", { "1": { operator: "gt", threshold: 1 
 eq(I.ilIssueTriggerId ? I.ilIssueTriggerId("METRIC-TRIGGER-364-GATEWAY-CAP-30D-USD: x") : "missing", "364", "the trigger id comes from the title");
 eq(I.ilIssueTriggerId ? I.ilIssueTriggerId("OBJECTIVE-CONSTRAINT-BREACH-1: energy_efficiency") : "missing", null, "a constraint title has no trigger id");
 
+// A per-closure probe exists before a subsequent daily history row can expose a relapse.
+const monitorDate = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
+const monitor = I.ilRelapseContract(
+  { id: GW.id, title: GW.title, closed_at: monitorDate + " 06:00:00" },
+  { trigger_metric: { "364": "gateway_cap_30d_usd" }, trigger_pred: { "364": { operator: "gt", threshold: 180, enabled: 1 } } }
+);
+eq(monitor.class, "metric-relapse-2778", "monitor class is stable and names the closed issue");
+eq(monitor.issue_id, 2778, "monitor is linked to the closed issue");
+eq(monitor.action.includes("structural fix") && monitor.action.includes("rather than rerunning"), true, "monitor directs a structural replacement instead of a retry");
+const monitorDb = new DatabaseSync(":memory:");
+monitorDb.exec("CREATE TABLE metric_history (metric TEXT, day TEXT, value REAL, meets INTEGER)");
+monitorDb.prepare("INSERT INTO metric_history VALUES (?1, ?2, ?3, ?4)").run("gateway_cap_30d_usd", monitorDate, 180, 1);
+eq(monitorDb.prepare(monitor.verify_probe).get().observed, "0", "the closure-day value is outside the relapse window");
+const nextDate = (n) => new Date(Date.parse(monitorDate + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+monitorDb.prepare("INSERT INTO metric_history VALUES (?1, ?2, ?3, ?4)").run("gateway_cap_30d_usd", nextDate(1), 180, 1);
+eq(monitorDb.prepare(monitor.verify_probe).get().observed, "0", "a post-close value on the clear side of the trigger passes");
+monitorDb.prepare("INSERT INTO metric_history VALUES (?1, ?2, ?3, ?4)").run("gateway_cap_30d_usd", nextDate(2), 181, 0);
+eq(monitorDb.prepare(monitor.verify_probe).get().observed, "1", "the probe catches a post-close recurrence of the trigger");
+const targetMonitor = I.ilRelapseContract(
+  { id: 2891, title: "OBJECTIVE-CONSTRAINT-BREACH-1: energy_efficiency", closed_at: monitorDate },
+  {}
+);
+eq(monitorDb.prepare("SELECT instr(?1, 'meets = 0') > 0 AS target_probe").get(targetMonitor.verify_probe).target_probe, 1, "an issue without a trigger uses its target result");
+monitorDb.prepare("INSERT INTO metric_history VALUES (?1, ?2, ?3, ?4)").run("energy_efficiency", nextDate(1), 0.7, 0);
+eq(monitorDb.prepare(targetMonitor.verify_probe).get().observed, "1", "target-based closures detect a post-close target failure");
+const expiredMonitor = I.ilRelapseContract(
+  { id: 2893, title: GW.title, closed_at: new Date(Date.now() - 40 * 864e5).toISOString().slice(0, 10) },
+  { trigger_metric: { "364": "gateway_cap_30d_usd" }, trigger_pred: { "364": { operator: "gt", threshold: 180, enabled: 1 } } }
+);
+eq(monitorDb.prepare(expiredMonitor.verify_probe).get().observed, "0", "expired durability windows stop reporting historical recurrences");
+eq(I.ilRelapseContract({ id: 2892, title: "METRIC-REGRESSION-1: gateway_cap_30d_usd", closed_at: monitorDate }, {}), null, "trend-only closures do not get relapse monitors");
+eq(I.ilRelapseContract({ id: 0, title: GW.title, closed_at: monitorDate }, { trigger_metric: { "364": "gateway_cap_30d_usd" } }), null, "invalid issue ids cannot create contracts");
+
 // --- mixed ratio: held clear, relapsed on trigger, trigger-clear target-miss
 const mixHist = histOf("m_ok", Array(14).fill(10), () => 1)
   .concat(histOf("m_hit", [60, 60, 60, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10], (v) => (v <= 20 ? 1 : 0)))
@@ -223,6 +257,7 @@ CREATE TABLE analytics_metric_triggers(id INTEGER PRIMARY KEY AUTOINCREMENT, met
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER, close_channel TEXT);
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, triaged_at TEXT DEFAULT (datetime('now')), close_evidence TEXT);
 CREATE TABLE metric_history (metric TEXT NOT NULL, day TEXT NOT NULL, value REAL, meets INTEGER, target TEXT, ts TEXT, PRIMARY KEY (metric, day));
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', module TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
 CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues WHEN NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix') AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') BEGIN SELECT RAISE(ABORT,'close-without-evidence'); END;
 `);
@@ -272,6 +307,15 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
   eq(one("SELECT COUNT(*) n FROM agent_issues WHERE title = 'METRIC-FIX-RELAPSED-1: gateway_cap_30d_usd'").n, 1, "nothing is filed for the gateway cap");
   eq(one("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'METRIC-FIX-RELAPSED-1:%' AND status = 'open'").n, 1, "exactly one relapse issue is open (worker_count)");
   eq(t.fix_hold_rate_30d, 0.5, "the tick reports fix_hold_rate_30d by the trigger (gateway held, worker_count relapsed)");
+  const gatewayMonitor = one("SELECT * FROM remediation_contracts WHERE class = 'metric-relapse-1'");
+  const workerMonitor = one("SELECT * FROM remediation_contracts WHERE class = 'metric-relapse-2'");
+  eq(gatewayMonitor.issue_id, 1, "the held metric closure receives its own relapse contract");
+  eq(workerMonitor.issue_id, 2, "the relapsed metric closure receives its own relapse contract");
+  eq(gatewayMonitor.verify_transport, "d1-query", "relapse contract uses the D1 probe transport");
+  eq(one(gatewayMonitor.verify_probe).observed, "0", "the closure-specific probe passes while its trigger stays clear");
+  eq(one(workerMonitor.verify_probe).observed, "3", "the closure-specific probe detects later trigger hits, including today's reading");
+  eq(workerMonitor.action.includes("structural fix") && workerMonitor.action.includes("rather than rerunning"), true, "the contract prescribes a structural replacement, not a rerun");
+  eq(one("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'metric-relapse-%'").n, 2, "one relapse contract is installed per eligible closed issue");
   eq(t.fix_target_hold_rate_30d, 0, "and the strict fix_target_hold_rate_30d");
   eq(Number(one("SELECT last_value v FROM metric_registry WHERE metric = 'fix_hold_rate_30d'").v), 0.5, "fix_hold_rate_30d is written to metric_registry");
   eq(Number((one("SELECT last_value v FROM metric_registry WHERE metric = 'fix_target_hold_rate_30d'") || {}).v), 0, "fix_target_hold_rate_30d is written to metric_registry");
