@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-11-01 22:27:59",
+  "audited_at": "2026-11-01 23:14:21",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -638,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.14-ai-spend-cap-actual-context",
+        "version": "0.59.15-journey-close-race-guard",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -708,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.44.2",
+        "version": "0.44.3",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1412,9 +1405,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.14-ai-spend-cap-actual-context",
+      "before": "0.59.15-journey-close-race-guard",
       "http": 200,
-      "live": "0.59.14-ai-spend-cap-actual-context",
+      "live": "0.59.15-journey-close-race-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1676,9 +1669,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.44.2",
+      "before": "0.44.3",
       "http": 200,
-      "live": "0.44.2",
+      "live": "0.44.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
