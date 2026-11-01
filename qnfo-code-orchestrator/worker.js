@@ -23,7 +23,8 @@
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
 // 0.29.4 PLAN-LARGE-FILE-ANCHORS-1 (2026-11-01, issue 1000819, pillar autonomy; retain bounded source excerpts when planner keyword matches exceed its budget).
-var VERSION = "0.30.1-issue-age-retry"; // 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+// 0.30.4 CAPABILITY-CONTRACT-REFRESH-1 (#2852, pillar autonomy; patch: re-publish the declared /health lists for a fresh live capability audit).
+var VERSION = "0.31.0-codeagent"; // 0.31.0 ISSUE-AGE-24H-REINTAKE-1 (#1001064, pillar autonomy; minor: requeue an open issue only when its 24h age probe confirms no live doer; bounded by trusted intake checks). prior 0.30.4-codeagent; 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -633,7 +634,7 @@ const CODE_TASK_DONE_SQL = "(" + CODE_TASK_DONE.map(function (s) { return "'" + 
 // research-exec 69, gateway 65, fleet-dashboard 50 deferrals) are all held by published or ready_to_publish tasks. This
 // list is used ONLY by claimsSweep, to stop renewing a finished task's claim and to release it, so the file-busy and
 // in-flight semantics above are untouched.
-const CLAIM_RELEASED = CODE_TASK_DONE.concat(["published"]);
+const CLAIM_RELEASED = CODE_TASK_DONE.concat(["published", "ready_to_publish"]);
 function taskPaths(path) {
   const m = /^([a-z0-9][a-z0-9-]*)\/(?:deployed-current\.)?worker\.js$/.exec(String(path || ""));
   return m ? [m[1] + "/worker.js", m[1] + "/deployed-current.worker.js"] : [String(path || ""), String(path || "")];
@@ -2313,7 +2314,7 @@ async function stepTask(env, task) {
     // step: it adds its signature, and the stop, the 9-attempt end and the round backoff apply to it as to any failed attempt.
     const nAtt = Number(task.attempts || 0);
     if (ctx.sig_n != null && nAtt < Number(ctx.sig_n)) { ctx.sigs = []; ctx.sig_n = nAtt; ctx.last_new_sig_at = null; }
-    const external = nAtt > 0 && !!ctx.lastError && (ctx.sig_n != null ? nAtt > Number(ctx.sig_n) : task.step === "propose");
+    const external = nAtt > 0 && !!ctx.lastError && (ctx.sig_n != null ? (nAtt > Number(ctx.sig_n) || PAIR_SUITE_RE.test(String(ctx.lastError))) : task.step === "propose");
     if (external) {
       // PUBLISH-SUITE-REBASE-1 (#100293): publisher suite feedback follows a successful patch apply, but the cached
       // proposal base may have gone stale. One fresh read retries the same goal against current main before repair attempts.
@@ -2333,7 +2334,8 @@ async function stepTask(env, task) {
         return await fail("FOLD-PAIR-TASK-1: " + pm[0].slice(0, 160) + " needs a twin file changed in the same commit; a session task builds the two-file change", true);
       }
       const probe = noteSig({ sigs: ctx.sigs }, ctx.lastError, nAtt);
-      if (probe.streak >= SIG_REPEAT_MAX || nAtt >= MAX_ATTEMPTS * RETRY_ROUNDS || nAtt % MAX_ATTEMPTS === 0) return await settle(ctx.lastError, false, nAtt);
+      const repeatIsOneAwayFromStop = probe.streak === SIG_REPEAT_MAX - 1;
+      if (probe.streak >= SIG_REPEAT_MAX || nAtt >= MAX_ATTEMPTS * RETRY_ROUNDS || (nAtt % MAX_ATTEMPTS === 0 && !repeatIsOneAwayFromStop)) return await settle(ctx.lastError, false, nAtt);
       noteSig(ctx, ctx.lastError, nAtt);
       await env.AUDIT_DB.prepare("UPDATE code_tasks SET ctx=json_set(json_set(json_set(COALESCE(ctx,'{}'), '$.sigs', json(?)), '$.sig_n', ?), '$.last_new_sig_at', ?) WHERE id=?").bind(JSON.stringify(ctx.sigs), nAtt, ctx.last_new_sig_at || "", task.id).run();
     }
@@ -2695,6 +2697,8 @@ async function intakeTrustedList(env) {
 }
 // CODE-TASK-REINTAKE-1 (0.3.20, agent_issues 2021): an issue whose task ended (closed on a stale base, a merge-runner refusal
 // such as "no required check started", a failed ladder) was never taken again while it stayed open with its code-task line.
+// ISSUE-AGE-24H-REINTAKE-1 (issue 1001064): a merged task is also eligible again only when its still-open issue is 24h overdue
+// and v_issue_age_ladder confirms there is no live task, claim, or progressing breach diagnosis.
 const INTAKE_MAX_TASKS = 3;
 // SLA-120M-7 (0.16.2): an issue whose last task ended is taken again after 120 minutes, not 6 h (owner directive 2026-10-14: no SLA
 // exceeds 120 minutes); INTAKE_MAX_TASKS per INTAKE_WINDOW_MS still bounds a goal that keeps failing.
@@ -2707,11 +2711,11 @@ const INTAKE_MAX_INFRA = 6;
 function intakeInfraFail(t) { return !!t && String(t.status) === "publish_failed" && INTAKE_INFRA_FAIL.test(String(t.last_error || "").trim()); }
 // A person, the review or the no-op gate said the lever is not this one-anchor edit, or the change already landed elsewhere.
 const INTAKE_NO_RETRY = /rejected by|review-rejected|noop-proposal|no-op proposals in a row|superseded|already shipped|DROPPED|withdrawn/i;
-function intakeRetryDecision(tasks, nowMs) {
+function intakeRetryDecision(tasks, nowMs, mergedUnowned) {
   if (!tasks.length) return { take: true, k: 0 };
   const last = tasks[0];
   if (CODE_TASK_DONE.indexOf(String(last.status)) < 0) return { take: false, why: "in flight" };
-  if (String(last.status) === "merged") return { take: false, why: "merged; the issue closes on its own probe" };
+  if (String(last.status) === "merged" && !mergedUnowned) return { take: false, why: "merged; the issue closes on its own probe" };
   // INTAKE-WINDOW-1 (0.10.0, owner directive 2026-10-11 deploy success): only the tasks of the last INTAKE_WINDOW_MS count toward
   // the cap, so an issue exhausted by failures from before a code-loop improvement (PUBLISH-SUITE-CHECK-1, CODE-REPAIR-INTASK-1)
   // is taken again once they age out after 3 days (issues 2052, 2055, 2106, 2116 and 2121 were exhausted on 2026-10-07/08); a goal that keeps
@@ -2723,15 +2727,18 @@ function intakeRetryDecision(tasks, nowMs) {
   if (INTAKE_NO_RETRY.test(reason)) return { take: false, why: "not retried: " + reason.trim().slice(0, 120) };
   const ended = Date.parse(String(last.updated_at || last.created_at || "")) || 0;
   if (nowMs - ended < INTAKE_RETRY_COOLDOWN_MS) return { take: false, why: "cooldown" };
-  return { take: true, k: tasks.length, prev: last.id };
+  return { take: true, k: tasks.length, prev: last.id, mergedUnowned: String(last.status) === "merged" && !!mergedUnowned };
 }
 // ---- CI-FEEDBACK-1:BEGIN (0.5.0; pure, replayed by reintake.test.mjs)
 // The goal of a retry: the previous task's failure first, so the GOAL_MAX cap (validTask; 2000 before GOAL-ROOM-1) and the body cut can
 // never drop it; the issue body fills what is left.
 const RETRY_FAIL_CHARS = 700;
 const GOAL_MAX = 6000; // GOAL-ROOM-1 (0.12.4, #2378): was 2000; clipped goals failed 12 of 21 (57%) vs 16 of 76 (21%) under 1500 chars
-function intakePrevFailure(t) {
+function intakePrevFailure(t, mergedUnowned) {
   if (!t || intakeInfraFail(t)) return "";
+  if (String(t.status) === "merged") return mergedUnowned
+    ? "PREVIOUS TASK " + String(t.id || "?") + " MERGED, BUT THE ISSUE REMAINS OPEN AND ITS 24H AGE VIEW REPORTS NO LIVE DOER. Re-evaluate the current issue and preserve its own definition of done."
+    : "";
   const why = String(t.merge_note || t.last_error || "").replace(/^merge-runner:\s*/, "").trim();
   if (!why) return "";
   return "PREVIOUS ATTEMPT " + String(t.id || "?") + " FAILED: " + why.slice(0, RETRY_FAIL_CHARS) + " Keep every behaviour the worker's existing tests pin; change only what the goal needs.";
@@ -2843,7 +2850,13 @@ async function intakeIssues(env, maxNew) {
       try { prior = (await env.AUDIT_DB.prepare("SELECT " + cols + " FROM code_tasks WHERE goal LIKE ? OR id = ? ORDER BY created_at DESC LIMIT 10").bind(tag + "%", "ct_im" + r.id).all()).results || []; break; } catch (e) { prior = null; }
     }
     if (prior === null) continue;
-    const rd = intakeRetryDecision(prior, nowMs);
+    let mergedUnowned = false;
+    if (prior.length && String(prior[0].status) === "merged") {
+      try {
+        mergedUnowned = !!(await env.AUDIT_DB.prepare("SELECT 1 AS x FROM v_issue_age_ladder WHERE id = ? AND rung = '24h' AND breach = 1").bind(r.id).first());
+      } catch (e) { mergedUnowned = false; }
+    }
+    const rd = intakeRetryDecision(prior, nowMs, mergedUnowned);
     if (!rd.take) {
       // EXHAUST-SELF-RETRY-1 (0.25.1, 2026-10-21, pillar autonomy): an exhausted issue is not handed to an outside session; the code loop
       // itself takes it again when its oldest counted task leaves INTAKE_WINDOW_MS (INTAKE-WINDOW-1), and the event names that time.
@@ -2863,7 +2876,7 @@ async function intakeIssues(env, maxNew) {
     }
     const body = String(r.description || "").replace(INTAKE_MARK, "").replace(INTAKE_MULTI, "").trim().slice(0, GOAL_MAX); // GOAL-ROOM-1: was 1500; intakeGoal fits it to GOAL_MAX after the failure line
     // CI-FEEDBACK-1 (0.5.0): a retry leads with why the last task failed (prior[0] is the task rd decided on).
-    const goal = intakeGoal(tag, rd.k, r.title, rd.k ? intakePrevFailure(prior[0]) : "", body);
+    const goal = intakeGoal(tag, rd.k, r.title, rd.k ? intakePrevFailure(prior[0], rd.mergedUnowned) : "", body);
     // Optional second opt-in line `code-anchor: <verbatim text near the edit>` selects patch mode for a large file.
     const am = /^[ \t]*code-anchor:[ \t]*(.{1,300}?)[ \t]*$/m.exec(String(r.description || ""));
     // CODE-TASK-PREFLIGHT-1 (0.4.0): a task that cannot succeed is refused here, before its row and its model call. The issue
