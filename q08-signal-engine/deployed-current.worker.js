@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.1-codeagent";
+var VERSION = "0.40.2-codeagent";
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
@@ -4932,6 +4932,16 @@ async function q08Fetch(req, env, ctx) {
       } catch (e) { fnote = null; }
       await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, note, created_at) VALUES (?,?,?,?,?)").bind(fslug, s, ipKey, fnote, nowIso()).run();
       return json({ ok: true, recorded: s, note_stored: !!fnote });
+    }
+    function renderAtomFeed(rows) {
+      var esc = function (s) { return String(s || "").replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+      var updated = rows.length ? rows[0].published_at : nowIso();
+      var entries = rows.map(function (r) {
+        var url = ORIGIN + "/p/" + r.slug;
+        var content = esc(String(r.body_md || "").slice(0, 8000)).replace(/\n/g, "<br/>\n");
+        return "<entry>\n<id>" + esc(url) + "</id>\n<link href=\"" + esc(url) + "\"/>\n<title>" + esc(r.title || r.slug) + "</title>\n<updated>" + esc(r.published_at) + "</updated>\n<published>" + esc(r.published_at) + "</published>\n<summary>" + esc(r.core_concept || "") + "</summary>\n<content type=\"html\">" + content + "</content>\n</entry>";
+      }).join("\n");
+      return '<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n<title>q08 Signal Engine pieces</title>\n<link rel="self" href="' + esc(ORIGIN + "/atom.xml") + '"/>\n<link href="' + esc(ORIGIN + "/") + '"/>\n<updated>' + esc(updated) + '</updated>\n<id>' + esc(ORIGIN + "/") + '</id>\n' + entries + '\n</feed>';
     }
     if (path === "/feed.xml" || path === "/atom.xml") {
       var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all();
