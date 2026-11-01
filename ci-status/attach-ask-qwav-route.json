@@ -12,6 +12,6 @@
   "route_id": "38a23917a5f448e692c4c225036bea5c",
   "redirect_rule_id": null,
   "old_zone_id": "331e4363fd05e8e4fc123ea7d2775411",
-  "worker_version": "2.6.5-cron-grid-1",
-  "ts": "2026-10-20T11:56:32Z"
+  "worker_version": "2.12.5-codeagent",
+  "ts": "2026-11-01T17:19:57Z"
 }
