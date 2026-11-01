@@ -216,6 +216,15 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A worker's `*.test.mjs` suites run on every PR that touches the worker (scripts/run-suites.mjs). The full set runs for
   control-plane, `scripts/`, `.github/` and `migrations/` changes. A new suite needs no deploy-gate line. A suite that
   pins an exact VERSION breaks on the next bump; assert a minimum instead.
+- Two migration rules fail only in the full set after the merge (deploy-gate is advisory on a pull request, MERGE-STREAMLINE-1), so read them before you write the file;
+  each broke main more than once in the week of 2026-10-29 (RED-MAIN-RECURRENCE-1):
+  - A migration that registers a metric (`INSERT ... INTO metric_registry`) maps its breach cause in the same file (`INSERT ... INTO metric_breach_cause`, with a cause key
+    the vocabulary already uses: look at the sibling metrics, for example `issue-backlog`, `code-loop`, `structure`) or carries a `-- CAUSE-MAPPED: <where and why>` line
+    (METRIC-CAUSE-AT-REGISTRATION-1, migrations/metric-family-cluster-b.test.mjs). A file that already merged is never edited to add it (the runner re-applies an edited
+    file, MIGRATION-NO-CLOBBER-1): add a later migration and list the pair in `MAPPED_FORWARD` in that test. plussing-3, plussing-4 and issue-family-throughput-action each needed one.
+  - A trigger's `code-anchor:` line is a function signature (`async function name(...) {`), never a `return {...}` or other body line: sessions and the code loop edit body
+    lines, the anchor then occurs 0 times and migrations/code-anchor-once.test.mjs fails (trigger 10931 twice, 2026-10-27 and 2026-11-01). Repoint a stale one by a later
+    migration; migrations/2026-11-01-anchor-10931-repoint.sql is the pattern.
 - A `METRIC-TRIGGER-<id>-...` issue's contract gets its trigger's probe at birth (D1 trigger
   `contract_probe_templates_v1`). Write a probe by hand only for other families.
 

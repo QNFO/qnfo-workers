@@ -60,8 +60,7 @@ ok(!run(), "a sample-bound ticket reopened 2 h ago fails the probe");
 const src = readFileSync(new URL("../qnfo-research-exec/worker.js", import.meta.url), "utf8");
 ok(/WHERE metric = 'owner_papers_retracted_over_24h'/.test(src) && /_staleOk/.test(src), "noticeRepairTick writes the metric only when the backup times were read");
 const mirror = readFileSync(new URL("../qnfo-research-exec/deployed-current.worker.js", import.meta.url), "utf8");
-ok(/var VERSION = "([^"]+)"/.exec(mirror)?.[1] === /var VERSION = "([^"]+)"/.exec(src)?.[1], "the Wrangler-built deploy mirror carries the source VERSION");
-ok(mirror.includes("owner_papers_retracted_over_24h") && mirror.includes("_staleOk"), "the built deploy mirror includes the guarded metric producer");
+ok(mirror === src, "deployed-current.worker.js mirrors worker.js");
 const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(ver && (+ver[1] > 0 || +ver[2] >= 40), "VERSION is at least 0.40.0");
 
