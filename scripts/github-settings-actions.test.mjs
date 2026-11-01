@@ -245,9 +245,9 @@ const api = makeApi(g.fetchImpl, "t");
 let threw = 0;
 for (const p of ["/repos/QNFO/other/rulesets", "/orgs/QNFO/repos", "/user/repos", "/repos/QNFO/qnfo-workers-evil/rulesets", "/apps/qnfo-fleet/installations", "/apps/Evil_App"]) { try { await api.call("GET", p); } catch (e) { threw++; } }
 ok(threw === 6, "only QNFO/qnfo-workers and the org installations are reachable", threw);
-ok(ACTIONS.join() === "report,ruleset-main,ruleset-main-revert,secret-scanning,delete-stuck-runs" && SECRET_FEATURES.length === 4, "the action list is the documented five");
+ok(ACTIONS.join() === "report,ruleset-main,ruleset-main-revert,secret-scanning,delete-stuck-runs,gh-webhook" && SECRET_FEATURES.length === 4, "the action list is the documented six");
 const wfText = readFileSync(join(repoRoot, ".github", "workflows", "github-settings-actions.yml"), "utf8");
-ok(/GH_ADMIN_TOKEN: \$\{\{ secrets\.QNFO_GH_PAT \}\}/.test(wfText) && !/run:.*\$\{\{ (github\.event\.)?inputs\./.test(wfText) && /IN_ACTION: \$\{\{ github\.event\.inputs\.action \}\}/.test(wfText) && /workflow_dispatch:/.test(wfText) && !/schedule:/.test(wfText), "the workflow passes inputs through env, takes the PAT from the secret and is dispatch-only");
+ok(/GH_ADMIN_TOKEN: \$\{\{ secrets\.QNFO_GH_PAT \}\}/.test(wfText) && !/run:.*\$\{\{ (github\.event\.)?inputs\./.test(wfText) && /IN_ACTION: \$\{\{ github\.event_name == 'push' && 'gh-webhook' \|\| inputs\.action \}\}/.test(wfText) && /workflow_dispatch:/.test(wfText) && !/schedule:/.test(wfText), "the workflow passes inputs through env, takes the PAT from the secret and has no recurring schedule");
 ok(!/ghp_|github_pat_|ghs_[A-Za-z0-9]{10}/.test(readFileSync(join(repoRoot, "scripts", "github-settings-actions.mjs"), "utf8")), "no credential value in the script");
 
 // ---- DELETE-STUCK-RUNS-1 (agent_issues 1000275): queued or in-progress runs older than 24 h with no job running now

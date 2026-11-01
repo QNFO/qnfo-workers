@@ -18,6 +18,8 @@
 //                              feature so a refusal of one never hides the others; the answer of each is recorded. The run is ok when
 //                              the two core protections (secret scanning, push protection) are enabled; the plan-gated extras that stay
 //                              disabled are listed under limitations (SECRET-SCANNING-CORE-OK-1).
+//          gh-webhook          register the existing signed receiver, installing its dedicated secret under the secret lease;
+//                              verify a fresh GitHub test delivery before reporting success (dry reads only).
 // WHY    No session holds repository Administration rights (a session's GET /branches/main/protection answers 403 "Resource not
 //        accessible by integration", 2026-10-19), main has a ruleset that only blocks deletion and force pushes, and every concurrent
 //        session clobber in this repository traces to unreviewed direct pushes. The steward's token has administration rights
@@ -32,8 +34,9 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setupWebhook } from "./gh-webhook-setup.mjs";
 
-export const ACTIONS = ["report", "ruleset-main", "ruleset-main-revert", "secret-scanning", "delete-stuck-runs"];
+export const ACTIONS = ["report", "ruleset-main", "ruleset-main-revert", "secret-scanning", "delete-stuck-runs", "gh-webhook"];
 export const STUCK_RUN_MIN_AGE_H = 24;
 export const STUCK_RUN_MAX_DELETES = 25;
 export const API = "https://api.github.com";
@@ -429,13 +432,16 @@ export async function run(action, mode, root, fetchImpl, env) {
   const writes = action !== "report";
   // a dry run only reads, so it may use whichever credential exists; a live write uses the admin credential and nothing else
   const token = writes && mode === "live" ? admin : (admin || readTok);
-  const api = makeApi(fetchImpl, token);
+  const api = makeApi(action === "gh-webhook" ? (url, init) => fetchImpl(url, {
+    ...init, redirect: "error", signal: AbortSignal.timeout(15000)
+  }) : fetchImpl, token);
   let res;
   if (writes && mode === "live" && !admin) res = { ok: false, action, mode, refused: { call: "(none sent)", status: 0, message: "no GH_ADMIN_TOKEN (repository secret QNFO_GH_PAT is empty or unset): a live write needs a credential with repository administration" } };
   else if (action === "report") res = await actionReport(api, cfg, root);
   else if (action === "ruleset-main") res = await actionRulesetMain(api, cfg, root, mode);
   else if (action === "ruleset-main-revert") res = await actionRulesetRevert(api, cfg, mode);
   else if (action === "delete-stuck-runs") res = await actionDeleteStuckRuns(api, cfg, mode, Date.now(), env);
+  else if (action === "gh-webhook") res = await setupWebhook(api, mode, fetchImpl, env || {});
   else res = await actionSecretScanning(api, cfg, mode);
   res.credential = token === admin && admin ? "QNFO_GH_PAT" : token ? "GITHUB_TOKEN" : "none";
   res.calls = api.calls.length;
