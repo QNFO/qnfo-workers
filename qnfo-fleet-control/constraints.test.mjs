@@ -23,7 +23,7 @@ const ocBlock = slice("// ---- OBJECTIVE-CONSTRAINTS-1:BEGIN", "// ---- OBJECTIV
 // IL-CLOSE-VS-PROBE-2: objectiveConstraintsTick asks closeBlockedByContract (declared in the IMPROVEMENT-LOOP-1 block) before it closes. This file has no remediation_contracts table, and the helper
 // answers "not blocked" when its read fails, so the closes below are unchanged; objective-constraints-close-guard.test.mjs drives the blocked path against the live triggers.
 const guardFn = (() => {
-  const a = src.indexOf("async function closeBlockedByContract(env, issueId) {"), b = src.indexOf("async function improvementLoopTick(env) {");
+  const a = src.indexOf("async function closeBlockedByContract(env, issueId, database) {"), b = src.indexOf("async function improvementLoopTick(env) {");
   if (a < 0 || b < a) { console.error("FAIL closeBlockedByContract not found in worker.js"); console.log("1 failed"); process.exit(1); }
   return src.slice(a, b);
 })();
