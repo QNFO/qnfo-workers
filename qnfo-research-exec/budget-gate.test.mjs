@@ -1,5 +1,4 @@
-// COST-SUSTAIN-1 / DAILY-BUDGET-SCHEDULE-1 (qnfo-research-exec 0.33.6) offline suite: researchBudget reports the UTC-day
-// pace but holds only at the hard daily neuron budget (agent_issues 100622: front-loading used to idle the pipeline for hours).
+// COST-SUSTAIN-1 / SOFT-DAILY-BUDGET-1 offline suite: the daily neuron target keeps work running and selects the lean route.
 // Run: node qnfo-research-exec/budget-gate.test.mjs -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -28,9 +27,9 @@ ok(r.ok, "the same spend at 05h is under pace -> runs");
 r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 359999]]), T(0));
 ok(r.ok, "359,999 neurons by 00:05 is under the daily cap -> runs");
 r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 360000]]), T(0));
-ok(!r.ok, "360,000 neurons by 00:05 is the daily cap -> held");
+ok(r.ok && r.overBudget, "360,000 neurons by 00:05 exceeds the target but still runs");
 r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 300000], ["2026-10-21", "errata-hub", 100000], ["2026-10-21", "qnfo-paper-reviser", 60000]]), T(23));
-ok(!r.ok && r.spent === 460000, "folded members count toward the budget; 460k >= 360k at 23h -> held");
+ok(r.ok && r.overBudget && r.spent === 460000, "folded members count toward the target; 460k >= 360k still runs lean");
 r = await researchBudget(mk(undefined, [["2026-10-21", "q08-signal-engine", 900000], ["2026-10-20", "qnfo-research-exec", 900000]]), T(12));
 ok(r.ok && r.spent === 0, "other workers and other days do not count");
 r = await researchBudget(mk(0, [["2026-10-21", "qnfo-research-exec", 9e9]]), T(1));
@@ -41,5 +40,20 @@ r = await researchBudget(mk(200000, [["2026-10-21", "qnfo-research-exec", 200000
 ok(!r.ok, "the hard daily budget holds when spent reaches it");
 r = await researchBudget({ QNFO_AUDIT: { prepare() { throw new Error("d1 down"); } } }, T(3));
 ok(r.ok && r.unreadable, "unreadable counters fail open (verified work is not stopped by a D1 fault)");
+const today = new Date().toISOString().slice(0, 10);
+const envOver = mk(undefined, [[today, "qnfo-research-exec", 360000]]);
+const leased = new Function("researchBudget", "logEvent", "leaseAcquire", "leaseRelease", "researchParallel", "run", "runSlot", "INFLIGHT_SQL", "__attrSlotEnv",
+  fn("async function runLeased(") + "\nreturn runLeased;")(
+  researchBudget, async () => {}, async () => true, async () => {}, async () => 1,
+  async () => ({ status: "ok", claimed: 0 }), async () => ({}), "", (e) => e
+);
+let ran = 0;
+const runOnce = new Function("researchBudget", "logEvent", "leaseAcquire", "leaseRelease", "researchParallel", "run", "runSlot", "INFLIGHT_SQL", "__attrSlotEnv",
+  fn("async function runLeased(") + "\nreturn runLeased;")(
+  researchBudget, async () => {}, async () => true, async () => {}, async () => 1,
+  async () => { ran++; return { status: "ok", claimed: 0 }; }, async () => ({}), "", (e) => e
+);
+const out = await runOnce(envOver, "test", 1, 1000);
+ok(ran === 1 && !out.budgetHeld, "runLeased advances work after the daily neuron target is exceeded");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
