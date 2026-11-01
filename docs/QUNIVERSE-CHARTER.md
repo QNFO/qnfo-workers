@@ -80,9 +80,10 @@ owner as an override and never a dependency.
 5. **Reach follows credibility.** Fewer, stronger works under one identity; honest distribution inside cadence and
    consent caps; a closed measurement loop from publication to engaged human. Volume is never the headline.
 
-**Non-goals.** The Quniverse is not a general cloud platform, a social-media growth engine, a product company, or a
-multi-tenant service. It does not chase journals, buy attention, run paid promotion, or keep a worker alive because it
-was fun to build. It never loses research data: a store is deleted only after a verified, restorable copy exists
+**Non-goals.** The Quniverse is not a general cloud platform, a social-media growth engine, or a multi-tenant service.
+It does not pursue standalone products; product work is limited to products that carry research and reach. It does not
+chase journals, buy attention, run paid promotion, or keep a worker alive because it was fun to build. It never loses
+research data: a store is deleted only after a verified, restorable copy exists
 (OWNER-STANDING-GRANT-1, rule 9), and data with no such copy is never deleted automatically.
 
 ## 3. Objectives and value-add
