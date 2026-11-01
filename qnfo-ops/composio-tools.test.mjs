@@ -85,6 +85,7 @@ ok(sample.args.tool_slug === "GMAIL_SEND_EMAIL" && sample.args.argument_keys.inc
 ok(/name: "composio_execute"/.test(src) && /name: "composio_status"/.test(src), "both tools are registered in the qnfo-ops tool catalog");
 ok(/else if \(name === "composio_execute"\) res = await composioExecute\(env, args\)/.test(src) && /else if \(name === "composio_status"\) res = await composioStatus\(env, args\)/.test(src), "both registered tools reach their real handlers");
 ok(/composioAuditPayload\(name, args, res\)/.test(src) && /logToolEvent\(env, name, audit\.args, audit\.result, ms\)/.test(src), "tool events use the metadata-only audit payload");
+ok(/api\/v3\.1\/connected_accounts\/[\s\S]{0,300}AbortSignal\.timeout\(15000\)/.test(src) && /api\/v3\.1\/tools\/execute\/[\s\S]{0,400}AbortSignal\.timeout\(60000\)/.test(src), "account lookups and executions have bounded 15- and 60-second deadlines");
 ok(/var VERSION = "2\.61\.0-composio-managed-oauth-tools"/.test(src), "the worker version records the added capability");
 
 console.log(`${pass} passed, ${fail} failed`);

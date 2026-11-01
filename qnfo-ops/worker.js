@@ -5995,7 +5995,7 @@ async function composioExecute(env, args) {
   if (account.account.status !== "ACTIVE") return { ok: false, rejected: true, error: "connected account is not active", status: account.account.status };
   let response;
   try {
-    response = await fetch("https://backend.composio.dev/api/v3.1/tools/execute/" + encodeURIComponent(slug), { method: "POST", headers: { "x-api-key": String(env.COMPOSIO_API_KEY || "").trim(), "content-type": "application/json", Accept: "application/json" }, body: JSON.stringify({ connected_account_id: accountId, arguments: toolArgs }), signal: AbortSignal.timeout(15000) });
+    response = await fetch("https://backend.composio.dev/api/v3.1/tools/execute/" + encodeURIComponent(slug), { method: "POST", headers: { "x-api-key": String(env.COMPOSIO_API_KEY || "").trim(), "content-type": "application/json", Accept: "application/json" }, body: JSON.stringify({ connected_account_id: accountId, arguments: toolArgs }), signal: AbortSignal.timeout(60000) });
   } catch (e) {
     return { ok: false, error: "Composio tool execution failed" };
   }
