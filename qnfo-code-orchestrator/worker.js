@@ -28,6 +28,7 @@
 // 0.31.1 ANCHOR-FROM-ISSUE-1 (#99916, pillar autonomy; patch: reuse a unique, path-matched issue anchor before routing a large-file task to a session).
 // 0.32.1 ISSUE-AGE-24H-STALE-HANDOFF-1: a stale code-task marker no longer excludes an issue with a 24h no-doer action.
 // 0.32.0 ISSUE-AGE-24H-PLAN-PRIORITY-1 (#1001165, pillar autonomy; a 24h no-doer action now outranks the planner's bounded candidate window, without bypassing trusted intake or claim checks).
+// 0.33.0 PATH-BACKLOG-SERIAL-QUEUE-1 (#100460, pillar autonomy): trusted single-file issue tasks queue behind existing work and claim a path FIFO.
 var VERSION = "0.32.1-codeagent"; // prior 0.31.2-codeagent (FAIL-SIGNATURE-STOP-1 #5844); 0.31.1-codeagent (ANCHOR-FROM-ISSUE-1 #99916); 0.31.0 ISSUE-AGE-24H-REINTAKE-1 (#1001064, pillar autonomy; minor: requeue an open issue only when its 24h age probe confirms no live doer; bounded by trusted intake checks). prior 0.30.4-codeagent; 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
@@ -621,15 +622,17 @@ async function claimsSweep(env) {
 // CODE-DISPATCH-DEDUPE-1 (0.3.16, agent_issues 1876, 1834; pillar autonomy). Measured 2026-10-05 over the 56 code tasks finished in
 // 30 days: 16 merged; 26 of the 40 others ended because another change to the SAME file got there first (19 superseded by a
 // parallel task or a session's PR, 7 stale bases: every worker edit rewrites the VERSION line, so two changes to one worker always
-// conflict), e.g. 5 tasks on qnfo-ipatent/worker.js inside 20 minutes on 2026-10-02. Each one spent model calls. A new task is
-// now refused while the file (or its deployed-current mirror) has an unfinished code task, or while a session holds a live work
-// claim on it in qnfo-audit.work_claims (the WORK-CLAIM-1 ledger behind qnfo-deploy-guard /work-lock and GET /work-locks; one
-// store, not a second one). Intake retries a refused code-task line on the next tick; the planner skips the issue before its
-// model call and does not record it, so it is planned once the file is free.
+// conflict), e.g. 5 tasks on qnfo-ipatent/worker.js inside 20 minutes on 2026-10-02. Each one spent model calls. Direct tasks are
+// refused while a file is busy; trusted single-file issue tasks queue behind existing work, with one active task per file.
+// Session work claims still block intake.
 const CODE_TASK_DONE = ["merged", "closed", "superseded", "publish_failed", "needs_human", "failed", "reverted"]; // = qnfo-deploy-guard CODE_TASK_DONE
 // PLAN-WIP-SUPERSEDED-1 (0.18.25, agent_issues 100074): SQL predicates read the done set from CODE_TASK_DONE, so a terminal
 // status added there is terminal everywhere (the planner WIP gate omitted 'superseded' and stalled planning for 20 h).
 const CODE_TASK_DONE_SQL = "(" + CODE_TASK_DONE.map(function (s) { return "'" + s + "'"; }).join(",") + ")";
+function taskPathKeySql(alias) {
+  const p = alias + ".path";
+  return "CASE WHEN " + p + " LIKE '%/deployed-current.worker.js' THEN substr(" + p + ", 1, length(" + p + ") - length('deployed-current.worker.js')) || 'worker.js' ELSE " + p + " END";
+}
 // CLAIM-PUBLISHED-RELEASE-1 (0.18.20, 2026-10-18): "published" is not in CODE_TASK_DONE and must not be - that list also
 // decides whether a file is busy for CODE-DISPATCH-DEDUPE-1 (a second task on a file with an unmerged PR is exactly what
 // it prevents) and whether a retry is refused as "in flight". But a published task will never edit the file again, and the
@@ -686,14 +689,16 @@ async function pathNoProgress(env, t) {
   return changed;
 }
 var CLAIM_TTL_MAX_MS = 90 * 60 * 1e3;
-async function pathBusy(env, repo, path) {
+async function pathBusy(env, repo, path, opts) {
   const ps = taskPaths(path);
   let t = null;
-  try {
-    const ph = CODE_TASK_DONE.map(function (_, i) { return "?" + (i + 4); }).join(",");
-    const st = env.AUDIT_DB.prepare("SELECT id, path, status, attempts, created_at, ctx, last_error FROM code_tasks WHERE repo = ?1 AND path IN (?2, ?3) AND status NOT IN (" + ph + ") ORDER BY created_at LIMIT 1");
-    t = await st.bind.apply(st, [repo, ps[0], ps[1]].concat(CODE_TASK_DONE)).first();
-  } catch (e) { t = null; /* no code_tasks columns yet: nothing in flight */ }
+  if (!(opts && opts.queueBehind)) {
+    try {
+      const ph = CODE_TASK_DONE.map(function (_, i) { return "?" + (i + 4); }).join(",");
+      const st = env.AUDIT_DB.prepare("SELECT id, path, status, attempts, created_at, ctx, last_error FROM code_tasks WHERE repo = ?1 AND path IN (?2, ?3) AND status NOT IN (" + ph + ") ORDER BY created_at LIMIT 1");
+      t = await st.bind.apply(st, [repo, ps[0], ps[1]].concat(CODE_TASK_DONE)).first();
+    } catch (e) { t = null; /* no code_tasks columns yet: nothing in flight */ }
+  }
   if (t) {
     let gone = false;
     try { gone = await pathNoProgress(env, t); }
@@ -710,6 +715,15 @@ async function pathBusy(env, repo, path) {
   try {
     const c = await env.AUDIT_DB.prepare("SELECT holder, intent, expires_at, issue_id, claimed_at, pr FROM work_claims WHERE released_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') AND path IN (?1, ?2) ORDER BY claimed_at LIMIT 1").bind(ps[0], ps[1]).first();
     if (c) {
+      const prefix = CLAIM_OWNER + ":";
+      if (opts && opts.queueBehind && String(c.holder || "").indexOf(prefix) === 0) {
+        const taskId = String(c.holder).slice(prefix.length);
+        try {
+          const active = await env.AUDIT_DB.prepare("SELECT 1 AS x FROM code_tasks WHERE id = ?1 AND repo = ?2 AND path IN (?3, ?4) AND status NOT IN " + CODE_TASK_DONE_SQL + " LIMIT 1")
+            .bind(taskId, repo, ps[0], ps[1]).first();
+          if (active) return null;
+        } catch (e) { /* an unverified claim remains busy */ }
+      }
       // PATH-CLAIM-CEILING-1 (agent_issues 2726): a claim is not a lock without a liveness
       // check. One claim held qnfo-research-exec/worker.js for its full 2-hour TTL while
       // targeting an issue that had already been fixed, and every other task on that file
@@ -804,7 +818,7 @@ function mergeScopeWhy(repo, path) {
   if (/^workers\//.test(p)) return "path " + p + " does not exist in qnfo-workers: the repository root holds " + p.slice(8).split("/")[0] + "/, not workers/; re-author the task against " + p.slice(8);
   return "path " + p + " is outside the merge runner's auto-merge scope (a worker.js with its mirror, docs/**.md, <dir>/README.md, scripts/*.py|*.mjs outside CM_SCRIPT_DENY): the loop cannot ship a change to it, so it is a session task";
 }
-async function enqueue(env, b) {
+async function enqueue(env, b, opts) {
   await ensureSchema(env);
   const bad = validTask(b); if (bad) return { ok: false, status: 400, error: bad };
   // REPO-SLUG-NORMALIZE-1: intake keeps refusing an owner-qualified repo (the "repo with slash denied" suite pins it).
@@ -818,7 +832,7 @@ async function enqueue(env, b) {
   if (scopeWhy) return { ok: false, status: 422, error: "session task: " + scopeWhy, session: true };
   const gone = await retiredTarget(env, repo0, path0);
   if (gone) return { ok: false, status: 422, error: gone };
-  const busy = await pathBusy(env, repo0, path0);
+  const busy = await pathBusy(env, repo0, path0, opts);
   if (busy) return { ok: false, status: 409, error: "path busy: " + busy, busy: true };
   const open = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE status='queued'").first();
   if (open && open.n >= MAX_OPEN_TASKS) return { ok: false, status: 429, error: "queue full (" + MAX_OPEN_TASKS + " queued tasks); drain it first" };
@@ -2951,7 +2965,7 @@ async function intakeIssues(env, maxNew) {
       const anchors = (String(r.description || "").match(/^[ \t]*code-anchor:[ \t]*.{1,300}?[ \t]*$/gm) || []).map(function (l) { return l.replace(/^[ \t]*code-anchor:[ \t]*/, "").replace(/[ \t]+$/, ""); });
       job.extras = extraPaths.map(function (xp, i) { const a = anchors[i + 1]; return a && a !== "-" ? { path: xp, anchor: a } : { path: xp }; });
     }
-    const res = await enqueue(env, job);
+    const res = await enqueue(env, job, { queueBehind: extraPaths.length === 0 });
     // MERGE-SCOPE-INTAKE-1: the issue keeps its target as a session-task line (counted by the watchmaker) and says why, so the
     // intake stops re-reading it and a session sees the path at once.
     if (!res.ok && res.session) {
