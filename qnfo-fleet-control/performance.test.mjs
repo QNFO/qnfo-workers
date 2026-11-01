@@ -81,6 +81,7 @@ r = P.perfWorkerHealth({ live_audit: [wla("a", 200, "SYNC", 1), wla("b", null, "
 eq(r.value, 0.5, "a retired tombstone is excluded, while an unmanaged worker without /health remains a live failure");
 eq(r.detail.live, 4, "only active workers contribute to the health rate denominator");
 eq(r.detail.failing.join(), "c,no-health", "both live health failures remain visible");
+ok(P.PERF_METRICS.find((m) => m.metric === "worker_health_failure_rate").formula.includes("TOMBSTONE_"), "the registered metric formula documents retired tombstone exclusion");
 eq(P.perfWorkerHealth({ live_audit: [wla("a", 200, "SYNC", 30)] }, NOW).value, null, "a live audit over 26h old: unmeasured");
 eq(P.perfWorkerHealth({ live_audit: [wla("d", 404, "NOT_DEPLOYED", 1)] }, NOW).value, null, "no live worker: unmeasured");
 
