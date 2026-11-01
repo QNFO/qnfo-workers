@@ -849,10 +849,11 @@ var SECOND_PATH = {
   contract: "AI-ROUTER-SECOND-PATH-1",
   when: "the router answers 5xx (503 router_drill, 504 router_timeout), throws, or exceeds the caller's own timeout",
   direct_binding: "AI",
-  models: ["@cf/zai-org/glm-5.3-flash", "@cf/deepseek-ai/deepseek-v4-flash-0731"],
-  small_answer_input: { "@cf/zai-org/glm-5.3-flash": { reasoning_effort: "low" } },
+  gateway: "default",
+  models: ["dynamic/value"],
+  small_answer_input: { model: "dynamic/value", gateway: "default" },
   drill: { method: "POST", path: "/v1/chat/completions", body: { model: "auto", messages: [{ role: "user", content: "drill" }], drill: "router-down" }, answers: 503, evidence: "cloud_ops_events kind router-drill" },
-  request_budget: "timeout_ms in the chat body (3000-120000) bounds the router's own wait and adds a hedge leg; hedge: false keeps the requested model only"
+  request_budget: "timeout_ms in the chat body (3000-120000) bounds one dynamic route call; AI Gateway owns provider fallback and the consumer does not add a local model hedge"
 };
 // CHANNEL-DIVERSITY-1 (#2146, docs/ENSEMBLE-POLICY.md): the declared channel of each routed model. Two members of the
 // same lineage are one correlated channel; the same vendor with another lineage is half of one. Architecture is declared
@@ -2685,13 +2686,13 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   }
   const { model = "dynamic/standard", messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
   // AI-ROUTER-SECOND-PATH-1 (#2179): an authenticated caller rehearses "the router is down" and exercises its own
-  // direct fallback from a real request. No model call; one cloud_ops_events row (kind router-drill) is the evidence.
+  // dynamic/value Gateway fallback from a real request. No model call; one cloud_ops_events row (kind router-drill) is the evidence.
   if (body && body.drill === "router-down") {
     const _drillCaller = env.__spendCaller || "public";
     // ROUTER-DRILL-SYNC-1 (agent_issues 2605): written before the 503, not in waitUntil, so CHAOS-DRILL-1's probe that
     // runs right after the exercise reads it (the 2026-10-19 04:00 probe ran 3 s before the waitUntil insert landed).
     if (env.QNFO_AUDIT) await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'router-drill', ?3, ?4, 'qnfo-ai', 'ok')").bind("drill-" + Date.now().toString(36) + "-" + rid(6), (/* @__PURE__ */ new Date()).toISOString(), ("router-down drill answered 503 for caller " + _drillCaller).slice(0, 300), JSON.stringify({ caller: _drillCaller, v: VERSION })).run().catch((eD) => { console.error("router-drill log failed: " + String(eD && eD.message || eD).slice(0, 160)); });
-    return new Response(JSON.stringify({ error: { type: "router_drill", message: "router-down drill: use your direct fallback (GET /health second_path)", caller: _drillCaller } }), { status: 503, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "x-qnfo-drill": "router-down" } });
+    return new Response(JSON.stringify({ error: { type: "router_drill", message: "router-down drill: use dynamic/value via AI Gateway default (GET /health second_path)", caller: _drillCaller } }), { status: 503, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "x-qnfo-drill": "router-down" } });
   }
   // SPEND-GOVERNOR-1 waste cut: qnfo-ai-calibration probes every model about 1,000 times a day ("Reply with exactly:
   // OK"); each probe carried the full research system prompt (about 2k tokens), the calendar block and, for question
@@ -3079,7 +3080,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       const hasRunCode = modelTools && modelTools.some((t) => t && t.function && t.function.name === "run_code");
       modelTools = (modelTools && modelTools.length ? modelTools : []).concat(GATEWAY_TOOLS.filter((t) => !(modelTools || []).some((x) => x && x.function && x.function.name === t.function.name)));
     }
-    // TURN-BUDGET-1 (#2316): a small answer, or any request that names timeout_ms, runs under a budget with one hedge leg.
+    // TURN-BUDGET-1 (#2316): a small answer, or any request that names timeout_ms, runs under a budget with one dynamic-route leg.
     const _budgetMs = turnBudgetMs(body, { stream: isStream, tools: !!(modelTools && modelTools.length), wantsCode, ensemble: isEnsemble });
     let turn;
     if (_budgetMs) {
@@ -3092,7 +3093,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       if (turn && hb.winner && hb.winner !== routedModel) _servedBy = hb.winner;
       if (!turn) {
           if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("ROUTER-TIMEOUT-504: " + JSON.stringify(hb.legs)).slice(0, 400), latency_ms: Date.now() - t0 })));
-          return json({ error: { type: "router_timeout", message: "no model answered within the budget (" + (hb.reason || "no-answer") + "); use your direct fallback", budget_ms: _budgetMs, legs: hb.legs }, _router: mkRouter(routedModel, isAuto ? "auto" : "single") }, 504);
+          return json({ error: { type: "router_timeout", message: "no model answered within the dynamic route budget (" + (hb.reason || "no-answer") + "); retry via dynamic/value on AI Gateway default", budget_ms: _budgetMs, legs: hb.legs }, _router: mkRouter(routedModel, isAuto ? "auto" : "single") }, 504);
       }
     } else {
       turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP, clientToolChoice);
@@ -4414,7 +4415,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1, res;
   // AIG-BINDING-1 (2026-10-02, #1784): embedding calls are deterministic, so they go through the AI Gateway (logged there,
   // served from its cache for 24h). A gateway error falls back to the plain binding once, so the gateway can never take
-  // search down. Chat calls are unchanged: they have their own semantic cache and a fallback here would double their wait.
+  // search down. Dynamic chat callers pass explicit gateway options and propagate errors; the dynamic route owns provider fallback.
   // 5.31.1: each gateway log entry carries metadata {worker, purpose} (Workers AI binding gateway.metadata), so the gateway
   // log attributes these requests to qnfo-ai, the second half of #1784's definition of done.
   var viaGw = !opts && String(purpose).indexOf("embed") === 0;

@@ -104,7 +104,8 @@ ok(src.indexOf("let routedModel = String(body.model") > 0 && src.indexOf("let ro
 ok(!/const routedModel = effective;/.test(src), "the late const declaration is gone");
 
 // ---- second path ----
-ok(X.SECOND_PATH.contract === "AI-ROUTER-SECOND-PATH-1" && X.SECOND_PATH.direct_binding === "AI" && X.SECOND_PATH.drill.answers === 503, "the second-path contract names the binding and the drill");
+ok(X.SECOND_PATH.contract === "AI-ROUTER-SECOND-PATH-1" && X.SECOND_PATH.direct_binding === "AI" && X.SECOND_PATH.gateway === "default" && X.SECOND_PATH.models.join() === "dynamic/value" && X.SECOND_PATH.drill.answers === 503, "the second-path contract names the gateway route and drill");
+ok(/AI Gateway owns provider fallback/.test(X.SECOND_PATH.request_budget) && /consumer does not add a local model hedge/.test(X.SECOND_PATH.request_budget), "the second-path contract does not promise a consumer-side hedge");
 ok(/second_path: SECOND_PATH/.test(src) && /body\.drill === "router-down"/.test(src) && /"x-qnfo-drill": "router-down"/.test(src), "/health serves the contract and the drill answers 503");
 ok(src.indexOf('body.drill === "router-down"') > src.indexOf("async function handleChatCore") && src.indexOf('body.drill === "router-down"') > src.indexOf('return json({ error: "Unauthorized" }, 401);', src.indexOf("async function handleChatCore")), "the drill runs after the auth check");
 
