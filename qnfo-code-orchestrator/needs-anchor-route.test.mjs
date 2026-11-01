@@ -55,9 +55,11 @@ const row = (env, id) => env.AUDIT_DB._db.prepare("SELECT * FROM code_tasks WHER
 const issueRow = (env, id) => env.AUDIT_DB._db.prepare("SELECT * FROM agent_issues WHERE id=?").get(id);
 const events = (env, kind) => env.AUDIT_DB._db.prepare("SELECT * FROM cloud_ops_events WHERE kind = ?").all(kind);
 const STACK = 'CF-OBS-ISSUE-1: fx-na: {"completion_tokens":"<number>","evt":"<string>","finish_reason":"<string>"} -- issue #77 (RED-DRAIN-1 dispatch). The trace has no code in it.';
-function addIssue(env, id, status, withLine) {
+function addIssue(env, id, status, withLine, opts = {}) {
+  const marker = opts.marker || "code-task";
+  const path = opts.path || "fx-na/worker.js";
   env.AUDIT_DB._db.prepare("INSERT INTO agent_issues (id, title, description, source, status, created_at) VALUES (?, ?, ?, 'qnfo-fleet-control', ?, ?)")
-    .run(id, "CF-OBS-ISSUE-1: fx-na", "A stack trace.\n" + (withLine ? "code-task: repo=qnfo-workers path=fx-na/worker.js\n" : "") + "Definition of done: probe.", status, Date.now());
+    .run(id, "CF-OBS-ISSUE-1: fx-na", "A stack trace.\n" + (withLine ? marker + ": repo=qnfo-workers path=" + path + "\n" : "") + (opts.anchor ? "code-anchor: " + opts.anchor + "\n" : "") + "Definition of done: probe.", status, Date.now());
 }
 async function readOnce(env, goal, anchor) {
   const c = await addTask(env, goal, anchor);
@@ -83,6 +85,17 @@ ok(BIG.length > 60000 && BIG.indexOf("completion_tokens") < 0 && BIG.indexOf("CF
   const ev = events(env, "code-task.anchor-routed");
   ok(ev.length === 1 && /issue #77/.test(ev[0].text) && JSON.parse(ev[0].meta).issue === 77, "1d event code-task.anchor-routed", ev);
   ok(events(env, "code-task.fail").length === 1, "1e the task's own failure event is unchanged", events(env, "code-task.fail").length);
+}
+// An issue's own exact, path-matched anchor survives a planner task that omitted the anchor.
+{
+  const { env } = envWith();
+  const anchor = "function farAway(x) { return x + 1; }";
+  addIssue(env, 77, "open", true, { marker: "session-task", anchor });
+  const id = await readOnce(env, STACK);
+  const r = row(env, id), iss = issueRow(env, 77);
+  const ctx = JSON.parse(r.ctx || "{}");
+  ok(r.status !== "needs_human" && ctx.anchor === anchor, "1f a unique issue anchor is carried into the code task", { status: r.status, ctx });
+  ok(/session-task: repo=qnfo-workers path=fx-na\/worker\.js/.test(iss.description) && events(env, "code-task.anchor-from-issue").length === 1 && events(env, "code-task.anchor-routed").length === 0, "1g the task uses the explicit anchor without changing issue routing", { description: iss.description, events: events(env, "code-task.anchor-from-issue").length });
 }
 // 2. the locator is still asked first, and a goal whose keyword is in the file is not routed (the keyword fallback places it)
 {
@@ -119,6 +132,13 @@ ok(BIG.length > 60000 && BIG.indexOf("completion_tokens") < 0 && BIG.indexOf("CF
   const id = await readOnce(env, STACK, "this anchor line occurs nowhere in the fixture file");
   const r = row(env, id);
   ok(r.status === "needs_human" && /anchor occurs 0 times/.test(r.last_error || "") && /code-task: repo=/.test(issueRow(env, 77).description) && events(env, "code-task.anchor-routed").length === 0, "4 an anchor given but absent is not routed", { status: r.status, last_error: r.last_error });
+}
+// An anchor on a different path cannot make this task executable.
+{
+  const { env } = envWith();
+  addIssue(env, 77, "open", true, { path: "other/worker.js", anchor: "function farAway(x) { return x + 1; }" });
+  const id = await readOnce(env, STACK);
+  ok(row(env, id).status === "needs_human" && events(env, "code-task.anchor-from-issue").length === 0, "5 an anchor for another path is ignored", row(env, id).last_error);
 }
 
 console.log("needs-anchor-route.test: " + pass + " passed, " + fail + " failed");
