@@ -4,8 +4,8 @@
   "token_present": true,
   "stage": "partial",
   "status": "failed",
-  "error": "ipatent.me: present unverified; www.ipatent.me: present unverified; qwave.tech: present unverified; www.qwave.tech: present unverified; q-wave.tech: present unverified; www.q-wave.tech: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: created unverified; www.qwav.org: created unverified",
-  "gateway_version": "3.29.0-reader-report",
+  "error": "qwav.tech: created unverified; ipatent.me: present unverified; www.ipatent.me: present unverified; qwav.net: present unverified; www.qwav.net: present unverified; qwav.uk: present unverified; www.qwav.uk: present unverified; qwave.tech: present unverified; www.qwave.tech: present unverified; q-wave.tech: present unverified; www.q-wave.tech: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: created unverified; www.qwav.org: created unverified",
+  "gateway_version": "3.48.2-codeagent",
   "hosts": {
     "archive.qnfo.org": {
       "zone": "qnfo.org",
@@ -16,10 +16,11 @@
     },
     "qwav.tech": {
       "zone": "qwav.tech",
-      "route_id": "5037bbfd552b4cdebf91781eb1655db4",
-      "status": "present",
+      "route_id": "98f3c7c09f3b4112989e3a16b8fe07fc",
+      "status": "created",
       "detail": null,
-      "verified": true
+      "verified": false,
+      "rolled_back": true
     },
     "agent-orchestrator.qnfo.org": {
       "zone": "qnfo.org",
@@ -124,28 +125,28 @@
       "route_id": "8eab103f9f224d94be50de3136d2a6c7",
       "status": "present",
       "detail": null,
-      "verified": true
+      "verified": false
     },
     "www.qwav.net": {
       "zone": "qwav.net",
       "route_id": "da08c2a4e11d4a228c1f5cba1308bbd5",
       "status": "present",
       "detail": null,
-      "verified": true
+      "verified": false
     },
     "qwav.uk": {
       "zone": "qwav.uk",
       "route_id": "da26d4194f484676a2d51d170b4e6499",
       "status": "present",
       "detail": null,
-      "verified": true
+      "verified": false
     },
     "www.qwav.uk": {
       "zone": "qwav.uk",
       "route_id": "c0d5644ffb674e43ab671e4393cc1809",
       "status": "present",
       "detail": null,
-      "verified": true
+      "verified": false
     },
     "qwave.tech": {
       "zone": "qwave.tech",
@@ -177,7 +178,7 @@
     },
     "empoweringchange.today": {
       "zone": "empoweringchange.today",
-      "route_id": "b3e924c5faa84707ae74e355a69aba81",
+      "route_id": "a42a86b26b394a51b95aea39a07a9fe7",
       "status": "created",
       "detail": null,
       "verified": false,
@@ -192,33 +193,27 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": "8ff25c42420e4d5eb9fd5ab8b23f1524",
+      "route_id": "7890a190910b4995a9c72b52a6ae1591",
       "status": "created",
       "detail": null,
-      "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
-      "dns_proxied_from": false,
       "pages_detach_http": 200,
       "pages_detached": "qwav",
       "verified": false,
       "pages_reattached": true,
-      "rolled_back": true,
-      "dns_restored": true
+      "rolled_back": true
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "863db29c51a34950a67e11fa91b4021e",
+      "route_id": "e91912f8f5494ba69e5984b6fd070f86",
       "status": "created",
       "detail": null,
-      "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
-      "dns_proxied_from": false,
       "pages_detach_http": 200,
       "pages_detached": "qwav",
       "verified": false,
       "pages_reattached": true,
-      "rolled_back": true,
-      "dns_restored": true
+      "rolled_back": true
     }
   },
-  "ts": "2026-10-20T08:54:48Z",
-  "lifecycle_version": "1.14.0-paper-learn-triage"
+  "ts": "2026-11-01T17:49:45Z",
+  "lifecycle_version": "1.17.0-paper-learn-probation"
 }
