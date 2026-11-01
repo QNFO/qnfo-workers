@@ -4,7 +4,8 @@
 // pull_request runs are approved only when the diff avoids every denied path (workflows, scripts, wrangler and package manifests, shell, Docker, yaml), a
 // withheld approval is explained once per head commit, a 403 on approve is recorded and stops that pull request only; KICK-GATED-CHECKS-1: when GitHub refuses
 // the approval of a Copilot run with 403 and the fleet user credential is present, a finished pull request that avoids every denied path gets one update-branch
-// pinned to its head (never for another refusal, a running agent, a denied path, an empty pull request, a dry run, approve=false or a missing credential; capped per run); dry sends no write; approve=false
+// pinned to its head (never for another refusal, a running agent, a denied path, an empty pull request, a dry run, approve=false or a missing credential; capped per run); EMPTY-FINISHED-DRAFT-1: a draft whose
+// session finished 30 minutes ago and changed no file (files listing confirms) is commented and closed with the workflow token, never approved or kicked; dry sends no write; approve=false
 // sends no approval; no credential or an unreadable list sends nothing and never throws; the per-run cap defers the rest; the workflow keeps GITHUB_TOKEN
 // as its only secret, a timeout, the runner pin, pinned actions, a base checkout and no pull request text in a run line; lane-poke ignores copilot/** runs.
 // Run: node --no-warnings scripts/copilot-pr-lifecycle.test.mjs   -> prints "N passed, 0 failed"
@@ -299,6 +300,66 @@ ok(JSON.stringify(linkedIssues("Fixes #12\n\ncloses #5, Resolved: #9 and fixes #
   const gm = mk({ files: { 1: [], 2: [f("qnfo-x/worker.js")] } });
   const sm = await run(withOrg, { fetchImpl: gm.fetchImpl, sleep: async () => {} });
   ok(sm.skipped["no-changed-files"] === 1 && sm.kicked.length === 1 && sm.kicked[0].pr === 2 && puts(gm.log).length === 1 && approves(gm.log).length === 1 && !approves(gm.log).some((c) => /\/runs\/1[12]\/approve$/.test(c.path)), "an empty pull request is neither approved nor kicked", { skipped: sm.skipped, kicked: sm.kicked, approves: approves(gm.log).map((c) => c.path) });
+}
+
+// --- EMPTY-FINISHED-DRAFT-1: a draft whose session finished 30 minutes ago and changed no file is closed in this repository too
+{
+  const NOW = Date.parse("2026-11-01T12:00:00Z");
+  const sessionFinished = (minAgo) => [{ event: "copilot_work_started", created_at: "2026-11-01T10:00:00Z" }, { event: "copilot_work_finished", created_at: new Date(NOW - minAgo * 60000).toISOString() }, { event: "review_requested" }];
+  const mk = (over) => fakeGh(Object.assign({
+    prs: [pr(1, { changed_files: 0 })], events: { 1: sessionFinished(45) }, files: { 1: [] }, runs: { sha1: [gatedRun(11, "sha1")] }, approveStatus: { 11: 403 }
+  }, over || {}));
+  const go = (g, extra) => run(Object.assign({}, base, extra || {}), { fetchImpl: g.fetchImpl, sleep: async () => {}, now: NOW });
+  const patches = (log) => log.filter((c) => c.method === "PATCH");
+  const posts = (log) => log.filter((c) => c.method === "POST" && c.path.endsWith("/comments"));
+
+  const g = mk();
+  const s = await go(g, { orgToken: "ORG" });
+  ok(s.empty_drafts_closed.length === 1 && s.empty_drafts_closed[0].repo === REPO && s.empty_drafts_closed[0].number === 1 && /^2026-11-01T11:15:00/.test(s.empty_drafts_closed[0].finished_at) && s.status === "ok", "an empty draft whose session finished 45 minutes ago is closed", s);
+  ok(posts(g.log).length === 1 && /EMPTY-FINISHED-DRAFT-1/.test(posts(g.log)[0].body.body) && patches(g.log).length === 1 && patches(g.log)[0].path === "/repos/" + REPO + "/pulls/1" && patches(g.log)[0].body.state === "closed", "it is explained in one comment and closed", g.log.filter((c) => c.method !== "GET").map((c) => c.method + " " + c.path));
+  ok(!g.log.some((c) => /\/approve$/.test(c.path) || c.method === "PUT") && s.kicked.length === 0, "a closed empty draft is neither approved nor kicked");
+  ok(g.log.filter((c) => c.path === "/repos/" + REPO + "/pulls/1/files").length === 1 && s.skipped["no-changed-files"] === undefined, "it is listed once and the sweep moves on: no second pass through the approval path", { skipped: s.skipped });
+  ok(g.log.filter((c) => c.method !== "GET").every((c) => c.auth === "Bearer t"), "it is closed with the workflow token, not the fleet user credential");
+
+  const gn = mk();
+  const sn = await go(gn);
+  ok(sn.empty_drafts_closed.length === 1 && patches(gn.log).length === 1, "it needs no fleet user credential");
+
+  const gr = mk({ events: { 1: sessionFinished(10) } });
+  const sr = await go(gr);
+  ok(writes(gr.log).length === 0 && sr.skipped["empty-draft-recent"] === 1 && sr.empty_drafts_closed.length === 0, "a session that finished 10 minutes ago is left for now, and not approved or kicked", sr.skipped);
+  const gl = mk({ files: { 1: [f("docs/A.md")] } });
+  const sl = await go(gl, { orgToken: "ORG" });
+  ok(patches(gl.log).length === 0 && sl.empty_drafts_closed.length === 0, "changed_files 0 with files listed (GitHub still computing) is not closed", sl.empty_drafts_closed);
+  const gh = mk({ prs: [pr(1, { changed_files: 0, draft: false })] });
+  const sh = await go(gh);
+  ok(patches(gh.log).length === 0 && sh.empty_drafts_closed.length === 0, "a pull request that is ready for review is never closed");
+  const gf = mk({ prs: [pr(1, { changed_files: 2 })], files: { 1: [f("docs/A.md")] } });
+  const sf = await go(gf);
+  ok(patches(gf.log).length === 0 && sf.empty_drafts_closed.length === 0, "a draft that changed files is never closed");
+  const gw = mk({ events: { 1: [{ event: "copilot_work_started", created_at: "2026-11-01T11:00:00Z" }] } });
+  const sw = await go(gw);
+  ok(patches(gw.log).length === 0 && sw.skipped["agent-working"] === 1, "a session that is still running is never closed");
+  const gu = mk({ events: { 1: [{ event: "copilot_work_started" }, { event: "copilot_work_finished" }] } });
+  const su = await go(gu);
+  ok(patches(gu.log).length === 0 && su.empty_drafts_closed.length === 0, "a finish time that cannot be read closes nothing");
+  const gd = mk();
+  const sd = await go(gd, { mode: "dry" });
+  ok(writes(gd.log).length === 0 && sd.empty_drafts_closed.length === 1 && sd.empty_drafts_closed[0].dry === true, "a dry run names the draft and sends no write", sd.empty_drafts_closed);
+  const ga = mk();
+  const sa = await go(ga, { approve: false });
+  ok(sa.empty_drafts_closed.length === 1 && patches(ga.log).length === 1, "approve off does not keep an empty finished draft open");
+  const gp = mk({ patchStatus: 403 });
+  const sp = await go(gp);
+  ok(sp.status === "partial" && sp.empty_drafts_closed.length === 0 && sp.errors.some((e) => /close empty draft/.test(e.where) && e.http === 403), "a refused close is recorded and not counted", sp.errors);
+  const g2 = mk({ prs: [pr(1, { changed_files: 0 }), pr(2, { changed_files: 0 })], events: { 1: sessionFinished(45), 2: sessionFinished(60) }, files: { 1: [], 2: [] }, runs: {} });
+  const s2 = await go(g2, { emptyMax: 1 });
+  ok(s2.empty_drafts_closed.length === 1 && s2.skipped["empty-over-cap"] === 1, "the per-run cap defers the other empty draft", s2);
+  // The organization pass fills the same list: this repository's entry is kept and the other repository's is added.
+  const cfgOrg = { prs: [pr(1, { changed_files: 0 })], events: { 1: sessionFinished(45) }, files: { 1: [] }, runs: {}, search: { emptyDraft: [{ repo: "QNFO/other", number: 7 }] }, otherPrs: { "QNFO/other#7": { draft: true, changed_files: 0 } } };
+  const go2 = fakeGh(cfgOrg);
+  const so = await run(Object.assign({}, base, { orgToken: "ORG" }), { fetchImpl: go2.fetchImpl, sleep: async () => {}, now: NOW });
+  ok(so.empty_drafts_closed.some((x) => x.repo === REPO && x.number === 1), "the organization pass does not discard this repository's closed drafts", so.empty_drafts_closed);
 }
 
 // --- the workflow and the lane poke
