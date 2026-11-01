@@ -30,9 +30,9 @@ import { createMcpHandler } from "agents/mcp/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { createCodeTool } from "@cloudflare/codemode/ai";
-import { generateText, jsonSchema, stepCountIs, tool } from "ai";
+import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, lastStepText, toolTranscript } from "./lib.js";
+import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, lastStepText, toolTranscript, codeSessionNeurons, codeSessionCost } from "./lib.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
 declare var VERSION: string;
@@ -57,19 +57,20 @@ interface Env {
   LOADER: any;
   OPS: Fetcher;
   FleetCodeAgent: DurableObjectNamespace<FleetCodeAgent>;
+  CodeSession: DurableObjectNamespace<CodeSession>;
 }
 interface RunInput { text: string; scope: Scope; caller: string; instance?: string; wait_ms?: number }
 interface State { runs: number; last_run: string | null; last_status: string | null; version: string }
 
 const CAPABILITIES = [
-  "Agent Durable Object with SQLite state (FleetCodeAgent)",
-  "durable turns (runFiber, re-run once after eviction)",
+  "Agent Durable Objects with SQLite state (FleetCodeAgent and resumable CodeSession)",
+  "durable turns and replayable CodeSession SSE streams (runFiber)",
   "schedules: cron or delay (schedule, getSchedules, cancelSchedule)",
   "callable methods over WebSocket (/agents/fleet-code-agent/<instance>, trusted callers)",
   "MCP server at /mcp (createMcpHandler)",
   "MCP client: connect any MCP server; its tools join the turn (addMcpServer)",
   "Code Mode: the model writes JavaScript that calls the tools inside a Dynamic Worker sandbox (LOADER)",
-  "Workers AI through AI Gateway with a fallback model (createAI)",
+  "Workers AI through AI Gateway with a fallback model (createAI); CodeSession uses DeepSeek V4 Flash and escalates to Pro within its neuron budget",
   "the qnfo-ops tool surface: Cloudflare API, D1, R2, KV, GitHub, workspace, containers, deploys (scope-gated)",
   "code changes as code-task proposals the owner files; the code loop opens and merges the PR",
   "fleet loops reach it through D1 cf_agent_requests (run, sandbox, schedule), drained every 5 minutes in the loop scope"
@@ -263,6 +264,11 @@ const SYSTEM = [
   "Never print a secret, token or key. Keep the final answer short: what you found, what you did, what is proposed, and what is open."
 ].join("\n");
 
+const CODE_SESSION_FLASH = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+const CODE_SESSION_PRO = "@cf/deepseek-ai/deepseek-v4-pro-0813";
+const CODE_SESSION_NEURON_BUDGET = 100000;
+const CODE_SESSION_SYSTEM = SYSTEM;
+
 async function modelFor(env: Env) {
   let id = DEFAULT_MODEL, fb = FALLBACK_MODEL;
   try {
@@ -416,6 +422,150 @@ export class FleetCodeAgent extends Agent<Env, State> {
   @callable() schedules() { return this.listSchedules(); }
 }
 
+export class CodeSession extends Agent<Env, State> {
+  initialState: State = { runs: 0, last_run: null, last_status: null, version: VERSION };
+
+  async onStart() {
+    this.sql`CREATE TABLE IF NOT EXISTS code_session (id TEXT PRIMARY KEY, caller TEXT NOT NULL, scope TEXT NOT NULL, status TEXT NOT NULL, neuron_budget REAL NOT NULL, neurons_used REAL NOT NULL DEFAULT 0, current_turn INTEGER NOT NULL DEFAULT 0, error TEXT, created_ms INTEGER NOT NULL, finished_ms INTEGER)`;
+    this.sql`CREATE TABLE IF NOT EXISTS code_session_turns (turn INTEGER PRIMARY KEY, prompt TEXT NOT NULL, answer TEXT, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, model TEXT, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, cost_usd REAL NOT NULL DEFAULT 0, error TEXT, created_ms INTEGER NOT NULL, finished_ms INTEGER)`;
+    this.sql`CREATE TABLE IF NOT EXISTS code_session_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, data TEXT NOT NULL, created_ms INTEGER NOT NULL)`;
+  }
+
+  private sessionRow(): any {
+    return this.sql`SELECT * FROM code_session LIMIT 1`[0] || null;
+  }
+
+  private event(type: string, data: unknown) {
+    this.sql`INSERT INTO code_session_events (type, data, created_ms) VALUES (${type}, ${JSON.stringify(data).slice(0, 6000)}, ${Date.now()})`;
+    const r: any = this.sql`SELECT last_insert_rowid() AS seq`;
+    return Number(r[0] && r[0].seq) || 0;
+  }
+
+  async startSession(input: { text: string; scope: Scope; caller: string }) {
+    const text = String(input.text || "").trim().slice(0, 8000);
+    if (!text) return { ok: false, error: "empty request" };
+    const now = Date.now();
+    const scope: Scope = input.scope === "write" ? "write" : "read";
+    this.sql`INSERT INTO code_session (id, caller, scope, status, neuron_budget, created_ms) VALUES (${this.name}, ${input.caller}, ${scope}, 'idle', ${CODE_SESSION_NEURON_BUDGET}, ${now})`;
+    this.event("status", { status: "queued", turn: 1 });
+    return this.startTurn(text, input.caller);
+  }
+
+  async startTurn(text: string, caller = "") {
+    const session = this.sessionRow();
+    if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
+    if (session.status === "running" || (session.status === "queued" && Number(session.current_turn) > 0)) return { ok: false, error: "this code session is already running" };
+    const prompt = String(text || "").trim().slice(0, 8000);
+    if (!prompt) return { ok: false, error: "empty request" };
+    const turn = Number(session.current_turn || 0) + 1;
+    const now = Date.now();
+    this.sql`INSERT INTO code_session_turns (turn, prompt, status, created_ms) VALUES (${turn}, ${prompt}, 'queued', ${now})`;
+    this.sql`UPDATE code_session SET status = 'queued', current_turn = ${turn}, error = NULL, finished_ms = NULL WHERE id = ${this.name}`;
+    if (turn > 1) this.event("status", { status: "queued", turn });
+    void this.runFiber("code-session:" + turn, async (fctx: any) => {
+      fctx.stash({ turn });
+      await this.executeTurn(turn);
+    }).catch((e) => this.failTurn(turn, errText(e)));
+    return { ok: true, session_id: this.name, turn, status: "queued" };
+  }
+
+  async onFiberRecovered(ctx: any) {
+    const turn = Number(ctx && ctx.stash && ctx.stash.turn);
+    if (!turn) return;
+    const rows: any = this.sql`SELECT status FROM code_session_turns WHERE turn = ${turn}`;
+    if (!rows[0] || rows[0].status === "done" || rows[0].status === "failed") return;
+    const prior: any = this.sql`SELECT attempts FROM code_session_turns WHERE turn = ${turn}`;
+    const attempts = Number(prior[0] && prior[0].attempts) || 0;
+    if (attempts >= 2) return this.failTurn(turn, "session turn was evicted twice");
+    void this.runFiber("code-session:" + turn, async (fctx: any) => {
+      fctx.stash({ turn });
+      await this.executeTurn(turn);
+    }).catch((e) => this.failTurn(turn, errText(e)));
+  }
+
+  private async failTurn(turn: number, error: string) {
+    const now = Date.now();
+    this.sql`UPDATE code_session_turns SET status = 'failed', error = ${error.slice(0, 600)}, finished_ms = ${now} WHERE turn = ${turn}`;
+    this.sql`UPDATE code_session SET status = 'failed', error = ${error.slice(0, 600)}, finished_ms = ${now} WHERE id = ${this.name}`;
+    this.event("error", { turn, error: error.slice(0, 600) });
+  }
+
+  private async executeTurn(turn: number) {
+    const rows: any = this.sql`SELECT * FROM code_session WHERE id = ${this.name}`;
+    const session = rows[0];
+    const turns: any = this.sql`SELECT turn, prompt, answer FROM code_session_turns WHERE status = 'done' AND turn < ${turn} ORDER BY turn DESC LIMIT 8`;
+    const current: any = this.sql`SELECT prompt FROM code_session_turns WHERE turn = ${turn}`;
+    if (!session || !current[0]) return;
+    const row = current[0];
+    const now = Date.now();
+    this.sql`UPDATE code_session_turns SET status = 'running', attempts = attempts + 1 WHERE turn = ${turn}`;
+    this.sql`UPDATE code_session SET status = 'running', error = NULL WHERE id = ${this.name}`;
+    this.event("status", { status: "running", turn });
+    let answer = "", error: string | null = null, modelId = CODE_SESSION_FLASH;
+    let inputTokens = 0, outputTokens = 0, neurons = 0, costUsd = 0, steps = 0;
+    try {
+      const history = (turns || []).slice().reverse().map((x: any) => "User: " + clip(x.prompt, 1200) + "\nAssistant: " + clip(x.answer || "", 1800)).join("\n\n");
+      const prompt = (history ? "Conversation so far:\n" + history + "\n\n" : "") + "Scope: " + session.scope + "\nCurrent request:\n" + row.prompt;
+      const remaining = Math.max(0, Number(session.neuron_budget) - Number(session.neurons_used || 0));
+      const ai = createAI({ binding: this.env.AI, id: "default", metadata: { worker: WORKER, purpose: "code-session" } } as any);
+      const model = (ai as any)(CODE_SESSION_FLASH, { fallback: remaining >= 10000 ? [CODE_SESSION_PRO] : [] });
+      const tools = await allTools({ env: this.env, scope: session.scope, caller: session.caller, agent: null, proposals: [] });
+      const out: any = streamText({
+        model, system: CODE_SESSION_SYSTEM, prompt, tools, stopWhen: stepCountIs(MAX_STEPS),
+        timeout: { totalMs: TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS }
+      } as any);
+      for await (const part of out.fullStream) {
+        if (part.type === "text-delta") {
+          answer += String(part.delta || "");
+          this.event("text", { turn, delta: String(part.delta || "") });
+        } else if (part.type === "tool-input-available") {
+          steps++;
+          this.event("tool", { turn, phase: "call", name: part.toolName, input: clip(part.input, 1600) });
+        } else if (part.type === "tool-result") {
+          this.event("tool", { turn, phase: "result", name: part.toolName, output: clip(part.output, 2600) });
+        } else if (part.type === "tool-error") {
+          this.event("tool", { turn, phase: "error", name: part.toolName, error: errText(part.error) });
+        }
+      }
+      const usage = await out.totalUsage;
+      inputTokens = Number(usage && usage.inputTokens) || 0;
+      outputTokens = Number(usage && usage.outputTokens) || 0;
+      const response = await out.response;
+      modelId = String(response && response.modelId || CODE_SESSION_FLASH);
+      neurons = codeSessionNeurons(modelId, inputTokens, outputTokens);
+      if (!neurons) neurons = codeSessionNeurons(CODE_SESSION_FLASH, inputTokens, outputTokens);
+      costUsd = codeSessionCost(neurons);
+      const finish = Date.now();
+      this.sql`UPDATE code_session_turns SET status = 'done', answer = ${answer.slice(0, 16000)}, model = ${modelId}, input_tokens = ${inputTokens}, output_tokens = ${outputTokens}, neurons = ${neurons}, cost_usd = ${costUsd}, finished_ms = ${finish} WHERE turn = ${turn}`;
+      this.sql`UPDATE code_session SET status = 'done', neurons_used = neurons_used + ${neurons}, finished_ms = ${finish} WHERE id = ${this.name}`;
+      try {
+        await this.env.AUDIT_DB.prepare("INSERT OR REPLACE INTO cf_agent_session_usage (session_id, turn, caller, model, input_tokens, output_tokens, neurons, cost_usd, status, created_ms, finished_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'done', ?9, ?10)")
+          .bind(this.name, turn, session.caller, modelId, inputTokens, outputTokens, neurons, costUsd, now, finish).run();
+      } catch (e) { logErr("code-session-usage", e); }
+      this.event("complete", { turn, answer: answer.slice(0, 16000), model: modelId, input_tokens: inputTokens, output_tokens: outputTokens, neurons, cost_usd: costUsd, neuron_budget: session.neuron_budget, neurons_remaining: Math.max(0, Number(session.neuron_budget) - Number(session.neurons_used || 0) - neurons), steps });
+      this.setState({ runs: (this.state.runs || 0) + 1, last_run: this.name + ":" + turn, last_status: "done", version: VERSION });
+    } catch (e) {
+      error = errText(e);
+      await this.failTurn(turn, error);
+    }
+  }
+
+  readEvents(after = 0, caller = "") {
+    const session = this.sessionRow();
+    if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
+    const cursor = Math.max(0, Number(after) || 0);
+    const events: any = this.sql`SELECT seq, type, data, created_ms FROM code_session_events WHERE seq > ${cursor} ORDER BY seq LIMIT 100`;
+    return { ok: true, session: { status: session.status, current_turn: session.current_turn }, events: (events || []).map((e: any) => ({ seq: e.seq, type: e.type, data: JSON.parse(e.data), created_ms: e.created_ms })) };
+  }
+
+  sessionStatus(caller = "") {
+    const session = this.sessionRow();
+    if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
+    const turns: any = this.sql`SELECT turn, prompt, answer, status, model, input_tokens, output_tokens, neurons, cost_usd, error, created_ms, finished_ms FROM code_session_turns ORDER BY turn`;
+    return { ok: true, session: { id: session.id, status: session.status, neuron_budget: session.neuron_budget, neurons_used: session.neurons_used, turns } };
+  }
+}
+
 // ---- CF-AGENTS-LOOPS-1: the D1 request queue any fleet loop writes (cf_agent_requests), drained by the 5-minute cron.
 const NOW_SQL = "strftime('%Y-%m-%dT%H:%M:%SZ','now')";
 async function finishRequest(env: Env, id: number, status: string, result: unknown, error: string | null) {
@@ -497,6 +647,48 @@ function instanceName(s: unknown): string {
   return /^[a-z0-9][a-z0-9-]{0,40}$/.test(n) ? n : "fleet";
 }
 
+function codeSessionStream(request: Request, stub: any, caller: string) {
+  const url = new URL(request.url);
+  let cursor = Math.max(0, Number(url.searchParams.get("after")) || Number(request.headers.get("last-event-id")) || 0);
+  const encoder = new TextEncoder();
+  let cancelled = false;
+  const stream = new ReadableStream({
+    start(controller) {
+      void (async () => {
+        const started = Date.now();
+        let lastPing = started;
+        try {
+          while (!cancelled && Date.now() - started < 15 * 60 * 1000) {
+            const batch = await stub.readEvents(cursor, caller);
+            if (!batch || !batch.ok) {
+              controller.enqueue(encoder.encode("event: error\ndata: " + JSON.stringify({ error: "no such code session" }) + "\n\n"));
+              break;
+            }
+            for (const event of batch.events || []) {
+              cursor = Math.max(cursor, Number(event.seq) || 0);
+              controller.enqueue(encoder.encode("id: " + cursor + "\nevent: " + event.type + "\ndata: " + JSON.stringify(event.data) + "\n\n"));
+            }
+            if (["done", "failed"].includes(String(batch.session && batch.session.status)) && !(batch.events || []).length) break;
+            if (Date.now() - lastPing > 15000) {
+              controller.enqueue(encoder.encode(": keepalive\n\n"));
+              lastPing = Date.now();
+            }
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+          if (!cancelled) controller.close();
+        } catch (e) {
+          if (!cancelled) {
+            controller.enqueue(encoder.encode("event: error\ndata: " + JSON.stringify({ error: errText(e) }) + "\n\n"));
+            controller.close();
+          }
+        }
+      })();
+    },
+    cancel() { cancelled = true; }
+  });
+  return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "connection": "keep-alive", "x-accel-buffering": "no" } });
+}
+
 async function body(request: Request): Promise<any> {
   try { return await request.json(); } catch (e) { return {}; }
 }
@@ -511,7 +703,7 @@ function selfDoc(caller: string, scope: Scope) {
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
       loops: ["INSERT INTO qnfo-audit.cf_agent_requests (requester, kind run|sandbox|schedule, prompt | code, cron | delay_s, instance?, priority?): drained every 5 minutes, outcome written back to the row"],
-      trusted: ["GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
+      trusted: ["POST /code-sessions {text}", "POST /code-sessions/<id>/turns {text}", "GET /code-sessions/<id>/events?after=<seq> (replayable SSE)", "GET /code-sessions/<id>", "GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
     },
     surfaces: { console: "https://fleet.qnfo.org/cmd (cfagent <request>, cfagent! <request> for the write scope)", ops: "https://ops.qnfo.org/v1/agents/..." }
   };
@@ -537,6 +729,26 @@ export default {
       if (!caller) return json({ ok: false, error: "This route is for the fleet console and the ops endpoint. Use https://fleet.qnfo.org/cmd (cfagent <request>) or https://ops.qnfo.org/v1/agents.", open: ["/", "/health", "/tools", "/mcp"] }, 403);
       if (path.indexOf("/agents/") === 0) return (await routeAgentRequest(request, env)) || json({ ok: false, error: "no such agent" }, 404);
       const b = request.method === "POST" ? await body(request) : {};
+      if (path === "/code-sessions" && request.method === "POST") {
+        const text = String(b.text || "").trim();
+        if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);
+        const id = runId();
+        const session: any = await getAgentByName(env.CodeSession as any, id);
+        return json(await session.startSession({ text, scope, caller }), 202);
+      }
+      let sessionMatch: RegExpExecArray | null;
+      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns))?$/.exec(path))) {
+        const session: any = await getAgentByName(env.CodeSession as any, sessionMatch[1]);
+        if (sessionMatch[2] === "events" && request.method === "GET") return codeSessionStream(request, session, caller);
+        if (sessionMatch[2] === "turns" && request.method === "POST") {
+          const text = String(b.text || "").trim();
+          if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);
+          const result = await session.startTurn(text, caller);
+          return json(result, result.ok ? 202 : 409);
+        }
+        if (!sessionMatch[2] && request.method === "GET") return json(await session.sessionStatus(caller));
+        return json({ ok: false, error: "no such route" }, 404);
+      }
       const stub: any = await getAgentByName(env.FleetCodeAgent as any, instanceName(b.instance || url.searchParams.get("instance")));
       if (path === "/run" && request.method === "POST") return json(await stub.startRun({ text: b.text, scope, caller, wait_ms: b.wait_ms }));
       if (path === "/runs" && request.method === "GET") return json({ ok: true, runs: await stub.listRuns(Number(url.searchParams.get("limit")) || 20) });

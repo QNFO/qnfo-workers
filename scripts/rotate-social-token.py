@@ -24,6 +24,7 @@ import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -69,10 +70,15 @@ def rotate():
     print("rotating", SECRET, "(48 hex)")
     subprocess.run(["wrangler", "secret", "put", SECRET], cwd=WKR, input=new, text=True, check=True)
     print("[1] worker secret: set")
-    tmp = os.path.join(os.environ.get("TEMP", "/tmp"), "gwst.txt")
-    with open(tmp, "w", encoding="utf-8", newline="") as fh:
-        fh.write(new)
-    subprocess.run(["wrangler", "r2", "object", "put", R2_KEY, "--file", tmp, "--remote"], cwd=REPO, check=True)
+    # ROTATE-TOKEN-TMP-1: the new token used to be written to a fixed TEMP/gwst.txt, readable by other local users and never removed, so every rotation left the
+    # live bearer on disk (CodeQL py/clear-text-storage-sensitive-data). wrangler needs a file, so it gets one in a private directory (0700) with mode 0600,
+    # removed with the directory when the upload ends, whether it succeeded or not.
+    with tempfile.TemporaryDirectory(prefix="gwst-") as td:
+        tmp = os.path.join(td, "gwst.txt")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(new)
+        subprocess.run(["wrangler", "r2", "object", "put", R2_KEY, "--file", tmp, "--remote"], cwd=REPO, check=True)
     print("[2] R2 mirror: set")
     lines = []
     try:
@@ -81,7 +87,11 @@ def rotate():
         pass
     lines = [ln for ln in lines if not ln.startswith(SECRET + "=")]
     lines.append(SECRET + "=" + new)
-    open(ENV, "w", encoding="utf-8", newline="").write("\n".join(lines) + "\n")
+    # ~/.env holds more than this token: it is created or tightened to 0600, never left at the umask default
+    fd = os.open(ENV, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+        fh.write("\n".join(lines) + "\n")
+    os.chmod(ENV, 0o600)
     print("[3] ~/.env: set")
     check()
 
