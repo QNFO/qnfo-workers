@@ -194,13 +194,17 @@ function fileIssue(env) {
   ok(row(env, id).status === "failed" && again === 1, "B3 exhausting the same task again keeps one open fleet issue (deduped by title)", { st: row(env, id).status, issues: again });
 }
 
-// ===== C. what a model cannot fix still stops at once (policy refusals are unchanged) =====
+// ===== C. what a model cannot fix still stops (policy refusals are unchanged) =====
+// ANCHOR-LOCATOR-1 makes one pick when the planner excerpts for the goal exist; a stub that answers empty is retried once by the model helper, so a pick is up to two calls.
+// PLAN-LARGE-FILE-ANCHORS-1 (0.29.4, pull request 5511) keeps sampled source windows when a 486-line match region overflows the excerpt budget. It used to keep none, the locator
+// returned at once and no model was called; that accident is what this case encoded as "before any model call". What still holds is the policy: the task parks needs_human with
+// the reason, and the only model calls are locator picks, never a propose, review or repair call.
 {
   const { env, calls } = envWith([]);
   await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: { authorization: "Bearer t0ken", "content-type": "application/json" }, body: JSON.stringify({ repo: "qnfo-workers", path: "q08-signal-engine/worker.js", goal: "make a change somewhere in this file", anchor: "function filler1" }) }), env);
   await tick(env);
   const r = env.AUDIT_DB._db.prepare("SELECT status, last_error FROM code_tasks").get();
-  ok(r.status === "needs_human" && /must occur exactly once/.test(r.last_error) && calls.length === 0, "C1 a non-unique anchor is still refused at once, before any model call", r);
+  ok(r.status === "needs_human" && /must occur exactly once/.test(r.last_error) && calls.length <= 2 && calls.every((c) => /^TASK: /.test(String(c.prompt)) && /FILE EXCERPTS/.test(String(c.prompt))), "C1 a non-unique anchor still parks the task: at most one locator pick (its empty-reply retry included) and no propose call", { r, calls: calls.length });
 }
 
 // ===== D. /health tells the truth about it =====

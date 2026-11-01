@@ -12,6 +12,18 @@
 //           its head so that the checks the merge lane waits for actually run (a Copilot push starts runs that stay `action_required` until a person
 //           clicks "Approve and run workflows": 268 such runs and 19 zero-job failed runs measured on 2026-10-30, so the lane never saw a green check
 //           on any Copilot pull request). Marking a draft ready is left to the merge lane (PR-MERGE-SLA-10M-1 stale_pr_merge_drafts).
+//        3. KICK-GATED-CHECKS-1 (2026-11-01): the REST approval cannot do step 2 for these runs. POST /actions/runs/{id}/approve answers 403 "This run is
+//           not from a fork pull request or queued by the Actions bot" for a run the Copilot agent queued on a branch of this repository: 9 of 9 attempts
+//           on 2026-11-01 10:03-10:43Z (the sweeps ran every 7 minutes), `approved` empty in every RESULT_JSON, so every finished Copilot draft sat at
+//           `action_required` and the lane never saw its required checks ("guard, mirror-guard, comparator never ran"). When that refusal comes back and
+//           ORG_TOKEN is set, the script asks GitHub to bring the branch up to date (PUT /pulls/{n}/update-branch, pinned to the head it judged, the
+//           call the merge lane's own nudge makes): the merge commit is pushed by the owner credential, a person's push is not held, and the same
+//           workflows run un-gated on the new head (measured on #5513: actor rwnq8, version-bump-guard, mirror-guard, migration-guard, identity-guard
+//           green within 30 s). It applies exactly the policy of step 2: the agent has finished, the diff avoids every DENY_PATHS entry, the head is this
+//           repository's own branch. Only four workflows run on a push to a branch other than main (copilot-setup-steps, dup-worker-name-gate,
+//           version-bump-guard, workflow-lint), all path-filtered and none reads a secret, so the push adds no exposure beyond the pull_request runs
+//           step 2 already approves. A kick is pinned to the head sha and never repeated for it: the new head's runs are the owner's, not Copilot's,
+//           so the next sweep finds nothing gated.
 // WHY    The approval gate is a security control, so it is relaxed only where it protects nothing: a run is approved only when the pull request
 //        changes none of the paths a workflow executes with more than read access or that configure the build (DENY_PATHS: .github/, scripts/,
 //        wrangler and package manifests, shell scripts, Dockerfiles, yaml). Workflow definitions run from the base branch, deploy-gate strips the
@@ -21,17 +33,20 @@
 //        until copilot_work_finished: nothing is approved before that, so the lane never merges half a change.
 //        COPILOT_PR_APPROVE=off restores "nothing is approved" without a deploy of anything but the workflow variable.
 // SAFETY * Only pull requests whose author is the Copilot cloud agent and whose head branch lives in this repository are touched; a fork run is
-//          never approved. * The GITHUB_TOKEN of the workflow does the repository work; ORG_TOKEN is used only for the organization search and the
-//          removal of the owner, never for an approval. Nothing from the pull request (title, body, branch) is put in
+//          never approved. * The GITHUB_TOKEN of the workflow does the repository work; ORG_TOKEN is used for the organization search, the
+//          removal of the owner and, only after the REST approval was refused with 403 for a finished pull request that avoids every DENY_PATHS entry,
+//          for the one update-branch of step 3 (never for an approval call). Nothing from the pull request (title, body, branch) is put in
 //          a shell line, a path or a query: only integers and SHAs read from the API. * Every write is idempotent and capped per run. A refusal
-//          is recorded as it was said (RESULT_JSON, ::warning::) and never retried with another credential; the exit code stays 0 except for a crash.
+//          is recorded as it was said (RESULT_JSON, ::warning::); the one exception to "never retried with another credential" is step 3, because that 403 says the
+//          endpoint cannot approve this kind of run at all (an eligibility answer, not a denial of the caller), the kick needs no approval and the policy is
+//          the same as step 2's. COPILOT_PR_APPROVE=off stops the kick as well. The exit code stays 0 except for a crash.
 // USAGE  GH_TOKEN=... GITHUB_REPOSITORY=QNFO/qnfo-workers node scripts/copilot-pr-lifecycle.mjs [--pr N] [--mode live|dry] [--no-approve] [--max 30]
 //        OWNER_LOGINS=rwnq8 (comma separated) names the people who are never reviewer or assignee.
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const API = "https://api.github.com";
-export const DEFAULTS = { max: 30, pages: 3, owners: ["rwnq8"], pauseMs: 250, orgMax: 50, emptyMax: 10, emptyAfterMin: 30 };
+export const DEFAULTS = { max: 30, pages: 3, owners: ["rwnq8"], pauseMs: 250, orgMax: 50, emptyMax: 10, emptyAfterMin: 30, kickMax: 8 };
 export const isCopilotAuthor = (login) => /^(copilot|copilot-swe-agent)(\[bot\])?$/i.test(String(login || ""));
 
 // Paths whose change can alter what CI executes with a secret or write access, or that steer the build. A pull request touching one is never
@@ -127,13 +142,14 @@ export async function run(opts, deps) {
   const isOwner = (login) => owners.includes(String(login || "").toLowerCase());
   const sum = {
     action: "copilot-pr-lifecycle", mode: dry ? "dry" : "live", repo: o.repo, approve: o.approve !== false, copilot_prs: 0, considered: 0, skipped: {},
-    reviewers_removed: [], assignees_removed: [], issue_assignees_removed: [], approved: [], approval_withheld: [], errors: []
+    reviewers_removed: [], assignees_removed: [], issue_assignees_removed: [], approved: [], kicked: [], approval_withheld: [], errors: []
   };
   const skip = (why) => { sum.skipped[why] = (sum.skipped[why] || 0) + 1; };
   const fail = (where, r) => sum.errors.push({ where, http: r.status, message: r.message });
   if (!o.token) { sum.status = "no-credential"; return sum; }
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(o.repo || "")) { sum.status = "bad-repo"; return sum; }
   const api = makeApi(d.fetchImpl, o.token);
+  const orgApi = o.orgToken ? makeApi(d.fetchImpl, o.orgToken) : null;
   const repo = o.repo;
 
   const listed = await listAll(api, "/repos/" + repo + "/pulls?state=open", null, o.pages);
@@ -201,14 +217,24 @@ export async function run(opts, deps) {
       if (!dry) await noteWithheld(api, repo, n, sha, denied, sum);
       continue;
     }
+    let refused = null;
     for (const run1 of gated) {
       if (dry) { sum.approved.push({ pr: n, run: run1.id, name: run1.name, dry: true }); continue; }
       const r = await api.req("POST", "/repos/" + repo + "/actions/runs/" + run1.id + "/approve");
       if (okStatus(r.status)) sum.approved.push({ pr: n, run: run1.id, name: run1.name });
-      else { fail("approve run " + run1.id + " on " + n, r); break; }
+      else { refused = { run: run1.id, r }; break; }
       if (o.pauseMs) await d.sleep(o.pauseMs);
     }
+    if (!refused) continue;
+    // KICK-GATED-CHECKS-1 (header, step 3). Only a 403 means "this endpoint cannot approve this run"; any other answer stays an error and is retried next sweep.
+    if (refused.r.status !== 403 || !orgApi) { fail("approve run " + refused.run + " on " + n, refused.r); continue; }
+    if (sum.kicked.length >= (o.kickMax || 0)) { skip("kick-over-cap"); continue; }
+    const k = await orgApi.req("PUT", "/repos/" + repo + "/pulls/" + n + "/update-branch", { expected_head_sha: sha });
+    if (okStatus(k.status)) sum.kicked.push({ pr: n, head: sha.slice(0, 7), refused_run: refused.run });
+    else if (k.status === 422) skip("kick-refused-422"); // a conflict or no new commit on main: the lane's conflict repair owns the first, the next push of main ends the second
+    else fail("update branch on " + n + " after approve run " + refused.run + " was refused", k);
   }
+  if (orgApi && orgApi.calls.length) sum.calls_kick = orgApi.calls.length;
   if (o.orgToken) await orgPass(o, d, sum, dry);
   if (sum.status !== "list-failed") sum.status = sum.errors.length ? "partial" : "ok";
   sum.calls = api.calls.length;
@@ -300,7 +326,7 @@ async function noteWithheld(api, repo, n, sha, denied, sum) {
 
 function summaryMarkdown(s) {
   const rows = [["copilot pull requests", s.copilot_prs], ["owner reviewer requests removed", s.reviewers_removed.length], ["owner assignments removed", s.assignees_removed.length + s.issue_assignees_removed.length],
-    ["owner removed across the organization", (s.org_removed || []).length], ["empty drafts closed in other repositories", (s.empty_drafts_closed || []).length], ["gated runs approved", s.approved.length], ["approval withheld", s.approval_withheld.length], ["errors", s.errors.length]];
+    ["owner removed across the organization", (s.org_removed || []).length], ["empty drafts closed in other repositories", (s.empty_drafts_closed || []).length], ["gated runs approved", s.approved.length], ["checks started by a branch update", (s.kicked || []).length], ["approval withheld", s.approval_withheld.length], ["errors", s.errors.length]];
   const skipped = Object.keys(s.skipped).sort().map((k) => "- " + k + ": " + s.skipped[k]).join("\n");
   return "### Copilot pull request lifecycle (" + s.mode + ", status " + s.status + ")\n\n" + rows.map((r) => "- " + r[0] + ": " + r[1]).join("\n") + (skipped ? "\n\nSkipped\n" + skipped : "") + "\n";
 }

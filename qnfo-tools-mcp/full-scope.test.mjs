@@ -5,6 +5,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -108,7 +109,7 @@ await t("health: version, tools, token + binding report, self-register fired", a
   const r = await worker.fetch(new Request("https://t/health"), env, ctx);
   const j = await r.json();
   ok(j.ok && j.worker === "qnfo-tools-mcp", "health shape");
-  ok(/^1\.4\.0/.test(j.version), "version " + j.version);
+  ok(versionAtLeast(j.version, "1.4.0"), "version " + j.version);
   eq(j.tokens.read_token_configured, true); eq(j.bindings.audit, true);
   ok(j.protocol.includes("2025-03-26"), "protocols listed");
   for (const n of ["web_search", "web_fetch", "papers_search", "history_recall", "personal_search", "express_desire", "intents_list", "infra_status", "infra_analytics", "infra_records", "email_check", "email_stats", "email_search", "email_respond", "email_mark", "owner_queue", "owner_code", "owner_act"]) ok(j.tools.includes(n), "tool " + n);

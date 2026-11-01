@@ -22,18 +22,18 @@ Owner request: productive activity without required typing, with Yes/No controls
 - [x] One-tap Qniverse presets saved into the existing action backlog.
 - [x] No text, textarea, or select control in Focus.
 
-## Next — evaluate only after real use
+## Next — completed and evidence-gated dispositions
 
-- [ ] Remember the last-used time and energy selections on the device.
-- [ ] Add a one-tap “too long” control that splits an action into a smaller fixed step without AI.
-- [ ] Add optional voice capture beside Focus using the existing recorder, only if requested.
-- [ ] Add keyboard and screen-reader regression checks for the timer and checklist.
+- [x] Remember the last-used time and energy selections on the device (stored only in device-local browser storage).
+- [x] Add a one-tap “too long” control that creates a fixed two-minute next action without AI.
+- [ ] Optional voice capture beside Focus: defer; the existing Capture flow already supports voice, and this change has no Focus-specific usage evidence or request to duplicate that control.
+- [x] Add keyboard and screen-reader regression checks for the timer and checklist (native buttons, pressed state, timer name and live semantics).
 
 ## Later — needs evidence before implementation
 
-- [ ] Rank recommendations from existing activity ratings, without adding an LLM.
-- [ ] Add calendar-aware time suggestions using the existing Today read model.
-- [ ] Add home-screen shortcuts only if Focus becomes the main entry point.
+- [ ] Rank recommendations from existing activity ratings, without adding an LLM. **Disposition:** defer until Focus usage evidence supports changing recommendation order.
+- [ ] Add calendar-aware time suggestions using the existing Today read model. **Disposition:** deferred; not needed for this follow-up and no Focus usage evidence calls for it.
+- [ ] Add home-screen shortcuts only if Focus becomes the main entry point. **Disposition:** deferred until usage evidence shows Focus is the main entry point.
 
 ## Explicit non-goals
 

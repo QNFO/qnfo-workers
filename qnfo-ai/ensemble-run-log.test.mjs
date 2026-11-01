@@ -108,7 +108,7 @@ v = api.ensembleValidatorFor({ validator: { wa: "@cf/deepseek-ai/deepseek-v4-fla
 eq([v.wa, v.switched, v.ctx], ["@cf/deepseek-ai/deepseek-v4-flash-0731", false, 65536], "without validator_alt the default is kept (no throw)");
 v = api.ensembleValidatorFor(null, "x");
 eq([v.wa, v.switched], ["", false], "null ENSEMBLE is tolerated");
-ok(/const validatorSpec = ensembleValidatorFor\(ENSEMBLE, primaryModel\);/.test(src) && /runWorkersAI\(env, validatorSpec\.wa, truncateMessagesToFit\(vMsg, validatorSpec\.ctx\)/.test(src), "runEnsemble validates with the chosen spec");
+ok(src.includes('const validatorSpec = { wa: "dynamic/value"') && /runWorkersAI\(env, validatorSpec\.wa, truncateMessagesToFit\(vMsg, validatorSpec\.ctx\)/.test(src), "runEnsemble validates with the value route");
 ok(!/runWorkersAI\(env, ENSEMBLE\.validator\.wa/.test(src), "no validator call bypasses the family check");
 m = api.ensembleRunMeta({ primary_model: "deepseek-v4-flash", validator_model: ENS.validator_alt.wa, validator_switched: true, validator_verdict: "pass" }, "general", "t");
 eq([m.primary_family, m.validator_family, m.same_family, m.validator_switched], ["deepseek", "zai", false, true], "meta records the switch and a cross-family pair");

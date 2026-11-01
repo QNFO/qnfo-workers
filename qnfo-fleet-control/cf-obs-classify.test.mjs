@@ -20,7 +20,7 @@ const a = src.indexOf(BEGIN), b = src.indexOf(END);
 if (a < 0 || b < a) { console.error("FAIL CF-OBS-SWEEP-1 block markers missing"); console.log("1 failed"); process.exit(1); }
 const sandbox = { __name: (f) => f, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { cfObsClassify, CF_OBS_STALE_H };", sandbox);
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { cfObsClassify, cfObsPayload, CF_OBS_STALE_H };", sandbox);
 const C = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -41,6 +41,17 @@ eq(C.cfObsClassify({ title: "Potential vulnerability scan · /.env · low risk",
 eq(C.cfObsClassify({ title: "UNIQUE constraint failed: x.y", lastObserved: ago(2) }, NOW), "active", "fresh unique-constraint group stays active");
 eq(C.cfObsClassify({ title: "UNIQUE constraint failed: x.y", lastObserved: ago(100) }, NOW), "resolved", "old unique-constraint group is resolved");
 eq(C.cfObsClassify({ title: "ping fail", lastObserved: ago(100) }, NOW), "active", "ping fail rule is untouched by this change");
+
+const ordinary = nested(1);
+eq(C.cfObsPayload(ordinary), JSON.stringify(ordinary), "small issue payloads retain the complete source object");
+const oversized = { id: "large-group", service: "qnfo-fleet-control", title: '"unterminated '.repeat(700), status: "active", type: "exception", count: 4, firstObserved: ago(2), lastObserved: ago(1), details: "x".repeat(9000) };
+let oldPayloadFailed = false;
+try { JSON.parse(JSON.stringify(oversized).slice(0, 8000)); } catch (e) { oldPayloadFailed = true; }
+const bounded = C.cfObsPayload(oversized);
+let parsedBounded = null;
+try { parsedBounded = JSON.parse(bounded); } catch (e) {}
+eq(oldPayloadFailed, true, "the previous character slice can cut through a JSON string");
+eq(!!parsedBounded && bounded.length <= 8000 && parsedBounded.truncated === true && parsedBounded.title.length <= 4096 && parsedBounded.service === oversized.service && parsedBounded.lastObserved === oversized.lastObserved, true, "oversized issue payloads stay valid, bounded JSON with the fields consumers need");
 
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

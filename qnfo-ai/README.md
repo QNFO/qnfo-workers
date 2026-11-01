@@ -4,6 +4,25 @@
 > Purpose: AI router/gateway (model routing, ensemble, RAG, vision, query logging)
 > Canonical source: this directory (QNFO/qnfo-workers)
 > Version: worker.js VERSION + /health (see fleet-drift scan)
+> models routed via AI Gateway dynamic routes -- see qnfo-ops issue #7.
+
+Chat inference uses the existing `default` gateway: `dynamic/standard` for
+default/general requests, `dynamic/value` for cheap/background tasks, and
+`dynamic/premium` for agentic coding and complex reasoning. Explicit dynamic
+IDs pass through unchanged; legacy chat IDs select a route, not a pinned
+serving model. Embedding and other non-chat model IDs remain unchanged.
+Provider URLs, credentials, dependencies, spend limits and gateway route
+configuration are not changed. Gateway exhaustion returns an explicit error;
+there is no consumer-side provider ladder or hedge. The original free-fallback
+helper retains its shared 120-second deadline, now for one value route call.
+
+The existing multi-stage ensemble remains a writer, value validator and
+premium review pass, within its 120-second budget. Dynamic routes do **not**
+guarantee independent model families: runtime diversity is reported as unknown,
+not inferred from the old model catalog. Catalog and health entries continue
+to describe serving models, not routes. Native Anthropic Messages input/output
+conversion stays intact; only the translated OpenAI-shaped inference uses
+`dynamic/premium`, never the Anthropic request shape.
 
 Deployed-current discipline: deployed-current.worker.js mirrors the live bundle;
 regenerate via: wrangler deploy --dry-run --outdir dist && cp dist/worker.js deployed-current.worker.js
