@@ -1,6 +1,6 @@
 // ERRATA-CONFIRM-COST-1 (0.34.0): the internal-errata confirm block, run offline against fakes.
-// Proves: PAPER-LEARN-1 findings go to deepseek first and kimi second, reviser findings to gpt-oss then kimi; the excerpt is
-// at most 24k chars; ops_config errata_confirm_max sets the batch (clamped to 48); the folded copy equals the errata-hub source.
+// Proves: PAPER-LEARN-1 findings go to deepseek first and glm-5.3 second, reviser findings to gpt-oss then glm-5.3; the excerpt is
+// at most 24k chars; ops_config errata_confirm_max sets the batch (default 20, clamped to 48); the folded copy equals errata-hub.
 // Run: node qnfo-research-exec/errata-confirm-cost.test.mjs
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,7 +12,14 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 const block = (s) => s.slice(s.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:BEGIN"), s.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:END"));
 const code = block(src);
-ok(code.length > 1000 && code === block(hub), "the folded confirm block equals the errata-hub source");
+const foldedCode = code.replace(/^CONFIRM_MODEL_OTHER = "@cf\/zai-org\/glm-5\.3";\nINTERNAL_CONFIRM_MAX = 20;\n/m, "");
+ok(code.length > 1000 && foldedCode === block(hub), "the folded confirm block matches errata-hub apart from the two host-specific overrides");
+const otherModelDeclaration = src.indexOf('var CONFIRM_MODEL_OTHER = "@cf/moonshotai/kimi-k2.6";');
+const otherModelOverride = src.indexOf('CONFIRM_MODEL_OTHER = "@cf/zai-org/glm-5.3";', otherModelDeclaration);
+const maxDeclaration = src.indexOf("var INTERNAL_CONFIRM_MAX = 12;");
+const maxOverride = src.indexOf("INTERNAL_CONFIRM_MAX = 20;", otherModelOverride);
+ok(otherModelDeclaration >= 0 && otherModelOverride > otherModelDeclaration && maxDeclaration >= 0 && maxOverride > otherModelOverride,
+  "the proven confirm model and larger batch cap override their declarations");
 const mod = new Function(code + "\nreturn { confirmInternalErrata, logConfirmDefer, confirmReplyText, internalConfirmModels, confirmExcerpt, confirmRunInput, CONFIRM_EXCERPT_MAX };")();
 
 {
@@ -40,9 +47,9 @@ const mod = new Function(code + "\nreturn { confirmInternalErrata, logConfirmDef
 ok(mod.CONFIRM_EXCERPT_MAX === 24000, "the excerpt is 24k chars");
 ok(mod.confirmExcerpt("x".repeat(100000), "").length === 24000, "a long body is cut to the excerpt");
 const pl = mod.internalConfirmModels("qnfo-lifecycle PAPER-LEARN-1");
-ok(/deepseek/.test(pl[0]) && /kimi/.test(pl[1]), "a PAPER-LEARN-1 finding is checked by deepseek, then kimi", pl);
+ok(/deepseek/.test(pl[0]) && /glm-5\.3/.test(pl[1]), "a PAPER-LEARN-1 finding is checked by deepseek, then glm-5.3", pl);
 const rv = mod.internalConfirmModels("qnfo-paper-reviser");
-ok(/gpt-oss/.test(rv[0]) && /kimi/.test(rv[1]), "a reviser finding is checked by gpt-oss, then kimi", rv);
+ok(/gpt-oss/.test(rv[0]) && /glm-5\.3/.test(rv[1]), "a reviser finding is checked by gpt-oss then glm-5.3", rv);
 ok(mod.confirmRunInput("@cf/deepseek-ai/deepseek-v4-flash-0731", "p").chat_template_kwargs.thinking === false, "deepseek runs with thinking off");
 ok(mod.confirmReplyText({ reasoning: '{"confirmed": true}' }) === '{"confirmed": true}', "a reasoning-only verdict is available to the JSON parser");
 ok(mod.confirmReplyText({ output_text: '{"confirmed": false}' }) === '{"confirmed": false}', "output_text verdicts are read");
@@ -68,9 +75,9 @@ const rows = Array.from({ length: 60 }, (_, i) => ({ id: i + 1, sender: "qnfo-li
 {
   const { env, calls } = mkEnv(null, rows, () => ({ choices: [{ message: { content: '{"confirmed": true, "why": "quoted"}' } }] }));
   const out = await mod.confirmInternalErrata(env);
-  ok(calls.limit === 12 && out.max === 12 && out.confirmed === 12, "no setting: 12 rows a tick, all settled", out);
+  ok(calls.limit === 20 && out.max === 20 && out.confirmed === 20, "no setting: 20 rows a tick, all settled", out);
   ok(calls.ai.every((c) => /deepseek/.test(c.m)), "a readable deepseek verdict needs no kimi call", calls.ai.map((c) => c.m));
-  ok(out.models["@cf/deepseek-ai/deepseek-v4-flash-0731"] === 12, "the settling model is recorded", out.models);
+  ok(out.models["@cf/deepseek-ai/deepseek-v4-flash-0731"] === 20, "the settling model is recorded", out.models);
   ok(calls.ai.every((c) => c.len < 26000), "each prompt carries at most the 24k excerpt plus the frame", calls.ai[0]);
 }
 {
@@ -86,7 +93,7 @@ const rows = Array.from({ length: 60 }, (_, i) => ({ id: i + 1, sender: "qnfo-li
 {
   const { env, calls } = mkEnv(2, rows, (m) => /deepseek/.test(m) ? { choices: [{ message: { content: "" } }] } : { response: '{"confirmed": true, "why": "k"}' });
   const out = await mod.confirmInternalErrata(env);
-  ok(out.confirmed === 2 && calls.ai.filter((c) => /kimi/.test(c.m)).length === 2, "an unreadable deepseek reply falls back to kimi", { out, ai: calls.ai.map((c) => c.m) });
+  ok(out.confirmed === 2 && calls.ai.filter((c) => /glm-5\.3/.test(c.m)).length === 2, "an unreadable deepseek reply falls back to glm-5.3", { out, ai: calls.ai.map((c) => c.m) });
 }
 {
   const { env, calls } = mkEnv(2, rows, () => ({ reasoning: '{"confirmed": true, "why": "reasoning-channel verdict"}' }));
