@@ -97,6 +97,8 @@ const POLICY = JSON.parse(readFileSync(policyFile, "utf8"));
   ok(Array.isArray(rows) && rows.every((r) => typeof r.id === "string" && typeof r.family === "string" && /^@cf\/[\w.-]+\/[\w.-]+$/.test(r.wa) && Number.isInteger(r.ctx) && r.ctx > 0 && typeof r.reasoning === "boolean"), "every allowed row has id, family, wa, ctx and reasoning of the right type");
   ok(Array.isArray(rows) && new Set(rows.map((r) => r.id)).size === rows.length && new Set(rows.map((r) => r.wa)).size === rows.length, "allowed ids and wa ids are unique");
   ok(Array.isArray(rows) && rows.every((r) => !BANNED.some((b) => b.re.test(r.id) || b.re.test(r.wa))), "no allowed row matches a BANNED rule");
+  const gemmaBan = BANNED.find((b) => b.label === "gemma-4-26b");
+  ok(gemmaBan && !gemmaBan.re.test("@cf/google/gemma-4-26b-a4b-it") && gemmaBan.re.test("@cf/google/gemma-4-26b-a4b-it-v2"), "only the evaluated Gemma 4 26B A4B instruction model is exempt from the model-floor ban");
   ok(Array.isArray(rows) && new Set(rows.map((r) => r.family)).size >= 4, "the allowed table keeps at least four vendor families (panels count families)"); }
 { ok(validateAllowed([{ id: "x", family: "f", wa: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", ctx: 1, reasoning: false }]).some((p) => /conflicts with BANNED \[llama\]/.test(p)), "validateAllowed rejects a row that re-admits a BANNED model");
   ok(validateAllowed([{ id: "x", family: "f", wa: "nope", ctx: 0, reasoning: "no" }]).length === 3, "validateAllowed rejects a malformed row (wa, ctx, reasoning)"); }

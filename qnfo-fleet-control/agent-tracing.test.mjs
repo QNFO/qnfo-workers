@@ -15,11 +15,11 @@ function check(value, expected, message) {
   passed++;
 }
 
-function fixture({ replies = ["private proposal", "ACCEPT"], findings = true, prior, ai = true } = {}) {
+function fixture({ replies = ["private proposal", "ACCEPT"], findings = true, prior, ai = true, advisorModel = "@cf/test/proposer" } = {}) {
   const spans = [], calls = [], events = [];
   const env = {
     PROBE_WORKERS: "test-worker",
-    ADVISOR_MODEL: "@cf/test/proposer",
+    ADVISOR_MODEL: advisorModel,
     REVIEW_MODEL: "@cf/test/reviewer",
     ADVISOR_ITERS: "3",
     ADVISOR_TOKEN: "private-secret",
@@ -128,6 +128,25 @@ check(accepted.calls.map((c) => c.purpose), ["advisor-propose", "advisor-review"
 check(accepted.calls[0].input.max_tokens, 350, "proposal options preserved");
 check(accepted.calls[1].input.temperature, 0.2, "review options preserved");
 
+const gemma = fixture({ advisorModel: "", replies: ["private proposal", "ACCEPT"] });
+await gemma.run();
+check(gemma.calls.map((c) => c.model), ["@cf/google/gemma-4-26b-a4b-it", "@cf/test/reviewer"], "Gemma is the default proposal model and the separate reviewer is unchanged");
+verifySpans(gemma, 2);
+
+for (const replies of [
+  [new Error("private upstream error"), "fallback proposal", "ACCEPT"],
+  ["", "fallback proposal", "ACCEPT"]
+]) {
+  const fallback = fixture({ advisorModel: "", replies });
+  check((await fallback.run()).suggestion, "fallback proposal", "the previous proposal model answers after Gemma errors or returns empty content");
+  check(fallback.calls.map((c) => c.model), [
+    "@cf/google/gemma-4-26b-a4b-it",
+    "@cf/zai-org/glm-5.3-flash",
+    "@cf/test/reviewer"
+  ], "fallback model and independent reviewer are recorded in order");
+  verifySpans(fallback, 3);
+}
+
 const improved = fixture({ replies: ["private proposal", "IMPROVE private revised proposal", "ACCEPT"] });
 check((await improved.runDO()).suggestion, "private revised proposal", "DO entry uses same turn and improvement behavior");
 verifySpans(improved, 3);
@@ -137,9 +156,10 @@ const bounded = fixture({ replies: ["private proposal", "IMPROVE private first r
 check((await bounded.runCron()).suggestion, "private third revision", "cron keeps existing review limit");
 verifySpans(bounded, 4);
 
-const empty = fixture({ replies: [""] });
+const empty = fixture({ advisorModel: "", replies: ["", ""] });
 check((await empty.run()).suggestion, null, "empty proposal still skips review");
-verifySpans(empty, 1);
+check(empty.calls.map((c) => c.model), ["@cf/google/gemma-4-26b-a4b-it", "@cf/zai-org/glm-5.3-flash"], "an empty Gemma answer retries the control model before skipping review");
+verifySpans(empty, 2);
 
 const choices = fixture({ replies: [{ choices: [{ message: { content: "private choices proposal" } }] }, "ACCEPT"] });
 check((await choices.run()).suggestion, "private choices proposal", "alternate model response shape preserved");
