@@ -4,7 +4,8 @@
 // puts a referrer outside the fleet's domains under external_referred_pageviews_7d, a referrer that is another public
 // page under continuation_pageviews_7d, drops direct loads and the owner's surfaces; the read carries bot: 0 and a 7-day
 // window; both registry rows, the daily ledger row and the reach_signals series are written; a failed read leaves the
-// registry untouched; WATCHMAKER_OPS carries the two new runners; the source stays ASCII (ASCII-SOURCE-1).
+// registry untouched; a corroborated anomalous read is held once and then accepted; WATCHMAKER_OPS carries the two new
+// runners; the source stays ASCII (ASCII-SOURCE-1).
 // Run: node qnfo-fleet-dashboard/human-audience.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -68,7 +69,7 @@ function load(db, queries, answer) {
     helpers + block +
     // the real reachGf (inside helpers) is replaced AFTER it is declared, so the scripted answer wins
     "\nreachGf = async function(env, query) { __q.push(query); return __answer(query); };" +
-    "\nthis.__run = refreshHumanAudience; this.__tally = humanAudienceTally; this.__k = { HA_PUBLIC_HOSTS, HA_FLEET_HOST_RE };", cx);
+    "\nthis.__run = refreshHumanAudience; this.__tally = humanAudienceTally; this.__guard = humanAudienceGuard; this.__baseline = humanAudienceBaseline; this.__k = { HA_PUBLIC_HOSTS, HA_FLEET_HOST_RE };", cx);
   return cx;
 }
 const answerLive = () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: LIVE }] } }, err: null });
@@ -83,6 +84,21 @@ const answerLive = () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdap
   ok(t.refs["www.bing.com"] === 10 && t.refs["t.co"] === 10 && t.refs["www.google.com"] === 20, "referrer breakdown is lower-cased and summed");
   ok(cx.__k.HA_FLEET_HOST_RE.test("qnfo-social.q08.workers.dev") && cx.__k.HA_FLEET_HOST_RE.test("fleet.qnfo.org") && !cx.__k.HA_FLEET_HOST_RE.test("news.ycombinator.com") && !cx.__k.HA_FLEET_HOST_RE.test("qnfo.org.evil.example"), "the fleet-host rule matches every owned domain and workers.dev, not outside hosts");
   ok(cx.__tally(null).external === 0 && cx.__tally([{ count: 5, dimensions: { requestHost: "fleet.qnfo.org", refererHost: "www.google.com" } }]).external === 0, "no groups and owner-surface pages count nothing");
+}
+// 1a. Guard only a corroborated partial collapse; ordinary low referrals remain measurable.
+{
+  const cx = load(freshDb(), [], answerLive);
+  const prev = { rows: 24, external: 240, continuation: 850, direct: 3190 };
+  const partial = { rows: 7, external: 0, continuation: 0, direct: 4000 };
+  const genuineLow = { rows: 14, external: 30, continuation: 920, direct: 1970 };
+  ok(!!cx.__guard(partial, prev), "a partial result with fewer than half the groups and external views collapsed is held");
+  ok(cx.__guard(genuineLow, prev) === null, "low external traffic with a representative group count and stable total remains measurable");
+  ok(cx.__guard(partial, null) === null, "a first read without a baseline is not blocked");
+  const baseline = cx.__baseline([
+    { ts: "2026-10-06T07:00:00Z", meta: JSON.stringify({ rows: 24, external: 240, continuation: 850, direct: 3190, guard: "ok" }) },
+    { ts: "2026-10-06T06:00:00Z", meta: JSON.stringify({ rows: 42, external: 115, continuation: 1630, direct: 1240, guard: "ok", guard_note: "accepted: hold expired after 1 held read" }) }
+  ]);
+  ok(baseline.rows === 24 && baseline.passed, "the baseline prefers the latest valid, previously accepted result");
 }
 // 2. The refresh: one bot-filtered 7-day read, both registry rows, the ledger and the series.
 {
@@ -103,6 +119,29 @@ const answerLive = () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdap
   // a second refresh the same day replaces, never duplicates
   await cx.__run({ AUDIT: d1(db) }, now + 36e5);
   ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events").get().n === 1 && db.prepare("SELECT COUNT(*) AS n FROM reach_signals").get().n === 3, "a second refresh the same day replaces the day's rows");
+}
+// 2a. A partial response is recorded separately without changing metrics; the next read cannot be held indefinitely.
+{
+  const db = freshDb(), q = [];
+  const now = Date.parse("2026-10-06T07:00:00Z");
+  db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('human-audience-2026-10-05', ?1, 'human-audience', 'trusted baseline', ?2, 'qnfo-fleet-dashboard', 'ok')").run("2026-10-05T07:00:00Z", JSON.stringify({ external: 240, continuation: 850, direct: 3190, rows: 24, guard: "ok" }));
+  db.prepare("INSERT INTO metric_registry (metric, layer, kind, last_value, last_refreshed, state) VALUES ('external_referred_pageviews_7d', 'fleet', 'leading', '240', '2026-10-05T07:00:00Z', 'MEASURED'), ('continuation_pageviews_7d', 'fleet', 'leading', '850', '2026-10-05T07:00:00Z', 'MEASURED')").run();
+  db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES ('2026-10-05', 'cf-rum-human', 'web', 'site', 'public', 'external_referred_7d', 240, 'human')").run();
+  const partial = Array.from({ length: 7 }, (_, i) => ({ count: i ? 1 : 3994, dimensions: { requestHost: i ? "papers.qnfo.org" : "qnfo.org", refererHost: "" } }));
+  const cx = load(db, q, () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: partial }] } }, err: null }));
+  const held = await cx.__run({ AUDIT: d1(db) }, now);
+  ok(held.value === null && /degraded read held/.test(held.why), "a corroborated partial read is held");
+  const metric = db.prepare("SELECT last_value FROM metric_registry WHERE metric='external_referred_pageviews_7d'").get();
+  const signal = db.prepare("SELECT value FROM reach_signals WHERE date='2026-10-05' AND metric='external_referred_7d'").get();
+  const degraded = db.prepare("SELECT kind, meta FROM cloud_ops_events WHERE kind='human-audience-degraded'").get();
+  ok(metric.last_value === "240" && signal.value === 240, "held read leaves the existing metric and signal untouched");
+  ok(degraded && JSON.parse(degraded.meta).guard.startsWith("degraded:") && JSON.parse(degraded.meta).held === 1, "the separate ledger row records why and that this is the first hold");
+  ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='human-audience'").get().n === 1, "held read does not overwrite the accepted ledger row");
+  const accepted = await cx.__run({ AUDIT: d1(db) }, now + 36e5);
+  const current = db.prepare("SELECT last_value FROM metric_registry WHERE metric='external_referred_pageviews_7d'").get();
+  const latest = db.prepare("SELECT meta FROM cloud_ops_events WHERE kind='human-audience' ORDER BY ts DESC LIMIT 1").get();
+  ok(accepted.value && accepted.value.external === 0 && current.last_value === "0", "the following anomalous read is accepted rather than held forever");
+  ok(JSON.parse(latest.meta).guard_note.startsWith("accepted:"), "the accepted read after one hold is explicitly marked in its metric provenance");
 }
 // 3. A failed read leaves the registry untouched (never a fabricated zero).
 {
