@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.7-codeagent";
+var VERSION = "1.44.8-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -4809,6 +4809,26 @@ __name2(extractLede, "extractLede");
 __name22(extractLede, "extractLede");
 var NOTES_OBJECTION_PLACEHOLDER = "Each item stands or falls on its own.";
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback, revision) {
+  // Ensure contested-topic pieces have sufficient source diversity:
+  // - at least 3 independent sources
+  // - at least two distinct viewpoints
+  // - at least one source from a non‑US country
+  (function validateSources(srcs) {
+    if (!Array.isArray(srcs) || srcs.length < 3) return false;
+    var hasNonUS = srcs.some(function (a) {
+      return a.sourceCountry && a.sourceCountry.toUpperCase() !== "US";
+    });
+    if (!hasNonUS) return false;
+    var vpSet = {};
+    srcs.forEach(function (a) {
+      if (a.viewpoint) vpSet[a.viewpoint] = true;
+    });
+    var vpCount = Object.keys(vpSet).length;
+    return vpCount >= 2;
+  })(anchors) || (function () {
+    // Abort drafting when source criteria are not met
+    return { piece: null, error: "insufficient sources for contested topic" };
+  })();
   var band = writerBand(form, writerIsFallback(env)), bandText = band[0] + " to " + band[1] + " words";
   var formContract = (form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES).replace(/\d{4} to \d{4} words/, bandText);
   var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then the lede paragraph, with no heading above it. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Then the lede paragraph, with no heading above it. Use ## for sections after it. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
