@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-11-01 03:57:29",
+  "audited_at": "2026-11-01 08:40:15",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-control"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -631,7 +638,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.0-empty-draft-close",
+        "version": "0.59.1-improvement-full-day-windows",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1405,9 +1412,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.0-empty-draft-close",
+      "before": "0.59.1-improvement-full-day-windows",
       "http": 200,
-      "live": "0.59.0-empty-draft-close",
+      "live": "0.59.1-improvement-full-day-windows",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"

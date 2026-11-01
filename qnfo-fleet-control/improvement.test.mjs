@@ -63,6 +63,17 @@ eq(x.findings[0] && x.findings[0].severity, "medium", "no target: medium");
 eq(x.findings[0] && x.findings[0].file, false, "IL-DEFECT-ONLY-1: a decline with no target is an early warning, not filed");
 eq(x.metric_regressions_7d, 1, "regression count");
 
+// exclude today's incomplete value: trend windows must compare seven complete UTC days
+x = I.improvementEvaluate({
+  registry: [reg("daily_metric", "maximize")],
+  history: hist("daily_metric", [400, ...Array(7).fill(100), ...Array(7).fill(120)])
+}, NOW);
+eq(x.evaluable, 1, "full-day trend is evaluable");
+eq(x.trends[0] && x.trends[0].recent, 100, "recent mean excludes today's partial value");
+eq(x.trends[0] && x.trends[0].prior, 120, "prior mean uses the preceding complete week");
+eq(x.regressed, 1, "current-day outlier cannot turn a full-week decline into an improvement");
+eq(x.improved, 0, "partial-day outlier is not counted as an improvement");
+
 // a cost metric that went DOWN 30% improved; one that went up 10% is flat (under the 15% bar)
 x = I.improvementEvaluate({ registry: [reg("cost_usd_30d", "<= 200"), reg("worker_count", "<= 24")], history: hist("cost_usd_30d", step(315, 450)).concat(hist("worker_count", step(44, 40))) }, NOW);
 eq(x.improved, 1, "cost down 30% improved");
