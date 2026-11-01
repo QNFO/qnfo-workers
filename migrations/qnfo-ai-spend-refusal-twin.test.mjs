@@ -3,6 +3,7 @@
 // Replayed in node:sqlite. Run: node --no-warnings migrations/qnfo-ai-spend-refusal-twin.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const sql = readFileSync(new URL("./2026-10-26-qnfo-ai-spend-refusal-twin.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../qnfo-ai/worker.js", import.meta.url), "utf8");
 let pass = 0, fail = 0;
@@ -37,8 +38,14 @@ for (const c of cases) {
 }
 const stream = byTitle("QNFO-AI-STREAM-SPEND-TWIN-1:");
 ok(stream && stream.description.includes("callDeepSeek(env, effSpec.api, messages, max_tokens, true,") && /DEEPSEEK-TWIN-1/.test(stream.description), "the stream issue's anchor is the stream call of the api branch");
-// the facts the issues state about the code are true on this checkout
-ok(worker.includes("DEEPSEEK-TWIN-1") && /\/\^deepseek 402\|\^spend-governor\//.test(worker) && worker.includes("served_by: effSpec.waTwin"), "the non-stream twin catch the issues point at exists in qnfo-ai/worker.js (pattern and served_by)");
+// the facts the issues state about the code are true on this checkout, or the code they were written beside has been superseded: qnfo-ai 5.41.0 (#5572) routes paid
+// inference through AI Gateway dynamic routes and removed the direct-DeepSeek non-stream catch (the "^deepseek 402|^spend-governor" pattern and `served_by: effSpec.waTwin`).
+// Both issues were done in 5.40.3 (their markers stay in the worker), so the premise is pinned only while that catch exists; a worker that has neither the catch nor the
+// dynamic routes still fails here. Suites assert a minimum VERSION, never a pin (VERSION-PIN-TESTS-1).
+const qnfoAiVersion = (/^var VERSION = "([^"]+)"/m.exec(worker) || [])[1];
+const catchExists = worker.includes("DEEPSEEK-TWIN-1") && /\/\^deepseek 402\|\^spend-governor\//.test(worker) && worker.includes("served_by: effSpec.waTwin");
+const dynamicRoutes = versionAtLeast(qnfoAiVersion, "5.41.0") && worker.includes("DYNAMIC_ROUTES") && worker.includes("isDynamicRoute(");
+ok(catchExists || dynamicRoutes, "the non-stream twin catch the issues point at exists in qnfo-ai/worker.js (pattern and served_by), or the dynamic routes (5.41.0) superseded it", { qnfoAiVersion, catchExists, dynamicRoutes });
 ok(/model: routedModel, choices: \[\{ index: 0, delta: \{ role: "assistant", content: _ft \}/.test(worker) || worker.includes("QNFO-AI-STREAM-SPEND-TWIN-1"), "the stream fallback chunk names routedModel (until the stream issue is done)");
 ok(worker.includes('"ensemble-context-fallback"') && worker.includes("callDeepSeek(env, MODELS[\"deepseek-v4-flash\"].api, messages, fbCap, false)") || worker.includes("QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1"), "the ensemble context fallback calls callDeepSeek unguarded (until the ensemble issue is done)");
 const dl = db.prepare("SELECT * FROM decision_log").get();

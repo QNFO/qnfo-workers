@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 10:47:45",
+  "audited_at": "2026-11-01 11:46:52",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -556,12 +556,12 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.29.0-one-thing",
+        "version": "4.30.0",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.6-codeagent",
+        "version": "1.44.7-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -581,12 +581,12 @@
       },
       {
         "dir": "qnfo-agents",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "worker": "qnfo-agents"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.40.15-codeagent",
+        "version": "5.41.1-dynamic-routes",
         "worker": "qnfo-ai"
       },
       {
@@ -601,7 +601,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.42.1-gcp-inventory",
+        "version": "1.42.3-breach-doctor-run-id",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -631,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.3-trigger-aware",
+        "version": "0.59.5-verified-core",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -691,7 +691,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.60.5-codeagent-stale-edit-recovery",
+        "version": "2.61.0-composio-managed-oauth-tools",
         "worker": "qnfo-ops"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.41.2",
+        "version": "0.42.1-event-id",
         "worker": "qnfo-research-exec"
       },
       {
@@ -988,17 +988,17 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.29.0-one-thing",
+      "before": "4.30.0",
       "http": 200,
-      "live": "4.29.0-one-thing",
+      "live": "4.30.0",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.6-codeagent",
+      "before": "1.44.7-codeagent",
       "http": 200,
-      "live": "1.44.6-codeagent",
+      "live": "1.44.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1091,17 +1091,17 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-agents": {
-      "before": "0.3.0",
+      "before": "0.3.1",
       "http": 200,
-      "live": "0.3.0",
+      "live": "0.3.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.40.15-codeagent",
+      "before": "5.41.1-dynamic-routes",
       "http": 200,
-      "live": "5.40.15-codeagent",
+      "live": "5.41.1-dynamic-routes",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1258,9 +1258,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.42.1-gcp-inventory",
+      "before": "1.42.3-breach-doctor-run-id",
       "http": 200,
-      "live": "1.42.1-gcp-inventory",
+      "live": "1.42.3-breach-doctor-run-id",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1405,9 +1405,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.3-trigger-aware",
+      "before": "0.59.5-verified-core",
       "http": 200,
-      "live": "0.59.3-trigger-aware",
+      "live": "0.59.5-verified-core",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1581,9 +1581,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.60.5-codeagent-stale-edit-recovery",
+      "before": "2.61.0-composio-managed-oauth-tools",
       "http": 200,
-      "live": "2.60.5-codeagent-stale-edit-recovery",
+      "live": "2.61.0-composio-managed-oauth-tools",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1669,9 +1669,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.41.2",
+      "before": "0.42.1-event-id",
       "http": 200,
-      "live": "0.41.2",
+      "live": "0.42.1-event-id",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

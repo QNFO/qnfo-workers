@@ -5,6 +5,10 @@
 // code session (FLEET-CMD-1), qnfo-ops by its own authOk (owner session or router key).
 export const TRUSTED_CALLERS = ["qnfo-fleet-dashboard", "qnfo-ops"];
 
+export function isDynamicRoute(model) {
+  return typeof model === "string" && /^dynamic\/[a-z0-9][a-z0-9._-]{0,119}$/.test(model);
+}
+
 export function callerOf(ctx) {
   const c = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
   return TRUSTED_CALLERS.indexOf(c) >= 0 ? c : "";

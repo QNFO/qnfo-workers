@@ -5,6 +5,8 @@ agent tool and function is reachable from the fleet console (https://fleet.qnfo.
 
 Address: https://agents.qnfo.org (machine origin `qnfo-agents.q08.workers.dev`).
 
+Models are routed via AI Gateway dynamic routes — see qnfo-ops issue #7.
+
 ## What it does
 
 One Agent class, `FleetCodeAgent` (a SQLite-backed Durable Object from `agents@0.30.1`), runs coding and operations turns:
@@ -19,7 +21,7 @@ One Agent class, `FleetCodeAgent` (a SQLite-backed Durable Object from `agents@0
 | MCP server | `POST /mcp` (`createMcpHandler`, stateless): public clients get `repo_read_file`; trusted callers get every tool plus `agent_run` and `agent_status` |
 | MCP client | `POST /mcp-servers {name, url}` or the `mcp_connect` tool; the server's tools join later turns |
 | Code Mode | the `codemode` tool: the model writes JavaScript that calls every tool as `codemode.<name>()` in a Dynamic Worker (`LOADER`, no outbound network); `POST /sandbox {code}` runs code without a model |
-| Models | Workers AI through AI Gateway `default` (`createAI`): `FleetCodeAgent` uses its configured models; `CodeSession` starts on DeepSeek V4 Flash and escalates to Pro only while its 100,000-neuron session budget allows |
+| Models | Workers AI through AI Gateway `default` (`createAI`): agent turns and `CodeSession` use `dynamic/standard`; route overrides are dynamic-route-only, and the route owns model fallbacks |
 
 Tools: `repo_read_file` (the public repository), `fleet_sql` (read-only SQL on qnfo-audit; sign-in and secret tables refused),
 `ops_catalog` and `ops_call` (the qnfo-ops tool surface: Cloudflare API, D1, R2, KV, GitHub, workspace, containers, deploys),

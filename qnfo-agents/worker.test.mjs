@@ -2,7 +2,7 @@
 // ADVERSARIAL: the helpers are tested directly; the bundle is checked by shape (it needs the Workers runtime to run). The live proof
 // is GET https://agents.qnfo.org/health answering this VERSION, a public POST /run answering 403, and a console turn reaching done.
 import { readFileSync } from "node:fs";
-import { callerOf, scopeOf, opsToolAllowed, readOnlySql, repoPathOk, codeTaskText, scheduleWhen, safeToolName, sliceLines, OPS_READ_ONLY, validateRequest, loopInstance, requesterOk, DRAIN_PER_TICK, EMPTY_TEXT, lastStepText, toolTranscript, codeSessionNeurons, codeSessionCost } from "./src/lib.js";
+import { callerOf, scopeOf, opsToolAllowed, readOnlySql, repoPathOk, codeTaskText, scheduleWhen, safeToolName, sliceLines, OPS_READ_ONLY, validateRequest, loopInstance, requesterOk, DRAIN_PER_TICK, EMPTY_TEXT, lastStepText, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute } from "./src/lib.js";
 const here = (p) => new URL(p, import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
@@ -87,12 +87,16 @@ ok(/tool fleet_sql \{"sql":"SELECT 1"\} -> \{"ok":true,"rows":1\}/.test(toolTran
 ok(codeSessionNeurons("@cf/deepseek-ai/deepseek-v4-flash-0731", 1000, 500) === 100, "CodeSession estimates DeepSeek Flash neurons from input/output tokens");
 ok(codeSessionNeurons("@cf/deepseek-ai/deepseek-v4-pro-0813", 1000, 500) === 300, "CodeSession uses the higher Pro neuron rate");
 ok(codeSessionNeurons("unknown-model", 1000, 500) === 0 && codeSessionCost(100) === 0.0011, "unknown models do not invent neuron usage and cost follows the published neuron price");
+ok(isDynamicRoute("dynamic/standard") && isDynamicRoute("dynamic/qnfo-agentic"), "model overrides accept named AI Gateway dynamic routes");
+ok(!isDynamicRoute("@cf/zai-org/glm-5.3-flash") && !isDynamicRoute("dynamic/") && !isDynamicRoute("dynamic/standard/v2"), "model overrides reject provider models and malformed dynamic routes");
 const ts = readFileSync(here("./src/index.ts"), "utf8");
+ok(/const DEFAULT_MODEL = "dynamic\/standard";/.test(ts) && /row && isDynamicRoute\(row\.value\)/.test(ts), "agent turns default to dynamic/standard and accept only dynamic-route overrides");
+ok(/modelFor\(this\.env, "code-session"\)/.test(ts) && !/fallback:\s*\[/.test(ts) && !/CODE_SESSION_PRO/.test(ts), "CodeSession shares dynamic routing without a consumer-owned model fallback");
 ok(/result = String\(out\.text \|\| ""\)\.trim\(\) \|\| lastStepText\(out\.steps\);/.test(ts) && /if \(!result\) \{[\s\S]{0,200}generateText\(\{ model: m\.model[^\n]*FINAL_ANSWER_ASK, abortSignal/.test(ts), "an empty turn gets one more call, without tools");
 ok(/result = result \|\| EMPTY_TEXT;/.test(ts) && EMPTY_TEXT === "(the model returned no text)", "an answer that stays empty still says so");
 ok(/export class CodeSession extends Agent/.test(ts) && /CREATE TABLE IF NOT EXISTS code_session_events/.test(ts), "CodeSession persists session and ordered event state in its Durable Object");
 ok(/for await \(const part of out\.fullStream\)/.test(ts) && /part\.type === "text-delta"/.test(ts) && /part\.type === "tool-result"/.test(ts), "CodeSession emits text and tool events as the model stream runs");
-ok(/fallback: remaining >= 10000 \? \[CODE_SESSION_PRO\] : \[\]/.test(ts) && /CODE_SESSION_NEURON_BUDGET = 100000/.test(ts), "a session budget controls Pro escalation without blocking the Flash route");
+ok(/CODE_SESSION_NEURON_BUDGET = 100000/.test(ts) && /codeSessionNeurons\(CODE_SESSION_NEURON_BASELINE, inputTokens, outputTokens\)/.test(ts), "CodeSession retains neuron-budget and cost accounting with route-owned fallback");
 ok(/cf_agent_session_usage/.test(ts) && /input_tokens, output_tokens, neurons, cost_usd/.test(ts), "each completed streamed turn records tokens, neurons and estimated cost");
 ok(/function codeSessionStream/.test(ts) && /text\/event-stream/.test(ts) && /last-event-id/.test(ts), "authenticated SSE reconnects from its last event id");
 ok(/CodeSession: DurableObjectNamespace<CodeSession>/.test(ts) && /name = "CodeSession"\nclass_name = "CodeSession"/.test(toml) && /\[exports\.CodeSession\]/.test(toml), "CodeSession has an exported SQLite-backed Durable Object binding");
