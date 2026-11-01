@@ -17,17 +17,23 @@ function fnText(src, name) {
 }
 // AI-STAGE-ATTRIBUTION-2 (qnfo-research-exec 0.16.0): the wrapper may delegate the Proxy to __aiAttrBinding(ai, db, worker, attrCtx)
 // so the stage travels in a per-env context instead of a module global; the slice then carries both functions.
+// CF-OBS-ISSUE-1: the wrapper also calls d1AttrWriteSkip(), the D1 overload breaker defined just above it at module level. A slice without it
+// ends in a ReferenceError that the wrapper catches, so nothing is recorded and the suite sees "0" (qnfo-ai, red on main 2026-11-01).
 function extract(src) {
   const env = fnText(src, "__aiAttrEnv");
   if (!env) return null;
   const binding = fnText(src, "__aiAttrBinding");
-  return binding ? env + "\n" + binding : env;
+  const body = binding ? env + "\n" + binding : env;
+  if (!/\bd1AttrWriteSkip\b/.test(body)) return body;
+  const breaker = (src.match(/var __d1OverloadedUntil = [^\n]*;/) || [""])[0];
+  return breaker + "\n" + (fnText(src, "d1AttrWriteSkip") || "") + "\n" + body;
 }
 for (const w of WORKERS) {
   const src = readFileSync(new URL("../" + w + "/worker.js", import.meta.url), "utf8");
   const fn = extract(src);
   ok(!!fn && /PROMPT-CACHE-1/.test(fn), w + ": wrapper carries PROMPT-CACHE-1");
   if (!fn) continue;
+  ok(!/\bd1AttrWriteSkip\b/.test(fn) || /function d1AttrWriteSkip\(/.test(fn), w + ": the slice defines every helper the wrapper calls (d1AttrWriteSkip)");
   const rates = (src.match(/var __AI_ATTR_RATES = \{[^\n]*\};/) || ["var __AI_ATTR_RATES = {};"])[0];
   const ctx = vm.createContext({ Proxy, Reflect, Object, JSON, Number, String, Math, Date, __AI_ATTR_STAGE: "", console });
   vm.runInContext(rates + "\n" + fn + "\nthis.__aiAttrEnv = __aiAttrEnv;", ctx);
