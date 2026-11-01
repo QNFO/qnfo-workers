@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 const read = (file) => readFileSync(new URL(file, import.meta.url), "utf8");
 const migration = read("./2026-11-01-issue-age-live-doers.sql");
+const change = read("./2026-11-01-issue-drain-ratio-secondary-notices.sql");
 const old = read("./2026-10-28-issue-age-ladder-breach-doctor.sql");
 const db = new DatabaseSync(":memory:");
 db.exec(`
@@ -17,9 +18,11 @@ db.exec(`
   CREATE TABLE fleet_tick_heavy (id INTEGER PRIMARY KEY, source TEXT);
   CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
   CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, formula TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);
-  CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, expected_cadence_h INTEGER, status TEXT, precondition TEXT, action TEXT, escalate_to TEXT);
+  CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, expected_cadence_h INTEGER, status TEXT, precondition TEXT, action TEXT, escalate_to TEXT, module TEXT);
   CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
   CREATE TABLE decision_log (actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
+  CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT, kind TEXT, guards_against TEXT, critical_path INTEGER, disposition TEXT, disposition_state TEXT, alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT, issue_id INTEGER);
+  CREATE TABLE control_alternate_probes (control TEXT PRIMARY KEY, probe_sql TEXT, window_note TEXT, enabled INTEGER, last_run_at TEXT, last_pass INTEGER, last_pass_at TEXT, last_observed TEXT);
   CREATE VIEW v_sla_breaches AS SELECT i.id, i.priority, i.category, NULL AS rc, NULL AS owner, NULL AS sla_due_at, NULL AS triage_state, 'untriaged' AS breach_type FROM agent_issues i WHERE i.status = 'open' AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = i.id);
   INSERT INTO metric_registry VALUES ('issues_over_24h_no_doer', 'old formula', NULL, NULL, NULL);
   INSERT INTO remediation_contracts (class, issue_id, verify_probe) VALUES ('issue-100299', 100299, 'original seven-day metric probe');
@@ -28,6 +31,8 @@ db.exec(`
   END;
 `);
 db.exec(old);
+db.exec(migration);
+db.exec(change);
 const now = Math.floor(Date.now() / 1000) * 1000;
 const iso = (minutes) => new Date(now + minutes * 60000).toISOString().replace(/\.\d+Z$/, "Z");
 const issue = (id, hours, priority = "medium", description = "code-task: repo=qnfo-workers path=x/worker.js") =>
@@ -85,21 +90,32 @@ assert.equal(ladder(12).priority, "medium", "a claimed issue is not reassigned o
 assert.ok(db.prepare("SELECT 1 FROM v_sla_breaches WHERE id = 1 AND breach_type = 'issue-age-24h'").get());
 assert.equal(db.prepare("SELECT blocker FROM issue_age_actions WHERE issue_id = 7 AND rung = '24h'").get().blocker, "task failed");
 const repairCount = () => db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'ISSUE-AGE-24H-REPAIR-1:%'").get().n;
-assert.equal(repairCount(), 12, "repair filing is bounded per tick");
+assert.equal(repairCount(), 0, "secondary repair notices are filtered");
+assert.ok(db.prepare("SELECT 1 FROM issue_age_actions WHERE issue_id = 1 AND rung = '24h'").get(), "the original issue retains its age action");
+assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric = 'issues_over_24h_no_doer'").get().last_value,
+  String(db.prepare("SELECT COUNT(*) AS n FROM issue_age_tick_state WHERE breach = 1").get().n), "the age-breach metric still refreshes");
+const alternate = db.prepare("SELECT probe_sql FROM control_alternate_probes WHERE control = 'issue-age-repair-secondary-notice'").get().probe_sql;
+assert.equal(db.prepare(alternate).get().observed, "ok", "the alternate path retains every overdue issue in the ledger and breach view");
 tick();
 const after = repairCount();
 tick();
-assert.equal(repairCount(), after, "open repairs are not duplicated");
+assert.equal(repairCount(), after, "later ticks do not add redundant repair notices");
 assert.equal(ladder(19).priority, "medium", "8h escalation happens only once");
 const repair = db.prepare("SELECT c.* FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id WHERE a.title = 'ISSUE-AGE-24H-REPAIR-1: issue #1 has no live doer'").get();
-assert.equal(db.prepare(repair.verify_probe).get().observed, "1");
-task(1, "queued");
-assert.equal(db.prepare(repair.verify_probe).get().observed, "0", "repair closes only on recovery");
+assert.equal(repair, undefined, "filtering a duplicate notice does not create a notice contract");
 assert.equal(db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-100299'").get().verify_probe, "original seven-day metric probe");
 const detector = db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-issue-age-phantom-doer'").get().verify_probe;
 assert.equal(db.prepare(detector).get().observed, "0");
 db.exec(migration);
-assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n, 1);
+db.exec(change);
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n, 2);
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM control_alternate_probes WHERE control = 'issue-age-repair-secondary-notice'").get().n, 1);
+db.exec(change.match(/^-- Rollback: (.+)$/m)[1]);
+assert.equal(db.prepare("SELECT value FROM ops_config WHERE key = 'issue_age_repair_notices'").get().value, "on");
+assert.equal(db.prepare("SELECT disposition FROM control_registry WHERE control = 'issue-age-repair-secondary-notice'").get().disposition, "remove");
+assert.equal(db.prepare("SELECT enabled FROM control_alternate_probes WHERE control = 'issue-age-repair-secondary-notice'").get().enabled, 0);
+tick();
+assert.equal(repairCount(), 12, "the rollback switch restores the prior bounded notice behavior");
 db.exec(migration.match(/^-- Rollback: (.+)$/m)[1]);
 assert.equal(ladder(1).doer, "code-task line", "rollback restores prior accounting");
 assert.equal(db.prepare("SELECT formula FROM metric_registry").get().formula, "old formula");
