@@ -83,6 +83,7 @@ old.mkdir()
 st, js = post({"id": "7", "job": {}})
 ok(st == 202 and js.get("id") == "7", "a plain id is accepted", [st, js])
 ok(wait_done("7"), "the job ran to done", server.JOBS.get("7"))
+ok(rendered == [str(old)], "the renderer is handed exactly the validated directory", rendered)
 ok(not (old / "stale.txt").exists() and (old / "o.mp4").exists(), "a re-submitted job's old directory is cleared, then rendered into")
 st, js = post({"job": {}})
 ok(st == 202 and js.get("id") == "job", "no id still means the default job id", [st, js])
@@ -104,7 +105,8 @@ if (PY) {
 const src = readFileSync(join(container, "server.py"), "utf8");
 const code = src.replace(/"""[\s\S]*?"""/g, ""); // the docstring of job_dir quotes the old call
 ok(!/rmtree\(Path\("\/tmp\/jobs"\)\s*\/\s*jid/.test(code) && !/render\.render\(job, Path\("\/tmp\/jobs"\)\s*\/\s*jid\)/.test(code), "no call still joins the raw id onto /tmp/jobs");
-ok(/jdir = job_dir\(jid\)/.test(code) && /rmtree\(jdir,/.test(code) && /render\.render\(job, JOBS_ROOT \/ jid\)/.test(code), "do_POST validates through job_dir and removes the validated directory");
+ok(/jdir = job_dir\(jid\)/.test(code) && /rmtree\(jdir,/.test(code) && /target=work, args=\(jid, jdir, body\["job"\]\)/.test(code) && /render\.render\(job, jdir\)/.test(code), "do_POST validates through job_dir and both removes and renders into the validated directory");
+ok(/os\.path\.normpath\(os\.path\.join\(root, jid\)\)/.test(code) && /full\.startswith\(root \+ os\.sep\)/.test(code), "job_dir normalises the joined path and checks it sits under the root before any file system call on it");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
