@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.4-codeagent";
+var VERSION = "0.40.5-codeagent";
+/* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
@@ -1202,12 +1203,14 @@ async function aiGatewayRun(env, modelId, input, meta) {
   if (b) b.used += (Number(u.prompt_tokens) || 0) + (Number(u.completion_tokens) || 0);
   return resp && typeof resp === "object" ? Object.assign({}, resp, { __q08Model: model }) : { response: resp, __q08Model: model };
 }
-async function readerTest(env, modelId, text, rprompt) {
+async function readerTest(env, modelId, text, rprompt, cacheSuffix) {
   try {
     var essay = stripAnalysisMark(String(text || "").replace(/\n?worth your time:[^\n]*$/im, "").trim()).slice(0, 9000);
     meterCall(env, "panel");
     // BP26-AI-GATEWAY-BUDGETS-1: through AI Gateway with loop metadata; the fixed judge prompt per essay is deterministic, so it is cached.
-    var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: (rprompt || READER_PROMPT) + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "panel", deterministic: true, cacheKey: String(modelId) + "-panel-" + seedOf(essay), signal: AbortSignal.timeout(90000) });
+    var prompt = rprompt || READER_PROMPT;
+    var cacheKey = String(modelId) + "-panel-" + seedOf(prompt) + "-" + seedOf(essay) + (cacheSuffix ? "-" + String(cacheSuffix) : "");
+    var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: prompt + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "panel", deterministic: true, cacheKey: cacheKey, signal: AbortSignal.timeout(90000) });
     var out = aiReplyText(resp);
     var v = parseReaderVerdict(String(out).replace(/<think>[\s\S]*?<\/think>/gi, ""));
     if (v) { v.model = modelId; v.family = familyOf(modelId); }
@@ -1228,13 +1231,13 @@ function aggregatePanel(judges) {
   j.forEach(function (x) { (x.tells || []).forEach(function (t) { if (tells.indexOf(t) < 0 && tells.length < 5) tells.push(t); }); if (x.fix && fixes.indexOf(x.fix) < 0) fixes.push(x.fix); });
   return { judges: j, n: j.length, mean: Math.round(mean * 100) / 100, pass: mean >= PANEL_PASS_MEAN && wr >= 1 && j.every(function (x) { return x.score >= 3; }), fix: fixes.join(" | ").slice(0, 500), tells: tells };
 }
-async function panelRead(env, text, exclude, seed, k, rprompt) {
+async function panelRead(env, text, exclude, seed, k, rprompt, cacheSuffix) {
   var want = k || 2;
   var mode = await panelOrderMode(env);
   var ids = pickPanel(exclude, want + 2, seed, mode === "measured" ? await reviewerHealth(env) : undefined, mode);
   var first = ids.slice(0, want), spare = ids.slice(want);
-  var got = await Promise.all(first.map(function (id) { return readerTest(env, id, text, rprompt); }));
-  for (var i = 0; i < got.length; i++) { if (!got[i] && spare.length) got[i] = await readerTest(env, spare.shift(), text, rprompt); }
+  var got = await Promise.all(first.map(function (id) { return readerTest(env, id, text, rprompt, cacheSuffix); }));
+  for (var i = 0; i < got.length; i++) { if (!got[i] && spare.length) got[i] = await readerTest(env, spare.shift(), text, rprompt, cacheSuffix); }
   return aggregatePanel(got);
 }
 // Mean pairwise agreement of the two judges in each panel read, as a phi coefficient over pass/fail, and the implied number of
@@ -2284,7 +2287,9 @@ function publishBody(text) { return stripAnalysisMark(String(text || "").replace
 async function finalRead(env, text, writerModel, seedText) {
   var n = publishBody(text).length;
   if (n < PUBLISH_MIN_CHARS) return { ok: false, rows: [], problems: ["final read: too short to publish (" + n + " chars of body; floor " + PUBLISH_MIN_CHARS + ")"] };
-  var p = await panelRead(env, text, [familyOf(writerModel)], seedOf(seedText) + 7, 2, FINAL_READER_PROMPT);
+  var finalSeed = seedOf(seedText) + 7;
+  var p = await panelRead(env, text, [familyOf(writerModel)], finalSeed, 2, FINAL_READER_PROMPT);
+  if (!p) p = await panelRead(env, text, [familyOf(writerModel)], finalSeed + 1, 2, FINAL_READER_PROMPT, "final-read-retry-1");
   if (!p) return { ok: false, rows: [{ round: 9, role: "panel_unavailable", model: "", family: "", pass: 0 }], problems: ["final read: no reader verdict (fails closed)"] };
   var ok = p.mean >= FINAL_PASS_MEAN && p.judges.every(function (j) { return j.score >= 3; });
   var rows = panelRows(p, 9);
