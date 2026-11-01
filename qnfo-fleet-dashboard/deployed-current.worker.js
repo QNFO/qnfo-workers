@@ -11,7 +11,8 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.78.0"; // 1.78.0 RM-CODE-SESSION-1 (pillar autonomy; minor): owner command turns enter resumable CodeSession streams, with the existing ops agent as fallback. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+var VERSION = "1.79.0"; // 1.78.0 RM-CODE-SESSION-1 (pillar autonomy; minor): owner command turns enter resumable CodeSession streams, with the existing ops agent as fallback. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+// 1.79.0 HA-DEGRADED-READ-1 (issue 2607, pillar reach; minor): a bot-filtered RUM result that sharply conflicts with accepted history is held for one refresh; the next read is accepted and its guard verdict is recorded.
 // 1.77.4 ERRATA-CHAIN-DISPATCH-1 + WORKER-OBSERVABILITY-1 (conflict integration): preserve both the folded errata consumer dispatch and affected-service observability changes.
 /* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
@@ -4292,6 +4293,74 @@ function rumDaysCovered(rows) {
 var HA_PUBLIC_HOSTS = ["qnfo.org", "www.qnfo.org", "papers.qnfo.org", "archive.qnfo.org", "legal.qnfo.org", "ipatent.qnfo.org", "q08.org", "www.q08.org", "reading.q08.org", "ask.qwav.tech", "qwav.tech", "www.qwav.tech", "qwav.org", "www.qwav.org"];
 var HA_FLEET_HOST_RE = /(^|\.)(qnfo\.(org|net|uk)|q08\.org|qwav\.(tech|org|net|uk)|q-wave\.tech|qwave\.tech|ipatent\.me|empoweringchange\.today|workers\.dev|pages\.dev|localhost)$/i;
 var HA_DAYS = 7;
+var RUM_GUARD_ROWS_FLOOR = 0.5;
+var RUM_GUARD_MIN_BASE_ROWS = 10;
+var RUM_GUARD_LOADS_CORROBORATE = 0.8;
+var RUM_GUARD_TOTAL_FLOOR = 0.5;
+var RUM_GUARD_EXT_BASE = 50;
+var RUM_GUARD_COLLAPSE = 0.75;
+var RUM_GUARD_EXT_FLOOR = 0.5;
+var RUM_GUARD_AGREE = 0.5;
+var RUM_GUARD_MAX_SKIPS = 1;
+var RUM_GUARD_BASE_ROWS = 7;
+function rumAgree(a, b) {
+  const x = Math.abs(Number(a) || 0), y = Math.abs(Number(b) || 0), hi = Math.max(x, y);
+  return hi === 0 || Math.min(x, y) / hi >= RUM_GUARD_AGREE;
+}
+function rumParseMeta(s) {
+  try { const m = JSON.parse(s); return m && typeof m === "object" ? m : null; } catch (e) { return null; }
+}
+function humanAudienceTotal(m) {
+  return (Number(m && m.external) || 0) + (Number(m && m.continuation) || 0) + (Number(m && m.direct) || 0);
+}
+function humanAudienceGuard(t, prev) {
+  if (!prev || !(Number(prev.rows) > 0)) return null;
+  const pr = Number(prev.rows), pe = Number(prev.external) || 0, pt = humanAudienceTotal(prev), tt = humanAudienceTotal(t);
+  if (pr >= RUM_GUARD_MIN_BASE_ROWS && t.rows < RUM_GUARD_ROWS_FLOOR * pr) {
+    if (pt > 0 && tt < RUM_GUARD_LOADS_CORROBORATE * pt) return "rows " + t.rows + " are under half of the previous " + pr + " and page loads " + tt + " are under 80 percent of " + pt;
+    if (t.external === 0 && pe > 0) return "rows " + t.rows + " are under half of the previous " + pr + " and external fell to 0 from " + pe;
+    if (pe >= RUM_GUARD_EXT_BASE && t.external < RUM_GUARD_EXT_FLOOR * pe) return "rows " + t.rows + " are under half of the previous " + pr + " and external " + t.external + " is under half of " + pe;
+  }
+  if (pt > 0 && tt < RUM_GUARD_TOTAL_FLOOR * pt) return "page loads " + tt + " are under half of the previous " + pt;
+  if (t.external === 0 && pe >= RUM_GUARD_EXT_BASE && t.rows < RUM_GUARD_COLLAPSE * pr) return "external 0 after " + pe + " with rows " + t.rows + " of the previous " + pr;
+  return null;
+}
+function rumGuardDecide(reason, skipped, agree) {
+  if (!reason) return { hold: false, note: null };
+  if (skipped.length >= RUM_GUARD_MAX_SKIPS) return { hold: false, note: agree(skipped[0]) ? "accepted: agrees with the previous held read" : "accepted: hold expired after " + skipped.length + " held read" + (skipped.length === 1 ? "" : "s") };
+  return { hold: true, note: null };
+}
+function rumTrustedMeta(m) {
+  if (!m || m.guard !== "ok") return false;
+  const n = String(m.guard_note == null ? "" : m.guard_note);
+  return n === "" || /^(first write|accepted:)/.test(n);
+}
+function humanAudienceBaseline(list) {
+  const rows = [];
+  for (const x of list || []) { const m = rumParseMeta(x && x.meta); if (m) rows.push({ ts: x.ts, m: m }); }
+  if (!rows.length) return null;
+  let pick = rows.find(function(r) { return rumTrustedMeta(r.m); });
+  const passed = !!pick;
+  if (!pick) { pick = rows[0]; for (const r of rows) if ((Number(r.m.rows) || 0) > (Number(pick.m.rows) || 0)) pick = r; }
+  const m = pick.m;
+  return { ts: pick.ts, rows: Number(m.rows) || 0, external: Number(m.external) || 0, continuation: Number(m.continuation) || 0, direct: Number(m.direct) || 0, passed: passed };
+}
+async function humanAudienceGuardCheck(A, t) {
+  let prev = null, skipped = [];
+  try {
+    const p = (await A.prepare("SELECT ts, meta FROM cloud_ops_events WHERE kind = 'human-audience' ORDER BY ts DESC LIMIT " + RUM_GUARD_BASE_ROWS).all()).results || [];
+    prev = humanAudienceBaseline(p);
+    if (p.length) {
+      const s = (await A.prepare("SELECT ts, meta FROM cloud_ops_events WHERE kind = 'human-audience-degraded' AND ts > ?1 ORDER BY ts DESC LIMIT 6").bind(p[0].ts).all()).results || [];
+      skipped = s.map(function(x) { return rumParseMeta(x.meta) || {}; });
+    }
+  } catch (e) {
+    return { hold: false, reason: null, note: "guard state unreadable: " + String(e && e.message || e).slice(0, 80), prev: null, skipped: [] };
+  }
+  const reason = humanAudienceGuard(t, prev);
+  const d = rumGuardDecide(reason, skipped, function(s) { return rumAgree(t.rows, s.rows) && rumAgree(humanAudienceTotal(t), s.total); });
+  return { hold: d.hold, reason: reason, note: d.note || (prev ? null : "first write: no previous run"), prev: prev, skipped: skipped };
+}
  // RUMCOUNT-EMPTY-WINDOW-1 fix: treat empty-but-successful RUM reads as null to avoid zero pageviews misleading output
  if (typeof rumCount === "function") {
    const _origRumCount = rumCount;
@@ -4331,6 +4400,17 @@ async function refreshHumanAudience(env, nowMs) {
   if (groups.length >= REACH_RUM_LIMIT) return { value: null, why: "the RUM read hit the group limit, so the totals would be lower bounds" };
   const t = humanAudienceTally(groups);
   const A = env.AUDIT;
+  const gd = await humanAudienceGuardCheck(A, t);
+  if (gd.hold) {
+    let recorded = false;
+    try {
+      await A.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'human-audience-degraded', ?3, ?4, 'qnfo-fleet-dashboard', 'ok')").bind("human-audience-degraded-" + nowIso.slice(0, 16), nowIso, ("human audience read held: " + gd.reason + " (external " + t.external + ", continuation " + t.continuation + ", direct " + t.direct + "; the previous value stays)").slice(0, 500), JSON.stringify({ guard: "degraded: " + gd.reason, external: t.external, continuation: t.continuation, direct: t.direct, total: humanAudienceTotal(t), rows: t.rows, days: HA_DAYS, prev: { ts: gd.prev.ts, rows: gd.prev.rows, external: gd.prev.external, total: humanAudienceTotal(gd.prev), passed: gd.prev.passed }, held: gd.skipped.length + 1 })).run();
+      recorded = true;
+    } catch (e) {
+    }
+    if (recorded) return { value: null, why: "degraded read held (" + gd.reason + ")" };
+    gd.note = "degraded read not held: the human-audience-degraded row could not be written";
+  }
   for (const sql of HA_REGISTRY) await A.prepare(sql).run();
   await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'external_referred_pageviews_7d'").bind(String(t.external), nowIso).run();
   await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'continuation_pageviews_7d'").bind(String(t.continuation), nowIso).run();
@@ -4338,7 +4418,9 @@ async function refreshHumanAudience(env, nowMs) {
   const refs = {};
   for (const k of top) refs[k] = t.refs[k];
   try {
-    await A.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'human-audience', ?3, ?4, 'qnfo-fleet-dashboard', 'ok')").bind("human-audience-" + day, nowIso, ("human audience 7d: external " + t.external + ", continuation " + t.continuation + ", direct " + t.direct + "; top referrers " + (top.map(function(k) { return k + ":" + t.refs[k]; }).join(", ") || "none")).slice(0, 500), JSON.stringify({ external: t.external, continuation: t.continuation, direct: t.direct, rows: t.rows, refs: refs, days: HA_DAYS })).run();
+    const meta = { external: t.external, continuation: t.continuation, direct: t.direct, rows: t.rows, refs: refs, days: HA_DAYS, guard: "ok" };
+    if (gd.note) meta.guard_note = gd.note;
+    await A.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'human-audience', ?3, ?4, 'qnfo-fleet-dashboard', 'ok')").bind("human-audience-" + day, nowIso, ("human audience 7d: external " + t.external + ", continuation " + t.continuation + ", direct " + t.direct + "; top referrers " + (top.map(function(k) { return k + ":" + t.refs[k]; }).join(", ") || "none")).slice(0, 500), JSON.stringify(meta)).run();
   } catch (e) {
   }
   try {
