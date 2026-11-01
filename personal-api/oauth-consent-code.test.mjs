@@ -111,6 +111,7 @@ ok(r.status === 302 && u && u.searchParams.get("error") === "access_denied" && u
 r = await call("/oauth/authorize?" + new URLSearchParams(Object.assign({}, base, { client_id: "twin-nope" })).toString(), { redirect: "manual" });
 ok(r.status === 400, "an unknown client is refused before any consent");
 
-ok(/COMPANION-MCP-CONSENT-CODE-1/.test(src) && /var VERSION = "4\.2[1-9]|var VERSION = "[5-9]\./.test(src), "worker.js carries the marker and a version at or above 4.21.0");
+const version = /^var VERSION = "(\d+)\.(\d+)\./m.exec(src);
+ok(/COMPANION-MCP-CONSENT-CODE-1/.test(src) && version && (Number(version[1]) > 4 || Number(version[1]) === 4 && Number(version[2]) >= 21), "worker.js carries the marker and a version at or above 4.21.0");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

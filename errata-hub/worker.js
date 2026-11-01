@@ -11,7 +11,7 @@ function rxSecretEqual(given, expected) {
   for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-var VERSION = "1.9.2-confirm-json-repair"; // 1.9.1 ERRATA-DEFER-SINK-1 (2026-10-26, agent_issues 100449): the internal confirm takes the oldest rows first and a row that defers sinks behind the rest (it was RANDOM()). // 1.9.0 ERRATA-ROUTE-PER-PAPER-1 + PAPER-CONFIRM-FALLBACK-1 (2026-10-26, agent_issues 1000293 and 1000292): one remediation row per paper, errata_actions routed -> verified when the corrected version is published, the confirm excerpt centred on the claim's own quotation (folded into qnfo-research-exec 0.37.0). // 1.8.2 PAPER-LEDGER-ATTRIBUTION-2 (2026-10-26): repointStores sets papers.change_actor and change_reason on its corrected-text UPDATE, so living-paper paper_change_ledger no longer files the correction as unattributed. 1.8.1 ERRATA-CONFIRM-COST-1 (2026-10-26): internal confirm deepseek-v4-flash then kimi-k2.6, 24k excerpt, ops_config errata_confirm_max (folded into qnfo-research-exec 0.34.0). // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.9.5-confirm-event-id"; // 1.9.1 ERRATA-DEFER-SINK-1 (2026-10-26, agent_issues 100449): the internal confirm takes the oldest rows first and a row that defers sinks behind the rest (it was RANDOM()). // 1.9.0 ERRATA-ROUTE-PER-PAPER-1 + PAPER-CONFIRM-FALLBACK-1 (2026-10-26, agent_issues 1000293 and 1000292): one remediation row per paper, errata_actions routed -> verified when the corrected version is published, the confirm excerpt centred on the claim's own quotation (folded into qnfo-research-exec 0.37.0). // 1.8.2 PAPER-LEDGER-ATTRIBUTION-2 (2026-10-26): repointStores sets papers.change_actor and change_reason on its corrected-text UPDATE, so living-paper paper_change_ledger no longer files the correction as unattributed. 1.8.1 ERRATA-CONFIRM-COST-1 (2026-10-26): internal confirm deepseek-v4-flash then kimi-k2.6, 24k excerpt, ops_config errata_confirm_max (folded into qnfo-research-exec 0.34.0). // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21859,7 +21859,7 @@ async function internalConfirmMax(env) {
 }
 async function logConfirmDefer(env, row, why) {
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'errata_confirm_defer', 'qnfo-research-exec', ?)").bind(("queue row " + row.id + ": " + why).slice(0, 450)).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES (?, ?, 'errata_confirm_defer', 'qnfo-research-exec', ?)").bind(crypto.randomUUID(), new Date().toISOString(), ("queue row " + row.id + ": " + why).slice(0, 450)).run();
   } catch (e) {
     console.error("[errata-hub] internal confirm: defer event write failed:", String(e && e.message || e).slice(0, 160));
   }
@@ -21881,6 +21881,8 @@ function confirmReplyText(res) {
   const ch = res.choices && res.choices[0] && res.choices[0].message;
   if (ch && typeof ch.content === "string") return ch.content;
   if (res.result && typeof res.result.response === "string") return res.result.response;
+  if (typeof res.output_text === "string") return res.output_text;
+  if (typeof res.reasoning === "string") return res.reasoning;
   if (Array.isArray(res.output)) {
     for (const o of res.output) {
       if (!o || o.type === "reasoning" || !Array.isArray(o.content)) continue;
@@ -21980,22 +21982,44 @@ async function settleInternalErratum(env, row, status, note) {
       .bind(status, ("\nERRATA-INTERNAL-CONFIRM-1 " + now + " (" + status + "): " + note).slice(0, 1200), now, row.subject).run();
   }
 }
-// ERRATA-DEFER-SINK-1 (1.9.1, 2026-10-26, agent_issues 100449): the selector is oldest-first by updated_at (it was RANDOM(), so a six-day-old row waited like any
-// other), and a row that defers is touched (updated_at = now) so it sinks behind every row not yet tried instead of holding a slot for good. Each defer is still a
-// cloud_ops_events row (logConfirmDefer). A defer for a missing binding is not touched: it is no property of the row.
-async function touchDeferredErratum(env, row) {
+// ERRATA-DEFER-REASON-1 (1.9.3, 2026-10-30, issue #3800): report bounded defer causes in the tick. ERRATA-CONFIRM-RETRY-CAP-1
+// (1.9.4): reasoning-only model replies are parsed, while repeated failures are recorded in internal_errata.remediation and
+// move the queue row to internal-blocked after three attempts, using errata_queue.internal_confirm_tries as the durable counter.
+// This prevents a poison row cycling forever while retaining its reason.
+var INTERNAL_DEFER_REASONS_MAX = 5;
+var INTERNAL_CONFIRM_DEFER_MAX = 3;
+function noteConfirmDefer(out, row, why) {
+  if (out.defer_reasons.length < INTERNAL_DEFER_REASONS_MAX) out.defer_reasons.push({ id: row.id, why: String(why || "unknown").slice(0, 160) });
+}
+async function recordConfirmDefer(env, row, why) {
+  let updated;
   try {
-    await env.WATCH_DB.prepare("UPDATE errata_queue SET updated_at = datetime('now') WHERE id = ?1 AND status = 'internal-open'").bind(row.id).run();
+    updated = await env.WATCH_DB.prepare("UPDATE errata_queue SET internal_confirm_tries = COALESCE(internal_confirm_tries, 0) + 1, status = CASE WHEN COALESCE(internal_confirm_tries, 0) + 1 >= ?1 THEN 'internal-blocked' ELSE 'internal-open' END, updated_at = datetime('now') WHERE id = ?2 AND status = 'internal-open' RETURNING internal_confirm_tries, status")
+      .bind(INTERNAL_CONFIRM_DEFER_MAX, row.id).first();
   } catch (e) {
-    console.error("[errata-hub] internal confirm: defer touch failed:", String(e && e.message || e).slice(0, 160));
+    console.error("[errata-hub] internal confirm: defer counter write failed:", String(e && e.message || e).slice(0, 160));
+    return { tries: Number(row.internal_confirm_tries) || 0, blocked: false, error: "defer counter write failed" };
   }
+  if (!updated) return { tries: Number(row.internal_confirm_tries) || 0, blocked: false, settled: true };
+  const tries = Number(updated.internal_confirm_tries) || 0;
+  const blocked = updated.status === "internal-blocked";
+  const note = ("\nERRATA-INTERNAL-CONFIRM-DEFER-1 " + new Date().toISOString() + " (" + tries + "/" + INTERNAL_CONFIRM_DEFER_MAX + "): " + String(why || "unknown")).slice(0, 360);
+  try {
+    const auditDb = env.QNFO_AUDIT || env.WATCH_DB;
+    await auditDb.prepare("UPDATE internal_errata SET remediation = substr(COALESCE(remediation, '') || ?1, -4000), updated_at = datetime('now') WHERE id = ?2")
+      .bind(note, row.subject).run();
+  } catch (e) {
+    console.error("[errata-hub] internal confirm: defer reason write failed:", String(e && e.message || e).slice(0, 160));
+    return { tries: tries, blocked: blocked, error: "defer reason write failed" };
+  }
+  return { tries: tries, blocked: blocked };
 }
 async function confirmInternalErrata(env) {
   const max = await internalConfirmMax(env);
-  const out = { ok: true, max: max, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [], models: {} };
+  const out = { ok: true, max: max, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, blocked: 0, defer_reasons: [], ids: [], models: {} };
   let rows = [];
   try {
-    rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY updated_at ASC, id ASC LIMIT ?2")
+    rows = (await env.WATCH_DB.prepare("SELECT q.id, q.sender, q.subject, q.paper_doi, q.claim, q.internal_confirm_tries FROM errata_queue q WHERE q.status = 'internal-open' AND datetime(q.created_at) < datetime('now', ?1) ORDER BY q.updated_at ASC, q.id ASC LIMIT ?2")
       .bind(INTERNAL_CONFIRM_MIN_AGE, max).all()).results || [];
   } catch (e) {
     out.ok = false;
@@ -22005,6 +22029,20 @@ async function confirmInternalErrata(env) {
   }
   out.candidates = rows.length;
   const startedAt = Date.now();
+  const defer = async function(row, why) {
+    out.deferred++;
+    noteConfirmDefer(out, row, why);
+    const r = await recordConfirmDefer(env, row, why);
+    if (r.blocked) {
+      out.blocked++;
+      if (out.ids.length < INTERNAL_DEFER_REASONS_MAX) out.ids.push(row.id + ":internal-blocked");
+    }
+    if (r.error) {
+      out.ok = false;
+      noteConfirmDefer(out, row, r.error);
+    }
+    return r;
+  };
   for (const row of rows) {
     if (Date.now() - startedAt > INTERNAL_CONFIRM_BUDGET_MS) {
       out.skipped_budget = rows.length - rows.indexOf(row);
@@ -22018,7 +22056,7 @@ async function confirmInternalErrata(env) {
         continue;
       }
       if (!env.PAPERS_DB || !env.AI) {
-        out.deferred++;
+        await defer(row, "no PAPERS_DB or AI binding");
         console.error("[errata-hub] internal confirm: no PAPERS_DB or AI binding; queue row " + row.id + " waits");
         continue;
       }
@@ -22031,9 +22069,8 @@ async function confirmInternalErrata(env) {
         continue;
       }
       if (!String(paper.body_md || "").trim()) {
-        out.deferred++;
+        await defer(row, "paper " + paper.slug + " has no body");
         console.error("[errata-hub] internal confirm: paper " + paper.slug + " has no body; queue row " + row.id + " waits");
-        await touchDeferredErratum(env, row);
         continue;
       }
       let v = null, model = "", lastErr = "";
@@ -22049,10 +22086,9 @@ async function confirmInternalErrata(env) {
         }
       }
       if (!v) {
-        out.deferred++;
+        await defer(row, lastErr || "no model produced a verdict");
         console.error("[errata-hub] internal confirm: no verdict for queue row " + row.id + " (" + lastErr + ")");
         await logConfirmDefer(env, row, lastErr);
-        await touchDeferredErratum(env, row);
         continue;
       }
       const status = v.confirmed ? "detected" : "rejected";
@@ -22063,9 +22099,8 @@ async function confirmInternalErrata(env) {
       out.ids.push(row.id + ":" + status);
     } catch (e) {
       out.ok = false;
-      out.deferred++;
+      await defer(row, "exception: " + String(e && e.message || e));
       console.error("[errata-hub] internal confirm: queue row " + row.id + " failed:", String(e && e.message || e).slice(0, 200));
-      await touchDeferredErratum(env, row);
     }
   }
   return out;

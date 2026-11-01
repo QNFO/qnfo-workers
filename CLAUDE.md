@@ -563,4 +563,7 @@ because each one was broken at least once; the linked issue holds the evidence.
   for a refusal (credits exhausted stops the run and the next 30 minutes), a `ci-watchdog` issue is dispatched first, and a run spends at most 170 reads of the shared PAT.
   The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
   cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1
-  (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository copies of the workflow or of the secret.
+  (`.github/workflows/copilot-pr-lifecycle.yml`). GitHub's REST call that approves a workflow run refuses every run the Copilot agent queued on a branch of this repository
+  (403, 9 of 9 sweeps on 2026-11-01), so no finished Copilot pull request ever had a required check and the lane could not merge any; KICK-GATED-CHECKS-1 starts those checks
+  instead with one `update-branch` of the fleet user credential, pinned to the head, for a finished pull request that changes no DENY_PATHS file (`scripts/copilot-pr-lifecycle.mjs`).
+  A Copilot pull request that changes `.github/`, `scripts/`, yaml, a manifest or a shell file is not started: redo it through the code loop. Do not add per-repository copies of the workflow or of the secret.

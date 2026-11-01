@@ -31,6 +31,7 @@ await build({
 const BANNED_IN_VENDOR = [/@cf\/zai-org\/glm-4\.7-flash/g];
 let bundled = readFileSync("worker.js", "utf8");
 for (const re of BANNED_IN_VENDOR) bundled = bundled.replace(re, "@cf/zai-org/retired-flash");
+bundled = bundled.replace(/(\.exports=`)\t(?=\r?\n)/g, "$1\\t");
 writeFileSync("worker.js", bundled);
 copyFileSync("worker.js", "deployed-current.worker.js");
 console.log("worker.js", (readFileSync("worker.js").length / 1024).toFixed(0) + " KiB, VERSION " + VERSION);

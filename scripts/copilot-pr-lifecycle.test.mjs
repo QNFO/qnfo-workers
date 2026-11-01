@@ -2,7 +2,9 @@
 // Proves: the owner is removed as reviewer and as assignee of a Copilot pull request and of the issue it fixes, a person who is not the owner is left
 // alone, other authors' pull requests and fork heads are never touched; nothing is approved while the agent is still working; a finished agent's gated
 // pull_request runs are approved only when the diff avoids every denied path (workflows, scripts, wrangler and package manifests, shell, Docker, yaml), a
-// withheld approval is explained once per head commit, a 403 on approve is recorded and stops that pull request only; dry sends no write; approve=false
+// withheld approval is explained once per head commit, a 403 on approve is recorded and stops that pull request only; KICK-GATED-CHECKS-1: when GitHub refuses
+// the approval of a Copilot run with 403 and the fleet user credential is present, a finished pull request that avoids every denied path gets one update-branch
+// pinned to its head (never for another refusal, a running agent, a denied path, a dry run, approve=false or a missing credential; capped per run); dry sends no write; approve=false
 // sends no approval; no credential or an unreadable list sends nothing and never throws; the per-run cap defers the rest; the workflow keeps GITHUB_TOKEN
 // as its only secret, a timeout, the runner pin, pinned actions, a base checkout and no pull request text in a run line; lane-poke ignores copilot/** runs.
 // Run: node --no-warnings scripts/copilot-pr-lifecycle.test.mjs   -> prints "N passed, 0 failed"
@@ -54,6 +56,7 @@ function fakeGh(cfg) {
     }
     if ((m = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)$/.exec(path)) && m[1] !== REPO && method === "GET") { const p = (cfg.otherPrs || {})[m[1] + "#" + m[2]]; return p ? reply(200, p) : reply(404, { message: "Not Found" }); }
     if ((m = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)$/.exec(path)) && method === "PATCH") return reply(cfg.patchStatus || 200, {});
+    if ((m = /^\/repos\/QNFO\/qnfo-workers\/pulls\/(\d+)\/update-branch$/.exec(path)) && method === "PUT") return (cfg.kickStatus && cfg.kickStatus[m[1]]) ? reply(cfg.kickStatus[m[1]], { message: "There are no new commits on the base branch." }) : reply(202, { message: "Updating pull request branch." });
     return reply(404, { message: "unexpected " + method + " " + path });
   };
   return { fetchImpl, log, cfg };
@@ -222,6 +225,75 @@ ok(JSON.stringify(linkedIssues("Fixes #12\n\ncloses #5, Resolved: #9 and fixes #
   const g2 = fakeGh(cfg());
   await run(Object.assign({}, base), { fetchImpl: g2.fetchImpl, sleep: async () => {}, now: NOW });
   ok(writes(g2.log).length === 0, "without ORG_TOKEN no draft is closed");
+}
+
+// --- KICK-GATED-CHECKS-1: the REST approval of a Copilot run is refused (403), so a finished pull request's checks are started by one update-branch
+{
+  const gatedFor = (n) => ({ ["sha" + n]: [gatedRun(n * 10 + 1, "sha" + n), gatedRun(n * 10 + 2, "sha" + n)] });
+  const refuse = { 11: 403, 12: 403, 21: 403, 22: 403 };
+  const mk = (over) => fakeGh(Object.assign({
+    prs: [pr(1), pr(2)], events: { 1: FINISHED, 2: FINISHED }, runs: Object.assign({}, gatedFor(1), gatedFor(2)),
+    files: { 1: [f("migrations/a.test.mjs")], 2: [f("qnfo-x/worker.js")] }, approveStatus: refuse
+  }, over || {}));
+  const withOrg = Object.assign({}, base, { orgToken: "ORG" });
+  const puts = (log) => log.filter((c) => c.method === "PUT");
+  const approves = (log) => log.filter((c) => c.method === "POST" && c.path.endsWith("/approve"));
+
+  const g = mk();
+  const s = await run(withOrg, { fetchImpl: g.fetchImpl, sleep: async () => {} });
+  ok(s.kicked.length === 2 && s.kicked[0].pr === 1 && s.kicked[1].pr === 2 && s.errors.length === 0 && s.status === "ok", "a refused approval is followed by one branch update per finished pull request, and the sweep is ok", s);
+  ok(puts(g.log).length === 2 && puts(g.log).every((c) => /^\/repos\/QNFO\/qnfo-workers\/pulls\/\d+\/update-branch$/.test(c.path)), "the update goes to the pull request's update-branch route", puts(g.log).map((c) => c.path));
+  ok(puts(g.log)[0].body.expected_head_sha === "sha1" && puts(g.log)[1].body.expected_head_sha === "sha2" && Object.keys(puts(g.log)[0].body).join() === "expected_head_sha", "the update is pinned to the head that was judged and carries nothing else", puts(g.log).map((c) => c.body));
+  ok(puts(g.log).every((c) => c.auth === "Bearer ORG") && approves(g.log).every((c) => c.auth === "Bearer t"), "the update uses the fleet user credential and the approval keeps the workflow token");
+  ok(approves(g.log).length === 2, "a refused approval stops that pull request's other runs: one approval attempt per pull request", approves(g.log).map((c) => c.path));
+  ok(s.skipped["kick-over-cap"] === undefined && typeof s.calls_kick === "number" && s.calls_kick === 2, "the calls of the kick are counted", s.calls_kick);
+
+  // The next sweep: the new head's runs belong to the owner, so nothing is gated and nothing is sent again.
+  const again = fakeGh({ prs: [pr(1, { head: { sha: "sha1b", ref: "copilot/x-1", repo: { full_name: REPO } } })], events: { 1: FINISHED }, runs: { sha1b: [gatedRun(13, "sha1b", { actor: user("rwnq8") })] }, files: { 1: [f("migrations/a.test.mjs")] } });
+  const sa = await run(withOrg, { fetchImpl: again.fetchImpl, sleep: async () => {} });
+  ok(writes(again.log).length === 0 && sa.kicked.length === 0, "a head whose runs are the owner's is neither approved nor kicked again", writes(again.log));
+
+  // No credential for the update: the refusal is an error, as before.
+  const gn = mk();
+  const sn = await run(base, { fetchImpl: gn.fetchImpl, sleep: async () => {} });
+  ok(puts(gn.log).length === 0 && sn.kicked.length === 0 && sn.status === "partial" && sn.errors.length === 2 && sn.errors.every((e) => e.http === 403 && /approve run/.test(e.where)), "without the fleet user credential the refusal stays an error and nothing is updated", sn.errors);
+
+  // Only a 403 is an eligibility answer; a 500 or a network error is retried by the next sweep and never kicks.
+  for (const status of [500, 404, 422, 429]) {
+    const gs = mk({ approveStatus: { 11: status, 21: status } });
+    const ss = await run(withOrg, { fetchImpl: gs.fetchImpl, sleep: async () => {} });
+    ok(puts(gs.log).length === 0 && ss.errors.length === 2 && ss.errors.every((e) => e.http === status), "an approval refused with " + status + " is an error and starts nothing", ss.errors);
+  }
+
+  // The same policy as an approval: a denied path, a running agent and a dry run never kick.
+  const gd = mk({ files: { 1: [f(".github/workflows/x.yml")], 2: [f("qnfo-x/worker.js"), f("scripts/y.mjs")] } });
+  const sd = await run(withOrg, { fetchImpl: gd.fetchImpl, sleep: async () => {} });
+  ok(puts(gd.log).length === 0 && approves(gd.log).length === 0 && sd.approval_withheld.length === 2 && sd.kicked.length === 0, "a diff that touches a denied path is neither approved nor kicked", sd.approval_withheld);
+  const gw = mk({ events: { 1: [{ event: "copilot_work_started" }], 2: [{ event: "copilot_work_started" }] } });
+  const sw = await run(withOrg, { fetchImpl: gw.fetchImpl, sleep: async () => {} });
+  ok(puts(gw.log).length === 0 && approves(gw.log).length === 0 && sw.skipped["agent-working"] === 2, "a session that is still running is never kicked", sw.skipped);
+  const gy = mk();
+  const sy = await run(Object.assign({}, withOrg, { mode: "dry" }), { fetchImpl: gy.fetchImpl, sleep: async () => {} });
+  ok(writes(gy.log).length === 0 && sy.kicked.length === 0, "a dry run sends no update", writes(gy.log));
+  const go = mk();
+  const so = await run(Object.assign({}, withOrg, { approve: false }), { fetchImpl: go.fetchImpl, sleep: async () => {} });
+  ok(puts(go.log).length === 0 && approves(go.log).length === 0 && so.kicked.length === 0, "approve off stops the update as well");
+
+  // An approval that works needs no update.
+  const gk = mk({ approveStatus: {} });
+  const sk = await run(withOrg, { fetchImpl: gk.fetchImpl, sleep: async () => {} });
+  ok(puts(gk.log).length === 0 && sk.approved.length === 4 && sk.kicked.length === 0, "an approval that works is never followed by an update", sk);
+
+  // The per-run cap, and the answers of the update call.
+  const gc = mk();
+  const sc = await run(Object.assign({}, withOrg, { kickMax: 1 }), { fetchImpl: gc.fetchImpl, sleep: async () => {} });
+  ok(sc.kicked.length === 1 && puts(gc.log).length === 1 && sc.skipped["kick-over-cap"] === 1, "the per-run cap defers the other updates", sc);
+  const gz = mk({ kickStatus: { 1: 422, 2: 422 } });
+  const sz = await run(withOrg, { fetchImpl: gz.fetchImpl, sleep: async () => {} });
+  ok(sz.kicked.length === 0 && sz.errors.length === 0 && sz.skipped["kick-refused-422"] === 2 && sz.status === "ok", "a 422 (a conflict, or nothing new on main) is skipped and not an error", sz);
+  const ge = mk({ kickStatus: { 1: 403, 2: 500 } });
+  const se = await run(withOrg, { fetchImpl: ge.fetchImpl, sleep: async () => {} });
+  ok(se.kicked.length === 0 && se.status === "partial" && se.errors.length === 2 && se.errors.every((e) => /update branch on \d+ after approve run \d+ was refused/.test(e.where)) && se.errors[0].http === 403 && se.errors[1].http === 500, "a refused update is recorded as GitHub said it", se.errors);
 }
 
 // --- the workflow and the lane poke
