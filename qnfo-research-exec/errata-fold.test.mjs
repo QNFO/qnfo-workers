@@ -56,6 +56,9 @@ const mkEnv = () => ({ LIVING_PAPER: db("living"), QNFO_AUDIT: db("audit"), GRAP
   const h = await mod.default.fetch(new Request(pub + "/errata-hub/health"), mkEnv(), {});
   const hj = await h.json();
   ok(h.status === 200 && hj.worker === "errata-hub" && versionAtLeast(hj.version, "1.5.0"), "GET /errata-hub/health answers as the member", hj);
+  const confirmLimit = hj.limitations.find((limitation) => limitation.startsWith("after the sweep, up to ops_config errata_confirm_max"));
+  ok(confirmLimit && confirmLimit.includes("(default 20)") && confirmLimit.includes("gpt-oss-120b then glm-5.3 for a reviser finding, deepseek-v4-flash then glm-5.3 otherwise") && !confirmLimit.includes("kimi-k2.6"),
+    "the public errata health metadata reports the active model and default batch", confirmLimit);
   const props = { caller: "qnfo-ops", member: "errata-hub" };
   const viaBinding = await mod.default.fetch(new Request("https://internal/internal-errata", { method: "POST", body: "not json" }), mkEnv(), { props });
   ok(viaBinding.status === 400 && (await viaBinding.json()).error === "invalid json", "a binding with member props passes the member's token gate (POST /internal-errata reaches body validation)", viaBinding.status);

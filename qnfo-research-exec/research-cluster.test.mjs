@@ -3,7 +3,7 @@
 // to the first window when no quotation can be located; (2) errata routing makes one remediation row per paper, appends an erratum that arrives while that row still
 // waits, holds one that arrives while the row is being worked, and caps new rows per run; routed errata are verified when a remediation row of the paper publishes after
 // the routing; (3) a new paper whose [n] has no References entry, or that cites itself, fails finalGates and the switch turns it off; (4) the review prompt carries the
-// cross-section consistency check; (5) the dead 5-a-day cap is gone and the park sweep leaves an hourly heartbeat; (6) the errata member in the host equals errata-hub.
+// cross-section consistency check; (5) the dead 5-a-day cap is gone and the park sweep leaves an hourly heartbeat; (6) errata-hub is folded into the host with two confirm overrides.
 // Run: node --no-warnings qnfo-research-exec/research-cluster.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -33,7 +33,9 @@ function d1(db) {
 // ---------------------------------------------------------------- (1) confirm excerpt
 {
   const block = (s) => s.slice(s.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:BEGIN"), s.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:END"));
-  ok(block(src).length > 1000 && block(src) === block(hub), "the confirm block of the host equals errata-hub");
+  const hostConfirm = block(src);
+  const foldedHostConfirm = hostConfirm.replace(/^CONFIRM_MODEL_OTHER = "@cf\/zai-org\/glm-5\.3";\nINTERNAL_CONFIRM_MAX = 20;\n/m, "");
+  ok(hostConfirm.length > 1000 && foldedHostConfirm === block(hub), "the host confirm block matches errata-hub apart from the two host-specific overrides");
   const mod = new Function(block(src) + "\nreturn { confirmExcerpt, CONFIRM_EXCERPT_MAX };")();
   const fnOnly = new Function(src.match(/^var CONFIRM_EXCERPT_MAX = [^;]+;/m)[0] + "\n" + src.match(/^function confirmExcerpt\(body, claim\) \{[\s\S]*?\n\}/m)[0] + "\nreturn confirmExcerpt;")();
   ok(typeof fnOnly === "function", "confirmExcerpt is one self-contained function (qnfo-lifecycle/paper-learn-anchor.test.mjs evaluates it on its own)");
