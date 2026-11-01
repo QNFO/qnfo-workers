@@ -154,4 +154,74 @@ async function run(db, gIssues, state) {
   assert.equal((await w.fetch(new Request("https://s.test/roadmap"), env)).status, 200);
 }
 
+// Manager-pinned issues need real projects and milestones, not just preserved map rows.
+{
+  const db = world({ scopeSources: 138 });
+  const programs = ["QNFO.RSCH", "QNFO.INFRA", "QNFO.OPS", "QNFO.REACH", "QNFO.PERSONAL"];
+  const gIssues = programs.map((program, i) => {
+    const id = 401 + i, number = 6101 + i;
+    db.prepare("INSERT INTO agent_issues (id, title, source, category, priority, created_at) VALUES (?, ?, 'management-personas', 'reliability', 'critical', ?)").run(id, program + " metric", Date.now());
+    db.prepare("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (?, ?, ?, 'fix')").run(id, "W." + program, program);
+    db.prepare("INSERT INTO gh_issue_links VALUES (?, ?, 'open', 'open', '')").run(id, number);
+    return { number, node_id: "N" + number, labels: [{ name: "fleet-issue" }], state: "open", milestone: null };
+  });
+  const { tick } = await run(db, gIssues, { calls: [] });
+  const first = await tick();
+  assert.deepEqual(first.errors, []);
+  assert.equal(first.issues_synced, programs.length, "each program-pinned mirror gets its milestone");
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM v_portfolio_drift").get().n, 0, "program-pinned mirrors converge without hiding drift");
+  for (const [i, program] of programs.entries()) {
+    const project = db.prepare("SELECT * FROM projects WHERE project_code = ?").get("W." + program);
+    assert.equal(project.program_code, program);
+    assert.equal(project.status, "active");
+    assert.equal(gIssues[i].milestone.number, project.gh_milestone);
+    assert.equal(db.prepare("SELECT project_code FROM issue_project_map WHERE issue_id = ?").get(401 + i).project_code, "W." + program, "the manager's program is preserved");
+  }
+  const again = await tick();
+  assert.deepEqual(again.errors, []);
+  assert.equal(again.projects_created, 0);
+  assert.equal(again.projects_retired, 0, "program projects are not retired as absent workers");
+  assert.equal(again.issues_synced, 0);
+  assert.equal(again.drift.total, 0);
+  db.prepare("UPDATE projects SET status = 'retired' WHERE project_code = 'W.QNFO.OPS'").run();
+  const recovered = await tick();
+  assert.equal(recovered.projects_reactivated, 1, "an existing derived program project is repaired");
+  assert.equal(recovered.drift.total, 0);
+}
+
+// Closed roll-up mirrors have no milestone requirement; reopened ones regain it.
+{
+  const db = world({ scopeSources: 138 });
+  db.exec(`
+    CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT, kind TEXT, guards_against TEXT, critical_path INTEGER, disposition TEXT, disposition_state TEXT, alternate_path TEXT, evidence TEXT, issue_id INTEGER);
+    CREATE TABLE control_alternate_probes (control TEXT PRIMARY KEY, probe_sql TEXT, window_note TEXT, enabled INTEGER);
+    CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER);
+    CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT);
+    CREATE TABLE decision_log (actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
+    CREATE VIEW v_tracker_drift AS SELECT 'issue-state' AS kind;
+    INSERT INTO agent_issues (id, status, priority) VALUES (501, 'open', 'high'), (502, 'open', 'critical');
+    INSERT INTO gh_issue_links VALUES (501, 6501, 'closed', 'open', ''), (502, 6502, 'open', 'open', '');
+  `);
+  const migration = readFileSync(join(here, "..", "migrations", "2026-11-01-portfolio-open-mirrors.sql"), "utf8");
+  const unplaced = () => db.prepare("SELECT ref FROM v_portfolio_drift WHERE kind = 'issue-unplaced' ORDER BY ref").all().map((r) => r.ref);
+  assert.deepEqual(unplaced(), ["501", "502"], "the old view grades a closed roll-up mirror");
+  db.exec(migration);
+  assert.deepEqual(unplaced(), ["502"], "open mirrors still require a project and milestone");
+  db.prepare("UPDATE gh_issue_links SET gh_state = 'open' WHERE issue_id = 501").run();
+  assert.deepEqual(unplaced(), ["501", "502"], "a reopened mirror is measured again");
+  const alternate = db.prepare("SELECT probe_sql FROM control_alternate_probes").get().probe_sql;
+  assert.equal(db.prepare(alternate).get().observed, "ok");
+  db.exec("DROP VIEW v_tracker_drift");
+  assert.notEqual(db.prepare(alternate).get().observed, "ok", "missing independent state checks are detected");
+  const detector = db.prepare("SELECT verify_probe FROM remediation_contracts").get().verify_probe;
+  assert.ok(Number(db.prepare(detector).get().observed) > 0, "the detector reports real drift");
+  db.exec(migration);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM failure_modes").get().n, 1, "migration replay is idempotent");
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n, 1, "the prediction is logged once");
+  db.exec(migration.match(/^-- Rollback: (.+)$/m)[1]);
+  db.prepare("UPDATE gh_issue_links SET gh_state = 'closed' WHERE issue_id = 501").run();
+  assert.deepEqual(unplaced(), ["501", "502"], "rollback restores the old scope");
+  assert.equal(db.prepare("SELECT enabled FROM control_alternate_probes").get().enabled, 0);
+}
+
 console.log("place-all-open.test.mjs ok");

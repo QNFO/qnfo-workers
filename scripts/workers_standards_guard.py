@@ -27,6 +27,8 @@ It fails a change only for what the change ADDS, so existing debt that other ses
     allowed_sender_addresses, adds `new_classes` (KV-backed Durable Object storage; new classes use new_sqlite_classes), or moves
     compatibility_date to 2026-08-04 or later while worker.js imports node:* under a `no_nodejs_compat` opt-out (the import then fails).
   * (BP26-WORKERS-BP-LINT-1) a wrangler.toml change that sets compatibility_date older than 90 days.
+  * (NET-ZERO-WORKER-BUDGET-1) a new Worker that would take the tracked active fleet over the hard cap, without a same-change
+    RETIRED/FOLDED marker for an existing Worker. The marker is not proof of safe retirement; live-consumer proof remains required.
 A line can carry `// standards-ok: <reason>` when a hit is a false positive (the reason is the record). A reviewed exception that cannot carry
 a comment (toml, generated code) is a line in scripts/workers-standards-allowlist.txt: `<path> <rule> <text that occurs in the line> # reason`.
 The same run asks SPOF-REVIEW-GATE-1 (scripts/spof_review.py) whether the change adds a cron, D1 trigger, external host or credential
@@ -366,6 +368,7 @@ def check_config(base, path, added=None):
     return bad
 
 COMPAT_MAX_DAYS = 90
+WORKER_HARD_CAP = 30
 
 def compat_age_days(d):
     import datetime
@@ -390,6 +393,45 @@ def unrestricted_send_email(cfg):
         if not re.search(r"^[ \t]*(?:destination_address|allowed_destination_addresses|allowed_sender_addresses)[ \t]*=", body, re.M): out.append(body)
     return out
 
+def worker_budget_violations(base, changed_paths, hard_cap=WORKER_HARD_CAP):
+    """Require a same-change retirement when a new Worker would exceed the tracked fleet's hard cap."""
+    base_files = set(git("ls-tree", "-r", "--name-only", base).splitlines())
+    base_workers = {
+        p.rsplit("/", 1)[0] for p in base_files
+        if p.count("/") == 1 and p.endswith("/worker.js") and p.rsplit("/", 1)[0] + "/wrangler.toml" in base_files
+    }
+    active_workers = {
+        d for d in base_workers
+        if d + "/RETIRED" not in base_files and d + "/FOLDED" not in base_files
+    }
+    new_workers = {
+        p.rsplit("/", 1)[0] for p in changed_paths
+        if re.fullmatch(r"[^/]+/wrangler\.toml", p)
+        and p not in base_files
+        and os.path.isfile(os.path.join(p.rsplit("/", 1)[0], "worker.js"))
+        and not os.path.exists(os.path.join(p.rsplit("/", 1)[0], "RETIRED"))
+        and not os.path.exists(os.path.join(p.rsplit("/", 1)[0], "FOLDED"))
+    }
+    if not new_workers:
+        return []
+    retired_workers = {
+        p.rsplit("/", 1)[0] for p in changed_paths
+        if re.fullmatch(r"[^/]+/(?:RETIRED|FOLDED)", p)
+        and p not in base_files
+        and os.path.isfile(p)
+        and p.rsplit("/", 1)[0] in active_workers
+    }
+    required = (len(new_workers) if len(active_workers) >= hard_cap
+                else max(0, len(active_workers) + len(new_workers) - hard_cap))
+    if len(retired_workers) >= required:
+        return []
+    return [(
+        "worker-budget-net-zero", 1,
+        "tracked active Workers=%d, hard cap=%d; %d new Worker(s) require %d same-change RETIRED/FOLDED marker(s) for existing Workers (live-consumer proof is still required)"
+        % (len(active_workers), hard_cap, len(new_workers), required),
+        "wrangler.toml",
+    )]
+
 def spof_gate(base):
     """SPOF-REVIEW-GATE-1 rides this step so it runs on every pull request without a workflow change (scripts/spof_review.py).
     It returns 1 only for an unanswered finding on a pull request opened after the gate landed; a fault inside it never fails the change."""
@@ -410,7 +452,7 @@ def main():
         else: print("WORKERS-STANDARDS-GUARD-1: note: no merge base with %s (shallow history); diffing against its tip, which is exact only when HEAD is the merge of the change into it" % base)
         names = [n for n in git("diff", "--name-only", base).split("\n") if n]
         allow = load_allowlist()
-        viol = []
+        viol = [("scripts/workers_standards_guard.py", *v) for v in worker_budget_violations(base, names)]
         for n in names:
             d = n.split("/")[0]
             if os.path.exists(os.path.join(d, "RETIRED")) or os.path.exists(os.path.join(d, "FOLDED")): continue
