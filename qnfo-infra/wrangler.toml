@@ -63,6 +63,11 @@ database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
 [ai]
 binding = "AI"
 
+[[secrets_store_secrets]]
+binding = "CF_TOKEN_STORE"
+store_id = "8ef28060302e4311b064ba3529493e8b"
+secret_name = "CF_API_TOKEN"
+
 # Vectorize — all QNFO + personal semantic indexes
 [[vectorize]]
 binding = "VZ"

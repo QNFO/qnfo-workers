@@ -53,7 +53,7 @@ const check = (c, m, d) => { console.log((c ? "PASS " : "FAIL ") + m + (c || d =
 const issues = () => sq.prepare("SELECT id, status FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-7-%'").all();
 const log = (st) => sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=7 AND status=?").get(st).n;
 const noDoerLog = (st) => sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=9901 AND status=?").get(st).n;
-const actionLog = (action) => sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=7 AND action=?").get(action).n;
+const actionLog = (action, triggerId = 7) => sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=? AND action=?").get(triggerId, action).n;
 const ageStreak = (min) => sq.prepare("UPDATE analytics_action_log SET fired_at = datetime('now', ?) WHERE trigger_id=7 AND status='recovering'").run("-" + min + " minutes");
 
 check(triggerRecoveryDue("2026-10-02 08:00:00", Date.parse("2026-10-02T09:00:00Z"), 60) === true, "60 minutes after the streak opened, recovery is due");
@@ -96,17 +96,19 @@ await evaluateMetricTriggers(env);
 check(log("recovering") === 3 && log("recovered") === 1 && errors.length === 0, "with no open issue, a recovered metric writes nothing more");
 check(sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=8").get().n === 0, "a digest-only trigger never opens recovery streaks");
 
-sq.prepare("INSERT INTO agent_issues (title, source, category, priority, status, created_at, updated_at) VALUES ('METRIC-TRIGGER-9901-ISSUES-OVER-24H-NO-DOER: open alert', 'qnfo-fleet-control', 'reliability', 'critical', 'open', 1, 1)").run();
+const noDoerRecoveryStarts = actionLog("recovery streak opened", 9901);
 sq.prepare("INSERT INTO agent_issues (title, source, category, priority, status, created_at, updated_at) VALUES ('METRIC-TRIGGER-9800-OTHER: another alert', 'qnfo-fleet-control', 'reliability', 'critical', 'open', 1, 1)").run();
 const otherId = sq.prepare("SELECT id FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-9800-%'").get().id;
 const noDoer = sq.prepare("SELECT * FROM analytics_metric_triggers WHERE id = 9901").get();
 check(await metricTriggerValue(d1, noDoer) === 1, "the no-doer trigger excludes only its own notice and counts another trigger's open notice");
 await evaluateMetricTriggers(env);
+check(issues().length === 1 && actionLog("recovery streak opened") === 2 && actionLog("recovery streak opened", 9901) === noDoerRecoveryStarts, "another open trigger notice prevents no-doer recovery");
 const noDoerIssue = sq.prepare("SELECT id, status FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-9901-%' AND status='open' ORDER BY id LIMIT 1").get();
 check(noDoerIssue && noDoerLog("relapsed") === 1, "another open trigger notice ends the no-doer recovery streak");
 sq.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?, 'test-cleanup', 'closed', 'test', datetime('now'), 'synthetic issue cleanup')").run(otherId);
 sq.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'session:trigger-recovery-test' WHERE id = ?").run(otherId);
 await evaluateMetricTriggers(env);
+check(sq.prepare("SELECT status FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-9901-%'").get().status === "open" && actionLog("recovery streak opened", 9901) === noDoerRecoveryStarts + 1, "the self-notice starts recovery only after other breaches clear");
 check(sq.prepare("SELECT status FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-9901-%'").get().status === "open" && noDoerLog("recovering") === 2, "the self-notice starts a new recovery streak after other breaches clear");
 sq.prepare("UPDATE analytics_action_log SET fired_at = datetime('now','-61 minutes') WHERE trigger_id=9901 AND status='recovering'").run();
 await evaluateMetricTriggers(env);

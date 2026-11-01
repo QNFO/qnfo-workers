@@ -30,13 +30,12 @@ async function recordReach(env, path, ctx) {
 }
 __name(recordReach, "recordReach");
 __name2(recordReach, "recordReach");
-// ROADMAP-1 / QNFO.INFRA #2 (issue 1000698, RED-DRAIN-1 dispatch): secrets now live in the default Secrets
-// Store; a store binding exposes .get(), a legacy plain-text secret is still accepted so rotation can move
-// one key at a time. Secret values are never logged.
-async function infraSecret(env, key) {
+// ROADMAP-1 / QNFO.INFRA #2 (issue 1000698, RED-DRAIN-1 dispatch): prefer Secrets Store bindings while
+// retaining the per-worker secret as a fallback until the live binding is verified. Secret values are never logged.
+async function infraSecret(env, key, legacyKey = key) {
   const b = env[key];
   if (b && typeof b.get === "function") return await b.get();
-  return b;
+  return b === undefined ? env[legacyKey] : b;
 }
 __name(infraSecret, "infraSecret");
 __name2(infraSecret, "infraSecret");
@@ -55,7 +54,7 @@ __name(AI_COST_LADDER, "AI_COST_LADDER");
 // deploy hash is derived from VERSION plus a hash of the serialized manifest body (no secret in it).
 var INFRA_MANIFEST = {
   workers: ["qnfo-infra"],
-  bindings: ["INFRA_TOKEN", "CF_ACCOUNT", "CF_TOKEN"],
+  bindings: ["INFRA_TOKEN", "CF_ACCOUNT", "CF_TOKEN", "CF_TOKEN_STORE"],
   crons: ["30 * * * *"],
   migrations: ["0001_initial", "0002_cron_fire_log", "0003_handoffs_vz_watermark"],
   schema_version: 3
@@ -94,7 +93,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.9.13-codeagent"; /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.10.0-secrets-store-cf-token"; /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 async function auth(token, env) {
   const exp = await infraSecret(env, "INFRA_TOKEN");
   if (!exp || !token) return false;
@@ -108,7 +107,7 @@ async function auth(token, env) {
 __name(auth, "auth");
 __name2(auth, "auth");
 async function cf(env, path) {
-  const token = await infraSecret(env, "CF_TOKEN");
+  const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
   const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + path, {
     headers: { Authorization: "Bearer " + token, "User-Agent": "Mozilla/5.0 (qnfo-infra)" }
   });
@@ -117,7 +116,7 @@ async function cf(env, path) {
 __name(cf, "cf");
 __name2(cf, "cf");
 async function cfRaw(env, path) {
-  const token = await infraSecret(env, "CF_TOKEN");
+  const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
   const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + path, {
     headers: { Authorization: "Bearer " + token, "User-Agent": "Mozilla/5.0 (qnfo-infra)" }
   });
@@ -126,7 +125,7 @@ async function cfRaw(env, path) {
 __name(cfRaw, "cfRaw");
 __name2(cfRaw, "cfRaw");
 async function gql(env, query) {
-  const token = await infraSecret(env, "CF_TOKEN");
+  const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
   const r = await fetch("https://api.cloudflare.com/client/v4/graphql", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-infra)" },
@@ -172,7 +171,7 @@ async function collectState(env) {
     const patchErrors = [];
     await Promise.all(topHeavy.map(async ({ name }) => {
       try {
-        const token = await infraSecret(env, "CF_TOKEN");
+        const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
         const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/workers/scripts/" + encodeURIComponent(name) + "/settings", {
           method: "PATCH",
           headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-infra)" },
