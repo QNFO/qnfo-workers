@@ -32,6 +32,35 @@ SET definition = replace(definition,
 WHERE id = 'management-personas'
   AND instr(definition, 'FROM product_registry p WHERE p.state = ''active'' AND p.worker IS NOT NULL') > 0;
 
+UPDATE fleet_tasks
+SET definition = json_set(
+      definition,
+      '$.steps[' || (
+        SELECT key FROM json_each(fleet_tasks.definition, '$.steps')
+        WHERE json_extract(value, '$.name') = 'pl-shipped-metric'
+        LIMIT 1
+      ) || '].sql',
+      replace(
+        json_extract(
+          definition,
+          '$.steps[' || (
+            SELECT key FROM json_each(fleet_tasks.definition, '$.steps')
+            WHERE json_extract(value, '$.name') = 'pl-shipped-metric'
+            LIMIT 1
+          ) || '].sql'
+        ),
+        'WHERE p.state = ''active'' AND p.worker IS NOT NULL AND p.worker NOT IN (',
+        'WHERE p.state = ''active'' AND (p.rest_until IS NULL OR p.rest_until <= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'')) AND p.worker IS NOT NULL AND p.worker NOT IN ('
+      )
+    ),
+    version = version + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+WHERE id = 'management-personas'
+  AND EXISTS (
+    SELECT 1 FROM json_each(definition, '$.steps')
+    WHERE json_extract(value, '$.name') = 'pl-shipped-metric'
+      AND instr(json_extract(value, '$.sql'), 'WHERE p.state = ''active'' AND p.worker IS NOT NULL AND p.worker NOT IN (') > 0
+  );
+
 CREATE TRIGGER IF NOT EXISTS product_plus_outcome_streak
 AFTER UPDATE OF outcome ON plus_outcome_checks
 WHEN OLD.outcome = 'pending' AND NEW.outcome IN ('kept', 'revert_required')
@@ -72,6 +101,13 @@ VALUES
    'the same product becomes eligible when its seven-day rest expires; other products and ordinary manager work continue',
    'Three consecutive measured revert_required outcomes set rest_until to seven days; a kept outcome resets the streak, unmeasured outcomes do not count, and the weekly shipment metric excludes active rests.');
 
+INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled)
+VALUES
+  ('plussing-three-miss-rest',
+   'SELECT ''ok'' AS expected, CASE WHEN EXISTS (SELECT 1 FROM product_registry p WHERE p.state = ''active'' AND (p.rest_until IS NULL OR p.rest_until <= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'')) AND (julianday(''now'') - julianday(COALESCE(p.last_plus_at, p.created_at))) * 24 >= p.plus_cadence_h AND NOT EXISTS (SELECT 1 FROM v_product_plus_due d WHERE d.product = p.product)) THEN ''a cadence-due product eligible after its rest is missing from v_product_plus_due'' ELSE ''ok'' END AS observed',
+   'state probe: every active product whose rest is absent or expired and whose cadence is due appears in v_product_plus_due',
+   1);
+
 UPDATE roadmap_implementation
 SET status = 'built',
     evidence = 'migrations/2026-11-01-plussing-6.sql and migrations/plussing-3.test.mjs: kept-plus continuation, three measured misses trigger a seven-day product rest, unmeasured outcomes do not count, and active rests are excluded from the weekly shipment target'
@@ -98,7 +134,7 @@ SELECT
   'measured feedback now prevents repeated failed product changes and directs kept changes toward a useful next iteration',
   'after three consecutive measured misses, no new plus is proposed for that product for seven days; active rests do not reduce plus_shipped_7d coverage',
   'more useful product improvements without worsening output-quality outcomes',
-  'management-personas, product_registry, plus_outcome_checks, v_product_plus_due, plus_shipped_7d, plus_kept_share_30d')
+  'management-personas, product_registry, plus_outcome_checks, v_product_plus_due, plus_shipped_7d, plus_kept_share_30d'
 WHERE NOT EXISTS (
   SELECT 1 FROM decision_log
   WHERE actor = 'management-personas (PLUSSING-6)'

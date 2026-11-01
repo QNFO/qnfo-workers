@@ -56,12 +56,32 @@ const sql4 = rd("./2026-11-01-plussing-4.sql");
 db.exec(sql4.split("\n").filter((line) => !line.startsWith("--")).join("\n"));
 const sql10 = rd("./2026-11-01-management-personas-10.sql");
 db.exec(sql10.split("\n").filter((line) => !line.startsWith("--")).join("\n"));
+db.exec(`CREATE TABLE control_registry (
+  control TEXT PRIMARY KEY,
+  location TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  guards_against TEXT,
+  critical_path INTEGER NOT NULL DEFAULT 0,
+  disposition TEXT NOT NULL,
+  disposition_state TEXT NOT NULL DEFAULT 'planned',
+  alternate_path TEXT,
+  alternate_tested_at TEXT,
+  evidence TEXT NOT NULL
+)`);
+db.exec(`CREATE TABLE control_alternate_probes (
+  control TEXT PRIMARY KEY,
+  probe_sql TEXT NOT NULL,
+  window_note TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1
+)`);
 const sql6 = rd("./2026-11-01-plussing-6.sql");
 db.exec(sql6);
+ok(one("SELECT alternate_path FROM control_registry WHERE control = 'plussing-three-miss-rest'").alternate_path.includes("seven-day rest expires"), "the miss-rest control registers its recovery path");
+ok(one("SELECT probe_sql FROM control_alternate_probes WHERE control = 'plussing-three-miss-rest'").probe_sql.includes("v_product_plus_due"), "the miss-rest recovery path is verified against the due-products view");
 const legacy = one("SELECT product, kind, title, metric, predicted_outcome, outcome, created_at FROM plus_ledger WHERE product = 'companion-today'");
 ok(legacy.product === "companion-today" && legacy.kind === "plus" && legacy.title === "Legacy plus proposal" && legacy.metric === "legacy_metric" && legacy.predicted_outcome === "legacy prediction" && legacy.outcome === "legacy outcome" && legacy.created_at === "2026-10-29 12:00:00", "the legacy ledger row is preserved and mapped to the PLUSSING-3/4 columns", legacy);
-ok(def().find((s) => s.name === "pl-research").sql.includes("latest kept plus") && def().find((s) => s.name === "pl-research").sql.includes("misses_in_row >= 3"), "the plus prompt extends a kept change and gives a fresh angle after a rest");
-ok(!def().find((s) => s.name === "pl-deployed").sql.includes("misses_in_row = 0, pluses_since_simplify =") && def().find((s) => s.name === "pl-shipped-metric").sql.includes("p.rest_until IS NULL"), "ordinary deployments preserve miss streaks and resting products leave the shipment denominator");
+ok(def().find((s) => s.name === "pl-research").sql.includes("latest kept plus") && def().find((s) => s.name === "pl-research").sql.includes("three-miss rest"), "the plus prompt extends a kept change and gives a fresh angle after a rest");
+ok(def().find((s) => s.name === "pl-deployed").sql.includes("misses_in_row = CASE WHEN rest_until") && def().find((s) => s.name === "pl-shipped-metric").sql.includes("p.rest_until IS NULL OR p.rest_until <="), "ordinary deployments preserve miss streaks and resting products leave the shipment denominator");
 run("INSERT INTO product_registry (product, program_code, last_plus_at) VALUES ('plus6-fixture', 'QNFO.REACH', '2026-09-01T00:00:00Z')");
 run("INSERT INTO plus_outcome_checks (plus_id, product, outcome) VALUES (9000, 'plus6-fixture', 'pending')");
 run("UPDATE plus_outcome_checks SET outcome = 'unmeasured' WHERE plus_id = 9000");
@@ -77,6 +97,14 @@ ok(restedProduct.misses_in_row === 3 && Date.parse(restedProduct.rest_until) > D
 ok(!q("SELECT product FROM v_product_plus_due").includes("plus6-fixture"), "a product on rest is not due");
 run("UPDATE plus_outcome_checks SET outcome = 'reverted' WHERE plus_id = 9004");
 ok(one("SELECT misses_in_row FROM product_registry WHERE product = 'plus6-fixture'").misses_in_row === 3, "completing a revert does not count the same miss twice");
+run("UPDATE product_registry SET misses_in_row = 3, rest_until = '2000-01-01T00:00:00Z' WHERE product = 'plus6-fixture'");
+run("INSERT INTO plus_ledger (product, kind, title, status, product_slug, plus) VALUES ('plus6-fixture', 'plus', 'Fresh-angle plus', 'deployed', 'plus6-fixture', 'Fresh-angle plus')");
+db.prepare(def().find((s) => s.name === "pl-deployed").sql).run();
+const resumedProduct = one("SELECT misses_in_row, rest_until FROM product_registry WHERE product = 'plus6-fixture'");
+ok(resumedProduct.misses_in_row === 0 && resumedProduct.rest_until === null, "the first deployed cycle after rest starts a fresh miss streak", resumedProduct);
+run("DELETE FROM plus_outcome_checks WHERE product = 'plus6-fixture'");
+run("DELETE FROM plus_ledger WHERE product = 'plus6-fixture'");
+run("DELETE FROM product_registry WHERE product = 'plus6-fixture'");
 for (const step of def().filter((s) => s.name.startsWith("pl-"))) {
   try {
     db.prepare(step.sql);
@@ -153,12 +181,6 @@ run("DELETE FROM cf_agent_requests WHERE instance NOT LIKE '%companion-today%'")
 tick();
 const again = one("SELECT prompt FROM cf_agent_requests WHERE instance LIKE 'roadmap-%-plus-companion-today-%'");
 ok(again && /Greet the owner with what changed since yesterday \[deployed\]/.test(again.prompt) && /SIMPLIFY pass/.test(again.prompt), "the next request names the earlier plus and is a simplify pass after four plusses", again && again.prompt.slice(0, 300));
-
-run("UPDATE product_registry SET misses_in_row = 3, rest_until = '2000-01-01T00:00:00Z' WHERE product = 'plus6-fixture'");
-run("INSERT INTO plus_ledger (product, kind, title, status) VALUES ('plus6-fixture', 'plus', 'Fresh-angle plus', 'deployed')");
-db.prepare(def().find((s) => s.name === "pl-deployed").sql).run();
-const resumedProduct = one("SELECT misses_in_row, rest_until FROM product_registry WHERE product = 'plus6-fixture'");
-ok(resumedProduct.misses_in_row === 0 && resumedProduct.rest_until === null, "the first deployed cycle after rest starts a fresh miss streak", resumedProduct);
 
 run("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('product_plus', 'off')");
 run("DELETE FROM cf_agent_requests");
