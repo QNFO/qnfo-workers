@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.5-codeagent";
+var VERSION = "0.40.6";
 /* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
@@ -2484,13 +2484,12 @@ async function generate(env) {
     // writer that had already failed the writer gate in the first compose, so each failed round paid for them twice
     // and q08_neurons_per_published_piece_7d climbed past the 6000 budget. The retry now spends calls only on the
     // writers that have not yet failed this run; the gate, the panel and the fact-check are unchanged.
-    var retryModels = null;
-    if (typeof COMPOSE_MODELS !== "undefined") {
-      var failedWriters = {}; (piece.trail || []).forEach(function (t) { if (t.problems && t.problems.length) failedWriters[t.model] = 1; });
-      retryModels = COMPOSE_MODELS.filter(function (m) { return !failedWriters[m]; });
-      if (!retryModels.length) retryModels = undefined; // every writer already failed: keep the previous default behaviour
+    var retryModels = await composeOrder(env);
+    var failedWriters = {}; (piece.trail || []).forEach(function (t) { if (t.problems && t.problems.length) failedWriters[t.model] = 1; });
+    retryModels = retryModels.filter(function (m) { return !failedWriters[m]; });
+    if (retryModels.length) {
+      try { retryPiece = await compose(env, retryPrompt, banned, retryModels, undefined, TITLE_REPAIR_ON); } catch (e) { retryPiece = null; }
     }
-    try { retryPiece = await compose(env, retryPrompt, banned, retryModels, undefined, TITLE_REPAIR_ON); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
       var retryGate = gateW(retryPiece.text);
       if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
