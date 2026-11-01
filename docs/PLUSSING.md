@@ -46,10 +46,11 @@ Per product, one cycle, run by the program manager that owns it (no new worker; 
    rewrite. It states its prediction (metric, direction, size) before the change.
 4. **Ship through the existing path.** `ROADMAP-1: <program> #<n>: <title>` with `code-task:` and `code-anchor:` lines, so the code loop opens the
    PR, the merge runner merges on green and canary reverts on failure. Nothing new to trust.
-5. **Verify live and keep or revert.** After the metric's measurement window, read the same metric. Kept only if the target moved and no
-   guard worsened; otherwise reverted, with the reason in the ledger.
+5. **Verify live and keep or revert.** PLUSSING-4 captures the registered outcome and output-quality guard at verified deployment,
+   then re-reads both after seven days. A plus is kept only after a material improvement with no guard regression; otherwise the manager
+   requests a revert of that addition through the existing roadmap/code path. Missing or stale measures are unmeasured, never a pass.
 6. **Plus the plus.** A kept plus seeds the next one for the same product (what did the first one make possible?). A plus that did not
-   move its metric is not repeated; the next cycle picks a different angle.
+   move its metric is reverted and replaced by a different angle.
 
 State lives in two tables: `product_registry` (what the products are, who manages them, their usage and quality signals, `last_plus_at`)
 and `plus_ledger` (one row per plus: evidence, prediction, issue, PR, outcome). `v_product_plus_due` lists products in the order step 1 picks them.
@@ -81,7 +82,7 @@ and `plus_ledger` (one row per plus: evidence, prediction, issue, PR, outcome). 
 | PLUS-1 | `product_registry`, `plus_ledger`, `v_product_plus_due` and the seeded products (this change) |
 | PLUS-2 | Usage signal per product: a beacon-free count from Worker logs for each product host, written daily to the registry |
 | PLUS-3 | Plus step in the manager tick: pick, gather, write the `ROADMAP-1` issue with prediction, record in the ledger |
-| PLUS-4 | Verify-and-keep step: read the metric after the window, mark `kept` or `reverted`, set `last_plus_at` |
+| PLUS-4 | **Built** (`migrations/2026-11-01-plussing-4.sql`): capture baseline at verified deployment; after seven days, keep on a material outcome gain with no guard regression or request a bounded revert; register `plus_shipped_7d` and `plus_kept_share_30d` triggers |
 | PLUS-5 | Weekly "what got better" digest from `plus_ledger` to the owner, and a fleet page `/plus` |
 | PLUS-6 | Plus-the-plus and rest rules (three misses rest 7 days, simplify every fifth) |
 
