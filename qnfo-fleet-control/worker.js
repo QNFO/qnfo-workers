@@ -14790,6 +14790,13 @@ async function metricTriggerValue(db, t) {
   var key = String(t.metric_key || ""), src = String(t.source_table || "meta");
   var num = function (r, f) { return r ? triggerNum(r[f]) : null; };
   var v = null;
+  if (key === "issues_over_24h_no_doer" && String(t.queue_target || "") === "agent_issues") {
+    var triggerId = Number(t.id);
+    if (!Number.isSafeInteger(triggerId) || triggerId <= 0) return null;
+    var age = await db.prepare("SELECT COUNT(*) AS n FROM v_issue_age_ladder WHERE breach = 1 AND title NOT LIKE ?1")
+      .bind("METRIC-TRIGGER-" + triggerId + "-%").first().catch(function () { return null; });
+    return age && isFinite(Number(age.n)) ? Number(age.n) : null;
+  }
   if (src === "records") v = num(await db.prepare("SELECT value FROM analytics_dash_records WHERE metric = ?1").bind(key).first().catch(function () { return null; }), "value");
   if (v == null) v = num(await db.prepare("SELECT value FROM analytics_dash_meta WHERE key = ?1").bind(key).first().catch(function () { return null; }), "value");
   if (v == null) v = num(await db.prepare("SELECT last_value FROM metric_registry WHERE metric = ?1").bind(key).first().catch(function () { return null; }), "last_value");
