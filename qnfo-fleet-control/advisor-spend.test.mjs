@@ -43,7 +43,7 @@ const run = src.slice(src.indexOf("async function runAudit(env)"), src.indexOf('
 ok(/const finding_sig = advisorFindingSig\(findings\);/.test(run), "W1 runAudit computes the finding signature");
 ok(/if \(findings\.length && advisorReuse\(fb0, finding_sig, Date\.now\(\)\)\) \{\s*suggestion = fb0\.prior_suggestion;/.test(run), "W2 a reuse sets the prior advice and skips the model branch");
 ok(/\} else if \(findings\.length && env\.AI\) \{/.test(run), "W3 the model branch runs only when advice is not reused");
-ok(run.indexOf("advisorReuse(") < run.indexOf('"advisor-propose"'), "W4 the reuse check comes before the proposal call");
+ok(run.indexOf("advisorReuse(") < run.indexOf("advisorProposal("), "W4 the reuse check comes before the proposal call");
 ok(/if \(ins && ins\.meta && ins\.meta\.changes === 0\) refile_ignored\+\+;\s*else filed\+\+;/.test(run), "W5 filed counts only an insert that wrote a row");
 ok(/filed, refile_ignored, finding_sig, advice_ts, suggestion/.test(run), "W6 the audit event records the signature, the advice time and ignored refiles");
 ok(/fb\.prior_sig = st\.finding_sig \|\| null;/.test(src) && /fb\.prior_advice_ts = st\.advice_ts \|\| null;/.test(src), "W7 collectFeedback reads the prior signature and advice time");
