@@ -33,6 +33,15 @@ function mkDb() {
   CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, close_channel TEXT, created_at INTEGER, updated_at INTEGER);
   CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, close_evidence TEXT);
   CREATE TABLE remediation_contracts (issue_id INTEGER, status TEXT, last_verdict TEXT);
+  CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues
+    WHEN NEW.status IN ('closed', 'resolved') AND OLD.status NOT IN ('closed', 'resolved')
+    BEGIN
+      SELECT RAISE(ABORT, 'close-without-evidence')
+        WHERE NOT EXISTS (SELECT 1 FROM issue_triage WHERE issue_id = NEW.id AND close_evidence IS NOT NULL AND TRIM(close_evidence) <> '');
+      SELECT RAISE(ABORT, 'close-while-contract-fails')
+        WHERE EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id AND c.status IN ('active', 'holding')
+          AND COALESCE(c.last_verdict, '') IN ('fail', 'vacuous-probe-result', 'probe-error', 'probe-not-machine-executable', 'probe-same-account-host'));
+    END;
   CREATE TRIGGER t AFTER INSERT ON agent_issues BEGIN INSERT INTO issue_triage (issue_id) VALUES (NEW.id); END;
   CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
   INSERT INTO metric_registry (metric) VALUES ('fleet_journeys_failing');
@@ -125,6 +134,28 @@ db.raw.prepare("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'g
 await M.journeyTick(mkEnv(db, NOW + 4800e3), { now: NOW + 4800e3 });
 iss = q(db, "SELECT a.status, a.close_channel, t.close_evidence FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id");
 ok(iss[0].status === "closed" && iss[0].close_channel === "auto-recovery" && /passed all 4 steps/.test(iss[0].close_evidence) && /qnfo-gateway 200/.test(iss[0].close_evidence), "closes on recovery with the passing path as evidence", iss[0]);
+
+// 3a. A remediation probe can turn failing after the pre-close read. The final UPDATE must
+// recheck the trigger predicate atomically instead of logging a D1 constraint error.
+{
+  const d = mkDb();
+  await M.journeyTick(mkEnv(d, NOW, { page: true }), { now: NOW });
+  const id = q(d, "SELECT id FROM agent_issues")[0].id;
+  d.raw.prepare("INSERT INTO remediation_contracts (issue_id, status, last_verdict) VALUES (?, 'active', 'pass')").run(id);
+  d.raw.exec(`CREATE TRIGGER test_contract_race AFTER UPDATE OF close_evidence ON issue_triage
+    WHEN NEW.issue_id = ${id}
+    BEGIN UPDATE remediation_contracts SET last_verdict = 'fail' WHERE issue_id = NEW.issue_id; END;`);
+  const errors = [], warnings = [];
+  const oldError = console.error, oldWarn = console.warn;
+  console.error = (...args) => errors.push(args.join(" "));
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try { await M.journeyTick(mkEnv(d, NOW + 1200e3), { now: NOW + 1200e3 }); }
+  finally { console.error = oldError; console.warn = oldWarn; }
+  ok(q(d, "SELECT status FROM agent_issues WHERE id = ?", id)[0].status === "open", "a contract that fails during close remains open");
+  ok(q(d, "SELECT last_verdict FROM remediation_contracts WHERE issue_id = ?", id)[0].last_verdict === "fail", "the test reproduces a contract changing after the pre-close read");
+  ok(errors.length === 0, "the race does not emit a D1 constraint error", errors);
+  ok(warnings.length === 1 && /fleet-control:journeys:issue:close-deferred/.test(warnings[0]) && /issue_id/.test(warnings[0]), "the deferred close remains observable as a warning", warnings);
+}
 
 for (const verdict of ["fail", "vacuous-probe-result", "probe-error", "probe-not-machine-executable", "probe-same-account-host"]) {
   const d = mkDb();
