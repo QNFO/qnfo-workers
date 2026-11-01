@@ -171,6 +171,7 @@ jobs:
       # SHA; every other trigger audits the CURRENT head of main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           # DEPLOY-SETTLE-1: the audit asks 'when did this worker's directory last change?'; a shallow clone answers
           # with HEAD's age for every path. The whole repo packs to ~5 MB, so full history is cheap.
@@ -246,6 +247,8 @@ jobs:
       # the D1 worker_live_audit rows remain the authoritative record either way.
       - name: commit self-audit artifact (rebase + retry)
         if: always()
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -euo pipefail
           git config user.name  "qnfo-fleet-bot"
@@ -276,7 +279,7 @@ jobs:
           snap="$(mktemp -d)"
           cp -a audits/. "$snap/"
           for i in 1 2 3 4 5 6; do
-            if git push origin HEAD:main; then
+            if git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then
               echo "artifact pushed on attempt $i"
               exit 0
             fi

@@ -69,6 +69,8 @@ jobs:
       GUARD_UA: "QNFO-fleet-ci/1.0 (+https://qnfo.org; deploy-containers-pilot)"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -246,15 +248,17 @@ jobs:
 
       - name: commit outcome artifact
         if: always()
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -uo pipefail
           git config user.name "qnfo-ci"
           git config user.email "ci@qnfo.org"
           git add ci-status/deploy-containers-pilot.json || true
-          git commit -m "chore(ci): deploy-containers-pilot outcome" || true
+          git commit -m "chore(ci): deploy-containers-pilot outcome [skip ci]" || true
           for i in 1 2 3 4 5; do
             git pull --rebase --autostash origin main || true
-            if git push origin HEAD:main; then echo "PUSH OK"; exit 0; fi
+            if git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then echo "PUSH OK"; exit 0; fi
             sleep $((i*3))
           done
           echo "::warning::outcome artifact not pushed after retries"

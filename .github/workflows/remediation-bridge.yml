@@ -58,6 +58,8 @@ jobs:
       CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -141,6 +143,8 @@ jobs:
       - name: Commit the status artifact
         if: always()
         continue-on-error: true
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
@@ -161,7 +165,7 @@ jobs:
           if git diff --cached --quiet; then echo "no status change"; exit 0; fi
           git commit -m "ci(status): remediation-bridge [skip ci]"
           for i in 1 2 3; do
-            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+            if git pull --rebase --autostash origin main && git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then
               echo "status pushed on attempt $i"
               exit 0
             fi

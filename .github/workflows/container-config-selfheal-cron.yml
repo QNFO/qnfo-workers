@@ -144,6 +144,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
           ref: main
 
@@ -354,6 +355,7 @@ jobs:
       - name: Commit outcome artifact (race-safe, no skip token)
         if: always()
         env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
           GATE_NEED: ${{ steps.gate.outputs.need_restore }}
           VERDICT_RC: ${{ steps.verdict.outputs.rc }}
         run: |
@@ -373,10 +375,10 @@ jobs:
             echo "artifact unchanged"
             exit 0
           fi
-          git commit -m "chore(ci): container-config-selfheal-cron outcome (issue #1485)"
+          git commit -m "chore(ci): container-config-selfheal-cron outcome (issue #1485) [skip ci]"
           for i in 1 2 3 4 5; do
             git pull --rebase --autostash origin main >/dev/null 2>&1 || true
-            if git push origin HEAD:main; then
+            if git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then
               echo "ARTIFACT_PUSH_OK attempt $i"
               exit 0
             fi

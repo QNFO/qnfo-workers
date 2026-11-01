@@ -13,6 +13,16 @@
 set -uo pipefail
 msg="$1"; shift
 [ "$#" -ge 1 ] || { echo "usage: push_artifact.sh <message> <path>..."; exit 2; }
+push_target=origin
+if [ -n "${MAIN_PUSH_TOKEN:-}" ]; then
+  repository="${GITHUB_REPOSITORY:-}"
+  if [[ ! "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    echo "invalid GITHUB_REPOSITORY for authenticated push" >&2
+    exit 2
+  fi
+  push_target="https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${repository}.git"
+fi
+case "$msg" in *"[skip ci]"*) ;; *) msg="$msg [skip ci]" ;; esac
 snap="$(mktemp -d)"
 for p in "$@"; do
   [ -e "$p" ] || continue
@@ -33,7 +43,7 @@ git add -- "$@" 2>/dev/null || true
 if git diff --cached --quiet; then echo "artifact unchanged - nothing to push"; exit 0; fi
 git commit -q -m "$msg"
 for i in 1 2 3 4 5 6; do
-  if git push -q origin HEAD:main; then echo "artifact pushed on attempt $i"; exit 0; fi
+  if git push -q "$push_target" HEAD:main; then echo "artifact pushed on attempt $i"; exit 0; fi
   echo "push rejected on attempt $i; re-applying the snapshot onto origin/main"
   sleep $((i * 3))
   git rebase --abort >/dev/null 2>&1 || true

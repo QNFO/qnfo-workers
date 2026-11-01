@@ -61,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -117,6 +118,8 @@ jobs:
 
       - name: Commit repaired sources (race-safe, bounded retry)
         if: github.actor != 'github-actions[bot]'
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -euo pipefail
           git config user.name  "qnfo-fleet-bot"
@@ -137,7 +140,7 @@ jobs:
           git commit -m "fix(fleet): UNMANGLE-WORKER-JS-1 extract MIME payload from worker.js [skip ci]"
           for i in 1 2 3 4 5; do
             git pull --rebase --autostash origin main >/dev/null 2>&1 || true
-            if git push origin HEAD:main; then
+            if git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then
               echo "pushed on attempt $i"
               exit 0
             fi

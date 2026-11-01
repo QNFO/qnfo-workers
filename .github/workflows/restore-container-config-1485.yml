@@ -69,6 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
           ref: main
 
@@ -160,6 +161,8 @@ jobs:
 
       - name: publish outcome artifact (always)
         if: always()
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -uo pipefail
           mkdir -p ci-status
@@ -202,7 +205,7 @@ jobs:
           git commit -m "chore(ci): restore-container-config-1485 outcome [skip ci]"
           for i in 1 2 3 4 5; do
             git pull --rebase --autostash origin main >/dev/null 2>&1 || true
-            if git push origin HEAD:main; then
+            if git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then
               echo "artifact pushed on attempt $i"
               exit 0
             fi

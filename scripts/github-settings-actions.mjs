@@ -171,7 +171,7 @@ export function workflowPushPaths(root) {
       }
       // MAIN-RULESET-STAGE0-1 (issue 100168): canonical-deploy status commits and the automatic canary revert push through these
       // scripts, so a workflow that never writes `git push ... main` itself still pushes to main as github-actions[bot].
-      if (/(push_artifact\.sh|canary_revert\.py)/.test(line)) {
+      if (/push_artifact\.sh/.test(line) || (/canary_revert\.py/.test(line) && /--targets\b/.test(line))) {
         out.push({ workflow: f, line: i + 1, snippet: line.trim() });
       }
     }

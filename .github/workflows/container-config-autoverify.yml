@@ -68,6 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -161,6 +162,8 @@ jobs:
       - name: "commit the verification artifact"
         if: always()
         continue-on-error: true
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -uo pipefail
           git config user.name "qnfo-ci"
@@ -170,10 +173,10 @@ jobs:
             echo "no artifact change"
             exit 0
           fi
-          git commit -m "ci(container-config): autoverify result"
+          git commit -m "ci(container-config): autoverify result [skip ci]"
           for i in 1 2 3 4 5; do
             git pull --rebase --autostash origin main || true
-            if git push origin HEAD:main; then echo "PUSH OK attempt $i"; exit 0; fi
+            if git push "https://x-access-token:${MAIN_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then echo "PUSH OK attempt $i"; exit 0; fi
             sleep $((i * 3))
           done
           echo "::warning::artifact not pushed after retries"

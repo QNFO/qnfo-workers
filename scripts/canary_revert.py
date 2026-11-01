@@ -7,7 +7,7 @@ WHAT   After canonical-deploy.yml (or deploy-code-orchestrator.yml for the conta
        not arrive inside the window is treated as a bad deploy: the push is reverted on main (git revert of the pushed
        commit, with each failed worker's VERSION bumped above the bad one so version-bump-guard and the deploy ledger stay
        monotonic, and its mirror kept identical), the revert is pushed, its deploy is dispatched (REVERT-REDEPLOY-1: a push
-       made with GITHUB_TOKEN starts no workflow run, so canonical-deploy.yml is run by `gh workflow run` for the failed
+       marked `[skip ci]` starts no workflow run, so canonical-deploy.yml is run by `gh workflow run` for the failed
        workers, and deploy-qnfo-ops.yml, the break-glass path that needs no /ops/deploy, when qnfo-ops is one of them), and
        one agent_issues row CONTROL-PLANE-REVERTED-1 records what was seen. A revert is never reverted (one level), so a
        broken /health route cannot ping-pong main; the dispatched redeploy runs the canary with --no-revert, which files
@@ -275,6 +275,16 @@ def git(args, check=True):
     return subprocess.run(["git"] + list(args), check=check, capture_output=True, text=True).stdout
 
 
+def main_push_target():
+    token = os.environ.get("MAIN_PUSH_TOKEN")
+    if not token:
+        return "origin"
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise ValueError("invalid GITHUB_REPOSITORY for authenticated push")
+    return f"https://x-access-token:{token}@github.com/{repository}.git"
+
+
 def revert_flags(parents_line):
     """'<sha> <parent> [<parent>]' from `git rev-list --parents -n1` -> the extra git-revert flags: a merge commit (two
     parents, every session PR the lane merges with the merge method) needs -m 1 to revert against main's side."""
@@ -394,17 +404,19 @@ def _revert_push(pushed, failed, dry, why=None):
     if why:
         title = "revert: " + str(pushed)[:7] + " failed the functional canary on " + ", ".join(w for w, _, _ in failed) + " (CONTROL-PLANE-CANARY-1)"
     body = "\n".join(revert_line(b, (why or {}).get(b[0])) for b in bumped)
-    git(["commit", "-q", "-m", title + "\n\n" + body + "\n\nAutomatic revert by canonical-deploy.yml (scripts/canary_revert.py). The failed pull request stays as it is; its author fixes it in a new pull request."])
+    git(["commit", "-q", "-m", title + " [skip ci]\n\n" + body + "\n\nAutomatic revert by canonical-deploy.yml (scripts/canary_revert.py). The failed pull request stays as it is; its author fixes it in a new pull request."])
     sha = git(["rev-parse", "HEAD"]).strip()
+    push_target = main_push_target()
+    push_token = os.environ.get("MAIN_PUSH_TOKEN", "")
     last = None
     for attempt in range(3):
         try:
-            git(["push", "origin", "HEAD:main"])
+            git(["push", push_target, "HEAD:main"])
             res = {"sha": sha, "bumped": bumped, "title": title}
             res.update(dispatch_redeploy([w for w, _, _ in failed]))
             return res
         except subprocess.CalledProcessError as e:
-            last = (e.stderr or e.stdout or str(e))[:300]
+            last = (e.stderr or e.stdout or str(e)).replace(push_token, "[REDACTED]")[:300] if push_token else (e.stderr or e.stdout or str(e))[:300]
             time.sleep(2 * (attempt + 1))
             git(["fetch", "origin", "main"], check=False)
             git(["rebase", "origin/main"], check=False)
@@ -421,7 +433,7 @@ def issue_text(pushed, results, outcome):
     elif "sha" in outcome:
         title = "CONTROL-PLANE-CANARY-FAILED-1: push " + str(pushed)[:7] + " reverted on main as " + str(outcome.get("sha"))[:7] + " but the redeploy of " + ", ".join(failed) + " was not dispatched"
         step = ("first dispatch the deploy of the revert commit " + str(outcome.get("sha")) + " (gh workflow run canonical-deploy.yml -f workers=\""
-                + " ".join(failed) + "\"; a push made with GITHUB_TOKEN starts no run): " + str(outcome.get("redeploy_error"))[:200] + ".")
+                + " " .join(failed) + "\"; a `[skip ci]` push starts no run): " + str(outcome.get("redeploy_error"))[:200] + ".")
     else:
         title = "CONTROL-PLANE-CANARY-FAILED-1: push " + str(pushed)[:7] + " did not reach /health on " + ", ".join(failed) + " and could not be reverted"
         step = "nothing was reverted (" + str(outcome.get("refused") or outcome.get("error") or "no outcome")[:200] + "), so the live worker is the one to repair first."
@@ -462,6 +474,32 @@ def selftest():
         checks.append((bool(cond), name))
         emit(("PASS " if cond else "FAIL ") + name + ("" if cond or detail is None else " -- " + str(detail)[:300]))
 
+    old_push_token = os.environ.get("MAIN_PUSH_TOKEN")
+    old_repository = os.environ.get("GITHUB_REPOSITORY")
+    try:
+        os.environ["MAIN_PUSH_TOKEN"] = "test-token"
+        os.environ["GITHUB_REPOSITORY"] = "QNFO/qnfo-workers"
+        target = main_push_target()
+        ok(target.startswith("https://x-access-token:") and "test-token@github.com/QNFO/qnfo-workers.git" in target, "main_push_target: authenticated pushes use the ruleset-compatible token")
+        os.environ.pop("MAIN_PUSH_TOKEN")
+        ok(main_push_target() == "origin", "main_push_target: local and legacy runs retain the origin fallback")
+        os.environ["MAIN_PUSH_TOKEN"] = "test-token"
+        os.environ["GITHUB_REPOSITORY"] = "invalid/repo/path"
+        try:
+            main_push_target()
+            invalid_repo_refused = False
+        except ValueError:
+            invalid_repo_refused = True
+        ok(invalid_repo_refused, "main_push_target: invalid repository names fail closed")
+    finally:
+        if old_push_token is None:
+            os.environ.pop("MAIN_PUSH_TOKEN", None)
+        else:
+            os.environ["MAIN_PUSH_TOKEN"] = old_push_token
+        if old_repository is None:
+            os.environ.pop("GITHUB_REPOSITORY", None)
+        else:
+            os.environ["GITHUB_REPOSITORY"] = old_repository
     ok(parse_targets("qnfo-ops qnfo-ops/worker.js\n# c\nqnfo-ai qnfo-ai/worker.js create\n\nbad\n") == [("qnfo-ops", "qnfo-ops/worker.js"), ("qnfo-ai", "qnfo-ai/worker.js")], "targets: worker and path per line, comments and bad lines skipped")
     ok(read_version('x\nvar VERSION = "0.7.0-a"; /* c */\n') == "0.7.0-a" and read_version("nothing") is None, "read_version reads the single VERSION line")
     ok(judge({"version": "1.2.3-x"}, "1.2.3-x") == ("ok", "1.2.3-x") and judge({"version": "1.2.2"}, "1.2.3-x")[0] == "wrong-version" and judge({"ok": True}, "1")[0] == "no-version" and judge(None, "1")[0] == "no-version", "judge: ok, wrong-version, no-version")

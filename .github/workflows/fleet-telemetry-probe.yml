@@ -39,6 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 50
       - name: At most every 6 hours when chained from a deploy
         id: due
@@ -69,6 +70,8 @@ jobs:
       - name: Commit the ci-status artifact back
         if: always() && steps.due.outputs.run == '1' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         continue-on-error: true
+        env:
+          MAIN_PUSH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
         run: |
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"

@@ -202,9 +202,10 @@ for (const mode of ["dry", "live"]) {
 // ---- a comment line is not a push path ----
 const pushRoot = mkdtempSync(join(tmpdir(), "gh-settings-pp-"));
 mkdirSync(join(pushRoot, ".github", "workflows"), { recursive: true });
-writeFileSync(join(pushRoot, ".github", "workflows", "p.yml"), "name: p\n# the old step ran a bare `git push origin HEAD:main` here\n  #   git push origin main  (indented comment)\njobs:\n  j:\n    steps:\n      - run: |\n          # git push origin main is documented above\n          git push origin HEAD:main\n      - run: git push origin feature\n");
+writeFileSync(join(pushRoot, ".github", "workflows", "p.yml"), "name: p\n# the old step ran a bare `git push origin HEAD:main` here\n  #   git push origin main  (indented comment)\njobs:\n  j:\n    steps:\n      - run: |\n          # git push origin main is documented above\n          git push origin HEAD:main\n      - run: git push origin feature\n      - run: python3 scripts/canary_revert.py --selftest\n");
+writeFileSync(join(pushRoot, ".github", "workflows", "d.yml"), "jobs:\n  j:\n    steps:\n      - run: python3 scripts/canary_revert.py --targets /tmp/targets.txt --pushed sha\n");
 const pp = workflowPushPaths(pushRoot);
-ok(pp.length === 1 && pp[0].workflow === "p.yml" && pp[0].line === 9 && /^git push origin HEAD:main$/.test(pp[0].snippet), "only the real push to main is a push path; comment lines (also indented and inside a run block) and a push to another branch are not", pp);
+ok(pp.length === 2 && pp[0].workflow === "d.yml" && pp[0].snippet.includes("--targets") && pp[1].workflow === "p.yml" && pp[1].line === 9 && /^git push origin HEAD:main$/.test(pp[1].snippet), "only real workflow writers are push paths; comments, tests, and pushes to another branch are not", pp);
 rmSync(pushRoot, { recursive: true, force: true });
 const realPaths = workflowPushPaths(repoRoot);
 ok(realPaths.length > 0 && realPaths.every((x) => !/^\s*#/.test(x.snippet)), "on this repository no listed push path is a comment line", realPaths.filter((x) => /^\s*#/.test(x.snippet)));
