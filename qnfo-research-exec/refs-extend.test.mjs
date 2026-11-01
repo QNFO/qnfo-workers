@@ -233,7 +233,7 @@ for (const [name, edits, paper, why] of [
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
-INSERT INTO ops_config (key, value) VALUES ('research_review_triage', 'off');
+INSERT INTO ops_config (key, value) VALUES ('research_review_triage', 'off'), ('research_lean_ensemble', 'off');
 INSERT INTO research_queue (id, source, source_id, idea, status, stage, context, recover_count) VALUES ('loop1', 'proposal', '1', 'an idea', 'researching', 'review', '{"cycles":0,"verifyPass":0}', 0);`);
   const d1 = { prepare(sql) {
     let args = [];

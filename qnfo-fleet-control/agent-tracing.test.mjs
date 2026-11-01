@@ -171,7 +171,7 @@ for (const replies of [[new Error("private upstream error")], ["private proposal
   check(output.ok, true, "model failures retain existing audit success semantics");
   check(output.suggestion, null, "model failures retain null suggestion");
   check(failed.events.some((sql) => sql.includes("INSERT INTO cloud_ops_events")), true, "audit still recorded after failure");
-  verifySpans(failed, replies.length);
+  verifySpans(failed, failed.calls.length);
 }
 
 for (const options of [
