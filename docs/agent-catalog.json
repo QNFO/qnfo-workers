@@ -451,6 +451,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MODEL-MATRIX.md"
     },
     {
+      "path": "docs/MONOREPO-DECISION.md",
+      "title": "MONOREPO-DECISION-1: keep qnfo-workers as one repository",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MONOREPO-DECISION.md"
+    },
+    {
       "path": "docs/ONE-THING-BACKLOG.md",
       "title": "One Thing / Focus backlog and roadmap",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ONE-THING-BACKLOG.md"
