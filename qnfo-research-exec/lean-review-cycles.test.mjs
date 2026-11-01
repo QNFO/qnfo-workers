@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const atLeast = (version, minimum) => {
+  const actual = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version || ""));
+  const required = minimum.split(".").map(Number);
+  if (!actual) return false;
+  for (let i = 0; i < required.length; i++) {
+    if (Number(actual[i + 1]) !== required[i]) return Number(actual[i + 1]) > required[i];
+  }
+  return true;
+};
 const fn = (name) => {
   const start = src.indexOf(`async function ${name}(`);
   if (start < 0) throw new Error(`missing ${name}`);
@@ -52,7 +61,8 @@ ok(src.includes("const _cycleCap = await reviewCycleCap(env);") &&
   /if \(hard\.length && cycle < _cycleCap && !_rising\)/.test(src) &&
   /if \(_blocking\.length\) \{/.test(src),
 "the smaller retry budget is wired into review while unresolved HARD findings remain blocking");
-ok(/var VERSION = "0\.42\.2-lean-review-cycles"/.test(src), "the worker receives a patch version bump");
+const version = /^var VERSION = "([^"]+)"/m.exec(src)?.[1];
+ok(atLeast(version, "0.42.2"), "the worker retains the lean-review-cycles version or newer", version);
 
 console.log(`lean-review-cycles: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

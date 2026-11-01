@@ -140,7 +140,9 @@ ok(atLeast((await (await worker.fetch(new Request("https://x/health"), env)).jso
   expire(id); replies.push(GOOD); guard.calls.length = 0;
   await tick();
   const acq = callsFor("/work-lock/acquire", K);
-  ok(acq.length >= 1 && !acq[0].body.token && guard.lease[K] && ctxOf(id).claim.token !== oldTok && !ctxOf(id).claim.released_at, "B4 on resume the task takes a fresh claim (no old token)", { acq, claim: ctxOf(id).claim });
+  const freshClaim = ctxOf(id).claim;
+  const release = callsFor("/work-lock/release", K).find((x) => x.body.token === freshClaim.token);
+  ok(acq.length >= 1 && !acq[0].body.token && freshClaim.token !== oldTok && freshClaim.released_at && release && !guard.lease[K], "B4 on resume the task takes a fresh claim and releases it after reaching ready_to_publish", { acq, claim: freshClaim, release });
   ok(row(id).status === "ready_to_publish", "B5 the resumed task lands its edit", { st: row(id).status, err: row(id).last_error });
 }
 
