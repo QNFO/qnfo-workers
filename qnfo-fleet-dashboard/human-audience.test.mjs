@@ -143,6 +143,21 @@ const answerLive = () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdap
   ok(accepted.value && accepted.value.external === 0 && current.last_value === "0", "the following anomalous read is accepted rather than held forever");
   ok(JSON.parse(latest.meta).guard_note.startsWith("accepted:"), "the accepted read after one hold is explicitly marked in its metric provenance");
 }
+// 2b. If guard state cannot be read, the existing measurement path remains available and marks its provenance.
+{
+  const db = freshDb(), q = [], audit = d1(db);
+  const cx = load(db, q, answerLive);
+  const unavailable = {
+    prepare(sql) {
+      if (sql.startsWith("SELECT ts, meta FROM cloud_ops_events")) throw new Error("guard state unavailable");
+      return audit.prepare(sql);
+    }
+  };
+  const r = await cx.__run({ AUDIT: unavailable }, Date.parse("2026-10-06T07:00:00Z"));
+  const led = db.prepare("SELECT meta FROM cloud_ops_events WHERE kind='human-audience'").get();
+  ok(r.value && r.value.external === 40, "an unreadable guard state does not stop a valid audience read");
+  ok(JSON.parse(led.meta).guard_note === "guard state unreadable: guard state unavailable", "the fail-open read records why guard state was unavailable");
+}
 // 3. A failed read leaves the registry untouched (never a fabricated zero).
 {
   const db = freshDb(), q = [];
