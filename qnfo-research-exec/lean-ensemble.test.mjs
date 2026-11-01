@@ -22,6 +22,7 @@ const mk = (budget, cfg) => {
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 ok(await leanEnsemble({ QNFO_AUDIT: mk([["ai_spend:workers-ai", 25, 59.7]], []) }) === true, "a breached ai_spend cap selects the lean ensemble");
+ok(await leanEnsemble({ QNFO_AUDIT: mk([], [["research_lean_ensemble", "off"]]), __researchDailyBudgetExceeded: true }) === true, "daily neuron target overrun forces the lean ensemble even if its opt-out is set");
 ok(await leanEnsemble({ QNFO_AUDIT: mk([["ai_spend:workers-ai", 25, 10], ["workers", 100, 500]], []) }) === false, "no breached ai_spend cap: three legs (other node classes do not count)");
 ok(await leanEnsemble({ QNFO_AUDIT: mk([["ai_spend:total", 150, 224]], [["research_lean_ensemble", "off"]]) }) === false, "ops_config research_lean_ensemble = off restores three legs");
 ok(await leanEnsemble({ QNFO_AUDIT: { prepare() { throw new Error("no such table: fleet_budget"); } } }) === true, "an unreadable fleet_budget reads as breached (lean)");
