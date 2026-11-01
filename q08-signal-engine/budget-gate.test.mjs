@@ -1,4 +1,4 @@
-// COST-SUSTAIN-2 (0.33.0): q08 hard daily neuron budget, paced over the UTC day; work waits, nothing is skipped.
+// COST-SUSTAIN-2: q08 daily neuron pressure routes writer calls cheaply; generation and audits continue.
 const G = (await import("./worker.js")).__gen;
 let passes = 0, fails = 0;
 const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL " + l + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };
@@ -20,5 +20,8 @@ const r6 = await G.q08Budget(env("150000", 0, true), noon);
 console.error = origErr;
 check("an unreadable counter reads as ok", r6.ok === true && r6.unreadable === true, r6);
 check("no AUDIT binding reads as ok", (await G.q08Budget({}, noon)).ok === true);
+const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+check("generation treats the daily limit as routing pressure instead of a stop", /var _bud = await q08Budget\(env\);\s*env = Object\.assign\(\{\}, env, \{ __q08BudgetPressure: !!env\.__q08BudgetPressure \|\| !_bud\.ok \}\);/.test(src) && !/if\s*\(!_bud\.ok\)\s*return/.test(src));
+check("published-piece audits continue under budget pressure", /var _abud = await q08Budget\(env\);\s*env = Object\.assign\(\{\}, env, \{ __q08BudgetPressure: !!env\.__q08BudgetPressure \|\| !_abud\.ok \}\);/.test(src) && !/if\s*\(!_abud\.ok\)\s*return/.test(src));
 console.log("budget-gate.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);

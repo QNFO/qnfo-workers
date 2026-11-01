@@ -8,7 +8,7 @@
 // the Rollback line puts every row back.
 // Output MUST contain "0 failed" on success.   node migrations/rem-a5-metric-triggers.test.mjs
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const root = new URL("../", import.meta.url);
@@ -44,6 +44,21 @@ const pairOf = (action) => {
   const t = marks.filter((l) => /code-task:/.test(l))[0], an = marks.filter((l) => /code-anchor:/.test(l))[0];
   if (!t || !an) return null;
   return { path: (/path=(\S+)/.exec(t) || [])[1], anchor: an.replace(/^\s*code-anchor:[ \t]*/, "").replace(/[ \t]+$/, "") };
+};
+// BREACH-CODE-ANCHORS-1: the live anchor is the LAST writer's (migrations/code-anchor-once.test.mjs reads it the same way). A worker change may rewrite an anchored line
+// (10931: REVISE-NOOP-BOUND-1, pull request 5500) and its author repoints the anchor in a later migration, so this file's "occurs exactly once" check must see the repointed
+// anchor, not the 2026-10-26 one. The later statements of the form UPDATE analytics_metric_triggers SET action = replace(action, char(10) || 'code-anchor: OLD', ... 'NEW') WHERE id = N
+// are replayed in file order on a one-row copy; a row no statement names is returned unchanged.
+const REPOINT = /^UPDATE analytics_metric_triggers SET action = replace\(action, char\(10\) \|\| 'code-anchor: (?:[^']|'')*', char\(10\) \|\| 'code-anchor: (?:[^']|'')*'\) WHERE id = \d+(?: AND metric_key = '[^']*')?;[ \t]*$/gm;
+const LATER = readdirSync(new URL("migrations/", root)).filter((n) => /^\d{4}-\d{2}-\d{2}.*\.sql$/.test(n) && n > "2026-10-26-rem-a5-metric-triggers.sql").sort();
+const effectiveAction = (id, metricKey, action) => {
+  const d = new DatabaseSync(":memory:");
+  d.exec("CREATE TABLE analytics_metric_triggers (id INTEGER PRIMARY KEY, metric_key TEXT, action TEXT)");
+  d.prepare("INSERT INTO analytics_metric_triggers (id, metric_key, action) VALUES (?, ?, ?)").run(id, metricKey, action);
+  for (const f of LATER) for (const m of rd("migrations/" + f).matchAll(REPOINT)) d.exec(m[0]);
+  const out = d.prepare("SELECT action FROM analytics_metric_triggers WHERE id = ?").get(id).action;
+  d.close();
+  return out;
 };
 
 // ---- the live rows this file touches (read 2026-10-26 from qnfo-audit)
@@ -131,7 +146,8 @@ for (const id of [388, 1867, 10931]) {
   ok(a.action.includes(ORIG[id].replace(/^Pillar [^.]*\. /, "").slice(0, 60)) || a.action.includes(ORIG[id].slice(40, 120)), id + ": the old action text is kept");
   ok(/REM-A5-METRIC-TRIGGERS-1 2026-10-26/.test(a.notes) && a.notes.startsWith(NOTES[id]), id + ": the note is appended to the old note");
   const file = p && p.path ? rd(p.path) : "";
-  ok(!!p && countOf(file, p.anchor) === 1, id + ": the anchor occurs exactly once in " + (p && p.path), p && { path: p.path, n: countOf(file, p.anchor), anchor: p.anchor.slice(0, 100) });
+  const pe = pairOf(effectiveAction(id, KEYS[id], a.action));
+  ok(!!p && !!pe && pe.path === p.path && countOf(file, pe.anchor) === 1, id + ": the effective anchor (after any later repoint) occurs exactly once in " + (p && p.path), pe && { path: p.path, n: countOf(file, pe.anchor), anchor: pe.anchor.slice(0, 100) });
   ok(!!p && /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/.test(p.path) && p.anchor.length > 0 && p.anchor.length <= 300 && !/^\s|\s$/.test(p.anchor), id + ": the path is a repository file and the anchor one trimmed line of at most 300 characters");
   ok(!!p && denyWorkers.indexOf(p.path.split("/")[0]) < 0 && /^[a-z0-9][a-z0-9-]*\/worker\.js$/.test(p.path), id + ": the worker is one the code loop may change (not in PLAN_DENY_WORKERS)", denyWorkers);
   const issueText = bridge.desc("METRIC-TRIGGER #" + id + " " + KEYS[id] + "=1 gt 0 -> ", a.action, " (owner x, target agent_issues)");

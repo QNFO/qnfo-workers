@@ -56,9 +56,17 @@ props = { caller = "qnfo-agents" }
 name = "FleetCodeAgent"
 class_name = "FleetCodeAgent"
 
+[[durable_objects.bindings]]
+name = "CodeSession"
+class_name = "CodeSession"
+
 # DO-EXPORTS-1 (2026-10-26): the class is declared in `exports`, not the legacy migrations array. A server-side upload at 09:11Z
 # replaced the script without its migration history, and wrangler then refused the deploy (provisioned_class_missing_from_config).
 # `exports` states the live class on every deploy, so the namespace (and its data) is reconciled from config, not from history.
 [exports.FleetCodeAgent]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.CodeSession]
 type = "durable-object"
 storage = "sqlite"
