@@ -43,7 +43,8 @@ ask product. Clearing breaches, closing issues and passing gates measure the fle
 | promotion | `outreach_human_clicks_7d`, `outreach_clicks_per_post_7d`, `social_engagement_rate_30d` | |
 | site | `engaged_human_sessions_28d` | |
 | code | `code_task_success_rate_30d`, `remediation_latest_pass_pct_7d` | |
-| ask | none yet (gap) | `ask_citation_validity_7d` |
+| ask | `ask_helpful_rate_30d` (visitor ratings; unmeasured below 10 ratings in 30 days) | `ask_citation_validity_7d`; `ask_plain_share_7d` |
+| job applications | `jobsearch_reply_rate_90d` (replies, interviews and offers among applications at least 21 days old; unmeasured below 10 mature applications) | |
 
 A measure's `polarity` says which direction is better; `tol_rel` and `tol_abs` set the smallest move that counts (the larger of the two applies), so noise reads `flat`.
 
@@ -76,6 +77,6 @@ The measures are written by `output_quality_heavy_tick`, a trigger on `fleet_tic
 - Errata come from a model reviewer; its errors correlate with the writers (ENSEMBLE-POLICY-1). A wider sweep raises the count without a worse paper, so read the share with the
   net inflow, and keep the belief probe `belief-paper-learn-errata-are-defects` (falsified if the fleet rejects over half of what it closes).
 - Reads include reads of retracted essays; clicks are not satisfaction. Promotion and site improving is evidence of reach, not of correctness.
-- Not yet measured: the quality of posts beyond clicks, the ask product's answers, an owner or reader verdict on papers.
+- Not yet measured: the quality of posts beyond clicks, an owner or reader verdict on papers. Ask ratings remain a sparse, self-selected outcome; job-application outcomes remain unknown until the mature-application sample reaches 10.
 - The ledger is wrong if the verdict reads `improving` while errata, retractions or reader complaints rise; that is a `validity` finding to fix in `output_quality_measures`, not a reason to
   add a measure that agrees.

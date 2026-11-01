@@ -451,6 +451,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MODEL-MATRIX.md"
     },
     {
+      "path": "docs/ONE-THING-BACKLOG.md",
+      "title": "One Thing / Focus backlog and roadmap",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/ONE-THING-BACKLOG.md"
+    },
+    {
       "path": "docs/OPS-CLIENT-KEY-SETUP.md",
       "title": "OPS_CLIENT_KEY Setup for ChatBox / SannaBot / Android",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/OPS-CLIENT-KEY-SETUP.md"
