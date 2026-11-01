@@ -1,375 +1,311 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@96ca9a7a149a",
- "due": 241,
- "pass": 114,
- "fail": 117,
- "skipped": 10,
- "deferred": 10,
+ "verifier": "remediation-consumer@7af59d1deed4",
+ "due": 560,
+ "pass": 131,
+ "fail": 391,
+ "skipped": 38,
+ "deferred": 37,
  "contracts": [
   {
-   "class": "fm-drill-probe-blames-budget-pause",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-research-extract-parse",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-plain-article-coverage-stalls",
-   "issue_id": null,
+   "class": "issue-1000654",
+   "issue_id": 1000654,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-portfolio-gap-ticket-outlives-gap",
+   "class": "fm-metric-refresher-replaced",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-ops-jobs-sweep-status-gap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-revise-second-model-timeout",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-revision-loop-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-d1-like-pattern-limit",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-retry-holds-file",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-red-drain-dispatch-out-of-scope",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-wai-spend-per-paper",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "belief-dash-owner-done-not-a-decision",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-portfolio-gap-deployable-owner",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-errata-chain-dispatch",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-plan-wip-terminal-omitted",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-workers-standards-debt-unmeasured",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-breach-ticket-reopen-starvation",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-metric-cause-registration-missing",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-ask-helpful-history-unit-drift",
-   "issue_id": 1000801,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-stale-hold",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-pn-target-closed-open",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-review-single-model",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-research-exec-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-reasoning-starves-small-answer",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001226",
-   "issue_id": 1001226,
    "verdict": "fail",
-   "expected": "success",
-   "observed": "failure-within-24h",
+   "expected": "0",
+   "observed": "4",
    "written": true
   },
   {
-   "class": "issue-1001227",
-   "issue_id": 1001227,
+   "class": "issue-1000800",
+   "issue_id": 1000800,
+   "verdict": "fail",
+   "expected": "2 of 2 program-manager target metrics hold a value (unmeasured: none)",
+   "observed": "0 of 2 program-manager target metrics hold a value (unmeasured: product_plus_rate_7d, plus_keep_rate_30d)",
+   "written": true
+  },
+  {
+   "class": "issue-1001198",
+   "issue_id": 1001198,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-cf-obs-sweep-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "fresh",
-   "observed": "fresh",
+   "class": "issue-1000816",
+   "issue_id": 1000816,
+   "verdict": "fail",
+   "expected": "under 300 USD/month",
+   "observed": "532.95 USD/month",
    "written": true
   },
   {
-   "class": "fm-probe-vacuous-open-fail",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-view-alias-capture",
+   "class": "fm-open-issue-no-doer",
    "issue_id": null,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "0",
+   "observed": "29",
    "written": true
   },
   {
-   "class": "fm-owner-notice-counted-as-dispatch",
-   "issue_id": null,
+   "class": "issue-1001195",
+   "issue_id": 1001195,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-owner-queue-objects-outside-repo",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-steward-protection-answer-dropped",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-100168",
+   "issue_id": 100168,
+   "verdict": "fail",
    "expected": "yes",
-   "observed": "yes",
+   "observed": "no",
    "written": true
   },
   {
-   "class": "fm-unconfirmed-citation-published",
+   "class": "fm-reopen-without-live-path",
    "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "28",
+   "written": true
+  },
+  {
+   "class": "issue-1001200",
+   "issue_id": 1001200,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001201",
+   "issue_id": 1001201,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001202",
+   "issue_id": 1001202,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001203",
+   "issue_id": 1001203,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001204",
+   "issue_id": 1001204,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-ops-capped-reply-logged-ok",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-seo-metric-refresh-bridge",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1001205",
+   "issue_id": 1001205,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001206",
+   "issue_id": 1001206,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001207",
+   "issue_id": 1001207,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001208",
+   "issue_id": 1001208,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001209",
+   "issue_id": 1001209,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001211",
+   "issue_id": 1001211,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-grounding-single-source-refused",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-GH-WEBHOOK-REGISTER-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "unmet: no gh-webhook delivery recorded in the last 120 minutes",
+   "written": true
+  },
+  {
+   "class": "issue-1000881",
+   "issue_id": 1000881,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000872 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000872 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000934",
+   "issue_id": 1000934,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000796 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000796 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1001210",
+   "issue_id": 1001210,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2852",
+   "issue_id": 2852,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "below target",
+   "written": true
+  },
+  {
+   "class": "issue-1000793",
+   "issue_id": 1000793,
+   "verdict": "fail",
+   "expected": "products table has key column and at least 6 rows",
+   "observed": "products table has no key column",
+   "written": true
+  },
+  {
+   "class": "issue-1000465",
+   "issue_id": 1000465,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "fm-code-task-search-outside-window",
+   "class": "fm-paper-fabricated-empirical-claim",
    "issue_id": null,
-   "verdict": "pass",
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "sweep-stale",
+   "written": true
+  },
+  {
+   "class": "issue-100310-BACKFILL-1",
+   "issue_id": 100310,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100310 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-1000891",
+   "issue_id": 1000891,
+   "verdict": "fail",
    "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-fm-sla-due-at-mixed-format",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-like-pattern-over-limit",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-workflow-state-retired",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-breach-doctor-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-publish-waits-for-push",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-lane-null-first-read-nudge",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-prd-funnel-evidence",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": 0,
-   "observed": 0,
-   "written": true
-  },
-  {
-   "class": "fm-gh-poke-silent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-register-row-reescalated",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-one-producer-two-paths",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "fm-remedy-efficacy-counts-dedupes",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "class": "issue-2827",
+   "issue_id": 2827,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "code-task-merge breach/breach 148.6 min vs 120, finished_7d 129, last 24h 52.8",
    "written": true
   },
   {
-   "class": "fm-portfolio-gap-owner-not-deployable",
+   "class": "issue-746",
+   "issue_id": 746,
+   "verdict": "fail",
+   "expected": "probe:PASS|scheduled:PASS",
+   "observed": "probe:FAIL=38|scheduled:FAIL=29",
+   "written": true
+  },
+  {
+   "class": "issue-1000824",
+   "issue_id": 1000824,
+   "verdict": "fail",
+   "expected": "0 off-target QNFO.OPS metrics without a doer",
+   "observed": "6 off-target QNFO.OPS metrics without a doer",
+   "written": true
+  },
+  {
+   "class": "fm-issue-no-doer-24h",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "341",
+   "written": true
+  },
+  {
+   "class": "fm-issue-sla-scope",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -377,33 +313,48 @@
    "written": true
   },
   {
-   "class": "fm-breach-anchor-stale",
+   "class": "issue-100084-BACKFILL-1",
+   "issue_id": 100084,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100084 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-100362-BACKFILL-1",
+   "issue_id": 100362,
+   "verdict": "fail",
+   "expected": "closed-with-evidence",
+   "observed": "open: issue 100362 is not closed with close_evidence yet (doer: qnfo-ops)",
+   "written": true
+  },
+  {
+   "class": "issue-1000399",
+   "issue_id": 1000399,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "still installed: deploy_merge_age_tick,breach_selfheal_heavy_tick",
+   "written": true
+  },
+  {
+   "class": "belief-doctor-structured-facts-suffice",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
+   "verdict": "fail",
+   "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "fm-code-task-owner-routed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
+   "class": "issue-1000459",
+   "issue_id": 1000459,
+   "verdict": "fail",
+   "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "belief-owner-items-have-a-loop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "holds",
-   "observed": "holds",
-   "written": true
-  },
-  {
-   "class": "fm-relapse-window-sql-twin-anchor",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "3",
-   "observed": "3",
-   "written"
+   "class": "issue-100439",
+   "issue_id": 100439,
+   "verdict": "fail",
+   "expected": "pass_rate>=0.5, neurons<=6000, cadence_overdue_count=0",
+   "observed": "pass_rate=0.04, neurons=73014.689, cadence_overdue_count=1 (continuity-snapshot=0, q08.org
