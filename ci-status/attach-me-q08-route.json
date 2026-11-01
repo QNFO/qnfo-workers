@@ -6,9 +6,9 @@
   "stage": "verify",
   "status": "ok",
   "error": null,
-  "worker_version": "4.21.0-mcp-consent-code",
+  "worker_version": "4.30.0",
   "route_id": "859a9e33ac72465080138ec966c41b90",
   "dns_created": null,
   "verified": true,
-  "ts": "2026-10-20T08:23:31Z"
+  "ts": "2026-11-01T17:19:32Z"
 }
