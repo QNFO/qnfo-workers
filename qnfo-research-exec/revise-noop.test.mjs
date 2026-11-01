@@ -21,13 +21,34 @@ const mkPaper = () => "# A paper about a model\n\n## Abstract\n\nContext, gap, a
 const PAPER = mkPaper();
 ok(PAPER.length >= 12000 && paperCompleteness(PAPER).complete, "fixture: a complete paper of at least 12000 chars", { len: PAPER.length, pc: paperCompleteness(PAPER) });
 
-function mkEnv(answer, opts = {}) {
+function mkEnv(answer, countOrOpts = 0) {
   const store = { "pipeline/r1/reconciled.md": PAPER, "pipeline/r1/fixes.json": JSON.stringify({ hard: [{ id: "h1", severity: "HARD", claim: "the coupling value", reason: "stated without derivation", fix: "derive or remove" }], soft: [] }), "pipeline/r1/grounding.md": "" };
+  const opts = typeof countOrOpts === "object" ? countOrOpts : {};
+  const reviseCount = typeof countOrOpts === "number" ? countOrOpts : 0;
   const sqls = [], calls = [];
-  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); if (opts.failReviseCount && /SET revise_count/.test(sql)) throw new Error("simulated counter write failure"); return { meta: { changes: 1 } }; }, async first() { return null; }, async all() { return { results: [] }; } }; return q; } };
+  const state = { reviseCount, status: "researching", stage: "revise", error: null, claimedAt: "now", recoverCount: 0 };
+  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() {
+    sqls.push({ sql, args });
+    if (opts.failReviseCount && /SET revise_count/.test(sql)) throw new Error("simulated counter write failure");
+    if (/UPDATE research_queue SET status='researching', stage='revise'/.test(sql)) {
+      state.status = "researching"; state.stage = "revise"; state.error = args[0]; state.recoverCount++;
+    }
+    return { meta: { changes: 1 } };
+  }, async first() {
+    sqls.push({ sql, args });
+    if (opts.failReviseCount && /SET revise_count/.test(sql)) throw new Error("simulated counter write failure");
+    if (/UPDATE research_queue SET revise_count/.test(sql)) {
+      state.reviseCount++;
+      if (state.reviseCount >= 2) {
+        state.status = "wontfix"; state.stage = "parked"; state.error = "REVISE-NOOP-BOUND-1 revise_count>=2; PARKED-REVISE-NOOP-CEILING-1"; state.claimedAt = null;
+      }
+      return { revise_count: state.reviseCount, status: state.status, stage: state.stage };
+    }
+    return null;
+  }, async all() { return { results: [] }; } }; return q; } };
   const MIRROR = { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } };
   const AI = { async run(model, input) { const prompt = input.messages[0].content; calls.push({ model, prompt }); return { response: typeof answer === "function" ? answer(calls.length, prompt) : answer }; } };
-  return { env: { AI, QNFO_AUDIT: D1, MIRROR }, sqls, calls, store };
+  return { env: { AI, QNFO_AUDIT: D1, MIRROR }, sqls, calls, store, state };
 }
 const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", stage: "revise", status: "researching" };
 
@@ -47,6 +68,7 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
   const upd = t.sqls.filter((s) => /UPDATE research_queue/.test(s.sql));
   ok(upd.some((s) => /SET revise_count = COALESCE\(revise_count, 0\) \+ 1/.test(s.sql)), "a revise-noop increments the live diagnostic counter", upd.map((s) => s.sql));
   ok(!upd.some((s) => /stage='review'/.test(s.sql)), "the row is NOT advanced to review", upd.map((s) => s.sql));
+  ok(t.state.reviseCount === 1, "the first no-op increments the durable revise_count", t.state);
   // RERUN-ROUTE-1 (0.18.0, agent_issues 2473): a revise failure re-enters once at revise with its findings, not at ground.
   ok(upd.some((s) => /status='researching', stage='revise'/.test(s.sql) && /recover_count=recover_count\+1/.test(s.sql) && s.args[3] === "r1" && /^RERUN-ROUTE-1 revise-once: /.test(s.args[0]) && /not advanced unrevised/.test(s.args[0]) && /h1/.test(s.args[0])), "markError re-enters the row once at revise with recover_count+1 and the reason (the recovery path)", upd.map((s) => [s.sql, s.args]));
   ok(t.store["pipeline/r1/reconciled.md"] === PAPER, "the paper in R2 is untouched");
@@ -56,12 +78,12 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
 
 // 1b. A second non-parse revise-noop hits the explicit revise_count ceiling and parks with its own reason.
 {
-  const t = mkEnv("[]");
+  const t = mkEnv("[]", 1);
   const second = Object.assign({}, row, { recover_count: 1, revise_count: 1, error: "RERUN-ROUTE-1 revise-once: first no-op" });
   const res = await stageRevise(t.env, second);
-  const park = t.sqls.find((s) => /UPDATE research_queue SET status='wontfix', stage='parked'/.test(s.sql));
   ok(res && res.withheld === "revise-noop", "the second no-op remains withheld", res);
-  ok(park && /^PARKED-REVISE-NOOP-CEILING-1/.test(park.args[0]), "revise_count=2 parks explicitly instead of re-entering the loop", park && park.args[0]);
+  const park = t.sqls.find((s) => /UPDATE research_queue SET revise_count/.test(s.sql));
+  ok(res && res.parked === true && res.revise_count === 2 && park && /PARKED-REVISE-NOOP-CEILING-1/.test(park.sql), "revise_count=2 parks explicitly instead of re-entering the loop", { result: res, sql: park && park.sql, state: t.state });
 }
 
 // 1c. A D1 counter failure is logged and does not replace the existing recover-route behavior.
@@ -102,7 +124,17 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
   ok(res && res.ok === true && res.stage === "revise->review" && res.patch === 1 && t.calls.length === 2, "an edit from the strict retry is applied and advances the row", res);
 }
 
-// 5. An unreadable review is re-reviewed, not counted as an unapplied patch.
+// 5. A second no-op is parked durably without the recovery route overwriting it.
+{
+  const t = mkEnv("[]", 1);
+  const res = await stageRevise(t.env, Object.assign({}, row, { revise_count: 1 }));
+  ok(res && res.ok === false && res.withheld === "revise-noop" && res.parked === true && res.revise_count === 2, "the second no-op is reported as parked", res);
+  ok(t.state.reviseCount === 2 && t.state.status === "wontfix" && t.state.stage === "parked" && t.state.claimedAt === null, "the second no-op persists its count and terminal queue state", t.state);
+  ok(!t.sqls.some((s) => /status='researching', stage='revise'/.test(s.sql)), "the parked no-op is not requeued by markError");
+  ok(!t.sqls.some((s) => /stage='review'/.test(s.sql)), "a paper with unresolved HARD fixes is never advanced to review");
+}
+
+// 6. An unreadable review is re-reviewed, not counted as an unapplied patch.
 {
   const t = mkEnv("[]");
   t.store["pipeline/r1/fixes.json"] = JSON.stringify([{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }]);

@@ -128,6 +128,12 @@ binding = "SVC_QNFO_RESEARCH_EXEC"
 service = "qnfo-research-exec"
 environment = "production"
 
+[[services]]
+binding = "SVC_ERRATA_HUB"
+service = "qnfo-research-exec"
+environment = "production"
+props = { caller = "qnfo-fleet-dashboard", member = "errata-hub" }
+
 
 
 [[kv_namespaces]]

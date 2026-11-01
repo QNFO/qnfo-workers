@@ -65,11 +65,27 @@ ok(mirror.includes("owner_papers_retracted_over_24h") && mirror.includes("_stale
 const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(ver && (+ver[1] > 0 || +ver[2] >= 40), "VERSION is at least 0.40.0");
 
+const throughputCause = readFileSync(new URL("./2026-11-01-issue-family-throughput-cause.sql", import.meta.url), "utf8");
+const throughputCauseBody = throughputCause.split("\n").filter((line) => !line.startsWith("--")).join("\n");
+w.exec(throughputCauseBody);
+w.exec(throughputCauseBody);
+ok(w.prepare("SELECT cause_key FROM metric_breach_cause WHERE metric_key = 'largest_issue_family_net_inflow_24h'").get()?.cause_key === "issue-backlog",
+  "the forward migration idempotently maps issue-family throughput to the issue-backlog cause");
+const throughputRollback = throughputCause.match(/^-- Rollback: (.+)$/m)?.[1];
+ok(!!throughputRollback, "the forward cause migration has a rollback");
+if (throughputRollback) w.exec(throughputRollback);
+ok(w.prepare("SELECT COUNT(*) n FROM metric_breach_cause WHERE metric_key = 'largest_issue_family_net_inflow_24h'").get().n === 0,
+  "the forward cause migration rollback removes only its cause mapping");
+
 // registration rule (deploy gate): a migration dated after this one that registers a metric maps its cause in the same file.
 // A file that already merged may not be edited to add the row (MIGRATION-NO-CLOBBER-1: the runner re-applies an edited file, and 2026-10-29-plussing-3.sql also rewrites the live
 // management-personas workflow), so a later migration may map the metric instead. Each such file is listed here with the metric and the forward file, and this test reads the
 // forward file to prove the mapping exists. A new registration still maps its cause in its own file.
-const MAPPED_FORWARD = { "2026-10-29-plussing-3.sql": { file: "2026-10-30-product-plus-cause.sql", metric: "product_plus_deployed_7d" } };
+const MAPPED_FORWARD = {
+  "2026-10-29-plussing-3.sql": { file: "2026-10-30-product-plus-cause.sql", metrics: ["product_plus_deployed_7d"] },
+  "2026-11-01-plussing-4.sql": { file: "2026-11-01-plussing-4a-cause.sql", metrics: ["plus_shipped_7d", "plus_kept_share_30d"] },
+  "2026-11-01-issue-family-throughput-action.sql": { file: "2026-11-01-issue-family-throughput-cause.sql", metrics: ["largest_issue_family_net_inflow_24h"] },
+};
 const files = readdirSync(new URL("./", import.meta.url)).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.sql$/.test(f) && f.slice(0, 10) >= "2026-10-29");
 for (const f of files) {
   const t = readFileSync(new URL("./" + f, import.meta.url), "utf8");
@@ -80,7 +96,7 @@ for (const f of files) {
   let later = false;
   if (fwd) {
     const ft = readFileSync(new URL("./" + fwd.file, import.meta.url), "utf8");
-    later = fwd.file > f && t.includes("'" + fwd.metric + "'") && new RegExp("INTO\\s+metric_breach_cause\\b[\\s\\S]*'" + fwd.metric + "'", "i").test(ft) && /^-- APPLY-BY: ci\s*$/m.test(ft);
+    later = fwd.file > f && fwd.metrics.every((metric) => t.includes("'" + metric + "'") && new RegExp("INTO\\s+metric_breach_cause\\b[\\s\\S]*'" + metric + "'", "i").test(ft)) && /^-- APPLY-BY: ci\s*$/m.test(ft);
   }
   ok(here || later,
     f + " registers a metric: add INSERT INTO metric_breach_cause in the same file (METRIC-CAUSE-AT-REGISTRATION-1), or a '-- CAUSE-MAPPED: <where and why>' line");

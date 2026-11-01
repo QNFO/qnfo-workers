@@ -194,13 +194,17 @@ function fileIssue(env) {
   ok(row(env, id).status === "failed" && again === 1, "B3 exhausting the same task again keeps one open fleet issue (deduped by title)", { st: row(env, id).status, issues: again });
 }
 
-// ===== C. what a model cannot fix still stops at once (policy refusals are unchanged) =====
+// ===== C. an ambiguous anchor gets one bounded locator attempt before parking =====
 {
   const { env, calls } = envWith([]);
   await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: { authorization: "Bearer t0ken", "content-type": "application/json" }, body: JSON.stringify({ repo: "qnfo-workers", path: "q08-signal-engine/worker.js", goal: "make a change somewhere in this file", anchor: "function filler1" }) }), env);
   await tick(env);
   const r = env.AUDIT_DB._db.prepare("SELECT status, last_error FROM code_tasks").get();
-  ok(r.status === "needs_human" && /must occur exactly once/.test(r.last_error) && calls.length === 0, "C1 a non-unique anchor is still refused at once, before any model call", r);
+  const locatorRequests = calls.filter((call) => /The anchor given with the task occurs \d+ times in the file, so it cannot be used:/.test(call.prompt));
+  ok(r.status === "needs_human" && /must occur exactly once/.test(r.last_error) && /ANCHOR-LOCATOR-1 found no unique line/.test(r.last_error) &&
+      locatorRequests.length === 2 && locatorRequests.every((call) => call.model === LADDER[0]),
+    "C1 a non-unique anchor gets one locator attempt (plus its bounded empty retry) and parks when no unique line can be found",
+    { ...r, locatorRequests: locatorRequests.length });
 }
 
 // ===== D. /health tells the truth about it =====

@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.0-forecast-ledger";
+var VERSION = "0.40.3";
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
@@ -390,10 +390,9 @@ async function insertRun(env, r) {
   }
   return await env.DB.prepare("INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error) VALUES (?,?,?,?,?,?,?,?)").bind(base[0], base[1], base[2], base[3], base[4], base[5], base[6], base[7]).run();
 }
-// COST-SUSTAIN-2 (0.33.0): the hard daily spend gate. PRECONDITION: env.AUDIT is qnfo-audit (ai_call_counters). POSTCONDITION:
-// { ok, spent, budget, pace }; ok is false once today's q08 neurons reach the paced allowance. INVARIANT: an unreadable counter
-// reads as ok (a D1 fault never blocks verified work; the publish and attempt caps still bound the day); a budget of 0 or below
-// in ops_config disables the gate (explicit owner override only).
+// COST-SUSTAIN-2 (0.33.0): daily spend pressure. PRECONDITION: env.AUDIT is qnfo-audit (ai_call_counters). POSTCONDITION:
+// { ok, spent, budget, pace }; ok is false once today's q08 neurons reach the paced allowance. Callers use this to route the
+// first writer attempt to a cheaper model, never to defer work; a budget of 0 or below disables the pressure signal.
 var Q08_DAILY_NEURONS_DEFAULT = 150000;
 var Q08_BUDGET_BURST = 0.1;
 async function q08Budget(env, nowMs) {
@@ -1164,11 +1163,11 @@ function seedOf(str) { var h = 0, t = String(str || ""); for (var i = 0; i < t.l
 // cache, the rate limits and the (beta, eventually consistent, up to 20 rules) spend limits configured on the gateway as a
 // backstop. Each call carries metadata (worker, loop_id, session_id, purpose) so gateway logs can be attributed per loop.
 // Deterministic calls (temperature 0 / fixed judge prompts) are cached (cf-aig-cache-ttl); anything else skips the cache.
-// The per-loop hard budget is enforced in code: a breached budget steers the call to a cheaper model (BUDGET-SOFT-ROUTE-1),
-// never refuses it, so the pipeline keeps working and the spend stops growing at the expensive models.
+// A breached spend or token budget steers the first writer attempt to a cheaper model (BUDGET-SOFT-ROUTE-1); reviewer calls
+// keep their independent families, and a writer that fails its gates can escalate through the measured-yield order.
 var AIG_GATEWAY_DEFAULT_ID = "qnfo-infra";
 var AIG_CACHE_TTL_SECONDS = 21600; // cf-aig-cache-ttl: 6 h
-var AIG_BUDGET_FALLBACK_MODEL = "@cf/moonshotai/kimi-k2.6";
+var AIG_BUDGET_FALLBACK_MODEL = "@cf/openai/gpt-oss-20b";
 var AIG_LOOP_MAX_TOKENS = 60000;
 function loopBudget(env, loopId, maxTokens) {
   if (!env) return null;
@@ -1180,7 +1179,15 @@ function loopBudget(env, loopId, maxTokens) {
 async function aiGatewayRun(env, modelId, input, meta) {
   var m = meta || {};
   var b = env && env.__aigLoopBudget, model = modelId;
-  if (b && b.used >= b.max) model = AIG_BUDGET_FALLBACK_MODEL; // BUDGET-SOFT-ROUTE-1: cheaper model, never a stop
+  var writerCall = m.purpose === "compose" || m.purpose === "title-repair" || m.purpose === "forecast";
+  if (writerCall && m.budgetFallback && ((b && b.used >= b.max) || (env && env.__q08BudgetPressure))) model = AIG_BUDGET_FALLBACK_MODEL;
+  var callInput = input;
+  if (model !== modelId) {
+    callInput = Object.assign({}, input);
+    delete callInput.chat_template_kwargs;
+    delete callInput.reasoning;
+    callInput.reasoning = { effort: "low" };
+  }
   var gw = {
     id: (env && env.AIG_GATEWAY_ID) || AIG_GATEWAY_DEFAULT_ID,
     collectLog: true,
@@ -1190,10 +1197,10 @@ async function aiGatewayRun(env, modelId, input, meta) {
   else { gw.skipCache = true; }
   var opts = { gateway: gw };
   if (m.signal) opts.signal = m.signal;
-  var resp = await env.AI.run(model, input, opts);
+  var resp = await env.AI.run(model, callInput, opts);
   var u = (resp && resp.usage) || {};
   if (b) b.used += (Number(u.prompt_tokens) || 0) + (Number(u.completion_tokens) || 0);
-  return resp;
+  return resp && typeof resp === "object" ? Object.assign({}, resp, { __q08Model: model }) : { response: resp, __q08Model: model };
 }
 async function readerTest(env, modelId, text, rprompt) {
   try {
@@ -1528,10 +1535,9 @@ var COMPOSE_MODELS = [
   "@cf/moonshotai/kimi-k2.6",
 ];
 var COMPOSE_MAX_TOKENS = 8000;
-// Q08-BUDGET-ROUTE-1 (0.24.0, issue 1780; BUDGET-SOFT-ROUTE-1): while the fleet_budget ai_spend:workers-ai cap is breached, the writer
-// order puts the cheaper writers first and kimi-k2.6 last (measured 2026-10-13: about 1040 neurons a kimi call, 740 nemotron, 290
-// gpt-oss). Work never stops at a cap; it steers. The order returns to COMPOSE_MODELS when the cap clears. An unreadable budget reads
-// as breached (the cheap side of a D1 fault), as in qnfo-research-exec LEAN-ENSEMBLE-1.
+// Q08-BUDGET-ROUTE-1 (0.24.0, issue 1780; BUDGET-SOFT-ROUTE-1): a breached or unreadable budget makes the first writer attempt use
+// the low-cost fallback; if it fails the gates, the measured-yield writer order remains available. Review and fact-check families stay
+// unchanged. Work never stops at a cap.
 var COMPOSE_MODELS_AT_CAP = [
   "@cf/nvidia/nemotron-3-120b-a12b",
   "@cf/openai/gpt-oss-120b",
@@ -1547,17 +1553,20 @@ function parseComposeOrder(v) {
 }
 async function composeOrder(env) {
   if (!env || !env.AUDIT) return COMPOSE_MODELS;
+  var override = null;
   try {
     var o = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(COMPOSE_ORDER_KEY).first();
-    var po = parseComposeOrder(o && o.value);
-    if (po) return po;
+    override = parseComposeOrder(o && o.value);
   } catch (e) { console.error("q08 composeOrder override read failed: " + String(e && e.message || e).slice(0, 160)); }
   try {
     var b = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM fleet_budget WHERE node_class IN ('ai_spend:workers-ai', 'ai_spend:total') AND current > cap").first();
-    return b && Number(b.n) > 0 ? COMPOSE_MODELS_AT_CAP : COMPOSE_MODELS;
+    var breached = !!(b && Number(b.n) > 0);
+    env.__q08BudgetPressure = !!env.__q08BudgetPressure || breached;
+    return override || (breached ? COMPOSE_MODELS_AT_CAP : COMPOSE_MODELS);
   } catch (e) {
     console.error("q08 composeOrder budget read failed: " + String(e && e.message || e).slice(0, 160));
-    return COMPOSE_MODELS_AT_CAP;
+    env.__q08BudgetPressure = true;
+    return override || COMPOSE_MODELS_AT_CAP;
   }
 }
 
@@ -1581,24 +1590,27 @@ async function compose(env, prompt, banned, order, xform, opts) {
   // TITLE-PROMOTE-1: compliance-driven fallback -- keep the best draft across
   // models rather than returning the first long-enough one gate-unchecked.
   var best = null, trail = [];
-  for (var modelId of (order || await composeOrder(env))) {
+  var models = order || await composeOrder(env);
+  for (var modelIndex = 0; modelIndex < models.length; modelIndex++) {
+    var modelId = models[modelIndex];
     try {
       meterCall(env, "compose");
       var resp = await aiGatewayRun(env, modelId, Object.assign({
         messages: [{ role: "user", content: prompt }],
         max_tokens: COMPOSE_MAX_TOKENS,
         temperature: temperature,
-      }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "compose", skipCache: true, signal: AbortSignal.timeout(150000) });
+      }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "compose", budgetFallback: modelIndex === 0, skipCache: true, signal: AbortSignal.timeout(150000) });
       // Workers AI returns {response: string} for chat models
       var text = aiReplyText(resp);
-      if (!text || text.length <= 200) { trail.push({ model: modelId, problems: ["empty or short reply (" + String(text || "").length + " chars)"] }); continue; }
+      var usedModel = resp && resp.__q08Model || modelId;
+      if (!text || text.length <= 200) { trail.push({ model: usedModel, problems: ["empty or short reply (" + String(text || "").length + " chars)"] }); continue; }
       // Q08-FORECAST-1: an optional xform (forecastXform) splits a structured block off the draft and adds its own problems.
       var xr = xform ? xform(text) : null;
       var norm = normalizeDraft(xr ? xr.text : text);
       var g = gate(norm, banned);
       var allProblems = g.problems.concat(xr && xr.problems || []);
-      trail.push({ model: modelId, problems: allProblems, chars: norm.length });
-      if (!allProblems.length) return { text: norm, model: modelId, extra: xr ? xr.extra : undefined, trail: trail };
+      trail.push({ model: usedModel, problems: allProblems, chars: norm.length });
+      if (!allProblems.length) return { text: norm, model: usedModel, extra: xr ? xr.extra : undefined, trail: trail };
       // Q08-TITLE-REPAIR-1 (0.26.0): a draft whose only writer-gate problems are its title gets one short title call to the same
       // writer before the next writer is tried; the body is kept byte for byte and the whole gate runs again.
       if (opts && opts.titleRepair && titleOnlyProblems(allProblems)) {
@@ -1614,7 +1626,7 @@ async function compose(env, prompt, banned, order, xform, opts) {
           if (!p2.length) return { text: norm2, model: modelId, extra: xr2 ? xr2.extra : undefined, trail: trail };
         }
       }
-      if (!best || norm.length > best.text.length) best = { text: norm, model: modelId, problems: allProblems, extra: xr ? xr.extra : undefined };
+      if (!best || norm.length > best.text.length) best = { text: norm, model: usedModel, problems: allProblems, extra: xr ? xr.extra : undefined };
     } catch (e) {
       lastErr = e;
       trail.push({ model: modelId, problems: ["error: " + String(e && e.message || e).slice(0, 160)] });
@@ -1639,7 +1651,7 @@ var TITLE_REPAIR_PROMPT = "Here is an essay that passed every editorial check ex
 async function titleMicroCall(env, modelId, essay) {
   var body = String(essay || "").replace(/^#\s+.+$/m, "").trim();
   meterCall(env, "compose");
-  var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: TITLE_REPAIR_PROMPT + "\n--- ESSAY ---\n" + body.slice(0, 6000) + "\n--- END ---" }], max_tokens: 400, temperature: 0.3 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "title-repair", signal: AbortSignal.timeout(60000) });
+  var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: TITLE_REPAIR_PROMPT + "\n--- ESSAY ---\n" + body.slice(0, 6000) + "\n--- END ---" }], max_tokens: 400, temperature: 0.3 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "title-repair", budgetFallback: true, signal: AbortSignal.timeout(60000) });
   var reply = aiReplyText(resp), line = titleLineOf(reply);
   if (!line) return { reply: String(reply || "") };
   return /^#\s+.+$/m.test(String(essay)) ? String(essay).replace(/^#\s+.+$/m, line) : line + "\n\n" + String(essay).replace(/^\s+/, "");
@@ -2323,7 +2335,7 @@ async function generate(env) {
   ).bind(utcDay() + "T00:00:00.000Z", PROPERTY).first();
   var todayN = (dayCount && dayCount.n) || 0;
   var _bud = await q08Budget(env);
-  if (!_bud.ok) return await quit("deferred", "COST-SUSTAIN-2 daily neuron pace reached (spent " + _bud.spent + " / pace " + _bud.pace + " / budget " + _bud.budget + "); resumes when the pace allows");
+  env = Object.assign({}, env, { __q08BudgetPressure: !!env.__q08BudgetPressure || !_bud.ok });
   var cap = await dailyCap(env);
   if (todayN >= cap) {
     return await quit("skipped", "daily cap reached (" + todayN + "/" + cap + (cap < MAX_PER_DAY ? ", ops_config " + CAP_KEY : "") + ")");
@@ -2769,7 +2781,7 @@ async function repairForecastJson(env, essayText, src, signalText) {
   for (var modelId of COMPOSE_MODELS) {
     try {
       meterCall(env, "compose");
-      var resp = await aiGatewayRun(env, modelId, { messages: [{ role: "user", content: prompt }], max_tokens: 1400, temperature: 0.2 }, { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "forecast", signal: AbortSignal.timeout(60000) });
+      var resp = await aiGatewayRun(env, modelId, { messages: [{ role: "user", content: prompt }], max_tokens: 1400, temperature: 0.2 }, { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "forecast", budgetFallback: true, signal: AbortSignal.timeout(60000) });
       var txt = aiReplyText(resp);
       var m = String(txt || "").match(/\{[\s\S]*\}/);
       if (!m) continue;
@@ -3845,7 +3857,7 @@ async function repairPublished(env, p, ground, problems) {
 async function auditPublished(env, limit) {
   if (!(await ensureAccuracySchema(env))) return { ok: false, reason: "schema" };
   var _abud = await q08Budget(env);
-  if (!_abud.ok) return { ok: true, deferred: "budget", spent: _abud.spent, pace: _abud.pace };
+  env = Object.assign({}, env, { __q08BudgetPressure: !!env.__q08BudgetPressure || !_abud.ok });
   var rows = await env.DB.prepare(
     "SELECT p.id, p.slug, p.title, p.body_md, p.core_concept, p.signal_id, p.kind, p.published_at FROM published_pieces p " +
     "WHERE p.slug NOT IN (SELECT slug FROM q08_retractions) AND p.slug NOT IN (SELECT slug FROM q08_audits) ORDER BY p.published_at DESC LIMIT ?1"
@@ -4081,7 +4093,7 @@ function renderCalibration(c) {
   var body = '<section class="q08-hero"><h1>Forecast calibration</h1><p class="q-lede">Forecasts grouped by the probability q08 gave them, against how often they came true. A calibrated forecaster sits on the diagonal. Scores use the original published probability; later updates are separate rows and never replace it.</p>' +
     '<p class="q-meta">' + (c.n ? c.n + ' resolved forecast' + (c.n === 1 ? '' : 's') + '. Brier score ' + c.brier + ' (always saying 50% scores ' + c.baseline_brier + '; lower is better). Log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better).' + (c.reliable ? '' : ' Under 20 resolved forecasts a score is mostly noise.') : 'No forecast has resolved yet, so there is nothing to plot.') + '</p></section>' +
     '<section class="q-panel">' + svg + (tr ? '<table class="q-table"><thead><tr><th>Bucket</th><th>Forecasts</th><th>Mean said</th><th>Came true</th></tr></thead><tbody>' + tr + '</tbody></table>' : '') + '<p class="q-meta"><a href="/forecasts">All forecasts</a> &middot; <a href="/api/forecasts/calibration">JSON</a></p></section>';
-  return q08Page({ title: "Forecast calibration \u00b7 q08", canonical: ORIGIN + "/forecasts/calibration", active: "forecasts", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline." }, body);
+  return q08Page({ title: "Forecast calibration \u00b7 q08", canonical: ORIGIN + "/forecasts/calibration", active: "forecasts", ogType: "article", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline.", jsonld: { "@context": "https://schema.org", "@type": "Article", headline: "Forecast calibration", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline.", url: ORIGIN + "/forecasts/calibration", mainEntityOfPage: ORIGIN + "/forecasts/calibration", publisher: { "@type": "Organization", name: "q08", url: ORIGIN }, isPartOf: { "@type": "WebSite", name: "q08", url: ORIGIN }, about: { "@type": "Thing", name: "Forecast calibration and scoring" } } }, body);
 }
 function renderForecasts(rows, stats) {
   var item = function (f) {
@@ -4095,7 +4107,7 @@ function renderForecasts(rows, stats) {
   var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p></section>' +
     '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. They appear after every few essays.</div>') + '</section>' +
     (fin.length ? '<section class="q08-feed" aria-label="Settled forecasts"><h2 class="q-h3">Settled</h2><ul class="q-list">' + fin.map(item).join("") + '</ul></section>' : "") + q08Sub(true);
-  return q08Page({ title: "Forecasts \u00b7 q08", canonical: ORIGIN + "/forecasts", active: "forecasts", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve." }, body);
+  return q08Page({ title: "Forecasts \u00b7 q08", canonical: ORIGIN + "/forecasts", active: "forecasts", ogType: "article", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", jsonld: { "@context": "https://schema.org", "@type": "Article", headline: "Forecasts", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", url: ORIGIN + "/forecasts", mainEntityOfPage: ORIGIN + "/forecasts", publisher: { "@type": "Organization", name: "q08", url: ORIGIN }, isPartOf: { "@type": "WebSite", name: "q08", url: ORIGIN }, about: { "@type": "Thing", name: "Dated, probability-weighted forecasts and their scoring record" } } }, body);
 }
 
 // ---------------------------------------------------------------------------
@@ -4263,11 +4275,17 @@ function q08Attr(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").r
 function q08Page(o, body) {
   var t = q08Attr(o.title), d = q08Attr(o.description || "Explanatory essays on technology stories: what happened, and the system that made it happen.");
   var canon = o.canonical ? q08Attr(o.canonical) : "";
-  var ld = o.jsonld ? '<script type="application/ld+json">' + JSON.stringify(o.jsonld).replace(/</g, "\\u003c") + "<\/script>" : "";
+  var siteJsonld = { "@context": "https://schema.org", "@type": "WebSite", name: "q08", url: ORIGIN, description: "Systems-level critique: explanatory essays on technology stories, with dated, scored forecasts.", publisher: { "@type": "Organization", name: "q08", url: ORIGIN } };
+  var ldArr = o.jsonld ? (Array.isArray(o.jsonld) ? o.jsonld : [o.jsonld]) : [];
+  ldArr.push(siteJsonld);
+  var ld = '<script type="application/ld+json">' + JSON.stringify(ldArr).replace(/</g, "\\u003c") + "<\/script>";
   var xh = o.extraHead || "";
+  var pubMeta = o.published ? '<meta property="article:published_time" content="' + q08Attr(o.published) + '">' : "";
+  var modMeta = o.modified ? '<meta property="article:modified_time" content="' + q08Attr(o.modified) + '">' : "";
+  var authMeta = o.author ? '<meta property="article:author" content="' + q08Attr(o.author) + '">' : "";
   return '<!DOCTYPE html><html lang="en" data-brand="q08"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + t + '</title><meta name="description" content="' + d + '">' +
     xh + (canon ? '<link rel="canonical" href="' + canon + '"><meta property="og:url" content="' + canon + '">' : "") + (o.robots ? '<meta name="robots" content="' + q08Attr(o.robots) + '">' : "") +
-    '<meta property="og:site_name" content="q08"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
+    '<meta property="og:site_name" content="q08"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '">' + (o.ogType === "article" ? pubMeta + modMeta + authMeta : "") + (o.section ? '<meta property="article:section" content="' + q08Attr(o.section) + '">' : "") + '<meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
     '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)"><link rel="icon" type="image/svg+xml" href="' + Q08_FAVICON + '"><link rel="alternate" type="application/rss+xml" title="q08" href="/feed.xml">' +
     Q08_FONTS + '<link rel="stylesheet" href="https://qnfo.org/qds.css?v=' + Q08_QDS + '"><script src="https://qnfo.org/qds.js?v=' + Q08_QDS + '" defer><\/script>' + Q08_CSS + ld + MATH_HEAD + "</head><body>" +
     '<a class="q-skip" href="#main">Skip to main content</a><header class="q-top"><div class="q-wrap"><a class="q08-mark" href="/" aria-label="q08 home"><b>q08</b><small>systems-level critique</small></a>' +
@@ -4926,6 +4944,16 @@ async function q08Fetch(req, env, ctx) {
       } catch (e) { fnote = null; }
       await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, note, created_at) VALUES (?,?,?,?,?)").bind(fslug, s, ipKey, fnote, nowIso()).run();
       return json({ ok: true, recorded: s, note_stored: !!fnote });
+    }
+    function renderAtomFeed(rows) {
+      var esc = function (s) { return String(s || "").replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+      var updated = rows.length ? rows[0].published_at : nowIso();
+      var entries = rows.map(function (r) {
+        var url = ORIGIN + "/p/" + r.slug;
+        var content = esc(String(r.body_md || "").slice(0, 8000)).replace(/\n/g, "<br/>\n");
+        return "<entry>\n<id>" + esc(url) + "</id>\n<link href=\"" + esc(url) + "\"/>\n<title>" + esc(r.title || r.slug) + "</title>\n<updated>" + esc(r.published_at) + "</updated>\n<published>" + esc(r.published_at) + "</published>\n<summary>" + esc(r.core_concept || "") + "</summary>\n<content type=\"html\">" + content + "</content>\n</entry>";
+      }).join("\n");
+      return '<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n<title>q08 Signal Engine pieces</title>\n<link rel="self" href="' + esc(ORIGIN + "/atom.xml") + '"/>\n<link href="' + esc(ORIGIN + "/") + '"/>\n<updated>' + esc(updated) + '</updated>\n<id>' + esc(ORIGIN + "/") + '</id>\n' + entries + '\n</feed>';
     }
     if (path === "/feed.xml" || path === "/atom.xml") {
       var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all();

@@ -274,7 +274,7 @@ INSERT INTO research_queue (id, source, source_id, idea, status, stage, context,
   const get = () => audit.prepare("SELECT * FROM research_queue WHERE id = 'loop1'").get();
   const trail = [];
   let first = null, last = null, steps = 0;
-  // Drive the real stages until the row leaves review / revise / complete (RERUN-ROUTE-1 sends a withheld paper to revise once, then to ground).
+  // Drive the real stages until the row leaves review / revise / complete; a HARD finding at the configured cap parks without an extra cycle.
   for (; steps < 400; steps++) {
     const r = get();
     if (r.status !== "researching" || !["review", "revise", "complete"].includes(r.stage)) { last = r.status + "/" + r.stage; break; }
@@ -287,10 +287,10 @@ INSERT INTO research_queue (id, source, source_id, idea, status, stage, context,
   const capCycles = 6;
   if (process.env.REFS_EXTEND_DEBUG) console.log(audit.prepare("SELECT kind, status, substr(text,1,330) t FROM cloud_ops_events ORDER BY rowid").all().map((e) => e.kind + " " + e.status + " " + e.t).join("\n"));
   ok(first && first.withheld === "review-hard" && first.cycle === capCycles, "the alternation ends: review withholds the paper with its HARD finding at cycle 6 (MAX_REVIEW_CYCLES)", { first, steps, trail: trail.join(" ") });
-  ok(/^(queued\/ground|wontfix\/parked)$/.test(String(last)), "after the one RERUN-ROUTE-1 revise the row leaves the loop for the recover path (re-grounded or parked), as for any withheld paper", { last, steps });
+  ok(last === "wontfix/parked", "a paper still carrying a HARD finding at the review-cycle cap parks without a seventh revise/review cycle", { last, steps });
   ok(steps < 100, "it ends well inside the step budget", steps);
-  ok(tasks.REVISE_PATCH >= capCycles && tasks.REVISE_PATCH <= capCycles + 1 && evK("revise-refs-below-floor") === tasks.REVISE_PATCH && evK("revise-noop") === 0 && evK("revise-shrink-refused") === 0, "each of the 6 cycles (and the one RERUN-ROUTE-1 pass) applied one reference-only deletion and none was refused", { tasks, refsBelow: evK("revise-refs-below-floor"), noop: evK("revise-noop"), refused: evK("revise-shrink-refused") });
-  ok(evK("floor-extend") >= capCycles && evK("floor-extend") <= (capCycles + 1) * 6, "every deletion was followed by at least one floor-extend, at most FLOOR_EXTEND_MAX_ROUNDS per cycle", evK("floor-extend"));
+  ok(tasks.REVISE_PATCH === capCycles && tasks.REVIEW === capCycles + 1 && evK("revise-refs-below-floor") === tasks.REVISE_PATCH && evK("revise-noop") === 0 && evK("revise-shrink-refused") === 0, "exactly the six configured revise cycles run, with a final quality-gate review and no refused patches", { tasks, refsBelow: evK("revise-refs-below-floor"), noop: evK("revise-noop"), refused: evK("revise-shrink-refused") });
+  ok(evK("floor-extend") >= capCycles && evK("floor-extend") <= capCycles * 6, "every deletion was followed by at least one floor-extend, at most FLOOR_EXTEND_MAX_ROUNDS per cycle", evK("floor-extend"));
   const finalPaper = r2.get("pipeline/loop1/reconciled.md");
   ok(!W.floorShortfall(row(), finalPaper, grounding, false).need, "the paper the loop ended on is back at the reference floor (the extension restored it)", W.floorShortfall(row(), finalPaper, grounding, false));
 }

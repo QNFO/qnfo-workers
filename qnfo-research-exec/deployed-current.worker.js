@@ -16,17 +16,31 @@ function rxSecretEqual(given, expected) {
 }
 __name(rxSecretEqual, "rxSecretEqual");
 var REVISE_NOOP_MAX = 2;
-async function countReviseNoop(env, row) {
+async function reviseNoopBound(env, row) {
+  const id = row && row.id;
+  if (!id || !env || !env.QNFO_AUDIT) {
+    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "revise-count", row: String(id || "").slice(0, 8), error: "audit database unavailable" }));
+    return { parked: false, revise_count: Number(row && row.revise_count) || 0, failed: true };
+  }
   try {
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET revise_count = COALESCE(revise_count, 0) + 1 WHERE id = ?1").bind(row.id).run();
-    row.revise_count = (Number(row.revise_count) || 0) + 1;
-    return row.revise_count;
+    const updated = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET revise_count = COALESCE(revise_count, 0) + 1, status = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN 'wontfix' ELSE status END, stage = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN 'parked' ELSE stage END, error = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN 'REVISE-NOOP-BOUND-1 revise_count>=2; PARKED-REVISE-NOOP-CEILING-1' ELSE error END, claimed_at = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN NULL ELSE claimed_at END WHERE id = ?2 RETURNING revise_count, status, stage").bind(REVISE_NOOP_MAX, id).first();
+    if (!updated) throw new Error("research queue row was not updated");
+    const count = Number(updated.revise_count) || 0;
+    const parked = updated.status === "wontfix" && updated.stage === "parked";
+    row.revise_count = count;
+    if (parked) {
+      row.status = "wontfix";
+      row.stage = "parked";
+      row.error = "REVISE-NOOP-BOUND-1 revise_count>=2; PARKED-REVISE-NOOP-CEILING-1";
+      row.claimed_at = null;
+    }
+    return { parked, revise_count: count };
   } catch (e) {
-    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "revise-count", row: String(row && row.id || "").slice(0, 8), error: String(e && e.message || e).slice(0, 200) }));
-    return null;
+    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "revise-count", row: String(id).slice(0, 8), error: String(e && e.message || e).slice(0, 200) }));
+    return { parked: false, revise_count: Number(row.revise_count) || 0, failed: true };
   }
 }
-__name(countReviseNoop, "countReviseNoop");
+__name(reviseNoopBound, "reviseNoopBound");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
@@ -37,7 +51,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.40.10-errata-confirm-retry-cap";
+var VERSION = "0.42.0-research-errata-ledger";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -506,6 +520,9 @@ function rerunRoute(row, msg) {
     return { stage: "parked", prior, reason: "noop terminal \u2013 applied=0, no further revise passes" };
   }
   if (!prior) return { stage: "ground", prior: String(row && row.stage || "?"), reason: "not a review or revise failure: full re-run from ground" };
+  if (/^review:\s*\d+\s+HARD findings unresolved after \d+ revise cycles\b/.test(m)) {
+    return { stage: "parked", prior, reason: "configured review-cycle cap exhausted; no extra revise pass" };
+  }
   if (String(row && row.error || "").indexOf(RERUN_ROUTE_MARK) === 0) return { stage: "parked", prior, reason: "the second revise pass also failed" };
   return { stage: "revise", prior, reason: "the paper exists and only its findings are unresolved: revise once with the findings" };
 }
@@ -4442,7 +4459,9 @@ async function stageGround(env, row) {
     return b.text.split("\n")[0];
   }).join("\n");
   await logEvent(env, "ground-fulltext", "row=" + rid + " candidates=" + _ft.stat.candidates + " kept_arxiv=" + _ft.stat.arxiv + " kept_qnfo=" + _ft.stat.qnfo + " dropped_no_fulltext=" + _ft.stat.dropped + " transport_errors=" + _ft.stat.transport, _ft.stat.transport ? "warn" : "ok");
-  const bibBlock = bib.map(function(b) {
+  const bibBlock = bib.filter(function(b) {
+    return !!b;
+  }).map(function(b) {
     return "[" + b.n + "] " + b.text;
   }).join("\n") || "(bibliography empty - writers must state this limitation)";
   const grounding = [
@@ -4812,7 +4831,7 @@ function paperCompleteness(md, opts) {
   if (!clean) reasons.push("ends mid-text: \xAB" + lastLineOf(body).slice(-60) + "\xBB");
   var dangling = [];
   danglingSectionRefs(body, maxSec).forEach(function(sp) {
-    if (dangling.indexOf(sp.n) < 0) dangling.push(sp.n);
+    if (sp && dangling.indexOf(sp.n) < 0) dangling.push(sp.n);
   });
   if (dangling.length) reasons.push("cites missing section " + dangling.join("/"));
   var conc = PAPER_SECTION_ORDER[PAPER_SECTION_ORDER.length - 1].re.exec(body);
@@ -4893,6 +4912,7 @@ function insertSection(md, key, sectionMd) {
   var at = PAPER_SECTION_ORDER.findIndex(function(x) {
     return x.key === key;
   });
+  if (at < 0) at = PAPER_SECTION_ORDER.length - 1;
   var pos = -1;
   for (var j = at + 1; j < PAPER_SECTION_ORDER.length && pos < 0; j++) {
     var m = PAPER_SECTION_ORDER[j].re.exec(s);
@@ -5148,12 +5168,22 @@ async function stageComplete(env, row) {
         } catch (eRr) {
         }
       }
+    } else if (pc.middleMissing.length === 0) {
+      mode = "structural";
+      await logEvent(env, "complete-structural", "row=" + row.id + " reasons=" + pc.reasons.join("; ").slice(0, 200), "warn");
+      await markError(env, row, "complete: structural defects only, no writable section: " + pc.reasons.join("; ").slice(0, 160));
+      return { ok: false, stage: "complete", structural: true };
     } else {
       mode = "section";
       var key = pc.middleMissing[0];
       var spec = PAPER_SECTION_ORDER.find(function(x) {
         return x.key === key;
       });
+      if (!spec) {
+        await logEvent(env, "complete-structural", "row=" + row.id + " missing spec for key=" + key, "warn");
+        await markError(env, row, "complete: structural defect \u2013 missing section spec for key=" + key);
+        return { ok: false, stage: "complete", structural: true };
+      }
       var secOut = await completeCall(env, stageContextPrompt("SECTION", "PAPER", paper, groundBlock + "\n\nSECTION TO WRITE: '## " + spec.n + ". " + spec.heading + "'"));
       var sec = stitchContinuation("", secOut).trim();
       if (sec.length >= COMPLETE_MIN_GAIN && !spec.re.test(paper)) next = insertSection(paper, key, sec);
@@ -5984,7 +6014,12 @@ async function stageRevise(env, row) {
       const _onlyParse = _fx.length > 0 && _fx.every(function(f) {
         return f && f.id === "review-parse";
       });
-      await logEvent(env, _onlyParse ? "revise-review-parse" : "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_p.refused ? "shrink refused: " + _p.refused + "; " : "") + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised; revise failed, recover path"), "warn");
+      const _noopBound = _onlyParse ? null : await reviseNoopBound(env, row);
+      const _noopDisposition = _onlyParse ? "the review output was unreadable, review runs again" : _noopBound.parked ? "parked after two revise-noops" : _noopBound.failed ? "revise counter write failed; recovery path" : "the paper does not advance unrevised; revise failed, recover path";
+      await logEvent(env, _onlyParse ? "revise-review-parse" : "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_p.refused ? "shrink refused: " + _p.refused + "; " : "") + _noopDisposition, "warn");
+      if (_noopBound && _noopBound.parked) {
+        return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, parked: true, revise_count: _noopBound.revise_count };
+      }
       if (_onlyParse && (ctx.reparse || 0) < 2) {
         await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: ctx.cycles || 0, patch: 0, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
         return { ok: true, stage: "revise->review", cycle: ctx.cycles || 0, patch: 0, rereview: true };
@@ -5993,10 +6028,8 @@ async function stageRevise(env, row) {
         await markError(env, row, "review: unreadable output after bounded re-review attempts");
         return { ok: false, stage: "revise", withheld: "review-parse", fixes: _fx.length, proposed: _p.proposed };
       }
-      const _noOpCount = await countReviseNoop(env, row);
-      const _ceiling = _noOpCount !== null && _noOpCount >= REVISE_NOOP_MAX;
-      await markError(env, row, "revise: no applicable edit for " + _fx.length + " HARD fixes (" + _hardIds.join(",").slice(0, 120) + ") from two models, strict retry included (not advanced unrevised)" + (_noOpCount === null ? "" : " revise_count=" + _noOpCount + "/" + REVISE_NOOP_MAX) + (_ceiling ? "; PARKED-REVISE-NOOP-CEILING-1" : ""));
-      return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed };
+      await markError(env, row, "revise: no applicable edit for " + _fx.length + " HARD fixes (" + _hardIds.join(",").slice(0, 120) + ") from two models, strict retry included (not advanced unrevised)" + (_noopBound.failed ? "; revise counter write failed" : " revise_count=" + _noopBound.revise_count + "/" + REVISE_NOOP_MAX));
+      return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, revise_count: _noopBound.revise_count };
     }
   }
   let revised = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3)), 3e4);
@@ -7754,7 +7787,8 @@ async function runSlot(env, slot, width, inflight) {
     return Object.assign(await claimNew(env), { slot });
   } catch (e) {
     const msg = String(e && e.message || e).slice(0, 600);
-    await logEvent(env, "error", "slot " + slot + ": " + msg, "error");
+    const frames = e && e.stack ? String(e.stack).split("\n").slice(1, 3).join(" ").replace(/\s+/g, " ").trim().slice(0, 300) : "";
+    await logEvent(env, "error", "slot " + slot + ": " + msg + (frames ? " @ " + frames : ""), "error");
     return { status: "error", error: msg.slice(0, 300), slot };
   }
 }
@@ -7879,7 +7913,8 @@ async function run(env) {
     return { status: r.ok ? "ok" : "error", res: r };
   } catch (e) {
     const msg = String(e && e.message || e).slice(0, 600);
-    await logEvent(env, "error", msg, "error");
+    const frames = e && e.stack ? String(e.stack).split("\n").slice(1, 3).join(" ").replace(/\s+/g, " ").trim().slice(0, 300) : "";
+    await logEvent(env, "error", msg + (frames ? " @ " + frames : ""), "error");
     return { status: "error", error: msg.slice(0, 300) };
   }
 }
@@ -31779,13 +31814,28 @@ function errataMemberCall(ctx) {
 __name(errataMemberCall, "errataMemberCall");
 async function runErrataMember(event, raw) {
   var at = Number(event && event.scheduledTime) || Date.now(), job = errataJobAt(at);
+  if (!job) {
+    var requested = await raw.QNFO_AUDIT.prepare("DELETE FROM ops_config WHERE key = 'errata_respond_requested' RETURNING value").first();
+    if (requested) job = "15 * * * *";
+  }
   if (!job) return null;
   var pending = [];
-  await errataMod.scheduled({ cron: job, scheduledTime: at, type: "scheduled", tickEntry: true }, errataEnv(raw), { waitUntil: /* @__PURE__ */ __name(function(p) {
-    pending.push(Promise.resolve(p));
-  }, "waitUntil"), passThroughOnException: /* @__PURE__ */ __name(function() {
-  }, "passThroughOnException") });
-  await Promise.allSettled(pending);
+  try {
+    await errataMod.scheduled({ cron: job, scheduledTime: at, type: "scheduled", tickEntry: true }, errataEnv(raw), { waitUntil: /* @__PURE__ */ __name(function(p) {
+      pending.push(Promise.resolve(p));
+    }, "waitUntil"), passThroughOnException: /* @__PURE__ */ __name(function() {
+    }, "passThroughOnException") });
+    var settled = await Promise.allSettled(pending);
+    if (requested) {
+      var failed = settled.find(function(r) {
+        return r.status === "rejected";
+      });
+      if (failed) throw failed.reason;
+    }
+  } catch (e) {
+    if (requested) await raw.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO ops_config (key, value) VALUES ('errata_respond_requested', ?1)").bind(requested.value).run();
+    throw e;
+  }
   return job;
 }
 __name(runErrataMember, "runErrataMember");
@@ -33176,6 +33226,11 @@ var worker_default = {
   },
   async fetch(request, env, ctx) {
     if (errataMemberCall(ctx)) {
+      if (new URL(request.url).pathname === "/run/errata-respond") {
+        if (request.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
+        await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO ops_config (key, value) VALUES ('errata_respond_requested', ?1)").bind(nowIso()).run();
+        return json({ ok: true, queued: true, job: "errata-respond" }, 202);
+      }
       var enonce = crypto.randomUUID();
       var eh = new Headers(request.headers);
       eh.set("X-Erratta-Token", enonce);

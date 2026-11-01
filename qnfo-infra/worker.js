@@ -94,7 +94,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.9.11-codeagent"; /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.9.13-codeagent"; /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 async function auth(token, env) {
   const exp = await infraSecret(env, "INFRA_TOKEN");
   if (!exp || !token) return false;
@@ -1515,14 +1515,80 @@ var worker_default = {
       return new Response(JSON.stringify({ ok: true, scope, context: renderContext(data) }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/drift/workers" && method === "GET") {
+      const accountId = env.CF_ACCOUNT_ID;
+      const apiToken = env.CF_API_TOKEN;
       let services = [];
       try {
         const r = await env.AUDIT.prepare("SELECT name, script FROM service_registry").all();
         services = (r && r.results) || [];
-      } catch (_) {
-        // ignore errors, treat as no services
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "failed to read service_registry: " + String(e && e.message || e) }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
       }
-      return new Response(JSON.stringify({ drift: [], services }), { headers: { "Content-Type": "application/json", ...cors } });
+      if (!accountId || !apiToken) {
+        return new Response(JSON.stringify({ ok: false, error: "Cloudflare API credentials not configured (CF_ACCOUNT_ID, CF_API_TOKEN)", declared: services, live: [], drift: { missing: services, extra: [], in_sync: services.length === 0 } }), { status: 503, headers: { "Content-Type": "application/json", ...cors } });
+      }
+      try {
+        var cf = await fetch("https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts", { headers: { Authorization: "Bearer " + apiToken } });
+        var json = await cf.json();
+        if (!cf.ok || !json.success) {
+          var msg = json.errors && json.errors.map(function(err){ return err.message; }).join("; ") || "cf http " + cf.status;
+          throw new Error(msg);
+        }
+        var live = (json.result || []).map(function(s){ return s.id; });
+        var liveSet = new Set(live);
+        var declaredSet = new Set(services.map(function(s){ return s.script; }));
+        var missing = services.filter(function(s){ return !liveSet.has(s.script); });
+        var extra = live.filter(function(s){ return !declaredSet.has(s); });
+        return new Response(JSON.stringify({ ok: true, declared: services, live: live, drift: { missing: missing, extra: extra, in_sync: missing.length === 0 && extra.length === 0 } }), { headers: { "Content-Type": "application/json", ...cors } });
+      } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: String(e && e.message || e), declared: services, live: [], drift: { missing: services, extra: [], in_sync: false } }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
+      }
+    }
+    if (path === "/reversibility" && method === "GET") {
+      const accountId = env.CF_ACCOUNT_ID;
+      const apiToken = env.CF_API_TOKEN;
+      let services = [];
+      try {
+        const r = await env.AUDIT.prepare("SELECT name, script FROM service_registry").all();
+        services = (r && r.results) || [];
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "failed to read service_registry: " + String(e && e.message || e) }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
+      }
+      if (!accountId || !apiToken) {
+        return new Response(JSON.stringify({ ok: false, error: "Cloudflare API credentials not configured (CF_ACCOUNT_ID, CF_API_TOKEN)", workers: [] }), { status: 503, headers: { "Content-Type": "application/json", ...cors } });
+      }
+      const workers = [];
+      let errors = 0, withoutRollback = 0;
+      for (let i = 0; i < services.length; i++) {
+        const svc = services[i];
+        const item = { name: svc.name, script: svc.script, current_deployment_id: null, previous_deployment_id: null, rollback_possible: false, rollback_seconds: null, error: null };
+        try {
+          const dep = await fetch("https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts/" + encodeURIComponent(svc.script) + "/deployments", { headers: { Authorization: "Bearer " + apiToken } });
+          const depJson = await dep.json();
+          if (!dep.ok || !depJson.success) {
+            const msg = depJson.errors && depJson.errors.map(function(err){ return err.message; }).join("; ") || "cf http " + dep.status;
+            throw new Error(msg);
+          }
+          const deps = ((depJson.result || []).slice()).sort(function(a, b){ return new Date(b.created_on || 0) - new Date(a.created_on || 0); });
+          if (deps.length > 0) item.current_deployment_id = deps[0].id || null;
+          if (deps.length > 1) {
+            item.previous_deployment_id = deps[1].id || null;
+            const cur = deps[0].created_on ? Date.parse(deps[0].created_on) : NaN;
+            const prev = deps[1].created_on ? Date.parse(deps[1].created_on) : NaN;
+            if (Number.isFinite(cur) && Number.isFinite(prev) && cur > prev) {
+              item.rollback_seconds = Math.max(0, Math.floor((cur - prev) / 1000));
+            }
+            item.rollback_possible = true;
+          }
+        } catch (e) {
+          item.error = String(e && e.message || e);
+          errors++;
+        }
+        if (!item.rollback_possible && !item.error) withoutRollback++;
+        workers.push(item);
+      }
+      const ok = errors === 0 && withoutRollback === 0;
+      return new Response(JSON.stringify({ ok, workers_checked: workers.length, errors, without_rollback: withoutRollback, reversible: ok, workers }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/drift/crons" && method === "GET") {
       const accountId = env.CF_ACCOUNT_ID;

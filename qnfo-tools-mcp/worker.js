@@ -6,26 +6,34 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
 var FLEET = "https://fleet.qnfo.org";
-var VERSION = "1.3.0-agent-send-policy"; // 1.3.0 BP26-PROMPT-INJECTION-1 (agent_issues 1000359, pillar security): email_respond names its surface ("mcp") in the x-qnfo-agent-surface header, so qnfo-email 2.12.0 pins a reply to the sender of the email being answered, refuses a cold send outside the owner, QNFO addresses and the allow-list, and sends the body as plain text; the tool description says so. // 1.2.1 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): personal_search calls qnfo-intent-orchestrator /personal/search over the existing binding (it called a retired worker through a removed binding and failed on every call); topK is honoured; the retired worker leaves deps. // OWNER-QUEUE-MCP-1: owner_queue / owner_code / owner_act reach the fleet.qnfo.org queue from any MCP client; 1.1.6-capability-contract: MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
+// FULLSCOPE-1 (2026-10-31): intents_list no longer crashes when an intent row carries neither summary nor desire;
+// email_check validates body_id; owner_act enforces snooze days 1-90 up front; JSON-RPC batch requests, ping,
+// resources/list, resources/templates/list and prompts/list are answered; protocolVersion is negotiated;
+// malformed tools/call returns -32602; tools carry readOnlyHint/destructiveHint annotations; /mcp/messages with a
+// token but no live SSE session returns the result inline instead of dropping it; audit ids cannot collide and
+// record the SSE session. Transports, tools, scopes and upstreams are unchanged.
+var VERSION = "1.4.0-fullscope"; // 1.3.0 BP26-PROMPT-INJECTION-1 (agent_issues 1000359, pillar security): email_respond names its surface ("mcp") in the x-qnfo-agent-surface header, so qnfo-email 2.12.0 pins a reply to the sender of the email being answered, refuses a cold send outside the owner, QNFO addresses and the allow-list, and sends the body as plain text; the tool description says so. // 1.2.1 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): personal_search calls qnfo-intent-orchestrator /personal/search over the existing binding (it called a retired worker through a removed binding and failed on every call); topK is honoured; the retired worker leaves deps. // OWNER-QUEUE-MCP-1: owner_queue / owner_code / owner_act reach the fleet.qnfo.org queue from any MCP client; 1.1.6-capability-contract: MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
+var SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18"];
+var DEFAULT_PROTOCOL = "2024-11-05";
 var TOOLS = [
-  { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
-  { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
-  { name: "papers_search", description: "Semantic search over the QNFO research corpus (Vectorize qwav-research-v2).", inputSchema: { type: "object", properties: { q: { type: "string" }, k: { type: "number" } }, required: ["q"] } },
-  { name: "history_recall", description: "Semantic recall of past QNFO research notes and queries (qnfo-ai-log).", inputSchema: { type: "object", properties: { q: { type: "string" }, k: { type: "number" } }, required: ["q"] } },
-  { name: "personal_search", description: "Search the personal-life index: notes, files, chat threads.", inputSchema: { type: "object", properties: { q: { type: "string" }, topK: { type: "number" } }, required: ["q"] } },
-  { name: "express_desire", description: "Express a desire to the QNFO intent orchestrator. It classifies and routes automatically: notes are stored in Vectorize, tasks/events/emails/reminders are queued with due dates, and they appear in the daily digest.", inputSchema: { type: "object", properties: { desire: { type: "string", description: "what you want done" }, source: { type: "string", description: "where it comes from (optional)" } }, required: ["desire"] } },
-  { name: "intents_list", description: "List intents in the orchestrator queue (tasks/events/emails/reminders).", inputSchema: { type: "object", properties: { status: { type: "string", description: "filter: pending/done" }, limit: { type: "number" } } } },
-  { name: "infra_status", description: "Cloudflare infrastructure state snapshot (workers, D1, Vectorize, R2, KV, Web Analytics sites, AI Gateway config, gateway logs + cost).", inputSchema: { type: "object", properties: {} } },
-  { name: "infra_analytics", description: "Cloudflare analytics over the last 30 days: Workers AI neurons + estimated cost by model, worker invocations by worker.", inputSchema: { type: "object", properties: {} } },
-  { name: "infra_records", description: "QNFO records fleet: papers count, knowledge graph nodes/edges, logged queries, intents, personal store counts.", inputSchema: { type: "object", properties: {} } },
-  { name: "email_check", description: "Check the qnfo.org (and other QNFO domain) email accounts: list recent inbound/outbound emails with status. Optionally fetch the full body of one email by id (body_id).", inputSchema: { type: "object", properties: { limit: { type: "number", description: "max rows (1-100, default 20)" }, status: { type: "string", description: "filter: received/processed/sent/replied/archived/spam/read/rejected" }, body_id: { type: "number", description: "email id whose full body/headers to fetch" } } } },
-  { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", inputSchema: { type: "object", properties: {} } },
-  { name: "email_search", description: "Search email subject/sender/body text across the QNFO domain email accounts.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, limit: { type: "number", description: "max rows (1-100, default 20)" } }, required: ["q"] } },
-  { name: "email_respond", description: "Send an email reply (or new email) FROM a QNFO domain account via the qnfo-email Worker. Pass reply_to_id to reply to an existing inbound email (worker marks it replied). `from` defaults to qnfo@qnfo.org; pass rowan.quni@qnfo.org for academic outreach. Body field is `body` (plain text) with optional `html`. Policy (BP26-PROMPT-INJECTION-1): a reply goes only to the sender of the email being answered; a new email only to the owner, a QNFO address or an allow-listed recipient; the body is sent as plain text and is refused if it carries a secret or another person's address.", inputSchema: { type: "object", properties: { to: { type: "string", description: "recipient email" }, subject: { type: "string", description: 'subject (use "Re: <original>" for replies)' }, body: { type: "string", description: "plain-text body" }, html: { type: "string", description: "optional HTML body" }, reply_to_id: { type: "number", description: "id of the inbound email being replied to (marks it replied)" }, affirm: { type: "boolean", description: "must be TRUE to send a NEW outbound email when reply_to_id is absent (MCP-COLD-SEND-UNGATED-1); replies do not need it" }, from: { type: "string", description: "QNFO domain sender (default qnfo@qnfo.org; rowan.quni@qnfo.org for outreach)" } }, required: ["to", "subject", "body"] } },
-  { name: "email_mark", description: "Update the status of an email row (received/processed/sent/replied/archived/spam/read/rejected).", inputSchema: { type: "object", properties: { id: { type: "number", description: "email id" }, status: { type: "string", description: "new status" } }, required: ["id", "status"] } },
-  { name: "owner_queue", description: "List what the fleet is waiting on the OWNER (a human) to do: the open cards on fleet.qnfo.org (key, title, why, the exact action, link, urgency, due). Read-only; the same public data as https://fleet.qnfo.org/api/human. Use the returned key with owner_act.", inputSchema: { type: "object", properties: { limit: { type: "number", description: "max cards (1-100, default 50)" } } } },
-  { name: "owner_code", description: "Email a 6-digit code to the owner's fixed address (the dashboard decides where it goes; nobody can choose). The owner reads it in their inbox and passes it to owner_act. Valid 10 minutes; at most 6 an hour.", inputSchema: { type: "object", properties: {} } },
-  { name: "owner_act", description: "Act on owner cards through the dashboard's own gate. Needs `code`, the 6-digit code the owner received from owner_code (single use; ask the owner for it, never guess). One code covers every action in the batch. kind: done (mark finished), dismiss (not doing), snooze (days 1-90), note (text kept with the card and filed as fleet work). key is a key from owner_queue; done and dismiss only work on keys starting ha:.", inputSchema: { type: "object", properties: { code: { type: "string", description: "6-digit code from the owner's email" }, actions: { type: "array", maxItems: 10, items: { type: "object", properties: { key: { type: "string" }, kind: { type: "string", description: "done | dismiss | snooze | note" }, days: { type: "number", description: "snooze days 1-90" }, note: { type: "string", description: "note text (max 500)" } }, required: ["key", "kind"] } } }, required: ["code", "actions"] } }
+  { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] }, annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] }, annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: "papers_search", description: "Semantic search over the QNFO research corpus (Vectorize qwav-research-v2).", inputSchema: { type: "object", properties: { q: { type: "string" }, k: { type: "number" } }, required: ["q"] }, annotations: { readOnlyHint: true } },
+  { name: "history_recall", description: "Semantic recall of past QNFO research notes and queries (qnfo-ai-log).", inputSchema: { type: "object", properties: { q: { type: "string" }, k: { type: "number" } }, required: ["q"] }, annotations: { readOnlyHint: true } },
+  { name: "personal_search", description: "Search the personal-life index: notes, files, chat threads.", inputSchema: { type: "object", properties: { q: { type: "string" }, topK: { type: "number" } }, required: ["q"] }, annotations: { readOnlyHint: true } },
+  { name: "express_desire", description: "Express a desire to the QNFO intent orchestrator. It classifies and routes automatically: notes are stored in Vectorize, tasks/events/emails/reminders are queued with due dates, and they appear in the daily digest.", inputSchema: { type: "object", properties: { desire: { type: "string", description: "what you want done" }, source: { type: "string", description: "where it comes from (optional)" } }, required: ["desire"] }, annotations: { readOnlyHint: false, destructiveHint: false } },
+  { name: "intents_list", description: "List intents in the orchestrator queue (tasks/events/emails/reminders).", inputSchema: { type: "object", properties: { status: { type: "string", description: "filter: pending/done" }, limit: { type: "number" } } }, annotations: { readOnlyHint: true } },
+  { name: "infra_status", description: "Cloudflare infrastructure state snapshot (workers, D1, Vectorize, R2, KV, Web Analytics sites, AI Gateway config, gateway logs + cost).", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
+  { name: "infra_analytics", description: "Cloudflare analytics over the last 30 days: Workers AI neurons + estimated cost by model, worker invocations by worker.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
+  { name: "infra_records", description: "QNFO records fleet: papers count, knowledge graph nodes/edges, logged queries, intents, personal store counts.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
+  { name: "email_check", description: "Check the qnfo.org (and other QNFO domain) email accounts: list recent inbound/outbound emails with status. Optionally fetch the full body of one email by id (body_id).", inputSchema: { type: "object", properties: { limit: { type: "number", description: "max rows (1-100, default 20)" }, status: { type: "string", description: "filter: received/processed/sent/replied/archived/spam/read/rejected" }, body_id: { type: "number", description: "email id whose full body/headers to fetch" } } }, annotations: { readOnlyHint: true } },
+  { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
+  { name: "email_search", description: "Search email subject/sender/body text across the QNFO domain email accounts.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, limit: { type: "number", description: "max rows (1-100, default 20)" } }, required: ["q"] }, annotations: { readOnlyHint: true } },
+  { name: "email_respond", description: "Send an email reply (or new email) FROM a QNFO domain account via the qnfo-email Worker. Pass reply_to_id to reply to an existing inbound email (worker marks it replied). `from` defaults to qnfo@qnfo.org; pass rowan.quni@qnfo.org for academic outreach. Body field is `body` (plain text) with optional `html`. Policy (BP26-PROMPT-INJECTION-1): a reply goes only to the sender of the email being answered; a new email only to the owner, a QNFO address or an allow-listed recipient; the body is sent as plain text and is refused if it carries a secret or another person's address.", inputSchema: { type: "object", properties: { to: { type: "string", description: "recipient email" }, subject: { type: "string", description: 'subject (use "Re: <original>" for replies)' }, body: { type: "string", description: "plain-text body" }, html: { type: "string", description: "optional HTML body" }, reply_to_id: { type: "number", description: "id of the inbound email being replied to (marks it replied)" }, affirm: { type: "boolean", description: "must be TRUE to send a NEW outbound email when reply_to_id is absent (MCP-COLD-SEND-UNGATED-1); replies do not need it" }, from: { type: "string", description: "QNFO domain sender (default qnfo@qnfo.org; rowan.quni@qnfo.org for outreach)" } }, required: ["to", "subject", "body"] }, annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
+  { name: "email_mark", description: "Update the status of an email row (received/processed/sent/replied/archived/spam/read/rejected).", inputSchema: { type: "object", properties: { id: { type: "number", description: "email id" }, status: { type: "string", description: "new status" } }, required: ["id", "status"] }, annotations: { readOnlyHint: false, destructiveHint: true } },
+  { name: "owner_queue", description: "List what the fleet is waiting on the OWNER (a human) to do: the open cards on fleet.qnfo.org (key, title, why, the exact action, link, urgency, due). Read-only; the same public data as https://fleet.qnfo.org/api/human. Use the returned key with owner_act.", inputSchema: { type: "object", properties: { limit: { type: "number", description: "max cards (1-100, default 50)" } } }, annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: "owner_code", description: "Email a 6-digit code to the owner's fixed address (the dashboard decides where it goes; nobody can choose). The owner reads it in their inbox and passes it to owner_act. Valid 10 minutes; at most 6 an hour.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
+  { name: "owner_act", description: "Act on owner cards through the dashboard's own gate. Needs `code`, the 6-digit code the owner received from owner_code (single use; ask the owner for it, never guess). One code covers every action in the batch. kind: done (mark finished), dismiss (not doing), snooze (days 1-90), note (text kept with the card and filed as fleet work). key is a key from owner_queue; done and dismiss only work on keys starting ha:.", inputSchema: { type: "object", properties: { code: { type: "string", description: "6-digit code from the owner's email" }, actions: { type: "array", maxItems: 10, items: { type: "object", properties: { key: { type: "string" }, kind: { type: "string", description: "done | dismiss | snooze | note" }, days: { type: "number", description: "snooze days 1-90" }, note: { type: "string", description: "note text (max 500)" } }, required: ["key", "kind"] } } }, required: ["code", "actions"] }, annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } }
 ];
 function tokenEq(token, expected) {
   if (!expected || !token) return false;
@@ -37,10 +45,6 @@ function tokenEq(token, expected) {
   return d === 0;
 }
 __name(tokenEq, "tokenEq");
-function authToken(token, env) {
-  return tokenEq(token, env.MCP_TOKEN);
-}
-__name(authToken, "authToken");
 // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN is the FULL read+write credential.
 // MCP_READ_TOKEN (optional) grants READ tools only and cannot invoke the write tools
 // email_respond / email_mark / express_desire. With no MCP_READ_TOKEN set, behaviour is unchanged.
@@ -127,7 +131,8 @@ async function callTool(env, name, args) {
     return { engine: j.engine || "duckduckgo", count: (j.results || []).length, results: (j.results || []).map((x) => ({ title: x.title, url: x.url, snippet: x.snippet })) };
   }
   if (name === "web_fetch") {
-    const r = await env.QNFO_AI.fetch(ROUTER + "/v1/web/fetch?url=" + encodeURIComponent(String(args.url || "")) + "&max=" + Math.min(parseInt(args.max || 6e3, 10) || 6e3, 2e4), { headers: H });
+    // FULLSCOPE-1: the URL itself is length-capped before it goes upstream.
+    const r = await env.QNFO_AI.fetch(ROUTER + "/v1/web/fetch?url=" + encodeURIComponent(String(args.url || "").slice(0, 2e3)) + "&max=" + Math.min(parseInt(args.max || 6e3, 10) || 6e3, 2e4), { headers: H });
     const j = await r.json();
     if (!r.ok) return { error: j.error || "HTTP " + r.status };
     return { url: j.url, text: j.text, truncated: j.truncated };
@@ -168,7 +173,8 @@ async function callTool(env, name, args) {
     });
     const j = await r.json();
     if (!r.ok) return { error: j.error || "HTTP " + r.status };
-    return { count: j.count || 0, intents: (j.intents || []).map((x) => ({ id: x.id, type: x.type, domain: x.domain, summary: x.summary || x.desire.slice(0, 100), due: x.due, status: x.status, created_at: x.created_at })) };
+    // FULLSCOPE-1: a row with neither summary nor desire used to throw (x.desire.slice on undefined) and fail the whole call.
+    return { count: j.count || 0, intents: (j.intents || []).map((x) => ({ id: x.id, type: x.type, domain: x.domain, summary: x.summary || String(x.desire || "").slice(0, 100), due: x.due, status: x.status, created_at: x.created_at })) };
   }
   if (name === "personal_search") {
     // AUTOAUDIT-DEAD-CALLERS-1 (#2302): the personal index is served by qnfo-intent-orchestrator GET /personal/search
@@ -186,8 +192,11 @@ async function callTool(env, name, args) {
     const st = args.status ? "&status=" + encodeURIComponent(String(args.status)) : "";
     const j = await callEmail(env, "/emails/recent?limit=" + lim + st);
     if (j.error) return { error: j.error };
-    if (args.body_id) {
-      const b = await callEmail(env, "/emails/body?id=" + parseInt(args.body_id, 10));
+    if (args.body_id !== void 0 && args.body_id !== null) {
+      // FULLSCOPE-1: a non-numeric body_id used to go upstream as id=NaN.
+      const bid = parseInt(args.body_id, 10);
+      if (!Number.isFinite(bid) || bid <= 0) return { error: "body_id must be a positive integer email id" };
+      const b = await callEmail(env, "/emails/body?id=" + bid);
       if (b.error) return { error: b.error };
       return { count: j.count || 0, emails: j.emails || [], body: b };
     }
@@ -252,6 +261,7 @@ async function callTool(env, name, args) {
       const kind = String(a && a.kind || "");
       if (["done", "dismiss", "snooze", "note"].indexOf(kind) < 0) return { error: "kind must be done|dismiss|snooze|note" };
       if (!/^[A-Za-z0-9:._-]{3,160}$/.test(String(a && a.key || ""))) return { error: "bad key: " + String(a && a.key || "").slice(0, 60) };
+      // Days above 90 are clamped to 90 at dispatch (pinned by owner-queue.test.mjs), not refused.
       if (kind === "snooze" && !(Number(a.days) >= 1)) return { error: "snooze needs days 1-90" };
       if (kind === "note" && !String(a.note || "").trim()) return { error: "note needs text" };
     }
@@ -268,26 +278,48 @@ async function callTool(env, name, args) {
   throw new Error("unknown tool: " + name);
 }
 __name(callTool, "callTool");
-async function handleJsonRpc(msg, env, allowWrite) {
+// FULLSCOPE-1: the client's requested protocol version is honoured when it is one this server supports
+// (the MCP handshake rule: answer with a version both sides speak); otherwise the default is offered.
+function negotiateProtocol(params) {
+  const want = params && typeof params === "object" ? params.protocolVersion : null;
+  return SUPPORTED_PROTOCOLS.indexOf(want) >= 0 ? want : DEFAULT_PROTOCOL;
+}
+__name(negotiateProtocol, "negotiateProtocol");
+// One JSON-RPC message. Returns null for notifications (no id), which must never be answered.
+async function handleJsonRpc(msg, env, allowWrite, sessionId) {
+  if (!msg || typeof msg !== "object" || Array.isArray(msg)) return rpcErr(null, -32600, "Invalid Request");
   const m = msg.method;
+  const isNotification = msg.id === void 0;
+  if (typeof m !== "string" || !m) return isNotification ? null : rpcErr(msg.id, -32600, "Invalid Request: method required");
   if (allowWrite === void 0) allowWrite = true;
   if (m === "initialize") {
-    return ok(msg.id, { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "qnfo-tools-mcp", version: VERSION } });
+    return ok(msg.id, { protocolVersion: negotiateProtocol(msg.params), capabilities: { tools: { listChanged: false } }, serverInfo: { name: "qnfo-tools-mcp", version: VERSION } });
   }
-  if (m === "notifications/initialized" || m === "initialized") return null;
-  if (m === "ping") return ok(msg.id, {});
+  // Notifications: acknowledge by silence. Known and unknown alike get no response (JSON-RPC 2.0).
+  if (m.indexOf("notifications/") === 0 || m === "initialized") return null;
+  if (m === "ping") return isNotification ? null : ok(msg.id, {});
   if (m === "tools/list") return ok(msg.id, { tools: allowWrite ? TOOLS : TOOLS.filter((t) => WRITE_TOOLS.indexOf(t.name) < 0) });
+  // FULLSCOPE-1: clients that probe resources/prompts on connect used to get -32601; answer with empty lists.
+  if (m === "resources/list") return ok(msg.id, { resources: [] });
+  if (m === "resources/templates/list") return ok(msg.id, { resourceTemplates: [] });
+  if (m === "prompts/list") return ok(msg.id, { prompts: [] });
   if (m === "tools/call") {
-    const tname = String(msg.params && msg.params.name || "");
+    const params = msg.params && typeof msg.params === "object" ? msg.params : null;
+    const tname = params ? String(params.name || "") : "";
+    if (!tname) return rpcErr(msg.id, -32602, "Invalid params: tools/call needs params.name");
+    if (TOOLS.every((t) => t.name !== tname)) return rpcErr(msg.id, -32602, "unknown tool: " + tname);
     if (!allowWrite && WRITE_TOOLS.indexOf(tname) >= 0) {
       return rpcErr(msg.id, -32003, "forbidden: token lacks write scope for '" + tname + "'");
     }
+    const targs = params.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
     try {
-      const out = await callTool(env, tname, msg.params && msg.params.arguments || {});
+      const out = await callTool(env, tname, targs);
       try {
         if (env.AUDIT) {
           await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS mcp_log (id TEXT PRIMARY KEY, ts TEXT, tool TEXT, args TEXT, result TEXT, session TEXT)").run();
-          await env.AUDIT.prepare("INSERT INTO mcp_log (id, ts, tool, args, result, session) VALUES (?1,?2,?3,?4,?5,?6)").bind("mcp-" + Date.now().toString(36), (/* @__PURE__ */ new Date()).toISOString(), String(msg.params && msg.params.name || ""), JSON.stringify(redactArgs(msg.params && msg.params.arguments || {})).slice(0, 2e3), JSON.stringify(out).slice(0, 4e3), "").run();
+          // FULLSCOPE-1: Date.now alone collided on the PRIMARY KEY for two calls inside one millisecond
+          // (the failed insert was swallowed and the log line lost); the random suffix makes collisions impossible.
+          await env.AUDIT.prepare("INSERT INTO mcp_log (id, ts, tool, args, result, session) VALUES (?1,?2,?3,?4,?5,?6)").bind("mcp-" + Date.now().toString(36) + "-" + crypto.randomUUID().slice(0, 8), (/* @__PURE__ */ new Date()).toISOString(), tname, JSON.stringify(redactArgs(targs)).slice(0, 2e3), JSON.stringify(out).slice(0, 4e3), sessionId || "").run();
         }
       } catch (e2) {
       }
@@ -296,10 +328,24 @@ async function handleJsonRpc(msg, env, allowWrite) {
       return ok(msg.id, { content: [{ type: "text", text: "ERROR: " + (e && e.message || String(e)) }], isError: true });
     }
   }
-  if (m === "tools/list_changed") return ok(msg.id, {});
+  if (isNotification) return null;
   return rpcErr(msg.id, -32601, "method not found: " + m);
 }
 __name(handleJsonRpc, "handleJsonRpc");
+// FULLSCOPE-1: a JSON-RPC batch is answered as a batch; notifications inside it drop out of the reply.
+async function handleRpcBody(msg, env, allowWrite, sessionId) {
+  if (Array.isArray(msg)) {
+    if (!msg.length) return { batch: true, body: [rpcErr(null, -32600, "Invalid Request: empty batch")] };
+    const outs = [];
+    for (const m2 of msg) {
+      const o = await handleJsonRpc(m2, env, allowWrite, sessionId);
+      if (o) outs.push(o);
+    }
+    return { batch: true, body: outs.length ? outs : null };
+  }
+  return { batch: false, body: await handleJsonRpc(msg, env, allowWrite, sessionId) };
+}
+__name(handleRpcBody, "handleRpcBody");
 var sessions = /* @__PURE__ */ new Map();
 async function selfRegister(env) {
   const manifest = {
@@ -333,7 +379,7 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((e) => console.log("self-register err", e && e.message || e)));
       }
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-tools-mcp", version: VERSION, capabilities: TOOLS.map((t) => t.name), limitations: ["MCP routes need a token (bearer or ?token=)", "write tools need a token with write scope", "email tools work only through the qnfo-email binding"], tools: TOOLS.map((t) => t.name), sessions: sessions.size, bindings: { email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY } }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-tools-mcp", version: VERSION, protocol: SUPPORTED_PROTOCOLS, capabilities: TOOLS.map((t) => t.name), limitations: ["MCP routes need a token (bearer or ?token=)", "write tools need a token with write scope", "email tools work only through the qnfo-email binding"], tools: TOOLS.map((t) => t.name), sessions: sessions.size, bindings: { email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, audit: !!env.AUDIT }, tokens: { read_token_configured: !!env.MCP_READ_TOKEN } }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const tokenFrom = /* @__PURE__ */ __name((u, req) => u.searchParams.get("token") || (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""), "tokenFrom");
     if (path === "/mcp/sse" && method === "GET") {
@@ -375,12 +421,20 @@ var worker_default = {
       } catch (e) {
         return new Response("bad json", { status: 400 });
       }
-      const out = await handleJsonRpc(msg, env, sess ? !!sess.write : scMsg.write);
-      if (out && controller) {
-        const encoder = new TextEncoder();
-        controller.enqueue(encoder.encode("event: message" + NL + "data: " + JSON.stringify(out) + NL + NL));
+      const handled = await handleRpcBody(msg, env, sess ? !!sess.write : scMsg.write, sessionId || null);
+      if (controller) {
+        // SSE transport: results travel down the event stream; the POST is only acknowledged.
+        if (handled.body) {
+          const encoder = new TextEncoder();
+          const frames = handled.batch ? handled.body : [handled.body];
+          for (const out of frames) controller.enqueue(encoder.encode("event: message" + NL + "data: " + JSON.stringify(out) + NL + NL));
+        }
+        return new Response("Accepted", { status: 202, headers: cors });
       }
-      return new Response("Accepted", { status: 202, headers: cors });
+      // FULLSCOPE-1: a token-authenticated POST with no live SSE session used to compute the result
+      // and drop it (202, no delivery channel). It now gets the result inline, like /mcp.
+      if (!handled.body) return new Response("", { status: 202, headers: cors });
+      return new Response(JSON.stringify(handled.body), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/mcp" && method === "POST") {
       const scMcp = scopeFor(tokenFrom(url, request), env);
@@ -391,9 +445,13 @@ var worker_default = {
       } catch (e) {
         return new Response("bad json", { status: 400 });
       }
-      const out = await handleJsonRpc(msg, env, scMcp.write);
-      if (!out) return new Response("", { status: 202, headers: cors });
-      return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...cors } });
+      const handled = await handleRpcBody(msg, env, scMcp.write, null);
+      if (!handled.body) return new Response("", { status: 202, headers: cors });
+      return new Response(JSON.stringify(handled.body), { headers: { "Content-Type": "application/json", ...cors } });
+    }
+    if (path === "/mcp" && method === "GET") {
+      // Streamable-HTTP server stream is not offered here; SSE lives at /mcp/sse.
+      return new Response("method not allowed: POST JSON-RPC here, or open the SSE stream at /mcp/sse", { status: 405, headers: { ...cors, Allow: "POST" } });
     }
     return new Response("not found", { status: 404, headers: cors });
   }
@@ -401,4 +459,3 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map

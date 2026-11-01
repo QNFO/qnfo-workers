@@ -1,0 +1,12 @@
+-- ANCHOR-REPOINT-10931 (2026-11-01, charter pillar autonomy, ci-watchdog issue 5399 suite-red: deploy-gate).
+-- Trigger 10931 (research_neurons_per_publication_7d) names a code-task and a code-anchor in qnfo-research-exec/worker.js. Its anchor was the line
+--   return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed };
+-- REVISE-NOOP-BOUND-1 (pull request 5500, qnfo-research-exec 0.41.1) shipped the lever that trigger asks for (count each revise-noop on research_queue.revise_count
+-- and park the row at two) and in doing so appended revise_count to that line, and parked: true to the parking return, so the anchor occurs 0 times. From that merge on,
+-- migrations/code-anchor-once.test.mjs and migrations/rem-a5-metric-triggers.test.mjs were red on main, and a code task dispatched from this trigger could not place its edit.
+-- The pair is repointed to the line that now carries the parking return, which occurs exactly once, so the trigger's code-task stays well formed. Only the anchor line changes:
+-- replace() leaves the rest of the action alone, and a second run finds no old anchor and changes nothing.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: UPDATE analytics_metric_triggers SET action = replace(action, char(10) || 'code-anchor: return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, parked: true, revise_count: _noopBound.revise_count };', char(10) || 'code-anchor: return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed };') WHERE id = 10931 AND metric_key = 'research_neurons_per_publication_7d';
+UPDATE analytics_metric_triggers SET action = replace(action, char(10) || 'code-anchor: return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed };', char(10) || 'code-anchor: return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, parked: true, revise_count: _noopBound.revise_count };') WHERE id = 10931 AND metric_key = 'research_neurons_per_publication_7d';
