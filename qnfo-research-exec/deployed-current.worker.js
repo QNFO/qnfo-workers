@@ -51,7 +51,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.42.0-research-errata-ledger";
+var VERSION = "0.42.1-event-id";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -2528,14 +2528,15 @@ async function prunePaperBodyBackups(env, slug) {
       ).bind(batch).run();
       var prunedGlobal = globalPrune && globalPrune.meta && globalPrune.meta.changes || 0;
       await env.QNFO_AUDIT.prepare(
-        "INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'backup-size-guard', 'qnfo-research-exec', ?)"
-      ).bind(("paper_body_backups size guard: " + totalChars + " chars > " + totalCharsMax + "; pruned " + prunedGlobal + " oldest rows (slug=" + String(slug || "?") + ")").slice(0, 450)).run();
+        "INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES (?, ?, 'backup-size-guard', 'qnfo-research-exec', ?)"
+      ).bind(crypto.randomUUID(), (/* @__PURE__ */ new Date()).toISOString(), ("paper_body_backups size guard: " + totalChars + " chars > " + totalCharsMax + "; pruned " + prunedGlobal + " oldest rows (slug=" + String(slug || "?") + ")").slice(0, 450)).run();
     } else if (prunedSlug > 0) {
       await env.QNFO_AUDIT.prepare(
-        "INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'backup-prune', 'qnfo-research-exec', ?)"
-      ).bind(("paper_body_backups per-slug prune: removed " + prunedSlug + " old rows for slug=" + String(slug || "?")).slice(0, 450)).run();
+        "INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES (?, ?, 'backup-prune', 'qnfo-research-exec', ?)"
+      ).bind(crypto.randomUUID(), (/* @__PURE__ */ new Date()).toISOString(), ("paper_body_backups per-slug prune: removed " + prunedSlug + " old rows for slug=" + String(slug || "?")).slice(0, 450)).run();
     }
   } catch (ePbpr) {
+    console.error("[qnfo-research-exec] paper backup pruning failed:", String(ePbpr && ePbpr.message || ePbpr).slice(0, 160));
   }
 }
 __name(prunePaperBodyBackups, "prunePaperBodyBackups");
@@ -2583,8 +2584,9 @@ async function publishV2(env, row) {
       } catch (eG) {
       }
       try {
-        await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'quality-gate-block', 'qnfo-research-exec', ?)").bind(("slug=" + String(row.slug || "?") + " " + gate.reason).slice(0, 450)).run();
+        await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES (?, ?, 'quality-gate-block', 'qnfo-research-exec', ?)").bind(crypto.randomUUID(), (/* @__PURE__ */ new Date()).toISOString(), ("slug=" + String(row.slug || "?") + " " + gate.reason).slice(0, 450)).run();
       } catch (eE) {
+        console.error("[qnfo-research-exec] quality gate event write failed:", String(eE && eE.message || eE).slice(0, 160));
       }
       return { ok: false, stage: "gate", error: gate.reason };
     }
@@ -2651,8 +2653,9 @@ async function publishV2(env, row) {
     var vGate = releaseGateVerdict(vBody);
     if (!vGate.pass) {
       try {
-        await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'gate-thin-publish', 'qnfo-research-exec', ?)").bind(("slug=" + String(vSlug) + " " + String(vGate.reason)).slice(0, 450)).run();
+        await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES (?, ?, 'gate-thin-publish', 'qnfo-research-exec', ?)").bind(crypto.randomUUID(), (/* @__PURE__ */ new Date()).toISOString(), ("slug=" + String(vSlug) + " " + String(vGate.reason)).slice(0, 450)).run();
       } catch (eGq) {
+        console.error("[qnfo-research-exec] release gate event write failed:", String(eGq && eGq.message || eGq).slice(0, 160));
       }
     }
     await env.LIVING_PAPER.prepare("UPDATE papers SET release_gate_pass=?2, release_gate_at=?3, release_gate_reason=?4 WHERE slug=?1 AND status='published'").bind(vSlug, vGate.pass, nowIso(), vGate.reason).run();
@@ -31374,7 +31377,7 @@ ${sourceUrlComment}
   __name(internalConfirmMax, "internalConfirmMax");
   async function logConfirmDefer(env, row, why) {
     try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'errata_confirm_defer', 'qnfo-research-exec', ?)").bind(("queue row " + row.id + ": " + why).slice(0, 450)).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES (?, ?, 'errata_confirm_defer', 'qnfo-research-exec', ?)").bind(crypto.randomUUID(), (/* @__PURE__ */ new Date()).toISOString(), ("queue row " + row.id + ": " + why).slice(0, 450)).run();
     } catch (e) {
       console.error("[errata-hub] internal confirm: defer event write failed:", String(e && e.message || e).slice(0, 160));
     }
