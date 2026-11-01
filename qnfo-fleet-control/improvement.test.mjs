@@ -75,12 +75,24 @@ eq(x.regressed, 0, "derived loop metrics do not create recursive regressions");
 eq(x.trends.filter((t) => t.verdict === "regressed").length, I.IL_SELF_METRICS.length, "self metrics keep their actual trend for issue recovery");
 
 // small discrete count changes are not material regression signals
-x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: hist("queue_count", step(12, 10)) }, NOW);
+const countHistory = (recent, prior) => hist("queue_count", [99, ...Array(7).fill(recent), ...Array(7).fill(prior)]);
+x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: countHistory(12, 10) }, NOW);
 eq(x.evaluable, 1, "discrete count metric remains measurable");
 eq(x.regressed, 0, "two-count increase is below the materiality floor");
 eq(x.trends[0] && x.trends[0].verdict, "flat", "small count movement is flat");
-x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: hist("queue_count", step(13, 10)) }, NOW);
+x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: countHistory(13, 10) }, NOW);
 eq(x.regressed, 1, "three-count increase is material");
+
+// exclude today's incomplete value: trend windows must compare seven complete UTC days
+x = I.improvementEvaluate({
+  registry: [reg("daily_metric", "maximize")],
+  history: hist("daily_metric", [400, ...Array(7).fill(100), ...Array(7).fill(120)])
+}, NOW);
+eq(x.evaluable, 1, "full-day trend is evaluable");
+eq(x.trends[0] && x.trends[0].recent, 100, "recent mean excludes today's partial value");
+eq(x.trends[0] && x.trends[0].prior, 120, "prior mean uses the preceding complete week");
+eq(x.regressed, 1, "current-day outlier cannot turn a full-week decline into an improvement");
+eq(x.improved, 0, "partial-day outlier is not counted as an improvement");
 
 // a cost metric that went DOWN 30% improved; one that went up 10% is flat (under the 15% bar)
 x = I.improvementEvaluate({ registry: [reg("cost_usd_30d", "<= 200"), reg("worker_count", "<= 24")], history: hist("cost_usd_30d", step(315, 450)).concat(hist("worker_count", step(44, 40))) }, NOW);

@@ -7,11 +7,13 @@
     "apply-pending-report.json",
     "apply-pending.json",
     "attach-ask-qwav-route.json",
+    "attach-jobs-q08-route.json",
     "attach-lifecycle-custom-domain.json",
     "attach-me-q08-route.json",
     "attach-mind-q08-route.json",
     "attach-surface-routes.json",
     "attach-travel-host.json",
+    "attach-watch-q08-route.json",
     "backlog-health-cheap.json",
     "backlog-repo-sync.json",
     "binding-install-gate-1.json",
@@ -60,6 +62,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 57,
+  "count": 59,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }

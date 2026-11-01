@@ -77,12 +77,22 @@ ok(/^# EXPIRES: \d{4}-\d{2}-\d{2}/m.test(allow), "the allowlist still parses its
 const PY = ["python3", "python"].find((c) => { const r = spawnSync(c, ["-I", "-c", "print(1)"], { encoding: "utf8" }); return r.status === 0; });
 ok(!!PY, "a python 3 interpreter is available");
 const files = readdirSync(here).filter((f) => f.endsWith(".sql")).sort().map((f) => join("migrations", f));
-const out = spawnSync(PY, [join(root, "scripts", "apply_migrations.py"), "--check", "--history", ...files], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-const recs = out.stdout.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
-ok(out.status === 0 && !recs.some((r) => r.refused), "apply_migrations.py --check over every migration refuses nothing", { status: out.status, refused: recs.filter((r) => r.refused).slice(0, 2) });
+// SUITE-PORT-32K-1: the full list is ~42 KB of arguments, past the ~32k CreateProcess command-line limit on Windows
+// (spawnSync fails before python starts and the suite used to crash on out.stdout === undefined). One spawn per
+// batch of 60 files keeps every platform under the limit; the assertions below read the merged records.
+const recs = [];
+let spawnError = null, batchFailures = 0, expiredSeen = false;
+for (let i = 0; i < files.length; i += 60) {
+  const out = spawnSync(PY, [join(root, "scripts", "apply_migrations.py"), "--check", "--history", ...files.slice(i, i + 60)], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (out.error) { spawnError = out.error; continue; }
+  if (out.status !== 0) batchFailures++;
+  if ((out.stderr || "").includes("expired")) expiredSeen = true;
+  recs.push(...String(out.stdout || "").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean));
+}
+ok(!spawnError && batchFailures === 0 && !recs.some((r) => r.refused), "apply_migrations.py --check over every migration refuses nothing", { spawnError: spawnError && String(spawnError), batchFailures, refused: recs.filter((r) => r.refused).slice(0, 2) });
 const declared = recs.filter((r) => r.declared);
 ok(declared.length >= 92, "at least the 92 audited files are declared (APPLY-BY: manual or none)", declared.length);
-ok(!out.stderr.includes("expired"), "no expiry warning is printed");
+ok(!expiredSeen, "no expiry warning is printed");
 const manualFirst = [];
 for (const r of declared) {
   const t = readFileSync(join(root, r.file), "utf8");

@@ -28,12 +28,12 @@ function fakeGh(cfg) {
   const log = [];
   const fetchImpl = async (url, init) => {
     const u = new URL(url), method = init.method || "GET", path = decodeURIComponent(u.pathname);
-    log.push({ method, path, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers.Authorization });
+    log.push({ method, path, search: u.search, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers.Authorization });
     const reply = (status, body) => ({ status, text: async () => (body === undefined ? "" : JSON.stringify(body)) });
     if (cfg.networkDown) throw new Error("getaddrinfo ENOTFOUND api.github.com");
     let m;
     if (method === "GET" && path === "/repos/" + REPO + "/pulls") return cfg.listStatus ? reply(cfg.listStatus, { message: "Bad credentials" }) : reply(200, (cfg.prs || []).map((p) => ({ number: p.number, user: p.user })));
-    if ((m = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)$/.exec(path)) && method === "GET") { const p = (cfg.prs || []).find((x) => x.number === Number(m[1])); return p ? reply(200, p) : reply(404, { message: "Not Found" }); }
+    if ((m = /^\/repos\/QNFO\/qnfo-workers\/pulls\/(\d+)$/.exec(path)) && method === "GET") { const p = (cfg.prs || []).find((x) => x.number === Number(m[1])); return p ? reply(200, p) : reply(404, { message: "Not Found" }); }
     if ((m = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/requested_reviewers$/.exec(path)) && method === "DELETE") return reply(cfg.reviewerDeleteStatus || 200, {});
     if ((m = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/assignees$/.exec(path)) && method === "DELETE") return reply(200, {});
     if ((m = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/events$/.exec(path))) return reply(200, (cfg.events || {})[m[1]] || []);
@@ -45,6 +45,15 @@ function fakeGh(cfg) {
     if (path === "/repos/" + REPO + "/actions/runs" && method === "GET") return reply(200, { workflow_runs: (cfg.runs || {})[u.searchParams.get("head_sha")] || [] });
     if ((m = /^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/approve$/.exec(path)) && method === "POST") return (cfg.approveStatus && cfg.approveStatus[m[1]]) ? reply(cfg.approveStatus[m[1]], { message: "Resource not accessible by integration" }) : reply(201, {});
     if ((m = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/files$/.exec(path))) return reply(200, (cfg.files || {})[m[1]] || []);
+    if (path === "/search/issues") {
+      const q = u.searchParams.get("q") || "";
+      if (cfg.searchStatus) return reply(cfg.searchStatus, { message: "Validation Failed" });
+      if (/draft:true/.test(q)) return reply(200, { items: ((cfg.search || {}).emptyDraft || []).map((x) => ({ number: x.number, repository_url: "https://api.github.com/repos/" + x.repo })) });
+      const kind = /review-requested:/.test(q) ? "reviewer" : /is:issue/.test(q) ? "issueAssignee" : "prAssignee";
+      return reply(200, { items: ((cfg.search || {})[kind] || []).map((x) => ({ number: x.number, repository_url: "https://api.github.com/repos/" + x.repo })) });
+    }
+    if ((m = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)$/.exec(path)) && m[1] !== REPO && method === "GET") { const p = (cfg.otherPrs || {})[m[1] + "#" + m[2]]; return p ? reply(200, p) : reply(404, { message: "Not Found" }); }
+    if ((m = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)$/.exec(path)) && method === "PATCH") return reply(cfg.patchStatus || 200, {});
     return reply(404, { message: "unexpected " + method + " " + path });
   };
   return { fetchImpl, log, cfg };
@@ -141,12 +150,87 @@ ok(JSON.stringify(linkedIssues("Fixes #12\n\ncloses #5, Resolved: #9 and fixes #
   ok(br.status === "bad-repo", "a malformed repository name sends nothing");
 }
 
+// --- the organization pass (ORG_TOKEN, the fleet user credential)
+{
+  const search = {
+    reviewer: [{ repo: "QNFO/qnfo-fleet-issues", number: 106 }, { repo: "QNFO/qnfo-ops", number: 9 }],
+    prAssignee: [{ repo: "QNFO/qnfo-fleet-issues", number: 106 }],
+    issueAssignee: [{ repo: "QNFO/qnfo-setup-bootstrap", number: 2 }, { repo: "QNFO/qnfo-workers", number: 55 }]
+  };
+  const g = fakeGh({ prs: [], search });
+  const s = await run(Object.assign({}, base, { orgToken: "ORG" }), { fetchImpl: g.fetchImpl, sleep: async () => {} });
+  const w = writes(g.log);
+  ok(s.status === "ok" && s.org_removed.length === 5, "the owner is removed from every matching pull request and issue in the organization", s.org_removed);
+  ok(w.length === 5 && w.every((c) => c.auth === "Bearer ORG"), "the organization removals use the fleet user credential and nothing else writes", w.map((c) => c.auth));
+  ok(w.filter((c) => c.path.endsWith("/requested_reviewers")).every((c) => JSON.stringify(c.body) === '{"reviewers":["rwnq8"]}') && w.filter((c) => c.path.endsWith("/assignees")).every((c) => JSON.stringify(c.body) === '{"assignees":["rwnq8"]}'), "a review request and an assignment are removed with the owner login only", w);
+  ok(w.some((c) => c.path === "/repos/QNFO/qnfo-fleet-issues/pulls/106/requested_reviewers") && w.some((c) => c.path === "/repos/QNFO/qnfo-setup-bootstrap/issues/2/assignees"), "other repositories are reached by their own path");
+  const searches = g.log.filter((c) => c.path === "/search/issues");
+  ok(searches.length === 4 && searches.every((c) => c.auth === "Bearer ORG"), "four searches (three removal queries and the empty-draft query), all with the fleet user credential");
+  const g2 = fakeGh({ prs: [], search });
+  const s2 = await run(Object.assign({}, base), { fetchImpl: g2.fetchImpl, sleep: async () => {} });
+  ok(!g2.log.some((c) => c.path === "/search/issues") && s2.org_removed === undefined, "without ORG_TOKEN there is no organization pass");
+  const g3 = fakeGh({ prs: [], search });
+  const s3 = await run(Object.assign({}, base, { orgToken: "ORG", mode: "dry" }), { fetchImpl: g3.fetchImpl, sleep: async () => {} });
+  ok(writes(g3.log).length === 0 && s3.org_removed.length === 5 && s3.org_removed.every((x) => x.dry), "dry mode lists the organization removals and sends no write");
+  const g4 = fakeGh({ prs: [], search });
+  const s4 = await run(Object.assign({}, base, { orgToken: "ORG", orgMax: 2 }), { fetchImpl: g4.fetchImpl, sleep: async () => {} });
+  ok(s4.org_removed.length === 2 && s4.skipped["org-over-cap"] === 3, "the organization cap defers the rest", [s4.org_removed.length, s4.skipped]);
+  const g5 = fakeGh({ prs: [], search, searchStatus: 422 });
+  const s5 = await run(Object.assign({}, base, { orgToken: "ORG" }), { fetchImpl: g5.fetchImpl, sleep: async () => {} });
+  ok(s5.status === "partial" && s5.errors.length === 4 && writes(g5.log).length === 0, "a failed search is recorded per query and removes nothing", s5.errors);
+  const g6 = fakeGh({ listStatus: 401, search });
+  const s6 = await run(Object.assign({}, base, { orgToken: "ORG" }), { fetchImpl: g6.fetchImpl, sleep: async () => {} });
+  ok(s6.status === "list-failed" && s6.org_removed.length === 5, "an unreadable repository list does not stop the organization pass", [s6.status, s6.org_removed]);
+  const g7 = fakeGh({ prs: [], search: { reviewer: [{ repo: "QNFO/x", number: 1 }] } });
+  const s7 = await run(Object.assign({}, base, { orgToken: "ORG", owners: ["rwnq8", "bad login; rm -rf"] }), { fetchImpl: g7.fetchImpl, sleep: async () => {} });
+  ok(g7.log.filter((c) => c.path === "/search/issues").length === 4, "an owner login that is not a plain name is never put in a query", s7.org_removed);
+}
+
+// --- empty Copilot drafts in other repositories
+{
+  const NOW = Date.parse("2026-10-30T10:00:00Z");
+  const done = (min, extra) => [{ event: "copilot_work_started", created_at: "2026-10-30T08:00:00Z" }, { event: "copilot_work_finished", created_at: new Date(NOW - min * 60000).toISOString() }].concat(extra || []);
+  const draft = (files) => ({ draft: true, changed_files: files });
+  const cfg = () => ({
+    prs: [],
+    search: { emptyDraft: [{ repo: "QNFO/qnfo-fleet-issues", number: 107 }, { repo: "QNFO/qnfo-fleet-issues", number: 108 }, { repo: "QNFO/qnfo-fleet-issues", number: 109 }, { repo: "QNFO/qnfo-fleet-issues", number: 110 }, { repo: "QNFO/qnfo-setup-bootstrap", number: 4 }] },
+    otherPrs: { "QNFO/qnfo-fleet-issues#107": draft(0), "QNFO/qnfo-fleet-issues#108": draft(0), "QNFO/qnfo-fleet-issues#109": draft(2), "QNFO/qnfo-fleet-issues#110": draft(0), "QNFO/qnfo-setup-bootstrap#4": draft(0) },
+    events: { 107: done(45), 108: done(5), 109: done(90), 110: [{ event: "copilot_work_started", created_at: "2026-10-30T09:50:00Z" }], 4: done(120) }
+  });
+  const g = fakeGh(cfg());
+  const s = await run(Object.assign({}, base, { orgToken: "ORG" }), { fetchImpl: g.fetchImpl, sleep: async () => {}, now: NOW });
+  const closed = s.empty_drafts_closed.map((x) => x.repo + "#" + x.number).sort().join();
+  ok(closed === "QNFO/qnfo-fleet-issues#107,QNFO/qnfo-setup-bootstrap#4", "only an empty draft whose session finished 30 minutes ago is closed", closed);
+  ok(s.skipped["empty-draft-recent"] === 1 && s.skipped["draft-has-changes"] === 1 && s.skipped["empty-draft-session-working"] === 1, "a recent finish, a draft with files and a running session are left alone", s.skipped);
+  const patches = g.log.filter((c) => c.method === "PATCH");
+  ok(patches.length === 2 && patches.every((c) => JSON.stringify(c.body) === '{"state":"closed"}' && c.auth === "Bearer ORG"), "the close is a state change with the fleet user credential", patches);
+  const cm = g.log.filter((c) => c.method === "POST" && c.path.endsWith("/comments"));
+  ok(cm.length === 2 && /changed no file/.test(cm[0].body.body) && /not assigned again/.test(cm[0].body.body), "each close explains itself and says the issue stays open");
+  const draftSearch = g.log.filter((c) => c.path === "/search/issues");
+  const dq = decodeURIComponent((draftSearch.find((c) => /draft:true/.test(decodeURIComponent(c.search))) || { search: "" }).search);
+  ok(/is:pr is:open draft:true author:app\/copilot-swe-agent -repo:QNFO\/qnfo-workers/.test(dq), "the draft search is Copilot's open drafts and excludes qnfo-workers (BH-EMPTY-DRAFT-1 owns that repository)", dq);
+  ok(draftSearch.length === 4, "the draft search is the fourth organization query", draftSearch.length);
+  const gd = fakeGh(cfg());
+  const sd = await run(Object.assign({}, base, { orgToken: "ORG", mode: "dry" }), { fetchImpl: gd.fetchImpl, sleep: async () => {}, now: NOW });
+  ok(writes(gd.log).length === 0 && sd.empty_drafts_closed.length === 2 && sd.empty_drafts_closed.every((x) => x.dry), "dry mode lists the empty drafts and sends no write");
+  const gc = fakeGh(cfg());
+  const sc = await run(Object.assign({}, base, { orgToken: "ORG", emptyMax: 1 }), { fetchImpl: gc.fetchImpl, sleep: async () => {}, now: NOW });
+  ok(sc.empty_drafts_closed.length === 1 && sc.skipped["empty-over-cap"] >= 1, "the empty-draft cap defers the rest", sc.skipped);
+  const gp = fakeGh(Object.assign(cfg(), { patchStatus: 403 }));
+  const sp = await run(Object.assign({}, base, { orgToken: "ORG" }), { fetchImpl: gp.fetchImpl, sleep: async () => {}, now: NOW });
+  ok(sp.status === "partial" && sp.empty_drafts_closed.length === 0 && sp.errors.some((e) => /close empty draft/.test(e.where) && e.http === 403), "a refused close is recorded and not counted", sp.errors);
+  const g2 = fakeGh(cfg());
+  await run(Object.assign({}, base), { fetchImpl: g2.fetchImpl, sleep: async () => {}, now: NOW });
+  ok(writes(g2.log).length === 0, "without ORG_TOKEN no draft is closed");
+}
+
 // --- the workflow and the lane poke
 const wf = readFileSync(join(root, ".github/workflows/copilot-pr-lifecycle.yml"), "utf8");
 const lane = readFileSync(join(root, ".github/workflows/lane-poke.yml"), "utf8");
 ok(/timeout-minutes:\s*10/.test(wf) && /runs-on:\s*ubuntu-24\.04/.test(wf) && /^permissions:/m.test(wf), "the workflow has a timeout, the runner pin and a top-level permissions block");
 ok(/pull-requests:\s*write/.test(wf) && /issues:\s*write/.test(wf) && /actions:\s*write/.test(wf) && /contents:\s*read/.test(wf) && !/contents:\s*write/.test(wf), "the token may write pull requests, issues and approvals and only read contents");
-ok((wf.match(/secrets\.[A-Za-z0-9_]+/g) || []).join() === "secrets.GITHUB_TOKEN", "GITHUB_TOKEN is the only secret the workflow reads", wf.match(/secrets\.[A-Za-z0-9_]+/g));
+ok((wf.match(/secrets\.[A-Za-z0-9_]+/g) || []).sort().join() === "secrets.GITHUB_TOKEN,secrets.QNFO_GH_PAT", "the workflow reads GITHUB_TOKEN and the fleet user credential and nothing else", wf.match(/secrets\.[A-Za-z0-9_]+/g));
+ok(/ORG_TOKEN: \$\{\{ github\.event_name != 'pull_request_target' && secrets\.QNFO_GH_PAT \|\| '' \}\}/.test(wf), "the fleet user credential is handed over only off a pull_request_target run");
 ok((wf.match(/uses:\s*\S+/g) || []).every((u) => /@[0-9a-f]{40}$/.test(u)), "every action is pinned to a commit", wf.match(/uses:\s*\S+/g));
 ok(/pull_request_target:/.test(wf) && /github\.event\.pull_request\.user\.login == 'Copilot'/.test(wf), "the pull_request_target job runs only for a pull request written by Copilot");
 ok(!/ref:\s*\$\{\{/.test(wf) && !/head\.(sha|ref)/.test(wf.replace(/^#.*$/gm, "")), "the job never checks out or names the pull request head");

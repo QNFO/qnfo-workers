@@ -1,16 +1,16 @@
 -- PLUS-1 slice 1 (2026-10-29, agent_issues 1000791, charter pillar autonomy; serves reach and personal products).
 -- Owner directive 2026-10-29: plussing (always make it better by adding) is a fleet philosophy; products (routing and website product lines,
 -- me.q08.org and the rest) improve automatically without the owner prompting each change. Programs set priority and budget; products are the
--- unit that gets plussed. Measured gap: qnfo-audit had programs, program_charters, program_focus and v_roadmap_originated but no product table,
--- so a built product (me.q08.org Today tab) had no owner loop, no outcome metric and no plus schedule.
+-- unit that gets plussed. Measured gap: qnfo-audit had programs, program_charters, program_focus and v_roadmap_originated but no product-improvement
+-- registry; its existing products table is a repository catalog, so this registry uses its own table.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP VIEW IF EXISTS v_product_plus_debt; DROP TABLE IF EXISTS products;
+-- Rollback: DROP VIEW IF EXISTS v_product_plus_debt; DROP TABLE IF EXISTS product_plus_registry;
 -- metric-exemption: this slice registers no metric. Slice 2 (qnfo-fleet-control manager assessment) writes products_unplussed_over_7d together with
 --   its trigger, because a metric ships with its trigger (CORE-PROMPT-1 rule 5) and the writer does not exist yet.
--- runtime-probe (D1): SELECT count(*) FROM products -- expected >= 6
+-- runtime-probe (D1): SELECT count(*) FROM product_plus_registry -- expected >= 6
 
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE IF NOT EXISTS product_plus_registry (
   key TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   program TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-INSERT OR IGNORE INTO products (key, name, program, url, worker, outcome_metric) VALUES
+INSERT OR IGNORE INTO product_plus_registry (key, name, program, url, worker, outcome_metric) VALUES
   ('me-q08', 'me.q08.org personal dashboard (Today)', 'QNFO.PERSONAL', 'https://me.q08.org', 'personal-api', 'personal return visits per week (named in slice 2)'),
   ('fleet-dashboard', 'Fleet dashboard and command line', 'QNFO.OPS', 'https://fleet.qnfo.org', 'qnfo-fleet-dashboard', 'pageviews_30d'),
   ('qnfo-gateway', 'qnfo.org landing, subscribe and papers host', 'QNFO.REACH', 'https://qnfo.org', 'qnfo-gateway', 'subscribers_growth_monthly'),
@@ -38,5 +38,5 @@ CREATE VIEW IF NOT EXISTS v_product_plus_debt AS
 SELECT key, name, program, url, plus_cadence_days, last_plussed_at,
   CASE WHEN last_plussed_at IS NULL THEN NULL ELSE CAST(julianday('now') - julianday(last_plussed_at) AS INTEGER) END AS days_since_plus,
   CASE WHEN last_plussed_at IS NULL OR julianday('now') - julianday(last_plussed_at) > plus_cadence_days THEN 1 ELSE 0 END AS in_debt
-FROM products WHERE state = 'live'
+FROM product_plus_registry WHERE state = 'live'
 ORDER BY (last_plussed_at IS NULL) DESC, last_plussed_at ASC;

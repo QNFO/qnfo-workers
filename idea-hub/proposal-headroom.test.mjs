@@ -62,7 +62,7 @@ const corp = raw.slice(raw.indexOf("async function runOwnerCorpus(env, deadline)
 ok(/var room = await proposalRoom\(env\);/.test(corp) && /if \(room < batch\) \{ batch = room; out\.capped = "room " \+ room; \}/.test(corp) && corp.indexOf("var room = await proposalRoom(env);") < corp.indexOf("FROM notes_intake"), "the notebook batch is capped by the room before notes are read");
 const cyc = fnBody(raw, "ideationCycle");
 ok(cyc.length > 400 && cyc.indexOf("runAskGap(env)") > 0 && cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)") > 0 && cyc.indexOf("triageProposals(env, WALL_DEADLINE)") > 0, "the cycle body was read whole (every stage inside ideationCycle)", { len: cyc.length });
-ok(cyc.indexOf("runConsume(env)") < cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)") && cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)") < cyc.indexOf("triageProposals(env, WALL_DEADLINE)"), "the notebook reads the room after re-entry and ask gaps, before triage");
+ok(cyc.indexOf("triageProposals(env, WALL_DEADLINE)") < cyc.indexOf("runConsume(env)") && cyc.indexOf("runConsume(env)") < cyc.indexOf("runAskGap(env)") && cyc.indexOf("runAskGap(env)") < cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)"), "triage frees room before producers; the notebook reads the room after re-entry and ask gaps");
 // PROPOSAL-COOLING-1 (1.14.3, agent_issues 1000244): a row IDEA-SCORING-POISON-1 could not score ("[scoring-error N ISO]" in rationale) stays in 'new'
 // for days waiting for a model, not for triage capacity. It is not counted against PROPOSAL_BACKPRESSURE or the fill-to room by any of the five
 // producers' counts. Live on 2026-10-26: 33 'new' rows, 24 of them marked, so the count (33) sat over 30 and runConsume was paused with 9 really waiting.
