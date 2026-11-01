@@ -29,7 +29,7 @@ and must be recorded in `spof_registry`, not merely believed redundant.
 | 2 | Evidence is persisted | 2 min after verdict | a row exists in `v_remediation_evidence_all` for `(class, verified_at)` | `INSERT INTO remediation_verifications` | **`INSERT INTO remediation_evidence`** (trigger-free sink, live since 2026-10-17) | session inserts into `remediation_evidence` with `path='C:session'` |
 | 3 | Close / reopen decided | within the same tick | `agent_issues.status` changed **and** the deciding row's id is recorded | D1 triggers `autoclose_ins/_upd`, `reopen_on_relapse_d1` | worker evaluates the same predicate in code against `v_remediation_evidence_all` | session closes/opens with `issue_triage.close_evidence` naming the evidence row |
 | 4 | Closure is durable | 24 h without relapse | contract holds a pass streak of `RT_HOLD_D` (7 d) | hold-and-recheck in the tick | trigger re-open on a later fail row | `fm-closure-relapse-unreopened` detector files the issue |
-| 5 | Backlog drains | 120 min per issue (`SLA-120M`) | `issues_open_over_120m = 0` | issue loop | backlog-exec drain | owner card when the loop stalls twice |
+| 5 | Backlog SLA | 120 min for defect, incident and reliability issues, excluding `METRIC-TRIGGER-*` tickets and issues mapped to `goals` or `objective_space` (`ISSUE-SLA-SCOPE-1`) | `issues_open_over_120m = 0` within that population; the overall queue remains measured by `open_agent_issues` | issue loop | backlog-exec drain | owner card when the loop stalls twice |
 
 ### Consequence for the live outage
 
