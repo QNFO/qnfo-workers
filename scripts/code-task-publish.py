@@ -43,7 +43,6 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-from unittest import mock
 
 AUDIT_DB = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
 REPO_NAME = "qnfo-workers"
@@ -427,6 +426,9 @@ def gate_check(repo_dir, files, base, log=print):
         log("::warning::PUBLISH-DEPLOY-GATE-1 skipped: npx is not installed")
         return None
 
+    gate_env = os.environ.copy()
+    for key in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CF_ACCOUNT_ID", "GH_TOKEN", "GITHUB_TOKEN"):
+        gate_env.pop(key, None)
     failures = []
     for directory in dirs:
         worker_dir = os.path.join(root, directory)
@@ -437,6 +439,7 @@ def gate_check(repo_dir, files, base, log=print):
                 capture_output=True,
                 text=True,
                 timeout=GATE_TIMEOUT_S,
+                env=gate_env,
             )
         except subprocess.TimeoutExpired:
             failures.append("GATE %s: deploy gate timed out after %d s" % (directory, GATE_TIMEOUT_S))
@@ -993,6 +996,8 @@ def _sh(cwd, *a):
 
 
 def selftest():
+    from unittest import mock
+
     fails = []
 
     def check(name, cond, extra=""):
@@ -1383,18 +1388,28 @@ def selftest():
             "worker = sys.argv[-1]\n"
             "with open(os.path.join(os.path.dirname(__file__), 'called.txt'), 'a') as calls:\n"
             "    calls.write(os.path.basename(worker) + '\\n')\n"
+            "for key in ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'GH_TOKEN', 'GITHUB_TOKEN'):\n"
+            "    if os.environ.get(key):\n"
+            "        print('FAIL unnecessary credential available: ' + key)\n"
+            "        sys.exit(4)\n"
             "if open(os.path.join(worker, 'wrangler.toml')).read().startswith('fail'):\n"
             "    print('FAIL synthetic worker gate failure')\n"
             "    sys.exit(3)\n"
             "print('CHECK OK')\n"
         )
     changed_workers = ["bad/worker.js", "w/worker.js", "scripts/x.py", "docs/readme.md"]
-    with mock.patch("shutil.which", return_value="/usr/bin/npx"):
+    with mock.patch.dict(os.environ, {
+        "CLOUDFLARE_API_TOKEN": "fixture",
+        "CLOUDFLARE_ACCOUNT_ID": "fixture",
+        "CF_ACCOUNT_ID": "fixture",
+        "GH_TOKEN": "fixture",
+        "GITHUB_TOKEN": "fixture",
+    }), mock.patch("shutil.which", return_value="/usr/bin/npx"):
         fb = gate_check(gate_root, changed_workers, "main", log=quiet)
     calls_path = os.path.join(gate_root, "scripts", "called.txt")
     calls = open(calls_path).read().splitlines()
-    check("deploy gate: each changed worker is checked and a failure is returned as feedback",
-          fb is not None and fb.startswith("GATE bad: FAIL synthetic worker gate failure") and calls == ["bad", "w"], (fb, calls))
+    check("deploy gate: each changed worker is checked without publisher credentials and failures return feedback",
+          fb == "GATE bad: FAIL synthetic worker gate failure" and calls == ["bad", "w"], (fb, calls))
     with open(os.path.join(gate_root, "bad", "wrangler.toml"), "w") as fh:
         fh.write("pass\n")
     os.remove(calls_path)
