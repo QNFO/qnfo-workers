@@ -21,10 +21,10 @@ const mkPaper = () => "# A paper about a model\n\n## Abstract\n\nContext, gap, a
 const PAPER = mkPaper();
 ok(PAPER.length >= 12000 && paperCompleteness(PAPER).complete, "fixture: a complete paper of at least 12000 chars", { len: PAPER.length, pc: paperCompleteness(PAPER) });
 
-function mkEnv(answer) {
+function mkEnv(answer, opts = {}) {
   const store = { "pipeline/r1/reconciled.md": PAPER, "pipeline/r1/fixes.json": JSON.stringify({ hard: [{ id: "h1", severity: "HARD", claim: "the coupling value", reason: "stated without derivation", fix: "derive or remove" }], soft: [] }), "pipeline/r1/grounding.md": "" };
   const sqls = [], calls = [];
-  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { return null; }, async all() { return { results: [] }; } }; return q; } };
+  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); if (opts.failReviseCount && /SET revise_count/.test(sql)) throw new Error("simulated counter write failure"); return { meta: { changes: 1 } }; }, async first() { return null; }, async all() { return { results: [] }; } }; return q; } };
   const MIRROR = { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } };
   const AI = { async run(model, input) { const prompt = input.messages[0].content; calls.push({ model, prompt }); return { response: typeof answer === "function" ? answer(calls.length, prompt) : answer }; } };
   return { env: { AI, QNFO_AUDIT: D1, MIRROR }, sqls, calls, store };
@@ -45,12 +45,36 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
   ok(/STRICT RETRY/.test(add) && /\bh1\b/.test(add) && /at least one edit for EACH/.test(add) && /empty array is a wrong answer/.test(add), "the retry names the fix id and demands one edit per HARD fix", add);
   ok(res && res.ok === false && res.stage === "revise" && res.withheld === "revise-noop" && res.proposed === 0 && Array.isArray(res.fixIds) && res.fixIds[0] === "h1", "the pass fails as revise-noop with the fix ids", res);
   const upd = t.sqls.filter((s) => /UPDATE research_queue/.test(s.sql));
+  ok(upd.some((s) => /SET revise_count = COALESCE\(revise_count, 0\) \+ 1/.test(s.sql)), "a revise-noop increments the live diagnostic counter", upd.map((s) => s.sql));
   ok(!upd.some((s) => /stage='review'/.test(s.sql)), "the row is NOT advanced to review", upd.map((s) => s.sql));
   // RERUN-ROUTE-1 (0.18.0, agent_issues 2473): a revise failure re-enters once at revise with its findings, not at ground.
   ok(upd.some((s) => /status='researching', stage='revise'/.test(s.sql) && /recover_count=recover_count\+1/.test(s.sql) && s.args[3] === "r1" && /^RERUN-ROUTE-1 revise-once: /.test(s.args[0]) && /not advanced unrevised/.test(s.args[0]) && /h1/.test(s.args[0])), "markError re-enters the row once at revise with recover_count+1 and the reason (the recovery path)", upd.map((s) => [s.sql, s.args]));
   ok(t.store["pipeline/r1/reconciled.md"] === PAPER, "the paper in R2 is untouched");
   const ev = t.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql)).map((s) => s.args[2] + ": " + s.args[3]);
   ok(ev.some((e) => /^revise-noop: /.test(e) && /ids=h1/.test(e) && /strict_retry=yes/.test(e) && /revise failed, recover path/.test(e)), "the revise-noop event names the fix ids, the strict retry and the disposition", ev);
+}
+
+// 1b. A second non-parse revise-noop hits the explicit revise_count ceiling and parks with its own reason.
+{
+  const t = mkEnv("[]");
+  const second = Object.assign({}, row, { recover_count: 1, revise_count: 1, error: "RERUN-ROUTE-1 revise-once: first no-op" });
+  const res = await stageRevise(t.env, second);
+  const park = t.sqls.find((s) => /UPDATE research_queue SET status='wontfix', stage='parked'/.test(s.sql));
+  ok(res && res.withheld === "revise-noop", "the second no-op remains withheld", res);
+  ok(park && /^PARKED-REVISE-NOOP-CEILING-1/.test(park.args[0]), "revise_count=2 parks explicitly instead of re-entering the loop", park && park.args[0]);
+}
+
+// 1c. A D1 counter failure is logged and does not replace the existing recover-route behavior.
+{
+  const t = mkEnv("[]", { failReviseCount: true });
+  const errors = [];
+  const realError = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
+  let res;
+  try { res = await stageRevise(t.env, Object.assign({}, row)); } finally { console.error = realError; }
+  ok(res && res.withheld === "revise-noop", "a failed counter write does not turn the revise failure into success or throw", res);
+  ok(errors.some((e) => /where":"revise-count/.test(e)), "the failed diagnostic write is surfaced", errors);
+  ok(t.sqls.some((s) => /status='researching', stage='revise'/.test(s.sql)), "the existing one-retry route remains active when counting is unavailable", t.sqls.map((s) => s.sql));
 }
 
 // 2. {"edits": [...]} with a real excerpt: applied, advanced to review.
@@ -76,6 +100,17 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
   const t = mkEnv((n) => n === 1 ? "[]" : "[{\"find\":" + JSON.stringify(UNIQUE) + ",\"replace\":\"The coupling constant takes the value $0.5000$ in the baseline configuration, as derived above.\"}]");
   const res = await stageRevise(t.env, Object.assign({}, row));
   ok(res && res.ok === true && res.stage === "revise->review" && res.patch === 1 && t.calls.length === 2, "an edit from the strict retry is applied and advances the row", res);
+}
+
+// 5. An unreadable review is re-reviewed, not counted as an unapplied patch.
+{
+  const t = mkEnv("[]");
+  t.store["pipeline/r1/fixes.json"] = JSON.stringify([{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }]);
+  const res = await stageRevise(t.env, Object.assign({}, row));
+  ok(res && res.rereview === true && res.stage === "revise->review", "a parse-only finding retries review", res);
+  ok(!t.sqls.some((s) => /SET revise_count/.test(s.sql)), "a review parser failure does not consume the no-op revise ceiling", t.sqls.map((s) => s.sql));
+  const events = t.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql)).map((s) => s.args[2]);
+  ok(events.includes("revise-review-parse") && !events.includes("revise-noop"), "parse failures have a distinct event and do not inflate revise-noop telemetry", events);
 }
 
 console.log(pass + " passed, " + fail + " failed");

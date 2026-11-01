@@ -4342,7 +4342,7 @@ async function breachDoctorWatchAct(env, db, d, row, nowMs, nowIso, out) {
   var binding = env && env.FLEET_CONTROL;
   if (!binding || typeof binding.fetch !== "function") { out.acting = { run: run, skipped: "no-binding" }; return; }
   var version = typeof VERSION === "string" ? VERSION : "unknown";
-  var id = "breach-doctor-watch-run-" + kind + "-" + nowMs.toString(36);
+  var id = "breach-doctor-watch-run-" + kind + "-" + nowMs.toString(36) + "-" + crypto.randomUUID();
   var cut = new Date(nowMs - BREACH_DOCTOR_WATCH_ACT_MIN * 6e4).toISOString();
   var claimText = "BREACH-DOCTOR-WATCH-2 " + run + ": calling POST /breach-doctor/run on qnfo-fleet-control (doctor_tick_age_min " + d.age_min + ", breach_doctor = " + d.mode + ")";
   var claimMeta = JSON.stringify({ job: "breach-doctor-watch", run: run, acted: 1, status: "pending", state: d.state, age_min: d.age_min, mode: d.mode, version: version });

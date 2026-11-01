@@ -210,7 +210,13 @@ for (const order of ["watch-first", "cron-first"]) {
 // ---- the whole second path: the real job of qnfo-cloud-ops, a fake service binding, the real route, the real engine, one database
 const cA = cloudSrc.indexOf("// ---- BREACH-DOCTOR-WATCH-1:BEGIN"), cB = cloudSrc.indexOf("// ---- BREACH-DOCTOR-WATCH-1:END");
 ok(cA > 0 && cB > cA, "the BREACH-DOCTOR-WATCH-1 block is marked in qnfo-cloud-ops/worker.js");
-const jx = { Date, Math, Number, JSON, String, Promise, isFinite, setTimeout, clearTimeout, VERSION: "1.40.0-test", __name: () => {}, console: quiet };
+const NativeDate = Date;
+let fixedNow = null;
+class TestDate extends NativeDate {
+  static now() { return fixedNow === null ? NativeDate.now() : fixedNow; }
+}
+const jx = { Date: TestDate, Math, Number, JSON, String, Promise, isFinite, setTimeout, clearTimeout, crypto: globalThis.crypto, VERSION: "1.40.0-test", __name: () => {}, console: quiet };
+Object.defineProperty(jx, "__setNow", { value: (value) => { fixedNow = value; } });
 vm.createContext(jx);
 vm.runInContext(cloudSrc.slice(cA, cB) + "\n__x = { jobBreachDoctorWatch };", jx);
 const watchJob = jx.__x.jobBreachDoctorWatch;
@@ -275,13 +281,18 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   // the cron tick holds the lock right now: the route answers lock-held, nothing is stamped, the next tick tries again
   const w = e2e({ tickAgo: 47 });
   w.raw.prepare("INSERT INTO loop_lock (k, holder, expires_at) VALUES ('breach-doctor', 'cron', ?)").run(new Date(Date.now() + 200000).toISOString().slice(0, 19) + "Z");
-  const out = await watchJob(w.env);
-  ok(out.notes.acting.status === "skipped" && out.notes.acting.error === "lock-held" && out.notes.acting.verified === false, "lock held by the cron tick: the run is skipped with lock-held", out.notes.acting);
-  const s = stamps(w.raw);
-  ok(s.control === null && s.spof === null && s.cap === null && tickEvents(w.raw).filter((e) => /source=watch/.test(e.detail)).length === 0, "and nothing is stamped (no tick row, no stamp)", s);
-  w.raw.prepare("DELETE FROM loop_lock").run();
-  const next = await watchJob(w.env);
-  ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control, "a skipped run is not counted against the 30-minute rate: the next tick calls again and verifies", next.notes.acting);
+  jx.__setNow(NativeDate.now());
+  try {
+    const out = await watchJob(w.env);
+    ok(out.notes.acting.status === "skipped" && out.notes.acting.error === "lock-held" && out.notes.acting.verified === false, "lock held by the cron tick: the run is skipped with lock-held", out.notes.acting);
+    const s = stamps(w.raw);
+    ok(s.control === null && s.spof === null && s.cap === null && tickEvents(w.raw).filter((e) => /source=watch/.test(e.detail)).length === 0, "and nothing is stamped (no tick row, no stamp)", s);
+    w.raw.prepare("DELETE FROM loop_lock").run();
+    const next = await watchJob(w.env);
+    ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control, "a skipped run is not counted against the 30-minute rate: the next tick calls again and verifies even at the same clock millisecond", next.notes.acting);
+  } finally {
+    jx.__setNow(null);
+  }
 }
 {
   // a 403 (the binding's props not installed yet) stamps nothing and is recorded with its code
