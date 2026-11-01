@@ -1,4 +1,4 @@
-// MANAGEMENT-PERSONAS-9 offline suite: breach distance controls QNFO.OPS focus and doer-request order.
+// MANAGEMENT-PERSONAS-9 offline suite: breach distance controls focus and doer-request order.
 // Run: node migrations/management-personas-9.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -46,38 +46,38 @@ db.exec(`DROP VIEW v_metric_trigger_state;
   FROM analytics_metric_triggers t
   LEFT JOIN metric_registry r ON r.metric = t.metric_key
   WHERE t.enabled = 1`);
-run("INSERT INTO service_program_map (service, program_code) VALUES ('ops-test', 'QNFO.OPS')");
+run("INSERT INTO service_program_map (service, program_code) VALUES ('rsch-test', 'QNFO.RSCH')");
 const metrics = [
-  [201, "ops_worst", "gt", 10, 40],
-  [205, "ops_worst_tie", "gt", 10, 40],
-  [206, "ops_gte", "gte", 10, 30],
-  [202, "ops_middle", "lt", 100, 50],
-  [207, "ops_lte", "lte", 100, 75],
-  [203, "ops_mild", "gt", 10, 11],
-  [204, "ops_on_target", "gt", 10, 10]
+  [201, "rsch_worst", "gt", 10, 40],
+  [205, "rsch_worst_tie", "gt", 10, 40],
+  [206, "rsch_gte", "gte", 10, 30],
+  [202, "rsch_middle", "lt", 100, 50],
+  [207, "rsch_lte", "lte", 100, 75],
+  [203, "rsch_mild", "gt", 10, 11],
+  [204, "rsch_on_target", "gt", 10, 10]
 ];
 for (const [id, metric, operator, threshold, value] of metrics) {
   run("INSERT INTO metric_registry (metric, layer, kind, last_value) VALUES (?, 'operational', 'guard', ?)", metric, String(value));
-  run("INSERT INTO analytics_metric_triggers (id, metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, enabled) VALUES (?, ?, ?, 'metric_registry', ?, ?, 5, 'fix metric', 'ops-test', 'agent_issues', 1)", id, metric, metric, operator, threshold);
+  run("INSERT INTO analytics_metric_triggers (id, metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, enabled) VALUES (?, ?, ?, 'metric_registry', ?, ?, 5, 'fix metric', 'rsch-test', 'agent_issues', 1)", id, metric, metric, operator, threshold);
 }
 const created = now - 4 * 60 * 60 * 1000;
-for (const [id, trigger, metric] of [[901, 201, "ops_worst"], [905, 205, "ops_worst_tie"], [906, 206, "ops_gte"], [902, 202, "ops_middle"], [907, 207, "ops_lte"], [903, 203, "ops_mild"], [904, 204, "ops_on_target"]]) {
+for (const [id, trigger, metric] of [[901, 201, "rsch_worst"], [905, 205, "rsch_worst_tie"], [906, 206, "rsch_gte"], [902, 202, "rsch_middle"], [907, 207, "rsch_lte"], [903, 203, "rsch_mild"], [904, 204, "rsch_on_target"]]) {
   run("INSERT INTO agent_issues (id, title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, 'no doer', 'metric-test', 'bug', 'medium', 'open', ?, ?)", id, `METRIC-TRIGGER-${trigger}-${metric}`, created, created);
-  run("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (?, 'W.OPS', 'QNFO.OPS', 'fix')", id);
+  run("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (?, 'W.RSCH', 'QNFO.RSCH', 'fix')", id);
 }
-run("INSERT INTO portfolio_allocations (tick, program_code, manager_persona, verdict, risk_score, open_issues, slots, decision) VALUES ('2099-01-01T00:00Z', 'QNFO.OPS', 'program-manager:QNFO.OPS', 'RED', 10, 7, 7, 'steady')");
+run("INSERT INTO portfolio_allocations (tick, program_code, manager_persona, verdict, risk_score, open_issues, slots, decision) VALUES ('2099-01-01T00:00Z', 'QNFO.RSCH', 'program-manager:QNFO.RSCH', 'RED', 10, 7, 7, 'steady')");
 
-const focus = q("SELECT issue_id, rank, reason FROM v_program_focus_plan WHERE program_code = 'QNFO.OPS' ORDER BY rank");
+const focus = q("SELECT issue_id, rank, reason FROM v_program_focus_plan WHERE program_code = 'QNFO.RSCH' ORDER BY rank");
 ok(focus.map((f) => f.issue_id).join() === "901,905,906,902,907,903,904", "breached metrics using gt/gte/lt/lte rank by normalized deviation, ties retain deterministic issue order, then in-target metrics", focus);
-ok(focus[0].reason.includes("ops_worst") && /300(?:\.0)?%/.test(focus[0].reason), "the greatest normalized breach is identified as the worst metric", focus[0]);
-ok(focus[1].reason.includes("ops_worst_tie") && /300(?:\.0)?%/.test(focus[1].reason), "equal normalized breaches have deterministic ordering", focus[1]);
-ok(focus[2].reason.includes("ops_gte") && /200(?:\.0)?%/.test(focus[2].reason), "gte breaches use high-side deviation", focus[2]);
-ok(focus[3].reason.includes("ops_middle") && /50(?:\.0)?%/.test(focus[3].reason), "a lower normalized breach follows the worst breach", focus[3]);
-ok(focus[4].reason.includes("ops_lte") && /25(?:\.0)?%/.test(focus[4].reason), "lte breaches use low-side deviation", focus[4]);
-ok(focus[5].reason.includes("ops_mild") && /10(?:\.0)?%/.test(focus[5].reason), "the mild breach follows the larger breaches", focus[5]);
+ok(focus[0].reason.includes("rsch_worst") && /300(?:\.0)?%/.test(focus[0].reason), "the greatest normalized breach is identified as the worst metric", focus[0]);
+ok(focus[1].reason.includes("rsch_worst_tie") && /300(?:\.0)?%/.test(focus[1].reason), "equal normalized breaches have deterministic ordering", focus[1]);
+ok(focus[2].reason.includes("rsch_gte") && /200(?:\.0)?%/.test(focus[2].reason), "gte breaches use high-side deviation", focus[2]);
+ok(focus[3].reason.includes("rsch_middle") && /50(?:\.0)?%/.test(focus[3].reason), "a lower normalized breach follows the worst breach", focus[3]);
+ok(focus[4].reason.includes("rsch_lte") && /25(?:\.0)?%/.test(focus[4].reason), "lte breaches use low-side deviation", focus[4]);
+ok(focus[5].reason.includes("rsch_mild") && /10(?:\.0)?%/.test(focus[5].reason), "the mild breach follows the larger breaches", focus[5]);
 ok(!focus[6].reason.includes("off-target"), "an in-target metric is not treated as an off-target breach", focus[6]);
 
-run("INSERT INTO program_focus (program_code, issue_id, rank, tier, reason, has_doer, entered_at) SELECT program_code, issue_id, rank, tier, reason, has_doer, strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-4 hours') FROM v_program_focus_plan WHERE program_code = 'QNFO.OPS'");
+run("INSERT INTO program_focus (program_code, issue_id, rank, tier, reason, has_doer, entered_at) SELECT program_code, issue_id, rank, tier, reason, has_doer, strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-4 hours') FROM v_program_focus_plan WHERE program_code = 'QNFO.RSCH'");
 for (const step of steps().filter((s) => ["dg-request"].includes(s.name))) db.prepare(step.sql).all();
 const requests = q("SELECT instance FROM cf_agent_requests WHERE instance LIKE 'doer-%' ORDER BY id");
 ok(requests.map((r) => Number(r.instance.split("-")[1])).join() === "901,905,906,902", "doer requests begin with worst metric issues in focus rank order and retain the four-request cap", requests);
