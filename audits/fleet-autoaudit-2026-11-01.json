@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-11-01 17:25:59",
+  "audited_at": "2026-11-01 18:59:01",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -576,7 +583,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.6",
+        "version": "0.40.7-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -641,7 +648,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.48.2-codeagent",
+        "version": "3.48.3-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -1056,9 +1063,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.6",
+      "before": "0.40.7-codeagent",
       "http": 200,
-      "live": "0.40.6",
+      "live": "0.40.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1447,9 +1454,9 @@
       "worker": "qnfo-fleet-lee"
     },
     "qnfo-gateway": {
-      "before": "3.48.2-codeagent",
+      "before": "3.48.3-codeagent",
       "http": 200,
-      "live": "3.48.2-codeagent",
+      "live": "3.48.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
