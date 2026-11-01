@@ -165,5 +165,24 @@ ok(Array.isArray(h.capabilities) && h.capabilities.includes("plan-trusted-first"
     "6b the trusted planner creates only the target issue task", tasks(env).map((t) => t.goal));
 }
 
+// 7. when the age-action table is unavailable, the compatibility filter still excludes handoff markers
+{
+  const { env } = envWith([FIX("q08-signal-engine")]);
+  env.AUDIT_DB._db.exec("DROP TABLE issue_age_actions");
+  issue(env, {
+    title: "METRIC-TRIGGER-243-Q08: stale handoff",
+    description: "q08-signal-engine /api/f\ncode-task: repo=qnfo-workers path=q08-signal-engine/worker.js",
+    priority: "critical",
+  });
+  const eligible = issue(env, {
+    title: "METRIC-TRIGGER-244-Q08: eligible",
+    description: "q08-signal-engine /api/f",
+    priority: "low",
+  });
+  const r = await plan(env);
+  ok(r.planned && r.issue === eligible && r.outcome === "queued",
+    "7 the schema-compatibility fallback still excludes a stale marker without a 24h action table", r);
+}
+
 console.log("plan-window-trusted.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

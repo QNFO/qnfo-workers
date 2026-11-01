@@ -3309,6 +3309,11 @@ async function planIssues(env, opts) {
     // PLAN-FIRST-TIME-FIRST-1 (0.29.3, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST): inside one priority class a first-time plan (no issue_plans row) is read before a re-plan (a verdict
     // older than PLAN_RECHECK_DAYS), so the daily cap of model calls is not spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 re-plans).
     const ageActions = await env.AUDIT_DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'issue_age_actions'").first();
+    const handoffFilter = ageActions
+      ? "(COALESCE(a.description, '') NOT LIKE '%code-task:%' OR EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h'))"
+      : "COALESCE(a.description, '') NOT LIKE '%code-task:%'";
+    const sel = "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id " +
+      "WHERE a.status = 'open' AND " + handoffFilter + " AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) AND ";
     const ageActionFirst = ageActions ? "CASE WHEN EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h') THEN 0 ELSE 1 END, " : "";
     const codeTaskFilter = ageActions
       ? "(COALESCE(a.description, '') NOT LIKE '%code-task:%' OR EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h'))"
