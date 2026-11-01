@@ -290,22 +290,19 @@ function world(opt) {
   check((out2.deferral_escalated || []).includes("OFF-1"), "removing the switch resumes the sweep (got " + JSON.stringify(out2.deferral_escalated) + ")");
 }
 {
-  // the sweep is bounded: 3 issues in a tick, 12 in any 24 hours, oldest deferral first; nothing is dropped, the rest wait
+  // The sweep is bounded to 3 issues per tick and can drain the audited 431-contract backlog within one daily window.
   const w = world();
-  for (let i = 1; i <= 20; i++) { w.contract("B" + String(i).padStart(2, "0"), null, "b" + i); w.src("b" + i, "pending: waiting " + i); }
+  for (let i = 1; i <= 431; i++) { w.contract("B" + String(i).padStart(3, "0"), null, "b" + i); w.src("b" + i, "pending: waiting " + i); }
   await w.tick();
-  for (let i = 1; i <= 20; i++) w.db.prepare("UPDATE remediation_contracts SET deferred_since = ? WHERE class = ?").run(ago(24 * 20 - i), "B" + String(i).padStart(2, "0"));
+  for (let i = 1; i <= 431; i++) w.db.prepare("UPDATE remediation_contracts SET deferred_since = ? WHERE class = ?").run(ago(24 * 8 + (431 - i) / 60), "B" + String(i).padStart(3, "0"));
   const count = () => w.db.prepare("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'VERIFICATION-DEFERRED-7D-1: B%'").get().n;
   let out = await w.tick();
-  check(count() === 3 && out.deferral_escalated.length === 3 && out.deferral_escalated[0] === "B01", "20 stale deferrals file at most 3 issues in a tick, oldest first (got " + count() + " " + JSON.stringify(out.deferral_escalated) + ")");
-  for (let t = 0; t < 8; t++) await w.tick();
-  check(count() === 12, "and at most 12 in 24 hours across ticks (got " + count() + ")");
-  out = await w.tick();
-  check(count() === 12 && out.deferral_sweep_capped === 1, "the daily cap is reported and holds (got " + count() + ")");
-  // the capped contracts are not dropped: once the day's window has room they are filed
-  w.db.prepare("UPDATE agent_issues SET created_at = created_at - 90000000 WHERE title LIKE 'VERIFICATION-DEFERRED-7D-1: B%'").run();
-  await w.tick();
-  check(count() === 15, "after the window rolls the next three are filed (got " + count() + ")");
+  check(count() === 3 && out.deferral_escalated.length === 3 && out.deferral_escalated[0] === "B001", "431 stale deferrals still file at most 3 issues in a tick, oldest first (got " + count() + " " + JSON.stringify(out.deferral_escalated) + ")");
+  for (let t = 0; t < 143; t++) await w.tickOnly();
+  check(count() === 431, "the entire 431-contract backlog is escalated within the daily window (got " + count() + ")");
+  const missing = w.db.prepare("SELECT c.class FROM remediation_contracts c WHERE c.class LIKE 'B%' AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.title = 'VERIFICATION-DEFERRED-7D-1: ' || c.class)").all();
+  check(missing.length === 0, "no overdue contract is left without its deduped escalation issue");
+  check(w.db.prepare("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'VERIFICATION-DEFERRED-7D-1: B%' AND description LIKE '%Named unblocker:%' AND description LIKE '%Doer:%'").get().n === 431, "every backlog issue names an unblocker and doer");
 }
 
 // ---------------------------------------------------------------- helpers
