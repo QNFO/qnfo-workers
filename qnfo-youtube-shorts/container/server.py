@@ -1,5 +1,6 @@
 """YT-SERVER-1 container entrypoint. POST /render {id, job} -> 202; GET /result?id=[&download=1] -> state or the mp4; GET /health."""
 import json
+import re
 import shutil
 import threading
 import traceback
@@ -11,11 +12,24 @@ import render
 
 JOBS = {}          # id -> {"state": running|done|error, ...}
 LOCK = threading.Lock()
+JOBS_ROOT = Path("/tmp/jobs")
+JOB_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def job_dir(jid):
+    """YT-SERVER-2: the working directory of a job, or None when the id is not a plain name. The id comes from the request body and used to reach
+    shutil.rmtree(Path("/tmp/jobs") / jid) unchecked, so "../../etc" deleted (and rendered into) a directory outside /tmp/jobs, and an absolute id
+    ("/etc") replaced the base path altogether, because pathlib drops the left side when the right side is absolute. The Worker sends the integer row id."""
+    if not isinstance(jid, str) or not JOB_ID.fullmatch(jid) or ".." in jid:
+        return None
+    root = JOBS_ROOT.resolve()
+    d = (root / jid).resolve()
+    return d if d.parent == root else None
 
 
 def work(jid, job):
     try:
-        r = render.render(job, Path("/tmp/jobs") / jid)
+        r = render.render(job, JOBS_ROOT / jid)
         with LOCK:
             JOBS[jid] = {"state": "done", **r}
     except Exception as e:          # reported to the caller verbatim
@@ -54,10 +68,13 @@ class H(BaseHTTPRequestHandler):
             return self._send(404, {"error": "not found"})
         body = json.loads(self.rfile.read(int(self.headers.get("content-length") or 0)))
         jid = str(body.get("id") or "job")
+        jdir = job_dir(jid)
+        if jdir is None:
+            return self._send(400, {"error": "bad id"})
         with LOCK:
             if JOBS.get(jid, {}).get("state") == "running":
                 return self._send(202, {"state": "running", "id": jid})
-            shutil.rmtree(Path("/tmp/jobs") / jid, ignore_errors=True)
+            shutil.rmtree(jdir, ignore_errors=True)
             JOBS[jid] = {"state": "running"}
         threading.Thread(target=work, args=(jid, body["job"]), daemon=True).start()
         self._send(202, {"state": "running", "id": jid})
