@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.7-codeagent";
+var VERSION = "0.40.8-codeagent";
 /* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
@@ -4378,10 +4378,35 @@ var AI_METHOD_URL = ORIGIN + "/p/2026-10-26-how-q08-researches-writes-and-scores
 var AI_LABEL_TEXT = "AI-generated";
 var AI_CREDIT_TEXT = "Researched and written by AI; factual claims are checked by an independent AI fact-checker before publication. No human reviews pieces before they appear. Method: " + AI_METHOD_URL;
 function aiLabelHtml() { return '<a class="q-badge" href="' + escHtml(AI_METHOD_URL) + '" title="' + escHtml(AI_CREDIT_TEXT) + '" style="text-decoration:none">' + AI_LABEL_TEXT + "</a>"; }
+var Q08_FEEDBACK_SCRIPT = `<script>
+(function () {
+  var form = document.querySelector(".q08-fb");
+  if (!form || typeof fetch !== "function" || typeof FormData !== "function") return;
+  var status = form.querySelector(".q08-fb-status");
+  var buttons = form.querySelectorAll("button");
+  form.addEventListener("submit", async function (event) {
+    if (!event.submitter) return;
+    event.preventDefault();
+    var action = event.submitter.formAction;
+    var body = new FormData(form);
+    buttons.forEach(function (button) { button.disabled = true; });
+    status.textContent = "Saving your vote\u2026";
+    try {
+      var response = await fetch(action, { method: "POST", body: body, headers: { Accept: "application/json" } });
+      var result = await response.json();
+      if (!response.ok || !result.ok) throw new Error("Vote not saved");
+      status.textContent = result.updated === false ? "Your vote was already recorded." : "Thanks \u2014 your vote is recorded.";
+    } catch (e) {
+      status.textContent = "Your vote could not be saved. Please try again.";
+      buttons.forEach(function (button) { button.disabled = false; });
+    }
+  });
+})();
+</script>`;
 function renderPiece(p, fr) {
   var body = mdToHtml(p.body_md || "").replace(/^\s*<h1>[\s\S]*?<\/h1>\s*/, "");
   var refs = renderSources(p.sources_json);
-  var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><textarea class="q-input" name="note" maxlength="280" rows="2" style="flex-basis:100%;order:2" placeholder="Optional: what was missing?" aria-label="Optional note: what was missing?"></textarea><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button></form>';
+  var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><textarea class="q-input" name="note" maxlength="280" rows="2" style="flex-basis:100%;order:2" placeholder="Optional: what was missing?" aria-label="Optional note: what was missing?"></textarea><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button><span class="q08-fb-status" role="status" style="flex-basis:100%;order:3"></span></form>' + Q08_FEEDBACK_SCRIPT;
   var date = (p.published_at || "").slice(0, 10);
   var desc = q08Short(q08Lede(p.body_md), 160);
   var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + q08Inline(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + " \u00b7 " + aiLabelHtml() + "</p>" +
