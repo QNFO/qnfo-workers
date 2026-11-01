@@ -7,9 +7,9 @@ const source = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const ledgerSql = readFileSync(new URL("../migrations/living-paper/2026-10-26-paper-change-ledger.sql", import.meta.url), "utf8");
 const provenanceSql = readFileSync(new URL("../migrations/2026-11-01-paper-provenance-metadata.sql", import.meta.url), "utf8");
 function extract(name) {
-  const start = source.indexOf("function " + name + "(") >= 0
-    ? source.indexOf("function " + name + "(")
-    : source.indexOf("async function " + name + "(");
+  const start = source.indexOf("async function " + name + "(") >= 0
+    ? source.indexOf("async function " + name + "(")
+    : source.indexOf("function " + name + "(");
   assert.notEqual(start, -1, name);
   let depth = 0, end = -1;
   for (let i = source.indexOf("{", start); i < source.length; i++) {
@@ -46,8 +46,28 @@ living.exec(`CREATE TABLE papers (
   zenodo_doi TEXT, categories TEXT, "references" TEXT, slug TEXT, status TEXT, body_md TEXT, updated_at TEXT,
   release_gate_pass INTEGER DEFAULT 0, release_gate_at TEXT, release_gate_reason TEXT
 )`);
+living.exec(`
+  CREATE TABLE paper_body_backups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, version TEXT, status TEXT,
+    title TEXT, body_md TEXT NOT NULL, captured_at TEXT NOT NULL, reason TEXT
+  );
+  CREATE TABLE publication_gate_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, run_at TEXT,
+    slug TEXT, status TEXT, mode TEXT, decision TEXT, reason TEXT, score INTEGER,
+    quality_flag TEXT, body_len INTEGER, has_abstract INTEGER, refs INTEGER, gate_version TEXT
+  );
+`);
 living.exec(ledgerSql);
+const originalTriggers = living.prepare(
+  "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name IN ('paper_change_bodies_no_update', 'paper_change_body_archive_no_update') ORDER BY name"
+).all();
+assert.equal(originalTriggers.length, 2);
 living.exec(provenanceSql);
+assert.deepEqual(
+  living.prepare("SELECT name, sql FROM bak_20261101_paper_provenance_triggers ORDER BY name").all(),
+  originalTriggers,
+  "the migration preserves both original trigger definitions before replacing them"
+);
 const row = { id: "queue-123", source: "proposal", source_id: "42", attempt: 2, idea: "Do not copy this prompt text" };
 const paper = { identifier: "qnf-queue-123", slug: "traceable-paper", status: "draft", body_md: "# Paper", change_actor: "qnfo-research-exec:draft:traceable-paper:abc", change_reason: "draft" };
 living.prepare("INSERT INTO papers (identifier, slug, status, body_md, change_actor, change_reason) VALUES (?, ?, ?, ?, ?, ?)").run(

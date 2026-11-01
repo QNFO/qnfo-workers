@@ -1,7 +1,13 @@
 -- APPLY-BY: ci
 -- DB: living-paper
+-- BACKUP: bak_20261101_paper_provenance_triggers
 -- Rollback: DROP TRIGGER paper_change_bodies_no_update; CREATE TRIGGER paper_change_bodies_no_update BEFORE UPDATE ON paper_change_bodies BEGIN SELECT RAISE(ABORT, 'PAPER-LEDGER-1: a stored body is never edited'); END; DROP TRIGGER paper_change_body_archive_no_update; CREATE TRIGGER paper_change_body_archive_no_update BEFORE UPDATE ON paper_change_body_archive BEGIN SELECT RAISE(ABORT, 'PAPER-LEDGER-1: archive proofs are append-only'); END;
 -- PAPER-PROVENANCE-TRACE-1: store the structured publication record beside each change and retain it when a body is archived.
+
+CREATE TABLE IF NOT EXISTS bak_20261101_paper_provenance_triggers AS
+SELECT name, sql FROM sqlite_master
+WHERE type = 'trigger'
+  AND name IN ('paper_change_bodies_no_update', 'paper_change_body_archive_no_update');
 
 ALTER TABLE paper_change_bodies ADD COLUMN metadata TEXT;
 ALTER TABLE paper_change_body_archive ADD COLUMN metadata TEXT;
