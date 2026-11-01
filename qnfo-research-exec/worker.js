@@ -386,17 +386,81 @@ function paperWriter(stage, slug, why) {
   return { actor: WORKER + ":" + stage + ":" + String(slug || "").slice(0, 90) + ":" + Date.now().toString(36), reason: String(why || stage).slice(0, 300) };
 }
 
-// RM-PAPER-PROVENANCE-TRACE-1 (issue #1000641): JSON provenance record stored in paper_change_bodies
-// metadata. seed = research_queue row id + generation params; trace_id = cloud_ops_events id of
-// the run; novelty = novelty-check result for this paper.
+// PAPER-PROVENANCE-TRACE-1 (#1000641): the record contains configuration and event IDs only, never prompts or secrets.
 function buildPaperProvenance(seedRow, traceId, novelty) {
+  const attempt = Number(seedRow && seedRow.attempt);
   return JSON.stringify({
-    seed: seedRow && { id: seedRow.id, params: seedRow.generation_params || seedRow.params || null },
-    trace_id: String(traceId || ""),
+    seed: seedRow && {
+      id: String(seedRow.id || ""),
+      params: {
+        pipeline_version: PIPELINE_VERSION,
+        writer_models: WRITER_MODELS.map(String),
+        attempt: Number.isFinite(attempt) ? attempt : null
+      }
+    },
+    trace_id: Array.isArray(traceId) ? traceId.map(String).slice(0, 200) : String(traceId || ""),
     novelty: novelty && typeof novelty === "object" ? novelty : { result: novelty }
   });
 }
 __name(buildPaperProvenance, "buildPaperProvenance");
+async function paperNoveltyResult(env, row) {
+  if (!row || row.source !== "proposal" || !row.source_id) {
+    return { result: null, reason: "IDEA-NOVELTY-1 does not screen this source" };
+  }
+  try {
+    const proposal = await env.QNFO_AUDIT.prepare("SELECT rationale FROM idea_proposals WHERE CAST(id AS TEXT) = ?1 LIMIT 1").bind(String(row.source_id)).first();
+    const rationale = String(proposal && proposal.rationale || "");
+    const match = rationale.match(/^\[novelty (\d+) neighbours none\/partial\/substantial\/duplicate (\d+)\/(\d+)\/(\d+)\/(\d+); payoff (\?|[1-5])(?:; ([^\]]+))?\]/i);
+    if (!match) return { result: null, reason: "no IDEA-NOVELTY-1 result is recorded on the source proposal" };
+    const outcome = String(match[7] || "").trim();
+    return {
+      result: {
+        screened: true,
+        neighbours: Number(match[1]),
+        overlap_counts: { none: Number(match[2]), partial: Number(match[3]), substantial: Number(match[4]), duplicate: Number(match[5]) },
+        payoff: match[6] === "?" ? null : Number(match[6]),
+        outcome: outcome.startsWith("HOLD duplicate") ? "hold-duplicate"
+          : outcome.startsWith("HOLD substantial") ? "hold-substantial"
+            : outcome.startsWith("HOLD practical payoff") ? "hold-low-payoff"
+              : outcome === "foundational-quota" ? "foundational-quota"
+                : outcome === "delta stated" ? "delta-stated" : "pass"
+      }
+    };
+  } catch (e) {
+    return { result: null, reason: "IDEA-NOVELTY-1 result could not be read" };
+  }
+}
+__name(paperNoveltyResult, "paperNoveltyResult");
+async function persistPaperProvenance(env, row, paper) {
+  const novelty = await paperNoveltyResult(env, row);
+  const events = await env.QNFO_AUDIT.prepare("SELECT id FROM cloud_ops_events WHERE job = ?1 AND instr(text, ?2) > 0 ORDER BY ts, id LIMIT 200").bind(WORKER, String(row.id)).all();
+  const traceIds = (events && events.results || []).map(function(event) { return String(event.id || ""); }).filter(Boolean);
+  const metadata = buildPaperProvenance(row, traceIds, novelty);
+  const actor = String(paper && paper.change_actor || "");
+  if (!actor) throw new Error("paper change actor is missing");
+  const ledger = await env.LIVING_PAPER.prepare("SELECT seq FROM paper_change_ledger WHERE slug = ?1 AND actor = ?2 ORDER BY seq DESC LIMIT 1").bind(String(paper.slug), actor).first();
+  if (!ledger || ledger.seq == null) throw new Error("paper change ledger row is missing");
+  const seq = Number(ledger.seq);
+  const bodyRow = await env.LIVING_PAPER.prepare("SELECT metadata FROM paper_change_bodies WHERE seq = ?1").bind(seq).first();
+  const archiveRow = bodyRow ? null : await env.LIVING_PAPER.prepare("SELECT metadata FROM paper_change_body_archive WHERE seq = ?1").bind(seq).first();
+  const existing = bodyRow || archiveRow;
+  if (existing && existing.metadata) {
+    const saved = JSON.parse(String(existing.metadata));
+    if (!saved.seed || String(saved.seed.id) !== String(row.id)) throw new Error("paper change already has provenance for another seed");
+    return saved;
+  }
+  if (bodyRow) {
+    await env.LIVING_PAPER.prepare("UPDATE paper_change_bodies SET metadata = ?1 WHERE seq = ?2 AND metadata IS NULL").bind(metadata, seq).run();
+  } else if (archiveRow) {
+    await env.LIVING_PAPER.prepare("UPDATE paper_change_body_archive SET metadata = ?1 WHERE seq = ?2 AND metadata IS NULL").bind(metadata, seq).run();
+  } else {
+    await env.LIVING_PAPER.prepare("INSERT INTO paper_change_bodies (seq, slug, body_md, metadata) VALUES (?1, ?2, ?3, ?4)").bind(seq, String(paper.slug), String(paper.body_md || ""), metadata).run();
+  }
+  const stored = await env.LIVING_PAPER.prepare("SELECT metadata FROM paper_change_bodies WHERE seq = ?1 UNION ALL SELECT metadata FROM paper_change_body_archive WHERE seq = ?1 LIMIT 1").bind(seq).first();
+  if (!stored || stored.metadata !== metadata) throw new Error("paper provenance metadata did not persist");
+  return JSON.parse(metadata);
+}
+__name(persistPaperProvenance, "persistPaperProvenance");
 
   // METRIC-TRIGGER-3687: compute Workers AI 7‑day run‑rate in USD
 // Reads the ai_call_counters table for the past 7 days (including today)
@@ -7890,6 +7954,14 @@ async function publishStageV2(env, row) {
     const _cit = await persistCitations(env, row, slug);
     await logEvent(env, "cite-graph", "row=" + String(row.id).slice(0, 8) + " slug=" + slug + " refs=" + (_cit.refs || 0) + " qnfo=" + (_cit.qnfo || 0) + " kg_edges=" + (_cit.kg || 0) + " terminal=" + (_cit.terminal || 0) + (_cit.skipped ? " skipped=" + _cit.skipped : "") + (_cit.error ? " error=" + _cit.error : ""), _cit.error ? "warn" : "ok");
   } catch (e) {
+  }
+  try {
+    await persistPaperProvenance(env, row, paper);
+  } catch (eProvenance) {
+    const reason = String(eProvenance && eProvenance.message || eProvenance).slice(0, 180);
+    await logEvent(env, "paper-provenance-error", "row=" + String(row.id) + " " + reason, "error");
+    await markError(env, row, "publish provenance: " + reason);
+    return { ok: false, stage: "publish", withheld: "paper-provenance" };
   }
   const artifacts = await collectArtifacts(env, String(row.id));
   const extras = artifacts.map(function(a) {
