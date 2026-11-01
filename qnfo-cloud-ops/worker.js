@@ -4909,8 +4909,9 @@ __name(dispatchMap, "dispatchMap");
 //   - Each source's outcome is reported in notes.sources as ok:<n>, http:<status> or error:<msg>.
 //   - Algolia is typo-tolerant and matches inside tokens (a YouTube id "QnfOOoTOrDE" was a hit), so only hits with "qnfo"
 //     as a whole word are kept.
-//   - First citations (OpenAlex cited_by_count > 0 in citation_stats, written by qnfo-paper-indexer) are recorded as
-//     source=openalex-citation, so being cited reaches the mention plane.
+//   - OpenAlex citations stay in citation_stats; the credibility metric counts citation growth separately, so the radar
+//     does not duplicate citation-feed rows as external mentions.
+// RADAR-CITATION-SEPARATION-1 (1.42.4, agent_issues 1838, pillar reach): citation feeds are not third-party mention events.
 // ---- RADAR-SE-REASON-1:BEGIN (2026-10-05, agent_issues 1641, pillar reach) ----
 // The StackExchange API answers HTTP 400 for every error class (throttle_violation, key_required, bad_parameter, ...)
 // and names the class in the JSON body, so "http:400" (every radar run since 2026-10-02, while the same URL answers 200
@@ -4990,6 +4991,7 @@ async function jobRadar(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS external_mentions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, title TEXT, url TEXT, author TEXT, score INTEGER, created TEXT, first_seen TEXT, UNIQUE(source, url))").run();
   let added = 0;
   for (const m of mentions) {
+    if (/-citation$/i.test(String(m.source || ""))) continue;
     try {
       const r = await env.AUDIT.prepare("INSERT OR IGNORE INTO external_mentions (ts, source, title, url, author, score, created, first_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), m.source, m.title, m.url, m.author, m.score, m.created, (/* @__PURE__ */ new Date()).toISOString()).run();
       if (r && r.meta && r.meta.changes) added += r.meta.changes;
