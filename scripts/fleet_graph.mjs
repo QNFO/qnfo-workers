@@ -756,6 +756,8 @@ export function computeFindings(ctx) {
   }
   if (codeSql && liveTables) {
     for (const s of codeSql) {
+      // Only trust SQL extracted from strings that open with a real statement keyword; prose that merely looks like SQL is not a statement.
+      if (!(s.sql && /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s.sql))) continue;
       const known = liveTables.get(s.db);
       if (!known || known.has(s.table.toLowerCase()) || s.createdInCode) continue;
       add("sql-table-missing", s.worker + ":" + s.db + "." + s.table, s.confidence === "EXTRACTED" ? "warn" : "info", s.unit + " " + s.rel + " " + s.table + " in " + s.db + ", which has no table or view of that name");
