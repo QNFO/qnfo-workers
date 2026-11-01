@@ -1,11 +1,16 @@
 // personal-watch offline suite. Run: node personal-watch/worker.test.mjs
 // Proves: health names the worker, the page client script parses, the queue interleaves sources from stubbed feeds, a mood filters.
 import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const w = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
+
+const config = readFileSync(join(here, "wrangler.toml"), "utf8");
+const traces = config.split(/^\s*\[/m).find((section) => section.startsWith("observability.traces]")) || "";
+ok(/^enabled\s*=\s*true\s*$/m.test(traces), "Workers traces are explicitly enabled, not just logs");
 
 const yt = (n) => "<feed>" + [1, 2, 3, 4].map((i) => `<entry><yt:videoId>${n}${i}</yt:videoId><title>${n} t${i}</title></entry>`).join("") + "</feed>";
 globalThis.fetch = async (url) => {
