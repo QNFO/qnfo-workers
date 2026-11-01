@@ -76,7 +76,7 @@ Links live in `gh_issue_links` and `code_task_pr_links` (not new `agent_issues` 
 it with `SELECT *`). `v_tracker_drift` lists what is still out of step; metric `tracker_drift` (target 0, trigger at > 0)
 is graded once the open-issue backfill has finished. Scope (owner choice): open issues only; closed history stays in D1.
 Public repository: descriptions are fenced, tokens and e-mail addresses redacted, personal and security issues mirrored by number only.
-A failed or partial GitHub read changes nothing. If more than half the links disagree although D1 has not changed since the last agreement, each linked issue is read by number: list omissions are left unchanged, while confirmed GitHub state changes are reconciled from D1.
+A failed or partial GitHub read changes nothing. If more than half the links disagree although D1 has not changed since the last agreement, each unexplained link is read by number: list omissions are left unchanged, while confirmed GitHub state changes are reconciled from D1.
 
 ### TRACKER-DRAIN-1 (0.5.0)
 
