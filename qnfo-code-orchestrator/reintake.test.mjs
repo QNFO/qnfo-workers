@@ -2,7 +2,8 @@
 // Proves: an issue from a source the merge runner does not trust gets no code task, its code-task line becomes a session-task
 // line with the reason; the orchestrator's default trusted list equals qnfo-fleet-control CM_TRUSTED_SOURCES; an issue whose
 // last task ended is taken again after the cooldown with "[issue #N] [retry k]" first, and not while in flight, inside the
-// cooldown, after a merge, after 3 tasks, or after a review rejection or a no-op refusal. INTAKE-DEPENDS-1 (0.3.23): a
+// cooldown, after a merge without a measured 24h no-doer breach, after 3 tasks, or after a review rejection or a no-op refusal.
+// INTAKE-DEPENDS-1 (0.3.23): a
 // "depends-on: #N" line of its own holds the task while issue N is open, missing or unreadable, and audits the wait once.
 // Run: node --no-warnings qnfo-code-orchestrator/reintake.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
@@ -32,6 +33,8 @@ ok(__decide([{ id: "a", status: "closed", last_error: "stale base", updated_at: 
 ok(__decide([{ id: "a", status: "closed", last_error: "stale base", updated_at: at(2.5) }], now).take === true, "SLA-120M-7: 150 minutes after the task ended it is taken again (was 6 h)");
 ok(__decide([{ id: "a", status: "queued", updated_at: at(9) }], now).why === "in flight", "a task in flight: not taken");
 ok(/merged/.test(__decide([{ id: "a", status: "merged", updated_at: at(9) }], now).why), "a merged task: not taken again");
+ok(__decide([{ id: "a", status: "merged", updated_at: at(9) }], now, true).take === true, "a merged task is retried only when the open issue has a measured 24h no-doer breach");
+ok(__decide([{ id: "a", status: "merged", updated_at: at(0.25) }], now, true).why === "cooldown", "a merged no-doer retry still observes the cooldown");
 ok(__decide([{ id: "c", status: "failed", updated_at: at(9) }, { id: "b", status: "closed", updated_at: at(20) }, { id: "a", status: "closed", updated_at: at(30) }], now).exhausted === true, "three tasks: exhausted");
 // INTAKE-WINDOW-1 (0.10.0): only tasks created in the last 3 days count toward the cap
 ok(__decide([{ id: "c", status: "failed", created_at: at(80), updated_at: at(79) }, { id: "b", status: "failed", created_at: at(90), updated_at: at(89) }, { id: "a", status: "failed", created_at: at(100), updated_at: at(99) }], now).take === true, "three tasks all older than 3 days: the issue is taken again");
@@ -47,6 +50,7 @@ ok(__decide([cap("b", 3), { id: "a", status: "failed", last_error: "verify faile
 ok(__decide([{ id: "a", status: "publish_failed", last_error: "publish: task repo is not qnfo-workers", created_at: at(7), updated_at: at(6) }, { id: "b", status: "publish_failed", last_error: "publish: path refused by policy: x", created_at: at(8), updated_at: at(7) }, { id: "c", status: "publish_failed", last_error: "publish: mirror m no longer equals the source", created_at: at(9), updated_at: at(8) }], now).exhausted === true, "other publish failures still count as the goal's");
 ok(__prevFail({ id: "ct_x", status: "publish_failed", last_error: "publish: patch larger than 1000000 chars" }) === "", "the retry goal does not carry the cap message as the goal's failure");
 ok(/PREVIOUS ATTEMPT ct_y FAILED: verify failed/.test(__prevFail({ id: "ct_y", status: "failed", last_error: "verify failed" })), "an ordinary failure still leads the retry goal");
+ok(/PREVIOUS TASK ct_m MERGED, BUT THE ISSUE REMAINS OPEN/.test(__prevFail({ id: "ct_m", status: "merged" }, true)), "a merged retry explains that the issue's own probe still reports no live doer");
 ok(__decide([{ id: "a", status: "needs_human", last_error: "model m: noop-proposal: ... [3 no-op proposals in a row: needs a person]", updated_at: at(9) }], now).take === false, "a no-op refusal is never retried");
 ok(__decide([{ id: "a", status: "needs_human", last_error: "the JS verifier could not confirm the syntax", updated_at: at(9) }], now).take === true, "a needs_human from a fixed engine wall is retried");
 
@@ -65,6 +69,7 @@ function mkEnv(issues, tasks, opts) {
       },
       async first() {
         if (/FROM ops_config/.test(q)) return opts.trusted ? { value: opts.trusted } : null;
+        if (/FROM v_issue_age_ladder/.test(q)) { if (opts.ageUnreadable) throw new Error("D1_ERROR: unavailable"); return opts.ageBreach ? { x: 1 } : null; }
         // INTAKE-IDLE-BEAT-1 (0.29.2): the idle beat reads whether an intake event exists in the last 50 minutes; the stub answers from its own audit list like the real table would
         if (/FROM cloud_ops_events WHERE job = \?1 AND kind LIKE 'code-task\.intake%' AND ts > \?2/.test(q)) { const hit = audits.find((x) => String(x[2]).startsWith("code-task.intake") && x[5] === a[0] && String(x[1]) > String(a[1])); return hit ? { x: 1 } : null; }
         if (/^SELECT status FROM agent_issues WHERE id = \?/.test(q)) { if (opts.depUnreadable) throw new Error("D1_ERROR: unavailable"); const st = (opts.dep || {})[a[0]]; return st ? { status: st } : null; }
@@ -177,6 +182,13 @@ function mkEnv(issues, tasks, opts) {
   w = mkEnv(issue(), [{ id: "ct_im1000210", goal: "OTHER-1 -- issue #1000210", status: "published", created_at: "2026-10-25 16:36:46", updated_at: "2026-10-25T16:40:00Z" }]);
   await __intake(w.env, 2);
   ok(w.inserted.length === 1 && /^\[issue #1000209\] PUB-STRUCTURE-ORDER-1/.test(w.inserted[0].goal), "another issue's ct_im task does not hold this one", w.inserted);
+  const staleMerged = im("merged", { created_at: "2000-01-01T00:00:00Z", updated_at: "2000-01-01T00:00:00Z" });
+  w = mkEnv(issue(), [staleMerged], { ageBreach: true });
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 1 && /^\[issue #1000209\] \[retry 1\]/.test(w.inserted[0].goal) && /PREVIOUS TASK ct_im1000209 MERGED, BUT THE ISSUE REMAINS OPEN/.test(w.inserted[0].goal), "a merged task is re-intaken only after the open issue's age view confirms no live doer", w.inserted);
+  w = mkEnv(issue(), [staleMerged], { ageUnreadable: true });
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "an unreadable age view fails closed for merged-task reintake", w.inserted);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

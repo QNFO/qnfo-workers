@@ -734,7 +734,11 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
   ok(r1.acted === 2 && diag(raw, 77).state === "applied" && diag(raw, 912).state === "applied", "(fixture) two applied cases whose effect is another loop's to produce", { acted: r1.acted });
   const r2 = await tick(raw), r3 = await tick(raw);
   ok(diag(raw, 77).state === "applied" && diag(raw, 912).state === "applied" && r2.failed === 0 && r3.failed === 0 && r2.verify_pending === 2 && r2.verified === 0, "a verify that reads pending-<reason> keeps an applied case open tick after tick: not verified, not failed", { r2: [r2.failed, r2.verify_pending, r2.verified], s: diag(raw, 77).state });
-  ok(q1(raw, "SELECT verify_passes v FROM breach_diagnoses WHERE issue_id = 77").v === 0 && !qa(raw, "SELECT 1 FROM breach_diagnosis_events WHERE issue_id = 77 AND event IN ('fail', 'renew')").length, "waiting counts no pass and writes no event (a quiet case costs one read a tick)");
+  ok(Date.parse(diag(raw, 77).lease_until) - Date.parse(diag(raw, 77).applied_at) === 120 * 60000 && q1(raw, "SELECT verify_passes v FROM breach_diagnoses WHERE issue_id = 77").v === 0 && qa(raw, "SELECT 1 FROM breach_diagnosis_events WHERE issue_id = 77 AND event = 'renew'").length === 1, "the first pending result extends the lease to 120 minutes after the original action and records one renewal");
+  raw.prepare("UPDATE breach_diagnoses SET applied_at = strftime('%Y-%m-%dT%H:%M:%SZ','now','-60 minutes'), lease_until = '2000-01-01T00:00:00Z' WHERE rule_id = 'T-PEND'").run();
+  const rLong = await tick(raw);
+  ok(rLong.failed === 0 && rLong.verify_pending === 2 && Date.parse(diag(raw, 77).lease_until) > Date.now(), "a pending effect is still allowed to complete after its original 30-minute lease elapsed but before the 120-minute deadline", [rLong.failed, rLong.verify_pending, diag(raw, 77).lease_until]);
+  ok(q1(raw, "SELECT verify_passes v FROM breach_diagnoses WHERE issue_id = 77").v === 0 && qa(raw, "SELECT 1 FROM breach_diagnosis_events WHERE issue_id = 77 AND event = 'renew'").length === 2, "waiting counts no pass and renews only when the bounded lease is extended");
   // the effect arrives: two ok passes verify it
   setPending(raw, "done");
   await tick(raw);
@@ -743,7 +747,7 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
   ok(diag(raw, 77).state === "verified" && diag(raw, 912).state === "verified" && r5.verified === 2, "and the second verifies the case");
   // the wait ends with the lease: lease-expired, as for any case
   const rawL = mk(); await tick(rawL); await tick(rawL);
-  rawL.prepare("UPDATE breach_diagnoses SET lease_until = '2026-01-01T00:00:00Z' WHERE issue_id = 77").run();
+  rawL.prepare("UPDATE breach_diagnoses SET applied_at = strftime('%Y-%m-%dT%H:%M:%SZ','now','-121 minutes'), lease_until = '2026-01-01T00:00:00Z' WHERE issue_id = 77").run();
   const rL = await tick(rawL);
   ok(diag(rawL, 77).state === "failed" && diag(rawL, 77).error_code === "lease-expired" && diag(rawL, 912).state === "applied" && rL.failed === 1, "a case still pending when its lease ends is failed lease-expired (the other case still waits)", [diag(rawL, 77).state, diag(rawL, 77).error_code]);
   // the issue closes while the case waits: superseded, never verified, never failed
