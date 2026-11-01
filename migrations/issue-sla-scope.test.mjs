@@ -106,7 +106,7 @@ db.exec("INSERT INTO fleet_tick VALUES (1, 'test')");
 assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric = 'issues_open_over_120m'").get().last_value, "3",
   "the existing broad metric writer is corrected on every refresh");
 const probe = db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-issue-sla-scope'").get().verify_probe;
-assert.deepEqual(db.prepare(probe).get(), { expected: "0", observed: "0" });
+assert.deepEqual({ ...db.prepare(probe).get() }, { expected: "0", observed: "0" });
 
 db.exec(migration);
 assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n, 1, "migration replay is idempotent");

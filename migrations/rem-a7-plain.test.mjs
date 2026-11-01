@@ -62,7 +62,7 @@ const corpus = (w, rows) => { for (const [slug, grade, text] of rows) { w.prepar
   const anchor = lines.find((l) => l.startsWith("code-anchor: ")), probe = lines.find((l) => l.startsWith("code-probe: ")), task = lines.find((l) => l.startsWith("code-task: "));
   ok(task === "code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js" && anchor === 'code-anchor: "- Write for an adjacent-field expert; define jargon once.",' && researchExec.includes(anchor.slice("code-anchor: ".length)), "its code-task path and anchor match the worker text on main", anchor);
   let pj = null; try { pj = JSON.parse(probe.slice("code-probe: ".length)); } catch (e) { pj = null; }
-  ok(pj && pj.paths && pj.paths[0] === "qnfo-research-exec/worker.js" && pj.contains === "PAPER-AUDIENCES-1" && !researchExec.includes("PAPER-AUDIENCES-1"), "its code-probe parses and fails on main today (the marker is absent)", pj);
+  ok(pj && pj.paths && pj.paths[0] === "qnfo-research-exec/worker.js" && pj.contains === "PAPER-AUDIENCES-1" && researchExec.includes("PAPER-AUDIENCES-1"), "its code-probe matches the implemented writer-prompt requirement", pj);
   ok(q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'PLAIN-STANDARD-1:%'").n === 1 && q1(w, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'PAPER-AUDIENCES-1:%'").n === 1, "each issue is filed once");
 
   const c = q1(w, "SELECT * FROM remediation_contracts WHERE class = ?", "issue-" + ps.id);
