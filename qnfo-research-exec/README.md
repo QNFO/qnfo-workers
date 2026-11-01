@@ -10,6 +10,10 @@ regenerate via: wrangler deploy --dry-run --outdir dist && cp dist/worker.js dep
 
 ## Publishing (NOZ-DOI-1, 0.12.3)
 
+Operational `cloud_ops_events` writes supply a unique UUID `id` and UTC ISO timestamp, including deferred errata confirmation,
+backup pruning and publication gate events (0.42.1). A logging failure is reported explicitly; it does not settle the queue row.
+The errata-hub confirmation source and folded copy stay identical. Regression coverage: `errata-confirm-cost.test.mjs`.
+
 A paper is published in-house: its papers.qnfo.org page is its address, and `doi`, `zenodo_doi` and `zenodo_url` are written NULL on
 every new or revised paper row. The version_queue drain (`publishV2`) updates the papers row, the knowledge-graph node
 (`paper:<slug>`), the R2 copy and the GitHub copy, and queues the social post; it calls no outside registrar. The earlier
