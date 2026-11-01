@@ -87,6 +87,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)](KILL-SWITCH-DRILL.md) - `docs/KILL-SWITCH-DRILL.md`
 - [Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)](LEASES-FENCING.md) - `docs/LEASES-FENCING.md`
 - [MODEL-MATRIX-1: which Cloudflare model for which job](MODEL-MATRIX.md) - `docs/MODEL-MATRIX.md`
+- [MONOREPO-DECISION-1: keep qnfo-workers as one repository](MONOREPO-DECISION.md) - `docs/MONOREPO-DECISION.md`
 - [One Thing / Focus backlog and roadmap](ONE-THING-BACKLOG.md) - `docs/ONE-THING-BACKLOG.md`
 - [OPS_CLIENT_KEY Setup for ChatBox / SannaBot / Android](OPS-CLIENT-KEY-SETUP.md) - `docs/OPS-CLIENT-KEY-SETUP.md`
 - [QNFO Quniverse — Autonomous Use Cases & Best Practices](OPS-EXEC-MULTI-CLIENT-GUIDE.md) - `docs/OPS-EXEC-MULTI-CLIENT-GUIDE.md`

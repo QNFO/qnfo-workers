@@ -43,6 +43,33 @@ Per toolkit (Google, GitHub, Slack...) the owner completes one consent click; af
 | Google consent, one link per toolkit (`session.authorize`) | owner, once | after the key exists |
 | `composio_execute` and `composio_status` tools in qnfo-ops | fleet (RM-COMPOSIO-BRIDGE-1) | filed |
 
+### qnfo-ops bridge contract
+
+The bridge uses the Composio REST API directly; it adds no SDK or runtime
+dependency. Configure `COMPOSIO_API_KEY` as a qnfo-ops Worker secret under the
+secret lock, and set `COMPOSIO_USER_ID` to a dedicated **non-personal** Composio
+user. The bridge fails closed when either value is missing. Do not configure
+the personal Composio user on qnfo-ops: personal services remain on
+`personal-api`, and their connected-account IDs must not be passed to these
+tools.
+
+`composio_status` accepts a `connected_account_id`, reads
+`GET /api/v3.1/connected_accounts/{id}`, and returns only its status and toolkit
+slug after verifying that the account's `user_id` matches the configured
+non-personal user. `composio_execute` accepts that account ID, a toolkit
+`tool_slug`, and a JSON object of `arguments`; it applies the same ownership
+check, requires an `ACTIVE` account, and calls
+`POST /api/v3.1/tools/execute/{tool_slug}`. Account IDs and tool slugs are
+validated, arguments are limited to 32 KiB, account reads time out after 15
+seconds, and execution requests after 60 seconds. qnfo-audit receives only
+action metadata and success/status; it does
+not retain connected-account IDs, argument values, or provider results. The
+tool's execution result is returned to its authenticated caller.
+
+The bridge code does not provision Composio credentials or OAuth connections.
+Until the secret, non-personal user ID, and consented account connections are
+configured, these tools remain unavailable.
+
 Risks and counter-arguments, stated plainly:
 - It is a third-party custodian of Google refresh tokens and a new runtime dependency on a vendor (ANTIFRAGILE-1: needs a second path). The fleet already holds its own Google/Outlook links for the Today dashboard; keep those and use Composio for the long tail of services, not as the only path.
 - Personal/research separation: personal Google data (calendar, mail) must go through a separate Composio `user_id` used only by personal-api; research workers never get that user. Tool-call logs go to qnfo-audit without payloads.
