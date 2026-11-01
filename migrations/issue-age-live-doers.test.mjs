@@ -1,0 +1,107 @@
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
+
+const read = (file) => readFileSync(new URL(file, import.meta.url), "utf8");
+const migration = read("./2026-11-01-issue-age-live-doers.sql");
+const old = read("./2026-10-28-issue-age-ladder-breach-doctor.sql");
+const db = new DatabaseSync(":memory:");
+db.exec(`
+  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+  CREATE TABLE code_tasks (id TEXT PRIMARY KEY, goal TEXT, status TEXT, last_error TEXT, merge_note TEXT, updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), lease_until TEXT);
+  CREATE TABLE work_claims (issue_id INTEGER, path TEXT, released_at TEXT, expires_at TEXT);
+  CREATE TABLE issue_plans (issue_id INTEGER PRIMARY KEY, outcome TEXT, planned_at TEXT, detail TEXT, task_id TEXT);
+  CREATE TABLE breach_diagnoses (issue_id INTEGER, mode TEXT, state TEXT, action_ref TEXT, action_kind TEXT, lease_until TEXT, last_progress_at TEXT);
+  CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY);
+  CREATE TABLE issue_age_replans (issue_id INTEGER, outcome_was TEXT, planned_at_was TEXT, age_h REAL, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
+  CREATE TABLE fleet_tick_heavy (id INTEGER PRIMARY KEY, source TEXT);
+  CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+  CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, formula TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);
+  CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, expected_cadence_h INTEGER, status TEXT, precondition TEXT, action TEXT, escalate_to TEXT);
+  CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
+  CREATE TABLE decision_log (actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
+  CREATE VIEW v_sla_breaches AS SELECT i.id, i.priority, i.category, NULL AS rc, NULL AS owner, NULL AS sla_due_at, NULL AS triage_state, 'untriaged' AS breach_type FROM agent_issues i WHERE i.status = 'open' AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = i.id);
+  INSERT INTO metric_registry VALUES ('issues_over_24h_no_doer', 'old formula', NULL, NULL, NULL);
+  INSERT INTO remediation_contracts (class, issue_id, verify_probe) VALUES ('issue-100299', 100299, 'original seven-day metric probe');
+  CREATE TRIGGER repair_probe_birth AFTER INSERT ON agent_issues BEGIN
+    INSERT INTO remediation_contracts (class, issue_id) VALUES ('issue-' || NEW.id, NEW.id);
+  END;
+`);
+db.exec(old);
+const now = Math.floor(Date.now() / 1000) * 1000;
+const iso = (minutes) => new Date(now + minutes * 60000).toISOString().replace(/\.\d+Z$/, "Z");
+const issue = (id, hours, priority = "medium", description = "code-task: repo=qnfo-workers path=x/worker.js") =>
+  db.prepare("INSERT INTO agent_issues VALUES (?, ?, ?, 'claude-session', 'reliability', ?, 'open', ?, ?)").run(id, `Issue ${id}`, description, priority, now - hours * 3600000, now);
+const plan = (id, outcome, task = null) => db.prepare("INSERT INTO issue_plans VALUES (?, ?, ?, 'plan detail', ?)").run(id, outcome, iso(-180), task);
+const task = (id, status, goal = `[issue #${id}] fix`) =>
+  db.prepare("INSERT INTO code_tasks (id, goal, status, last_error) VALUES (?, ?, ?, 'task failed')").run(String(id), goal, status);
+issue(1, 30);
+for (const [index, status] of ["merged", "closed", "superseded", "publish_failed", "needs_human", "failed", "reverted"].entries()) {
+  const id = index + 2;
+  issue(id, 30); task(id, status); plan(id, "queued", String(id));
+}
+issue(9, 30); task(9, "queued");
+issue(10, 30); task("ct_im10", "published", "issue id in middle");
+issue(11, 30); task("other", "ready_to_publish", "no prefix"); plan(11, "queued", "other");
+issue(12, 30); db.prepare("INSERT INTO work_claims VALUES (12, 'issue:12', NULL, ?)").run(iso(60));
+issue(13, 30); db.prepare("INSERT INTO work_claims VALUES (13, 'issue:13', NULL, ?)").run(iso(-1));
+for (const [id, mode, state, progress] of [[14, "on", "applied", -10], [15, "measure", "applied", -10], [16, "on", "diagnosed", -10], [17, "on", "applied", -121]]) {
+  issue(id, 30);
+  db.prepare("INSERT INTO breach_diagnoses VALUES (?, ?, ?, 'ref', 'sql', ?, ?)").run(id, mode, state, iso(60), iso(progress));
+}
+issue(18, 4); plan(18, "not-code");
+issue(19, 8, "low"); plan(19, "invalid");
+issue(20, 16);
+issue(21, 3.99); plan(21, "not-code");
+issue(22, 23.99);
+issue(23, 30); plan(23, "untrusted");
+issue(24, 30); plan(24, "refused");
+issue(25, 30); db.exec("UPDATE agent_issues SET status = 'closed' WHERE id = 25");
+issue(26, 30); task(26, "queued"); db.prepare("UPDATE code_tasks SET updated_at = ? WHERE id = '26'").run(iso(-121));
+issue(27, 30); task(27, "editing"); db.prepare("UPDATE code_tasks SET updated_at = ?, lease_until = ? WHERE id = '27'").run(iso(-121), iso(10));
+db.exec(migration);
+const ladder = (id) => db.prepare("SELECT * FROM v_issue_age_ladder WHERE id = ?").get(id);
+assert.equal(ladder(1).doer, null);
+for (let id = 2; id <= 8; id++) assert.equal(ladder(id).breach, 1, `terminal task ${id} is not live`);
+for (let id = 9; id <= 11; id++) assert.equal(ladder(id).doer, "live code task");
+assert.equal(ladder(12).doer, "live work claim");
+assert.equal(ladder(13).doer, null);
+assert.equal(ladder(14).doer, "breach doctor");
+for (let id = 15; id <= 17; id++) assert.equal(ladder(id).doer, null);
+assert.equal(ladder(21).rung, "new", "rounding cannot trigger the 4h rung early");
+assert.equal(ladder(22).rung, "16h", "rounding cannot trigger the 24h breach early");
+assert.equal(ladder(22).breach, 0);
+assert.equal(ladder(25), undefined);
+assert.equal(ladder(26).doer, null, "unfinished status without recent progress is not live");
+assert.equal(ladder(27).doer, "live code task", "an active task lease is live");
+assert.equal(Object.keys(ladder(1)).join(), "id,title,priority,source,age_h,doer,plan_outcome,planned_at,plan_reason,rung,breach");
+const tick = () => db.exec("INSERT INTO fleet_tick_heavy (source) VALUES ('test')");
+tick();
+for (const id of [2, 7, 18, 19]) assert.equal(db.prepare("SELECT outcome FROM issue_plans WHERE issue_id = ?").get(id).outcome, "retry");
+for (const id of [11, 21, 23, 24]) assert.notEqual(db.prepare("SELECT outcome FROM issue_plans WHERE issue_id = ?").get(id).outcome, "retry");
+assert.equal(ladder(19).priority, "medium");
+assert.equal(ladder(20).priority, "critical");
+assert.equal(ladder(12).priority, "medium", "a claimed issue is not reassigned or escalated");
+assert.ok(db.prepare("SELECT 1 FROM v_sla_breaches WHERE id = 1 AND breach_type = 'issue-age-24h'").get());
+assert.equal(db.prepare("SELECT blocker FROM issue_age_actions WHERE issue_id = 7 AND rung = '24h'").get().blocker, "task failed");
+const repairCount = () => db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'ISSUE-AGE-24H-REPAIR-1:%'").get().n;
+assert.equal(repairCount(), 12, "repair filing is bounded per tick");
+tick();
+const after = repairCount();
+tick();
+assert.equal(repairCount(), after, "open repairs are not duplicated");
+assert.equal(ladder(19).priority, "medium", "8h escalation happens only once");
+const repair = db.prepare("SELECT c.* FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id WHERE a.title = 'ISSUE-AGE-24H-REPAIR-1: issue #1 has no live doer'").get();
+assert.equal(db.prepare(repair.verify_probe).get().observed, "1");
+task(1, "queued");
+assert.equal(db.prepare(repair.verify_probe).get().observed, "0", "repair closes only on recovery");
+assert.equal(db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-100299'").get().verify_probe, "original seven-day metric probe");
+const detector = db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-issue-age-phantom-doer'").get().verify_probe;
+assert.equal(db.prepare(detector).get().observed, "0");
+db.exec(migration);
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n, 1);
+db.exec(migration.match(/^-- Rollback: (.+)$/m)[1]);
+assert.equal(ladder(1).doer, "code-task line", "rollback restores prior accounting");
+assert.equal(db.prepare("SELECT formula FROM metric_registry").get().formula, "old formula");
+console.log("issue-age-live-doers: all passed");
+db.close();
