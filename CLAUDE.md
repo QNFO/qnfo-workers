@@ -544,6 +544,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   owner, which the sweep removes again. It is bounded: only issues written by an owner, member, collaborator or `github-actions[bot]`, created in the look-back window, at most
   `--max` (10) per run and never more than 12 open Copilot pull requests org-wide; an issue the work-claim service shows as claimed or in flight is left to that doer; an issue
   a person unassigned Copilot from is never assigned again. A stalled assignment (Copilot assigned, no open or merged pull request, session older than 2 hours) is re-driven once,
-  and only while CLAIM-UNREACHABLE-FALLBACK-1 above is on main. The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
+  and only while CLAIM-UNREACHABLE-FALLBACK-1 above is on main. An assignment Copilot refused to start (a Copilot comment "unable to start working on this issue", and the issue
+  stays assigned to it) is not a session: 109 of 153 assigned issues were in that state on 2026-11-01, 107 for lack of AI credits, and counting them as sessions had left 87 of
+  them, the red-main issue among them, unworkable; a credit refusal never counts against an issue, any other refusal is bounded at three, the first assignment of a run is checked
+  for a refusal (credits exhausted stops the run and the next 30 minutes), a `ci-watchdog` issue is dispatched first, and a run spends at most 170 reads of the shared PAT.
+  The repository variable `ASSIGN_COPILOT_SWEEP` = `off` stops the sweep, `new-only` stops the re-drive. A session that
   cannot reach the claim endpoint follows CLAIM-UNREACHABLE-FALLBACK-1 above. The owner is removed again from the pull requests those sessions open by COPILOT-PR-LIFECYCLE-1
   (`.github/workflows/copilot-pr-lifecycle.yml`). Do not add per-repository copies of the workflow or of the secret.
