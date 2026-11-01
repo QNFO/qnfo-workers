@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-11-01 11:18:14",
+  "audited_at": "2026-11-01 11:46:52",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "personal-companion"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -593,7 +586,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.41.0-dynamic-routes",
+        "version": "5.41.1-dynamic-routes",
         "worker": "qnfo-ai"
       },
       {
@@ -608,7 +601,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.42.2-gcp-inventory",
+        "version": "1.42.3-breach-doctor-run-id",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -638,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.4-trigger-aware",
+        "version": "0.59.5-verified-core",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -698,7 +691,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.60.5-codeagent-stale-edit-recovery",
+        "version": "2.61.0-composio-managed-oauth-tools",
         "worker": "qnfo-ops"
       },
       {
@@ -1106,9 +1099,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.41.0-dynamic-routes",
+      "before": "5.41.1-dynamic-routes",
       "http": 200,
-      "live": "5.41.0-dynamic-routes",
+      "live": "5.41.1-dynamic-routes",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1265,9 +1258,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.42.2-gcp-inventory",
+      "before": "1.42.3-breach-doctor-run-id",
       "http": 200,
-      "live": "1.42.2-gcp-inventory",
+      "live": "1.42.3-breach-doctor-run-id",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1412,9 +1405,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.4-trigger-aware",
+      "before": "0.59.5-verified-core",
       "http": 200,
-      "live": "0.59.4-trigger-aware",
+      "live": "0.59.5-verified-core",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1588,9 +1581,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.60.5-codeagent-stale-edit-recovery",
+      "before": "2.61.0-composio-managed-oauth-tools",
       "http": 200,
-      "live": "2.60.5-codeagent-stale-edit-recovery",
+      "live": "2.61.0-composio-managed-oauth-tools",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
