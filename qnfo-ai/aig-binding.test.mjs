@@ -59,7 +59,7 @@ let threw = false;
 try { await aiRunAttr(bad, "qnfo-ai", "chat", "m", {}); } catch (x) { threw = /model down/.test(String(x && x.message)); }
 ok(threw, "a chat error propagates");
 
-// 5. transient 504s retry the same dynamic route without adding a local fallback
+// 5. transient 502/504 errors retry the same dynamic route without adding a local fallback
 const retryStart = src.indexOf("function __aiAttrEnv(");
 const retryEnd = src.indexOf("\n// AIG-CALLER-METADATA-1", retryStart);
 ok(retryStart > 0 && retryEnd > retryStart, "AI binding retry wrapper found in worker.js");
@@ -87,6 +87,15 @@ const wrappedCalls = (run) => {
   ok(response.choices[0].message.content === "recovered" && x.calls.join() === "dynamic/standard,dynamic/standard", "dynamic route retries a transient HTTP 504 and returns its successful retry");
 }
 {
+  let attempts = 0;
+  const x = wrappedCalls(async () => {
+    if (++attempts === 1) throw new Error("HttpServerError · HTTP 502");
+    return { choices: [{ message: { content: "recovered from bad gateway" } }] };
+  });
+  const response = await x.ai.run("dynamic/standard", {}, {});
+  ok(response.choices[0].message.content === "recovered from bad gateway" && x.calls.join() === "dynamic/standard,dynamic/standard", "dynamic route retries a transient HTTP 502 and returns its successful retry");
+}
+{
   const x = wrappedCalls(async () => { throw new Error("HttpServerError · HTTP 504"); });
   let failed504 = false;
   try { await x.ai.run("dynamic/standard", {}, {}); } catch (e) { failed504 = /HTTP 504/.test(e.message); }
@@ -94,12 +103,12 @@ const wrappedCalls = (run) => {
 }
 {
   const x = wrappedCalls(async (model) => {
-    if (model === "primary") throw new Error("HttpServerError · HTTP 504");
-    if (model === "cheap-model" && x.calls.filter((name) => name === model).length === 1) throw new Error("HTTP 504 Gateway Timeout");
+    if (model === "primary") throw new Error("HttpServerError · HTTP 502");
+    if (model === "cheap-model" && x.calls.filter((name) => name === model).length === 1) throw new Error("HTTP 502 Bad Gateway");
     return { choices: [{ message: { content: "fallback recovered" } }] };
   });
   const response = await x.ai.run("primary", {}, {});
-  ok(response.choices[0].message.content === "fallback recovered" && x.calls.filter((model) => model === "primary").length === 4 && x.calls.filter((model) => model === "cheap-model").length === 2, "non-dynamic fallback also retries transient HTTP 504 responses");
+  ok(response.choices[0].message.content === "fallback recovered" && x.calls.filter((model) => model === "primary").length === 4 && x.calls.filter((model) => model === "cheap-model").length === 2, "non-dynamic fallback also retries transient HTTP 502 responses");
 }
 {
   const x = wrappedCalls(async () => { throw new Error("invalid request"); });
@@ -109,5 +118,40 @@ const wrappedCalls = (run) => {
 }
 
 ok(/var gwOpts = /.test(src), "the deployed source names gwOpts (the issue's source check)");
+
+// 6. AI Gateway fetch retries 502 responses while preserving replayable request bodies.
+const fetchStart = src.indexOf("var __aigBaseFetch =");
+const fetchEnd = src.indexOf("\n// SPEND-GOVERNOR-1", fetchStart);
+ok(fetchStart > 0 && fetchEnd > fetchStart, "AI Gateway fetch retry wrapper found in worker.js");
+function wrappedFetch(statuses) {
+  const calls = [];
+  const context = vm.createContext({
+    Headers, Request, Response, Date, Promise, Object, String, JSON, __AIG_WORKER: "qnfo-ai",
+    setTimeout: (fn) => { queueMicrotask(fn); return 1; }
+  });
+  context.fetch = async (input, init) => {
+    const request = typeof input === "string" ? new Request(input, init) : input;
+    calls.push({ method: request.method, body: await request.clone().text(), metadata: request.headers.get("cf-aig-metadata") });
+    return new Response("upstream", { status: statuses.shift() });
+  };
+  vm.runInContext(src.slice(fetchStart, fetchEnd), context);
+  return { calls, fetch: context.fetch };
+}
+{
+  const x = wrappedFetch([502, 200]);
+  const response = await x.fetch("https://gateway.ai.cloudflare.com/v1/test", { method: "POST", body: "payload" });
+  ok(response.status === 200 && x.calls.length === 2 && x.calls.every((call) => call.method === "POST" && call.body === "payload" && JSON.parse(call.metadata).worker === "qnfo-ai"), "a string-based gateway POST retries HTTP 502 and preserves its body and metadata");
+}
+{
+  const x = wrappedFetch([502, 200]);
+  const request = new Request("https://gateway.ai.cloudflare.com/v1/test", { method: "POST", body: "payload" });
+  const response = await x.fetch(request);
+  ok(response.status === 200 && x.calls.length === 2 && x.calls.every((call) => call.method === "POST" && call.body === "payload" && JSON.parse(call.metadata).worker === "qnfo-ai"), "a Request-based gateway POST retries HTTP 502 and preserves its body and metadata");
+}
+{
+  const x = wrappedFetch([502, 502, 502]);
+  const response = await x.fetch("https://gateway.ai.cloudflare.com/v1/test", { method: "POST", body: "payload" });
+  ok(response.status === 502 && x.calls.length === 3, "gateway retries stop after two attempts when HTTP 502 persists");
+}
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
