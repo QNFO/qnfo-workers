@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 11:46:52",
+  "audited_at": "2026-11-01 12:18:21",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -586,7 +586,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.41.1-dynamic-routes",
+        "version": "5.41.2-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -641,7 +641,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.48.1-codeagent",
+        "version": "3.48.2-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -686,7 +686,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.5.6-drainable-issues",
+        "version": "1.5.7-retired-agent-ws",
         "worker": "qnfo-observability"
       },
       {
@@ -1099,9 +1099,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.41.1-dynamic-routes",
+      "before": "5.41.2-codeagent",
       "http": 200,
-      "live": "5.41.1-dynamic-routes",
+      "live": "5.41.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1447,9 +1447,9 @@
       "worker": "qnfo-fleet-lee"
     },
     "qnfo-gateway": {
-      "before": "3.48.1-codeagent",
+      "before": "3.48.2-codeagent",
       "http": 200,
-      "live": "3.48.1-codeagent",
+      "live": "3.48.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1573,9 +1573,9 @@
       "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
-      "before": "1.5.6-drainable-issues",
+      "before": "1.5.7-retired-agent-ws",
       "http": 200,
-      "live": "1.5.6-drainable-issues",
+      "live": "1.5.7-retired-agent-ws",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
