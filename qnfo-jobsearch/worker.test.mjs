@@ -10,6 +10,11 @@ const w = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
 const T = w.__test;
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 300))); } };
+const config = readFileSync(join(here, "wrangler.toml"), "utf8");
+const configHead = config.split(/^\s*\[/m)[0];
+const compatDate = (configHead.match(/^\s*compatibility_date\s*=\s*"(\d{4}-\d{2}-\d{2})"/m) || [])[1];
+ok(compatDate >= "2026-10-10", "compatibility date includes the reviewed default changes", compatDate);
+ok(/^# compat-advance: reviewed \d{4}-\d{2}-\d{2}$/m.test(config), "compatibility date has its review marker");
 
 const JOB = { id: "t:1", company: "Acme", title: "Research Program Manager", location: "Amsterdam, Netherlands", url: "https://x/1",
   desc: "Lead our research program and research operations. LLM evaluation, responsible AI, public sector work, government agencies. Audit and reproducibility." };
