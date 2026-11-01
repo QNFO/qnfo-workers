@@ -369,16 +369,18 @@ function fakeLoader(spinMs) {
 }
 // ---- CLAIM-FAIRNESS-1: the shipped claim query puts fewest failed attempts first, so a failing task cannot starve a fresh one ----
 {
-  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const m = /async function claim\(env\) \{[\s\S]*?\n\}/.exec(src);
-  check("claim order (source check): waited-first, then attempts ASC, created_at ASC in claim()", !!m && /ORDER BY CASE WHEN updated_at < \? THEN 0 ELSE 1 END, attempts ASC, created_at ASC/.test(m[0]), m && m[0].slice(0, 300));
+  check("claim order (source check): waited-first, then attempts ASC, created_at ASC in claim()", !!m && /ORDER BY CASE WHEN q.updated_at < \? THEN 0 ELSE 1 END, q.attempts ASC, q.created_at ASC/.test(m[0]), m && m[0].slice(0, 300));
   // CLAIM-AGE-1: run the shipped claim SQL on real SQL. A fresh task beats a retry that just failed (CLAIM-FAIRNESS-1),
   // and a retry that has waited 20+ minutes beats a fresh one (no starvation under continuous intake).
-  const sql = /prepare\(\s*"(UPDATE code_tasks SET lease_until=\?[^"]+)"/.exec(m[0])[1];
+  const defs = /^const CODE_TASK_DONE = .*$/m.exec(src)[0] + "\n" + /^const CODE_TASK_DONE_SQL = .*$/m.exec(src)[0] + "\n" + /function taskPathKeySql\(alias\) \{[\s\S]*?\n\}/.exec(src)[0];
+  const expression = /prepare\(([\s\S]*?)\n  \)\.bind/.exec(m[0])[1];
+  const sql = new Function(defs + "\nreturn (" + expression + ");")();
   const run = (rows, nowMs) => {
     const d = new DatabaseSync(":memory:");
-    d.exec("CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, lease_until TEXT, attempts INTEGER, created_at TEXT, updated_at TEXT)");
-    for (const r of rows) d.prepare("INSERT INTO code_tasks VALUES (?,?,?,?,?,?)").run(r.id, "queued", null, r.attempts, r.created_at, r.updated_at);
+    d.exec("CREATE TABLE code_tasks (id TEXT PRIMARY KEY, repo TEXT, path TEXT, status TEXT, lease_until TEXT, attempts INTEGER, created_at TEXT, updated_at TEXT)");
+    for (const r of rows) d.prepare("INSERT INTO code_tasks VALUES (?,?,?,?,?,?,?,?)").run(r.id, "qnfo-workers", "docs/" + r.id + ".md", "queued", null, r.attempts, r.created_at, r.updated_at);
     const iso = (ms) => new Date(ms).toISOString();
     return d.prepare(sql).get(iso(nowMs + 6e5), iso(nowMs), iso(nowMs), iso(nowMs - 20 * 6e4)).id;
   };

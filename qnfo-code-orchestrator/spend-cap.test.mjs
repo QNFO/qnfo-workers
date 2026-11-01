@@ -121,7 +121,10 @@ try {
 
   {
     const { env, db } = makeEnv();
-    for (let i = 0; i < 65; i++) await addTask(env, db, "ct_scan_" + i);
+    for (let i = 0; i < 65; i++) {
+      await addTask(env, db, "ct_scan_" + i);
+      db.prepare("UPDATE code_tasks SET path=? WHERE id=?").run("docs/scan-" + i + ".md", "ct_scan_" + i);
+    }
     let scans = 0;
     env.DEPLOY_GUARD.fetch = async () => { scans++; return Response.json({ acquired: false, holder: "another-live-session" }, { status: 409 }); };
     const result = await tick(env, opts);
