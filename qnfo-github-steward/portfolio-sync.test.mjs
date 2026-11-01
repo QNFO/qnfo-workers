@@ -40,6 +40,7 @@ assert.equal(db.prepare("SELECT status FROM projects WHERE project_code='QNFO.RS
 assert.equal(db.prepare("SELECT count(*) c FROM programs").get().c, 5);
 
 const workers = ["qnfo-ops", "qnfo-fleet-control", "qnfo-research-exec", "qnfo-social", "qnfo-github-steward", "qnfo-ai", "qnfo-email", "personal-api", "qnfo-pdf", "qnfo-gateway", "idea-hub"];
+for (let i = 0; i < 30; i++) workers.push("qnfo-test-worker-" + i);
 workers.forEach((s) => db.prepare("INSERT INTO service_registry (service, purpose) VALUES (?, ?)").run(s, "does " + s));
 const repos = [["qnfo-workers", "platform", "core", "public"], ["ultrametric-lean", "research", "research", "public"], ["qwav-demos", "demo", "reach", "public"], ["deepchat", "client-config", "personal", "private"], ["old", "research", "research", "public", 1]];
 for (let i = 0; i < 8; i++) repos.push(["paper-" + i, "research", "research", "public"]);
@@ -62,6 +63,7 @@ db.prepare("INSERT INTO trig VALUES ('drift_total','drift','qnfo-fleet-control',
 db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES ('RM-X','charter','build x','worker','qnfo-research-exec 1.0','not-built')").run();
 db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES ('AI-201','agent_issues','copy of issue 201','core','201','open')").run();
 db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, evidence) VALUES ('RM-DONE','charter','done','worker','qnfo-ops','verified','ok')").run();
+for (let i = 0; i < 45; i++) db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES (?, 'charter', ?, 'worker', 'qnfo-research-exec', 'not-built')").run("RM-BACKFILL-" + i, "backfill " + i);
 
 const prep = (sql) => { let a = []; const st = { bind: (...x) => { a = x.map((v) => (v === undefined ? null : v)); return st; }, run: async () => { const r = db.prepare(sql).run(...a); return { meta: { changes: Number(r.changes) } }; }, first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }) }; return st; };
 const AUDIT = { prepare: prep, batch: async (l) => { for (const s of l) await s.run(); return []; } };
@@ -116,7 +118,8 @@ assert.equal(map[205].project_code, "W.qnfo-social", "an open issue on a W.<work
 assert.equal(map[206].project_code, "W.qnfo-fleet-control", "an issue on a catalogue project that is not active is placed by owner (no active project to keep)");
 assert.equal(map[207].project_code, "W.qnfo-fleet-control", "an issue whose project is not in the table is placed by owner");
 assert.ok(gLabels.some((l) => l.name === "program:reach") && gLabels.some((l) => l.name === "kind:fix") && gLabels.some((l) => l.name === "roadmap"));
-assert.equal(r1.milestones_created, 15, "milestone creation is capped per tick");
+assert.equal(r1.milestones_created, 40, "milestone backfill matches the 40-item sync batch");
+assert.equal(r1.roadmap_mirrored, 40, "roadmap backfill matches the 40-item sync batch");
 assert.ok(r1.limitations.some((l) => /projects-v2/.test(l)), "a board failure is a limitation, not an error");
 
 for (let i = 0; i < 4; i++) await tick();
@@ -127,7 +130,7 @@ assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric='po
 const i202 = gIssues.find((x) => x.number === 6002);
 assert.ok(i202.milestone && i202.labels.some((l) => l.name === "program:reach") && i202.labels.some((l) => l.name === "bug"), "milestone + managed labels set, unmanaged labels kept");
 const rmIssues = gIssues.filter((x) => x.labels.some((l) => l.name === "roadmap"));
-assert.equal(rmIssues.length, 1, "only the open work item (RM-X) is mirrored; the metric objective is out of scope (PORTFOLIO-NOT-ISSUES-1), the verified item and the agent_issues copy are not");
+assert.equal(rmIssues.length, 46, "open roadmap work is mirrored across bounded ticks; the metric objective is out of scope (PORTFOLIO-NOT-ISSUES-1), the verified item and the agent_issues copy are not");
 assert.ok(!gIssues.some((i) => /RM-METRIC/.test(i.title)), "a metric-breach objective is never filed as a GitHub issue: its METRIC-TRIGGER ticket tracks the breach");
 assert.ok(!gIssues.some((i) => /AI-201/.test(i.title)), "an agent_issues copy is never filed twice");
 assert.ok(rmIssues.find((x) => /RM-X/.test(x.title)).milestone, "roadmap item lands in its worker's project milestone");
@@ -176,7 +179,7 @@ failMs = false;
 const rmGIns = db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, created_at, verified_at) VALUES (?, 'charter', ?, 'worker', 'qnfo-ops', 'not-built', ?, ?)");
 const rmGLink = db.prepare("INSERT INTO roadmap_gh_links (roadmap_id, gh_number, gh_state, d1_status, synced_at) VALUES (?, ?, 'open', 'not-built', '')");
 const nowIso = new Date().toISOString(), gIds = [];
-for (let i = 0; i < 30; i++) { const id = Number(rmGIns.run("RM-G" + i, "guard " + i, nowIso, nowIso).lastInsertRowid); gIds.push(id); rmGLink.run(id, 9500 + i); gIssues.push({ number: 9500 + i, node_id: "NG" + i, title: "[RM-" + id + "] g", labels: i < 3 ? [{ name: "roadmap" }] : [], state: "open" }); }
+for (let i = 0; i < 60; i++) { const id = Number(rmGIns.run("RM-G" + i, "guard " + i, nowIso, nowIso).lastInsertRowid); gIds.push(id); rmGLink.run(id, 9500 + i); gIssues.push({ number: 9500 + i, node_id: "NG" + i, title: "[RM-" + id + "] g", labels: i < 3 ? [{ name: "roadmap" }] : [], state: "open" }); }
 calls = [];
 const rg1 = await tick();
 assert.ok(rg1.errors.some((e) => e.scope === "portfolio-roadmap" && /mass state flip/.test(e.why)), "recently touched roadmap rows whose d1_status equals status are unexplained and refused: " + JSON.stringify(rg1.errors.map((e) => e.scope)));
