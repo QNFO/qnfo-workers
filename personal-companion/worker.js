@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.6-codeagent";
+var VERSION = "1.44.7-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -3368,6 +3368,7 @@ var P_STYLE = L(
   "- Do not add examples, precedents, historical episodes or comparisons from outside the source material. A scenario you need must be an explicit hypothetical that names no real person, organisation, product, date or number.",
   "- Reasoning that follows from the source material is welcome. State it as reasoning (it follows that, if this holds then), never as a further reported fact.",
   "- State uncertainty about the claim at its true size. Never inflate confidence to make a piece land better. Where the evidence leaves a point open, say the point is open, in terms of the subject itself; never write about the source material (what it covers, omits or does not say).",
+  "- For a contested topic in policy, history, geopolitics, health or economics, use at least three independent full-text sources with at least two explicit viewpoint labels and one verified non-US source. Compare where the viewpoints differ; source metadata is not evidence for factual claims.",
   "- The strongest objection to your central claim must appear in the piece, stated fairly in your own words as an objection a careful reader could raise, with an honest assessment of how bad it is. Never put it in quotation marks and never attribute it to critics, scholars, commentators or anyone the source material does not name making that objection. It may rest on the source material or be pure logic; it may not rest on facts from outside it. Where it sits is your choice; do not give it the same heading or the same position twice in a row.",
   "",
   "The source material is raw research notes, usually encyclopedic extracts in a register you must not copy. Never reproduce their sentences. Banned habits they carry: definitional lead sentences, hedged attributions ('commentators have linked', 'observers note', 'a study found', 'some argue'), and disambiguation-style enumeration. If you need a definition, state it in your own words.",
@@ -4003,45 +4004,66 @@ function cutAtSentence(text, max) {
 // lede names) now keeps PRIMARY_SHARE of the budget when there are others, and the rest share what is left; the total is unchanged, so
 // the writer, the grounding check, the critic and the reviewers still read the same material, and no judge or bar changes.
 var PRIMARY_SHARE = 0.7; // FULLTEXT-BUDGET-1 (1.26.2): was 0.55 of 18000
-// EK-2 (issue 1000713, RED-DRAIN-1, 1.27.0): the 2026-10-27 Afghanistan piece grounded an contested subject on a single
-// Wikipedia anchor; its balance came from the writer prompt's objection rule, not from source diversity. Policy, history,
-// geopolitics, health and economics topics now need at least 3 independent sources spanning differing viewpoints, and at
-// least one source that is not US-domiciled, before drafting; when the anchors cannot meet that bar the topic is dropped
-// (fitAnchors returns no anchors, so no draft is written on one anchor).
+// EK-2: a contested topic is not drafted unless source records prove three distinct publishers, differing viewpoints,
+// and a non-US source. Missing perspective or country metadata is not evidence and fails closed.
 var CONTESTED_TOPIC_RE = /\b(?:policy|policies|politics|political|election|elections|parliament|congress|government|governance|war|wars|conflict|invasion|occupation|insurgen\w*|geopolitic\w*|foreign relations|international relations|history|historical|history of|empire|colonial\w*|treaty|treaties|sanction\w*|health|medicine|medical|disease|diseases|epidemic|pandemic|vaccin\w*|econom\w*|inflation|recession|trade|tariff\w*|taxation|market|markets|budget|debt|poverty)\b/i;
-var US_SOURCE_HOSTS = /^(?:en\.wikipedia\.org|en\.m\.wikipedia\.org|simple\.wikipedia\.org|www\.whitehouse\.gov|[a-z0-9.-]+\.gov|[a-z0-9.-]+\.mil|[a-z0-9.-]+\.edu|arxiv\.org|ar5iv\.labs\.arxiv\.org|export\.arxiv\.org|www\.nytimes\.com|www\.washingtonpost\.com)$/i;
 function isContestedTopic(text) { return CONTESTED_TOPIC_RE.test(String(text || "").slice(0, 4000)); }
-function sourceHost(ref) { try { return new URL(String(ref || "")).hostname.toLowerCase(); } catch (e) { return ""; } }
+function sourceHost(ref) {
+  try {
+    var u = new URL(String(ref || ""));
+    return u.protocol === "https:" ? u.hostname.toLowerCase().replace(/^(?:www|m)\./, "") : "";
+  } catch (e) { return ""; }
+}
+function sourceViewpoint(anchor) {
+  var value = String(anchor && anchor.viewpoint || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-|-$/g, "");
+  return value && !/^(?:unknown|unspecified|neutral|encyclopedic|academic|general|none|other)$/.test(value) ? value : "";
+}
+function sourceCountry(anchor) {
+  var code = String(anchor && anchor.sourceCountry || "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code) || code === "US") return "";
+  try {
+    var name = new Intl.DisplayNames(["en"], { type: "region" }).of(code);
+    return name && name !== code && name !== "Unknown Region" ? code : "";
+  } catch (e) { return ""; }
+}
 function contestedSourcesOk(anchors) {
-  var seen = {}, list = [];
+  var seenRefs = {}, seenHosts = {}, list = [];
   for (var i = 0; i < (anchors || []).length; i++) {
     var a = anchors[i];
-    if (!a || !a.ref || seen[a.ref]) continue;
+    var host = sourceHost(a && a.ref);
+    if (!a || !host || seenRefs[a.ref] || seenHosts[host]) continue;
     if (String(a.text || "").length < ANCHOR_MIN_CHARS) continue;
-    seen[a.ref] = 1; list.push(a);
+    seenRefs[a.ref] = 1;
+    seenHosts[host] = 1;
+    list.push(a);
   }
-  var nonUS = 0;
-  for (var k = 0; k < list.length; k++) { var h = sourceHost(list[k].ref); if (h && !US_SOURCE_HOSTS.test(h)) nonUS++; }
-  // viewpoints differ only when the sources are independent (distinct hosts), not one outlet three times
-  var hosts = {};
-  for (var k2 = 0; k2 < list.length; k2++) hosts[sourceHost(list[k2].ref)] = 1;
-  var indep = Object.keys(hosts).length;
   if (list.length < 3) return { ok: false, why: "only " + list.length + " full-text sources" };
-  if (indep < 3) return { ok: false, why: "sources span " + indep + " outlets, not 3 independent ones" };
-  if (!nonUS) return { ok: false, why: "no non-US source" };
+  var viewpoints = {}, nonUS = false;
+  for (var k = 0; k < list.length; k++) {
+    var viewpoint = sourceViewpoint(list[k]), country = sourceCountry(list[k]);
+    if (viewpoint) viewpoints[viewpoint] = 1;
+    if (country) nonUS = true;
+  }
+  if (Object.keys(viewpoints).length < 2) return { ok: false, why: "fewer than 2 explicit viewpoints" };
+  if (!nonUS) return { ok: false, why: "no verified non-US source" };
   return { ok: true, why: "" };
 }
 function fitAnchors(anchors) {
-  // EK-2: a contested subject never drafts on fewer than three independent, viewpoint-spanning, full-text sources
-  // with one non-US source among them; the topic is dropped instead (CITE-FULLTEXT-1: no abstract or excerpt counts).
-  if (anchors && anchors.length && isContestedTopic(anchors[0] && anchors[0].text)) {
+  // CITE-FULLTEXT-1: an abstract or excerpt does not satisfy the contested-topic source gate.
+  if (anchors && anchors.length && isContestedTopic(String(anchors[0] && anchors[0].title || "") + " " + String(anchors[0] && anchors[0].text || ""))) {
     var gate = contestedSourcesOk(anchors);
     if (!gate.ok) { diagNote("contested-topic gate: " + gate.why + " \u2014 topic dropped"); return []; }
   }
   var n = anchors.length || 1, per = Math.max(900, Math.floor(GROUND_MAX / n));
   var prim = n > 1 ? Math.max(per, Math.floor(GROUND_MAX * PRIMARY_SHARE)) : per;
   var rest = n > 1 ? Math.max(900, Math.floor((GROUND_MAX - prim) / (n - 1))) : per;
-  return anchors.map(function (a, i) { var o = { kind: a.kind, ref: a.ref, title: a.title, text: cutAtSentence(a.text, i === 0 ? prim : rest) }; if (a.full) o.full = true; return o; });
+  return anchors.map(function (a, i) {
+    var o = { kind: a.kind, ref: a.ref, title: a.title, text: cutAtSentence(a.text, i === 0 ? prim : rest) };
+    if (a.full) o.full = true;
+    if (a.viewpoint) o.viewpoint = a.viewpoint;
+    if (a.sourceCountry) o.sourceCountry = a.sourceCountry;
+    return o;
+  });
 }
 // SYSTEMS-TOPIC-1 (1.21.0; companion_runs 5412-5444 of 2026-10-13 12:00 UTC, topic wiki:1065 Amundsenia, an asteroid): the subject was
 // the first random article long enough to use, so a catalogue entry with no actors became the topic, and the required systems analysis
@@ -4684,6 +4706,7 @@ function anchorsBlock(topic, anchors, life, profile) {
     var a = anchors[i];
     lines.push("[" + (i + 1) + "] " + sourceLabel(a) + " :: " + a.title);
     lines.push("    ref: " + a.ref);
+    if (a.viewpoint || a.sourceCountry) lines.push("    source metadata (not factual evidence): " + [a.viewpoint ? "viewpoint=" + a.viewpoint : "", a.sourceCountry ? "sourceCountry=" + a.sourceCountry : ""].filter(Boolean).join("; "));
     lines.push("    " + a.text);
     lines.push("");
   }
@@ -8120,6 +8143,7 @@ function groundingNeedles(problems) {
   return needles.filter(function (n, i, a) { return n.length > 0 && a.indexOf(n) === i; });
 }
 var __verify = { stallRecurred: stallRecurred, shortenFeedback: shortenFeedback, LENGTH_CEILING: LENGTH_CEILING, pruneClassOf: pruneClassOf, pruneClassesOf: pruneClassesOf, pruneRepeat: pruneRepeat, PRUNE_REPEAT_AFTER: PRUNE_REPEAT_AFTER, attemptBudgetStop: attemptBudgetStop, STALL_MIN: STALL_MIN, pruneHeadings: pruneHeadings, mirrorPipeline: mirrorPipeline, pipeItem: pipeItem, pipeSince: pipeSince, PIPE_SELECT: PIPE_SELECT, PIPE_PROPERTY: PIPE_PROPERTY, PIPE_ID_PREFIX: PIPE_ID_PREFIX, qualityWorst: qualityWorst, gateWorst: gateWorst, criticGroundingGates: criticGroundingGates, STARVED_RETRY_QUIET_MS: STARVED_RETRY_QUIET_MS, quotesAllSourced: quotesAllSourced, sourcedPassage: sourcedPassage, sourceSentences: sourceSentences, sourcedRereadNote: sourcedRereadNote, SOURCED_COVER: SOURCED_COVER, SENT_ABBREV_RE: SENT_ABBREV_RE, GROUND_MAX: GROUND_MAX, PRIMARY_SHARE: PRIMARY_SHARE, deleteSentences: deleteSentences, rubricNoQuoteNote: rubricNoQuoteNote, quotesAllInAnalysis: quotesAllInAnalysis, rubricRereadNote: rubricRereadNote, eventTitles: eventTitles, eventDay: eventDay, fetchEventTitles: fetchEventTitles, EVENT_POOL: EVENT_POOL, WRITER_LEAD: WRITER_LEAD, CF_FALLBACK_GPT_OSS: CF_FALLBACK_GPT_OSS, loadWriterOrder: loadWriterOrder, fallbackChain: fallbackChain, cutAtSentence: cutAtSentence, causalScore: causalScore, CAUSAL_MIN: CAUSAL_MIN, CAUSAL_CHARS: CAUSAL_CHARS, fitAnchors: fitAnchors, logCaught: logCaught, foldAccents: foldAccents, todayLine: todayLine, reframePiece: reframePiece, parseDraftMd: parseDraftMd, P_REFRAME: P_REFRAME, REFRAME_BAND: REFRAME_BAND, REFRAME_START_BEFORE_MS: REFRAME_START_BEFORE_MS, CF_FALLBACK: CF_FALLBACK, pieceWords: pieceWords, splitText: splitText, autoMarkAnalysis: autoMarkAnalysis, withAutoMark: withAutoMark, analysisSplitInfo: analysisSplitInfo, CRITIC_INVENTED_MAX: CRITIC_INVENTED_MAX, writerBand: writerBand, writerIsFallback: writerIsFallback, WRITER_TEMPERATURE_FB: WRITER_TEMPERATURE_FB, CRITIC_TEMPERATURE: CRITIC_TEMPERATURE, ANALYSIS_MARK: ANALYSIS_MARK, stripAnalysisMark: stripAnalysisMark, analysisSplitOk: analysisSplitOk, reviewText: reviewText, stripPieceMark: stripPieceMark, persistPiece: persistPiece, STARVED_RETRY_MAX_24H: STARVED_RETRY_MAX_24H, fetchWikiIntros: fetchWikiIntros, introScore: introScore, screenTopics: screenTopics, wikiAnchors: wikiAnchors, TOPIC_POOL: TOPIC_POOL, pruneBlockFixable: pruneBlockFixable, pruneRepairFeedback: pruneRepairFeedback, expandFeedback: expandFeedback, rankLinked: rankLinked, linkMentionScore: linkMentionScore, CRITIC_PRUNE_ROUNDS: CRITIC_PRUNE_ROUNDS, criticQuotes: criticQuotes, critiqueWorst: critiqueWorst, QUOTE_MIN_WORDS: QUOTE_MIN_WORDS, systemsFit: systemsFit, generationHold: generationHold, gatherVerdicts: gatherVerdicts, orderByHealth: orderByHealth, sickReviewers: sickReviewers, FACTCHECK_HEDGE_MS: FACTCHECK_HEDGE_MS, starvedRetryDue: starvedRetryDue, arxivWindow: arxivWindow, fetchWiki: fetchWiki, splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, unwrapJsonItem: unwrapJsonItem, itemHasNoClaim: itemHasNoClaim, reviewerSaysSupported: reviewerSaysSupported, factItemText: factItemText, splitFactItems: splitFactItems, serialInstallmentTitle: serialInstallmentTitle, serialBaseTitle: serialBaseTitle, serialChaptersDone: serialChaptersDone, serialTitleMatches: serialTitleMatches, withInstallmentTitle: withInstallmentTitle, freeInstallmentPiece: freeInstallmentPiece, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, plainCredit: plainCredit, sourcesFoot: sourcesFoot, renderPiece: renderPiece, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+Object.assign(__verify, { isContestedTopic: isContestedTopic, sourceHost: sourceHost, sourceViewpoint: sourceViewpoint, sourceCountry: sourceCountry, contestedSourcesOk: contestedSourcesOk });
 export {
   __verify,
   GenerationFlow,
