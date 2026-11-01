@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 13:44:50",
+  "audited_at": "2026-11-01 14:17:30",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -576,7 +576,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.3",
+        "version": "0.40.4-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -586,7 +586,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.41.2-codeagent",
+        "version": "5.41.3-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -606,7 +606,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.30.0-suite-rebase-retry",
+        "version": "0.30.1-issue-age-retry",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -631,12 +631,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.5-verified-core",
+        "version": "0.59.6-metric-trigger-close-contract",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.78.0",
+        "version": "1.79.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.42.1-event-id",
+        "version": "0.42.2-lean-review-cycles",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1056,9 +1056,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.3",
+      "before": "0.40.4-codeagent",
       "http": 200,
-      "live": "0.40.3",
+      "live": "0.40.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1099,9 +1099,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.41.2-codeagent",
+      "before": "5.41.3-codeagent",
       "http": 200,
-      "live": "5.41.2-codeagent",
+      "live": "5.41.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1275,9 +1275,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.30.0-suite-rebase-retry",
+      "before": "0.30.1-issue-age-retry",
       "http": 200,
-      "live": "0.30.0-suite-rebase-retry",
+      "live": "0.30.1-issue-age-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1405,17 +1405,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.5-verified-core",
+      "before": "0.59.6-metric-trigger-close-contract",
       "http": 200,
-      "live": "0.59.5-verified-core",
+      "live": "0.59.6-metric-trigger-close-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.78.0",
+      "before": "1.79.0",
       "http": 200,
-      "live": "1.78.0",
+      "live": "1.79.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1669,9 +1669,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.42.1-event-id",
+      "before": "0.42.2-lean-review-cycles",
       "http": 200,
-      "live": "0.42.1-event-id",
+      "live": "0.42.2-lean-review-cycles",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
