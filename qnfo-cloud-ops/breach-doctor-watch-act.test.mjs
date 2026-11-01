@@ -42,7 +42,7 @@ if (!/breachDoctorWatchAct/.test(block)) { console.log("breach-doctor-watch-act:
 // ---- the job in a sandbox (setTimeout is the real one unless a test swaps it)
 function load(timers) {
   const noisy = [];
-  const sb = Object.assign({ Date, Math, Number, JSON, String, Promise, isFinite, VERSION: "1.40.0-test", __name: () => {}, console: { log: () => {}, error: (...a) => noisy.push(a.join(" ")) } }, timers || { setTimeout, clearTimeout });
+  const sb = Object.assign({ Date, Math, Number, JSON, String, Promise, isFinite, crypto: globalThis.crypto, VERSION: "1.40.0-test", __name: () => {}, console: { log: () => {}, error: (...a) => noisy.push(a.join(" ")) } }, timers || { setTimeout, clearTimeout });
   vm.createContext(sb);
   vm.runInContext(block + "\n__export = { jobBreachDoctorWatch, breachDoctorWatchDue, breachDoctorWatchAnswer, breachDoctorWatchDecide };", sb);
   sb.__export.noisy = noisy;
@@ -161,7 +161,7 @@ async function go(db, binding, nowMs, o = {}, J) {
   const act = out.notes.acting;
   check(out.status === "ok" && act.run === "stall" && act.status === "ok" && act.verified === true && act.error === null && act.acted === 2 && /^t[0-9a-z]+$/.test(act.tick_id), "stalled: the run is verified and reports what the doctor did", act);
   const r = runsOf(db), m = r[0] && JSON.parse(r[0].meta);
-  check(r.length === 1 && /^breach-doctor-watch-run-s-[0-9a-z]+$/.test(r[0].id) && r[0].status === "ok" && r[0].kind === "breach-doctor-watch" && r[0].job === "breach-doctor-watch" && r[0].ts === new Date(T0).toISOString(), "stalled: one run row of kind breach-doctor-watch, id breach-doctor-watch-run-s-*, status ok", r);
+  check(r.length === 1 && /^breach-doctor-watch-run-s-[0-9a-z]+-[0-9a-f-]{36}$/.test(r[0].id) && r[0].status === "ok" && r[0].kind === "breach-doctor-watch" && r[0].job === "breach-doctor-watch" && r[0].ts === new Date(T0).toISOString(), "stalled: one run row of kind breach-doctor-watch, id breach-doctor-watch-run-s-<time>-<uuid>, status ok", r);
   check(m && m.acted === 1 && m.run === "stall" && m.ok === true && m.stamped === true && m.error === null && m.answer.ok === true && m.answer.acted === 2 && m.answer.cases === 3 && m.answer.http === 200 && m.answer.error === null && m.tick_row === true, "stalled: the answer (ok, acted, verified, error code) is in the row's meta", m);
   check(/ok=1/.test(r[0].text) && /acted=2/.test(r[0].text) && /error=none/.test(r[0].text) && /alternate stamped/.test(r[0].text), "and in its text");
   const s = stamps(db);

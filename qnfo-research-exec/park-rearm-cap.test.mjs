@@ -96,8 +96,10 @@ const events = (db) => db.prepare("SELECT * FROM cloud_ops_events WHERE kind = '
 
 // ---- wiring ----
 const src = readFileSync(join(here, "worker.js"), "utf8");
+const mirror = readFileSync(join(here, "deployed-current.worker.js"), "utf8");
 const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 assert.ok(ver && Number(ver[1]) === 0 && (Number(ver[2]) > 36 || (Number(ver[2]) === 36 && Number(ver[3]) >= 7)), "VERSION is at least 0.36.7: " + (ver && ver[0]));
-assert.equal(readFileSync(join(here, "deployed-current.worker.js"), "utf8"), src, "deployed-current.worker.js mirrors worker.js");
+assert.equal(/var VERSION = "([^"]+)"/.exec(mirror)?.[1], /var VERSION = "([^"]+)"/.exec(src)?.[1], "the Wrangler-built deploy mirror carries the source VERSION");
+assert.ok(mirror.includes("PARKED-REVISE-NOOP-CEILING-1"), "the built deploy mirror includes the revise no-op ceiling");
 assert.ok(/var PARK_REARM_MAX = TERMINAL_RECOVERY_MAX;/.test(src), "the cap is the shared recovery budget");
 console.log("park-rearm-cap: all assertions passed");

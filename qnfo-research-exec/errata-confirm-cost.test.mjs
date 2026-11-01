@@ -13,7 +13,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const block = (s) => s.slice(s.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:BEGIN"), s.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:END"));
 const code = block(src);
 ok(code.length > 1000 && code === block(hub), "the folded confirm block equals the errata-hub source");
-const mod = new Function(code + "\nreturn { confirmInternalErrata, internalConfirmModels, confirmExcerpt, confirmRunInput, CONFIRM_EXCERPT_MAX };")();
+const mod = new Function(code + "\nreturn { confirmInternalErrata, confirmReplyText, internalConfirmModels, confirmExcerpt, confirmRunInput, CONFIRM_EXCERPT_MAX };")();
 
 ok(mod.CONFIRM_EXCERPT_MAX === 24000, "the excerpt is 24k chars");
 ok(mod.confirmExcerpt("x".repeat(100000), "").length === 24000, "a long body is cut to the excerpt");
@@ -22,6 +22,8 @@ ok(/deepseek/.test(pl[0]) && /kimi/.test(pl[1]), "a PAPER-LEARN-1 finding is che
 const rv = mod.internalConfirmModels("qnfo-paper-reviser");
 ok(/gpt-oss/.test(rv[0]) && /kimi/.test(rv[1]), "a reviser finding is checked by gpt-oss, then kimi", rv);
 ok(mod.confirmRunInput("@cf/deepseek-ai/deepseek-v4-flash-0731", "p").chat_template_kwargs.thinking === false, "deepseek runs with thinking off");
+ok(mod.confirmReplyText({ reasoning: '{"confirmed": true}' }) === '{"confirmed": true}', "a reasoning-only verdict is available to the JSON parser");
+ok(mod.confirmReplyText({ output_text: '{"confirmed": false}' }) === '{"confirmed": false}', "output_text verdicts are read");
 
 function mkEnv(cfg, rows, aiReply) {
   const calls = { ai: [], updates: [], limit: null };
@@ -63,6 +65,11 @@ const rows = Array.from({ length: 60 }, (_, i) => ({ id: i + 1, sender: "qnfo-li
   const { env, calls } = mkEnv(2, rows, (m) => /deepseek/.test(m) ? { choices: [{ message: { content: "" } }] } : { response: '{"confirmed": true, "why": "k"}' });
   const out = await mod.confirmInternalErrata(env);
   ok(out.confirmed === 2 && calls.ai.filter((c) => /kimi/.test(c.m)).length === 2, "an unreadable deepseek reply falls back to kimi", { out, ai: calls.ai.map((c) => c.m) });
+}
+{
+  const { env, calls } = mkEnv(2, rows, () => ({ reasoning: '{"confirmed": true, "why": "reasoning-channel verdict"}' }));
+  const out = await mod.confirmInternalErrata(env);
+  ok(out.confirmed === 2 && calls.ai.length === 2, "a JSON verdict in the reasoning field settles without the more expensive fallback", { out, calls: calls.ai });
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
