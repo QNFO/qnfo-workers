@@ -9,6 +9,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 const sql = readFileSync(new URL("./2026-10-19-roadmap-self-maintain.sql", import.meta.url), "utf8");
+const placementSql = readFileSync(new URL("./2026-11-01-roadmap-upgrade-placement.sql", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 const db = new DatabaseSync(":memory:");
@@ -20,6 +21,8 @@ CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEX
 CREATE TABLE analytics_metric_triggers(id INTEGER PRIMARY KEY AUTOINCREMENT, metric_key TEXT UNIQUE, title TEXT, source_table TEXT, operator TEXT, threshold REAL, priority INTEGER DEFAULT 5, action TEXT, owner TEXT, queue_target TEXT, cooldown_hours INTEGER DEFAULT 168, enabled INTEGER DEFAULT 1, notes TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE fleet_crons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, cron_expr TEXT NOT NULL, task_id TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, timezone TEXT NOT NULL DEFAULT 'UTC', last_fired TEXT, next_fire TEXT, updated_at TEXT);
 CREATE TABLE fleet_tasks (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, definition TEXT NOT NULL, timeout_ms INTEGER NOT NULL DEFAULT 30000, retries INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT);
+CREATE TABLE fleet_tasks_canonical (id TEXT PRIMARY KEY, definition TEXT NOT NULL, repo_path TEXT, exported_at TEXT);
+CREATE TABLE worker_compat_state (worker TEXT, days_behind REAL, checked_at TEXT);
 CREATE TABLE goals (id INTEGER PRIMARY KEY AUTOINCREMENT, goal_key TEXT UNIQUE NOT NULL, statement TEXT NOT NULL, goal_type TEXT NOT NULL DEFAULT 'instrumental', parent_objective TEXT, alignment TEXT, source TEXT, score REAL, priority INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'proposed', dod TEXT, owner TEXT, adopted_at TEXT, completed_at TEXT, retired_at TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), program_code TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT, owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, last_value TEXT, last_refreshed TEXT, state TEXT, refresh_class TEXT);
 CREATE TABLE sla_registry (sla_id TEXT PRIMARY KEY, class TEXT NOT NULL, metric TEXT NOT NULL, threshold TEXT NOT NULL, window TEXT NOT NULL, owner TEXT NOT NULL, enforcement TEXT NOT NULL, breach_action TEXT NOT NULL, autofix INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT (datetime('now')));
@@ -43,7 +46,7 @@ run("INSERT INTO portfolios (portfolio_code, name) VALUES ('QNFO', 'QNFO')");
 for (const [c, n] of [["QNFO.OPS", "Operations & Governance"], ["QNFO.RSCH", "Research & Publications"], ["QNFO.INFRA", "Cloudflare Infrastructure"], ["QNFO.REACH", "Reach & Distribution"], ["QNFO.PERSONAL", "Personal Twin"]]) {
   run("INSERT INTO programs (program_code, portfolio_code, name) VALUES (?, 'QNFO', ?)", c, n);
 }
-run("INSERT INTO projects (project_code, program_code, name, status) VALUES ('W.alpha', 'QNFO.OPS', 'alpha', 'active'), ('W.beta', 'QNFO.REACH', 'beta', 'archived'), ('W.gamma', 'QNFO.OPS', 'gamma', 'active')");
+run("INSERT INTO projects (project_code, program_code, name, status) VALUES ('W.alpha', 'QNFO.OPS', 'alpha', 'active'), ('W.beta', 'QNFO.REACH', 'beta', 'archived'), ('W.gamma', 'QNFO.OPS', 'gamma', 'active'), ('W.personal-watch', 'QNFO.PERSONAL', 'personal-watch', 'active'), ('W.voice-stt', 'QNFO.INFRA', 'voice-stt', 'active')");
 run("INSERT INTO agent_issues (id, title, priority, status) VALUES (1, 'alpha defect', 'high', 'open'), (2, 'reach defect', 'medium', 'open')");
 run("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (1, 'W.alpha', 'QNFO.OPS', 'fix'), (2, 'W.beta', 'QNFO.REACH', 'fix')");
 run("INSERT INTO ops_config (key, value) VALUES ('tp1', 'no')");
@@ -64,10 +67,46 @@ run("INSERT INTO remediation_verifications (class, transport, expected, observed
 const rm = [["GL-TP-1", "goals", "TP-1", "autonomy", "TP-1", "open"], ["NEXT-W.alpha", "portfolio-self-manage", "Next deliverable for alpha", "project", "W.alpha", "planned"],
   ["NEXT-W.gamma", "portfolio-self-manage", "Next deliverable for gamma", "project", "W.gamma", "planned"], ["PROJ-W.beta", "projects", "beta", "project", "W.beta", "open"],
   ["FM-fm-x", "failure_modes", "x breaks", "gate", "fm-x", "open"], ["FM-fm-y", "failure_modes", "y breaks", "gate", "fm-y", "open"],
-  ["AI-1", "agent_issues", "alpha defect", "core", "1", "open"], ["MB-orphan", "cf-model-eval", "model row", "model", "m", "open"]];
+  ["AI-1", "agent_issues", "alpha defect", "core", "1", "open"], ["MB-orphan", "cf-model-eval", "model row", "model", "m", "open"],
+  ["UPG-personal-watch", "portfolio-gap-action", "Advance compat_date for personal-watch", "worker", "personal-watch", "open"],
+  ["UPG-voice-stt", "portfolio-gap-action", "Advance compat_date for voice-stt", "worker", "voice-stt", "open"]];
 for (const r of rm) run("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES (?, ?, ?, ?, ?, ?)", ...r);
 
+const upgradeInsert = `INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, evidence, created_at)
+  SELECT 'UPG-'||w.worker, 'portfolio-gap-action', 'Advance compat_date for '||w.worker, 'worker', w.worker, 'open',
+         'auto: '||MAX(w.days_behind)||' days behind the current compat default', datetime('now')
+    FROM worker_compat_state w
+   WHERE w.days_behind >= 30 AND w.checked_at=(SELECT MAX(w2.checked_at) FROM worker_compat_state w2 WHERE w2.worker=w.worker)
+     AND NOT EXISTS (SELECT 1 FROM roadmap_implementation r WHERE r.item='UPG-'||w.worker)
+   GROUP BY w.worker`;
+const initialUpgradeTask = JSON.stringify({ steps: [{ sql: "SELECT 1" }, { sql: "SELECT 1" }, { sql: upgradeInsert }] });
+run("INSERT INTO fleet_tasks (id, name, type, definition) VALUES ('portfolio-gap-action', 'portfolio-gap-action', 'workflow', ?)", initialUpgradeTask);
+run("INSERT INTO fleet_tasks_canonical (id, definition, repo_path, exported_at) VALUES ('portfolio-gap-action', ?, 'migrations/2026-10-25-portfolio-gap-close-evidence.sql', '2026-10-25')", initialUpgradeTask);
+
 db.exec(sql);
+ok(q("SELECT item FROM v_roadmap WHERE item IN ('UPG-personal-watch','UPG-voice-stt') AND program_code IS NULL").length === 2, "the bare worker references reproduce both unplaced upgrade rows");
+db.exec(placementSql);
+const upgradeTask = one("SELECT definition, version FROM fleet_tasks WHERE id = 'portfolio-gap-action'");
+const upgradeStep = JSON.parse(upgradeTask.definition).steps[2].sql;
+ok(upgradeStep.includes("'worker', 'W.'||w.worker, 'open'"), "future upgrade rows store their canonical W.<worker> project code");
+ok(one("SELECT definition, repo_path FROM fleet_tasks_canonical WHERE id = 'portfolio-gap-action'").definition === upgradeTask.definition, "the canonical task definition follows the migration");
+ok(one("SELECT artifact_ref FROM roadmap_implementation WHERE item='UPG-personal-watch'").artifact_ref === "W.personal-watch"
+  && one("SELECT artifact_ref FROM roadmap_implementation WHERE item='UPG-voice-stt'").artifact_ref === "W.voice-stt", "existing upgrade rows are repaired from matching projects");
+ok(one("SELECT program_code FROM v_roadmap WHERE item='UPG-personal-watch'").program_code === "QNFO.PERSONAL"
+  && one("SELECT program_code FROM v_roadmap WHERE item='UPG-voice-stt'").program_code === "QNFO.INFRA", "existing upgrade rows roll up under their owning programs");
+run("INSERT INTO worker_compat_state (worker, days_behind, checked_at) VALUES ('gamma', 42, datetime('now'))");
+db.exec(upgradeStep);
+ok(one("SELECT artifact_ref FROM roadmap_implementation WHERE item='UPG-gamma'").artifact_ref === "W.gamma"
+  && one("SELECT program_code FROM v_roadmap WHERE item='UPG-gamma'").program_code === "QNFO.OPS", "a new upgrade row is placed by the portfolio task");
+run("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES ('UPG-unknown', 'portfolio-gap-action', 'Unknown project', 'worker', 'unknown', 'open')");
+ok(one("SELECT program_code FROM v_roadmap WHERE item='UPG-unknown'").program_code === null, "an unknown project is not assigned a guessed program");
+run("DELETE FROM roadmap_implementation WHERE item='UPG-unknown'");
+const placementVersion = upgradeTask.version;
+db.exec(placementSql);
+ok(one("SELECT version FROM fleet_tasks WHERE id='portfolio-gap-action'").version === placementVersion, "the placement migration is idempotent");
+ok(one("SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'ROADMAP-OPEN-UPGRADE-PLACEMENT-1:')=1").n === 1, "the placement decision is recorded once");
+run("DELETE FROM roadmap_implementation WHERE item='UPG-gamma'");
+
 const task = one("SELECT type, definition, enabled FROM fleet_tasks WHERE id = 'roadmap-self-maintain'");
 ok(task && task.type === "workflow" && task.enabled === 1, "the workflow task exists and is enabled", task);
 const steps = JSON.parse(task.definition).steps;
@@ -176,6 +215,13 @@ db.exec(sql);
 ok(one("SELECT COUNT(*) AS n FROM metric_registry WHERE metric IN ('goals_unevaluated','goals_without_machine_dod','roadmap_open_unplaced','goals_completed_7d')").n === 4, "four metrics");
 ok(one("SELECT COUNT(*) AS n FROM analytics_metric_triggers WHERE metric_key IN ('goals_unevaluated','roadmap_open_unplaced')").n === 2, "two triggers, once");
 ok(one("SELECT COUNT(*) AS n FROM bak_20261019_goals_rsm").n === goals.length, "the backup holds the goals as they were before the first apply");
+
+const placementRollback = /^-- Rollback: (.*)$/m.exec(placementSql)[1];
+db.exec(placementRollback);
+ok(one("SELECT artifact_ref FROM roadmap_implementation WHERE item='UPG-personal-watch'").artifact_ref === "personal-watch"
+  && one("SELECT artifact_ref FROM roadmap_implementation WHERE item='UPG-voice-stt'").artifact_ref === "voice-stt", "the placement rollback restores existing artifact references");
+ok(one("SELECT definition FROM fleet_tasks WHERE id='portfolio-gap-action'").definition === initialUpgradeTask
+  && one("SELECT definition FROM fleet_tasks_canonical WHERE id='portfolio-gap-action'").definition === initialUpgradeTask, "the placement rollback restores both task definitions");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

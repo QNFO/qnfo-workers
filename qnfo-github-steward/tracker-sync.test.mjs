@@ -90,6 +90,17 @@ assert.equal(drift.ct_c, null, "a compare URL with no PR is recorded as never-op
 assert.equal(db.prepare("SELECT pr_state FROM code_task_pr_links WHERE task_id='ct_c'").get().pr_state, "never-opened");
 assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric='tracker_code_task_drift'").get().last_value, "2");
 assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric='tracker_drift'").get().last_value, "2", "graded once every open issue is mirrored");
+assert.equal(db.prepare("SELECT merged_at FROM code_tasks WHERE id='ct_d'").get().merged_at, "2026-10-01T21:37:29Z", "a task already marked merged gets its missing timestamp from the confirmed merged PR");
+
+db.prepare("UPDATE code_tasks SET merged_at = NULL WHERE id='ct_d'").run();
+db.prepare("UPDATE code_task_pr_links SET merged_at = '2026-10-01T21:37:29Z' WHERE task_id='ct_d'").run();
+db.prepare("INSERT INTO tracker_sync_state (k, v, updated_at) VALUES ('pr_backfill_done', 'yes', ?) ON CONFLICT(k) DO UPDATE SET v='yes'").run(new Date().toISOString());
+gPulls.find((p) => p.number === 381).hidden = true;
+calls = [];
+await tick();
+assert.ok(calls.includes("GET /repos/QNFO/qnfo-workers/pulls/381"), "an old settled link with a missing task timestamp is re-read after PR backfill");
+assert.equal(db.prepare("SELECT merged_at FROM code_tasks WHERE id='ct_d'").get().merged_at, "2026-10-01T21:37:29Z", "a task outside the recent PR list is repaired from its confirmed PR");
+gPulls.find((p) => p.number === 381).hidden = false;
 
 // Tick 2: idempotent.
 calls = [];
