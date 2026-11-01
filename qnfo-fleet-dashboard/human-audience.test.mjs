@@ -158,6 +158,25 @@ const answerLive = () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdap
   ok(r.value && r.value.external === 40, "an unreadable guard state does not stop a valid audience read");
   ok(JSON.parse(led.meta).guard_note === "guard state unreadable: guard state unavailable", "the fail-open read records why guard state was unavailable");
 }
+// 2c. An unwritable degraded-read ledger cannot turn a one-read hold into a permanent stop.
+{
+  const db = freshDb(), audit = d1(db);
+  db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, meta) VALUES ('baseline', '2026-10-05T07:00:00Z', 'human-audience', ?1)").run(JSON.stringify({ rows: 24, external: 240, continuation: 850, direct: 3190, guard: "ok" }));
+  const partial = Array.from({ length: 7 }, (_, i) => ({ count: i ? 1 : 3994, dimensions: { requestHost: "qnfo.org", refererHost: "" } }));
+  const cx = load(db, [], () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: partial }] } }, err: null }));
+  const unavailable = {
+    prepare(sql) {
+      if (sql.startsWith("INSERT OR REPLACE INTO cloud_ops_events") && sql.includes("'human-audience-degraded'")) throw new Error("degraded ledger unavailable");
+      return audit.prepare(sql);
+    }
+  };
+  const r = await cx.__run({ AUDIT: unavailable }, Date.parse("2026-10-06T07:00:00Z"));
+  const metric = db.prepare("SELECT last_value FROM metric_registry WHERE metric='external_referred_pageviews_7d'").get();
+  const led = db.prepare("SELECT meta FROM cloud_ops_events WHERE id='human-audience-2026-10-06'").get();
+  ok(r.value && r.value.external === 0 && metric.last_value === "0", "a failed degraded ledger write still accepts and measures the RUM result");
+  ok(JSON.parse(led.meta).guard_note === "degraded read not held: the human-audience-degraded row could not be written", "the alternate path records the failed hold in accepted provenance");
+  ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='human-audience-degraded'").get().n === 0, "a failed degraded write does not fabricate a held-read record");
+}
 // 3. A failed read leaves the registry untouched (never a fabricated zero).
 {
   const db = freshDb(), q = [];

@@ -29,7 +29,7 @@ FROM capability_ledger WHERE capability='guard anomalous bot-filtered human-audi
 INSERT OR IGNORE INTO control_registry
   (control,location,kind,guards_against,critical_path,disposition,disposition_state,alternate_path,alternate_tested_at,evidence,issue_id)
 VALUES
-  ('rum-degraded-read-guard','qnfo-fleet-dashboard refreshHumanAudience','guard','a successful but incomplete RUM response overwriting an accepted human-referral metric',0,'keep','applied','On unreadable guard state or an unwritable degraded-read ledger, retain the existing RUM measurement path and mark the accepted row when possible.','2026-11-01','Historical RUM reads returned 5–7 groups instead of the usual 23–24; one anomalous response is held, then accepted on the next read. Worker test exercises the hold and expiry; D1 lookup failure is fail-open.',2607);
+  ('rum-degraded-read-guard','qnfo-fleet-dashboard refreshHumanAudience','guard','a successful but incomplete RUM response overwriting an accepted human-referral metric',0,'keep','applied','On unreadable guard state or an unwritable degraded-read ledger, retain the existing RUM measurement path and mark the accepted row when possible.','2026-11-01','Historical RUM reads returned 5–7 groups instead of the usual 23–24; one anomalous response is held, then accepted on the next read. ALTERNATE-NOT-EXERCISABLE: a read-only SQL drill cannot inject selective D1 read or write failures; qnfo-fleet-dashboard/human-audience.test.mjs injects both failures and verifies that metrics and accepted provenance are still written.',2607);
 
 INSERT OR IGNORE INTO failure_modes
   (fm_key,failure_mode,root_cause,remediation,detector,probe_class,first_seen,issue_id,trigger_condition,symptom,blast_radius)
