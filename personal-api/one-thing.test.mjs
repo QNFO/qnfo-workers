@@ -40,10 +40,126 @@ assert.equal(C.PAGE_HTML.includes("/companion/api/focus"), false);
 for (const text of ["project:'Qniverse'", "source:'focus-qniverse'", "docs/ONE-THING-BACKLOG.md"]) assert.ok(C.PAGE_HTML.includes(text), text);
 console.log("ok   Focus reuses existing APIs and the Qniverse action backlog");
 
+const focusStart = C.PAGE_HTML.indexOf("// COMPANION-FOCUS-1: everything below");
+const focusEnd = C.PAGE_HTML.indexOf("var CTX=[];", focusStart);
+assert.ok(focusStart >= 0 && focusEnd > focusStart, "Focus browser code is present");
+
+function focusHarness(preferences, options) {
+  const stored = new Map();
+  if (preferences !== undefined) stored.set("cmp-focus-prefs", preferences);
+  const nodes = new Map(), calls = [];
+  function node(tag) {
+    const n = {
+      tagName: tag.toUpperCase(), attributes: {}, children: [], textContent: "",
+      appendChild(child) { this.children.push(child); return child; },
+      setAttribute(name, value) { this.attributes[name] = String(value); if (name === "id") nodes.set(String(value), this); }
+    };
+    Object.defineProperty(n, "innerHTML", {
+      get() { return ""; },
+      set() { this.children = []; this.textContent = ""; }
+    });
+    return n;
+  }
+  function el(tag, attrs, children) {
+    const n = node(tag);
+    for (const [key, value] of Object.entries(attrs || {})) {
+      if (key === "text") n.textContent = value;
+      else if (key === "cls") n.className = value;
+      else if (key.slice(0, 2) === "on") n[key] = value;
+      else n.setAttribute(key, value);
+    }
+    for (const child of children || []) if (child) n.appendChild(child);
+    return n;
+  }
+  const context = {
+    localStorage: {
+      getItem(key) { return stored.has(key) ? stored.get(key) : null; },
+      setItem(key, value) { stored.set(key, String(value)); }
+    },
+    $(id) { if (!nodes.has(id)) nodes.set(id, node("div")); return nodes.get(id); },
+    el,
+    api(path, options) {
+      calls.push({ path, json: options && options.json });
+      if (path === "/companion/api/actions" && options && options.json) return Promise.resolve({ ok: true });
+      if (path === "/companion/api/actions") return Promise.resolve({ actions: [] });
+      if (path === "/companion/api/activities") return Promise.resolve({ activities: [] });
+      return Promise.resolve({ ok: true });
+    },
+    CMP: { focusOptions() { return options; } },
+    say(box, text) { box.appendChild(el("div", { text })); },
+    setInterval() { return 1; },
+    clearInterval() {},
+    go() {}
+  };
+  vm.runInNewContext(C.PAGE_HTML.slice(focusStart, focusEnd), context);
+  context.FOCUS.options = options;
+  return { context, stored, nodes, calls };
+}
+
+function allNodes(root) {
+  return [root, ...root.children.flatMap(allNodes)];
+}
+
+const savedAction = { kind: "action", id: "action-1", title: "Write the report", minutes: 10, context: "@desk" };
+const prefs = focusHarness('{"minutes":10,"energy":"medium"}', [savedAction]);
+assert.equal(prefs.context.FOCUS.minutes, 10);
+assert.equal(prefs.context.FOCUS.energy, "medium");
+prefs.context.drawFocus();
+const focusButtons = allNodes(prefs.nodes.get("focus"));
+focusButtons.find((n) => n.textContent === "5 min").onclick();
+focusButtons.find((n) => n.textContent === "High energy").onclick();
+assert.deepEqual(JSON.parse(prefs.stored.get("cmp-focus-prefs")), { minutes: 5, energy: "high" });
+assert.equal(prefs.context.FOCUS.minutes, 5);
+assert.equal(prefs.context.FOCUS.energy, "high");
+const invalidPrefs = focusHarness('{"minutes":999,"energy":"unknown"}', [savedAction]);
+assert.equal(invalidPrefs.context.FOCUS.minutes, 5);
+assert.equal(invalidPrefs.context.FOCUS.energy, "low");
+console.log("ok   Focus restores and safely stores device-local time and energy selections");
+
+const accessible = focusHarness(null, [savedAction]);
+accessible.context.drawFocus();
+const rendered = allNodes(accessible.nodes.get("focus"));
+const timer = accessible.nodes.get("focus-clock");
+assert.equal(timer.attributes.role, "timer");
+assert.equal(timer.attributes["aria-label"], "Focus timer");
+assert.equal(timer.attributes["aria-live"], "polite");
+const checklist = rendered.filter((n) => ["Make the smallest possible start", "Stop when the timer ends", "Tap Done — a partial try counts"].includes(n.attributes["aria-label"]));
+assert.equal(checklist.length, 3);
+for (const button of checklist) {
+  assert.equal(button.tagName, "BUTTON");
+  assert.equal(button.attributes["aria-pressed"], "false");
+  assert.equal(typeof button.onclick, "function");
+  button.onclick();
+  assert.equal(accessible.nodes.get("focus-clock").attributes.role, "timer");
+}
+assert.equal(accessible.context.FOCUS.checks[0], true);
+console.log("ok   timer and checklist expose screen-reader semantics and native keyboard controls");
+
+const tooLong = focusHarness(null, [savedAction]);
+tooLong.context.drawFocus();
+const tooLongButton = allNodes(tooLong.nodes.get("focus")).find((n) => n.textContent === "Too long — make a 2-minute step");
+assert.ok(tooLongButton);
+await tooLongButton.onclick();
+const smallerStep = tooLong.calls.find((call) => call.path === "/companion/api/actions" && call.json);
+assert.deepEqual(JSON.parse(JSON.stringify(smallerStep.json)), {
+  title: "Start with 2 minutes: Write the report",
+  context: "@desk",
+  energy: "low",
+  minutes: 2,
+  gtd: "next",
+  source: "focus-too-long"
+});
+assert.equal(tooLong.calls.some((call) => call.path === "/companion/api/chat"), false);
+assert.equal(allNodes(tooLong.nodes.get("focus")).find((n) => n.attributes.role === "status").attributes["aria-live"], "polite");
+const minimumStep = focusHarness(null, [{ ...savedAction, minutes: 2 }]);
+minimumStep.context.drawFocus();
+assert.equal(allNodes(minimumStep.nodes.get("focus")).some((n) => n.textContent.startsWith("Too long")), false);
+console.log("ok   Too long creates a deterministic 2-minute next action without AI");
+
 const worker = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const mirror = fs.readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
-assert.ok(worker.includes('var VERSION = "4.29.0-one-thing"'));
-assert.ok(worker.includes('const COMPANION_VERSION = "1.14.0"'));
+assert.ok(worker.includes('var VERSION = "4.30.0"'));
+assert.ok(worker.includes('const COMPANION_VERSION = "1.15.0"'));
 assert.ok(worker.includes("COMPANION-FOCUS-1"));
 assert.equal(worker, mirror);
 console.log("ok   versions bumped and deployed mirror is byte-identical");
