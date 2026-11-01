@@ -260,7 +260,7 @@ const settle = async (raw) => { const r1 = await tick(raw); await tick(raw); awa
   ok(!JSON.stringify([qa(raw, "SELECT * FROM decision_log"), qa(raw, "SELECT * FROM breach_diagnoses"), qa(raw, "SELECT * FROM breach_diagnosis_events")]).includes("7f3a"), "TAINT: the payload in a title and a plan reason reaches no ledger table");
   // a marker the planner never reads ends with the lease (30 minutes), not with a verified case
   const rawS = mk(); await tick(rawS); await tick(rawS);
-  rawS.prepare("UPDATE breach_diagnoses SET lease_until = '2026-01-01T00:00:00Z' WHERE rule_id = 'TL-R01-rearm'").run();
+  rawS.prepare("UPDATE breach_diagnoses SET applied_at = '2026-01-01T00:00:00Z', lease_until = '2026-01-01T00:00:00Z' WHERE rule_id = 'TL-R01-rearm'").run();
   const rS = await tick(rawS);
   ok(rS.failed === 3 && rS.verified === 0 && [5001, 5002, 5010].every((i) => dg(rawS, i).state === "failed" && dg(rawS, i).error_code === "lease-expired"), "a marker the planner never read ends as lease-expired (and demotes the rule), never as verified", { failed: rS.failed, verified: rS.verified });
 }

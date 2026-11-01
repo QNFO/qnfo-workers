@@ -49,7 +49,7 @@ function statements(text) {
   return out;
 }
 
-const triggerBlock = migration.match(/DROP TRIGGER IF EXISTS queue_sla_tick_10m;\s*CREATE TRIGGER queue_sla_tick_10m[\s\S]*?\nEND;/)?.[0];
+const triggerBlock = migration.match(/^DROP TRIGGER IF EXISTS queue_sla_tick_10m;\s*CREATE TRIGGER queue_sla_tick_10m[\s\S]*?\nEND;/m)?.[0];
 ok(!!triggerBlock, "migration replaces the SLA trigger");
 const rest = statements(migration.replace(triggerBlock, ""));
 const backup = rest.find((statement) => statement.startsWith("CREATE TABLE IF NOT EXISTS bak_20261101_queue_sla_tick"));

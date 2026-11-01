@@ -66,7 +66,7 @@ const metric = db.prepare("SELECT last_value, owner FROM metric_registry WHERE m
 assert.equal(metric.owner, "qnfo-fleet-control", "metric owner points to the active issue loop");
 assert.equal(metric.last_value, "2.6", "the hourly metric uses the latest open/reopen cycle and falls back to created_at");
 
-const groups = db.prepare("SELECT family, owner, closes_7d, avg_open_to_close_h, max_open_to_close_h FROM v_issue_mttr_by_family_owner_7d ORDER BY family, owner").all();
+const groups = db.prepare("SELECT family, owner, closes_7d, avg_open_to_close_h, max_open_to_close_h FROM v_issue_mttr_by_family_owner_7d ORDER BY family, owner").all().map((row) => ({ ...row }));
 assert.deepEqual(groups, [
   { family: "METRIC-TRIGGER", owner: "qnfo-social", closes_7d: 3, avg_open_to_close_h: 2.2, max_open_to_close_h: 4 },
   { family: "RESEARCH-TERMINAL", owner: "qnfo-ops", closes_7d: 1, avg_open_to_close_h: 4, max_open_to_close_h: 4 },
@@ -86,7 +86,7 @@ db.exec(rollback);
 assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'view' AND name = 'v_issue_mttr_by_family_owner_7d'").get().n, 0);
 assert.equal(db.prepare("SELECT formula, owner FROM metric_registry WHERE metric = 'mttr_h_7d'").get().owner, "qnfo-kaizen");
 assert.equal(db.prepare("SELECT formula FROM metric_registry WHERE metric = 'mttr_h_7d'").get().formula, "old first-open formula");
-assert.deepEqual(db.prepare("SELECT owner, action FROM analytics_metric_triggers WHERE id = 3464").get(), { owner: "qnfo-kaizen", action: "old action" });
+assert.deepEqual({ ...db.prepare("SELECT owner, action FROM analytics_metric_triggers WHERE id = 3464").get() }, { owner: "qnfo-kaizen", action: "old action" });
 assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger' AND name = 'doctrine_rev5_tick'").get().n, 1);
 
 console.log("mttr-cycle-accounting: all passed");
