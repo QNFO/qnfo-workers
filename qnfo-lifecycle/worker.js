@@ -2917,8 +2917,8 @@ async function paperLearnStatus(env, slug) {
 //                     note cites the mechanism and the time, so the citation is verified when the row is settled, not taken from a model;
 //   rejected          two model families, asked separately, both say reject with a reason (the paper's own convention, an analogy only, or a
 //                     conflict with a catalogue mechanism whose probe is ok); a single reject, an apply or an unreadable answer settles nothing;
-//   apply             a model says the fleet has a gap: the row stays proposed with the proposal in its note and is not triaged again, so the
-//                     issue stays open for a doer.
+//   probation         no verified mechanism covers the learning: an adopted goal keeps the proposal and a machine-checkable DoD until it is
+//                     applied or rejected, while the paper-learning row leaves the issue's proposed backlog.
 // The reader also strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before it reads, so a
 // notice is not learned as the paper's claim. ops_config paper_learn_triage = off stops the triage. Revert one row:
 // UPDATE paper_learnings SET fleet_status = 'proposed' WHERE id = <id>.
@@ -2980,11 +2980,25 @@ async function plTriageModel(env, L, mechs, now) {
     return { settled: true, status: "rejected", note: PL_TRIAGE_MARK + " rejected (" + answers[0].cat + "; two model families agree, " + now + "): " + answers[0].reason + (cited ? " Conflicts with " + cited.mech_key + ": " + cited.citation + " (probe ok)" : "") };
   }
   var apply = answers.filter(function (a) { return a.d === "apply" && a.reason.length >= 20; })[0];
-  if (apply) return { settled: false, apply: PL_TRIAGE_MARK + " apply (" + String(apply.model || "").split("/").pop() + ", " + now + "): " + apply.reason };
+  if (apply) return { settled: false, apply: { model: String(apply.model || "").split("/").pop(), reason: apply.reason } };
   return { settled: false, why: "no agreement" };
 }
+async function plProbationGoal(env, L, proposal, now) {
+  var id = Number(L && L.id);
+  if (!Number.isSafeInteger(id) || id < 1) return null;
+  var goalKey = "PAPER-LEARN-" + id;
+  var source = "paper_learnings " + id + " (PAPER-LEARN-TRIAGE-1; " + plStr(L.slug, 120) + " " + plStr(L.version, 40) + ")";
+  var statement = ("Probationary direct learning from " + plStr(L.slug, 120) + " v" + plStr(L.version, 40) + ": " + plStr(L.claim, 500)).slice(0, 700);
+  var alignment = ("PAPER-LEARN-TRIAGE-1 probation: no verified fleet mechanism covers this direct learning. Apply signal from " + plStr(proposal.model, 80) + ": " + plStr(proposal.reason, 400)).slice(0, 700);
+  var dod = "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM paper_learnings WHERE id = " + id + " AND fleet_status NOT IN ('applied', 'rejected')";
+  await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO goals (goal_key, statement, goal_type, parent_objective, alignment, source, priority, status, dod, owner) VALUES (?1, ?2, 'instrumental', 'mission', ?3, ?4, 1, 'adopted', ?5, 'qnfo-code-orchestrator')")
+    .bind(goalKey, statement, alignment, source, dod).run();
+  var goal = await env.QNFO_AUDIT.prepare("SELECT id, source FROM goals WHERE goal_key = ?1").bind(goalKey).first();
+  if (!goal || goal.source !== source) return null;
+  return { id: goal.id, key: goalKey, alignment: alignment };
+}
 async function plTriageTick(env, opts) {
-  var o = opts || {}, out = { marker: PL_TRIAGE_MARK, examined: 0, in_place: 0, rejected: 0, apply: 0, kept: 0 };
+  var o = opts || {}, out = { marker: PL_TRIAGE_MARK, examined: 0, in_place: 0, rejected: 0, apply: 0, goals: 0, kept: 0 };
   try {
     var flag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'paper_learn_triage'").first();
     if (flag && String(flag.value || "").trim().toLowerCase() === "off") { out.skipped = true; return out; }
@@ -3010,8 +3024,15 @@ async function plTriageTick(env, opts) {
         await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'proposed'").bind(L.id, v.status, v.note.slice(0, 700), now).run();
         out.rejected++;
       } else if (v.apply) {
-        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'proposed'").bind(L.id, v.apply.slice(0, 700), now).run();
-        out.apply++;
+        var goal = await plProbationGoal(env, L, v.apply, now);
+        if (goal) {
+          var note = (PL_TRIAGE_MARK + " probation: goal " + goal.key + " (goals.id " + goal.id + ", " + now + "): " + goal.alignment).slice(0, 700);
+          await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'probation', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'proposed'").bind(L.id, note, now).run();
+          out.goals++;
+          out.apply++;
+        } else {
+          out.kept++;
+        }
       } else out.kept++;
     }
   } catch (e) {
