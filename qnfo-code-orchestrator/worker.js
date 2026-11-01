@@ -3306,12 +3306,15 @@ async function planIssues(env, opts) {
     // (PLAN_CHEAP_PER_TICK rows) is read after it, to be recorded as before (PLAN-UNTRUSTED-RECORD-1), so no open issue is left without a row.
     trustRules = await planTrustList(env);
     const recheck = new Date(now - PLAN_RECHECK_DAYS * 864e5).toISOString(), tp = planTrustedSql(trustRules);
-    const sel = "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id " +
-      "WHERE a.status = 'open' AND COALESCE(a.description, '') NOT LIKE '%code-task:%' AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) AND ";
     // PLAN-FIRST-TIME-FIRST-1 (0.29.3, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST): inside one priority class a first-time plan (no issue_plans row) is read before a re-plan (a verdict
     // older than PLAN_RECHECK_DAYS), so the daily cap of model calls is not spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 re-plans).
     const ageActions = await env.AUDIT_DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'issue_age_actions'").first();
     const ageActionFirst = ageActions ? "CASE WHEN EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h') THEN 0 ELSE 1 END, " : "";
+    const codeTaskFilter = ageActions
+      ? "(COALESCE(a.description, '') NOT LIKE '%code-task:%' OR EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h'))"
+      : "COALESCE(a.description, '') NOT LIKE '%code-task:%'";
+    const sel = "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id " +
+      "WHERE a.status = 'open' AND " + codeTaskFilter + " AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) AND ";
     const ord = " ORDER BY " + ageActionFirst + "CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, (p.issue_id IS NULL) DESC, a.id LIMIT ";
     const trusted = (await env.AUDIT_DB.prepare(sel + tp.sql + ord + PLAN_WINDOW).bind(recheck, ...tp.args).all()).results || [];
     const untrusted = (await env.AUDIT_DB.prepare(sel + "NOT " + tp.sql + ord + PLAN_CHEAP_PER_TICK).bind(recheck, ...tp.args).all()).results || [];

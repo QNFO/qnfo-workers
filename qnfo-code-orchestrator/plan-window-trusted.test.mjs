@@ -154,13 +154,13 @@ ok(Array.isArray(h.capabilities) && h.capabilities.includes("plan-trusted-first"
   });
   const overdue = issue(env, {
     title: "METRIC-TRIGGER-242-Q08: q08-signal-engine",
-    description: "q08-signal-engine /api/f has no live doer",
+    description: "q08-signal-engine /api/f has no live doer\ncode-task: repo=qnfo-workers path=q08-signal-engine/worker.js",
     priority: "critical",
   });
   env.AUDIT_DB._db.prepare("INSERT INTO issue_age_actions (issue_id, rung) VALUES (?, '24h')").run(overdue);
   const r = await plan(env);
   ok(r.planned && r.issue === overdue && r.outcome === "queued" && prompts.length === 1,
-    "6 a critical 24h no-doer issue outside the ordinary 40-row window is planned first", r);
+    "6 a critical 24h no-doer issue with a stale code-task marker outside the ordinary 40-row window is planned first", r);
   ok(tasks(env).length === 1 && tasks(env)[0].goal.includes("[issue #" + overdue + "]"),
     "6b the trusted planner creates only the target issue task", tasks(env).map((t) => t.goal));
 }
