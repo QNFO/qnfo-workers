@@ -32,6 +32,7 @@ def with_rows(rows):
 same = [{"pass": 1, "observed": "0"}] * rc.STEADY_RUN
 with_rows(same)
 check(rc.steady_state_cadence("issue-1", "pass", 1) == rc.STEADY_CADENCE_H, "six identical passes back off")
+check(rc.steady_state_cadence("issue-1", "pass", 1, "runner-https") == 1, "runtime checks retain their hourly cadence")
 check(rc.steady_state_cadence("issue-1", "fail", 1) == 1, "a failing verdict keeps its cadence")
 check(rc.steady_state_cadence("issue-1", "deferred", 1) == 1, "a deferred verdict keeps its cadence")
 with_rows(same[:-1])
@@ -44,6 +45,10 @@ with_rows(same)
 check(rc.steady_state_cadence("issue-1", "pass", 3) == 3, "a contract already slower than the ceiling is not sped up")
 check(rc.STEADY_CADENCE_H * 60 <= 120, "the back-off never exceeds 120 minutes (SLA-120M-1)")
 check(rc.next_due_offset(rc.STEADY_CADENCE_H) == "+52 minutes", "the backed-off contract is due again in 52 minutes", rc.next_due_offset(rc.STEADY_CADENCE_H))
+check(rc.next_due_offset(rc.STEADY_CADENCE_H, steady_state=True) == "+105 minutes",
+      "stable checks use the full two-hour ceiling instead of running every hourly consumer tick",
+      rc.next_due_offset(rc.STEADY_CADENCE_H, steady_state=True))
+check(rc.RT_HOLD_CADENCE_H == 1, "held runtime checks are reverified hourly")
 
 print("all passed" if not fails else "%d failed" % fails)
 sys.exit(1 if fails else 0)
