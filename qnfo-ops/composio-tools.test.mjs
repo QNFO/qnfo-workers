@@ -17,7 +17,7 @@ const ok = (condition, message, value) => {
   if (condition) pass++;
   else { fail++; console.log("FAIL " + message + (value !== undefined ? " :: " + JSON.stringify(value).slice(0, 400) : "")); }
 };
-const env = { COMPOSIO_API_KEY: "synthetic-composio-key", COMPOSIO_USER_ID: "qnfo-ops-nonpersonal" };
+const env = { COMPOSIO_API_KEY: "test-key", COMPOSIO_USER_ID: "qnfo-ops-nonpersonal" };
 const account = (overrides = {}) => ({ data: { id: "ca_test_123", user_id: env.COMPOSIO_USER_ID, status: "ACTIVE", toolkit: { slug: "gmail" }, ...overrides } });
 const response = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const scriptFetch = (handler) => {
