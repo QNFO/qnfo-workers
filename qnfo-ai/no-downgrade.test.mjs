@@ -69,7 +69,7 @@ const KIMI = "@cf/moonshotai/kimi-k2.6";
   ok(run({ no_downgrade: true, max_tokens: 16 }, "qnfo-ai-calibration").__pinModel === true, "it pins the model, so the fleet cap steer skips the probe too");
   ok(run(null, "qnfo-ai-calibration").__noDowngrade === undefined, "a missing body is safe");
 }
-ok(src.indexOf("body.no_downgrade === true") < src.indexOf("await spendGovern(env, _spendWantEns"), "the flag is set before the governor is consulted");
+ok(src.indexOf("body.no_downgrade === true") < src.indexOf('await spendGovern(env, "gateway", _spendWantEns'), "the flag is set before the governor is consulted");
 const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(v && (Number(v[1]) > 5 || Number(v[2]) > 37 || (Number(v[2]) === 37 && Number(v[3]) >= 0)), "VERSION is at least 5.37.0", v && v[0]);
 ok(mirror === src, "deployed-current.worker.js is identical to worker.js");
