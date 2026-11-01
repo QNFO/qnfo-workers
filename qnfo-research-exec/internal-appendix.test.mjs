@@ -65,7 +65,9 @@ ok(!mod.__sections(withApp).some((h) => /Divergence|Claim attribution/i.test(h))
 const calls = (src.match(/stripInternalAppendices\(/g) || []).length;
 ok(calls >= 5, "stripInternalAppendices is defined once and called at the reconcile, complete, draft-row and version-queue boundaries", calls);
 ok(/_stripped = stripInternalAppendices\(finalText\)/.test(src) && /var _noApp = stripInternalAppendices\(paper\)/.test(src) && /const body = stripInternalAppendices\(String\(md\)\.trim\(\)\)\.trim\(\)/.test(src) && /row\.corrected_md = stripInternalAppendices\(String\(row\.corrected_md\)\)/.test(src), "the four call sites are in place");
-ok(mirror === src, "the deployed-current mirror is identical to worker.js");
+const sourceVersion = /var VERSION = "([^"]+)"/.exec(src)?.[1];
+ok(/var VERSION = "([^"]+)"/.exec(mirror)?.[1] === sourceVersion, "the Wrangler-built deploy mirror carries the source VERSION");
+ok(mirror.includes("function stripInternalAppendices") && mirror.includes("name the drafts A, B and C nowhere"), "the built deploy mirror includes the appendix strip and prompt safeguards");
 const ver = String(mod.__version).split(/[.-]/).map(Number);
 ok(ver[0] === 0 && (ver[1] > 36 || (ver[1] === 36 && ver[2] >= 1)), "VERSION is at least 0.36.1", mod.__version);
 console.log(pass + " passed, " + fail + " failed");

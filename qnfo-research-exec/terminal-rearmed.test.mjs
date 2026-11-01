@@ -80,6 +80,7 @@ park("dddddddd-4", "PARKED-POISON-1: x; last error: revise: no applicable edit f
 park("rem-eeee-5", "PARKED-POISON-1: x; last error: revise: no applicable edit", 0, "2026-07-01"); // a remediation row is the sweep's own
 park("ffffffff-6", "PARKED-POISON-1: stale researching claim with recover_count exhausted (6); not re-armed", 0, "2026-07-02"); // not a content failure
 park("gggggggg-7", "revise: no applicable edit", 0, "2026-07-03", "queued", "ground"); // not parked
+park("hhhhhhhh-8", "PARKED-REVISE-NOOP-CEILING-1: revise_count=2; no applicable edit", 0, "2026-07-01"); // the no-op ceiling is terminal
 r.prepare("INSERT INTO agent_issues (id,title,status) VALUES (1,'RESEARCH-TERMINAL bbbbbbbb: revise: no applicable edit','open'),(2,'RESEARCH-TERMINAL aaaaaaaa: x','open')").run();
 const renv = { QNFO_AUDIT: d1(r) };
 const g1 = await parkedRegroundTick(renv);
@@ -95,7 +96,7 @@ assert.equal(g2.regrounded, 1, "the next run takes the oldest remaining candidat
 assert.equal(r.prepare("SELECT status FROM research_queue WHERE id='cccccccc-3'").get().status, "queued");
 const g3 = await parkedRegroundTick(renv);
 assert.equal(g3.regrounded, 0, "spent rows, remediation rows and non-content parks are never returned");
-for (const id of ["dddddddd-4", "rem-eeee-5", "ffffffff-6"]) assert.equal(r.prepare("SELECT status FROM research_queue WHERE id=?").get(id).status, "wontfix", id + " untouched");
+for (const id of ["dddddddd-4", "rem-eeee-5", "ffffffff-6", "hhhhhhhh-8"]) assert.equal(r.prepare("SELECT status FROM research_queue WHERE id=?").get(id).status, "wontfix", id + " untouched");
 // park_rearm = off stops it with the other sweeps
 r.prepare("UPDATE research_queue SET status='wontfix', stage='parked', terminal_rearms=0 WHERE id='aaaaaaaa-1'").run();
 r.prepare("INSERT INTO ops_config (key, value) VALUES ('park_rearm','off')").run();

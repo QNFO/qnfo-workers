@@ -30,6 +30,15 @@
 //        * One credential (GH_PAT_TOKEN = QNFO_GH_PAT), never printed. A 401 or a rate limit stops the run; a
 //          refusal for one repository skips that repository's other issues. Every failure is a ::warning:: and the exit code stays 0, so a
 //          failed sweep cannot file a WORKFLOW-FAILED-1 issue that the next sweep would assign again.
+//        * Refused starts are not sessions: Copilot answers an assignment it cannot start ("unable to start working on this issue") with a comment and leaves the
+//          issue assigned. Measured 2026-11-01: 109 of the 153 open issues assigned to Copilot carried that comment, 107 for lack of AI credits (the 2026-10-31
+//          outage), and the sweep had counted each as a session, so 87 of them, the red-main issue among them, read "redrive-exhausted" and were never worked. The
+//          timeline is now read before that decision: refusals do not spend the re-drive, a credit refusal never counts against an issue, any other refusal is
+//          bounded (--max-other-failures 3), and the cooldown still applies after one.
+//        * Credit canary: the first assignment of a run is checked for a refusal after a few seconds; AI credits exhausted stops the run (status credits-exhausted,
+//          a ::warning::) instead of leaving a refusal comment on every issue, and a pre-flight read keeps the next runs from assigning for 30 minutes.
+//        * Red main first: an issue labelled ci-watchdog is dispatched before every other issue (the one that fired the run still goes first).
+//        * Read budget: a run stops examining issues after --max-calls (170) reads of the PAT the whole fleet shares.
 //        * Kill switch: the repository variable ASSIGN_COPILOT_SWEEP = off stops the sweep, new-only stops the re-drive.
 //        * Throttle: workflow_run fires about once a minute while the fleet merges, so only the first run of each --window-minutes (10) window
 //          sweeps; issues and manual runs always do. A throttled run costs one read.
@@ -51,7 +60,15 @@ export const TARGET_OVERRIDES = { "QNFO/qnfo-fleet-issues": "QNFO/qnfo-workers" 
 export const LOCKS_URL = "https://qnfo-deploy-guard.q08.workers.dev/work-locks";
 export const TRUSTED_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
 export const TRUSTED_BOTS = ["github-actions[bot]"];
-export const DEFAULTS = { hours: 720, max: 10, maxOpen: 12, redriveMax: 5, stalledHours: 2, maxRedrives: 1, pages: 5, pauseMs: 1000, windowMinutes: 10 };
+export const DEFAULTS = { hours: 720, max: 10, maxOpen: 12, redriveMax: 5, stalledHours: 2, maxRedrives: 1, maxOtherFailures: 3, pages: 5, pauseMs: 1000, windowMinutes: 10, canaryMs: 12000, creditsCooldownMinutes: 30, maxCalls: 170 };
+// Copilot answers an assignment it cannot start with a comment on the issue and leaves the issue assigned to it. Measured 2026-11-01: 109 of the 153 open issues
+// assigned to Copilot carry that comment, 107 of them "You don't have sufficient GitHub AI Credits to start a session" (the 2026-10-31 credit outage). Those
+// assignments are not sessions, so they must not spend an issue's re-drive (they did: 87 issues, the red-main issue among them, read "redrive-exhausted" and were
+// never worked), and a credit refusal is a billing outage, not a property of the issue, so it never counts against it at all.
+export const START_FAILED_RE = /unable to start working on this issue/i;
+export const CREDITS_RE = /sufficient GitHub AI Credits/i;
+// A red main blocks every deploy, so the issue ci-watchdog files for it is dispatched before every other issue.
+export const PRIORITY_LABEL = "ci-watchdog";
 
 // Static text only: nothing from the issue is copied into it.
 export const INSTRUCTIONS = "Resolve this issue with code changes in a pull request, not with a plan or a report. Reference the issue in the pull request, run the repository's tests and linters, and mark the pull request ready for review when the work is complete. Never hand the work back to a person and never assign the issue to a user. If the work-claim service (qnfo-deploy-guard) cannot be reached from this sandbox because of the cloud-agent firewall, that is an environment limit and not a refusal: read the open pull requests and copilot/ branches through the GitHub API for the paths you will change, skip any file another open pull request changes, write 'work-claim: unreachable (<verbatim error>)' in the pull request body (CLAUDE.md, CLAIM-UNREACHABLE-FALLBACK-1), and continue. An explicit acquired:false answer from the service, a live secret lease and a HOLD: comment are still binding.";
@@ -97,7 +114,8 @@ export function normalize(it) {
   return {
     owner: m ? m[1] : "", repo: m ? m[2] : "", number: it.number, title: it.title || "", state: it.state, pr: !!it.pull_request,
     login: (it.user && it.user.login) || "", assoc: it.author_association || "NONE",
-    assignees: (it.assignees || []).map((a) => a.login), created_at: it.created_at || ""
+    assignees: (it.assignees || []).map((a) => a.login), created_at: it.created_at || "",
+    labels: (it.labels || []).map((l) => (typeof l === "string" ? l : (l && l.name) || ""))
   };
 }
 
@@ -185,6 +203,46 @@ function hasLivePr(timeline) {
   return (timeline || []).some((e) => e && e.event === "cross-referenced" && e.source && e.source.issue && e.source.issue.pull_request && (e.source.issue.state === "open" || e.source.issue.pull_request.merged_at));
 }
 
+// Copilot's own "unable to start" comments in an issue timeline: how many assignments never became a session, and how many of those were credit refusals.
+export function startFailures(timeline) {
+  let all = 0, credits = 0;
+  for (const e of timeline || []) {
+    if (!e || e.event !== "commented" || !(isCopilot(e.actor && e.actor.login) || isCopilot(e.user && e.user.login))) continue;
+    const body = String(e.body || "");
+    if (!START_FAILED_RE.test(body)) continue;
+    all++;
+    if (CREDITS_RE.test(body)) credits++;
+  }
+  return { all, credits, other: all - credits };
+}
+
+// Has Copilot refused a start for lack of AI credits within the last `minutes`? One search for the issues updated in that window, then their comments since it began:
+// an issue's updated_at also moves for a label or a bot comment, so the comment's own time decides. While it holds, assigning anything would only add a refusal comment.
+export async function creditsBreaker(api, org, nowMs, minutes) {
+  const since = sinceIso(nowMs, minutes / 60);
+  const q = "org:" + org + ' is:issue is:open archived:false assignee:app/copilot-swe-agent "sufficient GitHub AI Credits" in:comments updated:>=' + since;
+  const r = await api.req("GET", "/search/issues?q=" + encodeURIComponent(q) + "&sort=updated&order=desc&per_page=5");
+  if (r.status !== 200 || !r.body || !Array.isArray(r.body.items)) return { tripped: false, checked: 0 };
+  for (const it of r.body.items) {
+    const n = normalize(it);
+    const c = await api.req("GET", "/repos/" + n.owner + "/" + n.repo + "/issues/" + n.number + "/comments?since=" + encodeURIComponent(since) + "&per_page=30");
+    if (c.status === 200 && Array.isArray(c.body) && c.body.some((x) => isCopilot(x.user && x.user.login) && CREDITS_RE.test(String(x.body || "")) && Date.parse(x.created_at) >= Date.parse(since))) {
+      return { tripped: true, issue: n.owner + "/" + n.repo + "#" + n.number, checked: r.body.items.length };
+    }
+  }
+  return { tripped: false, checked: r.body.items.length };
+}
+
+// After the first assignment of a run, give Copilot a few seconds to refuse it and read the answer. A start that fails for lack of AI credits would fail for every
+// later issue too, so the run stops there (measured live: the refusal comment arrives about five seconds after the assignment).
+async function canaryRefusal(api, slug, number, sinceMs, d, waitMs) {
+  if (waitMs) await d.sleep(waitMs);
+  const c = await api.req("GET", "/repos/" + slug + "/issues/" + number + "/comments?since=" + encodeURIComponent(sinceIso(sinceMs, 0)) + "&per_page=30");
+  if (c.status !== 200 || !Array.isArray(c.body)) return "";
+  const hit = c.body.find((x) => isCopilot(x.user && x.user.login) && START_FAILED_RE.test(String(x.body || "")));
+  return hit ? (CREDITS_RE.test(String(hit.body || "")) ? "credits" : "other") : "";
+}
+
 const stopsRun = (r) => r.status === 401 || (r.status === 403 && /rate limit|abuse/i.test(r.message)) || r.status === 429;
 
 // workflow_run fires about once a minute while the fleet is merging, and a full sweep costs ~90 reads of the shared PAT, so only the FIRST run of each
@@ -206,7 +264,7 @@ export async function run(opts, deps) {
   const d = Object.assign({ fetchImpl: fetch, now: Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)), env: process.env }, deps || {});
   const dry = o.mode === "dry";
   const sweep = ["on", "new-only", "off"].includes(String(o.sweep || "on").toLowerCase()) ? String(o.sweep || "on").toLowerCase() : "on";
-  const sum = { action: "assign-copilot-sweep", mode: dry ? "dry" : "live", agent: AGENT, hours: o.hours, max: o.max, sweep, considered: 0, assigned: 0, redriven: 0, skipped: {}, deferred: 0, errors: [], agent_sync: null, credential: o.token ? "QNFO_GH_PAT" : "none" };
+  const sum = { action: "assign-copilot-sweep", mode: dry ? "dry" : "live", agent: AGENT, hours: o.hours, max: o.max, sweep, considered: 0, assigned: 0, redriven: 0, redriven_after_start_failure: 0, skipped: {}, deferred: 0, errors: [], agent_sync: null, credential: o.token ? "QNFO_GH_PAT" : "none" };
   const skip = (why, n) => { sum.skipped[why] = (sum.skipped[why] || 0) + 1; if (n) sum.skipped_items = (sum.skipped_items || []).concat(n.owner + "/" + n.repo + "#" + n.number + " " + why).slice(0, 40); };
   if (sweep === "off") { sum.status = "disabled"; sum.note = "ASSIGN_COPILOT_SWEEP is off"; return sum; }
   if (!o.token) { sum.status = "no-credential"; sum.note = "the repository secret QNFO_GH_PAT is empty or unset: assigning Copilot needs a user token, the workflow GITHUB_TOKEN is refused"; return sum; }
@@ -222,6 +280,16 @@ export async function run(opts, deps) {
   if (pr.ok) { sum.open_copilot_prs = pr.count; capacity = Math.min(o.max, Math.max(0, o.maxOpen - pr.count)); }
   else sum.errors.push({ where: "open Copilot pull requests", http: pr.http, message: pr.message });
   sum.capacity = capacity;
+  // Pre-flight: while Copilot is refusing starts for lack of AI credits, assigning would only add a refusal comment to an issue.
+  if (!dry && capacity > 0) {
+    const br = await creditsBreaker(api, org, d.now, o.creditsCooldownMinutes);
+    sum.credits_check = br.tripped ? "tripped" : "clear";
+    if (br.tripped) {
+      sum.status = "credits-exhausted"; sum.credits_exhausted = br.issue; sum.calls = api.calls.length;
+      sum.note = "Copilot refused a start for lack of AI credits within the last " + o.creditsCooldownMinutes + " minutes (" + br.issue + "); nothing is assigned until that window passes";
+      return sum;
+    }
+  }
   const doers = await fetchDoers(d.fetchImpl);
   sum.work_locks = doers.ok ? "read" : "unreachable";
   const landed = sweep === "on" ? await fallbackLanded(api) : false;
@@ -235,7 +303,7 @@ export async function run(opts, deps) {
   // The issue that fired the run goes first, then the new issues oldest first so a backlog drains in the order it arrived, then the stalled ones.
   if (o.priority) {
     const r = await api.req("GET", "/repos/" + o.priority.repo + "/issues/" + o.priority.number);
-    if (r.status === 200 && r.body) add(normalize(r.body));
+    if (r.status === 200 && r.body) add(Object.assign(normalize(r.body), { priority: true }));
     else sum.errors.push({ where: "priority " + o.priority.repo + "#" + o.priority.number, http: r.status, message: r.message });
   }
   const fresh = await searchIssues(api, "org:" + org + " is:issue is:open archived:false created:>=" + sinceIso(d.now, o.hours), o.pages);
@@ -246,6 +314,9 @@ export async function run(opts, deps) {
     if (stalled.error) sum.errors.push({ where: "search Copilot-assigned issues", http: stalled.error.http, message: stalled.error.message });
     stalled.items.map(normalize).sort(byAge).forEach(add);
   }
+  // The issue that fired the run first, then a red-main issue (ci-watchdog), then everything else in the order built above (new issues oldest first, then the stalled).
+  const tier = (n) => (n.priority ? 0 : (n.labels || []).includes(PRIORITY_LABEL) ? 1 : 2);
+  candidates.sort((a, b) => tier(a) - tier(b));
   const repos = new Map(), refused = new Set();
   const repoInfo = async (slug) => {
     if (!repos.has(slug)) {
@@ -254,12 +325,14 @@ export async function run(opts, deps) {
     }
     return repos.get(slug);
   };
-  let attempts = 0, redrives = 0, stopped = false;
+  let attempts = 0, redrives = 0, stopped = false, canaried = false;
   for (let idx = 0; idx < candidates.length; idx++) {
     const n = candidates[idx];
     if (stopped) break;
     // Back-pressure and the run cap end the run: nothing further is examined, so a saturated run costs no per-issue calls.
     if (attempts >= capacity) { sum.deferred += candidates.length - idx; sum.deferred_why = pr.ok && pr.count >= o.maxOpen ? "open Copilot pull requests at the limit" : "per-run cap"; break; }
+    // The per-run read budget bounds what a sweep may spend of the PAT the whole fleet shares (about 90 reads once the stalled backlog is in play).
+    if (api.calls.length >= o.maxCalls) { sum.deferred += candidates.length - idx; sum.deferred_why = "read budget"; break; }
     sum.considered++;
     const slug = n.owner + "/" + n.repo;
     const hasCopilot = n.assignees.some(isCopilot);
@@ -283,14 +356,20 @@ export async function run(opts, deps) {
     if (ev.status !== 200 || !Array.isArray(ev.body)) { skip("history-unreadable", n); continue; }
     const given = ev.body.filter((e) => e.event === "assigned" && e.assignee && isCopilot(e.assignee.login));
     if (!hasCopilot && given.length) { skip("previously-assigned", n); continue; }
+    let refused0 = 0;
     if (hasCopilot) {
       // Stalled: Copilot is the assignee, the session is older than --stalled-hours, and no open or merged pull request references the issue.
-      if (given.length > o.maxRedrives) { skip("redrive-exhausted", n); continue; }
       const last = given.reduce((t, e) => Math.max(t, Date.parse(e.created_at) || 0), 0);
       if (!last || d.now - last < o.stalledHours * 3600000) { skip("session-recent", n); continue; }
       const tl = await api.req("GET", "/repos/" + slug + "/issues/" + n.number + "/timeline?per_page=100");
       if (tl.status !== 200 || !Array.isArray(tl.body)) { skip("history-unreadable", n); continue; }
       if (hasLivePr(tl.body)) { skip("has-live-pr", n); continue; }
+      // An assignment Copilot refused to start is not a session and must not spend the issue's re-drive. A credit refusal never counts against the issue at all;
+      // any other refusal is bounded by maxOtherFailures so a refusal that is a property of the issue cannot loop.
+      const sf = startFailures(tl.body);
+      if (given.length - sf.all > o.maxRedrives) { skip("redrive-exhausted", n); continue; }
+      if (sf.other > o.maxOtherFailures) { skip("start-failures-exhausted", n); continue; }
+      refused0 = sf.all;
     }
     attempts++;
     if (hasCopilot) redrives++;
@@ -306,12 +385,21 @@ export async function run(opts, deps) {
     const r = await api.req("POST", "/repos/" + slug + "/issues/" + n.number + "/assignees", body);
     const now = r.body && Array.isArray(r.body.assignees) ? r.body.assignees.map((a) => a.login) : [];
     if ((r.status === 200 || r.status === 201) && now.some(isCopilot)) {
-      if (hasCopilot) { sum.redriven++; (sum.redriven_items = sum.redriven_items || []).push(slug + "#" + n.number); }
+      if (hasCopilot) { sum.redriven++; if (refused0) sum.redriven_after_start_failure++; (sum.redriven_items = sum.redriven_items || []).push(slug + "#" + n.number); }
       else { sum.assigned++; (sum.assigned_items = sum.assigned_items || []).push(slug + "#" + n.number); }
       const added = now.filter((l) => !isCopilot(l) && !before.includes(l));
       if (added.length) {
         const u = await api.req("DELETE", "/repos/" + slug + "/issues/" + n.number + "/assignees", { assignees: added });
         (sum.person_removed = sum.person_removed || []).push({ issue: slug + "#" + n.number, logins: added, http: u.status });
+      }
+      if (!canaried) {
+        canaried = true;
+        const why = await canaryRefusal(api, slug, n.number, d.now - 60000, d, o.canaryMs);
+        if (why) {
+          sum.start_refused = slug + "#" + n.number + " (" + (why === "credits" ? "AI credits" : "other reason") + ")";
+          if (why === "credits") sum.credits_exhausted = slug + "#" + n.number;
+          stopped = true; sum.stopped = why === "credits" ? "Copilot cannot start sessions: AI credits are exhausted" : "Copilot refused the first start of this run; the cause is unknown, so the rest would meet the same refusal";
+        }
       }
     } else {
       sum.errors.push({ where: slug + "#" + n.number, http: r.status, message: r.status === 200 || r.status === 201 ? "the answer does not list Copilot as an assignee" : r.message });
@@ -320,13 +408,13 @@ export async function run(opts, deps) {
     }
     if (o.pauseMs) await d.sleep(o.pauseMs);
   }
-  sum.status = sum.stopped ? "stopped" : sum.errors.length ? "partial" : "ok";
+  sum.status = sum.credits_exhausted ? "credits-exhausted" : sum.stopped ? "stopped" : sum.errors.length ? "partial" : "ok";
   sum.calls = api.calls.length;
   return sum;
 }
 
 function summaryMarkdown(s) {
-  const rows = [["assigned", s.assigned], ["re-driven", s.redriven], ["considered", s.considered], ["deferred", s.deferred], ["open Copilot pull requests", s.open_copilot_prs], ["errors", s.errors.length]];
+  const rows = [["assigned", s.assigned], ["re-driven", s.redriven], ["re-driven after a refused start", s.redriven_after_start_failure], ["considered", s.considered], ["deferred", s.deferred], ["open Copilot pull requests", s.open_copilot_prs], ["errors", s.errors.length]];
   const skipped = Object.keys(s.skipped).sort().map((k) => "- " + k + ": " + s.skipped[k]).join("\n");
   return "### Assign Copilot to new issues (" + s.mode + ", agent " + s.agent + ", status " + s.status + ")\n\n" + rows.map((r) => "- " + r[0] + ": " + r[1]).join("\n") + (skipped ? "\n\nSkipped\n" + skipped : "") + (s.agent_sync ? "\n\nOrganization agent: " + s.agent_sync.status : "") + "\n";
 }
@@ -349,6 +437,7 @@ async function main() {
   catch (e) { s = { action: "assign-copilot-sweep", status: "crashed", considered: 0, assigned: 0, redriven: 0, skipped: {}, deferred: 0, errors: [{ where: "run", message: String((e && e.message) || e).slice(0, 200) }], mode: opts.mode, agent: AGENT }; }
   console.log("RESULT_JSON=" + JSON.stringify(s));
   if (s.status === "no-credential") console.log("::warning::assign-copilot-sweep: " + s.note);
+  if (s.credits_exhausted) console.log("::warning::assign-copilot-sweep: Copilot cannot start sessions because the account is out of AI credits (" + s.credits_exhausted + "); issues are assigned again once it can");
   for (const e of s.errors || []) console.log("::warning::assign-copilot-sweep " + e.where + ": " + (e.http !== undefined ? "http " + e.http + " " : "") + (e.message || ""));
   if (s.agent_sync && /refused|unreadable|invalid/.test(s.agent_sync.status)) console.log("::warning::assign-copilot-sweep organization agent: " + JSON.stringify(s.agent_sync));
   if (env.GITHUB_STEP_SUMMARY) { try { appendFileSync(env.GITHUB_STEP_SUMMARY, summaryMarkdown(s)); } catch (e) { /* the summary is a convenience */ } }
