@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.77.4"; // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+var VERSION = "1.78.0"; // 1.78.0 RM-CODE-SESSION-1 (pillar autonomy; minor): owner command turns enter resumable CodeSession streams, with the existing ops agent as fallback. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
 // 1.77.4 ERRATA-CHAIN-DISPATCH-1 + WORKER-OBSERVABILITY-1 (conflict integration): preserve both the folded errata consumer dispatch and affected-service observability changes.
 /* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
@@ -12746,6 +12746,17 @@ async function cmdAgentPoll(env, id) {
   await env.AUDIT.prepare("UPDATE cmd_log SET status=?1, answer=?2, error=?3, done_ms=?4 WHERE id=?5 AND status='running'").bind(out.status, answer.slice(0, 16e3), out.error, Date.now(), id).run();
   return out;
 }
+async function cmdCodeSessionFetch(env, path, body) {
+  const svc = env && env.SVC_QNFO_AGENTS;
+  if (!svc || typeof svc.fetch !== "function") return { ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" };
+  try {
+    const r = await svc.fetch("https://agents.qnfo.org" + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(15e3) });
+    const text = await r.text();
+    let j = null;
+    try { j = JSON.parse(text); } catch (e) {}
+    return j ? Object.assign({ http: r.status }, j) : { ok: false, http: r.status, error: "qnfo-agents HTTP " + r.status + ": " + conClip(text, 300) };
+  } catch (e) { return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }; }
+}
 // CMD-VOICE-1: speech to text for the command line. The body is the raw recording (webm, ogg, mp4, wav or mp3, at most 8 MB);
 // the answer is {ok, text, model, ms}. Owner session or loop token only (it spends Workers AI neurons). The first model that
 // answers wins, so a retired model id costs one fallback, not the feature. No vendor SDK: the Workers AI binding only.
@@ -12789,6 +12800,17 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   if (path.indexOf("/api/cmd") !== 0) return null;
   const holder = !!(owner.authed || owner.loop);
   await cmdEnsure(env);
+  const streamMatch = /^\/api\/cmd\/session\/(run_[a-z0-9_]{8,60})\/events$/.exec(path);
+  if (request.method === "GET" && streamMatch) {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The code session needs your email code." }, 401);
+    const svc = env.SVC_QNFO_AGENTS;
+    if (!svc || typeof svc.fetch !== "function") return ownerJson({ ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" }, 503);
+    const after = Math.max(0, Number(new URL(request.url).searchParams.get("after")) || Number(request.headers.get("last-event-id")) || 0);
+    try {
+      const r = await svc.fetch("https://agents.qnfo.org/code-sessions/" + streamMatch[1] + "/events?after=" + after, { method: "GET" });
+      return new Response(r.body, { status: r.status, headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
+    } catch (e) { return ownerJson({ ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }, 502); }
+  }
   if (request.method === "GET" && path.indexOf("/api/cmd/job/") === 0) {
     const id = path.slice("/api/cmd/job/".length);
     if (!/^cmd-[0-9a-f]{20}$/.test(id)) return ownerJson({ error: "bad id" }, 400);
@@ -12993,10 +13015,20 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     }
     return ownerJson({ ok: true, kind: "answer", text: di.text, actions: di.actions || [], holder });
   }
-  // CMD-AGENT-1 (1.77.0, owner 2026-10-29: the command line must work like Claude Code, not answer from a no-tools prompt): for the signed-in
-  // owner a plain-English line is a task for the durable ops agent, which runs the tool loop server-side (code, SQL, GitHub, workspace,
-  // fleet probes) and answers with what the tools returned. If qnfo-ops cannot start the run, the older grounded answer below still runs.
+  // RM-CODE-SESSION-1: only after deterministic commands and fleet reads have declined the request does the owner's natural-language
+  // turn enter the resumable CodeSession stream. The session id is supplied by the existing chat UI/CLI on later turns.
   if (holder) {
+    const existingSession = /^run_[a-z0-9_]{8,60}$/.test(String(b.session_id || "")) ? String(b.session_id) : "";
+    const sessionPath = existingSession ? "/code-sessions/" + existingSession + "/turns" : "/code-sessions";
+    const session = await cmdCodeSessionFetch(env, sessionPath, { text: text });
+    if (session.ok && session.session_id) {
+      try {
+        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, model) VALUES (?1, ?2, ?3, 'agent-stream', 'running', 1, 'deepseek-v4-flash-wa')").bind("cmd-" + cmdRandHex(10), text, from || null).run();
+      } catch (e) {}
+      return ownerJson({ ok: true, kind: "stream", session_id: session.session_id, turn: session.turn, holder }, 202);
+    }
+    console.error(JSON.stringify({ worker: NAME, where: "cmd-code-session-start", http: session.http || 0, error: String(session.error || "").slice(0, 200) }));
+    // Keep the existing qnfo-ops run as an independent fallback if CodeSession is unavailable.
     const aid = "cmd-" + cmdRandHex(10);
     const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", text: text, sid: "console-" + new Date().toISOString().slice(0, 10), run_id: aid, max_iters: 16 }) });
     if (st.json && st.json.ok) {
