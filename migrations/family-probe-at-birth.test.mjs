@@ -10,6 +10,8 @@ CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT,
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, status TEXT, verify_probe TEXT, verify_transport TEXT, module TEXT, attempts INTEGER DEFAULT 0, last_verdict TEXT, next_due_at TEXT, precondition TEXT, action TEXT);
 CREATE TABLE metric_improvement_now (owner TEXT, verdict TEXT, bp26 INTEGER);
 CREATE TABLE fleet_issue_dispatch (fingerprint TEXT PRIMARY KEY, category TEXT, state TEXT, payload TEXT);
+CREATE TABLE capability_ledger (capability TEXT PRIMARY KEY, provenance TEXT, prerequisites TEXT, reliability REAL, acquired_at TEXT, evidence TEXT);
+CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);
 CREATE TRIGGER birth AFTER INSERT ON agent_issues
 WHEN NEW.status = 'open'
 BEGIN
@@ -46,6 +48,8 @@ ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql) && /^-- Ro
 ok(!/\b(DELETE|DROP)\b/i.test(sql.replace(/^--.*$/gm, "")), "migration body does not delete or drop data");
 db.exec(sql);
 db.exec(sql);
+ok(one("SELECT COUNT(*) AS n FROM capability_ledger WHERE capability = 'family-specific-measuring-probes-at-issue-birth'").n === 1, "the capability ledger records the new birth-time measuring path once");
+ok(one("SELECT COUNT(*) AS n FROM decision_log WHERE action LIKE 'FM-4: install family-specific measuring probes%'").n === 1, "the predicted outcome and revert path are recorded once");
 
 db.exec("INSERT INTO metric_improvement_now VALUES ('svc''quoted', 'unmeasured', 0), ('svc''quoted', 'unmeasured', 0), ('other-service', 'unmeasured', 0)");
 insertIssue.run("METRIC-UNMEASURED-1: svc'quoted has metrics with no value", "", "management-personas");
@@ -69,6 +73,10 @@ let obs = readProbe(obsIssue.id);
 ok(obs.contract.status === "active" && obs.contract.module === "issue-birth-probe-families", "observability issue is active on its real probe at birth", obs.contract);
 ok(obs.result.expected === "1" && obs.result.observed === "missing", "a missing dispatch observation does not vacuously pass", obs.result);
 ok(!/agent_issues|issue_triage|remediation_contracts|VACUOUS-PROBE/i.test(obs.contract.verify_probe), "observability probe measures dispatch state, not the issue's own status");
+db.prepare("UPDATE remediation_contracts SET verify_probe = ?, verify_transport = 'd1-query' WHERE class = ?")
+  .run("SELECT '1' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM fleet_issue_dispatch d WHERE d.fingerprint = 'cf-obs-group-42' AND d.state <> 'resolved' AND CAST(json_extract(d.payload, '$.lastObserved') AS INTEGER) > 0) THEN '1' ELSE '0' END AS observed", "issue-" + obsIssue.id);
+obs = readProbe(obsIssue.id);
+ok(obs.contract.verify_probe.includes("ELSE 'missing' END AS observed") && obs.result.observed === "missing", "the dispatch bridge's post-insert probe update is normalized to the missing-evidence-safe probe", obs);
 db.prepare("INSERT INTO fleet_issue_dispatch VALUES (?, 'worker-observability', 'active', ?)").run("cf-obs-group-42", JSON.stringify({ lastObserved: Date.now() }));
 obs = readProbe(obsIssue.id);
 ok(obs.result.observed === "0", "a recently observed active group keeps the contract failing", obs.result);
