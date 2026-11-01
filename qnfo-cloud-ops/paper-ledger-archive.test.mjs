@@ -11,6 +11,7 @@ const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
 const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
 const ledgerSql = readFileSync(new URL("../migrations/living-paper/2026-10-26-paper-change-ledger.sql", import.meta.url), "utf8");
+const provenanceSql = readFileSync(new URL("../migrations/2026-11-01-paper-provenance-metadata.sql", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
   "\nexport { paperLedgerArchiveStep as __step, paperLedgerBody as __body, paperLedgerFingerprint as __fp, VERSION as __version };\n";
@@ -36,6 +37,7 @@ function mkLiving(bodies) {
     CREATE TABLE paper_body_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, version TEXT, status TEXT, title TEXT, body_md TEXT NOT NULL, captured_at TEXT NOT NULL, reason TEXT);
     CREATE TABLE publication_gate_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, run_at TEXT DEFAULT (datetime('now')), slug TEXT, status TEXT, mode TEXT, decision TEXT, reason TEXT, score INTEGER, quality_flag TEXT, body_len INTEGER, has_abstract INTEGER, refs INTEGER, gate_version TEXT);`);
   db.exec(ledgerSql);
+  db.exec(provenanceSql);
   db.prepare("INSERT INTO papers (identifier, slug, status, body_md) VALUES ('p1', 'one', 'published', ?)").run(bodies[0]);
   // each body edit writes a ledger row and keeps the prior body: edit i stores body i-1, so the last body written stays only in papers
   bodies.slice(1).forEach((b, i) => { db.prepare("UPDATE papers SET body_md = ?, change_actor = ?, change_reason = ? WHERE slug = 'one'").run(b, "test:edit:" + (i + 1), "edit " + (i + 1)); });
