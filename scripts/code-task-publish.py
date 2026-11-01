@@ -403,6 +403,60 @@ def standards_check(repo_dir, files, base):
     return ("STANDARDS " + " ; ".join(lines[:STANDARDS_FEEDBACK_LINES]))[:900]
 
 
+# PUBLISH-DEPLOY-GATE-1: run the existing gate for each changed worker before its branch is pushed.
+GATE_TIMEOUT_S = 180
+GATE_FEEDBACK_LINES = 6
+
+
+def gate_check(repo_dir, files, base, log=print):
+    """Run the deploy gate for changed worker dirs; return actionable feedback on failure."""
+    root = os.path.abspath(repo_dir)
+    dirs = sorted({
+        f.split("/", 1)[0]
+        for f in files
+        if "/" in f and os.path.isfile(os.path.join(root, f.split("/", 1)[0], "wrangler.toml"))
+    })
+    if not dirs:
+        return None
+    gate = os.path.join(root, "scripts", "deploy_gate.py")
+    if not os.path.isfile(gate):
+        log("::warning::PUBLISH-DEPLOY-GATE-1 skipped: scripts/deploy_gate.py is not present")
+        return None
+    if not shutil.which("npx"):
+        log("::warning::PUBLISH-DEPLOY-GATE-1 skipped: npx is not installed")
+        return None
+
+    gate_env = os.environ.copy()
+    for key in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CF_ACCOUNT_ID", "GH_TOKEN", "GITHUB_TOKEN"):
+        gate_env.pop(key, None)
+    failures = []
+    for directory in dirs:
+        worker_dir = os.path.join(root, directory)
+        try:
+            result = subprocess.run(
+                [sys.executable, gate, "--check", worker_dir],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=GATE_TIMEOUT_S,
+                env=gate_env,
+            )
+        except subprocess.TimeoutExpired:
+            failures.append("GATE %s: deploy gate timed out after %d s" % (directory, GATE_TIMEOUT_S))
+            continue
+        if result.returncode == 0:
+            continue
+        output = (result.stdout or "") + "\n" + (result.stderr or "")
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        relevant = [line for line in lines if re.search(r"\b(FAIL|ERROR|error|failed|Error)\b", line)]
+        failures.append("GATE %s: %s" % (
+            directory,
+            " | ".join((relevant or lines[-GATE_FEEDBACK_LINES:])[:GATE_FEEDBACK_LINES]) or
+            "deploy gate exited %d" % result.returncode,
+        ))
+    return " ; ".join(failures)[:900] if failures else None
+
+
 # MULTI-FILE-CODE-TASKS-1 (2026-10-12, agent_issues 2074): a task may carry companion files beside its own path. The
 # orchestrator lists the ones its patch changes in ctx.paths; the rule it applied is repeated here, so a row written by
 # anything else cannot widen what a code-loop branch touches: a companion is a migrations/<name>.sql or a file in the task
@@ -690,7 +744,7 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
             git(repo_dir, "reset", "-q", "--hard")
             return "publish_failed", None, "the orchestrator deferred this task's JavaScript verify to the publisher, and node is not installed here", None
         bad = js_syntax_errors(repo_dir, sorted(files)) or migration_errors(repo_dir, sorted(files)) or suite_check(repo_dir, sorted(files), base) \
-            or standards_check(repo_dir, sorted(files), base)
+            or standards_check(repo_dir, sorted(files), base) or gate_check(repo_dir, sorted(files), base)
         if bad:
             git(repo_dir, "reset", "-q", "--hard")
             git(repo_dir, "clean", "-qfd")
@@ -942,6 +996,8 @@ def _sh(cwd, *a):
 
 
 def selftest():
+    from unittest import mock
+
     fails = []
 
     def check(name, cond, extra=""):
@@ -1317,6 +1373,61 @@ def selftest():
     fb = standards_check(groot, ["w/worker.js"], "main")
     check("standards check: a swallowed catch the edit adds is fed back with the guard's line", fb is not None and fb.startswith("STANDARDS ") and "swallowed-catch" in fb, fb)
     check("standards check: a task with no worker or wrangler file is left to CI", standards_check(groot, ["scripts/x.py"], "main") is None)
+
+    # 7b3. PUBLISH-DEPLOY-GATE-1: every changed worker is gated before publication; failure is returned to the proposal loop
+    gate_root = tempfile.mkdtemp(prefix="ctp-gate-")
+    os.makedirs(os.path.join(gate_root, "scripts"))
+    for directory in ("bad", "w"):
+        os.makedirs(os.path.join(gate_root, directory))
+        with open(os.path.join(gate_root, directory, "wrangler.toml"), "w") as fh:
+            fh.write("fail\n" if directory == "bad" else "pass\n")
+    fake_gate = os.path.join(gate_root, "scripts", "deploy_gate.py")
+    with open(fake_gate, "w") as fh:
+        fh.write(
+            "import os, sys\n"
+            "worker = sys.argv[-1]\n"
+            "with open(os.path.join(os.path.dirname(__file__), 'called.txt'), 'a') as calls:\n"
+            "    calls.write(os.path.basename(worker) + '\\n')\n"
+            "for key in ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'GH_TOKEN', 'GITHUB_TOKEN'):\n"
+            "    if os.environ.get(key):\n"
+            "        print('FAIL unnecessary credential available: ' + key)\n"
+            "        sys.exit(4)\n"
+            "if open(os.path.join(worker, 'wrangler.toml')).read().startswith('fail'):\n"
+            "    print('FAIL synthetic worker gate failure')\n"
+            "    sys.exit(3)\n"
+            "print('CHECK OK')\n"
+        )
+    changed_workers = ["bad/worker.js", "w/worker.js", "scripts/x.py", "docs/readme.md"]
+    with mock.patch.dict(os.environ, {
+        "CLOUDFLARE_API_TOKEN": "fixture",
+        "CLOUDFLARE_ACCOUNT_ID": "fixture",
+        "CF_ACCOUNT_ID": "fixture",
+        "GH_TOKEN": "fixture",
+        "GITHUB_TOKEN": "fixture",
+    }), mock.patch("shutil.which", return_value="/usr/bin/npx"):
+        fb = gate_check(gate_root, changed_workers, "main", log=quiet)
+    calls_path = os.path.join(gate_root, "scripts", "called.txt")
+    calls = open(calls_path).read().splitlines()
+    check("deploy gate: each changed worker is checked without publisher credentials and failures return feedback",
+          fb == "GATE bad: FAIL synthetic worker gate failure" and calls == ["bad", "w"], (fb, calls))
+    with open(os.path.join(gate_root, "bad", "wrangler.toml"), "w") as fh:
+        fh.write("pass\n")
+    os.remove(calls_path)
+    with mock.patch("shutil.which", return_value="/usr/bin/npx"):
+        passed = gate_check(gate_root, changed_workers, "main", log=quiet)
+    calls = open(calls_path).read().splitlines()
+    check("deploy gate: clean changed workers pass and non-worker paths are ignored",
+          passed is None and calls == ["bad", "w"] and gate_check(gate_root, ["scripts/x.py"], "main") is None, (passed, calls))
+    warnings = []
+    with mock.patch("shutil.which", return_value=None):
+        skipped = gate_check(gate_root, ["w/worker.js"], "main", log=warnings.append)
+    check("deploy gate: missing npx is explicitly warned and left to CI",
+          skipped is None and len(warnings) == 1 and "npx is not installed" in warnings[0], warnings)
+    with mock.patch("shutil.which", return_value="/usr/bin/npx"), \
+         mock.patch("subprocess.run", side_effect=subprocess.TimeoutExpired("deploy gate", GATE_TIMEOUT_S)):
+        timed_out = gate_check(gate_root, ["w/worker.js"], "main", log=quiet)
+    check("deploy gate: timeout returns failure feedback instead of skipping",
+          timed_out is not None and timed_out.startswith("GATE w: deploy gate timed out"), timed_out)
 
     # 7c. a rebuild takes the patch bump even when the goal named a VERSION (the merge runner rebuilds with the same rule)
     check("bump_version takes no wanted version: the rebuild is the patch bump the merge runner expects",
