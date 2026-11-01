@@ -1,8 +1,8 @@
 // PAPER-LEARN-TRIAGE-1 offline suite (qnfo-lifecycle 1.14.0). Drives the triage step of the real default export against an in-memory qnfo-audit
 // (node:sqlite behind a D1 shim) and a scripted Workers AI. Proves: a learning that matches a catalogue mechanism whose probe reads ok is settled
 // already-in-place with the citation and no model call; a match whose probe fails is not (it goes to the model path); a reject needs both model
-// families, a single reject or an unreadable answer settles nothing; a conflict must name a catalogue mechanism whose probe is ok; an apply is left
-// proposed with the proposal in its note and is not triaged again; the model budget per tick holds; issue-bound learnings go first; a probe that is
+// families, a single reject or an unreadable answer settles nothing; a conflict must name a catalogue mechanism whose probe is ok; an uncovered
+// learning becomes a probationary goal and is not triaged again; the model budget per tick holds; issue-bound learnings go first; a probe that is
 // not a single SELECT never runs; paper_learn_triage = off stops it; the reader strips the pipeline's own notices.
 // Run: node --no-warnings qnfo-lifecycle/paper-learn-triage.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -34,6 +34,7 @@ const audit = new DatabaseSync(":memory:");
 audit.exec(`CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT);
 CREATE TABLE paper_learnings (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, version TEXT, claim TEXT, kind TEXT, verification TEXT DEFAULT 'derived-unchecked', fleet_lever TEXT, application TEXT, applicability TEXT DEFAULT 'direct', fleet_status TEXT DEFAULT 'proposed', status_note TEXT, issue_id INTEGER, updated_at TEXT);
+CREATE TABLE goals (id INTEGER PRIMARY KEY AUTOINCREMENT, goal_key TEXT UNIQUE NOT NULL, statement TEXT NOT NULL, goal_type TEXT NOT NULL DEFAULT 'instrumental', parent_objective TEXT, alignment TEXT, source TEXT, priority INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'adopted', dod TEXT, owner TEXT);
 CREATE TABLE paper_learning_mechanisms (mech_key TEXT PRIMARY KEY, title TEXT, terms TEXT, citation TEXT, evidence_probe TEXT, status TEXT DEFAULT 'active');
 INSERT INTO paper_learning_mechanisms (mech_key, title, terms, citation, evidence_probe) VALUES
  ('claim-integrity', 'past-tense claims are held', 'claim-integrity|none took place', 'CLAIM-INTEGRITY-1 in qnfo-research-exec', 'SELECT CASE WHEN EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''claim-integrity'') THEN ''ok'' ELSE ''absent'' END AS observed'),
@@ -62,11 +63,17 @@ add({ claim: "Claim-integrity again", lever: "x", issue: 7 });
 calls.length = 0;
 script = () => ({ disposition: "apply", category: "gap", mechanism: "", reason: "the fleet has no such check at all today, so one should be added" });
 r = await P.triage(env);
-ok(get(2).fleet_status === "proposed" && calls.length === 2, "a match whose probe is not ok goes to the model path", { st: get(2).fleet_status, calls: calls.length });
-ok(r.apply === 1 && /^PL-TRIAGE-1 apply \(/.test(get(2).status_note) && /no such check/.test(get(2).status_note), "a model apply leaves the row proposed with the proposal in its note", get(2));
+const goal2 = audit.prepare("SELECT * FROM goals WHERE goal_key = 'PAPER-LEARN-2'").get();
+ok(get(2).fleet_status === "probation" && calls.length === 2, "a match whose probe is not ok goes to the model path", { st: get(2).fleet_status, calls: calls.length });
+ok(r.apply === 1 && r.goals === 1 && /^PL-TRIAGE-1 probation: goal PAPER-LEARN-2/.test(get(2).status_note) && /no such check/.test(get(2).status_note), "an uncovered learning is transferred to a probationary goal with its reason", get(2));
+ok(goal2 && goal2.status === "adopted" && goal2.owner === "qnfo-code-orchestrator" && /fleet_status NOT IN \('applied', 'rejected'\)/.test(goal2.dod), "the goal has an owner and a machine-checkable completion condition", goal2);
+ok(audit.prepare(goal2.dod).get().observed === "1", "the goal remains open while the learning is on probation");
 calls.length = 0;
 r = await P.triage(env);
-ok(calls.length === 0 && r.examined === 0, "an apply-flagged row is not triaged again", r);
+ok(calls.length === 0 && r.examined === 0, "a learning transferred to a goal is not triaged again", r);
+ok(audit.prepare("SELECT COUNT(*) AS n FROM goals WHERE goal_key = 'PAPER-LEARN-2'").get().n === 1, "the probationary goal is created only once");
+audit.prepare("UPDATE paper_learnings SET fleet_status = 'applied' WHERE id = 2").run();
+ok(audit.prepare(goal2.dod).get().observed === "0", "the goal completion probe passes once the learning is applied");
 audit.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('e2', strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'claim-integrity', 'x', 'qnfo-research-exec', 'ok')").run();
 
 // 3. a reject needs both families
@@ -79,7 +86,7 @@ add({ claim: "A claim only one family will reject", lever: "x" });
 calls.length = 0;
 script = (model) => /glm/.test(model) ? { disposition: "reject", category: "analogy-only", mechanism: "", reason: "a metaphor with no operational counterpart in the fleet" } : { disposition: "apply", category: "gap", mechanism: "", reason: "the fleet could adopt this practice for its own loops" };
 r = await P.triage(env);
-ok(get(4).fleet_status === "proposed" && /^PL-TRIAGE-1 apply/.test(get(4).status_note), "a single reject settles nothing (the apply is kept)", get(4));
+ok(get(4).fleet_status === "probation" && /^PL-TRIAGE-1 probation: goal PAPER-LEARN-4/.test(get(4).status_note), "a single reject does not reject the learning; the apply signal becomes a goal", get(4));
 add({ claim: "A claim the second family cannot read", lever: "x" });
 script = (model) => /glm/.test(model) ? { disposition: "reject", category: "analogy-only", mechanism: "", reason: "a metaphor with no operational counterpart in the fleet" } : "garbage";
 r = await P.triage(env);
@@ -128,8 +135,8 @@ const issueBound = audit.prepare("SELECT id FROM paper_learnings WHERE claim = '
 calls.length = 0;
 script = () => ({ disposition: "apply", category: "gap", mechanism: "", reason: "nothing in the fleet covers this at the moment" });
 r = await P.triage(env);
-ok(calls.length === 8 && r.apply === 4 && r.kept >= 3, "four learnings reach the model per tick (two calls each)", { calls: calls.length, r });
-ok(/^PL-TRIAGE-1 apply/.test(get(issueBound).status_note || "") && get(audit.prepare("SELECT id FROM paper_learnings WHERE claim = 'Unmatched claim number 5'").get().id).status_note === null, "the issue-bound learning is examined before the unbound ones, and the budget stops after four", { bound: get(issueBound).status_note });
+ok(calls.length === 8 && r.apply === 4 && r.goals === 4 && r.kept >= 3, "four learnings reach the model per tick (two calls each) and unresolved gaps become goals", { calls: calls.length, r });
+ok(get(issueBound).fleet_status === "probation" && /^PL-TRIAGE-1 probation: goal PAPER-LEARN-/.test(get(issueBound).status_note || "") && get(audit.prepare("SELECT id FROM paper_learnings WHERE claim = 'Unmatched claim number 5'").get().id).status_note === null, "the issue-bound learning is examined before the unbound ones, and the budget stops after four", { bound: get(issueBound).status_note });
 
 // 7. the flag
 audit.exec("UPDATE paper_learnings SET status_note = NULL WHERE fleet_status = 'proposed'");
