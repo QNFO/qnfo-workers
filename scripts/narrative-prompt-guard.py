@@ -77,16 +77,21 @@ def discover(root):
     return targets
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if "--root" in argv:  # a tree to scan instead of the repository (scripts/narrative-prompt-guard.test.mjs)
+        root = os.path.abspath(argv[argv.index("--root") + 1])
     targets = discover(root)
     violations = []
     for t in targets:
         with open(os.path.join(root, t), encoding="utf-8", errors="replace") as fh:
             src = fh.read()
         for label, pat in PATTERNS:
-            if re.search(pat, src, re.IGNORECASE):
-                violations.append((t, "banned: " + label))
+            m = re.search(pat, src, re.IGNORECASE)
+            if m:
+                # the whole file is searched, comments included, so a hit is found by its line, not by reading a file of thousands of lines
+                violations.append((f"{t}:{src.count(chr(10), 0, m.start()) + 1}", "banned: " + label))
     for t, anchors in REQUIRED.items():
         path = os.path.join(root, t)
         if not os.path.isfile(path):
@@ -100,6 +105,7 @@ def main() -> int:
         print("NARRATIVE-PROMPT-GUARD-1 FAIL")
         for t, label in violations:
             print(f"  {t}: {label}")
+        print("  (the whole file is searched, comments and tag names included: reword the text in worker.js and in deployed-current.worker.js)")
         return 1
     print(f"NARRATIVE-PROMPT-GUARD-1 PASS: {len(targets)} narrative source(s) clean + {len(REQUIRED)} anchor set(s) present")
     return 0

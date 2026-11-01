@@ -225,6 +225,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   - A trigger's `code-anchor:` line is a function signature (`async function name(...) {`), never a `return {...}` or other body line: sessions and the code loop edit body
     lines, the anchor then occurs 0 times and migrations/code-anchor-once.test.mjs fails (trigger 10931 twice, 2026-10-27 and 2026-11-01). Repoint a stale one by a later
     migration; migrations/2026-11-01-anchor-10931-repoint.sql is the pattern.
+- `scripts/narrative-prompt-guard.py` (NARRATIVE-PROMPT-GUARD-1) is a deploy-gate step, so it is advisory on a pull request like the suites and shows only after the merge. It searches
+  the whole text of every `<dir>/worker.js` and `<dir>/deployed-current.worker.js`, comments and tag names included, for the phrases it bans (`program placement`, `fit table`,
+  `primary home`, ...). A comment that uses one turns main red until it is reworded in the source and its mirror (#5526 added one on 2026-11-01): run
+  `python3 scripts/narrative-prompt-guard.py` (about 8 s) before you push a worker change; a failure names `file:line`.
 - A `METRIC-TRIGGER-<id>-...` issue's contract gets its trigger's probe at birth (D1 trigger
   `contract_probe_templates_v1`). Write a probe by hand only for other families.
 

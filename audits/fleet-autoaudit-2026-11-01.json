@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 10:16:25",
+  "audited_at": "2026-11-01 10:47:45",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -10,26 +10,10 @@
     "content_drift": [],
     "cron_only": [],
     "cron_only_count": 0,
-    "drift": [
-      {
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.29.3-plan-first-time-first",
-        "repo": "0.29.4-plan-large-file-anchors",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
+    "drift": [],
     "live_err": [],
-    "multi_version": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-code-orchestrator/deployed-current.worker.js",
-        "declarations": "0.29.4-plan-large-file-anchors,fleet-executor/0.3.3",
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.29.3-plan-first-time-first",
-        "repo": "0.29.4-plan-large-file-anchors",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
-    "multi_version_count": 1,
+    "multi_version": [],
+    "multi_version_count": 0,
     "name_resolution": true,
     "no_health_route": [],
     "no_live_version": [],
@@ -563,7 +547,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -621,6 +605,11 @@
         "worker": "qnfo-cloud-ops"
       },
       {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.29.4-plan-large-file-anchors",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.11-command-exit-honest",
         "worker": "qnfo-containers-pilot"
@@ -657,7 +646,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.10.0-issue-rollup",
+        "version": "0.10.3-narrative-guard-wording",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1288,9 +1277,9 @@
     "qnfo-code-orchestrator": {
       "before": "0.29.4-plan-large-file-anchors",
       "http": 200,
-      "live": "0.29.3-plan-first-time-first",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.29.4-plan-large-file-anchors",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
@@ -1466,9 +1455,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.10.0-issue-rollup",
+      "before": "0.10.3-narrative-guard-wording",
       "http": 200,
-      "live": "0.10.0-issue-rollup",
+      "live": "0.10.3-narrative-guard-wording",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"

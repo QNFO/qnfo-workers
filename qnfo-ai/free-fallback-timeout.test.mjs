@@ -15,8 +15,8 @@ function load(plan) {
     Date: { now: () => now },
     console: { log: (message) => logs.push(String(message)), error: (message) => logs.push(String(message)) },
     reasoningEffortFor: () => null,
-    async aiRunAttr(_env, _worker, _purpose, model, input) {
-      calls.push({ model, input });
+    async runDynamicChat(_env, model, messages, max_tokens) {
+      calls.push({ model, input: { messages, max_tokens } });
       return plan.shift() || { elapsedMs: 0, response: null };
     },
     async withTimeout(promise, ms, label) {
@@ -56,15 +56,14 @@ ok(slow.timeouts[0] === 120e3 && slow.calls.length === 1, "the first fallback le
 ok(!slow.logs.some((message) => message.includes("timed out") || message.includes("caught")), "a completed slow leg is not logged as a timeout");
 
 const exhausted = load([
-  { elapsedMs: 70e3, response: null },
-  { elapsedMs: 60e3, response: response("too late") },
+  { elapsedMs: 130e3, response: response("too late") },
   { elapsedMs: 0, response: response("should not run") }
 ]);
 const noAnswer = await exhausted.fallback({ AI: {} }, [{ role: "user", content: "test" }], 100);
 ok(noAnswer === null && exhausted.getNow() === 120e3, "fallback attempts share one bounded 120-second budget");
-ok(exhausted.timeouts.length === 2 && exhausted.timeouts[1] === 50e3, "later attempts receive only the remaining budget");
-ok(exhausted.logs.some((message) => message.includes('"evt":"ai:qnfoAiFreeFallback:caught"') && message.includes("timed out after 50000ms")), "an exhausted deadline remains logged");
-ok(exhausted.calls.length === 2, "no candidate starts after the shared deadline expires");
+ok(exhausted.timeouts.length === 1 && exhausted.timeouts[0] === 120e3, "the gateway owns all fallback legs within the shared budget");
+ok(exhausted.logs.some((message) => message.includes('"evt":"ai:qnfoAiFreeFallback:caught"') && message.includes("timed out after 120000ms")), "an exhausted deadline remains logged");
+ok(exhausted.calls.length === 1 && exhausted.calls[0].model === "dynamic/value", "no local provider candidate starts after gateway exhaustion");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
