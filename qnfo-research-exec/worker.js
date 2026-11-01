@@ -712,6 +712,9 @@ function rerunRoute(row, msg) {
     return { stage: "parked", prior, reason: "noop terminal – applied=0, no further revise passes" };
   }
   if (!prior) return { stage: "ground", prior: String(row && row.stage || "?"), reason: "not a review or revise failure: full re-run from ground" };
+  if (/^review:\s*\d+\s+HARD findings unresolved after \d+ revise cycles\b/.test(m)) {
+    return { stage: "parked", prior, reason: "configured review-cycle cap exhausted; no extra revise pass" };
+  }
   if (String(row && row.error || "").indexOf(RERUN_ROUTE_MARK) === 0) return { stage: "parked", prior, reason: "the second revise pass also failed" };
   return { stage: "revise", prior, reason: "the paper exists and only its findings are unresolved: revise once with the findings" };
 }
