@@ -85,6 +85,7 @@ cf_model_catalog status `passed`) must hold before the row is used. Rows marked 
 | safety / policy screen of outbound text | clef-flash noul **H** | llama-guard-3-8b | - | - | |
 | sentiment / coarse class | distilbert-sst-2 | clef-flash | - | - | |
 | utility text (title, tag, rewrite, extract) | qwen3-30b-a3b | glm-4.7-flash | gpt-oss-20b | JSON schema | cheapest capable chat |
+| fleet-control advisor proposal | @cf/google/gemma-4-26b-a4b-it | @cf/zai-org/glm-5.3-flash | - | non-empty proposal; separate gpt-oss-120b review | Same quality as control at 67% of its input price; fallback on errors or empty replies |
 | chat (default) | glm-5.3-flash | gpt-oss-120b | glm-5.3 | empty-content check | unchanged |
 | background bulk (batch scoring, summaries) | gpt-oss-20b **H** | qwen3-30b-a3b | glm-5.3-flash | schema | |
 | agent loop (tools, multi-turn) | deepseek-v4.1-flash-1017 **H** (gateway deepseek-v4-flash today) | gpt-oss-120b **H** | deepseek-v4-pro | tool_calls valid + ops-scale canary | cached input 0.006 makes long loops cheapest |
