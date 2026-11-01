@@ -71,7 +71,9 @@ export function buildCatalog(root = ROOT) {
     lines.push(`## ${label}`, "");
     for (const { path, title } of entries) {
       const safeTitle = title.replace(/\\/g, "\\\\").replace(/[[\]]/g, "\\$&").replace(/\|/g, "\\|");
-      const link = relative("docs", path).split("/").map(encodeURIComponent).join("/");
+      // SUITE-PORT-SEP-1: relative() uses the platform separator, so on Windows the link came out with %5C for
+      // every directory and checkCatalog reported a permanent INDEX.md drift. Normalize to forward slashes first.
+      const link = relative("docs", path).replaceAll("\\", "/").split("/").map(encodeURIComponent).join("/");
       lines.push(`- [${safeTitle}](${link}) - \`${path}\``);
     }
     lines.push("");

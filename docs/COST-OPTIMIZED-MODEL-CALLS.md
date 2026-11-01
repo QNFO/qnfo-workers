@@ -71,6 +71,16 @@ Aggregates are recomputed from the ledger, including both caller/week groups
 when a row moves and the remaining total after a deletion. Trigger definitions
 are backed up; the migration includes a rollback and is replay-safe.
 
+A group a move or a delete empties is upserted as a zero-valued row: an
+aggregate `SELECT` without `GROUP BY` yields one row over no input, so the
+triggers need no separate empty-group path.
+`migrations/finops-digest-upsert.test.mjs` checks the digest against the ledger
+after random upserts, replaces, moves and deletes.
+`migrations/2026-10-30-finops-digest-zero-empty-groups.sql` zeroes the digest
+groups the first triggers (`2026-10-29-finops-digest.sql`) stranded: they
+recomputed only the new group on UPDATE and had no DELETE trigger, and the
+upsert migration's backfill only visits groups that still hold ledger rows.
+
 In source version `q08-signal-engine 0.39.8-compose-cache`, creative compose
 calls explicitly request `skipCache: true`. `aiGatewayRun` only enables caching
 for deterministic calls without that override; gateway routing and attribution

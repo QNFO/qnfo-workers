@@ -19,9 +19,16 @@ Two transports: HTTP (SSE) at `/mcp/sse?token=...` and streamable HTTP at `/mcp?
 
 ## Deploy
 
-Secrets (both set to the qnfo-ai router key, `tokens/qnfo-ai`):
-- `MCP_TOKEN` — token clients present (`?token=` or `Authorization: Bearer`)
+Secrets (`MCP_TOKEN` and `RT` set to the qnfo-ai router key, `tokens/qnfo-ai`):
+- `MCP_TOKEN` — full read+write token clients present (`?token=` or `Authorization: Bearer`)
+- `MCP_READ_TOKEN` — optional read-only token: every tool except the write tools (`email_respond`, `email_mark`, `express_desire`, `owner_code`, `owner_act`)
 - `RT` — router key used for outbound web_search/history_recall calls
+
+Since 1.4.0 the server also answers JSON-RPC batch requests, `ping`, `resources/list`,
+`resources/templates/list` and `prompts/list`, negotiates `protocolVersion` (2024-11-05 /
+2025-03-26 / 2025-06-18), and annotates every tool with `readOnlyHint`/`destructiveHint`.
+A token-authenticated POST to `/mcp/messages` with no live SSE session returns the result
+inline instead of dropping it.
 
 ```bash
 cd qnfo-tools-mcp

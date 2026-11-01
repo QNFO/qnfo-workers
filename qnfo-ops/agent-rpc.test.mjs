@@ -65,6 +65,11 @@ ok(/op === "start"/.test(src) && /op === "result"/.test(src), "start / result op
 ok(/storage\.put\("run:" \+ rid/.test(src) && /storage\.put\("schedule:" \+ rid, row\)/.test(src), "start stores the run and a due schedule row, then arms the alarm");
 ok(/if \(v\.run\) \{/.test(src) && /status: r && r\.ok \? "done" : "failed"/.test(src), "alarm() runs a run row and records done or failed with the reply");
 ok(/steps\.push\(\{ tool:/.test(src) && /onStep\(steps\)/.test(src), "each tool round is recorded as a live step");
+const chatBudgetStart = src.indexOf("if (!withTools) {", src.indexOf("const runner ="));
+const chatBudget = src.slice(chatBudgetStart, src.indexOf("const _dsOpts", chatBudgetStart));
+ok(chatBudget.indexOf("opsBudgetPromote") >= 0 && chatBudget.indexOf("opsBudgetPromote") < chatBudget.indexOf("opsToolBudgetBail"), "the interactive loop attempts durable recovery before recording a bail");
+ok(/if \(_firstBail && !promotedJobId\) opsToolBudgetBail\(env/.test(chatBudget), "a successful durable handoff is not counted as an interactive bail");
+ok(/"ops_agent_session_budget"/.test(src), "durable agent-session budget events use a separate event kind");
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

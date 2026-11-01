@@ -4,7 +4,10 @@
 //
 // WHAT   For every open pull request written by the Copilot cloud agent in this repository:
 //        1. removes the owner as requested reviewer and as assignee, and as assignee of the issue it fixes (GitHub adds the person who triggered
-//           the agent: events `assigned` and `review_requested` appear within a second of `copilot_work_finished`);
+//           the agent: events `assigned` and `review_requested` appear within a second of `copilot_work_finished`); with ORG_TOKEN (the fleet user
+//           credential, handed to this script only off a pull_request_target run) the same removal runs for the Copilot pull requests and the issues of
+//           every other repository of the organization, found by search: ASSIGN-COPILOT-ISSUES-1 starts sessions in all of them. It also closes a Copilot
+//           draft in another repository whose session finished 30 minutes ago and changed no file (no lane merges there; qnfo-workers has BH-EMPTY-DRAFT-1);
 //        2. once the agent has finished (the last copilot_work_* event is copilot_work_finished): approves the approval-gated pull_request runs of
 //           its head so that the checks the merge lane waits for actually run (a Copilot push starts runs that stay `action_required` until a person
 //           clicks "Approve and run workflows": 268 such runs and 19 zero-job failed runs measured on 2026-10-30, so the lane never saw a green check
@@ -18,7 +21,8 @@
 //        until copilot_work_finished: nothing is approved before that, so the lane never merges half a change.
 //        COPILOT_PR_APPROVE=off restores "nothing is approved" without a deploy of anything but the workflow variable.
 // SAFETY * Only pull requests whose author is the Copilot cloud agent and whose head branch lives in this repository are touched; a fork run is
-//          never approved. * The GITHUB_TOKEN of the workflow is the only credential; nothing from the pull request (title, body, branch) is put in
+//          never approved. * The GITHUB_TOKEN of the workflow does the repository work; ORG_TOKEN is used only for the organization search and the
+//          removal of the owner, never for an approval. Nothing from the pull request (title, body, branch) is put in
 //          a shell line, a path or a query: only integers and SHAs read from the API. * Every write is idempotent and capped per run. A refusal
 //          is recorded as it was said (RESULT_JSON, ::warning::) and never retried with another credential; the exit code stays 0 except for a crash.
 // USAGE  GH_TOKEN=... GITHUB_REPOSITORY=QNFO/qnfo-workers node scripts/copilot-pr-lifecycle.mjs [--pr N] [--mode live|dry] [--no-approve] [--max 30]
@@ -27,7 +31,7 @@ import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const API = "https://api.github.com";
-export const DEFAULTS = { max: 30, pages: 3, owners: ["rwnq8"], pauseMs: 250 };
+export const DEFAULTS = { max: 30, pages: 3, owners: ["rwnq8"], pauseMs: 250, orgMax: 50, emptyMax: 10, emptyAfterMin: 30 };
 export const isCopilotAuthor = (login) => /^(copilot|copilot-swe-agent)(\[bot\])?$/i.test(String(login || ""));
 
 // Paths whose change can alter what CI executes with a secret or write access, or that steer the build. A pull request touching one is never
@@ -60,6 +64,16 @@ export function workState(events) {
     else if (e.event === "copilot_work_finished") state = "finished";
   }
   return state;
+}
+
+// When the newest copilot_work_finished event happened (ISO), or "" when the session is not finished.
+export function finishedAt(events) {
+  let state = "none", at = "";
+  for (const e of events || []) {
+    if (e.event === "copilot_work_started") state = "working";
+    else if (e.event === "copilot_work_finished") { state = "finished"; at = e.created_at || ""; }
+  }
+  return state === "finished" ? at : "";
 }
 
 export function linkedIssues(body) {
@@ -123,8 +137,9 @@ export async function run(opts, deps) {
   const repo = o.repo;
 
   const listed = await listAll(api, "/repos/" + repo + "/pulls?state=open", null, o.pages);
-  if (listed.error) { sum.status = "list-failed"; sum.errors.push({ where: "list pulls", http: listed.error.http, message: listed.error.message }); return sum; }
-  let prs = listed.items.filter((p) => isCopilotAuthor(p.user && p.user.login));
+  let prs = [];
+  if (listed.error) { sum.status = "list-failed"; sum.errors.push({ where: "list pulls", http: listed.error.http, message: listed.error.message }); }
+  else prs = listed.items.filter((p) => isCopilotAuthor(p.user && p.user.login));
   if (o.pr) prs = prs.filter((p) => p.number === o.pr);
   sum.copilot_prs = prs.length;
 
@@ -194,9 +209,80 @@ export async function run(opts, deps) {
       if (o.pauseMs) await d.sleep(o.pauseMs);
     }
   }
-  sum.status = sum.errors.length ? "partial" : "ok";
+  if (o.orgToken) await orgPass(o, d, sum, dry);
+  if (sum.status !== "list-failed") sum.status = sum.errors.length ? "partial" : "ok";
   sum.calls = api.calls.length;
   return sum;
+}
+
+// Across the organization (the fleet user credential, never on a pull_request_target run): a Copilot pull request that asks the owner to review or is assigned to
+// the owner, and any open issue assigned to the owner, in every repository. GitHub adds the person who triggered the agent to both, in every repository it works in.
+async function orgPass(o, d, sum, dry) {
+  const api = makeApi(d.fetchImpl, o.orgToken);
+  const org = String(o.repo).split("/")[0];
+  const queries = [];
+  for (const owner of o.owners || []) {
+    if (!/^[A-Za-z0-9-]+$/.test(owner)) continue;
+    queries.push({ kind: "reviewer", owner, q: "org:" + org + " is:pr is:open author:app/copilot-swe-agent review-requested:" + owner });
+    queries.push({ kind: "pr-assignee", owner, q: "org:" + org + " is:pr is:open author:app/copilot-swe-agent assignee:" + owner });
+    queries.push({ kind: "issue-assignee", owner, q: "org:" + org + " is:issue is:open assignee:" + owner });
+  }
+  sum.org_removed = [];
+  let handled = 0;
+  for (const { kind, owner, q } of queries) {
+    const r = await api.req("GET", "/search/issues?per_page=100&q=" + encodeURIComponent(q));
+    if (r.status !== 200 || !r.body || !Array.isArray(r.body.items)) { sum.errors.push({ where: "org search " + kind, http: r.status, message: r.message }); continue; }
+    for (const it of r.body.items) {
+      if (handled >= o.orgMax) { sum.skipped["org-over-cap"] = (sum.skipped["org-over-cap"] || 0) + 1; continue; }
+      const m = /\/repos\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(String(it.repository_url || ""));
+      if (!m || !Number.isInteger(it.number)) continue;
+      handled++;
+      const entry = { kind, repo: m[1], number: it.number, login: owner };
+      if (dry) { sum.org_removed.push(Object.assign(entry, { dry: true })); continue; }
+      const res = kind === "reviewer"
+        ? await api.req("DELETE", "/repos/" + m[1] + "/pulls/" + it.number + "/requested_reviewers", { reviewers: [owner] })
+        : await api.req("DELETE", "/repos/" + m[1] + "/issues/" + it.number + "/assignees", { assignees: [owner] });
+      if (okStatus(res.status)) sum.org_removed.push(entry);
+      else sum.errors.push({ where: "org remove " + kind + " " + m[1] + "#" + it.number, http: res.status, message: res.message });
+      if (o.pauseMs) await d.sleep(o.pauseMs);
+    }
+  }
+  await closeEmptyDrafts(o, d, sum, api, org, dry);
+  sum.calls_org = api.calls.length;
+}
+
+// A Copilot draft in another repository whose session finished 30 minutes ago and changed no file carries nothing to review or merge (no merge lane exists
+// there, and qnfo-workers has its own hygiene tick, BH-EMPTY-DRAFT-1). It is commented and closed; the issue stays open and is never assigned again.
+async function closeEmptyDrafts(o, d, sum, api, org, dry) {
+  sum.empty_drafts_closed = [];
+  const q = "org:" + org + " is:pr is:open draft:true author:app/copilot-swe-agent -repo:" + o.repo;
+  const r = await api.req("GET", "/search/issues?per_page=100&q=" + encodeURIComponent(q));
+  if (r.status !== 200 || !r.body || !Array.isArray(r.body.items)) { sum.errors.push({ where: "org search empty-draft", http: r.status, message: r.message }); return; }
+  const now = d.now === undefined ? Date.now() : d.now;
+  let closed = 0;
+  for (const it of r.body.items) {
+    if (closed >= o.emptyMax) { sum.skipped["empty-over-cap"] = (sum.skipped["empty-over-cap"] || 0) + 1; continue; }
+    const m = /\/repos\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(String(it.repository_url || ""));
+    if (!m || !Number.isInteger(it.number)) continue;
+    const slug = m[1], n = it.number;
+    const g = await api.req("GET", "/repos/" + slug + "/pulls/" + n);
+    if (g.status !== 200 || !g.body) { sum.errors.push({ where: "empty-draft pull " + slug + "#" + n, http: g.status, message: g.message }); continue; }
+    if (!g.body.draft || Number(g.body.changed_files) !== 0) { sum.skipped["draft-has-changes"] = (sum.skipped["draft-has-changes"] || 0) + 1; continue; }
+    const ev = await listAll(api, "/repos/" + slug + "/issues/" + n + "/events", null, 2);
+    if (ev.error) { sum.errors.push({ where: "empty-draft events " + slug + "#" + n, http: ev.error.http, message: ev.error.message }); continue; }
+    const at = finishedAt(ev.items);
+    if (!at) { sum.skipped["empty-draft-session-" + workState(ev.items)] = (sum.skipped["empty-draft-session-" + workState(ev.items)] || 0) + 1; continue; }
+    if (now - Date.parse(at) < o.emptyAfterMin * 60000) { sum.skipped["empty-draft-recent"] = (sum.skipped["empty-draft-recent"] || 0) + 1; continue; }
+    const entry = { repo: slug, number: n, finished_at: at };
+    if (dry) { sum.empty_drafts_closed.push(Object.assign(entry, { dry: true })); closed++; continue; }
+    const body = "Closed by COPILOT-PR-LIFECYCLE-1: the Copilot session finished at " + at + " and changed no file, so this draft carries nothing to review or merge. The issue stays open; "
+      + "an issue Copilot ever had is not assigned again (ASSIGN-COPILOT-ISSUES-1), and a machine signal labelled no-auto is never assigned.";
+    const c = await api.req("POST", "/repos/" + slug + "/issues/" + n + "/comments", { body });
+    const x = await api.req("PATCH", "/repos/" + slug + "/pulls/" + n, { state: "closed" });
+    if (okStatus(c.status) && okStatus(x.status)) { sum.empty_drafts_closed.push(entry); closed++; }
+    else sum.errors.push({ where: "close empty draft " + slug + "#" + n, http: okStatus(x.status) ? c.status : x.status, message: okStatus(x.status) ? c.message : x.message });
+    if (o.pauseMs) await d.sleep(o.pauseMs);
+  }
 }
 
 // One comment per head commit names the files that kept the checks from being approved.
@@ -214,7 +300,7 @@ async function noteWithheld(api, repo, n, sha, denied, sum) {
 
 function summaryMarkdown(s) {
   const rows = [["copilot pull requests", s.copilot_prs], ["owner reviewer requests removed", s.reviewers_removed.length], ["owner assignments removed", s.assignees_removed.length + s.issue_assignees_removed.length],
-    ["gated runs approved", s.approved.length], ["approval withheld", s.approval_withheld.length], ["errors", s.errors.length]];
+    ["owner removed across the organization", (s.org_removed || []).length], ["empty drafts closed in other repositories", (s.empty_drafts_closed || []).length], ["gated runs approved", s.approved.length], ["approval withheld", s.approval_withheld.length], ["errors", s.errors.length]];
   const skipped = Object.keys(s.skipped).sort().map((k) => "- " + k + ": " + s.skipped[k]).join("\n");
   return "### Copilot pull request lifecycle (" + s.mode + ", status " + s.status + ")\n\n" + rows.map((r) => "- " + r[0] + ": " + r[1]).join("\n") + (skipped ? "\n\nSkipped\n" + skipped : "") + "\n";
 }
@@ -227,7 +313,7 @@ async function main() {
   const prNum = /^\d+$/.test(String(arg("--pr", env.TARGET_PR || ""))) ? Number(arg("--pr", env.TARGET_PR)) : 0;
   const maxN = Number(arg("--max", DEFAULTS.max));
   const opts = {
-    token: env.GH_TOKEN || "", repo: env.GITHUB_REPOSITORY || "", mode: arg("--mode", env.LIFECYCLE_MODE || "live") === "dry" ? "dry" : "live",
+    token: env.GH_TOKEN || "", orgToken: env.ORG_TOKEN || "", repo: env.GITHUB_REPOSITORY || "", mode: arg("--mode", env.LIFECYCLE_MODE || "live") === "dry" ? "dry" : "live",
     approve: !(off || argv.includes("--no-approve")), pr: prNum || 0, max: Number.isFinite(maxN) && maxN > 0 ? maxN : DEFAULTS.max,
     owners: (env.OWNER_LOGINS || DEFAULTS.owners.join(",")).split(",").map((x) => x.trim()).filter(Boolean)
   };
