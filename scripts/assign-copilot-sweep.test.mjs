@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { run, normalize, trusted, isCopilot, mirrorId, parseRefs, agentProblems, sinceIso, makeApi, syncOrgAgent, INSTRUCTIONS, AGENT, COPILOT_BOT, AGENT_SOURCE, AGENT_TARGET, LOCKS_URL, DEFAULTS, TARGET_OVERRIDES } from "./assign-copilot-sweep.mjs";
+import { run, normalize, trusted, isCopilot, mirrorId, parseRefs, agentProblems, sinceIso, makeApi, syncOrgAgent, INSTRUCTIONS, AGENT, COPILOT_BOT, AGENT_SOURCE, AGENT_TARGET, LOCKS_URL, DEFAULTS, TARGET_OVERRIDES, startFailures, creditsBreaker, START_FAILED_RE, CREDITS_RE, PRIORITY_LABEL } from "./assign-copilot-sweep.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -26,12 +26,16 @@ const item = (n, over) => Object.assign({
   number: n, state: "open", title: "issue " + n, repository_url: "https://api.github.com/repos/QNFO/qnfo-ops", html_url: "https://github.com/QNFO/qnfo-ops/issues/" + n,
   user: { login: "rwnq8" }, author_association: "OWNER", assignees: [], created_at: "2026-10-30T0" + (n % 9) + ":00:00Z"
 }, over || {});
+const hAgoIso = (h) => new Date(NOW - h * 3600000).toISOString();
+const REFUSED_CREDITS = "The agent encountered an error and was unable to start working on this issue: You don't have sufficient GitHub AI Credits to start a session. Review your usage and budgets in your Copilot settings.";
+const REFUSED_OTHER = "The agent encountered an error and was unable to start working on this issue: Please try again later, or contact support if the problem persists. (Request id: 67C7:70AE8)";
 const withCopilot = (n, over) => item(n, Object.assign({ assignees: [{ login: "Copilot" }], created_at: hAgo(20 + (n % 9)) }, over || {}));
 
 function fakeGh(cfg) {
   const log = [];
   const repos = Object.assign({ "QNFO/qnfo-ops": { default_branch: "main", archived: false }, "QNFO/qnfo-skills": { default_branch: "master", archived: false }, "QNFO/qnfo-workers": { default_branch: "main", archived: false }, "QNFO/qnfo-fleet-issues": { default_branch: "main", archived: false } }, cfg.repos || {});
   const files = Object.assign({}, cfg.files || {});
+  const refused = {}; // issue key -> "credits" | "other": Copilot's refusal comment appears after the assignment POST
   const fetchImpl = async (url, init) => {
     if (url === LOCKS_URL) { log.push({ method: "GET", path: "LOCKS" }); if (!cfg.locks) throw new Error("getaddrinfo ENOTFOUND qnfo-deploy-guard.q08.workers.dev"); return { status: 200, text: async () => JSON.stringify(cfg.locks) }; }
     const u = new URL(url), method = init.method || "GET", path = decodeURIComponent(u.pathname);
@@ -41,6 +45,7 @@ function fakeGh(cfg) {
     if (path === "/search/issues") {
       const q = u.searchParams.get("q") || "";
       if (/is:pr/.test(q)) { const items = cfg.copilotPrs || []; return reply(200, { total_count: cfg.openPrCount !== undefined ? cfg.openPrCount : items.length, items }); }
+      if (/sufficient GitHub AI Credits/.test(q)) { const items = cfg.creditsIssues || []; return reply(200, { total_count: items.length, items }); }
       if (cfg.searchStatus) return reply(cfg.searchStatus, { message: "Validation Failed" });
       const list = /assignee:app\/copilot-swe-agent/.test(q) ? (cfg.stalled || []) : (cfg.issues || []);
       const page = Number(u.searchParams.get("page") || 1);
@@ -50,11 +55,18 @@ function fakeGh(cfg) {
     if (m) return cfg.runsStatus ? reply(cfg.runsStatus, { message: "boom" }) : reply(200, { workflow_runs: cfg.runs || [] });
     m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/events$/.exec(path);
     if (m) return reply(200, (cfg.events || {})[m[1] + "#" + m[2]] || []);
+    m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/comments$/.exec(path);
+    if (m && method === "GET") {
+      const key = m[1] + "#" + m[2], since = Date.parse(u.searchParams.get("since") || "") || 0;
+      const extra = refused[key] ? [{ user: { login: "Copilot" }, created_at: hAgoIso(0), body: refused[key] === "credits" ? REFUSED_CREDITS : REFUSED_OTHER }] : [];
+      return reply(200, ((cfg.comments || {})[key] || []).concat(extra).filter((c) => cfg.sinceIsUpdatedAt || Date.parse(c.created_at) >= since)); // GitHub's since filters on updated_at, so an old comment that was edited comes back
+    }
     m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/timeline$/.exec(path);
     if (m) return cfg.timelineStatus ? reply(cfg.timelineStatus, { message: "boom" }) : reply(200, (cfg.timeline || {})[m[1] + "#" + m[2]] || []);
     m = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/assignees$/.exec(path);
     if (m && method === "POST") {
       const key = m[1] + "#" + m[2];
+      if (cfg.refuseOnAssign && cfg.refuseOnAssign[key]) refused[key] = cfg.refuseOnAssign[key];
       if (cfg.assignStatus && cfg.assignStatus[key]) return reply(cfg.assignStatus[key], { message: (cfg.assignMessage || {})[key] || "Forbidden" });
       if (cfg.assignRepoStatus && cfg.assignRepoStatus[m[1]]) return reply(cfg.assignRepoStatus[m[1]], { message: "Resource not accessible by personal access token" });
       const all = (cfg.issues || []).concat(cfg.stalled || [], Object.values(cfg.single || {}));
@@ -82,6 +94,8 @@ function fakeGh(cfg) {
 }
 const go = (cfg, opts, extra) => { const g = fakeGh(cfg); return run(Object.assign({ token: "SECRET-TOKEN-123", hours: 24, max: 25, pauseMs: 0, agentSync: false }, opts || {}), Object.assign({ fetchImpl: g.fetchImpl, now: NOW, sleep: async () => {} }, extra || {})).then((s) => ({ s, g })); };
 const posts = (g) => g.log.filter((c) => c.method === "POST");
+// the credit pre-flight search also names the Copilot assignee; only a search WITHOUT the credit phrase looks for stalled issues
+const stalledSearched = (g) => g.log.some((c) => /assignee:app\/copilot-swe-agent/.test(c.search || "") && !/AI Credits/.test(c.search || ""));
 
 // helpers
 ok(isCopilot("Copilot") && isCopilot("copilot-swe-agent[bot]") && isCopilot("copilot-swe-agent") && !isCopilot("rwnq8") && !isCopilot("copilot-fan"), "isCopilot matches the bot's three spellings and nothing else");
@@ -174,6 +188,7 @@ const stalledCfg = () => ({
   }
 });
 const num = (c) => c.path.split("/")[5];
+const assignedAtList = (hours) => hours.map((h) => ({ event: "assigned", assignee: { login: "Copilot" }, created_at: hAgo(h) }));
 ({ s, g } = await go(stalledCfg()));
 ok(s.claim_fallback_on_main === true && s.redriven === 2 && s.assigned === 0 && s.status === "ok", "with the fallback on main two stalled assignments are re-driven", s);
 ok(posts(g).map(num).join() === "101,106", "only the stalled ones: not the recent session, not the one with an open Copilot pull request, not the one with a merged pull request, not the exhausted one", { posts: posts(g).map((c) => c.path), skipped: s.skipped });
@@ -182,7 +197,7 @@ const seq = g.log.filter((c) => /\/(101|106)\/assignees$/.test(c.path)).map((c) 
 ok(seq.join() === "DELETE101,POST101,DELETE106,POST106", "each re-drive unassigns the bot and then assigns again", seq);
 ok(g.log.filter((c) => c.method === "DELETE").every((c) => JSON.stringify(c.body) === JSON.stringify({ assignees: [COPILOT_BOT] })), "the unassign names the bot login copilot-swe-agent[bot] (the login the API accepts) and no person");
 ({ s, g } = await go(Object.assign(stalledCfg(), { files: {} })));
-ok(s.claim_fallback_on_main === false && s.redriven === 0 && !g.log.some((c) => /assignee:/.test(c.search || "")), "without the fallback on main nothing is re-driven and the stalled issues are not even searched");
+ok(s.claim_fallback_on_main === false && s.redriven === 0 && !stalledSearched(g), "without the fallback on main nothing is re-driven and the stalled issues are not even searched");
 ({ s, g } = await go(stalledCfg(), { sweep: "new-only" }));
 ok(s.redriven === 0 && posts(g).length === 0 && s.claim_fallback_on_main === false, "new-only turns the re-drive off");
 ({ s, g } = await go(stalledCfg(), { redriveMax: 1 }));
@@ -190,7 +205,7 @@ ok(s.redriven === 1 && s.deferred >= 1 && posts(g).map(num).join() === "101", "-
 ({ s, g } = await go(Object.assign(stalledCfg(), { openPrCount: 11 })));
 ok(s.capacity === 1 && s.redriven === 1, "the open-pull-request limit bounds re-drives too", s);
 ({ s, g } = await go(Object.assign(stalledCfg(), { openPrCount: 12 })));
-ok(s.capacity === 0 && s.redriven === 0 && !g.log.some((c) => /assignee:/.test(c.search || "")), "a saturated run does not even search the stalled issues");
+ok(s.capacity === 0 && s.redriven === 0 && !stalledSearched(g), "a saturated run does not even search the stalled issues");
 ({ s, g } = await go(Object.assign(stalledCfg(), { deleteStatus: 403 })));
 ok(s.redriven === 0 && posts(g).length === 0 && s.errors.some((e) => /could not unassign/.test(e.message)), "a failed unassign stops that re-drive before any new assignment");
 ({ s, g } = await go(Object.assign(stalledCfg(), { timelineStatus: 500 })));
@@ -229,6 +244,84 @@ ok(s.status === "throttled", "two runs created in the same second: the lower id 
 ({ s, g } = await go({ issues: [item(148)], runs: [run_(3, "2026-10-30T09:35:30Z"), run_(2, "2026-10-30T09:35:30Z")] }, gate("workflow_run", 2)));
 ok(s.status === "ok" && s.assigned === 1, "the lower id of two simultaneous runs sweeps", s);
 ok(DEFAULTS.windowMinutes === 10, "the throttle window is ten minutes");
+
+// 4g. an assignment Copilot refused to start is not a session (measured 2026-11-01: 109 of 153 issues assigned to Copilot, 107 of them for lack of AI credits)
+const tlc = (who, body) => ({ event: "commented", actor: { login: who }, body });
+const sf0 = startFailures([tlc("Copilot", REFUSED_CREDITS), tlc("Copilot", REFUSED_CREDITS), tlc("Copilot", REFUSED_OTHER), tlc("rwnq8", REFUSED_CREDITS), tlc("Copilot", "Working on it."), { event: "cross-referenced" }, { event: "commented", user: { login: "Copilot" }, body: REFUSED_OTHER }]);
+ok(sf0.all === 4 && sf0.credits === 2 && sf0.other === 2, "startFailures counts only Copilot's own refusals (actor or user), split into credit refusals and others", sf0);
+ok(startFailures(null).all === 0 && startFailures([]).all === 0 && START_FAILED_RE.test(REFUSED_OTHER) && CREDITS_RE.test(REFUSED_CREDITS) && !CREDITS_RE.test(REFUSED_OTHER), "the refusal and credit patterns match the comments measured live");
+const LANDED_FILES = { [CLAUDE_KEY]: { sha: "c1", text: "## Work claims\n- CLAIM-UNREACHABLE-FALLBACK-1 (2026-10-30): an unreachable endpoint is not a refusal.\n" } };
+const stalledOne = (n, assignedHours, tl, extra) => Object.assign({
+  files: LANDED_FILES, stalled: [withCopilot(n, { created_at: "2026-10-20T01:00:00Z" })],
+  events: { ["QNFO/qnfo-ops#" + n]: assignedHours.map((h) => ({ event: "assigned", assignee: { login: "Copilot" }, created_at: hAgo(h) })) },
+  timeline: { ["QNFO/qnfo-ops#" + n]: tl }
+}, extra || {});
+({ s, g } = await go(stalledOne(301, [30, 20, 10], [tlc("Copilot", REFUSED_CREDITS), tlc("Copilot", REFUSED_CREDITS), tlc("Copilot", REFUSED_CREDITS)])));
+ok(s.redriven === 1 && s.redriven_after_start_failure === 1 && posts(g).length === 1 && !s.skipped["redrive-exhausted"], "an issue assigned three times whose three starts all failed for credits is re-driven (it used to read redrive-exhausted and was never worked)", s);
+({ s, g } = await go(stalledOne(302, [30, 20, 10], [tlc("Copilot", REFUSED_CREDITS)])));
+ok(s.redriven === 0 && s.skipped["redrive-exhausted"] === 1, "two real sessions (three assignments, one refusal) still exhaust the re-drive", s);
+({ s, g } = await go(stalledOne(303, [70, 60, 50, 40, 30, 20, 10], [1, 2, 3, 4, 5, 6, 7].map(() => tlc("Copilot", REFUSED_CREDITS)))));
+ok(s.redriven === 1, "credit refusals never count against an issue, however many there were", s);
+({ s, g } = await go(stalledOne(304, [40, 30, 20, 10], [1, 2, 3, 4].map(() => tlc("Copilot", REFUSED_OTHER)))));
+ok(s.redriven === 0 && s.skipped["start-failures-exhausted"] === 1, "a refusal that is not about credits is bounded: four of them stop the issue", s);
+({ s, g } = await go(stalledOne(305, [30, 20, 10], [1, 2, 3].map(() => tlc("Copilot", REFUSED_OTHER)))));
+ok(s.redriven === 1, "three non-credit refusals are still allowed one more try", s);
+({ s, g } = await go(stalledOne(306, [20, 10], [tlc("Copilot", REFUSED_CREDITS)])));
+ok(s.redriven === 1, "one refusal and one real session: the second real attempt is allowed", s);
+({ s, g } = await go(stalledOne(307, [30, 20, 10], [tlc("Copilot", REFUSED_CREDITS), { event: "cross-referenced", source: { issue: { state: "open", pull_request: {} } } }])));
+ok(s.redriven === 0 && s.skipped["has-live-pr"] === 1, "a refused start does not override a live pull request");
+({ s, g } = await go(stalledOne(308, [0.5], [tlc("Copilot", REFUSED_CREDITS)])));
+ok(s.redriven === 0 && s.skipped["session-recent"] === 1, "the cooldown applies to a refused start too (no retry inside the window)");
+
+// 4h. a red main blocks every deploy: its ci-watchdog issue goes first
+({ s, g } = await go({ issues: [item(401, { created_at: "2026-10-30T01:00:00Z" }), item(402, { created_at: "2026-10-30T08:00:00Z", labels: [{ name: PRIORITY_LABEL }] })] }, { max: 1 }));
+ok(posts(g).length === 1 && posts(g)[0].path.includes("/issues/402/") && PRIORITY_LABEL === "ci-watchdog", "a ci-watchdog issue is assigned before an older issue when the cap allows one", posts(g).map((c) => c.path));
+({ s, g } = await go({ stalled: [withCopilot(403, { created_at: "2026-10-01T00:00:00Z" }), withCopilot(404, { created_at: "2026-10-25T00:00:00Z", labels: [{ name: PRIORITY_LABEL }] })], files: LANDED_FILES, events: { "QNFO/qnfo-ops#403": assignedAtList([5]), "QNFO/qnfo-ops#404": assignedAtList([5]) } }, { redriveMax: 1 }));
+ok(posts(g).length === 1 && posts(g)[0].path.includes("/issues/404/"), "a stalled ci-watchdog issue is re-driven before an older stalled issue", posts(g).map((c) => c.path));
+({ s, g } = await go({ issues: [item(405, { created_at: "2026-10-30T01:00:00Z" }), item(406, { created_at: "2026-10-30T08:00:00Z", labels: [{ name: PRIORITY_LABEL }] })], single: { "QNFO/qnfo-ops#405": item(405, { created_at: "2026-10-30T01:00:00Z" }) } }, { max: 1, priority: { repo: "QNFO/qnfo-ops", number: 405 } }));
+ok(posts(g).length === 1 && posts(g)[0].path.includes("/issues/405/"), "the issue that fired the run still goes before a ci-watchdog issue");
+
+// 4i. canary: the first assignment of a run is checked for a refusal; credits stop the run, no refusal lets it continue
+const refusalReads = (g) => g.log.filter((c) => c.method === "GET" && /\/comments$/.test(c.path));
+const sleeps = [];
+({ s, g } = await go({ issues: [item(411, { created_at: "2026-10-30T01:00:00Z" }), item(412, { created_at: "2026-10-30T02:00:00Z" }), item(413, { created_at: "2026-10-30T03:00:00Z" })], refuseOnAssign: { "QNFO/qnfo-ops#411": "credits" } }, {}, { sleep: async (ms) => { sleeps.push(ms); } }));
+ok(posts(g).length === 1 && s.status === "credits-exhausted" && s.credits_exhausted === "QNFO/qnfo-ops#411" && /AI credits/.test(s.start_refused) && /AI credits are exhausted/.test(s.stopped), "a credit refusal on the first assignment stops the run after that one assignment", s);
+ok(sleeps.length === 1 && sleeps[0] === DEFAULTS.canaryMs && DEFAULTS.canaryMs === 12000, "the canary waits the configured seconds once (Copilot refuses within about five)", sleeps);
+({ s, g } = await go({ issues: [item(421, { created_at: "2026-10-30T01:00:00Z" }), item(422, { created_at: "2026-10-30T02:00:00Z" })], refuseOnAssign: { "QNFO/qnfo-ops#421": "other" } }));
+ok(posts(g).length === 1 && s.status === "stopped" && /other reason/.test(s.start_refused) && s.credits_exhausted === undefined && /unknown/.test(s.stopped), "a refusal for another reason also stops the run (the cause is unknown, so the rest would meet it)", s);
+({ s, g } = await go({ issues: [item(431, { created_at: "2026-10-30T01:00:00Z" }), item(432, { created_at: "2026-10-30T02:00:00Z" }), item(433, { created_at: "2026-10-30T03:00:00Z" })] }));
+ok(posts(g).length === 3 && s.status === "ok" && refusalReads(g).length === 1, "with no refusal every issue is assigned and the canary read exactly once", { posts: posts(g).length, reads: refusalReads(g).length, status: s.status });
+({ s, g } = await go({ issues: [item(441), item(442)], refuseOnAssign: { "QNFO/qnfo-ops#441": "credits" } }, { mode: "dry" }));
+ok(refusalReads(g).length === 0 && posts(g).length === 0 && s.would_assign.length === 2, "dry never assigns, so it never runs the canary or the pre-flight check");
+({ s, g } = await go(Object.assign(stalledOne(451, [30], []), { refuseOnAssign: { "QNFO/qnfo-ops#451": "credits" } })));
+ok(s.status === "credits-exhausted" && s.redriven === 1, "a re-drive is canaried like a new assignment", s);
+
+// 4j. pre-flight breaker: while Copilot is refusing for credits, assign nothing
+const recentRefusal = (key, hours, body) => ({ [key]: [{ user: { login: "Copilot" }, created_at: hAgoIso(hours), body: body || REFUSED_CREDITS }] });
+({ s, g } = await go({ issues: [item(461)], creditsIssues: [item(462)], comments: recentRefusal("QNFO/qnfo-ops#462", 0.17) }));
+ok(s.status === "credits-exhausted" && s.credits_check === "tripped" && s.credits_exhausted === "QNFO/qnfo-ops#462" && posts(g).length === 0 && s.assigned === 0 && /AI credits/.test(s.note), "a credit refusal inside the cooldown window stops the sweep before it assigns anything", s);
+ok(!g.log.some((c) => /created:>=/.test(c.search || "")), "the tripped run costs only the pre-flight reads (it never lists the issues)");
+({ s, g } = await go({ issues: [item(463)], creditsIssues: [item(464)], comments: recentRefusal("QNFO/qnfo-ops#464", 2) }));
+ok(s.status === "ok" && s.credits_check === "clear" && s.assigned === 1, "a refusal older than the window no longer holds the sweep", s);
+({ s, g } = await go({ issues: [item(465)], creditsIssues: [item(466)], comments: recentRefusal("QNFO/qnfo-ops#466", 0.17, REFUSED_OTHER) }));
+ok(s.status === "ok" && s.credits_check === "clear" && s.assigned === 1, "a refusal that is not about credits does not trip the breaker");
+({ s, g } = await go({ issues: [item(467)], creditsIssues: [item(468)], comments: recentRefusal("QNFO/qnfo-ops#468", 0.17) }, { creditsCooldownMinutes: 5 }));
+ok(s.status === "ok" && s.assigned === 1, "the cooldown is configurable (a 10-minute-old refusal is outside a 5-minute window)");
+({ s, g } = await go({ issues: [item(469)] }));
+ok(s.credits_check === "clear" && s.assigned === 1, "no recently updated credit-refusal issue leaves the breaker clear");
+({ s, g } = await go({ issues: [item(470)], creditsIssues: [item(471)], comments: recentRefusal("QNFO/qnfo-ops#471", 0.17), openPrCount: 12 }));
+ok(!g.log.some((c) => /AI Credits/.test(c.search || "")) && s.capacity === 0, "a saturated run skips the pre-flight (it would assign nothing anyway)");
+({ s, g } = await go({ issues: [item(473)], creditsIssues: [item(474)], comments: recentRefusal("QNFO/qnfo-ops#474", 3), sinceIsUpdatedAt: true }));
+ok(s.status === "ok" && s.credits_check === "clear" && s.assigned === 1, "a refusal written hours ago that GitHub returns because it was edited recently does not trip the breaker (since filters on updated_at, so the comment's own time decides)", s);
+const cb = await creditsBreaker(makeApi(fakeGh({ creditsIssues: [item(472)], comments: recentRefusal("QNFO/qnfo-ops#472", 0.1) }).fetchImpl, "t"), "QNFO", NOW, 30);
+ok(cb.tripped === true && cb.issue === "QNFO/qnfo-ops#472", "creditsBreaker reads the comment time, not the issue's updated_at", cb);
+const cb2 = await creditsBreaker(makeApi(fakeGh({ searchStatus: 500, creditsIssues: [] }).fetchImpl, "t"), "QNFO", NOW, 30);
+ok(cb2.tripped === false, "an unreadable pre-flight never blocks the sweep");
+
+// 4k. the per-run read budget bounds what a sweep spends of the shared PAT
+({ s, g } = await go(Object.assign(stalledCfg(), { }), { maxCalls: 14 }));
+ok(s.deferred_why === "read budget" && s.deferred >= 1 && g.log.filter((c) => c.path !== "LOCKS").length <= 14 + 8, "a run that has spent its read budget defers the rest of the backlog", { why: s.deferred_why, deferred: s.deferred, calls: s.calls });
+ok(DEFAULTS.maxCalls === 170 && DEFAULTS.maxOtherFailures === 3 && DEFAULTS.creditsCooldownMinutes === 30, "the defaults: 170 reads a run, three non-credit refusals, a 30-minute credit cooldown", DEFAULTS);
 
 // 5. failures never throw and never loop
 ({ s, g } = await go({ issues: [item(71, { created_at: "2026-10-30T01:00:00Z" }), item(72, { created_at: "2026-10-30T02:00:00Z" }), item(73, { created_at: "2026-10-30T03:00:00Z" })], assignStatus: { "QNFO/qnfo-ops#71": 401 }, assignMessage: { "QNFO/qnfo-ops#71": "Bad credentials" } }));

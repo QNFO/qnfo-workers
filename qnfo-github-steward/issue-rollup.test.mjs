@@ -1,4 +1,4 @@
-// ISSUE-ROLLUP-1 offline suite: only the priorities in ops_config gh_individual_priorities keep one GitHub issue each; the rest are listed in a [digest] issue and their mirrors close not_planned. Run: node qnfo-github-steward/issue-rollup.test.mjs
+// ISSUE-ROLLUP-1 offline suite: configured priorities keep one GitHub issue each; FM-ACTOR-1 issues are also individual at every priority, while the rest are listed in a [digest]. D1 remains authoritative. Run: node qnfo-github-steward/issue-rollup.test.mjs
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
@@ -90,6 +90,17 @@ assert.ok(patchLog.some((x) => /\(3\)$/.test(x.title || "") && /#4 \| medium/.te
 const patches = patchLog.length;
 await tick();
 assert.equal(patchLog.length, patches, "an unchanged digest is not rewritten");
+
+// FM-ACTOR-1 issues stay individual at every priority and D1, not GitHub, remains their closure authority.
+ins.run(5, "FM-ACTOR-1: loop-close-vs-probe-disagree", "Failure-mode detector", "qnfo-cloud-ops", "failure-mode", "medium", t0);
+r = await tick();
+const fmIssue = gIssues.find((i) => i.title.startsWith("[#5]"));
+assert.ok(fmIssue && fmIssue.state === "open", "a medium FM-ACTOR-1 issue is mirrored individually");
+assert.ok(!dg.body.includes("#5 |"), "FM-ACTOR-1 is not duplicated into the digest");
+fmIssue.state = "closed";
+await tick();
+assert.equal(fmIssue.state, "open", "a GitHub close cannot resolve an FM-ACTOR-1 issue while D1 remains open");
+assert.equal(db.prepare("SELECT status FROM agent_issues WHERE id = 5").get().status, "open", "D1 remains the closure authority");
 
 // Promotion: a medium row that becomes critical gets its issue back (reopen).
 db.prepare("UPDATE agent_issues SET priority = 'critical', updated_at = ? WHERE id = 3").run(Date.now());

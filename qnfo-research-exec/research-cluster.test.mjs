@@ -15,6 +15,7 @@ import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const hub = readFileSync(join(here, "..", "errata-hub", "worker.js"), "utf8");
+const confirmMigration = readFileSync(join(here, "..", "migrations", "2026-11-01-errata-confirm-attempts.sql"), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
 
@@ -89,9 +90,13 @@ CREATE TABLE internal_errata (id TEXT PRIMARY KEY, status TEXT DEFAULT 'open', r
 CREATE TABLE papers (slug TEXT, title TEXT, body_md TEXT, doi TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
+  db.exec(confirmMigration.replace(/^--.*$/gm, ""));
   db.prepare("INSERT INTO papers VALUES (?, ?, ?, NULL)").run("good", "Good", "The paper text is here. ".repeat(50));
   db.prepare("INSERT INTO papers VALUES (?, ?, ?, NULL)").run("empty", "Empty", "   ");
-  const add = (subj, doi, created) => db.prepare("INSERT INTO errata_queue (source, sender, subject, paper_doi, claim, status, created_at, updated_at) VALUES ('internal_audit', 'qnfo-lifecycle PAPER-LEARN-1', ?, ?, 'a claim', 'internal-open', ?, ?)").run(subj, doi, created, created);
+  const add = (subj, doi, created) => {
+    db.prepare("INSERT INTO internal_errata (id, status, remediation) VALUES (?, 'open', '')").run(subj);
+    db.prepare("INSERT INTO errata_queue (source, sender, subject, paper_doi, claim, status, created_at, updated_at) VALUES ('internal_audit', 'qnfo-lifecycle PAPER-LEARN-1', ?, ?, 'a claim', 'internal-open', ?, ?)").run(subj, doi, created, created);
+  };
   add("poison-a", "empty", "2026-10-20 00:00:00"); add("poison-b", "empty", "2026-10-20 01:00:00"); add("poison-c", "empty", "2026-10-20 02:00:00");
   add("ok-1", "good", "2026-10-20 03:00:00"); add("ok-2", "good", "2026-10-20 04:00:00"); add("ok-3", "good", "2026-10-20 05:00:00");
   db.prepare("INSERT INTO ops_config VALUES ('errata_confirm_max', '3')").run();
@@ -107,7 +112,13 @@ CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT
   const out3 = await mod.confirmInternalErrata(env);
   ok(out3.candidates === 3 && out3.deferred === 3, "once nothing else is waiting the poison rows are tried again, oldest first", out3);
   ok(db.prepare("SELECT count(*) AS n FROM cloud_ops_events WHERE kind = 'errata_confirm_defer'").get().n === 0, "an empty paper is a no-body defer (console only); a model failure writes the cloud_ops_events row");
-  ok(!/ORDER BY RANDOM\(\) LIMIT \?2/.test(src) && /ORDER BY updated_at ASC, id ASC LIMIT \?2/.test(src), "the selector is oldest-first, not random");
+  ok(!/ORDER BY RANDOM\(\) LIMIT \?2/.test(src) && /ORDER BY q\.updated_at ASC, q\.id ASC LIMIT \?2/.test(src), "the selector is oldest-first, not random");
+  const out4 = await mod.confirmInternalErrata(env);
+  ok(out4.blocked === 3 && out4.deferred === 3, "the third repeated defer blocks each poison row instead of retrying forever", out4);
+  const blocked = db.prepare("SELECT subject, status FROM errata_queue WHERE subject LIKE 'poison-%' ORDER BY id").all();
+  ok(blocked.every((r) => r.status === "internal-blocked"), "exhausted internal errata are excluded from the automatic retry lane", blocked);
+  const reasons = db.prepare("SELECT id, remediation FROM internal_errata WHERE id LIKE 'poison-%' ORDER BY id").all();
+  ok(reasons.every((r) => (r.remediation.match(/ERRATA-INTERNAL-CONFIRM-DEFER-1/g) || []).length === 3 && /has no body/.test(r.remediation)), "each blocked row retains its three bounded defer reasons", reasons);
 }
 
 // ---------------------------------------------------------------- (2) routing
