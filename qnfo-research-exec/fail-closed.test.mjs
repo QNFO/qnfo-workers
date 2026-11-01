@@ -280,7 +280,7 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
   addQ("fb-1", "qnfo-ops", "true-paper", "fallback finding");
   AI.run = async (model, input) => { calls.push(model); if (/deepseek/.test(model)) return { response: "" }; return { response: "{\"confirmed\": \"yes\", \"why\": \"ok\"}" }; };
   await tick();
-  ok(q("fb-1") === "detected" && calls.length === 2 && /kimi/.test(calls[1]), "an empty reply from the first model falls back to the second and a lenient verdict is accepted", calls);
+  ok(q("fb-1") === "detected" && calls.length === 2 && /glm-5\.3/.test(calls[1]), "an empty reply from the first model falls back to glm-5.3 and a lenient verdict is accepted", calls);
   // The respond member now sees the confirmed rows.
   ok(audit.prepare("SELECT COUNT(*) n FROM errata_queue WHERE status = 'detected'").get().n === 4, "four rows reach errata-respond as detected");
   // The issue-2494 probe, verbatim, on this database.
