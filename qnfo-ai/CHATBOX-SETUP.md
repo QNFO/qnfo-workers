@@ -60,17 +60,20 @@ personal-life) remain physically separate.
 Two Cloudflare-hosted MCP servers give Chatbox the agentic tools.
 
 ### qnfo-tools-mcp (web + research + personal recall) — new 2026-08-28
-- Type: **HTTP (SSE)** — URL: `https://qnfo-tools-mcp.q08.workers.dev/mcp/sse?token=<research key>`
-- If your Chatbox build only supports streamable HTTP: `https://qnfo-tools-mcp.q08.workers.dev/mcp?token=<research key>`
+- Type: **HTTP (SSE)** — URL: `https://qnfo-tools-mcp.q08.workers.dev/mcp/sse?token=<MCP_TOKEN or MCP_READ_TOKEN>`
+- If your Chatbox build only supports streamable HTTP: `https://qnfo-tools-mcp.q08.workers.dev/mcp?token=<MCP_TOKEN or MCP_READ_TOKEN>`
+- `MCP_READ_TOKEN` is optional and read-only; write tools (`express_desire`, `email_respond`, `email_mark`, `owner_code`, `owner_act`) require `MCP_TOKEN`. Use the query token for clients that cannot set an `Authorization: Bearer` header.
 - Tools: `web_search`, `web_fetch` (SSRF-guarded), `papers_search` (QNFO corpus),
   `history_recall` (your past research notes), `personal_search` (personal-life index).
 - Health: `https://qnfo-tools-mcp.q08.workers.dev/health`
 
 ### qnfo-memory-mcp (knowledge graph + memory)
-- Type: **HTTP (SSE)** — URL: `https://qnfo-memory-mcp.q08.workers.dev/mcp/sse`
+- Type: **HTTP (SSE)** — URL: `https://qnfo-memory-mcp.q08.workers.dev/mcp/sse?token=<MCP_TOKEN or MCP_READ_TOKEN>`
+- For streamable HTTP: `https://qnfo-memory-mcp.q08.workers.dev/mcp?token=<MCP_TOKEN or MCP_READ_TOKEN>`
+- `MCP_READ_TOKEN` is optional and read-only; `remember_fact` and `exuvia_publish_paper` require `MCP_TOKEN`. Use the query token for clients that cannot set an `Authorization: Bearer` header.
 - Tools: `search_papers`, `search_papers_enriched`, `resolve_paper_id`, `search_memories`,
   `remember_fact`, `recall_facts`, `query_graph`, `get_paper_context`.
-- Public (read-only; remember_fact writes to the QNFO memory store — it is the designed write path).
+- All MCP endpoints require a token; the open `/fleet-graph/*` read routes remain public. `remember_fact` writes to the QNFO memory store — it is the designed write path.
 
 ## 3. System prompt (make every chat agentic)
 
