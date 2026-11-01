@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-11-01 19:30:03",
+  "audited_at": "2026-11-01 20:13:59",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-github-steward"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -591,7 +598,7 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.6.5-codeagent",
+        "version": "1.6.6",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -606,7 +613,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.31.2-codeagent",
+        "version": "0.32.1-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -631,7 +638,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.12-metric-relapse-monitor",
+        "version": "0.59.13-worker-health-tombstone-exclusion",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -646,7 +653,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.10.7",
+        "version": "0.10.8",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1107,9 +1114,9 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.6.5-codeagent",
+      "before": "1.6.6",
       "http": 200,
-      "live": "1.6.5-codeagent",
+      "live": "1.6.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1275,9 +1282,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.31.2-codeagent",
+      "before": "0.32.1-codeagent",
       "http": 200,
-      "live": "0.31.2-codeagent",
+      "live": "0.32.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1405,9 +1412,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.12-metric-relapse-monitor",
+      "before": "0.59.13-worker-health-tombstone-exclusion",
       "http": 200,
-      "live": "0.59.12-metric-relapse-monitor",
+      "live": "0.59.13-worker-health-tombstone-exclusion",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1455,9 +1462,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.10.7",
+      "before": "0.10.8",
       "http": 200,
-      "live": "0.10.7",
+      "live": "0.10.8",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
