@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.0-forecast-ledger";
+var VERSION = "0.40.2-codeagent";
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
 /* 0.39.1 (2026-10-28, issue 5129): the VERSION line is short again (VERSION-LINE-NOTES-1); the 0.39.0 note moved here unchanged. 0.39.0 BP26-CORRECTIONS-FEED-1 (2026-10-28, agent_issues 1000334, pillar research): /api/retractions and the new /corrections and /api/corrections carry a COPE type and the original link per entry. */
@@ -4081,7 +4081,7 @@ function renderCalibration(c) {
   var body = '<section class="q08-hero"><h1>Forecast calibration</h1><p class="q-lede">Forecasts grouped by the probability q08 gave them, against how often they came true. A calibrated forecaster sits on the diagonal. Scores use the original published probability; later updates are separate rows and never replace it.</p>' +
     '<p class="q-meta">' + (c.n ? c.n + ' resolved forecast' + (c.n === 1 ? '' : 's') + '. Brier score ' + c.brier + ' (always saying 50% scores ' + c.baseline_brier + '; lower is better). Log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better).' + (c.reliable ? '' : ' Under 20 resolved forecasts a score is mostly noise.') : 'No forecast has resolved yet, so there is nothing to plot.') + '</p></section>' +
     '<section class="q-panel">' + svg + (tr ? '<table class="q-table"><thead><tr><th>Bucket</th><th>Forecasts</th><th>Mean said</th><th>Came true</th></tr></thead><tbody>' + tr + '</tbody></table>' : '') + '<p class="q-meta"><a href="/forecasts">All forecasts</a> &middot; <a href="/api/forecasts/calibration">JSON</a></p></section>';
-  return q08Page({ title: "Forecast calibration \u00b7 q08", canonical: ORIGIN + "/forecasts/calibration", active: "forecasts", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline." }, body);
+  return q08Page({ title: "Forecast calibration \u00b7 q08", canonical: ORIGIN + "/forecasts/calibration", active: "forecasts", ogType: "article", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline.", jsonld: { "@context": "https://schema.org", "@type": "Article", headline: "Forecast calibration", description: "Calibration of q08's resolved forecasts by probability bucket, with Brier and log scores against the always-50% baseline.", url: ORIGIN + "/forecasts/calibration", mainEntityOfPage: ORIGIN + "/forecasts/calibration", publisher: { "@type": "Organization", name: "q08", url: ORIGIN }, isPartOf: { "@type": "WebSite", name: "q08", url: ORIGIN }, about: { "@type": "Thing", name: "Forecast calibration and scoring" } } }, body);
 }
 function renderForecasts(rows, stats) {
   var item = function (f) {
@@ -4095,7 +4095,7 @@ function renderForecasts(rows, stats) {
   var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p></section>' +
     '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. They appear after every few essays.</div>') + '</section>' +
     (fin.length ? '<section class="q08-feed" aria-label="Settled forecasts"><h2 class="q-h3">Settled</h2><ul class="q-list">' + fin.map(item).join("") + '</ul></section>' : "") + q08Sub(true);
-  return q08Page({ title: "Forecasts \u00b7 q08", canonical: ORIGIN + "/forecasts", active: "forecasts", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve." }, body);
+  return q08Page({ title: "Forecasts \u00b7 q08", canonical: ORIGIN + "/forecasts", active: "forecasts", ogType: "article", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", jsonld: { "@context": "https://schema.org", "@type": "Article", headline: "Forecasts", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", url: ORIGIN + "/forecasts", mainEntityOfPage: ORIGIN + "/forecasts", publisher: { "@type": "Organization", name: "q08", url: ORIGIN }, isPartOf: { "@type": "WebSite", name: "q08", url: ORIGIN }, about: { "@type": "Thing", name: "Dated, probability-weighted forecasts and their scoring record" } } }, body);
 }
 
 // ---------------------------------------------------------------------------
@@ -4263,11 +4263,17 @@ function q08Attr(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").r
 function q08Page(o, body) {
   var t = q08Attr(o.title), d = q08Attr(o.description || "Explanatory essays on technology stories: what happened, and the system that made it happen.");
   var canon = o.canonical ? q08Attr(o.canonical) : "";
-  var ld = o.jsonld ? '<script type="application/ld+json">' + JSON.stringify(o.jsonld).replace(/</g, "\\u003c") + "<\/script>" : "";
+  var siteJsonld = { "@context": "https://schema.org", "@type": "WebSite", name: "q08", url: ORIGIN, description: "Systems-level critique: explanatory essays on technology stories, with dated, scored forecasts.", publisher: { "@type": "Organization", name: "q08", url: ORIGIN } };
+  var ldArr = o.jsonld ? (Array.isArray(o.jsonld) ? o.jsonld : [o.jsonld]) : [];
+  ldArr.push(siteJsonld);
+  var ld = '<script type="application/ld+json">' + JSON.stringify(ldArr).replace(/</g, "\\u003c") + "<\/script>";
   var xh = o.extraHead || "";
+  var pubMeta = o.published ? '<meta property="article:published_time" content="' + q08Attr(o.published) + '">' : "";
+  var modMeta = o.modified ? '<meta property="article:modified_time" content="' + q08Attr(o.modified) + '">' : "";
+  var authMeta = o.author ? '<meta property="article:author" content="' + q08Attr(o.author) + '">' : "";
   return '<!DOCTYPE html><html lang="en" data-brand="q08"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + t + '</title><meta name="description" content="' + d + '">' +
     xh + (canon ? '<link rel="canonical" href="' + canon + '"><meta property="og:url" content="' + canon + '">' : "") + (o.robots ? '<meta name="robots" content="' + q08Attr(o.robots) + '">' : "") +
-    '<meta property="og:site_name" content="q08"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
+    '<meta property="og:site_name" content="q08"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '">' + (o.ogType === "article" ? pubMeta + modMeta + authMeta : "") + (o.section ? '<meta property="article:section" content="' + q08Attr(o.section) + '">' : "") + '<meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
     '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)"><link rel="icon" type="image/svg+xml" href="' + Q08_FAVICON + '"><link rel="alternate" type="application/rss+xml" title="q08" href="/feed.xml">' +
     Q08_FONTS + '<link rel="stylesheet" href="https://qnfo.org/qds.css?v=' + Q08_QDS + '"><script src="https://qnfo.org/qds.js?v=' + Q08_QDS + '" defer><\/script>' + Q08_CSS + ld + MATH_HEAD + "</head><body>" +
     '<a class="q-skip" href="#main">Skip to main content</a><header class="q-top"><div class="q-wrap"><a class="q08-mark" href="/" aria-label="q08 home"><b>q08</b><small>systems-level critique</small></a>' +
@@ -4926,6 +4932,16 @@ async function q08Fetch(req, env, ctx) {
       } catch (e) { fnote = null; }
       await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, note, created_at) VALUES (?,?,?,?,?)").bind(fslug, s, ipKey, fnote, nowIso()).run();
       return json({ ok: true, recorded: s, note_stored: !!fnote });
+    }
+    function renderAtomFeed(rows) {
+      var esc = function (s) { return String(s || "").replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+      var updated = rows.length ? rows[0].published_at : nowIso();
+      var entries = rows.map(function (r) {
+        var url = ORIGIN + "/p/" + r.slug;
+        var content = esc(String(r.body_md || "").slice(0, 8000)).replace(/\n/g, "<br/>\n");
+        return "<entry>\n<id>" + esc(url) + "</id>\n<link href=\"" + esc(url) + "\"/>\n<title>" + esc(r.title || r.slug) + "</title>\n<updated>" + esc(r.published_at) + "</updated>\n<published>" + esc(r.published_at) + "</published>\n<summary>" + esc(r.core_concept || "") + "</summary>\n<content type=\"html\">" + content + "</content>\n</entry>";
+      }).join("\n");
+      return '<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n<title>q08 Signal Engine pieces</title>\n<link rel="self" href="' + esc(ORIGIN + "/atom.xml") + '"/>\n<link href="' + esc(ORIGIN + "/") + '"/>\n<updated>' + esc(updated) + '</updated>\n<id>' + esc(ORIGIN + "/") + '</id>\n' + entries + '\n</feed>';
     }
     if (path === "/feed.xml" || path === "/atom.xml") {
       var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all();

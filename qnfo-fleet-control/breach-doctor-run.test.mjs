@@ -213,8 +213,19 @@ ok(cA > 0 && cB > cA, "the BREACH-DOCTOR-WATCH-1 block is marked in qnfo-cloud-o
 const jx = { Date, Math, Number, JSON, String, Promise, isFinite, setTimeout, clearTimeout, VERSION: "1.40.0-test", __name: () => {}, console: quiet };
 vm.createContext(jx);
 vm.runInContext(cloudSrc.slice(cA, cB) + "\n__x = { jobBreachDoctorWatch };", jx);
-const watchJob = jx.__x.jobBreachDoctorWatch;
-ok(typeof watchJob === "function", "jobBreachDoctorWatch is loaded");
+const rawWatchJob = jx.__x.jobBreachDoctorWatch;
+// BDR-CLAIM-ID-RACE-1 (2026-10-30, agent_issues 5013): a run row's id is "breach-doctor-watch-run-<kind>-" + the millisecond in base 36, and two real ticks are 10 minutes apart. A scenario that calls the job
+// twice in a row (a skipped lock-held call, then the retry) could land both in one millisecond under CPU load (1 of 24 concurrent runs); the second claim then hit the primary key, threw, and was
+// reported as claim-failed: red in the full parallel suite, green alone. Each call now starts strictly after the previous one ended, so no two calls share a millisecond.
+let lastWatchMs = 0;
+const watchJob = async (...args) => {
+  while (Date.now() <= lastWatchMs) await new Promise((r) => setTimeout(r, 1));
+  try { return await rawWatchJob(...args); } finally { lastWatchMs = Date.now(); }
+};
+// SUITE-CLOCK-FLAKE-1: wait out the current millisecond before a second claim; a run id is Date.now() in base 36
+// and two claims in one millisecond collide on cloud_ops_events.id (reported claim-failed on CI).
+const nextMs = async () => { const t = Date.now(); while (Date.now() <= t) await new Promise((r) => setTimeout(r, 1)); };
+ok(typeof rawWatchJob === "function", "jobBreachDoctorWatch is loaded");
 const iso = (minAgo) => new Date(Date.now() - minAgo * 60000).toISOString().slice(0, 19) + "Z";
 function e2e(o = {}) {
   const raw = world();
@@ -268,6 +279,7 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   ok(w.calls.length === 1, "no second drill the next tick");
   w.raw.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id LIKE 'breach-doctor-watch-run-%'").run(iso(1441));
   w.raw.prepare("UPDATE control_registry SET alternate_tested_at = NULL").run();
+  await nextMs();
   const next = await watchJob(w.env);
   ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control !== null && runs(w.raw).length === 2, "1441 minutes later the drill runs again and stamps again", next.notes.acting);
 }
@@ -280,6 +292,7 @@ const runs = (raw) => qa(raw, "SELECT * FROM cloud_ops_events WHERE id LIKE 'bre
   const s = stamps(w.raw);
   ok(s.control === null && s.spof === null && s.cap === null && tickEvents(w.raw).filter((e) => /source=watch/.test(e.detail)).length === 0, "and nothing is stamped (no tick row, no stamp)", s);
   w.raw.prepare("DELETE FROM loop_lock").run();
+  await nextMs();
   const next = await watchJob(w.env);
   ok(w.calls.length === 2 && next.notes.acting.verified === true && stamps(w.raw).control, "a skipped run is not counted against the 30-minute rate: the next tick calls again and verifies", next.notes.acting);
 }

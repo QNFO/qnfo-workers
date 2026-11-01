@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,6 +76,11 @@ test("generation is deterministic, detects drift and refuses absent entry points
     writeFileSync(resolve(fixture, "docs/INDEX.md"), "edited output\n");
     assert.ok(checkCatalog(fixture).includes("docs/INDEX.md"));
   } finally {
-    rmSync(fixture, { recursive: true, force: true });
+    // SUITE-PORT-RM-1: on Windows the fixture's .git objects are read-only, which rmSync cannot delete (EPERM, and
+    // force does not chmod). Mark the tree writable first, then remove with bounded retries for indexer/AV timing.
+    // The suite is green on Linux either way; both steps are no-ops there in effect.
+    const writable = (dir) => { for (const name of readdirSync(dir)) { const p = resolve(dir, name); const st = statSync(p); try { chmodSync(p, st.isDirectory() ? 0o755 : 0o644); } catch { /* a racing reader */ } if (st.isDirectory()) writable(p); } };
+    try { writable(fixture); } catch { /* best effort: rmSync retries below still apply */ }
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

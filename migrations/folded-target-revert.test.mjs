@@ -8,6 +8,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 const here = (f) => new URL("./" + f, import.meta.url);
 const sql = readFileSync(here("2026-10-26-folded-target-revert.sql"), "utf8");
 const sql1 = readFileSync(here("2026-10-26-issue-hygiene-1.sql"), "utf8");
@@ -111,7 +112,7 @@ const missing = guest.split("\n").filter((l) => l.trim() && !host.includes(l.tri
 ok(missing.every((l) => /^var VERSION = |^export \{|^  worker_default as default$|^\/\/# sourceMappingURL/.test(l)), "every qnfo-backlog-exec line is in the host except its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
 ok(!/INSERT OR IGNORE INTO issue_triage/.test(guest) && !/Auto.attach a doer/.test(guest), "the empty auto-attach insert is gone from the folded member");
 ok(guest === mirror, "qnfo-backlog-exec/deployed-current.worker.js is identical to worker.js");
-const r = spawnSync(process.execPath, ["--no-warnings", new URL("../qnfo-lifecycle/backlog-fold.test.mjs", import.meta.url).pathname], { encoding: "utf8" });
+const r = spawnSync(process.execPath, ["--no-warnings", fileURLToPath(new URL("../qnfo-lifecycle/backlog-fold.test.mjs", import.meta.url))], { encoding: "utf8" });
 ok(r.status === 0 && /0 failed/.test(r.stdout), "qnfo-lifecycle/backlog-fold.test.mjs passes", (r.stdout || "").slice(-200));
 
 console.log(`${pass} passed, ${fail} failed`);
