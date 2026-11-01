@@ -25,6 +25,10 @@
 //           version-bump-guard, workflow-lint), all path-filtered and none reads a secret, so the push adds no exposure beyond the pull_request runs
 //           step 2 already approves. A kick is pinned to the head sha and never repeated for it: the new head's runs are the owner's, not Copilot's,
 //           so the next sweep finds nothing gated.
+//        4. EMPTY-FINISHED-DRAFT-1 (2026-11-01): a draft whose session finished (copilot_work_finished) emptyAfterMin (30) minutes ago and changed no file is commented and closed here
+//           too, by the rule the organization pass applies to other repositories. The merge lane's BH-EMPTY-DRAFT-1 waits 6 hours for an idle empty draft because a session that has only
+//           just opened its pull request looks the same; this script knows the session is over. Measured 2026-11-01 11:00-12:15Z: #5523, #5640 and #5652 (three of about twenty
+//           sessions) finished empty, and each held one of the 12 open-Copilot-pull-request slots of the assignment sweep, whose capacity is that limit minus the open ones.
 // WHY    The approval gate is a security control, so it is relaxed only where it protects nothing: a run is approved only when the pull request
 //        changes none of the paths a workflow executes with more than read access or that configure the build (DENY_PATHS: .github/, scripts/,
 //        wrangler and package manifests, shell scripts, Dockerfiles, yaml). Workflow definitions run from the base branch, deploy-gate strips the
@@ -139,11 +143,12 @@ export async function run(opts, deps) {
   const o = Object.assign({}, DEFAULTS, opts || {});
   const d = Object.assign({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }, deps || {});
   const dry = o.mode === "dry";
+  const now = d.now === undefined ? Date.now() : d.now;
   const owners = (o.owners || []).map((x) => String(x).toLowerCase());
   const isOwner = (login) => owners.includes(String(login || "").toLowerCase());
   const sum = {
     action: "copilot-pr-lifecycle", mode: dry ? "dry" : "live", repo: o.repo, approve: o.approve !== false, copilot_prs: 0, considered: 0, skipped: {},
-    reviewers_removed: [], assignees_removed: [], issue_assignees_removed: [], approved: [], kicked: [], approval_withheld: [], errors: []
+    reviewers_removed: [], assignees_removed: [], issue_assignees_removed: [], approved: [], kicked: [], empty_drafts_closed: [], approval_withheld: [], errors: []
   };
   const skip = (why) => { sum.skipped[why] = (sum.skipped[why] || 0) + 1; };
   const fail = (where, r) => sum.errors.push({ where, http: r.status, message: r.message });
@@ -201,6 +206,26 @@ export async function run(opts, deps) {
     if (ev.error) { fail("events " + n, { status: ev.error.http, message: ev.error.message }); skip("history-unreadable"); continue; }
     const state = workState(ev.items);
     if (state !== "finished") { skip("agent-" + state); continue; }
+
+    // EMPTY-FINISHED-DRAFT-1 (header, step 4): a draft whose session finished and changed no file is closed after emptyAfterMin; the files listing confirms it because
+    // changed_files can read 0 while GitHub is still computing. It is neither approved nor kicked, and the issue it answered stays open for the assignment sweep.
+    const fin = finishedAt(ev.items);
+    if (pr.draft && Number(pr.changed_files) === 0 && fin) {
+      if (now - Date.parse(fin) < o.emptyAfterMin * 60000) { skip("empty-draft-recent"); continue; }
+      const fl = await listAll(api, "/repos/" + repo + "/pulls/" + n + "/files", null, 1);
+      if (!fl.error && !fl.items.length) {
+        if (sum.empty_drafts_closed.filter((x) => x.repo === repo).length >= o.emptyMax) { skip("empty-over-cap"); continue; }
+        const entry = { repo, number: n, finished_at: fin };
+        if (dry) { sum.empty_drafts_closed.push(Object.assign(entry, { dry: true })); continue; }
+        const text = "Closed by COPILOT-PR-LIFECYCLE-1 (EMPTY-FINISHED-DRAFT-1): the Copilot session finished at " + fin + " and changed no file, so this draft carries nothing to review or merge and only holds "
+          + "one of the open-pull-request slots of the assignment sweep (the merge lane waits 6 hours, BH-EMPTY-DRAFT-1). The issue stays open and assigned; the sweep may start one more session for it (ASSIGN-COPILOT-ISSUES-1).";
+        const c = await api.req("POST", "/repos/" + repo + "/issues/" + n + "/comments", { body: text });
+        const x = await api.req("PATCH", "/repos/" + repo + "/pulls/" + n, { state: "closed" });
+        if (okStatus(c.status) && okStatus(x.status)) sum.empty_drafts_closed.push(entry);
+        else fail("close empty draft " + repo + "#" + n, okStatus(x.status) ? c : x);
+        continue;
+      }
+    }
 
     if (o.approve === false) continue;
     const sha = pr.head.sha;
@@ -283,7 +308,6 @@ async function orgPass(o, d, sum, dry) {
 // A Copilot draft in another repository whose session finished 30 minutes ago and changed no file carries nothing to review or merge (no merge lane exists
 // there, and qnfo-workers has its own hygiene tick, BH-EMPTY-DRAFT-1). It is commented and closed; the issue stays open and is never assigned again.
 async function closeEmptyDrafts(o, d, sum, api, org, dry) {
-  sum.empty_drafts_closed = [];
   const q = "org:" + org + " is:pr is:open draft:true author:app/copilot-swe-agent -repo:" + o.repo;
   const r = await api.req("GET", "/search/issues?per_page=100&q=" + encodeURIComponent(q));
   if (r.status !== 200 || !r.body || !Array.isArray(r.body.items)) { sum.errors.push({ where: "org search empty-draft", http: r.status, message: r.message }); return; }
@@ -329,7 +353,7 @@ async function noteWithheld(api, repo, n, sha, denied, sum) {
 
 function summaryMarkdown(s) {
   const rows = [["copilot pull requests", s.copilot_prs], ["owner reviewer requests removed", s.reviewers_removed.length], ["owner assignments removed", s.assignees_removed.length + s.issue_assignees_removed.length],
-    ["owner removed across the organization", (s.org_removed || []).length], ["empty drafts closed in other repositories", (s.empty_drafts_closed || []).length], ["gated runs approved", s.approved.length], ["checks started by a branch update", (s.kicked || []).length], ["approval withheld", s.approval_withheld.length], ["errors", s.errors.length]];
+    ["owner removed across the organization", (s.org_removed || []).length], ["empty finished drafts closed", (s.empty_drafts_closed || []).length], ["gated runs approved", s.approved.length], ["checks started by a branch update", (s.kicked || []).length], ["approval withheld", s.approval_withheld.length], ["errors", s.errors.length]];
   const skipped = Object.keys(s.skipped).sort().map((k) => "- " + k + ": " + s.skipped[k]).join("\n");
   return "### Copilot pull request lifecycle (" + s.mode + ", status " + s.status + ")\n\n" + rows.map((r) => "- " + r[0] + ": " + r[1]).join("\n") + (skipped ? "\n\nSkipped\n" + skipped : "") + "\n";
 }
