@@ -39,7 +39,7 @@ const AI = { async run(model, input, opts) {
     if (/NO-IDEA-HERE/.test(p)) return { response: '{"none":"shopping list"}' };
     return { response: '{"title":"Distinction lattices bound measurement records","idea":"The author argues that a distinction lattice over measurement outcomes gives an ultrametric on records, and that its depth bounds the information an observer can extract. A formal analysis can derive the bound and test it on finite lattices by computation."}' };
   }
-  const m = /MERIT_LOW/.test(p) ? 0.3 : /MERIT_MID/.test(p) ? 0.6 : 0.9;
+  const m = /MERIT_LOW/.test(p) ? 0.3 : /MERIT_MID/.test(p) ? 0.6 : /MERIT_BORDERLINE/.test(p) ? 0.75 : 0.9;
   return { response: card(m) };
 } };
 const vault = new Map();
@@ -57,11 +57,13 @@ for (let i = 0; i < 300; i++) fill.run("seed-" + i, "seed-" + i);
 
 const own = add("owner-chat", "MERIT_LOW An owner-authored idea filed while the research queue is full.", "owner");
 const gen = add("auto-scan", "MERIT_HIGH A machine-generated proposal that the model scores highly.", "");
+const borderline = add("auto-scan", "MERIT_BORDERLINE A generated proposal below the raised acceptance bar.", "");
 await api.triageProposals(env);
 
 ok(row(own).status === "triaged_accepted" && queued(own), "an owner-authored idea is queued even though the research queue is over the admission cap", row(own));
 ok(!/research admission cap/.test(String(row(own).rationale || "")), "the owner idea carries no admission-cap rationale", row(own).rationale);
 ok(row(gen).status === "triaged_hold" && /research admission cap/.test(String(row(gen).rationale || "")) && !queued(gen), "a machine-generated accept is still held by the cap (backpressure unchanged)", row(gen));
+ok(row(borderline).decision === "HOLD" && row(borderline).status === "triaged_hold" && !/research admission cap/.test(String(row(borderline).rationale || "")) && !queued(borderline), "generated scores below 0.8 do not enter the research queue", row(borderline));
 
 // 2. POST /api/intake: owner token required; an idea is filed and its id returned.
 const secret = "t".repeat(32);
