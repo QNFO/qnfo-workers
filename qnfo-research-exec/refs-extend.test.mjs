@@ -86,7 +86,7 @@ function mkEnv(answerFn, opts) {
   const o = opts || {};
   const store = { "pipeline/r1/reconciled.md": o.paper || BIGP, "pipeline/r1/grounding.md": grounding, "pipeline/r1/fixes.json": JSON.stringify({ hard: [{ id: o.hardId || "h1", severity: "HARD", claim: "the Conclusion rests on [8, 9]", reason: "the cited works do not support the claim", fix: "delete the unsupported claim and its citation" }], soft: [] }) };
   const sqls = [], calls = [];
-  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { if (/FROM ops_config/.test(sql) && o.flags && o.flags[args[0]] !== undefined) return { value: o.flags[args[0]] }; return null; }, async all() { return { results: [] }; } }; return q; } };
+  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { if (/research_lean_ensemble/.test(sql)) return { value: "off" }; if (/FROM fleet_budget/.test(sql)) return { n: 0 }; if (/FROM ops_config/.test(sql) && o.flags && o.flags[args[0]] !== undefined) return { value: o.flags[args[0]] }; return null; }, async all() { return { results: [] }; } }; return q; } };
   const MIRROR = { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } };
   const AI = { async run(model, input) { const prompt = input.messages[0].content; calls.push({ model, prompt }); return { response: answerFn(calls.length, prompt) }; } };
   return { env: { AI, QNFO_AUDIT: D1, MIRROR }, sqls, calls, store };
