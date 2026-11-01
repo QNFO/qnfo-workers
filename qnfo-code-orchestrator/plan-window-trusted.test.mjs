@@ -30,6 +30,7 @@ function makeD1() {
   };
   db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
     CREATE TABLE service_registry (service TEXT PRIMARY KEY, state TEXT, kind TEXT, base_url TEXT);
+    CREATE TABLE issue_age_actions (issue_id INTEGER, rung TEXT);
     CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
   for (const n of ["q08-signal-engine", "qnfo-social", "qnfo-ai-search"]) db.prepare("INSERT INTO service_registry VALUES (?, 'live', 'worker', '')").run(n);
   return { prepare: wrap, _db: db };
@@ -141,6 +142,27 @@ ok(Array.isArray(h.capabilities) && h.capabilities.includes("plan-trusted-first"
   env.AUDIT_DB._db.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = ?").run(closed);
   const r = await plan(env);
   ok(!r.planned && plans(env).length === 0, "5 a young issue, an issue with a code-task line and a closed issue leave no row", { r, rows: plans(env).length });
+}
+
+// 6. a 24-hour no-doer action is considered ahead of the fixed trusted window
+{
+  const { env, prompts } = envWith([FIX("q08-signal-engine")]);
+  for (let i = 0; i < 42; i++) issue(env, {
+    title: "METRIC-TRIGGER-" + (200 + i) + "-UNKNOWN: unresolved",
+    description: "no attributable worker in this issue",
+    priority: "critical",
+  });
+  const overdue = issue(env, {
+    title: "METRIC-TRIGGER-242-Q08: q08-signal-engine",
+    description: "q08-signal-engine /api/f has no live doer",
+    priority: "critical",
+  });
+  env.AUDIT_DB._db.prepare("INSERT INTO issue_age_actions (issue_id, rung) VALUES (?, '24h')").run(overdue);
+  const r = await plan(env);
+  ok(r.planned && r.issue === overdue && r.outcome === "queued" && prompts.length === 1,
+    "6 a critical 24h no-doer issue outside the ordinary 40-row window is planned first", r);
+  ok(tasks(env).length === 1 && tasks(env)[0].goal.includes("[issue #" + overdue + "]"),
+    "6b the trusted planner creates only the target issue task", tasks(env).map((t) => t.goal));
 }
 
 console.log("plan-window-trusted.test: " + pass + " passed, " + fail + " failed");
