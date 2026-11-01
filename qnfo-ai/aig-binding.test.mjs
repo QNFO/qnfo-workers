@@ -1,6 +1,6 @@
 // AIG-BINDING-1 (#1784) offline suite for qnfo-ai aiRunAttr. Run: node qnfo-ai/aig-binding.test.mjs
 // Embedding calls go through AI Gateway "default" (cached 24h) with metadata {worker, purpose} on the log entry; a gateway
-// error retries once on the plain binding; chat calls and callers that pass their own options are unchanged.
+// error retries once on the plain binding; dynamic chat routes preserve explicit gateway options and attribution.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,8 +14,9 @@ const start = src.indexOf("async function aiRunAttr(");
 const end = src.indexOf("\n// end aiRunAttr", start);
 ok(start > 0 && end > start, "aiRunAttr found in worker.js");
 const body = src.slice(start, end);
-const make = new Function("AI_ATTR_DB_BINDINGS", "spendRecord", "spendUsageOf", "spendOutEstimate", body + "\nreturn aiRunAttr;");
-const aiRunAttr = make([], () => {}, () => ({ in: 0, out: 0 }), () => 0);
+const spendRecords = [];
+const make = new Function("AI_ATTR_DB_BINDINGS", "spendRecord", "spendUsageOf", "spendOutEstimate", "isDynamicRoute", body + "\nreturn aiRunAttr;");
+const aiRunAttr = make([], (...args) => spendRecords.push(args), () => ({ in: 0, out: 0 }), () => 0, (model) => String(model).startsWith("dynamic/"));
 
 function env(failGateway) {
   const calls = [];
@@ -44,6 +45,12 @@ e = env(false);
 const own = { gateway: { id: "other" } };
 await aiRunAttr(e, "qnfo-ai", "embed-topic", "@cf/baai/bge-base-en-v1.5", { text: ["y"] }, own);
 ok(e.calls.length === 1 && e.calls[0].opts === own, "a caller's own options are passed through unchanged");
+e = env(false);
+const gatewayOpts = { gateway: { id: "default", metadata: { worker: "qnfo-ai", purpose: "chat" } } };
+await aiRunAttr(e, "qnfo-ai", "chat-dynamic", "dynamic/standard", { messages: [{ role: "user", content: "x" }] }, gatewayOpts);
+const dynamicSpend = spendRecords[spendRecords.length - 1];
+ok(e.calls.length === 1 && e.calls[0].model === "dynamic/standard" && e.calls[0].opts === gatewayOpts, "dynamic chat preserves its route and gateway options");
+ok(dynamicSpend && dynamicSpend[1] === "gateway" && dynamicSpend[2] === "dynamic/standard", "dynamic chat accounting is attributed to the gateway route");
 
 // 4. a chat error still propagates (no silent fallback)
 const bad = { AI: { async run() { throw new Error("model down"); } } };

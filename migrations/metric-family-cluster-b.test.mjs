@@ -71,6 +71,7 @@ ok(ver && (+ver[1] > 0 || +ver[2] >= 40), "VERSION is at least 0.40.0");
 const MAPPED_FORWARD = {
   "2026-10-29-plussing-3.sql": { file: "2026-10-30-product-plus-cause.sql", metrics: ["product_plus_deployed_7d"] },
   "2026-11-01-plussing-4.sql": { file: "2026-11-01-plussing-4a-cause.sql", metrics: ["plus_shipped_7d", "plus_kept_share_30d"] },
+  "2026-11-01-issue-family-throughput-action.sql": { file: "2026-11-01-issue-family-throughput-cause.sql", metrics: ["largest_issue_family_net_inflow_24h"] },
 };
 const files = readdirSync(new URL("./", import.meta.url)).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.sql$/.test(f) && f.slice(0, 10) >= "2026-10-29");
 for (const f of files) {
