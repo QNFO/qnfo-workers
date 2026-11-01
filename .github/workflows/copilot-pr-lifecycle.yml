@@ -8,8 +8,10 @@ name: copilot-pr-lifecycle
 #
 # TOKEN: the workflow GITHUB_TOKEN (pull-requests, issues, actions write) does the repository work. ORG_TOKEN is QNFO_GH_PAT, the fleet user credential, handed to the script
 # only off a pull_request_target run (the same guard deploy-gate uses for its secrets): the script uses it to remove the owner from the Copilot pull requests and the issues of
-# every other QNFO repository (search by author app/copilot-swe-agent, review-requested and assignee), never for an approval. COPILOT_PR_APPROVE (repository variable) set to
-# off restores "nothing is approved"; OWNER_LOGINS (repository variable, comma separated) overrides the default owner login.
+# every other QNFO repository (search by author app/copilot-swe-agent, review-requested and assignee), and, after GitHub refused the REST approval of a Copilot run (403: the call
+# approves only fork runs and runs the Actions bot queued), for one update-branch of a finished Copilot pull request that avoids DENY_PATHS, which starts its checks un-gated
+# (KICK-GATED-CHECKS-1; never for an approval call). COPILOT_PR_APPROVE (repository variable) set to
+# off restores "nothing is approved" and "nothing is started"; OWNER_LOGINS (repository variable, comma separated) overrides the default owner login.
 # PULL_REQUEST_TARGET IS SAFE HERE: the job runs only for a pull request written by Copilot, checks out the base branch (never the pull request), and
 # the script puts nothing from the pull request in a shell line, a path or a query except integers and SHAs read from the API.
 # CADENCE: the pull_request_target events are the fast path. When GitHub holds a Copilot-triggered run for approval, the push to main and the
