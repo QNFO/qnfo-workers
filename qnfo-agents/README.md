@@ -12,13 +12,14 @@ One Agent class, `FleetCodeAgent` (a SQLite-backed Durable Object from `agents@0
 | Agents SDK feature | Here |
 |---|---|
 | Agent Durable Object, state, SQL | `FleetCodeAgent`, instance `fleet` by default; every turn is a row in its `runs` table and in D1 `cf_agent_runs` |
+| Resumable code chat | `CodeSession` persists ordered events and turn state in SQLite; resume with `GET /code-sessions/<id>/events?after=<seq>` |
 | Durable execution | each turn is a `runFiber`; a turn cut off by eviction is re-run once (`onFiberRecovered`), twice means failed |
 | Scheduling | `POST /schedules` or the `schedule_turn` tool: a cron (at most every 5 minutes) or a delay; each fires a new turn |
 | Callable methods | `run`, `runs`, `status`, `schedules` over WebSocket at `/agents/fleet-code-agent/<instance>` (trusted callers) |
 | MCP server | `POST /mcp` (`createMcpHandler`, stateless): public clients get `repo_read_file`; trusted callers get every tool plus `agent_run` and `agent_status` |
 | MCP client | `POST /mcp-servers {name, url}` or the `mcp_connect` tool; the server's tools join later turns |
 | Code Mode | the `codemode` tool: the model writes JavaScript that calls every tool as `codemode.<name>()` in a Dynamic Worker (`LOADER`, no outbound network); `POST /sandbox {code}` runs code without a model |
-| Models | Workers AI through AI Gateway `default` (`createAI`): `@cf/moonshotai/kimi-k2.7-code`, fallback `@cf/zai-org/glm-5.3-flash`; `ops_config qnfo_agents_model` overrides the primary |
+| Models | Workers AI through AI Gateway `default` (`createAI`): `FleetCodeAgent` uses its configured models; `CodeSession` starts on DeepSeek V4 Flash and escalates to Pro only while its 100,000-neuron session budget allows |
 
 Tools: `repo_read_file` (the public repository), `fleet_sql` (read-only SQL on qnfo-audit; sign-in and secret tables refused),
 `ops_catalog` and `ops_call` (the qnfo-ops tool surface: Cloudflare API, D1, R2, KV, GitHub, workspace, containers, deploys),
@@ -44,7 +45,8 @@ The read-only ops tool list (`OPS_READ_ONLY` in src/lib.js) equals `CMD_TOOL_REA
 ## Routes
 
 Open: `GET /`, `GET /health`, `GET /tools`, `POST /mcp`.
-Trusted: `POST /run {text, instance?, wait_ms?}`, `GET /runs`, `GET /runs/<id>`, `GET|POST /schedules`, `DELETE /schedules/<id>`,
+Trusted: `POST /code-sessions {text}`, `POST /code-sessions/<id>/turns {text}`, `GET /code-sessions/<id>/events?after=<seq>` (replayable SSE), `GET /code-sessions/<id>`,
+`POST /run {text, instance?, wait_ms?}`, `GET /runs`, `GET /runs/<id>`, `GET|POST /schedules`, `DELETE /schedules/<id>`,
 `GET|POST /mcp-servers`, `DELETE /mcp-servers/<id>`, `POST /sandbox {code}`, `/agents/fleet-code-agent/<instance>`.
 
 ## Build and deploy
