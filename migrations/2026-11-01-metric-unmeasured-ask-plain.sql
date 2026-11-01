@@ -101,7 +101,7 @@ SELECT
   'The fleet distinguishes the producer''s valid low-sample state from a missing producer without hiding numeric results.',
   'METRIC-UNMEASURED-1 reopens attributable to ask_plain_share_7d fall to 0 over the next 7 days; the metric remains unmeasured below 10 eligible verdicts and resumes normal trigger evaluation when measured.',
   'No direct external reach gain.',
-  'Live D1 issue and metric source reads; management-personas snapshot replay, sample-floor exemption, numeric trigger evaluation, and migration rollback.')
+  'Live D1 issue and metric source reads; management-personas snapshot replay, sample-floor exemption, numeric trigger evaluation, and migration rollback.'
 WHERE NOT EXISTS (
   SELECT 1 FROM decision_log
   WHERE action LIKE 'Add a named exemption for ask_plain_share_7d only%'
