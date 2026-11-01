@@ -52,7 +52,7 @@ ok(X.reasoningEffortFor("@cf/zai-org/glm-5.3-flash", 700, "none", false) === "lo
 ok(X.reasoningEffortFor("@cf/moonshotai/kimi-k2.6", 512, null, false) === "none", "kimi-k2.6 small answers turn reasoning off");
 ok(X.reasoningEffortFor("@cf/deepseek-ai/deepseek-v4-flash-0731", 512, null, false) === null, "a model with no verified lever gets no effort field");
 ok(X.reasoningEffortFor("@cf/zai-org/glm-5.3-flash", 700, null, true) === null, "a tool request keeps the model default");
-ok(/if \(_effort\) b\.reasoning_effort = _effort;/.test(src) && src.split("if (_effort) b.reasoning_effort = _effort;").length === 3, "both Workers AI request bodies carry the effort");
+ok(src.includes('["temperature", "top_p", "reasoning_effort"]'), "dynamic chat passes the caller's reasoning option without a model-specific default");
 
 // ---- DeepSeek twin ----
 ok(X.dsTwinSpec(X.MODELS["deepseek-v4-flash"]) === X.MODELS["deepseek-v4-flash-wa"], "deepseek-v4-flash has its Workers AI twin");
@@ -62,7 +62,7 @@ ok(X.dsUnfunded() === false, "the breaker is closed by default");
 sb._ds402Until = Date.now() + 6e4;
 ok(X.dsUnfunded() === true, "an open 402 breaker reads as unfunded");
 sb._ds402Until = 0;
-ok(/twin_reason: "deepseek-402-breaker"/.test(src) && !/callDeepSeek\(env, MODELS\["deepseek-v4-flash"\]\.api, messages, maxTokens, false\), _stageCap/.test(src), "runModelTurn and the ensemble fallback stage use the twin");
+ok(src.includes("return runDynamicChat(env, chatRoute(apiModel)") && !src.includes('twin_reason: "deepseek-402-breaker"'), "gateway routes replace the local DeepSeek twin fallback");
 
 // ---- budget and hedge ----
 ok(X.turnBudgetMs({ max_tokens: 700 }, {}) === 45e3, "a small answer runs under the default budget");
@@ -96,7 +96,7 @@ const run = (o) => X.runTurnBudgeted({}, X.MODELS[o.primaryKey], [], 700, null, 
   ok(n.turn === null && !n.hedged, "with no hedge (spend cap: one leg) a failed primary ends the turn", n);
 }
 ok(/type: "router_timeout"/.test(src) && /, 504\);/.test(src), "an exhausted budget answers 504 router_timeout, not canned text");
-ok(/hedgeKey: _gov\.noEnsemble \|\| body\.hedge === false \? null : pickHedge\(/.test(src), "at a spend cap, or with hedge: false, the turn keeps one leg (BUDGET-SOFT-ROUTE-1)");
+ok(src.includes("primaryKey: _primaryKey, hedgeKey: null"), "dynamic routes keep one consumer leg; gateway owns fallback");
 for (const label of ["calendar-context", "web-search", "web-fetch", "rag-context", "semantic-cache", "free-fallback"]) ok(src.includes('"' + label + '"'), "a timeout bounds " + label);
 
 // ---- semantic cache: mkLogRec no longer reads a variable before its declaration ----
@@ -104,7 +104,8 @@ ok(src.indexOf("let routedModel = String(body.model") > 0 && src.indexOf("let ro
 ok(!/const routedModel = effective;/.test(src), "the late const declaration is gone");
 
 // ---- second path ----
-ok(X.SECOND_PATH.contract === "AI-ROUTER-SECOND-PATH-1" && X.SECOND_PATH.direct_binding === "AI" && X.SECOND_PATH.drill.answers === 503, "the second-path contract names the binding and the drill");
+ok(X.SECOND_PATH.contract === "AI-ROUTER-SECOND-PATH-1" && X.SECOND_PATH.direct_binding === "AI" && X.SECOND_PATH.gateway === "default" && X.SECOND_PATH.models.join() === "dynamic/value" && X.SECOND_PATH.drill.answers === 503, "the second-path contract names the gateway route and drill");
+ok(/AI Gateway owns provider fallback/.test(X.SECOND_PATH.request_budget) && /consumer does not add a local model hedge/.test(X.SECOND_PATH.request_budget), "the second-path contract does not promise a consumer-side hedge");
 ok(/second_path: SECOND_PATH/.test(src) && /body\.drill === "router-down"/.test(src) && /"x-qnfo-drill": "router-down"/.test(src), "/health serves the contract and the drill answers 503");
 ok(src.indexOf('body.drill === "router-down"') > src.indexOf("async function handleChatCore") && src.indexOf('body.drill === "router-down"') > src.indexOf('return json({ error: "Unauthorized" }, 401);', src.indexOf("async function handleChatCore")), "the drill runs after the auth check");
 
