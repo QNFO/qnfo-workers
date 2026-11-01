@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.8-codeagent";
+var VERSION = "0.41.0";
+// Q08-FORECAST-RESEARCH-1 (#4291, agent_issues 1000268, pillar reach): researched forecasts and dated secondary claims.
 /* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
@@ -444,16 +445,16 @@ var ORIGIN = "https://q08.org";
 // IndexNow: search-engine instant indexing (Bing, Yandex, Seznam, Naver).
 var INDEXNOW_KEY = "3f8a1c9e7b2d6045a1f3c8e5b9d20147";
 
-// Q08-FORECAST-LEDGER-1 (issue 1000512, charter pillar reach; slice 1, default off): the forecast ground is the source essay plus a research ledger of
+// Q08-FORECAST-LEDGER-1 (issue 1000512, charter pillar reach): the forecast ground is the source essay plus a research ledger of
 // verbatim sentences. FETCH SCOPE: the four evidence APIs (Hacker News Algolia, GDELT doc, Wikipedia search, arXiv), queried with at most 6 capitalised
-// names taken from the essay and its signal, then the public https pages those results link (publicHttpsUrl: no private or local host), at most 10
+// names taken from the essay and its signal, then public https pages and their external source links, at most 15
 // documents, at most 40000 characters read of each, 15 s timeout each, every fetch failing on its own. LEDGER: sentences of 25 to 280 characters copied
-// from the fetched text that name one of those names, at most 60 lines, "[R<n>] <sentence> (<host>, <date>)" numbered in order; no model writes or
+// from the fetched text that name one of those names, at most 60 numbered lines with URL and date; no model writes or
 // rewords a ledger line. A fact in a draft may come from the essay, the signal or a ledger line cited by its tag; stripLedgerTags removes [R<n>] like
-// [S<n>] before any check reads the draft. Switch: ops_config q08_forecast_ledger = on (absent or anything else is off: no request is made and the
-// forecast path is unchanged). The ledger is stored in q08_forecasts.ground_json, so the re-audit of a published forecast reads the same ledger.
+// [S<n>] before any check reads the draft. Default on; ops_config q08_forecast_ledger = off restores the legacy path.
+// Six usable sources are required. Ground is stored with publication, so re-audits read the same material.
 var LEDGER_MAX_NAMES = 6;
-var LEDGER_MAX_DOCS = 10;
+var LEDGER_MIN_DOCS = 6, LEDGER_MAX_DOCS = 15;
 var LEDGER_DOC_CHARS = 40000;
 var RLEDGER_MAX_LINES = 60; // not LEDGER_MAX_LINES: that name is the [S<n>] source ledger's cap (80), declared further down, and would overwrite this one
 var LEDGER_FETCH_MS = 15000;
@@ -518,7 +519,16 @@ var LEDGER_SEARCHES = [
 
 // One linked page: at most LEDGER_DOC_CHARS characters are read, then tags are removed.
 async function ledgerReadPage(url) {
-  var r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(LEDGER_FETCH_MS), redirect: "follow" });
+  var r;
+  for (var redirects = 0; redirects <= 3; redirects++) {
+    if (!publicHttpsUrl(url)) throw new Error("non-public research URL");
+    r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(LEDGER_FETCH_MS), redirect: "manual" });
+    if (r.status < 300 || r.status >= 400) break;
+    var location = r.headers.get("location");
+    if (r.body) await r.body.cancel();
+    if (!location || redirects === 3) throw new Error("research redirect limit");
+    url = new URL(location, url).href;
+  }
   if (!r.ok) throw new Error("http " + r.status);
   var txt = "";
   if (r.body && typeof r.body.getReader === "function") {
@@ -530,7 +540,16 @@ async function ledgerReadPage(url) {
     }
     try { await rd.cancel(); } catch (e) { /* the stream is already closed */ }
   } else txt = await r.text();
-  return plainText(txt.slice(0, LEDGER_DOC_CHARS));
+  txt = txt.slice(0, LEDGER_DOC_CHARS);
+  var links = [];
+  for (var m of txt.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["']/gi)) {
+    try {
+      var link = publicHttpsUrl(new URL(m[1].replace(/&amp;/g, "&"), url).href);
+      if (link && new URL(link).hostname !== new URL(url).hostname && links.indexOf(link) < 0) links.push(link);
+    } catch (e) { /* malformed link */ }
+    if (links.length >= 5) break;
+  }
+  return { text: plainText(txt), links: links };
 }
 
 // researchLedger(env, src, signalText) -> { lines, sources }. Every search and every page fails on its own; documents are taken round-robin across the
@@ -545,17 +564,28 @@ async function researchLedger(env, src, signalText) {
   for (var rank = 0; rank < 5 && cands.length < LEDGER_MAX_DOCS; rank++) {
     for (var k = 0; k < found.length && cands.length < LEDGER_MAX_DOCS; k++) {
       var it = found[k][rank];
-      var pu = it ? publicHttpsUrl(it.url) : "";
+      var pu = it ? publicHttpsUrl(it.url.replace(/^(https:\/\/(?:export\.)?arxiv\.org)\/abs\//, "$1/html/")) : "";
       if (!pu || seenUrl[pu]) continue;
       seenUrl[pu] = 1;
       cands.push({ url: pu, date: String(it.date || "") });
     }
   }
-  var docs = await Promise.all(cands.map(function (c) {
-    return ledgerReadPage(c.url).then(function (t) { return { c: c, sentences: ledgerSentences(t, names) }; }).catch(function () { return null; });
-  }));
-  docs = docs.filter(function (d) { return d && d.sentences.length; });
+  var read = function (c) {
+    return ledgerReadPage(c.url).then(function (d) { return { c: c, sentences: ledgerSentences(d.text, names), links: d.links }; }).catch(function () { return null; });
+  };
+  // Reserve five fetches for primary-source links found in the discovery pages.
+  var first = cands.slice(0, 10), docs = await Promise.all(first.map(read)), more = [];
+  docs.filter(Boolean).forEach(function (d) {
+    d.links.forEach(function (url) {
+      if (!seenUrl[url] && more.length < LEDGER_MAX_DOCS - first.length) {
+        seenUrl[url] = 1; more.push({ url: url, date: "" });
+      }
+    });
+  });
+  for (var ci = first.length; ci < cands.length && more.length < LEDGER_MAX_DOCS - first.length; ci++) more.push(cands[ci]);
+  docs = docs.concat(await Promise.all(more.map(read))).filter(function (d) { return d && d.sentences.length; });
   var used = {};
+  var ledgerChars = 0;
   for (var round = 0; lines.length < RLEDGER_MAX_LINES; round++) {
     var any = false;
     for (var di = 0; di < docs.length && lines.length < RLEDGER_MAX_LINES; di++) {
@@ -564,21 +594,25 @@ async function researchLedger(env, src, signalText) {
       any = true;
       var host = "";
       try { host = new URL(docs[di].c.url).hostname; } catch (e) { host = ""; }
-      lines.push("[R" + (lines.length + 1) + "] " + sn + " (" + host + ", " + (docs[di].c.date || "undated") + ")");
-      if (!used[docs[di].c.url]) { used[docs[di].c.url] = 1; sources.push({ label: "Research ledger source: " + host, url: docs[di].c.url }); }
+      var date = docs[di].c.date || "retrieved " + utcDay();
+      var line = "[R" + (lines.length + 1) + "] " + sn + " (" + docs[di].c.url + ", " + date + ")";
+      if (ledgerChars + line.length + 1 > 32000) continue;
+      lines.push(line);
+      ledgerChars += line.length + 1;
+      if (!used[docs[di].c.url]) { used[docs[di].c.url] = 1; sources.push({ label: "Research ledger source: " + host, url: docs[di].c.url, date: date }); }
     }
     if (!any) break;
   }
   return { lines: lines, sources: sources };
 }
 
-// ops_config q08_forecast_ledger = on; absent, any other value or a read error is off.
+// An absent setting or an unavailable config read keeps research enabled.
 async function forecastLedgerOn(env) {
   try {
-    if (!env || !env.AUDIT || typeof env.AUDIT.prepare !== "function") return false;
+    if (!env || !env.AUDIT || typeof env.AUDIT.prepare !== "function") return true;
     var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'q08_forecast_ledger'").first();
-    return String(r && r.value || "").trim().toLowerCase() === "on";
-  } catch (e) { return false; }
+    return String(r && r.value || "").trim().toLowerCase() !== "off";
+  } catch (e) { return true; }
 }
 
 // q08_forecasts.ground_json (nullable): the ensure-column pattern of RUN_COLUMNS. Called only when the ledger is on; a failure turns the ledger off.
@@ -624,6 +658,9 @@ async function storedForecastLedger(env, slug) {
     var ls = j && Array.isArray(j.lines) ? j.lines.filter(function (l) { return typeof l === "string"; }) : [];
     return ls.length ? "\n" + ls.join("\n") : "";
   } catch (e) { return ""; }
+}
+function forecastGroundText(snapshot) {
+  return [snapshot.essay.title || "", String(snapshot.essay.body_md || "").slice(0, 6000), snapshot.signal || "", (snapshot.lines || []).join("\n")].join("\n");
 }
 
 // FORECAST-CRITERIA-REPUBLISH-1 (issue 1000740, RED-DRAIN-1 dispatch; charter pillar: personal): metric
@@ -1910,6 +1947,8 @@ function gate(text, banned) {
 // 6. Persist + serve
 // ---------------------------------------------------------------------------
 async function persistPiece(env, piece, signal, story, model) {
+  var fx = (story.source === "q08" && piece.extra) ? piece.extra : null;
+  if (fx && (!(await ensureForecastSchema(env)) || !(await ensureForecastGroundColumn(env)))) throw new Error("forecast schema unavailable");
   var salt = Date.now().toString(36) + rnd36(4);
   var slug  = utcDay() + "-" + slugify(piece.title || signal.core_concept) + "-" + salt.slice(-6);
   var pieceId = "p-" + salt;
@@ -1928,25 +1967,28 @@ async function persistPiece(env, piece, signal, story, model) {
     signal.friction_point, signal.signal_strength, "published", nowIso()
   ).run();
   // Persist piece
-  await env.DB.prepare(
+  var publication = env.DB.prepare(
     "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json, property) VALUES (?,?,?,?,?,?,?,?,?,?)"
   ).bind(
     pieceId, "sig-" + salt, slug, title, body,
     signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso(),
     JSON.stringify(buildSources(story).concat(Array.isArray(story.ledgerSources) ? story.ledgerSources : [])), PROPERTY
-  ).run();
+  );
   // Q08-FORECAST-1: a forecast piece also gets its q08_forecasts record (the claim, probability, horizon and resolution
   // condition the judges later settle). Its skeleton stays out of the essay prompt pool, which feeds essay few-shots only.
-  var fx = (story.source === "q08" && piece.extra) ? piece.extra : null;
   if (fx) {
-    await ensureForecastSchema(env);
-    await env.DB.prepare("UPDATE published_pieces SET kind = 'forecast' WHERE id = ?").bind(pieceId).run();
+    var writes = [publication, env.DB.prepare("UPDATE published_pieces SET kind = 'forecast' WHERE id = ?").bind(pieceId)];
     var fAlts = (fx.alternatives || []).map(function (a) { return { claim: String(a.claim || "").trim().slice(0, 300), probability: Math.round(Number(a.probability) * 100) / 100 }; });
     var fInd = (fx.indicators || []).map(function (x) { return String(x).trim().slice(0, 200); });
     var fUrls = (fx.watch_urls || []).map(publicHttpsUrl).filter(Boolean);
-    await env.DB.prepare("INSERT INTO q08_forecasts (piece_id, slug, source_slug, claim, probability, horizon, resolution, watch_query, watch_urls, alternatives_json, indicators_json, created_at, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'open')")
-      .bind(pieceId, slug, String(story.slug || ""), String(fx.claim).trim().slice(0, 300), Math.round(Number(fx.probability) * 100) / 100, String(fx.horizon), String(fx.resolution).trim().slice(0, 400), String(fx.watch_query).trim().slice(0, 80), JSON.stringify(fUrls), JSON.stringify(fAlts), JSON.stringify(fInd), nowIso()).run();
-  }
+    writes.push(env.DB.prepare("INSERT INTO q08_forecasts (piece_id, slug, source_slug, claim, probability, horizon, resolution, watch_query, watch_urls, alternatives_json, indicators_json, created_at, ground_json, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'open')")
+      .bind(pieceId, slug, String(story.slug || ""), String(fx.claim).trim().slice(0, 300), Math.round(Number(fx.probability) * 100) / 100, String(fx.horizon), String(fx.resolution).trim().slice(0, 400), String(fx.watch_query).trim().slice(0, 80), JSON.stringify(fUrls), JSON.stringify(fAlts), JSON.stringify(fInd), nowIso(), story.forecastGround ? JSON.stringify(story.forecastGround) : null));
+    (fx.secondary_claims || []).forEach(function (c, i) {
+      writes.push(env.DB.prepare("INSERT INTO q08_forecast_claims (forecast_id, slug, claim_index, claim, probability, horizon, resolution, watch_query, watch_urls, created_at) SELECT id, slug, ?, ?, ?, ?, ?, ?, ?, ? FROM q08_forecasts WHERE slug = ?")
+        .bind(i + 1, String(c.claim).trim(), Math.round(Number(c.probability) * 100) / 100, c.horizon, String(c.resolution).trim(), String(c.watch_query).trim(), JSON.stringify((c.watch_urls || []).map(publicHttpsUrl)), nowIso(), slug));
+    });
+    await env.DB.batch(writes);
+  } else await publication.run();
   // Seed prompt pool with structure skeleton (headings, else title + lead paragraph).
   var skeleton = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
   if (skeleton.length < 50) {
@@ -2629,6 +2671,11 @@ async function ensureForecastSchema(env) {
     // BP26-FORECAST-HYGIENE-1: an update to a forecast is a new row here, never an overwrite of q08_forecasts, and the published claim, probability,
     // horizon, resolution text and timestamp can no longer be changed in place (the trigger names the rule; status/outcome/brier stay writable).
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_forecast_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, forecast_id INTEGER NOT NULL, slug TEXT NOT NULL, prior_probability REAL NOT NULL, probability REAL NOT NULL, reason TEXT NOT NULL, evidence_url TEXT, created_at TEXT NOT NULL)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_forecast_claims (id INTEGER PRIMARY KEY AUTOINCREMENT, forecast_id INTEGER NOT NULL REFERENCES q08_forecasts(id), slug TEXT NOT NULL, claim_index INTEGER NOT NULL, claim TEXT NOT NULL, probability REAL NOT NULL, horizon TEXT NOT NULL, resolution TEXT NOT NULL, watch_query TEXT NOT NULL, watch_urls TEXT, created_at TEXT NOT NULL, status TEXT DEFAULT 'open', outcome INTEGER, brier REAL, checks INTEGER DEFAULT 0, last_check_at TEXT, resolved_at TEXT, disposition TEXT, evidence_json TEXT, UNIQUE(forecast_id, claim_index))").run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_q08_forecast_claims_due ON q08_forecast_claims (status, horizon)").run();
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_claims_immutable BEFORE UPDATE OF forecast_id, slug, claim_index, claim, probability, horizon, resolution, watch_query, watch_urls, created_at ON q08_forecast_claims BEGIN SELECT RAISE(ABORT, 'Q08-FORECAST-RESEARCH-1: published secondary claims are immutable'); END").run();
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_claims_no_delete BEFORE DELETE ON q08_forecast_claims BEGIN SELECT RAISE(ABORT, 'Q08-FORECAST-RESEARCH-1: secondary claims are never dropped'); END").run();
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_claims_retracted AFTER UPDATE OF status ON q08_forecasts WHEN NEW.status = 'void' AND NEW.disposition IN ('retracted', 'superseded-incomplete-criteria') BEGIN UPDATE q08_forecast_claims SET status = 'void', disposition = NEW.disposition, resolved_at = NEW.resolved_at WHERE forecast_id = NEW.id AND status = 'open'; END").run();
     await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_q08_forecast_updates_slug ON q08_forecast_updates (slug, id)").run();
     await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_updates_no_update BEFORE UPDATE ON q08_forecast_updates BEGIN SELECT RAISE(ABORT, 'BP26-FORECAST-HYGIENE-1: q08_forecast_updates is append-only'); END").run();
     await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS q08_forecast_updates_no_delete BEFORE DELETE ON q08_forecast_updates BEGIN SELECT RAISE(ABORT, 'BP26-FORECAST-HYGIENE-1: q08_forecast_updates is append-only'); END").run();
@@ -2662,6 +2709,7 @@ async function forecastDue(env) {
   if ((ff && ff.n || 0) >= 3) return false;
   var last = await env.DB.prepare("SELECT kind FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT ?1").bind(FORECAST_EVERY).all();
   var rows = last.results || [];
+  if (!(n && n.n)) return true; // the archive can seed a daily forecast even when essay publication stalls
   if (rows.length < FORECAST_EVERY) return false;
   return rows.every(function (r) { return r.kind !== "forecast"; });
 }
@@ -2674,7 +2722,7 @@ async function pickForecastSource(env) {
     "AND NOT EXISTS (SELECT 1 FROM q08_forecasts f WHERE f.source_slug = p.slug) " +
     "AND (SELECT COUNT(*) FROM engine_runs e WHERE e.status = 'gate_failed' AND e.top_signal = substr('q08-forecast:' || p.slug, 1, 80)) < 2 " +
     "ORDER BY COALESCE(p.feedback_score, 0) DESC, p.reads DESC, p.published_at DESC LIMIT 1"
-  ).bind(new Date(Date.now() - 21 * 864e5).toISOString()).first();
+  ).bind(new Date(Date.now() - 30 * 864e5).toISOString()).first();
 }
 
 var FORECAST_DIRECTIVE = [
@@ -2686,9 +2734,9 @@ var FORECAST_DIRECTIVE = [
   "",
   "PROBABILITIES: state your probability for the main scenario in the prose as a whole percent, and the alternatives' probabilities too. They are your judgments, not measurements: do not dress them as data and do not hedge them. The main scenario must be at least as probable as each alternative, and all stated probabilities together must not exceed 100 percent; the remainder is 'something else', and say so.",
   "",
-  "BASE RATE, WITHOUT BORROWED CASES: before the scenario, say which class of situations you are reasoning from (for example, 'a standard that two competing bodies both claim to own') and how situations of that class usually go, in general terms. Do not name a past case, company, law or event that is not stated in the ESSAY or SIGNAL below, and give no historical statistics; a reader will check every name. Then say why this case should or should not follow the class.",
+  "BASE RATE: before the scenario, identify the class of situations you are reasoning from and how that class usually goes. Use dated precedents and historical statistics only when the ESSAY, SIGNAL or RESEARCH LEDGER states them. Then explain why this case should or should not follow the class.",
   "",
-  "FACTS (hard, non-negotiable, and checked): every claim about the real world as it stands today (an event, a date, a person, an organisation, a product, a law, a number, a price, a count, an identifier, a quotation) must be stated in the ESSAY or the SIGNAL below, verbatim or as a direct paraphrase. Your memory is not a source: add no outside facts, precedents or statistics. Future dates and your own probabilities are the only numbers you may add. Never state a projected quantity (a price, a user count, a market size) unless the text derives it from a figure in the sources. Never invent a source, a report or a quote. Every draft is fact-checked against the essay and signal by independent reviewers from other model families; one unsupported claim and the forecast is not published. A general honest sentence beats a specific unsupported one.",
+  "FACTS (hard, non-negotiable, and checked): every claim about the real world as it stands today (an event, a date, a person, an organisation, a product, a law, a number, a price, a count, an identifier, a quotation) must be stated in the ESSAY, SIGNAL or RESEARCH LEDGER below, verbatim or as a direct paraphrase. Your memory is not a source: add no outside facts, precedents or statistics. Future dates and your own probabilities are the only numbers you may add. Never state a projected quantity (a price, a user count, a market size) unless the text derives it from a figure in the sources. Never invent a source, a report or a quote. Every draft is fact-checked against the essay, signal and research ledger by independent reviewers from other model families; one unsupported claim and the forecast is not published. A general honest sentence beats a specific unsupported one.",
   "",
   "REGISTER: plain explanatory journalism, a sharp person explaining something to a smart friend. Name actors by what they are, never by role words ('the observer', 'the actor', 'the mechanism'). No bullets, no tables, no '##' headers: continuous prose. No first person, no hedging words, no emotional vocabulary, no marketing register, no @handles. Never mention 'the essay', 'the signal' or any pipeline field.",
   "",
@@ -2706,7 +2754,8 @@ var FORECAST_DIRECTIVE = [
   "",
   "OUTPUT FORMAT, in this order: Markdown with the H1 title first and then the prose; then one line that starts exactly with FORECAST-JSON: followed by a single-line JSON object; then the verdict line.",
   "The JSON object has these keys: \"claim\" (the main scenario as one checkable sentence, 20-300 characters), \"probability\" (your probability for it as a number from 0.05 to 0.95, equal to the percent you state in the prose), \"horizon\" (the date by which the claim is settled, YYYY-MM-DD, between 30 and 540 days after today), \"resolution\" (one sentence, 30-400 characters: the public, checkable condition that makes the claim true; it must name the source that settles it, the date it is read by, and an edge-case rule such as \"void if the figure is not published by then\"), \"alternatives\" (1 to 3 objects with \"claim\" and \"probability\"), \"indicators\" (2 to 5 short strings), \"watch_query\" (3 to 8 words someone would search to find news that settles it), \"watch_urls\" (0 to 2 https URLs of public pages that would show the outcome; only addresses you are certain exist, otherwise an empty list).",
-  "VERDICT (mandatory last line, after the FORECAST-JSON line): worth your time: yes|flat|no - one clause of justification. State honestly whether a reader gains something a plain extrapolation of the source would not give them."
+  "VERDICT (mandatory last line, after the FORECAST-JSON line): worth your time: yes|flat|no - one clause of justification. State honestly whether a reader gains something a plain extrapolation of the source would not give them.",
+  "SECONDARY PREDICTIONS: optionally add \"secondary_claims\", an array of at most five independent checkable predictions. Each has claim, probability, horizon, resolution, watch_query and watch_urls under the same rules as the main claim, and its probability must appear in the prose. These are not rival scenarios; they are separately dated and scored."
 ].join("\n");
 
 var READER_FORECAST_PROMPT = [
@@ -2718,10 +2767,10 @@ var READER_FORECAST_PROMPT = [
 
 function publicHttpsUrl(u) {
   var x = safeUrl(u);
-  if (!x || !/^https:\/\//i.test(x)) return "";
+  if (!x || x.length > 2048 || !/^https:\/\//i.test(x)) return "";
   try {
     var h = new URL(x).hostname.toLowerCase();
-    if (h.indexOf(".") < 0 || /^\d+\.\d+\.\d+\.\d+$/.test(h) || /\.(internal|local|localhost)$/.test(h) || h === "localhost") return "";
+    if (h.indexOf(".") < 0 || h.includes(":") || new URL(x).username || new URL(x).password || /^\d+\.\d+\.\d+\.\d+$/.test(h) || /\.(internal|local|localhost)$/.test(h) || h === "localhost") return "";
   } catch (e) { return ""; }
   return x;
 }
@@ -2736,7 +2785,7 @@ function parseForecastBlock(text) {
   var rest = t.replace(m[0], "").replace(/^[ \t]*```[a-z]*[ \t]*$/gim, "").replace(/\n{3,}/g, "\n\n");
   return { text: rest, extra: extra };
 }
-function validateForecast(f, text, nowMs) {
+function validateForecastClaim(f, text, nowMs) {
   var p = [];
   if (!f || typeof f !== "object" || Array.isArray(f)) return ["forecast block missing or not valid JSON (the FORECAST-JSON line)"];
   var claim = String(f.claim || "").trim();
@@ -2753,6 +2802,20 @@ function validateForecast(f, text, nowMs) {
   var res = String(f.resolution || "").trim();
   if (res.length < 30 || res.length > 400) p.push("resolution condition must be 30-400 characters");
   forecastResolutionGaps(res).forEach(function (g) { p.push("resolution condition must name " + g); });
+  var wq = String(f.watch_query || "").trim();
+  if (wq.length < 3 || wq.length > 80) p.push("watch_query must be 3-80 characters");
+  var wu = f.watch_urls == null ? [] : f.watch_urls;
+  if (!Array.isArray(wu) || wu.length > 2 || wu.some(function (u) { return !publicHttpsUrl(u); })) p.push("watch_urls must be 0-2 public https URLs");
+  if (isFinite(pr) && text != null) {
+    var pct = Math.round(pr * 100);
+    if (!new RegExp("(?:^|[^0-9])" + pct + "\\s?(?:%|percent|per cent)", "i").test(String(text))) p.push("the prose must state the main probability (" + pct + " percent) in its own words");
+  }
+  return p;
+}
+function validateForecast(f, text, nowMs) {
+  var p = validateForecastClaim(f, text, nowMs);
+  if (!f || typeof f !== "object" || Array.isArray(f)) return p;
+  var pr = Number(f.probability);
   var alts = Array.isArray(f.alternatives) ? f.alternatives : [];
   if (alts.length < 1 || alts.length > 3) p.push("forecast needs 1-3 alternative scenarios");
   var sum = isFinite(pr) ? pr : 0, altOk = alts.length > 0, maxAlt = 0;
@@ -2768,13 +2831,11 @@ function validateForecast(f, text, nowMs) {
   }
   var ind = Array.isArray(f.indicators) ? f.indicators : [];
   if (ind.length < 2 || ind.length > 5 || ind.some(function (x) { return String(x || "").trim().length < 15; })) p.push("forecast needs 2-5 leading indicators of 15+ characters");
-  var wq = String(f.watch_query || "").trim();
-  if (wq.length < 3 || wq.length > 80) p.push("watch_query must be 3-80 characters");
-  var wu = f.watch_urls == null ? [] : f.watch_urls;
-  if (!Array.isArray(wu) || wu.length > 2 || wu.some(function (u) { return !publicHttpsUrl(u); })) p.push("watch_urls must be 0-2 public https URLs");
-  if (isFinite(pr) && text != null) {
-    var pct = Math.round(pr * 100);
-    if (!new RegExp("(?:^|[^0-9])" + pct + "\\s?(?:%|percent|per cent)", "i").test(String(text))) p.push("the prose must state the main probability (" + pct + " percent) in its own words");
+  if (f.secondary_claims != null) {
+    if (!Array.isArray(f.secondary_claims) || f.secondary_claims.length > 5) p.push("secondary_claims must be an array of at most five predictions");
+    else f.secondary_claims.forEach(function (c, i) {
+      validateForecastClaim(c, text, nowMs).forEach(function (g) { p.push("secondary claim " + (i + 1) + ": " + g); });
+    });
   }
   return p;
 }
@@ -2851,9 +2912,13 @@ async function generateForecast(env, t0) {
   var banned = []; // Q08-VERIFY-1: outside precedents are rejected by the grounding check, so no precedent is named to the writer
   // Q08-FORECAST-LEDGER-1 (default off): with ops_config q08_forecast_ledger = on the ground also holds a research ledger; off makes no request.
   var ledger = await forecastLedgerFor(env, src, signalText);
+  if (await forecastLedgerOn(env) && ledger.sources.length < LEDGER_MIN_DOCS) {
+    await insertRun(env, { scraped: 1, scored: 1, published: 0, top: ("q08-forecast:" + src.slug).slice(0, 80), ms: Date.now() - t0, status: "deferred", error: "forecast research: " + ledger.sources.length + " usable sources; need " + LEDGER_MIN_DOCS, sourceKind: "forecast" });
+    return null; // retry research next tick; never compose against a single essay by accident
+  }
   var prompt = buildForecastPrompt(src, signalText, { banned: banned, ownerNotes: await ownerDirectives(env), recent: (recentF.results || []).map(function (r) { return r.claim; }), ledger: ledger.lines });
   var topSig = ("q08-forecast:" + src.slug).slice(0, 80);
-  var fcSrcChars = String(src.title || "").length + String(src.body_md || "").length + signalText.length; // Q08-YIELD-1: the size of the ground the forecast is checked against
+  var fcSrcChars = String(src.title || "").length + String(src.body_md || "").length + signalText.length + ledger.lines.join("\n").length;
   var piece = null, problems = [];
   try { piece = await compose(env, prompt, banned, undefined, forecastXform, TITLE_REPAIR_ON); } catch (e) { problems = ["compose failed: " + String(e && e.message || e).slice(0, 160)]; }
   // Q08-LEDE-1 (0.17.3): a forecast opens with a news lede too; the subject is the essay's case (its title and signal)
@@ -2880,8 +2945,8 @@ async function generateForecast(env, t0) {
   }
   var readerRows = [], gateResult = { ok: !!piece && problems.length === 0, problems: problems };
   // Q08-FACT-LEDGER-1: the forecast ground is built before the panel and the same free grounding check runs ahead of it (no prune: a forecast keeps its text)
-  var fcGround = [src.title || "", src.body_md || "", signalText].join("\n");
-  if (ledger.lines.length) fcGround += "\n" + ledger.lines.join("\n"); // Q08-FORECAST-LEDGER-1: the ledger is ground too (only when the switch is on)
+  var snapshot = { essay: { title: src.title || "", body_md: src.body_md || "" }, signal: signalText, lines: ledger.lines, sources: ledger.sources, researched_at: nowIso() };
+  var fcGround = forecastGroundText(snapshot);
   if (gateResult.ok) {
     var fgpMode = await groundPreCheckMode(env); // the same switch: prune never refuses a forecast, off makes no pre-check call
     if (fgpMode !== "off") {
@@ -2907,13 +2972,8 @@ async function generateForecast(env, t0) {
     return null; // the analysis path still runs this tick
   }
   piece.text = stripAnalysisMark(piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim());
-  var pseudo = { source: "q08", id: src.id, slug: src.slug, title: src.title, url: ORIGIN + "/p/" + src.slug, points: 0, num_comments: 0, ratio: 0, volatility_score: 0, ledgerSources: ledger.sources };
+  var pseudo = { source: "q08", id: src.id, slug: src.slug, title: src.title, url: ORIGIN + "/p/" + src.slug, points: 0, num_comments: 0, ratio: 0, volatility_score: 0, ledgerSources: ledger.sources, forecastGround: snapshot };
   var saved = await persistPiece(env, piece, { core_concept: src.core_concept || src.title, friction_point: signalText || String(src.title || ""), signal_strength: "Forecast" }, pseudo, piece.model);
-  if (ledger.lines.length) {
-    // the stored ledger is what the re-audit of this forecast reads (groundForPublished); a failure here is logged, the forecast is already published
-    await env.DB.prepare("UPDATE q08_forecasts SET ground_json = ?1 WHERE slug = ?2").bind(JSON.stringify({ lines: ledger.lines, sources: ledger.sources }), saved.slug).run()
-      .catch(function (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:generateForecast:ground_json:caught", error: String((e && e.message) || e).slice(0, 200) })); });
-  }
   if (fcVr) await recordAudit(env, saved.slug, "pass", "publish", fcVr).catch(function (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:generateForecast:caught", error: String((e && e.message) || e) })); });
   await saveReaderTests(env, saved.slug, readerRows);
   var fcRow = await env.DB.prepare("SELECT claim, probability, horizon FROM q08_forecasts WHERE slug = ?").bind(saved.slug).first().catch(function () { return null; });
@@ -3832,6 +3892,14 @@ async function recordAudit(env, slug, verdict, stage, vr) {
 }
 // Source material for a piece already published: its signal row, the linked article, and (for a forecast) the essay it projects.
 async function groundForPublished(env, p) {
+  if (p.kind === "forecast") {
+    var snapshot = null;
+    try {
+      var saved = await env.DB.prepare("SELECT ground_json FROM q08_forecasts WHERE slug = ?").bind(p.slug).first();
+      snapshot = saved && JSON.parse(saved.ground_json);
+    } catch (e) { /* legacy forecast */ }
+    if (snapshot && snapshot.essay && Array.isArray(snapshot.lines)) return forecastGroundText(snapshot);
+  }
   var parts = [p.title || "", p.core_concept || ""];
   var sig = null;
   try { sig = await env.DB.prepare("SELECT title, url, friction_point FROM signal_log WHERE id = ?").bind(p.signal_id).first(); } catch (e) { sig = null; }
@@ -4025,21 +4093,25 @@ async function resolveForecasts(env, max) {
   if (!(await ensureForecastSchema(env))) return { checked: 0 };
   var cutoff = new Date(Date.now() - FORECAST_RECHECK_DAYS * 864e5 + 36e5).toISOString();
   var due = await env.DB.prepare("SELECT * FROM q08_forecasts WHERE status = 'open' AND horizon <= ?1 AND (last_check_at IS NULL OR last_check_at <= ?2) ORDER BY horizon ASC LIMIT ?3").bind(utcDay(), cutoff, max || 2).all();
+  var children = await env.DB.prepare("SELECT * FROM q08_forecast_claims WHERE status = 'open' AND horizon <= ?1 AND (last_check_at IS NULL OR last_check_at <= ?2) ORDER BY horizon ASC LIMIT ?3").bind(utcDay(), cutoff, max || 2).all();
+  var work = (due.results || []).map(function (f) { return { row: f, table: "q08_forecasts" }; }).concat((children.results || []).map(function (f) { return { row: f, table: "q08_forecast_claims" }; }));
+  work.sort(function (a, b) { return a.row.horizon.localeCompare(b.row.horizon) || (a.row.last_check_at || "").localeCompare(b.row.last_check_at || ""); });
   var done = 0;
-  for (var f of (due.results || [])) {
+  for (var item of work.slice(0, max || 2)) {
+    var f = item.row, table = item.table;
     var ev = await gatherEvidence(f);
     var v = await judgeForecast(env, f, ev);
     var now = nowIso(), checks = (Number(f.checks) || 0) + 1;
     var evJson = JSON.stringify({ at: now, evidence: ev.map(function (e) { return e.slice(0, 400); }), verdict: v.outcome, basis: v.basis, judges: v.judges }).slice(0, 6000);
     if (v.outcome === "yes" || v.outcome === "no") {
       var oc = v.outcome === "yes" ? 1 : 0, br = Math.round(Math.pow(Number(f.probability) - oc, 2) * 10000) / 10000;
-      await env.DB.prepare("UPDATE q08_forecasts SET status = 'resolved', outcome = ?1, brier = ?2, checks = ?3, last_check_at = ?4, resolved_at = ?4, disposition = ?5, evidence_json = ?6 WHERE id = ?7 AND status = 'open'")
+      await env.DB.prepare("UPDATE " + table + " SET status = 'resolved', outcome = ?1, brier = ?2, checks = ?3, last_check_at = ?4, resolved_at = ?4, disposition = ?5, evidence_json = ?6 WHERE id = ?7 AND status = 'open'")
         .bind(oc, br, checks, now, ("resolved " + v.outcome + ": " + v.basis).slice(0, 400), evJson, f.id).run();
     } else if (checks >= FORECAST_MAX_CHECKS) {
-      await env.DB.prepare("UPDATE q08_forecasts SET status = 'void', checks = ?1, last_check_at = ?2, resolved_at = ?2, disposition = ?3, evidence_json = ?4 WHERE id = ?5 AND status = 'open'")
+      await env.DB.prepare("UPDATE " + table + " SET status = 'void', checks = ?1, last_check_at = ?2, resolved_at = ?2, disposition = ?3, evidence_json = ?4 WHERE id = ?5 AND status = 'open'")
         .bind(checks, now, ("void: no decidable public evidence after " + checks + " checks. Last basis: " + v.basis).slice(0, 400), evJson, f.id).run();
     } else {
-      await env.DB.prepare("UPDATE q08_forecasts SET checks = ?1, last_check_at = ?2, evidence_json = ?3 WHERE id = ?4 AND status = 'open'").bind(checks, now, evJson, f.id).run();
+      await env.DB.prepare("UPDATE " + table + " SET checks = ?1, last_check_at = ?2, evidence_json = ?3 WHERE id = ?4 AND status = 'open'").bind(checks, now, evJson, f.id).run();
     }
     done++;
   }
@@ -4099,6 +4171,7 @@ function renderForecastBox(f) {
     '<p class="q-meta" style="margin:0 0 6px">Resolves true if: ' + escHtml(f.resolution) + '</p>' +
     (altText ? '<p class="q-meta" style="margin:0 0 6px">Rival scenarios: ' + altText + '</p>' : "") +
     (ind.length ? '<p class="q-meta" style="margin:0 0 6px">Watch: ' + ind.map(function (x) { return escHtml(String(x)); }).join("; ") + '</p>' : "") +
+    (f.secondary_claims || []).map(function (c) { return '<p class="q-meta">Secondary prediction (' + fcPct(c.probability) + '), made ' + escHtml(String(c.created_at).slice(0, 10)) + ': ' + escHtml(c.claim) + ' &middot; settled by ' + escHtml(c.horizon) + ' &middot; ' + escHtml(fcStatus(c)) + (c.brier != null ? ' &middot; Brier ' + escHtml(String(c.brier)) : '') + '<br>Resolves true if: ' + escHtml(c.resolution) + '</p>'; }).join("") +
     '<p class="q-meta" style="margin:0"><a href="/forecasts">All forecasts and the scoring record</a></p></section>';
 }
 function renderCalibration(c) {
@@ -4121,7 +4194,7 @@ function renderForecasts(rows, stats) {
   var c = stats.calibration;
   var cal = c.n ? ('Scored so far: ' + c.n + ' resolved, mean Brier score ' + c.brier + ' (always saying 50% scores 0.25; lower is better), mean log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better; <a href="/forecasts/calibration">calibration by probability bucket</a>)' + (c.reliable ? "" : '. Under 20 resolved forecasts a score is mostly noise') + '. Void: ' + stats.void + (stats.void_share != null ? ' (' + Math.round(stats.void_share * 100) + '% of finished)' : "") + '.') : 'No forecast has been scored yet. Void so far: ' + stats.void + '.';
   var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p></section>' +
-    '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. They appear after every few essays.</div>') + '</section>' +
+    '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. Researched forecasts can draw on the essay archive.</div>') + '</section>' +
     (fin.length ? '<section class="q08-feed" aria-label="Settled forecasts"><h2 class="q-h3">Settled</h2><ul class="q-list">' + fin.map(item).join("") + '</ul></section>' : "") + q08Sub(true);
   return q08Page({ title: "Forecasts \u00b7 q08", canonical: ORIGIN + "/forecasts", active: "forecasts", ogType: "article", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", jsonld: { "@context": "https://schema.org", "@type": "Article", headline: "Forecasts", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", url: ORIGIN + "/forecasts", mainEntityOfPage: ORIGIN + "/forecasts", publisher: { "@type": "Organization", name: "q08", url: ORIGIN }, isPartOf: { "@type": "WebSite", name: "q08", url: ORIGIN }, about: { "@type": "Thing", name: "Dated, probability-weighted forecasts and their scoring record" } } }, body);
 }
@@ -5025,6 +5098,7 @@ async function q08Fetch(req, env, ctx) {
       // cancelled once the response returns), and a failure is logged instead of swallowed.
       await countPieceRead(env, req, slug, ctx);
       var frow = piece.kind === "forecast" ? await env.DB.prepare("SELECT * FROM q08_forecasts WHERE slug = ?").bind(slug).first().catch(function () { return null; }) : null;
+      if (frow) frow.secondary_claims = (await env.DB.prepare("SELECT * FROM q08_forecast_claims WHERE slug = ? ORDER BY claim_index").bind(slug).all().catch(function () { return { results: [] }; })).results || [];
       var pieceHtml = renderPiece(piece, frow);
       var provLink = '<link rel="c2pa-manifest" href="/p/' + slug + '/provenance.json">';
       if (pieceHtml.indexOf("</head>") >= 0) {
@@ -5078,8 +5152,11 @@ async function q08Fetch(req, env, ctx) {
       var fr2 = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, alternatives_json, status, outcome, brier, checks, created_at, resolved_at, disposition FROM q08_forecasts WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
       var fupd = await env.DB.prepare("SELECT slug, prior_probability, probability, reason, evidence_url, created_at FROM q08_forecast_updates ORDER BY id").all().catch(function () { return { results: [] }; });
       var fby = {}; (fupd.results || []).forEach(function (u) { (fby[u.slug] = fby[u.slug] || []).push({ prior_probability: u.prior_probability, probability: u.probability, reason: u.reason, evidence_url: u.evidence_url, at: u.created_at }); });
+      var claims = await env.DB.prepare("SELECT * FROM q08_forecast_claims WHERE slug IN (SELECT slug FROM q08_forecasts ORDER BY id DESC LIMIT 200) ORDER BY claim_index").all().catch(function () { return { results: [] }; });
+      var cby = {}; (claims.results || []).forEach(function (c) { (cby[c.slug] = cby[c.slug] || []).push(c); });
       return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: (fr2.results || []).map(function (f) {
   f.original_probability = f.probability;
+  f.secondary_claims = cby[f.slug] || [];
   f.updates = fby[f.slug] || [];
   // Compute updated_brier: last forecast update before the horizon (if resolved)
   if (f.resolution != null && f.updates.length) {

@@ -1,6 +1,6 @@
-// Q08-FORECAST-LEDGER-1 offline suite (q08-signal-engine 0.40.0, issue 1000512, slice 1, default off): the research ledger of verbatim sentences, with every fetch stubbed.
-// Proves: off (absent or any value but "on") makes no request and leaves the prompt and ground unchanged; on, the ledger obeys its limits (at most 6 names, 10
-// documents, 40000 characters each, 60 lines "[R<n>] <sentence> (<host>, <date>)", only public https pages, every fetch failing on its own, sentences copied verbatim);
+// Q08-FORECAST-LEDGER-1 offline suite: the research ledger of verbatim sentences, with every fetch stubbed.
+// Proves: explicit off makes no request; default on obeys its limits (at most 6 names, 15
+// documents, 40000 characters each, 60 numbered sentences with URL and date, only public https pages, every fetch failing on its own, sentences copied verbatim);
 // a draft stating a ledger fact passes the grounding check and one stating a fact in neither the essay nor the ledger is refused; [R<n>] tags are stripped like [S<n>];
 // the stored ledger (q08_forecasts.ground_json) is what the re-audit reads. Run: node q08-signal-engine/forecast-ledger.test.mjs
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -47,9 +47,9 @@ const forecastDdl = mainDb.prepare("SELECT sql FROM sqlite_master WHERE name = '
 
 // ---- the switch ----
 {
-  const cases = [[undefined, false], ["", false], ["off", false], ["1", false], ["true", false], ["on", true], [" ON ", true]];
+  const cases = [[undefined, true], ["", true], ["off", false], [" OFF ", false], ["1", true], ["true", true], ["on", true], [" ON ", true]];
   for (const [v, want] of cases) check("switch " + JSON.stringify(v) + " -> " + want, (await L.forecastLedgerOn(opsEnv(v))) === want);
-  check("switch with no AUDIT binding is off", (await L.forecastLedgerOn({})) === false);
+  check("switch with no AUDIT binding is on", (await L.forecastLedgerOn({})) === true);
 }
 
 // ---- stubbed network ----
@@ -80,21 +80,21 @@ const stub = (over) => async (url, init) => {
 try {
   // off: no request at all, an empty ledger, and a prompt identical to the one built without a ledger
   globalThis.fetch = stub();
-  for (const v of [undefined, "off", "1"]) {
+  for (const v of ["off", " OFF "]) {
     calls.length = 0;
     const r = await L.forecastLedgerFor(opsEnv(v), src, signalText);
     check("off (" + JSON.stringify(v) + ") makes no request and returns an empty ledger", calls.length === 0 && r.lines.length === 0 && r.sources.length === 0, { calls: calls.length, r });
   }
   const pOff = L.buildForecastPrompt(src, signalText, { banned: [], ownerNotes: [], recent: [] });
-  check("off: the prompt is unchanged and carries no ledger block", pOff === L.buildForecastPrompt(src, signalText, { banned: [], ownerNotes: [], recent: [], ledger: [] }) && !/RESEARCH LEDGER/.test(pOff));
+  check("off: the prompt carries no ledger block", pOff === L.buildForecastPrompt(src, signalText, { banned: [], ownerNotes: [], recent: [], ledger: [] }) && !/--- RESEARCH LEDGER/.test(pOff));
 
   // on
   calls.length = 0;
   const led = await L.researchLedger({}, src, signalText);
   const pageCalls = calls.filter((u) => !/hn\.algolia|gdeltproject|\/w\/api\.php|export\.arxiv/.test(u));
   check("on: a ledger is built from the linked pages", led.lines.length > 0 && led.sources.length > 0, led);
-  check("on: every line is '[R<n>] <sentence> (<host>, <date>)' numbered in order", led.lines.every((l, i) => new RegExp("^\\[R" + (i + 1) + "\\] .{25,280} \\([a-z0-9.-]+, (\\d{4}-\\d{2}-\\d{2}|undated)\\)$").test(l)), led.lines.slice(0, 3));
-  check("on: at most 60 lines and 10 documents", led.lines.length <= L.LEDGER_MAX_LINES && pageCalls.length <= L.LEDGER_MAX_DOCS && led.sources.length <= L.LEDGER_MAX_DOCS, { lines: led.lines.length, pages: pageCalls.length });
+  check("on: every line includes its numbered sentence, URL and date", led.lines.every((l, i) => new RegExp("^\\[R" + (i + 1) + "\\] .{25,280} \\(https://[^ ]+, (\\d{4}-\\d{2}-\\d{2}|retrieved \\d{4}-\\d{2}-\\d{2})\\)$").test(l)), led.lines.slice(0, 3));
+  check("on: at most 60 lines and 15 documents", led.lines.length <= L.LEDGER_MAX_LINES && pageCalls.length <= L.LEDGER_MAX_DOCS && led.sources.length <= L.LEDGER_MAX_DOCS, { lines: led.lines.length, pages: pageCalls.length });
   check("on: only public https pages are fetched (no http, private address or localhost)", pageCalls.every((u) => /^https:\/\//.test(u) && !/10\.0\.0\.5|localhost|insecure/.test(u)), pageCalls);
   check("on: a failing page (HTTP 500) is skipped and the others still count", pageCalls.some((u) => /down\.example\.net/.test(u)) && !led.lines.some((l) => /down\.example\.net/.test(l)) && led.lines.some((l) => /news\.example\.com/.test(l)) && led.lines.some((l) => /news\.example\.org/.test(l)));
   check("on: no more than 40000 characters of a page are read", !led.lines.some((l) => /far beyond the forty thousand/.test(l)) && led.lines.some((l) => /big\.example\.com/.test(l)));
@@ -102,7 +102,7 @@ try {
   const norm = (s) => s.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/g, " ").replace(/\s+/g, " ");
   const allText = Object.values(pages).map(norm).join(" ");
   check("on: every sentence is copied verbatim from a fetched page", led.lines.every((l) => allText.includes(l.replace(/^\[R\d+\] /, "").replace(/ \([^()]*\)$/, ""))), led.lines.slice(0, 2));
-  check("on: the date comes from the search result, else 'undated'", led.lines.some((l) => /news\.example\.com, 2026-10-01\)$/.test(l)) && led.lines.some((l) => /news\.example\.org, 2026-10-02\)$/.test(l)));
+  check("on: the date comes from the search result", led.lines.some((l) => /news\.example\.com\/a, 2026-10-01\)$/.test(l)) && led.lines.some((l) => /news\.example\.org\/c, 2026-10-02\)$/.test(l)));
   check("on: no model is called (the environment has no AI binding)", true);
 
   // on, through the switch: the same ledger, and a prompt that carries it with the extended FACTS rule
@@ -128,7 +128,7 @@ try {
   calls.length = 0;
   const big = await L.researchLedger({}, src, signalText);
   const bigPages = calls.filter((u) => /many\.example\.com/.test(u));
-  check("cap: 60 lines at most, 10 documents at most, lines shared across documents", big.lines.length === 60 && bigPages.length <= 10 && big.sources.length <= 10 && new Set(big.lines.map((l) => l.match(/\(([^,]+),/)[1])).size >= 1, { lines: big.lines.length, pages: bigPages.length, sources: big.sources.length });
+  check("cap: 60 lines at most, 15 documents at most, lines shared across documents", big.lines.length === 60 && bigPages.length <= 15 && big.sources.length <= 15 && new Set(big.lines.map((l) => l.match(/\(([^,]+),/)[1])).size > 1, { lines: big.lines.length, pages: bigPages.length, sources: big.sources.length });
 } finally { globalThis.fetch = realFetch; }
 
 // ---- grounding: a ledger fact passes, a fact in neither the essay nor the ledger is refused ----
@@ -182,9 +182,8 @@ try {
 {
   const code = readFileSync(join(here, "worker.js"), "utf8");
   const gf = code.slice(code.indexOf("async function generateForecast("), code.indexOf("// ---- Accuracy layer"));
-  check("generateForecast reads the ledger through the switch and adds it to the prompt and to fcGround", /forecastLedgerFor\(env, src, signalText\)/.test(gf) && /ledger: ledger\.lines/.test(gf) && /fcGround \+= "\\n" \+ ledger\.lines\.join/.test(gf));
-  check("the issue's code-anchor line is untouched (the ledger is appended on the next line)", code.split('var fcGround = [src.title || "", src.body_md || "", signalText].join("\\n");').length - 1 === 1);
-  check("generateForecast stores the ledger and passes its sources to persistPiece", /SET ground_json = \?1/.test(gf) && /ledgerSources: ledger\.sources/.test(gf));
+  check("generateForecast adds the ledger to the prompt and snapshot ground", /forecastLedgerFor\(env, src, signalText\)/.test(gf) && /ledger: ledger\.lines/.test(gf) && /fcGround = forecastGroundText\(snapshot\)/.test(gf));
+  check("generateForecast passes its snapshot and sources to atomic persistence", /forecastGround: snapshot/.test(gf) && /ledgerSources: ledger\.sources/.test(gf) && /await env\.DB\.batch\(writes\)/.test(code));
   check("persistPiece adds the ledger sources to sources_json", /buildSources\(story\)\.concat\(Array\.isArray\(story\.ledgerSources\)/.test(code));
   check("the probe text of issue 1000512 is present", /function researchLedger\(/.test(code));
   check("the unused draft forecastLedger is gone", !/forecastLedger\(|FORECAST_EVIDENCE_SOURCES/.test(code));
