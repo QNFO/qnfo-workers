@@ -13,3 +13,4 @@
 #   - A malformed line or an expiry more than 7 days away fails the run.
 #   - Name the issue that fixes the suite; the entry is a loan, not a decision to leave the suite red.
 #   - Nothing here at birth: the full set was 527 of 527 on 2026-10-19.
+qnfo-fleet-control/trigger-recovery.test.mjs | 2026-11-08 | #5702 | PR #5700 fixes this fixture's close-evidence cleanup

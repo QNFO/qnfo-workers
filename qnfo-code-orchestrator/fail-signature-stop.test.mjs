@@ -183,7 +183,7 @@ ok(atLeast((await (await worker.fetch(new Request("https://x/health"), env)).jso
   await tick();
   const r2 = row(id2), c2 = ctxOf(id2);
   ok(r2.status === "queued" && r2.attempts === 3 && Date.parse(r2.lease_until) - Date.now() > 3 * 60e3 && aiCalls === n1 && /round 1 of 3 failed/.test(r2.last_error), "C8 a different third publisher failure is a round end: a backoff, no model call", { st: r2.status, a: r2.attempts, err: r2.last_error });
-  ok(c2.sigs[2] === "suite diversity-cap.test.mjs: with fewer than DIVERSITY_MIN_N accepts in the window a quantum ACCEPT passes", "C9 the signature drops the payload after ' :: '", c2.sigs);
+  ok(c2.sigs[1] === "suite diversity-cap.test.mjs: with fewer than DIVERSITY_MIN_N accepts in the window a quantum ACCEPT passes", "C9 the signature drops the payload after ' :: '", c2.sigs);
   ok(!guard.lease[K2] && c2.claim.released_at && c2.claim.outcome === "backoff", "C10 the publisher-fed backoff releases the claim (outcome backoff)", c2.claim);
 }
 

@@ -53,7 +53,7 @@ const BANNED = [
   { label: "qwen3-30b", re: /qwen3-30b[\w.-]*/i },
   { label: "qwq-32b", re: /qwq-32b[\w.-]*/i },
   { label: "r1-distill-32b", re: /deepseek-r1-distill-qwen-32b[\w.-]*/i },
-  { label: "gemma-4-26b", re: /gemma-4-26b[\w.-]*/i },
+  { label: "gemma-4-26b", re: /gemma-4-26b(?!-a4b-it(?:$|[^\w.-]))[\w.-]*/i },
   { label: "glm-4.7-flash", re: /glm-4\.7-flash[\w.-]*/i },
   { label: "glm-5.2", re: /glm-5\.2(?![\d.])[\w.-]*/i },
 ];

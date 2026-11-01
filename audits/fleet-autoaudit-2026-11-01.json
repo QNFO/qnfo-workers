@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 14:17:30",
+  "audited_at": "2026-11-01 14:50:39",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -601,7 +601,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.42.3-breach-doctor-run-id",
+        "version": "1.43.0-paper-provenance-archive",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -691,7 +691,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.61.0-composio-managed-oauth-tools",
+        "version": "2.62.0-policy-gate-shadow",
         "worker": "qnfo-ops"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.42.2-lean-review-cycles",
+        "version": "0.43.0-paper-provenance",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1258,9 +1258,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.42.3-breach-doctor-run-id",
+      "before": "1.43.0-paper-provenance-archive",
       "http": 200,
-      "live": "1.42.3-breach-doctor-run-id",
+      "live": "1.43.0-paper-provenance-archive",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1581,9 +1581,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.61.0-composio-managed-oauth-tools",
+      "before": "2.62.0-policy-gate-shadow",
       "http": 200,
-      "live": "2.61.0-composio-managed-oauth-tools",
+      "live": "2.62.0-policy-gate-shadow",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1669,9 +1669,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.42.2-lean-review-cycles",
+      "before": "0.43.0-paper-provenance",
       "http": 200,
-      "live": "0.42.2-lean-review-cycles",
+      "live": "0.43.0-paper-provenance",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
