@@ -4,7 +4,7 @@
 // pull_request runs are approved only when the diff avoids every denied path (workflows, scripts, wrangler and package manifests, shell, Docker, yaml), a
 // withheld approval is explained once per head commit, a 403 on approve is recorded and stops that pull request only; KICK-GATED-CHECKS-1: when GitHub refuses
 // the approval of a Copilot run with 403 and the fleet user credential is present, a finished pull request that avoids every denied path gets one update-branch
-// pinned to its head (never for another refusal, a running agent, a denied path, a dry run, approve=false or a missing credential; capped per run); dry sends no write; approve=false
+// pinned to its head (never for another refusal, a running agent, a denied path, an empty pull request, a dry run, approve=false or a missing credential; capped per run); dry sends no write; approve=false
 // sends no approval; no credential or an unreadable list sends nothing and never throws; the per-run cap defers the rest; the workflow keeps GITHUB_TOKEN
 // as its only secret, a timeout, the runner pin, pinned actions, a base checkout and no pull request text in a run line; lane-poke ignores copilot/** runs.
 // Run: node --no-warnings scripts/copilot-pr-lifecycle.test.mjs   -> prints "N passed, 0 failed"
@@ -294,6 +294,11 @@ ok(JSON.stringify(linkedIssues("Fixes #12\n\ncloses #5, Resolved: #9 and fixes #
   const ge = mk({ kickStatus: { 1: 403, 2: 500 } });
   const se = await run(withOrg, { fetchImpl: ge.fetchImpl, sleep: async () => {} });
   ok(se.kicked.length === 0 && se.status === "partial" && se.errors.length === 2 && se.errors.every((e) => /update branch on \d+ after approve run \d+ was refused/.test(e.where)) && se.errors[0].http === 403 && se.errors[1].http === 500, "a refused update is recorded as GitHub said it", se.errors);
+
+  // A finished session that changed nothing has no check to run: it is neither approved nor kicked, and the pull request that did change files still is.
+  const gm = mk({ files: { 1: [], 2: [f("qnfo-x/worker.js")] } });
+  const sm = await run(withOrg, { fetchImpl: gm.fetchImpl, sleep: async () => {} });
+  ok(sm.skipped["no-changed-files"] === 1 && sm.kicked.length === 1 && sm.kicked[0].pr === 2 && puts(gm.log).length === 1 && approves(gm.log).length === 1 && !approves(gm.log).some((c) => /\/runs\/1[12]\/approve$/.test(c.path)), "an empty pull request is neither approved nor kicked", { skipped: sm.skipped, kicked: sm.kicked, approves: approves(gm.log).map((c) => c.path) });
 }
 
 // --- the workflow and the lane poke
