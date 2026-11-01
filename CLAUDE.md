@@ -567,3 +567,7 @@ because each one was broken at least once; the linked issue holds the evidence.
   (403, 9 of 9 sweeps on 2026-11-01), so no finished Copilot pull request ever had a required check and the lane could not merge any; KICK-GATED-CHECKS-1 starts those checks
   instead with one `update-branch` of the fleet user credential, pinned to the head, for a finished pull request that changes no DENY_PATHS file (`scripts/copilot-pr-lifecycle.mjs`).
   A Copilot pull request that changes `.github/`, `scripts/`, yaml, a manifest or a shell file is not started: redo it through the code loop. Do not add per-repository copies of the workflow or of the secret.
+- Every ready pull request into main gets the Copilot reviewer requested by `.github/workflows/request-copilot-review.yml` (REQUEST-COPILOT-REVIEW-1, lever 1 of LANE-WAITS-FOR-REVIEW-1,
+  issue 5515): the workflow token first, the fleet user credential second. A request never blocks a merge: the lane refuses a pull request while a check that is not required has
+  failed, so both request steps are `continue-on-error`. A draft is not reviewed. Still open on the issue: hold the merge when the reviewer's review of the head lists a High severity
+  item, never wait more than 8 minutes for a review that has not arrived, feed the findings to the code loop.
