@@ -106,7 +106,7 @@ card = Object.assign({}, card, { novelty: 0.9, technical_merit: 0.9 });
 
 // 7. A second held row with a lower score; then enough non-quantum accepts that exactly one quantum release fits.
 const held2 = add("auto-scan", "Qubit recycling in distillation factories", ago(0.009));
-card = Object.assign({}, card, { novelty: 0.75, technical_merit: 0.75 });
+card = Object.assign({}, card, { novelty: 0.85, technical_merit: 0.85 });
 out = await api.triageProposals(env);
 card = Object.assign({}, card, { novelty: 0.9, technical_merit: 0.9 });
 ok(row(held2).status === "deferred_diversity" && row(held2).score < row(held1).score, "a second, lower-scored quantum ACCEPT is held too", [row(held1).score, row(held2).score]);
