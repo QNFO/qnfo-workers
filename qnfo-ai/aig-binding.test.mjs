@@ -4,6 +4,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let failed = 0, passed = 0;
@@ -57,6 +58,55 @@ const bad = { AI: { async run() { throw new Error("model down"); } } };
 let threw = false;
 try { await aiRunAttr(bad, "qnfo-ai", "chat", "m", {}); } catch (x) { threw = /model down/.test(String(x && x.message)); }
 ok(threw, "a chat error propagates");
+
+// 5. transient 504s retry the same dynamic route without adding a local fallback
+const retryStart = src.indexOf("function __aiAttrEnv(");
+const retryEnd = src.indexOf("\n// AIG-CALLER-METADATA-1", retryStart);
+ok(retryStart > 0 && retryEnd > retryStart, "AI binding retry wrapper found in worker.js");
+const retryContext = vm.createContext({
+  SPEND_CHEAP_WA: "cheap-model",
+  __AI_ATTR_RATES: {},
+  d1AttrWriteSkip: () => true,
+  setTimeout: (fn) => { queueMicrotask(fn); return 1; },
+  clearTimeout() {},
+  console: { log() {}, error() {} }
+});
+vm.runInContext(src.slice(retryStart, retryEnd) + "\nthis.wrapAI = __aiAttrEnv;", retryContext);
+const wrappedCalls = (run) => {
+  const calls = [];
+  const wrapped = retryContext.wrapAI({ AI: { async run(model, input, opts) { calls.push(model); return run(model, input, opts); } }, QNFO_AUDIT: {} }, "qnfo-ai", "AI", "QNFO_AUDIT");
+  return { calls, ai: wrapped.AI };
+};
+{
+  let attempts = 0;
+  const x = wrappedCalls(async () => {
+    if (++attempts === 1) throw new Error("HttpServerError · HTTP 504");
+    return { choices: [{ message: { content: "recovered" } }] };
+  });
+  const response = await x.ai.run("dynamic/standard", {}, {});
+  ok(response.choices[0].message.content === "recovered" && x.calls.join() === "dynamic/standard,dynamic/standard", "dynamic route retries a transient HTTP 504 and returns its successful retry");
+}
+{
+  const x = wrappedCalls(async () => { throw new Error("HttpServerError · HTTP 504"); });
+  let failed504 = false;
+  try { await x.ai.run("dynamic/standard", {}, {}); } catch (e) { failed504 = /HTTP 504/.test(e.message); }
+  ok(failed504 && x.calls.length === 4 && x.calls.every((model) => model === "dynamic/standard"), "exhausted dynamic-route retries propagate without a provider fallback");
+}
+{
+  const x = wrappedCalls(async (model) => {
+    if (model === "primary") throw new Error("HttpServerError · HTTP 504");
+    if (model === "cheap-model" && x.calls.filter((name) => name === model).length === 1) throw new Error("HTTP 504 Gateway Timeout");
+    return { choices: [{ message: { content: "fallback recovered" } }] };
+  });
+  const response = await x.ai.run("primary", {}, {});
+  ok(response.choices[0].message.content === "fallback recovered" && x.calls.filter((model) => model === "primary").length === 4 && x.calls.filter((model) => model === "cheap-model").length === 2, "non-dynamic fallback also retries transient HTTP 504 responses");
+}
+{
+  const x = wrappedCalls(async () => { throw new Error("invalid request"); });
+  let failed = false;
+  try { await x.ai.run("dynamic/standard", {}, {}); } catch (e) { failed = /invalid request/.test(e.message); }
+  ok(failed && x.calls.length === 1, "non-transient dynamic-route errors are not retried");
+}
 
 ok(/var gwOpts = /.test(src), "the deployed source names gwOpts (the issue's source check)");
 console.log(passed + " passed, " + failed + " failed");

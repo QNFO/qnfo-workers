@@ -6,7 +6,7 @@
 //
 // What it is: one Agent class (FleetCodeAgent, a SQLite-backed Durable Object from the `agents` package) that runs coding and
 // operations turns for the fleet with
-//   - Workers AI through AI Gateway (createAI from agents/models/ai-sdk, gateway "default", a fallback model on error),
+//   - Workers AI through AI Gateway dynamic routes (createAI from agents/models/ai-sdk, gateway "default"; routes own fallback),
 //   - the whole qnfo-ops tool surface (/v1/tools, TOOL-BRIDGE-1) as Code Mode functions in a Dynamic Worker sandbox
 //     (@cloudflare/codemode DynamicWorkerExecutor over the LOADER binding), plus direct tools for the repository, D1 reads,
 //     code-task proposals, fleet issues, schedules and MCP connections,
@@ -24,6 +24,8 @@
 // deploys it with the deploy-guard lock, the fleet_deploys ledger and a /health canary that reverts a push that did not arrive.
 // Source is src/; worker.js is the esbuild bundle of src/index.ts (npm run build), kept identical to deployed-current.worker.js.
 
+// Models are routed via AI Gateway dynamic routes — see qnfo-ops issue #7.
+
 import { Agent, callable, getAgentByName, routeAgentRequest } from "agents";
 import { createAI } from "agents/models/ai-sdk";
 import { createMcpHandler } from "agents/mcp/server";
@@ -32,15 +34,14 @@ import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { createCodeTool } from "@cloudflare/codemode/ai";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, lastStepText, toolTranscript, codeSessionNeurons, codeSessionCost } from "./lib.js";
+import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, lastStepText, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute } from "./lib.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
 declare var VERSION: string;
 const WORKER = "qnfo-agents";
 const SDK = "agents@0.30.1";
 const REPO = "QNFO/qnfo-workers";
-const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
-const FALLBACK_MODEL = "@cf/zai-org/glm-5.3-flash";
+const DEFAULT_MODEL = "dynamic/standard";
 const MAX_STEPS = 16;
 const TURN_TIMEOUT_MS = 10 * 60 * 1000;
 // ALARM-TIMEOUT-1: one hung model call used to hold a Durable Object until the whole-turn timeout and surfaced as an alarm exception
@@ -70,7 +71,7 @@ const CAPABILITIES = [
   "MCP server at /mcp (createMcpHandler)",
   "MCP client: connect any MCP server; its tools join the turn (addMcpServer)",
   "Code Mode: the model writes JavaScript that calls the tools inside a Dynamic Worker sandbox (LOADER)",
-  "Workers AI through AI Gateway with a fallback model (createAI); CodeSession uses DeepSeek V4 Flash and escalates to Pro within its neuron budget",
+  "Workers AI through AI Gateway dynamic route dynamic/standard (createAI); the route owns model fallback for agent turns and CodeSession",
   "the qnfo-ops tool surface: Cloudflare API, D1, R2, KV, GitHub, workspace, containers, deploys (scope-gated)",
   "code changes as code-task proposals the owner files; the code loop opens and merges the PR",
   "fleet loops reach it through D1 cf_agent_requests (run, sandbox, schedule), drained every 5 minutes in the loop scope"
@@ -264,19 +265,19 @@ const SYSTEM = [
   "Never print a secret, token or key. Keep the final answer short: what you found, what you did, what is proposed, and what is open."
 ].join("\n");
 
-const CODE_SESSION_FLASH = "@cf/deepseek-ai/deepseek-v4-flash-0731";
-const CODE_SESSION_PRO = "@cf/deepseek-ai/deepseek-v4-pro-0813";
+const CODE_SESSION_NEURON_BASELINE = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 const CODE_SESSION_NEURON_BUDGET = 100000;
 const CODE_SESSION_SYSTEM = SYSTEM;
 
-async function modelFor(env: Env) {
-  let id = DEFAULT_MODEL, fb = FALLBACK_MODEL;
+async function modelFor(env: Env, purpose?: string) {
+  let id = DEFAULT_MODEL;
   try {
     const row: any = await env.AUDIT_DB.prepare("SELECT value FROM ops_config WHERE key = 'qnfo_agents_model'").first();
-    if (row && /^@cf\/[a-z0-9._\/-]{3,120}$/i.test(String(row.value))) id = String(row.value);
+    if (row && isDynamicRoute(row.value)) id = row.value;
   } catch (e) { /* ops_config unreadable: the default model */ }
-  const ai = createAI({ binding: env.AI, id: "default", metadata: { worker: WORKER } } as any);
-  return { id, model: (ai as any)(id, { fallback: [fb] }) };
+  const metadata = purpose ? { worker: WORKER, purpose } : { worker: WORKER };
+  const ai = createAI({ binding: env.AI, id: "default", metadata } as any);
+  return { id, model: (ai as any)(id) };
 }
 
 async function ledger(env: Env, row: Record<string, unknown>) {
@@ -501,14 +502,16 @@ export class CodeSession extends Agent<Env, State> {
     this.sql`UPDATE code_session_turns SET status = 'running', attempts = attempts + 1 WHERE turn = ${turn}`;
     this.sql`UPDATE code_session SET status = 'running', error = NULL WHERE id = ${this.name}`;
     this.event("status", { status: "running", turn });
-    let answer = "", error: string | null = null, modelId = CODE_SESSION_FLASH;
+    let answer = "", error: string | null = null, modelId = CODE_SESSION_NEURON_BASELINE;
+    let routeId = DEFAULT_MODEL;
     let inputTokens = 0, outputTokens = 0, neurons = 0, costUsd = 0, steps = 0;
     try {
       const history = (turns || []).slice().reverse().map((x: any) => "User: " + clip(x.prompt, 1200) + "\nAssistant: " + clip(x.answer || "", 1800)).join("\n\n");
       const prompt = (history ? "Conversation so far:\n" + history + "\n\n" : "") + "Scope: " + session.scope + "\nCurrent request:\n" + row.prompt;
-      const remaining = Math.max(0, Number(session.neuron_budget) - Number(session.neurons_used || 0));
-      const ai = createAI({ binding: this.env.AI, id: "default", metadata: { worker: WORKER, purpose: "code-session" } } as any);
-      const model = (ai as any)(CODE_SESSION_FLASH, { fallback: remaining >= 10000 ? [CODE_SESSION_PRO] : [] });
+      const routed = await modelFor(this.env, "code-session");
+      routeId = routed.id;
+      modelId = routeId;
+      const model = routed.model;
       const tools = await allTools({ env: this.env, scope: session.scope, caller: session.caller, agent: null, proposals: [] });
       const out: any = streamText({
         model, system: CODE_SESSION_SYSTEM, prompt, tools, stopWhen: stepCountIs(MAX_STEPS),
@@ -531,9 +534,9 @@ export class CodeSession extends Agent<Env, State> {
       inputTokens = Number(usage && usage.inputTokens) || 0;
       outputTokens = Number(usage && usage.outputTokens) || 0;
       const response = await out.response;
-      modelId = String(response && response.modelId || CODE_SESSION_FLASH);
+      modelId = String(response && response.modelId || routeId);
       neurons = codeSessionNeurons(modelId, inputTokens, outputTokens);
-      if (!neurons) neurons = codeSessionNeurons(CODE_SESSION_FLASH, inputTokens, outputTokens);
+      if (!neurons) neurons = codeSessionNeurons(CODE_SESSION_NEURON_BASELINE, inputTokens, outputTokens);
       costUsd = codeSessionCost(neurons);
       const finish = Date.now();
       this.sql`UPDATE code_session_turns SET status = 'done', answer = ${answer.slice(0, 16000)}, model = ${modelId}, input_tokens = ${inputTokens}, output_tokens = ${outputTokens}, neurons = ${neurons}, cost_usd = ${costUsd}, finished_ms = ${finish} WHERE turn = ${turn}`;
@@ -699,7 +702,7 @@ function selfDoc(caller: string, scope: Scope) {
     what: "The fleet's Cloudflare Agents SDK agent: coding and operations turns over the whole fleet tool surface, durable, schedulable, with an MCP server and client and a Code Mode sandbox.",
     capabilities: CAPABILITIES,
     limitations: LIMITATIONS,
-    model: { primary: DEFAULT_MODEL, fallback: FALLBACK_MODEL, via: "Workers AI binding through AI Gateway 'default'", override: "ops_config qnfo_agents_model" },
+    model: { route: DEFAULT_MODEL, via: "Workers AI binding through AI Gateway 'default'", override: "ops_config qnfo_agents_model (dynamic routes only; invalid values use dynamic/standard)" },
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
       loops: ["INSERT INTO qnfo-audit.cf_agent_requests (requester, kind run|sandbox|schedule, prompt | code, cron | delay_s, instance?, priority?): drained every 5 minutes, outcome written back to the row"],

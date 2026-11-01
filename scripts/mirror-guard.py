@@ -64,7 +64,7 @@ The push-to-main run passes no flag, so main itself is still held to strict glob
 
 Usage:
   python scripts/mirror-guard.py                          # report; exit 1 if any drift
-  python scripts/mirror-guard.py --fix                    # regenerate lagging/missing mirrors
+  python scripts/mirror-guard.py --fix                    # repair import-free mirrors; imported mirrors need a build
   python scripts/mirror-guard.py --scope-to-diff=HEAD^1   # PR mode: only fail on workers this change touches
 Exit: 0 clean | 1 drift found
 """
@@ -199,24 +199,21 @@ def main(argv):
                 captured.append(name)
                 rows.append((name, "CAPTURED", "plain source", "multipart-upload capture - NOT auto-fixable"))
                 continue
-            # MIRROR-GUARD-IMPORT-BLINDSPOT-1 (2026-09-30, issue #1513): an import-using source is a bundle
-            # INPUT, not a plain deployable, so the previous rule left it report-only and
-            # the scheduled mirror-sync could NEVER repair qnfo-ops parity. This branch is
-            # only reached when the source and mirror carry the SAME version constant, so the
-            # mirror is not version-ahead; worker.js is the source of truth and the canonical
-            # deploy reads the mirror, so a byte-divergent version-equal pair silently reverts
-            # the source. Repair it when the source is at least as large as the mirror (a stale
-            # same-version build is smaller; a mirror-ahead hotfix is larger and is left alone).
-            if is_import_free(src_p) or os.path.getsize(src_p) >= os.path.getsize(mir_p):
+            # A bundled import-using source and its deployable mirror are expected
+            # to differ. Size is not a reliable freshness signal: bundling can shrink
+            # the source by removing comments and expanding it with dependencies.
+            # Version parity is checked above; deploy_gate.py separately verifies
+            # that the current source still produces a valid Wrangler bundle.
+            if is_import_free(src_p):
                 content_drift.append(name)
                 drift.append(name)
-                rows.append((name, "CONTENT-DRIFT-IMPORT-SOT", "sha=%s" % hs[:12], "sha=%s" % hm[:12]))
+                rows.append((name, "CONTENT-DRIFT", "sha=%s" % hs[:12], "sha=%s" % hm[:12]))
                 if fix:
                     shutil.copyfile(src_p, mir_p)
                     fixed.append(name)
             else:
                 review.append(name)
-                rows.append((name, "CONTENT-DIFF-REVIEW", "import-using source - mirror larger - report only", "sha=%s" % hm[:12]))
+                rows.append((name, "CONTENT-DIFF-REVIEW", "import-using source - verify built artifact", "sha=%s" % hm[:12]))
             continue
         if is_captured(mir_p):
             captured.append(name)
@@ -229,7 +226,9 @@ def main(argv):
             rows.append((name, "LAG", ",".join("%s=%s" % (k, s[k]) for k in lag),
                          ",".join("%s=%s" % (k, m[k]) for k in lag)))
             drift.append(name)
-            if fix:
+            # An imported source is not a deployable artifact; keep the lag blocking
+            # until its mirror is rebuilt rather than copying raw source into it.
+            if fix and is_import_free(src_p):
                 shutil.copyfile(src_p, mir_p)
                 fixed.append(name)
         else:
@@ -276,9 +275,12 @@ def main(argv):
             if pre:
                 print("\nPRE-EXISTING lag in workers this change does not touch (reported, NOT blocking here; "
                       "the push-to-main gate still enforces it): " + ", ".join(pre))
-    if blocking and not fix:
-        print("\nDRIFT GATE FAILED - run with --fix to regenerate from source, then commit BOTH files")
-    return 1 if (blocking and not fix) else 0
+    unresolved = [name for name in blocking if name not in fixed]
+    if unresolved:
+        print("\nDRIFT GATE FAILED - unresolved: " + ", ".join(unresolved))
+        print("Use --fix only for import-free sources; rebuild imported sources with Wrangler, then commit BOTH files")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

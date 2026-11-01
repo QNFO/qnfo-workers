@@ -20,7 +20,8 @@
 //           call the merge lane's own nudge makes): the merge commit is pushed by the owner credential, a person's push is not held, and the same
 //           workflows run un-gated on the new head (measured on #5513: actor rwnq8, version-bump-guard, mirror-guard, migration-guard, identity-guard
 //           green within 30 s). It applies exactly the policy of step 2: the agent has finished, the diff avoids every DENY_PATHS entry, the head is this
-//           repository's own branch. Only four workflows run on a push to a branch other than main (copilot-setup-steps, dup-worker-name-gate,
+//           repository's own branch (and a pull request with no changed file is skipped: nothing to check, and a push would restart the idle time
+//           BH-EMPTY-DRAFT-1 waits for before it closes that draft). Only four workflows run on a push to a branch other than main (copilot-setup-steps, dup-worker-name-gate,
 //           version-bump-guard, workflow-lint), all path-filtered and none reads a secret, so the push adds no exposure beyond the pull_request runs
 //           step 2 already approves. A kick is pinned to the head sha and never repeated for it: the new head's runs are the owner's, not Copilot's,
 //           so the next sweep finds nothing gated.
@@ -211,6 +212,8 @@ export async function run(opts, deps) {
     const files = await listAll(api, "/repos/" + repo + "/pulls/" + n + "/files", null, 3);
     if (files.error) { fail("files " + n, { status: files.error.http, message: files.error.message }); continue; }
     if (files.items.length >= 300) { sum.approval_withheld.push({ pr: n, reason: "300 or more changed files" }); continue; }
+    // An empty pull request (a finished session that changed nothing) has no check to run; a push would also restart the idle time BH-EMPTY-DRAFT-1 waits for before closing it.
+    if (!files.items.length) { skip("no-changed-files"); continue; }
     const denied = deniedPaths(files.items);
     if (denied.length) {
       sum.approval_withheld.push({ pr: n, paths: denied.slice(0, 20) });

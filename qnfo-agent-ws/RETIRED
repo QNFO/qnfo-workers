@@ -1,4 +1,5 @@
-absent from the live fleet pending owner decision RM-AGENT-WS-DECISION-1 (redeploy with a consumer, or archive)
+qnfo-agent-ws is archived under RM-AGENT-WS-DECISION-1 (2026-11-01).
+
+Live evidence: Cloudflare Workers script search returned no qnfo-agent-ws script; qnfo-audit.service_registry has no qnfo-agent-ws row; worker_count was 39 against the hard cap of 30 (2026-11-01). No application consumer is registered. Keep the source and bundle for audit; do not redeploy without a consumer and capacity.
 
 The PR 253 wrangler-only push (2026-10-01 09:26:41Z) recreated the script by mistake; WORKER-RESURRECTION-GUARD-1 (qnfo-ops 2.38.27) now refuses implicit creates.
-Remove this file only together with the owner's redeploy decision.
