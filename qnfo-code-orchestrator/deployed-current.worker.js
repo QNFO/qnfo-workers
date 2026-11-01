@@ -24,7 +24,8 @@
 // loop. The 16 existing rows are repaired in D1 separately. */
 // 0.29.4 PLAN-LARGE-FILE-ANCHORS-1 (2026-11-01, issue 1000819, pillar autonomy; retain bounded source excerpts when planner keyword matches exceed its budget).
 // 0.30.4 CAPABILITY-CONTRACT-REFRESH-1 (#2852, pillar autonomy; patch: re-publish the declared /health lists for a fresh live capability audit).
-var VERSION = "0.31.0-codeagent"; // 0.31.0 ISSUE-AGE-24H-REINTAKE-1 (#1001064, pillar autonomy; minor: requeue an open issue only when its 24h age probe confirms no live doer; bounded by trusted intake checks). prior 0.30.4-codeagent; 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+// 0.31.1 ANCHOR-FROM-ISSUE-1 (#99916, pillar autonomy; patch: reuse a unique, path-matched issue anchor before routing a large-file task to a session).
+var VERSION = "0.31.1-codeagent"; // 0.31.0 ISSUE-AGE-24H-REINTAKE-1 (#1001064, pillar autonomy; minor: requeue an open issue only when its 24h age probe confirms no live doer; bounded by trusted intake checks). prior 0.30.4-codeagent; 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -1755,6 +1756,32 @@ async function locateAnchor(env, task, base, badAnchor, n) {
     return null;
   } catch (e) { return null; }
 }
+// ANCHOR-FROM-ISSUE-1 (#99916): when the source issue already records a code anchor for this exact path, the planner's failure to carry
+// it into the task context must not turn otherwise executable work into a session dependency. The candidate is accepted only when unique.
+async function issueAnchor(env, task, base) {
+  try {
+    const m = /\bissue #(\d+)/.exec(String(task.goal || ""));
+    if (!m) return null;
+    const row = await env.AUDIT_DB.prepare("SELECT description FROM agent_issues WHERE id = ? AND status = 'open'").bind(Number(m[1])).first();
+    if (!row) return null;
+    const body = String(row.description || ""), route = /^[ \t]*(?:code|session)-task:[ \t]*repo=([^\s]+)[ \t]+path=([^\s]+)[ \t]*$/gm;
+    const anchors = [];
+    let hit;
+    while ((hit = route.exec(body))) {
+      if (repoSlug(hit[1]).toLowerCase() !== repoSlug(task.repo).toLowerCase() || hit[2] !== task.path) continue;
+      const rest = body.slice(route.lastIndex), next = rest.search(/^[ \t]*(?:code|session)-task:/m);
+      const block = next < 0 ? rest : rest.slice(0, next);
+      const am = /^[ \t]*code-anchor:[ \t]*(.{1,300}?)[ \t]*$/m.exec(block);
+      if (!am) continue;
+      const anchor = am[1].trim();
+      if (anchor.length <= MAX_ANCHOR_CHARS && countOf(base, anchor) === 1) anchors.push(anchor);
+    }
+    return anchors.length === 1 ? anchors[0] : null;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "issueAnchor", error: String((e && e.message) || e).slice(0, 200) }));
+    return null;
+  }
+}
 // NEEDS-ANCHOR-ROUTE-1 (0.23.0, agent_issues 99925 / 2007 second half): a read step that ends "needs an anchor ... ANCHOR-LOCATOR-1 found no
 // unique line" for a task that was given no anchor, when no keyword of the goal occurs in the file at all (ct_im99981/82/89, 2026-10-19
 // 06:17Z: a stack-trace goal on a 628k-char qnfo-gateway/worker.js, the locator was shown a list of function names), is a goal the loop
@@ -2381,11 +2408,18 @@ async function stepTask(env, task) {
           : "file larger than " + (large ? MAX_PATCH_FILE_CHARS : MAX_FILE_CHARS) + " chars needs an anchor (a verbatim string near the edit, at most " + MAX_ANCHOR_CHARS + " chars)" + (large ? ": LARGE-FILE-WINDOW-1 edits it from the anchor window alone" : " so the loop can edit it in patch mode");
         const loc = await locateAnchor(env, task, base, anchor, n);
         if (!loc) {
-          const routed = await routeUnanchored(env, task, base, anchor);
-          return await fail(why + " (ANCHOR-LOCATOR-1 found no unique line near the goal either)" + (routed ? " [NEEDS-ANCHOR-ROUTE-1: issue #" + routed + " keeps its target as a session-task line]" : ""), true);
+          const recorded = await issueAnchor(env, task, base);
+          if (!recorded) {
+            const routed = await routeUnanchored(env, task, base, anchor);
+            return await fail(why + " (ANCHOR-LOCATOR-1 found no unique line near the goal either)" + (routed ? " [NEEDS-ANCHOR-ROUTE-1: issue #" + routed + " keeps its target as a session-task line]" : ""), true);
+          }
+          const issueId = Number((/\bissue #(\d+)/.exec(String(task.goal || "")) || [])[1]);
+          anchor = recorded; n = 1;
+          await audit(env, "code-task.anchor-from-issue", task.id + " issue #" + issueId + " " + task.path + " uses its recorded unique anchor " + anchor.slice(0, 120), { id: task.id, issue: issueId, path: task.path }, "ok");
+        } else {
+          await audit(env, "code-task.anchor-located", task.id + " (" + loc.model + "): " + (anchor ? String(anchor).slice(0, 80) + " x" + n + " -> " : "none -> ") + loc.anchor.slice(0, 120), { id: task.id, model: loc.model, had: !!anchor, n: n }, "ok");
+          anchor = loc.anchor; n = 1;
         }
-        await audit(env, "code-task.anchor-located", task.id + " (" + loc.model + "): " + (anchor ? String(anchor).slice(0, 80) + " x" + n + " -> " : "none -> ") + loc.anchor.slice(0, 120), { id: task.id, model: loc.model, had: !!anchor, n: n }, "ok");
-        anchor = loc.anchor; n = 1;
       }
       const nctx = large ? { large: true, base_len: base.length, sha: r.sha, rereads: ctx.rereads || 0 } : { base: base, sha: r.sha };
       if (ctx.claim) nctx.claim = ctx.claim; // CLAIMS-CTX-1: the file claim outlives the rebuilt context
