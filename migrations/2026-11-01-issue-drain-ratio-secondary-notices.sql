@@ -86,7 +86,7 @@ SELECT 'copilot:QNFO.OPS',
   'Reduce redundant issue arrivals without weakening closure evidence.',
   'New repair notices stop; the drain ratio rises after the old notice window rolls out. The 1.5 target remains the closing probe.',
   'No direct reach change.',
-  'Read-only D1 queries; SQLite tick replay, alternate-path probe and rollback.')
+  'Read-only D1 queries; SQLite tick replay, alternate-path probe and rollback.'
 WHERE NOT EXISTS (
   SELECT 1 FROM decision_log
   WHERE action LIKE 'ISSUE-DRAIN-RATIO-REPAIR-1:%'
