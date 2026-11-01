@@ -124,7 +124,7 @@ jobs:
           fi
           git diff --cached --stat
           SUBJECT="chore(mirror-guard): auto-sync lagging deployed-current mirrors"
-          BODY="MIRROR-STALENESS-DEPLOY-FAIL-1: the canonical deploy reads <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the mirror in the same commit leaves the deploy route verifying a stale version and failing closed with an opaque ok=0. Regenerated from source by scripts/mirror-guard.py --fix; only LAG mirrors (same constant names, different values) and MISSING mirrors with an import-free, non-empty source are touched. Verified green with a plain mirror-guard.py run before committing."
+          BODY="MIRROR-STALENESS-DEPLOY-FAIL-1: the canonical deploy reads <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the mirror in the same commit leaves the deploy route verifying a stale version and failing closed with an opaque ok=0. Regenerated from source by scripts/mirror-guard.py --fix; only LAG and MISSING mirrors with an import-free, non-empty source are copied. Imported sources are never copied raw and require a Wrangler-built mirror. Verified green with a plain mirror-guard.py run before committing."
           FOOT="Co-authored-by: qnfo-mirror-bot <ops@qnfo.org>"
           git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
           for i in 1 2 3; do
