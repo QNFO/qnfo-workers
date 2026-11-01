@@ -120,7 +120,7 @@ HTTPS_HOSTS = ("qnfo.org", "q08.org", "q08.workers.dev", "qwav.tech", "qwav.org"
 HTTPS_READ_CAP = 512 * 1024
 HTTPS_TIMEOUT_S = 20
 RT_HOLD_D = 7
-RT_HOLD_CADENCE_H = 24
+RT_HOLD_CADENCE_H = 1
 LIVENESS_MODULE = "runtime-liveness-v1"
 
 
@@ -1218,25 +1218,28 @@ def consume_d1(c, rec, out, trusted):
             out["fail"] += 1
 
 
-def next_due_offset(cadence_h):
+def next_due_offset(cadence_h, steady_state=False):
     """PROBE-DRAIN-1: due 15 minutes before the cadence, so an hourly contract is probed inside its 60-minute window
     (issues_unprobed_60m) by a run that starts on the hour, instead of always just after it.
     REMEDIATION-2X-1 (owner directive 2026-10-13: every issue remediation and consumer run at least twice as fast, issues
-    drained faster than they accumulate): a contract is due again after half that interval (an hourly one in 22 minutes,
-    was 45), never sooner than 15 minutes (was 30), so a fix is verified and its issue closed in half the time."""
-    return "+%d minutes" % max(15, (int(float(cadence_h) * 60) - 15) // 2)
+    drained faster than they accumulate): an ordinary contract is due again after half that interval. Stable contracts
+    use their full back-off interval, minus 15 minutes, so the hourly consumer does not probe them every run."""
+    minutes = int(float(cadence_h) * 60) - 15
+    return "+%d minutes" % max(15, minutes if steady_state else minutes // 2)
 
 
 STEADY_RUN = 6  # FM-5: identical passing verifications in a row before a contract backs off
 STEADY_CADENCE_H = 2  # SLA-120M-1: never beyond 120 minutes
 
 
-def steady_state_cadence(cls, verdict, cadence_h):
+def steady_state_cadence(cls, verdict, cadence_h, transport=None):
     """FM-5 (ROADMAP-1 even-keel-fm-audit, agent_issues 1000721, pillar cost): remediation_verifications took 191,906 rows in
     7 days (78.6 percent pass) and issue 1000473 was re-verified every 80 minutes with observed=0. A contract whose last
     STEADY_RUN verifications all passed with the same observed value is re-probed every STEADY_CADENCE_H hours instead of at its
     own cadence (never beyond 2 hours, SLA-120M-1). Only a pass backs off: a failing, deferred or changing contract keeps its
-    cadence, so recovery and relapse are seen as fast as before. Guard: the runtime-verified share must not fall."""
+    cadence, so recovery and relapse are seen as fast as before. Runtime probes keep their hourly cadence."""
+    if transport == HTTPS_TRANSPORT:
+        return cadence_h
     if verdict != "pass" or float(cadence_h) >= STEADY_CADENCE_H:
         return cadence_h
     rows = d1("SELECT pass, observed FROM remediation_verifications WHERE class = ? ORDER BY id DESC LIMIT %d" % STEADY_RUN, [cls])
@@ -1283,8 +1286,12 @@ def consume_one(c, trusted):
             pass
     if cadence is None:
         cadence = c.get("expected_cadence_h") or 1
+    steady_backoff = False
     try:
-        cadence = steady_state_cadence(cls, rec.get("verdict"), cadence)
+        next_cadence = steady_state_cadence(
+            cls, rec.get("verdict"), cadence, c.get("verify_transport"))
+        steady_backoff = float(next_cadence) > float(cadence)
+        cadence = next_cadence
     except Exception:  # noqa: BLE001 - a failed history read keeps the contract's own cadence
         pass
     try:
@@ -1294,7 +1301,7 @@ def consume_one(c, trusted):
             # CONSUMER-STAMP-STATUS-1 (session_01SPji35 root cause): a status another writer set between the probe and this stamp (the superseded-closure
             # trigger sets 'superseded') must not be written back; only an active or holding contract takes the verdict's next status.
             "next_due_at = datetime('now', ?), status = CASE WHEN status IN ('active', 'holding') THEN COALESCE(?, status) ELSE status END WHERE class = ?",
-            [rec["verdict"], next_due_offset(cadence), next_status, cls],
+            [rec["verdict"], next_due_offset(cadence, steady_backoff), next_status, cls],
         )
     except Exception as e:  # noqa: BLE001
         log("contract %s stamp failed: %s" % (cls, e))
