@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 12:18:21",
+  "audited_at": "2026-11-01 13:44:50",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -606,7 +606,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.29.4-plan-large-file-anchors",
+        "version": "0.30.0-suite-rebase-retry",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -671,7 +671,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.16.0-sla-gap",
+        "version": "1.17.0-paper-learn-probation",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -1275,9 +1275,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.29.4-plan-large-file-anchors",
+      "before": "0.30.0-suite-rebase-retry",
       "http": 200,
-      "live": "0.29.4-plan-large-file-anchors",
+      "live": "0.30.0-suite-rebase-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1540,9 +1540,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.16.0-sla-gap",
+      "before": "1.17.0-paper-learn-probation",
       "http": 200,
-      "live": "1.16.0-sla-gap",
+      "live": "1.17.0-paper-learn-probation",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"

@@ -938,6 +938,11 @@ jobs:
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         if: ${{ !cancelled() }}
         run: python3 scripts/cf_ops_access_probe_test.py
+      # METRIC-TRIGGER-3061: the token-backed action reuses the bounded red-team runner and emits counts only.
+      - name: BLOCKER-REDTEAM-1 offline suite (scripts/cf_ops_actions.py)
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        if: ${{ !cancelled() }}
+        run: python3 scripts/cf_ops_blocker_redteam_test.py
       # 2026-10-05 remediation (session bold-thompson): suites added by clusters C2, D and E.
       - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
         continue-on-error: ${{ github.event_name == 'pull_request' }}
