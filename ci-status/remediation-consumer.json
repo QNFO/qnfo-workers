@@ -1,360 +1,392 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7af59d1deed4",
- "due": 560,
- "pass": 131,
- "fail": 391,
- "skipped": 38,
- "deferred": 37,
+ "verifier": "remediation-consumer@7fe517570da6",
+ "due": 517,
+ "pass": 300,
+ "fail": 198,
+ "skipped": 19,
+ "deferred": 18,
  "contracts": [
   {
-   "class": "issue-1000654",
-   "issue_id": 1000654,
+   "class": "issue-100436",
+   "issue_id": 100436,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-metric-refresher-replaced",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
-   "written": true
-  },
-  {
-   "class": "issue-1000800",
-   "issue_id": 1000800,
-   "verdict": "fail",
-   "expected": "2 of 2 program-manager target metrics hold a value (unmeasured: none)",
-   "observed": "0 of 2 program-manager target metrics hold a value (unmeasured: product_plus_rate_7d, plus_keep_rate_30d)",
-   "written": true
-  },
-  {
-   "class": "issue-1001198",
-   "issue_id": 1001198,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000816",
-   "issue_id": 1000816,
-   "verdict": "fail",
-   "expected": "under 300 USD/month",
-   "observed": "532.95 USD/month",
-   "written": true
-  },
-  {
-   "class": "fm-open-issue-no-doer",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "29",
-   "written": true
-  },
-  {
-   "class": "issue-1001195",
-   "issue_id": 1001195,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100168",
-   "issue_id": 100168,
-   "verdict": "fail",
-   "expected": "yes",
-   "observed": "no",
-   "written": true
-  },
-  {
-   "class": "fm-reopen-without-live-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "28",
-   "written": true
-  },
-  {
-   "class": "issue-1001200",
-   "issue_id": 1001200,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001201",
-   "issue_id": 1001201,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001202",
-   "issue_id": 1001202,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001203",
-   "issue_id": 1001203,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001204",
-   "issue_id": 1001204,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-ops-capped-reply-logged-ok",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-seo-metric-refresh-bridge",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001205",
-   "issue_id": 1001205,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001206",
-   "issue_id": 1001206,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001207",
-   "issue_id": 1001207,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001208",
-   "issue_id": 1001208,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001209",
-   "issue_id": 1001209,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001211",
-   "issue_id": 1001211,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-grounding-single-source-refused",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "goal-GH-WEBHOOK-REGISTER-1",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "unmet: no gh-webhook delivery recorded in the last 120 minutes",
-   "written": true
-  },
-  {
-   "class": "issue-1000881",
-   "issue_id": 1000881,
+   "class": "issue-1000769",
+   "issue_id": 1000769,
    "verdict": "deferred",
    "expected": "ok",
-   "observed": "pending: issue 1000872 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000872 has no probe of its own yet, a doer writes one"
+   "observed": "pending: issue 1000647 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000647 has no probe of its own yet, a doer writes one"
   },
   {
-   "class": "issue-1000934",
-   "issue_id": 1000934,
+   "class": "issue-1000882",
+   "issue_id": 1000882,
    "verdict": "deferred",
    "expected": "ok",
-   "observed": "pending: issue 1000796 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 1000796 has no probe of its own yet, a doer writes one"
+   "observed": "pending: issue 1000648 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000648 has no probe of its own yet, a doer writes one"
   },
   {
-   "class": "issue-1001210",
-   "issue_id": 1001210,
+   "class": "issue-1000885",
+   "issue_id": 1000885,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000662 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000662 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000627",
+   "issue_id": 1000627,
+   "verdict": "fail",
+   "expected": "plain share >= 0.5 (out of kill band)",
+   "observed": "plain share = 0.29 in kill band < 0.5 (5/17)",
+   "written": true
+  },
+  {
+   "class": "issue-1000697",
+   "issue_id": 1000697,
+   "verdict": "fail",
+   "expected": "10 patched, 0 errors",
+   "observed": "0 patched, 10 errors",
+   "written": true
+  },
+  {
+   "class": "issue-1000883",
+   "issue_id": 1000883,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000652 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000652 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000910",
+   "issue_id": 1000910,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000707 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000707 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000843",
+   "issue_id": 1000843,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "92",
+   "written": true
+  },
+  {
+   "class": "issue-1001009",
+   "issue_id": 1001009,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2852",
-   "issue_id": 2852,
+   "class": "issue-1001012",
+   "issue_id": 1001012,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "below target",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1000793",
-   "issue_id": 1000793,
+   "class": "issue-1001013",
+   "issue_id": 1001013,
    "verdict": "fail",
-   "expected": "products table has key column and at least 6 rows",
-   "observed": "products table has no key column",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1000465",
-   "issue_id": 1000465,
-   "verdict": "pass",
+   "class": "issue-1001016",
+   "issue_id": 1001016,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001048",
+   "issue_id": 1001048,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001071",
+   "issue_id": 1001071,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001072",
+   "issue_id": 1001072,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001075",
+   "issue_id": 1001075,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001073",
+   "issue_id": 1001073,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001074",
+   "issue_id": 1001074,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001076",
+   "issue_id": 1001076,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001077",
+   "issue_id": 1001077,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001079",
+   "issue_id": 1001079,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001078",
+   "issue_id": 1001078,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001081",
+   "issue_id": 1001081,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001080",
+   "issue_id": 1001080,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4736",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4747",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001082",
+   "issue_id": 1001082,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4742",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4748",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001109",
+   "issue_id": 1001109,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001111",
+   "issue_id": 1001111,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001110",
+   "issue_id": 1001110,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001112",
+   "issue_id": 1001112,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001113",
+   "issue_id": 1001113,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001060",
+   "issue_id": 1001060,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001066",
+   "issue_id": 1001066,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001114",
+   "issue_id": 1001114,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001115",
+   "issue_id": 1001115,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001061",
+   "issue_id": 1001061,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001117",
+   "issue_id": 1001117,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001116",
+   "issue_id": 1001116,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001120",
+   "issue_id": 1001120,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001059",
+   "issue_id": 1001059,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001062",
+   "issue_id": 1001062,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001063",
+   "issue_id": 1001063,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001068",
+   "issue_id": 1001068,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001231",
+   "issue_id": 1001231,
+   "verdict": "fail",
    "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-paper-fabricated-empirical-claim",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "sweep-stale",
-   "written": true
-  },
-  {
-   "class": "issue-100310-BACKFILL-1",
-   "issue_id": 100310,
-   "verdict": "fail",
-   "expected": "closed-with-evidence",
-   "observed": "open: issue 100310 is not closed with close_evidence yet (doer: qnfo-ops)",
-   "written": true
-  },
-  {
-   "class": "issue-1000891",
-   "issue_id": 1000891,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2827",
-   "issue_id": 2827,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "code-task-merge breach/breach 148.6 min vs 120, finished_7d 129, last 24h 52.8",
-   "written": true
-  },
-  {
-   "class": "issue-746",
-   "issue_id": 746,
-   "verdict": "fail",
-   "expected": "probe:PASS|scheduled:PASS",
-   "observed": "probe:FAIL=38|scheduled:FAIL=29",
-   "written": true
-  },
-  {
-   "class": "issue-1000824",
-   "issue_id": 1000824,
-   "verdict": "fail",
-   "expected": "0 off-target QNFO.OPS metrics without a doer",
-   "observed": "6 off-target QNFO.OPS metrics without a doer",
-   "written": true
-  },
-  {
-   "class": "fm-issue-no-doer-24h",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "341",
-   "written": true
-  },
-  {
-   "class": "fm-issue-sla-scope",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100084-BACKFILL-1",
-   "issue_id": 100084,
-   "verdict": "fail",
-   "expected": "closed-with-evidence",
-   "observed": "open: issue 100084 is not closed with close_evidence yet (doer: qnfo-ops)",
-   "written": true
-  },
-  {
-   "class": "issue-100362-BACKFILL-1",
-   "issue_id": 100362,
-   "verdict": "fail",
-   "expected": "closed-with-evidence",
-   "observed": "open: issue 100362 is not closed with close_evidence yet (doer: qnfo-ops)",
-   "written": true
-  },
-  {
-   "class": "issue-1000399",
-   "issue_id": 1000399,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "still installed: deploy_merge_age_tick,breach_selfheal_heavy_tick",
-   "written": true
-  },
-  {
-   "class": "belief-doctor-structured-facts-suffice",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000459",
-   "issue_id": 1000459,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100439",
-   "issue_id": 100439,
-   "verdict": "fail",
-   "expected": "pass_rate>=0.5, neurons<=6000, cadence_overdue_count=0",
-   "observed": "pass_rate=0.04, neurons=73014.689, cadence_overdue_count=1 (continuity-snapshot=0, q08.org
+   "observed": 
