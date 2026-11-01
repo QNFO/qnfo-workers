@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 16:55:07",
+  "audited_at": "2026-11-01 17:25:59",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -551,7 +551,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.16.0-derived-title-topics",
+        "version": "1.16.1-research-intake-bar",
         "worker": "idea-hub"
       },
       {
@@ -561,7 +561,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.8-codeagent",
+        "version": "1.44.9-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -576,7 +576,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.4-codeagent",
+        "version": "0.40.6",
         "worker": "q08-signal-engine"
       },
       {
@@ -591,7 +591,7 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.6.4-downgrade-inconclusive",
+        "version": "1.6.5-codeagent",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -851,9 +851,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.16.0-derived-title-topics",
+      "before": "1.16.1-research-intake-bar",
       "http": 200,
-      "live": "1.16.0-derived-title-topics",
+      "live": "1.16.1-research-intake-bar",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -996,9 +996,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.8-codeagent",
+      "before": "1.44.9-codeagent",
       "http": 200,
-      "live": "1.44.8-codeagent",
+      "live": "1.44.9-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1056,9 +1056,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.4-codeagent",
+      "before": "0.40.6",
       "http": 200,
-      "live": "0.40.4-codeagent",
+      "live": "0.40.6",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1107,9 +1107,9 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.6.4-downgrade-inconclusive",
+      "before": "1.6.5-codeagent",
       "http": 200,
-      "live": "1.6.4-downgrade-inconclusive",
+      "live": "1.6.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
