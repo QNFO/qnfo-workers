@@ -10,11 +10,14 @@ CLOUDFLARE_ACCOUNT_ID, already used by deploy-code-orchestrator.yml). Several op
 parked as "needs the credential holder" although the credential is available to a workflow:
 deleting a script that was recreated in error (#1704), attributing gateway traffic from AI Gateway
 logs (#1684), measuring Workers AI neurons per model (#1681, #1682), and probing whether the token
-carries Access scope (#1277). This script exposes ONLY those actions, each read-only except
-delete-worker, which carries its own guard.
+carries Access scope (#1277). The action allowlist includes read-only probes and individually
+guarded writes; it never exposes a general Cloudflare API client.
 
 ACTIONS
 -------
+  blocker-redteam        Run the deterministic blocker red-team runner against every row in
+                         qnfo-audit.v_blocker_claims. Records only verdicts supported by an
+                         existing safe probe; unsupported claims remain counted.
   delete-worker NAME     DELETE a script. Refused unless the repo directory NAME carries a RETIRED or
                          FOLDED marker (the repo's own retirement record) and NAME is not protected, and refused while
                          any other live script still has a service binding to NAME (DELETE-AFTER-UNBIND-1, TP-9): the
@@ -90,7 +93,9 @@ from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -891,6 +896,41 @@ def d1x(acct: str, token: str, db: str, sql: str, params: list | None = None) ->
     return True, res[0].get("results") or []
 
 
+def blocker_redteam(acct: str, token: str) -> int:
+    import blocker_redteam_runner as runner
+
+    def query(sql: str, params: list | None = None) -> list:
+        ok, rows = d1x(acct, token, AUDIT_DB, sql, params)
+        if not ok:
+            raise RuntimeError("D1 query refused")
+        return rows
+
+    def request(method: str, url: str, body: dict | None = None) -> dict:
+        parsed, api = urllib.parse.urlsplit(url), urllib.parse.urlsplit(API)
+        if parsed.scheme != "https" or parsed.netloc != api.netloc or not parsed.path.startswith(api.path + "/"):
+            raise RuntimeError("token probe URL is outside the Cloudflare API")
+        path = parsed.path[len(api.path):]
+        if parsed.query:
+            path += "?" + parsed.query
+        _, payload = call(method, path, token, body)
+        return payload if isinstance(payload, dict) else {"success": False}
+
+    runner.RC.ACCOUNT = acct
+    runner.RC.CF_API = API
+    output = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(output):
+            code = runner.main(query, request)
+        lines = output.getvalue().strip().splitlines()
+        result = json.loads(lines[-1]) if lines else {}
+    except Exception:  # noqa: BLE001 - avoid exposing issue/card content in public workflow logs
+        result, code = {}, 1
+    ok = code == 0 and result.get("marker") == "BLOCKER-REDTEAM-AUTO-1" and not result.get("error") and not result.get("errors")
+    emit({"action": "blocker-redteam", "ok": ok,
+          **{key: int(result.get(key, 0) or 0) for key in ("tested", "removed", "confirmed", "left")}})
+    return 0 if ok else 1
+
+
 def sql_lit(v) -> str:
     if v is None:
         return "NULL"
@@ -1550,7 +1590,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill"])
+    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1559,6 +1599,8 @@ def main() -> int:
     if a.action == "ops-intake-probe":
         return ops_intake_probe()
     token, acct = env("CLOUDFLARE_API_TOKEN"), env("CLOUDFLARE_ACCOUNT_ID")
+    if a.action == "blocker-redteam":
+        return blocker_redteam(acct, token)
     if a.action == "access-ensure-cloudflare":
         return access_ensure_cloudflare(acct, token)
     if a.action == "access-probe":
