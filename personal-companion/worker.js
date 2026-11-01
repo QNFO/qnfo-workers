@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.9-codeagent";
+var VERSION = "1.44.10-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -6356,6 +6356,8 @@ async function ensureAccuracySchema(env) {
     await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_audits (slug TEXT PRIMARY KEY, verdict TEXT NOT NULL, stage TEXT, models TEXT, problems_json TEXT, checked_at TEXT NOT NULL)").run();
     await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_retractions (slug TEXT PRIMARY KEY, reason TEXT, claims_json TEXT, retracted_at TEXT NOT NULL)").run();
     await ensureColumns(env.PERSONAL, "companion_pieces", { ground_text: "TEXT" });
+    // Add a column to store the separate‑family balance score for each piece.
+    await ensureColumns(env.PERSONAL, "companion_audits", { balance_score: "INTEGER" });
     __accSchemaDb = env.PERSONAL;
     return true;
   } catch (e) {
@@ -6374,8 +6376,17 @@ async function pieceVerified(env, slug) {
 }
 async function recordAudit(env, slug, verdict, stage, vr) {
   await ensureAccuracySchema(env);
-  await env.PERSONAL.prepare("INSERT OR REPLACE INTO companion_audits (slug, verdict, stage, models, problems_json, checked_at) VALUES (?,?,?,?,?,?)")
-    .bind(slug, verdict, stage, ((vr && vr.judges) || []).map(function (j) { return j.model; }).join(","), JSON.stringify(((vr && vr.problems) || []).slice(0, 10)), nowIso()).run();
+  await env.PERSONAL.prepare("INSERT OR REPLACE INTO companion_audits (slug, verdict, stage, models, problems_json, checked_at, balance_score) VALUES (?,?,?,?,?,?,?)")
+    .bind(
+      slug,
+      verdict,
+      stage,
+      ((vr && vr.judges) || []).map(function (j) { return j.model; }).join(","),
+      JSON.stringify(((vr && vr.problems) || []).slice(0, 10)),
+      nowIso(),
+      (vr && vr.balance && typeof vr.balance.score === "number") ? vr.balance.score : null
+    )
+    .run();
 }
 // Retracts a piece in public: its URL keeps answering with a notice, it leaves the index, feed, API and every mail run.
 async function retractPiece(env, slug, reason, claims) {
