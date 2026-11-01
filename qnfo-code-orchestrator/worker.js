@@ -3316,11 +3316,6 @@ async function planIssues(env, opts) {
     const sel = "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id " +
       "WHERE a.status = 'open' AND " + handoffFilter + " AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) AND ";
     const ageActionFirst = ageActions ? "CASE WHEN EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h') THEN 0 ELSE 1 END, " : "";
-    const codeTaskFilter = ageActions
-      ? "(COALESCE(a.description, '') NOT LIKE '%code-task:%' OR EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h'))"
-      : "COALESCE(a.description, '') NOT LIKE '%code-task:%'";
-    const sel = "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id " +
-      "WHERE a.status = 'open' AND " + codeTaskFilter + " AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) AND ";
     const ord = " ORDER BY " + ageActionFirst + "CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, (p.issue_id IS NULL) DESC, a.id LIMIT ";
     const trusted = (await env.AUDIT_DB.prepare(sel + tp.sql + ord + PLAN_WINDOW).bind(recheck, ...tp.args).all()).results || [];
     const untrusted = (await env.AUDIT_DB.prepare(sel + "NOT " + tp.sql + ord + PLAN_CHEAP_PER_TICK).bind(recheck, ...tp.args).all()).results || [];
