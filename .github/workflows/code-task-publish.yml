@@ -11,7 +11,7 @@ name: code-task-publish
 # records 'merged' or 'closed' in D1, so a PR a person merged stops counting as waiting (watchmaker code-task-merge).
 #
 # TRIGGERS: the GitHub `schedule` event has never fired on this repository, so there is deliberately NO cron.
-# It hangs off workflow_run of fleet-autodeploy, plus workflow_dispatch; a separate mirror-sync completion is not needed.
+# It hangs off workflow_run of mirror-sync (runs on every push to main) and fleet-autodeploy, plus workflow_dispatch.
 # This workflow pushes only codeagent-* branches, never main, so the chain is acyclic.
 #
 # SECRETS: reuses CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID exactly as fleet-autodeploy does; nothing new.

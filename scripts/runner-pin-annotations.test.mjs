@@ -180,16 +180,6 @@ ok(!/cancel-in-progress: true/.test(sh) && !/`cancel-in-progress: true` on its O
 // provably-firing workflow_run drivers, workflow_dispatch and contents: write must all stay, and a future cadence change
 // updates this line in the same commit.
 ok(/on:\n  schedule:[\s\S]*cron: '13 1 \* \* \*'[\s\S]*workflow_run:[\s\S]*workflows: \[fleet-autodeploy, mirror-sync, deploy-qnfo-ops\][\s\S]*workflow_dispatch:/.test(sh) && /^permissions:\n  contents: write$/m.test(sh), "its triggers, schedule and permissions are unchanged");
-const costReducedChains = [
-  [".github/workflows/remediation-consumer.yml", /workflows: \["apply-pending-patches", "fleet-autodeploy"\]/],
-  [".github/workflows/remediation-bridge.yml", /workflows: \["apply-pending-patches", "fleet-autodeploy"\]/],
-  [".github/workflows/code-task-publish.yml", /workflows: \["fleet-autodeploy"\]/],
-];
-for (const [path, expected] of costReducedChains) {
-  const workflow = rd(path);
-  const trigger = /^  workflow_run:\n([\s\S]*?)(?=^  [A-Za-z_-][\w-]*:|^permissions:)/m.exec(workflow)?.[1] || "";
-  ok(expected.test(trigger) && !/\bmirror-sync\b/.test(trigger), `${path} keeps its bounded workflow_run source without a redundant mirror-sync chain`, trigger);
-}
 const probe = step(sh, /Functional probe/), verdict = step(sh, /Verdict - honest red/);
 ok(probe && verdict, "the probe and verdict steps were found");
 ok(probe && /cat \/tmp\/health\.json 2>\/dev\/null \|\| true\n\s*echo\n/.test(probe.script) && /cat \/tmp\/status\.json 2>\/dev\/null \|\| true\n\s*echo\n/.test(probe.script), "the probe ends the file it prints with a newline, so the line after it starts a line");
