@@ -1,430 +1,384 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@31d5a278b136",
- "due": 600,
- "pass": 465,
- "fail": 120,
- "skipped": 15,
- "deferred": 15,
+ "verifier": "remediation-consumer@7c4b3f808fc9",
+ "due": 640,
+ "pass": 164,
+ "fail": 435,
+ "skipped": 41,
+ "deferred": 40,
  "contracts": [
   {
-   "class": "fm-notice-reply-encoded-subject",
+   "class": "issue-1000763",
+   "issue_id": 1000763,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000744 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000744 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-thin-papers-unremediated",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "rt-page-qnfo-home",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-100366",
+   "issue_id": 100366,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "unmet: metric worker_requests_nonpublic_per_day is not registered, so requests on workers with no public route cannot be graded",
    "written": true
   },
   {
-   "class": "rt-page-ask-robots",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "class": "issue-1000335",
+   "issue_id": 1000335,
+   "verdict": "fail",
+   "expected": "1.0000",
+   "observed": "0.0000",
    "written": true
   },
   {
-   "class": "slice-gh-app-broker-live",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
+   "class": "issue-100384-BACKFILL-1",
+   "issue_id": 100384,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "rt-live-q08-mind",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-work-with-me",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-ask",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-github-steward",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-ideas-sitemap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-ideas",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-graph-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-render-health",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-kpi",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-api-kpi",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-kpi-route-500",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-voice-stt",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-model-eval",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-fleet-graph",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-evolve",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-api-watchmaker",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-q08-feed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-observability",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-reader-history-navigation-control",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-subscribe",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-reading-feed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000676",
-   "issue_id": 1000676,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-reading",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-papers-sitemap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001067",
-   "issue_id": 1001067,
+   "class": "issue-1001104",
+   "issue_id": 1001104,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1001119",
-   "issue_id": 1001119,
+   "class": "issue-1000821",
+   "issue_id": 1000821,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "issue-1001098",
+   "issue_id": 1001098,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "rt-page-qnfo-sitemap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "class": "issue-1001099",
+   "issue_id": 1001099,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "fm-lane-workflow-merge-refused",
+   "class": "goal-PAPER-LEARN-4768",
    "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4769",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001102",
+   "issue_id": 1001102,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001103",
+   "issue_id": 1001103,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001105",
+   "issue_id": 1001105,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001108",
+   "issue_id": 1001108,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2562",
+   "issue_id": 2562,
+   "verdict": "fail",
+   "expected": "qnfo-ai 5xx rate <= 2% of requests in last 6h: PASS",
+   "observed": "qnfo-ai 5xx rate = 99.0% (293 5xx of 296 requests, last 6h): FAIL",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4783",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001100",
+   "issue_id": 1001100,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "belief-pn-r2-owner-outcome-unmeasured",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "holds",
-   "observed": "holds",
+   "class": "issue-1001101",
+   "issue_id": 1001101,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "rt-live-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-1000884",
+   "issue_id": 1000884,
+   "verdict": "deferred",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: issue 1000657 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000657 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1001106",
+   "issue_id": 1001106,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "rt-page-fleet-managers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000489",
-   "issue_id": 1000489,
+   "class": "issue-1001158",
+   "issue_id": 1001158,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000875",
-   "issue_id": 1000875,
-   "verdict": "pass",
+   "class": "issue-100613",
+   "issue_id": 100613,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "starvation: proposal_pub_3d=0 remediation_pub_3d=11 ready_proposals=180 oldest_ready_h=440.7 deferred_pool=394 hrs_since_last_prop=2.6",
    "written": true
   },
   {
-   "class": "rt-live-personal-companion",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "class": "issue-1001159",
+   "issue_id": 1001159,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "fm-code-task-lease-lost-write",
-   "issue_id": null,
+   "class": "issue-1001160",
+   "issue_id": 1001160,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001164",
+   "issue_id": 1001164,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001166",
+   "issue_id": 1001166,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001167",
+   "issue_id": 1001167,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2582",
+   "issue_id": 2582,
+   "verdict": "fail",
+   "expected": "fresh gh-webhook delivery in cloud_ops_events",
+   "observed": "no gh-webhook delivery: 0 in last 120 min, 0 ever",
+   "written": true
+  },
+  {
+   "class": "issue-1001165",
+   "issue_id": 1001165,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001162",
+   "issue_id": 1001162,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001168",
+   "issue_id": 1001168,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001029",
+   "issue_id": 1001029,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001030",
+   "issue_id": 1001030,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001032",
+   "issue_id": 1001032,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001070",
+   "issue_id": 1001070,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001133",
+   "issue_id": 1001133,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001169",
+   "issue_id": 1001169,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001225",
+   "issue_id": 1001225,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1001220 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1001220 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000255",
+   "issue_id": 1000255,
+   "verdict": "pass",
+   "expected": "clear",
+   "observed": "clear",
+   "written": true
+  },
+  {
+   "class": "issue-1001069",
+   "issue_id": 1001069,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-code-task-timeout-over-ceiling",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-1000838",
+   "issue_id": 1000838,
+   "verdict": "fail",
    "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-cron-fault-untriaged",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1001065",
-   "issue_id": 1001065,
+   "class": "issue-1001134",
+   "issue_id": 1001134,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "fm-d1-like-pattern-length",
-   "issue_id": null,
+   "class": "fm-issue-age-repair-untrusted",
+   "issue_id": 99945,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1000677",
-   "issue_id": 1000677,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-work-locks",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-ops-models",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-errata-remediation-duplicate",
-   "issue_id": 1000293,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000675",
-   "issue_id": 1000675,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001049",
-   "issue_id": 1001049,
+   "class": "issue-1001226",
+   "issue_id": 1001226,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "expected": "success",
+   "observed": "failure-within-24h",
    "written": true
   },
   {
-   "class": "fm-dedup-id-gap",
+   "class": "fm-view-alias-capture",
    "issue_id": null,
-   "ver
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-post-deploy-error-spike",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed"
