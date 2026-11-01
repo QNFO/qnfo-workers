@@ -21,5 +21,58 @@ check(evParseJson('{"anchor": "if (a) { b(\\"}\\"); }", "replacement": "x", "con
 check(evParseJson('{"skip": "the excerpt lacks the code"} trailing {"other": 1}').skip === "the excerpt lacks the code", "the first balanced object is taken");
 check(evParseJson("") === null && evParseJson("no json here") === null && evParseJson('{"anchor": "cut off') === null && evParseJson("{anchor: 1}") === null, "an empty, truncated or non-JSON reply is null, never a guess");
 check(/EV_LAST_RAW \? " \(" \+ EV_LAST_RAW \+ "\)"/.test(src), "a model-skip row carries the head of the reply");
+
+const modelStart = src.indexOf("async function evModelJson(env, model, system, user) {");
+const modelEnd = src.indexOf("\n__name(evModelJson", modelStart);
+const aiTextStart = src.indexOf("function evAiText(r) {");
+const aiTextEnd = src.indexOf("\n__name(evAiText", aiTextStart);
+const ai = { console: { error() {} } };
+vm.createContext(ai);
+vm.runInContext(
+  block + "\n" + src.slice(aiTextStart, aiTextEnd) +
+  "\nvar EV_LAST_RAW = ''; var EV_REASKED = false;\n" + src.slice(modelStart, modelEnd) +
+  "\n__export = { evModelJson, getLastRaw: () => EV_LAST_RAW, getReasked: () => EV_REASKED };",
+  ai
+);
+let calls = [], replies = [];
+ai.aiRunAttr = async (...args) => { calls.push(args); return replies.shift(); };
+const reply = (content, finish_reason = "stop") => ({ choices: [{ message: { content }, finish_reason }] });
+const valid = '{"anchor":"function f() { return 1; }","replacement":"function f() { return 2; }","confidence":0.8}';
+
+replies = [reply("", "length"), reply(valid)];
+calls = [];
+let parsed = await ai.__export.evModelJson({}, "model", "system", "prompt");
+check(parsed && parsed.confidence === 0.8 && calls.length === 2, "an empty length-limited reply is re-asked once and the second object is parsed");
+check(calls[0][4].max_tokens === 2500 && calls[1][4].max_tokens === 6000 && JSON.stringify(calls[0][4].messages) === JSON.stringify(calls[1][4].messages), "a length-limited retry raises only its token budget and reuses the original messages");
+check(ai.__export.getReasked() === true && ai.__export.getLastRaw() === "", "a successful retry is recorded without retaining a failure note");
+check(/model: model, reasked: EV_REASKED/.test(src), "the proposal records whether its model reply needed a retry");
+
+replies = [reply("not JSON from the first reply"), reply(valid)];
+calls = [];
+parsed = await ai.__export.evModelJson({}, "model", "system", "prompt");
+check(parsed && calls.length === 2 && calls[1][4].max_tokens === 2500, "an unparseable non-empty reply is re-asked once at the normal token budget");
+check(calls[1][4].messages.length === 3 && calls[1][4].messages[2].content.includes("not JSON from the first reply"), "the retry includes the parse failure excerpt in a follow-up message");
+
+replies = [reply("", ""), reply(valid)];
+calls = [];
+parsed = await ai.__export.evModelJson({}, "model", "system", "prompt");
+check(parsed && calls[1][4].max_tokens === 6000, "an empty reply without a finish reason still gets the larger token budget");
+
+replies = [reply(valid)];
+calls = [];
+parsed = await ai.__export.evModelJson({}, "model", "system", "prompt");
+check(parsed && calls.length === 1 && ai.__export.getReasked() === false, "a parseable first reply is not re-asked");
+
+replies = [reply("first malformed reply"), reply("final malformed retry")];
+calls = [];
+parsed = await ai.__export.evModelJson({}, "model", "system", "prompt");
+check(parsed === null && calls.length === 2 && ai.__export.getLastRaw().includes("final malformed retry") && !ai.__export.getLastRaw().includes("first malformed reply"), "a failed re-ask retains its own reply in the model-skip note");
+
+replies = [reply("", "length"), reply("", "length")];
+calls = [];
+parsed = await ai.__export.evModelJson({}, "model", "system", "prompt");
+check(parsed === null && calls.length === 2 && ai.__export.getReasked() === false, "two unparseable replies stop after exactly one retry");
+check(ai.__export.getLastRaw().includes("empty reply") && ai.__export.getLastRaw().includes("finish length"), "the final parse failure is retained for the model-skip note");
+
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);
