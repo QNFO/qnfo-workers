@@ -84,6 +84,37 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   const again = await plan(env);
   ok(tasks(env).length === 1 && !(again.outcome === "queued" && again.issue === id), "1g an issue is never planned twice", again);
 }
+// ISSUE-AGE-24H-1: rearmed plans share the trusted intake's bounded retry policy.
+{
+  const { env, prompts } = envWith([FIX('  if (path === "/api/f") {'), FIX('  if (path === "/api/f") {')]);
+  const id = issue(env, { title: "METRIC-TRIGGER-17: q08-signal-engine vote route", description: "/api/f should refuse GET", created_at: Date.now() - 5 * 3600e3 });
+  await plan(env);
+  const d = env.AUDIT_DB._db, original = tasks(env)[0];
+  d.prepare("UPDATE code_tasks SET status = 'failed', last_error = 'verify failed: method check missing', updated_at = ? WHERE id = ?")
+    .run(new Date(Date.now() - 3 * 3600e3).toISOString(), original.id);
+  d.prepare("UPDATE issue_plans SET outcome = 'retry', planned_at = '2000-01-01T00:00:00Z' WHERE issue_id = ?").run(id);
+  const r = await plan(env);
+  ok(r.outcome === "queued" && tasks(env).length === 2, "a rearmed prose issue with a failed historical task receives a fresh task", r);
+  ok(prompts[1].input.messages[1].content.includes("PREVIOUS ATTEMPT " + original.id + " FAILED: verify failed"),
+    "replanning sees the prior failure instead of repeating it blindly");
+  d.prepare("UPDATE issue_plans SET outcome = 'retry', planned_at = '2000-01-01T00:00:00Z' WHERE issue_id = ?").run(id);
+  await plan(env);
+  ok(tasks(env).length === 2 && prompts.length === 2, "a live retry is not duplicated even if its plan is rearmed");
+}
+for (const [status, reason, ago] of [
+  ["merged", "", 3],
+  ["failed", "rejected by review", 3],
+  ["failed", "verify failed", 0],
+]) {
+  const { env, prompts } = envWith([FIX('  if (path === "/api/f") {')]);
+  const id = issue(env, { title: "METRIC-TRIGGER-18: q08-signal-engine vote route", description: "/api/f" });
+  await plan(env);
+  const d = env.AUDIT_DB._db;
+  d.prepare("UPDATE code_tasks SET status = ?, last_error = ?, updated_at = ?").run(status, reason, new Date(Date.now() - ago * 3600e3).toISOString());
+  d.prepare("UPDATE issue_plans SET outcome = 'retry', planned_at = '2000-01-01T00:00:00Z' WHERE issue_id = ?").run(id);
+  await plan(env);
+  ok(tasks(env).length === 1 && prompts.length === 1, `replanning preserves ${status === "merged" ? "merge" : ago ? "review refusal" : "cooldown"} protection`);
+}
 // A dense keyword region in a large worker can merge into one excerpt larger than the planner budget.
 {
   const prior = FILES["q08-signal-engine/worker.js"];
