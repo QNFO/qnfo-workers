@@ -5,6 +5,7 @@ import test from "node:test";
 const retired = await readFile(new URL("./RETIRED", import.meta.url), "utf8");
 const observability = await readFile(new URL("../qnfo-observability/worker.js", import.meta.url), "utf8");
 const dashboardRegistry = await readFile(new URL("../qnfo-fleet-dashboard/registry.js", import.meta.url), "utf8");
+const deployTargets = await readFile(new URL("../deploy-targets.txt", import.meta.url), "utf8");
 
 test("the absent agent websocket worker is explicitly archived", () => {
   assert.match(retired, /^qnfo-agent-ws is archived under RM-AGENT-WS-DECISION-1/m);
@@ -16,4 +17,8 @@ test("the retired worker is absent from active health-monitor inventories", () =
   assert.ok(fallback, "observability fallback inventory exists");
   assert.doesNotMatch(fallback[1], /qnfo-agent-ws/);
   assert.doesNotMatch(dashboardRegistry, /qnfo-agent-ws/);
+});
+
+test("the archived worker is excluded from canonical deployment targets", () => {
+  assert.doesNotMatch(deployTargets, /^qnfo-agent-ws(?:\s|$)/m);
 });

@@ -36,6 +36,7 @@ assert.equal(generatedName, "q08-mind", "the generated config targets the produc
 assert.equal(generatedMain, "worker.js", "the generated main resolves relative to q08-mind/");
 assert.equal(join(here, generatedMain), join(here, "worker.js"));
 assert.equal(generatedCompatibilityDate, compatibilityDate, "the generated config keeps the source date");
+assert.match(sourceConfig, /^\[observability\.traces\]\r?\nenabled = false$/m, "the source preserves its explicit trace-off setting");
 assert.match(generatedConfig, /^\[observability\]\nenabled = false$/m, "the generated config uses Wrangler 3's supported disabled observability setting");
 assert.doesNotMatch(generatedConfig, /^\[observability\.traces\]/m, "the generated config omits Wrangler 3's unsupported traces table");
 assert.doesNotMatch(generatedConfig, /^routes\s*=/m, "the generated fallback has no placeholder routes");

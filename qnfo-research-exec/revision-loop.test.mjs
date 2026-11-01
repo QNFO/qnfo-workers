@@ -25,7 +25,7 @@ assert.ok(rlEligible({ slug: "s", identifier: "x", authors: "" }, { s: 1 }));
 assert.ok(rlEligible({ slug: "s", identifier: "qnf-2026-001", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, {}));
 assert.ok(!rlEligible({ slug: "s", identifier: "adelic-quantum-statistics", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, {}));
 assert.ok(!rlEligible({ slug: "chapter-1", identifier: "qnfo-2025-00-chapter-1", authors: "[\"QNFO Research\"]" }, {}), "imported owner writing is not a pipeline paper");
-assert.ok(/ORDER BY CASE WHEN source = 'proposal' AND attempt = 0 AND created_at < strftime[\s\S]{0,140}?THEN 0 ELSE 1 END, CASE WHEN source = 'remediation' AND source_id LIKE 'revision:%' THEN 0 ELSE 1 END, CASE WHEN stage IN/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "queued revisions are claimed ahead of resumable drafts and the 72-hour FIFO, below only the aged never-attempted proposal tier (0.33.4 PROPOSAL-FAIRNESS-1)");
+assert.ok(/source = 'remediation' AND source_id LIKE 'revision:%' THEN 'revision'/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")) && /q\.claim_class <> 'revision' OR u\.active < 14/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "queued revisions have their own class, capped below 60% of the 24-row window");
 assert.equal(rlErrataBlock([]), "");
 assert.match(rlErrataBlock([{ claim_text: "U = p(1-p) is concave", detected_by: "qnfo-lifecycle PAPER-LEARN-1" }]), /Reported errors[\s\S]*1\. U = p\(1-p\) is concave \(confirmed by a second model\)/);
 assert.ok(!rlEligible({ slug: "s", identifier: "10.5281/x.1", authors: "" }, {}));

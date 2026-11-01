@@ -1,6 +1,6 @@
 // CODE-DISPATCH-DEDUPE-1 + RETIRED-TARGET-1 offline suite (qnfo-code-orchestrator 0.3.16, agent_issues 1876, 1834, 1960).
-// One change per file at a time: a new code task is refused while the file (or its deployed-current mirror) has an unfinished
-// code task or a live session work claim (work_claims); the planner skips such an issue before its model call; a worker.js of a
+// One change per file at a time: direct tasks are refused on busy files; trusted single-file issue tasks queue and run FIFO.
+// Live session work claims (work_claims) still block intake; the planner skips busy files before its model call; a worker.js of a
 // worker that is not live in service_registry is refused. Real SQL (node:sqlite behind a D1-shaped shim), scripted model.
 // Run: node --no-warnings qnfo-code-orchestrator/dispatch-dedupe.test.mjs   (exit 0 = all passed)
 import { DatabaseSync } from "node:sqlite";
@@ -132,17 +132,48 @@ const claim = (env, p, f) => env.AUDIT_DB._db.prepare("INSERT INTO work_claims (
   r = await call(env, "POST", "/v1/plan");
   ok(r.planned && r.outcome === "queued" && prompts.length === 1 && tasks(env).length === 1, "4c once the claim is released the issue is planned into one task", r);
 }
-// 5. intake (code-task lines) waits for a busy file and takes the line once it is free
+// 5. trusted single-file intake queues behind a busy file, but only the oldest unfinished task can run
 {
   const { env } = envWith([]);
   const d = env.AUDIT_DB._db;
   d.prepare("INSERT INTO agent_issues (title, description, source, priority, status) VALUES (?,?,?,?,?)").run("FIX-1", "Do the thing.\ncode-task: repo=qnfo-workers path=qnfo-social/worker.js", "claude-session", "high", "open");
   const first = await enq(env, "qnfo-social/worker.js");
+  d.prepare("UPDATE code_tasks SET created_at = '2026-01-01T00:00:00Z', lease_until = ? WHERE id = ?").run(new Date(Date.now() + 60000).toISOString(), first.id);
   await call(env, "POST", "/v1/tick", { plan: false, maxSteps: 0 });
-  ok(tasks(env).length === 1 && tasks(env)[0].id === first.id, "5a a code-task line on a busy file creates no second task", tasks(env).map((t) => t.goal));
+  const second = tasks(env).find((t) => t.id !== first.id);
+  ok(tasks(env).length === 2 && second.goal.indexOf("[issue #1]") === 0 && second.attempts === 0, "5a trusted intake queues an unstarted successor behind the busy file", tasks(env).map((t) => t.goal));
+  await call(env, "POST", "/v1/tick", { plan: false, maxSteps: 0 });
+  ok(tasks(env).length === 2, "5b repeated intake does not duplicate the queued issue");
+  d.prepare("UPDATE code_tasks SET lease_until = NULL WHERE id = ?").run(first.id);
+  let r = await call(env, "POST", "/v1/tick", { plan: false, intake: false, maxSteps: 1 });
+  ok(r.done.length === 1 && r.done[0].id === first.id && tasks(env).find((t) => t.id === second.id).attempts === 0, "5c only the predecessor runs even without a deploy-guard binding", r);
+  d.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(new Date(Date.now() + 300000).toISOString(), first.id);
+  r = await call(env, "POST", "/v1/tick", { plan: false, intake: false, maxSteps: 1 });
+  ok(r.steps === 0 && tasks(env).find((t) => t.id === second.id).attempts === 0, "5d a predecessor in backoff still blocks its successor", r);
+  d.prepare("UPDATE code_tasks SET status = 'published' WHERE id = ?").run(first.id);
+  r = await call(env, "POST", "/v1/tick", { plan: false, intake: false, maxSteps: 1 });
+  ok(r.steps === 0, "5e a published predecessor blocks its successor until terminal", r);
   d.prepare("UPDATE code_tasks SET status = 'merged' WHERE id = ?").run(first.id);
-  await call(env, "POST", "/v1/tick", { plan: false, maxSteps: 0 });
-  ok(tasks(env).length === 2 && tasks(env)[1].goal.indexOf("[issue #1]") === 0, "5b the line is taken on a later tick once the file is free", tasks(env).map((t) => t.goal));
+  r = await call(env, "POST", "/v1/tick", { plan: false, intake: false, maxSteps: 1 });
+  ok(r.done.length === 1 && r.done[0].id === second.id, "5f the successor runs once the predecessor is terminal", r);
+}
+// A mirror is the same queue; equal timestamps have a deterministic id tie-break, without blocking unrelated paths.
+{
+  const { env } = envWith([]);
+  const d = env.AUDIT_DB._db;
+  const first = await enq(env, "qnfo-social/worker.js");
+  d.prepare("UPDATE code_tasks SET created_at = '2026-01-01T00:00:00Z', lease_until = ? WHERE id = ?").run(new Date(Date.now() + 60000).toISOString(), first.id);
+  d.prepare("INSERT INTO agent_issues (title, description, source, priority, status) VALUES (?,?,?,?,?)").run("FIX-MIRROR", "Do the thing.\ncode-task: repo=qnfo-workers path=qnfo-social/deployed-current.worker.js", "claude-session", "high", "open");
+  await call(env, "POST", "/v1/tick", { plan: false, maxSteps: 1 });
+  ok(tasks(env).length === 2 && tasks(env).every((t) => t.attempts === 0), "5g a mirror successor cannot run while the source predecessor is leased", tasks(env));
+  const ordered = tasks(env).map((t) => t.id).sort();
+  d.exec("UPDATE code_tasks SET created_at = '2026-01-01T00:00:00Z', lease_until = NULL");
+  d.prepare("UPDATE code_tasks SET attempts = 2, lease_until = ? WHERE id = ?").run(new Date(Date.now() + 60000).toISOString(), ordered[0]);
+  let r = await call(env, "POST", "/v1/tick", { plan: false, intake: false, maxSteps: 1 });
+  ok(r.steps === 0, "5h equal timestamps use id order rather than letting a newer zero-attempt task overtake", r);
+  const other = await enq(env, "qnfo-email/worker.js");
+  r = await call(env, "POST", "/v1/tick", { plan: false, intake: false, maxSteps: 1 });
+  ok(r.done.length === 1 && r.done[0].id === other.id, "5i a blocked path queue does not block another path", r);
 }
 // 6. VERSION_DECL: `var VERSION="x"` without spaces or semicolon is bumped (qnfo-email style); the spaced form is unchanged
 {
