@@ -37,8 +37,9 @@ for (const c of cases) {
 }
 const stream = byTitle("QNFO-AI-STREAM-SPEND-TWIN-1:");
 ok(stream && stream.description.includes("callDeepSeek(env, effSpec.api, messages, max_tokens, true,") && /DEEPSEEK-TWIN-1/.test(stream.description), "the stream issue's anchor is the stream call of the api branch");
-// the facts the issues state about the code are true on this checkout
-ok(worker.includes("DEEPSEEK-TWIN-1") && /\/\^deepseek 402\|\^spend-governor\//.test(worker) && worker.includes("served_by: effSpec.waTwin"), "the non-stream twin catch the issues point at exists in qnfo-ai/worker.js (pattern and served_by)");
+// QNFO-AI-DYNAMIC-ROUTES-1 replaced direct per-model dispatch: the governed fallback is dynamic/value,
+// and runModelTurn reports the Gateway model that actually served the request.
+ok(worker.includes("DEEPSEEK-TWIN-1") && worker.includes('route = "dynamic/value"') && worker.includes("served_by: out.model || route"), "the dynamic non-stream spend fallback and serving-model attribution exist in qnfo-ai/worker.js");
 ok(/model: routedModel, choices: \[\{ index: 0, delta: \{ role: "assistant", content: _ft \}/.test(worker) || worker.includes("QNFO-AI-STREAM-SPEND-TWIN-1"), "the stream fallback chunk names routedModel (until the stream issue is done)");
 ok(worker.includes('"ensemble-context-fallback"') && worker.includes("callDeepSeek(env, MODELS[\"deepseek-v4-flash\"].api, messages, fbCap, false)") || worker.includes("QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1"), "the ensemble context fallback calls callDeepSeek unguarded (until the ensemble issue is done)");
 const dl = db.prepare("SELECT * FROM decision_log").get();

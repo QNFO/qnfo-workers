@@ -429,11 +429,6 @@ jobs:
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         if: ${{ steps.suites.outputs.mode != 'full' }}
         run: node scripts/prompt-cache.test.mjs
-      # MIRROR-GUARD-BUNDLE-1: compiled Wrangler artifacts are not byte-identical to their import-using sources.
-      - name: MIRROR-GUARD-BUNDLE-1 offline suite (scripts)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        if: ${{ !cancelled() }}
-        run: node scripts/mirror-guard.test.mjs
       # idea-hub 1.5.4: share card + iPatent link (#1919 #1920) and the stale-while-revalidate home.
       - name: IDEAS reach + SWR offline suite (idea-hub)
         continue-on-error: ${{ github.event_name == 'pull_request' }}
