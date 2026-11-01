@@ -410,7 +410,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
         // SQL through .prepare / .exec on a binding (alias or env.X)
         if (c.type === "MemberExpression" && !c.computed && (c.property.name === "prepare" || c.property.name === "exec") && n.arguments.length) {
           const s = strValue(n.arguments[0]);
-          if (s && looksLikeSql(s)) sqlSeen.push({ sql: s, binding: bindingOf(c.object), line: lineOf(n) });
+          if (s && looksLikeSql(s) && /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s)) sqlSeen.push({ sql: s, binding: bindingOf(c.object), line: lineOf(n) });
         }
         // fetch to a literal (or constant) URL
         const isFetch = (c.type === "Identifier" && c.name === "fetch") || (c.type === "MemberExpression" && !c.computed && c.property.name === "fetch" && !bindingOf(c.object));

@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 15:56:04",
+  "audited_at": "2026-11-01 16:25:53",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -631,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.9-evolve-reask",
+        "version": "0.59.10-doctor-pending-lease",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -646,7 +646,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.10.4-narrative-guard-wording",
+        "version": "0.10.5",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1405,9 +1405,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.9-evolve-reask",
+      "before": "0.59.10-doctor-pending-lease",
       "http": 200,
-      "live": "0.59.9-evolve-reask",
+      "live": "0.59.10-doctor-pending-lease",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1455,9 +1455,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.10.4-narrative-guard-wording",
+      "before": "0.10.5",
       "http": 200,
-      "live": "0.10.4-narrative-guard-wording",
+      "live": "0.10.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
