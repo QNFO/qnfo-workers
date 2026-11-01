@@ -49,52 +49,54 @@ const chat = async (body, key, ua) => {
 const reset = () => { calls.ai.length = 0; calls.fetch.length = 0; calls.d1.length = 0; aiPlan = {}; };
 const msgs = [{ role: "user", content: "Reply with exactly: OK" }];
 
-// 1 an unknown id: the declared default by name, flagged, logged; the unfunded DeepSeek key is served by its twin.
+// Dynamic route dispatch replaces direct-model, twin and local hedge semantics.
 let r = await chat({ model: "nonexistent-model-xyz", messages: msgs, max_tokens: 32 });
-ok(r.status === 200 && r.j.model === "deepseek-v4-flash", "an unknown id answers 200 as deepseek-v4-flash (calibration contract)", r);
-ok(r.j._router.model_resolution === "unknown-id-default" && r.j._router.requested_model === "nonexistent-model-xyz", "_router says the id was unknown", r.j && r.j._router);
-ok(r.j._router.served_by === "deepseek-v4-flash-wa" && calls.ai.some((c) => c.model === "@cf/deepseek-ai/deepseek-v4-flash-0731"), "a 402 from the DeepSeek key is served by the Workers AI twin", r.j && r.j._router);
-ok(!calls.ai.some((c) => c.model === "@cf/zai-org/glm-5.3-flash"), "the twin answered: no generic free-fallback call");
+ok(r.status === 200 && r.j.model === "dynamic/standard", "unknown IDs use the standard default", r);
+ok(r.j._router.model_resolution === "unknown-id-default", "unknown resolution is still explicit");
 await Promise.all(waits);
-ok(calls.d1.some((c) => /'model-unknown-id'/.test(c.sql)), "the unknown id left a cloud_ops_events row");
-
-// 2 the breaker is now open in this isolate: no second paid round trip, same answer path.
+ok(calls.d1.some((c) => /'model-unknown-id'/.test(c.sql)), "unknown model requests remain logged");
+for (const route of ["dynamic/value", "dynamic/standard", "dynamic/premium"]) {
+  reset();
+  r = await chat({ model: route, messages: msgs, max_tokens: 700 });
+  const c = calls.ai.find((x) => x.model === route);
+  ok(r.status === 200 && r.j.model === route && c, route + " is accepted without direct-model resolution", r);
+  ok(c && c.opts.gateway.id === "default" && c.input.max_tokens === 700, "gateway and token options are preserved");
+  ok(calls.ai.filter((x) => !/bge-/.test(x.model)).length === 1 && !calls.fetch.includes("api.deepseek.com"), "one route call, no provider ladder");
+  ok(r.j._router.family === "unknown" && r.j._router.tier === null, "route IDs do not claim vendor or zero-price attribution");
+}
 reset();
-r = await chat({ model: "deepseek-v4-flash", messages: msgs, max_tokens: 32 });
-ok(r.status === 200 && r.j._router.served_by === "deepseek-v4-flash-wa" && calls.fetch.every((h) => h !== "api.deepseek.com"), "with the breaker open the twin serves at once, no DeepSeek call", { f: calls.fetch, rt: r.j && r.j._router });
-ok(r.j._router.model_resolution === undefined, "an exact id carries no resolution note");
-
-// 3 a small answer on glm-5.3-flash asks for low reasoning effort; a long one does not.
-reset();
-r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 700 });
-let c = calls.ai.find((x) => x.model === "@cf/zai-org/glm-5.3-flash");
-ok(r.status === 200 && c && c.input.reasoning_effort === "low" && c.input.max_tokens === 700, "max_tokens 700 on glm-5.3-flash carries reasoning_effort low", c && c.input && { e: c.input.reasoning_effort, m: c.input.max_tokens });
-ok(r.j._router.budget_ms === 45000 && r.j._router.hedge && r.j._router.hedge.fired === false && calls.ai.filter((x) => /glm|llama/.test(x.model)).length === 1, "a quick primary answers alone under the budget", r.j && r.j._router);
+r = await chat({ messages: msgs, max_tokens: 700 });
+ok(r.status === 200 && r.j.model === "dynamic/standard", "omitted model defaults to standard");
 reset();
 r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 16000 });
-c = calls.ai.find((x) => x.model === "@cf/zai-org/glm-5.3-flash");
-ok(r.status === 200 && c && c.input.reasoning_effort === undefined && r.j._router.budget_ms === undefined, "a long answer keeps the model default and has no budget");
-
-// 4 a Workers AI id resolves by name.
+let c = calls.ai.find((x) => x.model === "dynamic/value");
+ok(r.status === 200 && c && c.input.max_tokens === 16000 && c.input.reasoning_effort === undefined, "legacy cheap model selects value without direct-model effort defaults");
 reset();
 r = await chat({ model: "@cf/moonshotai/kimi-k2.6", messages: msgs, max_tokens: 64 });
-ok(r.status === 200 && r.j.model === "kimi-k2.6" && r.j._router.model_resolution === "workers-ai-id", "a Workers AI id resolves to its key and says how", r.j && r.j._router);
-
-// 5 a silent primary is overtaken by the hedge inside the caller's budget.
+ok(r.status === 200 && r.j.model === "dynamic/premium" && r.j._router.model_resolution === "workers-ai-id", "legacy reasoning ID selects premium by named resolution");
 reset();
-aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 5000, text: "late" }, "@cf/deepseek-ai/deepseek-v4-flash-0731": { ms: 5, text: "hedged answer OK" }, "deepseek-v4-flash-wa": { ms: 5, text: "hedged answer OK" } };
+aiPlan = { "dynamic/value": { ms: 3500, text: "late" } };
 let t = Date.now();
-r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 200, timeout_ms: 4500 });
-ok(r.status === 200 && r.j.choices[0].message.content.indexOf("hedged answer") >= 0 && r.j._router.hedge.fired === true && r.j._router.served_by === "deepseek-v4-flash-wa" && Date.now() - t < 4000, "the hedge answers when the primary is silent", { ms: Date.now() - t, rt: r.j && r.j._router });
-
-// 6 nothing answers: 504 router_timeout with the legs, never canned text.
+r = await chat({ model: "dynamic/value", messages: msgs, max_tokens: 200, timeout_ms: 3000 });
+ok(r.status === 504 && r.j.error.type === "router_timeout" && r.j.error.legs.length === 1 && Date.now() - t < 3400, "timeout returns 504 without a duplicate local fallback", r);
 reset();
-aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 9000, text: "late" }, "@cf/deepseek-ai/deepseek-v4-flash-0731": { ms: 9000, text: "late" }, "deepseek-v4-flash-wa": { ms: 9000, text: "late" } };
-t = Date.now();
-r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 200, timeout_ms: 3000 });
-ok(r.status === 504 && r.j.error.type === "router_timeout" && r.j.error.legs.length === 2 && Date.now() - t < 4500, "an exhausted budget answers 504 router_timeout", { ms: Date.now() - t, j: r.j });
+aiPlan = { "dynamic/standard": { ms: 1, throws: "gateway exhausted" } };
+r = await chat({ model: "dynamic/standard", messages: msgs, max_tokens: 16000 });
+ok(r.status === 502 && calls.ai.filter((x) => !/bge-/.test(x.model)).length === 1, "gateway exhaustion propagates without a local ladder", r);
 
 // 7 the router-down drill: 503 after auth, no model call, one evidence row.
+reset();
+r = await chat({ model: "dynamic/missing", messages: msgs });
+ok(r.status === 400 && calls.ai.length === 0, "unknown route IDs fail explicitly before inference", r);
+reset();
+r = await chat({ model: "ensemble", messages: msgs, max_tokens: 700 });
+ok(r.status === 200 && r.j._router.channel_diversity.ok === null, "ensemble preserves stages without claiming route-family independence", r);
+ok(calls.ai.filter((x) => !/bge-/.test(x.model)).every((x) => /^dynamic\//.test(x.model)), "every ensemble leg is a dynamic route");
+reset();
+const native = await worker.fetch(new Request("https://ai.test/v1/messages", { method: "POST", headers: { Authorization: "Bearer test-key", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet", max_tokens: 64, messages: [{ role: "user", content: "Reply OK" }] }) }), env(), ctx);
+const nj = await native.json();
+ok(native.status === 200 && nj.type === "message" && nj.model === "claude-sonnet", "native Messages response shape and client model stay intact", nj);
+ok(calls.ai.some((x) => x.model === "dynamic/premium" && x.input.messages) && !calls.ai.some((x) => x.input.system), "only the translated OpenAI-shaped Anthropic relay uses premium");
 reset();
 r = await chat({ model: "auto", messages: msgs, drill: "router-down" });
 await Promise.all(waits);
@@ -126,16 +128,16 @@ ok(r.status === 200 && r.j.data.length === 1 && r.j.data[0].id === "qnfo", "a wr
 // 9b the semantic cache: served only for the same prompt, never for a near neighbour, never for a liveness probe.
 reset();
 const cachedPrompt = "State the routing rule of this endpoint in one line";
-envExtra = { LOG_VZ: { async query() { return { matches: [{ id: "r:q-abc", score: 0.99, metadata: { kind: "response", model: "glm-5.3-flash", text: "The rule is that every id resolves by a named rule and is reported." } }] }; } } };
+envExtra = { LOG_VZ: { async query() { return { matches: [{ id: "r:q-abc", score: 0.99, metadata: { kind: "response", model: "dynamic/value", text: "The rule is that every id resolves by a named rule and is reported." } }] }; } } };
 d1First = (sql) => /FROM ai_queries WHERE id/.test(sql) ? { prompt: cachedPrompt, response: "The rule is that every id resolves by a named rule and is reported." } : null;
 r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt }], max_tokens: 200 }, null, "suite/1");
 ok(r.status === 200 && r.j._router && r.j._router.cache === "semantic" && !calls.ai.some((x) => !/bge-/.test(x.model)), "the same prompt is served from the cache with no model call", { rt: r.j && r.j._router, ai: calls.ai.map((x) => x.model) });
 reset();
 r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt + " for item 24" }], max_tokens: 200 }, null, "suite/1");
-ok(r.status === 200 && (!r.j._router || r.j._router.cache !== "semantic") && calls.ai.some((x) => x.model === "@cf/zai-org/glm-5.3-flash"), "a near neighbour (score 0.99, different prompt) is not served from the cache", r.j && r.j._router);
+ok(r.status === 200 && (!r.j._router || r.j._router.cache !== "semantic") && calls.ai.some((x) => x.model === "dynamic/value"), "a near neighbour (score 0.99, different prompt) is not served from the cache", r.j && r.j._router);
 reset();
 r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt }], max_tokens: 200 });
-ok(r.status === 200 && r.j._router.cache !== "semantic" && calls.ai.some((x) => x.model === "@cf/zai-org/glm-5.3-flash"), "a liveness probe never reads the cache");
+ok(r.status === 200 && r.j._router.cache !== "semantic" && calls.ai.some((x) => x.model === "dynamic/value"), "a liveness probe never reads the cache");
 reset();
 r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt }], max_tokens: 200, cache: false }, null, "suite/1");
 ok(r.status === 200 && r.j._router.cache !== "semantic", "cache: false skips the cache");

@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.40.15-codeagent"; /* 5.40.7 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D; patch): the chat page model select carries aria-label (axe label violation on ai.qnfo.org). prior 5.40.6-codeagent */ /* 5.40.3 QNFO-AI-SPEND-TWIN-PATHS-1 (2026-10-26, pillar cost, agent_issues 1000439, 1000440; patch): (a) QNFO-AI-SWALLOW-REVERT-1: the 5.40.2 code-loop change in the Workers AI binding wrapper (__aiAttrEnv) returned an empty successful reply for any error whose text matched spend, budget or cap, which includes the capacity error 3040, so a capacity error stopped reaching the fallback chains as an error; the wrapper rethrows again. (b) QNFO-AI-STREAM-SPEND-TWIN-1: a streamed deepseek-v4-pro or deepseek-v4-flash request whose paid call is refused (402 breaker, deepseek cap, router ledger total, fleet cap) is served by its Workers AI twin through the Workers AI stream branch with the caller's tools, the chunks name the twin, and the free chain that answers when there is no twin names the model that answered instead of the requested route. (c) QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1: the oversize-ensemble context fallback serves a refused paid call from the twin of deepseek-v4-flash (truncated to the twin context, _router.served_by and twin_reason name it) instead of HTTP 502. Suite: spend-twin-paths.test.mjs. prior 5.40.2-codeagent */ /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.41.0-dynamic-routes"; /* 5.40.7 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D; patch): the chat page model select carries aria-label (axe label violation on ai.qnfo.org). prior 5.40.6-codeagent */ /* 5.40.3 QNFO-AI-SPEND-TWIN-PATHS-1 (2026-10-26, pillar cost, agent_issues 1000439, 1000440; patch): (a) QNFO-AI-SWALLOW-REVERT-1: the 5.40.2 code-loop change in the Workers AI binding wrapper (__aiAttrEnv) returned an empty successful reply for any error whose text matched spend, budget or cap, which includes the capacity error 3040, so a capacity error stopped reaching the fallback chains as an error; the wrapper rethrows again. (b) QNFO-AI-STREAM-SPEND-TWIN-1: a streamed deepseek-v4-pro or deepseek-v4-flash request whose paid call is refused (402 breaker, deepseek cap, router ledger total, fleet cap) is served by its Workers AI twin through the Workers AI stream branch with the caller's tools, the chunks name the twin, and the free chain that answers when there is no twin names the model that answered instead of the requested route. (c) QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1: the oversize-ensemble context fallback serves a refused paid call from the twin of deepseek-v4-flash (truncated to the twin context, _router.served_by and twin_reason name it) instead of HTTP 502. Suite: spend-twin-paths.test.mjs. prior 5.40.2-codeagent */ /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -33,6 +33,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       } catch (e) {
         ok = 0;
         var errMsg = String((e && e.message) || e || "");
+        if (!String(model).startsWith("dynamic/")) {
         // CF-OBS-ISSUE-1 (#2911, RED-DRAIN-1): a Workers AI per-minute inference rate limit reached callers as a
         // hard error. Retry a rate-limit error with exponential backoff (1s, 2s, 4s; Date.now jitter, no Math.random)
         // before degrading to the fallback leg, so a burst inside the per-minute window no longer fails the request.
@@ -87,6 +88,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
               if (!/rate limit|429|too many requests/i.test(String((e3 && e3.message) || e3 || ""))) break;
             }
           }
+        }
         }
         // QNFO-AI-SWALLOW-REVERT-1 (5.40.3): 5.40.2 turned any binding error whose text matched spend, budget or cap into an
         // empty success, and "Capacity temporarily exceeded" (3040) matches cap, so a capacity error reached every caller as an
@@ -263,6 +265,7 @@ function spendIsPremium(provider, model) {
 }
 function spendModelProvider(spec) {
   if (!spec) return "deepseek";
+  if (isDynamicRoute(spec.wa)) return "gateway";
   return spec.wa ? "workers-ai" : spec.api ? "deepseek" : spec.gateway ? "gateway" : "workers-ai";
 }
 function spendSum(by) {
@@ -659,6 +662,19 @@ async function bearerMatches(header, secrets) {
 // deepseek-v4-flash with no trace (the command line's llama id, and seven calibration targets that then agreed with each
 // other 180 times out of 180, issue 2147). The default is unchanged; the resolution is now named, returned and logged.
 var UNKNOWN_MODEL_DEFAULT = "deepseek-v4-flash";
+// models routed via AI Gateway dynamic routes -- see qnfo-ops issue #7.
+var DYNAMIC_ROUTES = ["dynamic/value", "dynamic/standard", "dynamic/premium"];
+function isDynamicRoute(model) { return DYNAMIC_ROUTES.includes(String(model)); }
+function chatRoute(model) {
+  if (isDynamicRoute(model)) return model;
+  const id = String(model || "");
+  if (/code|thinking|reasoner|pro|glm-5\.3$|kimi-k2\.6|gpt-oss-120b/.test(id)) return "dynamic/premium";
+  if (/flash|mini|small|cleanup|summary|health/.test(id)) return "dynamic/value";
+  return "dynamic/standard";
+}
+function dynamicSpec(route) {
+  return { wa: route, tools: true, vision: true, ctx: 65536, maxOut: DEFAULT_MAX_OUT, family: "gateway", tier: null };
+}
 var MODEL_ALIASES = { "llama-3.3-70b": "glm-5.3-flash", "deepseek-chat": "deepseek-v4-flash", "deepseek-reasoner": "deepseek-v4-flash-thinking" };
 function resolveModel(reqModel) {
   var raw = String(reqModel == null ? "" : reqModel);
@@ -666,6 +682,7 @@ function resolveModel(reqModel) {
   if (raw === "auto" || raw === "qnfo" || raw === "ensemble") return { id: raw, how: "virtual", requested: raw };
   if (has(raw)) return { id: raw, how: "exact", requested: raw };
   var s = raw.trim().toLowerCase();
+  if (isDynamicRoute(s)) return { id: s, how: "dynamic-route", requested: raw };
   if (has(s)) return { id: s, how: "normalized", requested: raw };
   if (Object.prototype.hasOwnProperty.call(MODEL_ALIASES, s) && has(MODEL_ALIASES[s])) return { id: MODEL_ALIASES[s], how: "alias", requested: raw };
   var wa = s.replace(/^workers-ai\//, "");
@@ -1328,6 +1345,7 @@ var ENSEMBLE = {
 function modelFamily(id) {
   var s = String(id || "").toLowerCase();
   if (!s) return "none";
+  if (/^dynamic\//.test(s)) return "unknown";
   if (s.indexOf("deepseek") >= 0) return "deepseek";
   if (s.indexOf("moonshot") >= 0 || s.indexOf("kimi") >= 0) return "moonshot";
   if (s.indexOf("zai-org") >= 0 || s.indexOf("glm-") >= 0) return "zai";
@@ -1361,14 +1379,14 @@ function ensembleRunMeta(ens, domain, text) {
     primary_family: modelFamily(primary),
     validator: validator,
     validator_family: modelFamily(validator),
-    same_family: !!primary && !!validator && modelFamily(primary) === modelFamily(validator),
+    same_family: modelFamily(primary) === "unknown" || modelFamily(validator) === "unknown" ? null : !!primary && !!validator && modelFamily(primary) === modelFamily(validator),
     verdict: e.validator_verdict || "skipped",
     reviewer_ran: !!e.reviewer_ran,
     result: e.verification_result || "",
     latency_ms: Number(e.latency_ms) || 0,
     validator_switched: !!e.validator_switched,
     reviewer: e.reviewer_ran ? e.reviewer_model || "" : "",
-    diversity_ok: e.channel_diversity ? !!e.channel_diversity.ok : null,
+    diversity_ok: e.channel_diversity ? e.channel_diversity.ok : null,
     stages: e.stages && typeof e.stages === "object" ? e.stages : null,
     text_hash: textHash32(text),
     text_len: String(text || "").length,
@@ -1733,116 +1751,7 @@ function spendQualityLift(env, point, model, reason) {
 }
 // ---- FLEET-CAP-STEER-END ----
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
-  // FLEET-CAP-STEER-1: every Workers AI call of this router (single turns, ensemble legs, fallbacks) passes the fleet cap.
-  return fleetSteerRun(env, modelId, !!stream, (m) => runWorkersAICore(env, m, messages, maxTokens, stream, opts));
-}
-async function runWorkersAICore(env, modelId, messages, maxTokens, stream, opts = {}) {
-  const { temperature, top_p, tools, vision, tool_choice, reasoning_effort } = opts;
-  modelId = await spendGovernWA(env, modelId);
-  // REASONING-BUDGET-1: a small answer asks a verified model for low reasoning effort, so reasoning cannot eat max_tokens.
-  const _effort = reasoningEffortFor(modelId, maxTokens, reasoning_effort, !!(tools && tools.length));
-  // PREFIX-CACHE-1: the same caller, model and opening prompt reach the same model instance, so its prefix cache hits.
-  const _affinity = sessionAffinityId(env && env.__spendCaller, modelId, messages);
-  const directOnly = !!(tools && tools.length);
-  const msgsHaveImages = Array.isArray(messages) && messages.some((m) => Array.isArray(m && m.content) && m.content.some((p) => p && typeof p === "object" && (p.type === "image_url" || p.image_url)));
-  let specVision = !!vision;
-  if (!specVision) {
-    for (const _k in MODELS) {
-      const _s = MODELS[_k];
-      if (_s && _s.wa === modelId && _s.vision) {
-        specVision = true;
-        break;
-      }
-    }
-  }
-  const baseMsgs = tools && tools.length ? normalizeForWorkersAITools(messages) : messages;
-  if (msgsHaveImages && !specVision) {
-    const err = new Error("runWorkersAI: non-vision WA model " + modelId + " cannot accept image parts (skipped; caller fallback continues)");
-    err.gwShapeSkip = true;
-    throw err;
-  }
-  const buildBody = /* @__PURE__ */ __name2((msgs) => {
-    const b = { model: "workers-ai/" + modelId, messages: msgs, max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]), stream: stream || false };
-    if (_effort) b.reasoning_effort = _effort;
-    if (Number.isFinite(temperature)) b.temperature = temperature;
-    if (Number.isFinite(top_p)) b.top_p = top_p;
-    if (tools && tools.length) {
-      b.tools = tools;
-      b.tool_choice = tool_choice || "auto";
-    }
-    return b;
-  }, "buildBody");
-  const buildAIBody = /* @__PURE__ */ __name2((msgs) => {
-    const b = { messages: msgs, max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]), stream: stream || false };
-    if (_effort) b.reasoning_effort = _effort;
-    if (Number.isFinite(temperature)) b.temperature = temperature;
-    if (Number.isFinite(top_p)) b.top_p = top_p;
-    if (tools && tools.length) {
-      b.tools = tools;
-      b.tool_choice = tool_choice || "auto";
-    }
-    return b;
-  }, "buildAIBody");
-  const runDirect = /* @__PURE__ */ __name2(async (initialMsgs) => {
-    const aiBody = buildAIBody(initialMsgs);
-    let useAffinity = !!_affinity;
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await aiRunAttr(env, "qnfo-ai", "chat", modelId, aiBody, useAffinity ? { extraHeaders: { "x-session-affinity": _affinity } } : void 0);
-      } catch (e) {
-        const msg = String(e && e.message || e || "");
-        // The affinity header is an optimisation: an error that names it is retried once without it.
-        if (useAffinity && /extraheaders|session-affinity|unknown option|invalid option/i.test(msg)) {
-          useAffinity = false;
-          continue;
-        }
-        const isCapErr = /max_tokens|max output|context window|too (many|long)|token limit|max_new_tokens/i.test(msg);
-        const cur = aiBody.max_tokens;
-        if (isCapErr && attempt < 3 && Number.isFinite(cur) && cur > 1024) {
-          aiBody.max_tokens = Math.max(1024, Math.floor(cur / 2));
-          continue;
-        }
-        const isTimeoutErr = /3046|request timeout|timed out/i.test(msg);
-        if (isTimeoutErr && attempt < 2 && Number.isFinite(Number(aiBody.max_tokens)) && Number(aiBody.max_tokens) > 2048) {
-          aiBody.max_tokens = Math.max(2048, Math.floor(Number(aiBody.max_tokens) / 2));
-          await new Promise((res) => setTimeout(res, 300 + attempt * 400));
-          continue;
-        }
-        if (/429|rate limit|capacity temporarily|try again/i.test(msg) && attempt < 2) {
-          await new Promise((res) => setTimeout(res, 250 + attempt * 250));
-          continue;
-        }
-        throw e;
-      }
-    }
-  }, "runDirect");
-  if (!directOnly && env.CF_API_TOKEN && modelId.startsWith("@cf/")) {
-    for (let gi = 0; gi < 3; gi++) {
-      let gwResp;
-      try {
-        gwResp = await fetch(GW_COMPAT, {
-          method: "POST",
-          headers: Object.assign({ "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN }, _affinity ? { "x-session-affinity": _affinity } : {}),
-          body: JSON.stringify(buildBody(baseMsgs))
-        });
-      } catch (e) {
-        break;
-      }
-      if (gwResp.ok) {
-        if (stream) return spendMeterStream(env, gwResp, "workers-ai", modelId, spendInEstimate(baseMsgs));
-        const gwJson = await gwResp.json();
-        const gwU = spendUsageOf(gwJson, spendInEstimate(baseMsgs), spendOutEstimate(gwJson));
-        spendRecord(env, "workers-ai", modelId, gwU.in, gwU.out, { cached: gwU.cached });
-        return gwJson;
-      }
-      if (gwResp.status === 429 && gi === 0) {
-        await new Promise((r2) => setTimeout(r2, 350));
-        continue;
-      }
-      break;
-    }
-  }
-  return runDirect(baseMsgs);
+  return runDynamicChat(env, chatRoute(modelId), messages, maxTokens, stream, opts);
 }
 __name(runWorkersAI, "runWorkersAI");
 __name2(runWorkersAI, "runWorkersAI");
@@ -2141,39 +2050,9 @@ __name(executeBuiltinTools, "executeBuiltinTools");
 __name2(executeBuiltinTools, "executeBuiltinTools");
 __name22(executeBuiltinTools, "executeBuiltinTools");
 async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP, toolChoice) {
-  if (effSpec.wa) {
-    const out = await runWorkersAI(env, effSpec.wa, messages, maxTokens, false, {
-      temperature: effTemp,
-      top_p: effTopP,
-      tools: effSpec.tools ? tools : void 0,
-      tool_choice: toolChoice,
-      vision: effSpec.vision
-    });
-    return { content: extractWAContent(out), toolCalls: extractWAToolCalls(out), provider: "workers-ai" };
-  }
-  if (effSpec.api) {
-    // DEEPSEEK-TWIN-1: an unfunded (402 breaker) or spend-capped DeepSeek key is served by the same family on Workers AI,
-    // at once and by name, instead of the generic free fallback chain.
-    const twin = dsTwinSpec(effSpec);
-    if (twin && dsUnfunded()) {
-      return Object.assign(await runModelTurn(env, twin, messages, maxTokens, tools, effTemp, effTopP, toolChoice), { served_by: effSpec.waTwin, twin_reason: "deepseek-402-breaker" });
-    }
-    try {
-      const out = await callDeepSeek(env, effSpec.api, messages, maxTokens, false, tools, { temperature: effTemp, top_p: effTopP, tool_choice: toolChoice });
-      return { content: out?.choices?.[0]?.message?.content ?? "", toolCalls: out?.choices?.[0]?.message?.tool_calls ?? null, provider: "deepseek" };
-    } catch (eDs) {
-      const dsMsg = String(eDs && eDs.message || eDs || "");
-      if (twin && /^deepseek 402|^spend-governor/.test(dsMsg)) {
-        return Object.assign(await runModelTurn(env, twin, messages, maxTokens, tools, effTemp, effTopP, toolChoice), { served_by: effSpec.waTwin, twin_reason: /^deepseek 402/.test(dsMsg) ? "deepseek-402" : "spend-cap" });
-      }
-      throw eDs;
-    }
-  }
-  if (effSpec.gateway) {
-    const out = await callGateway(env, effSpec.model, messages, maxTokens, false);
-    return { content: out?.choices?.[0]?.message?.content ?? "", toolCalls: null, provider: effSpec.family };
-  }
-  return { content: "", toolCalls: null, provider: effSpec.family || "unknown" };
+  const route = chatRoute(effSpec.wa || effSpec.api || effSpec.model);
+  const out = await runDynamicChat(env, route, messages, maxTokens, false, { tools, temperature: effTemp, top_p: effTopP, tool_choice: toolChoice });
+  return { content: extractWAContent(out), toolCalls: extractWAToolCalls(out), provider: "gateway", served_by: out.model || route };
 }
 __name(runModelTurn, "runModelTurn");
 __name2(runModelTurn, "runModelTurn");
@@ -2238,31 +2117,7 @@ __name(isOAIUpstream, "isOAIUpstream");
 var DS_402_BREAKER_MS = 36e5;
 var _ds402Until = 0;
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
-  if (Date.now() < _ds402Until) throw new Error("deepseek 402: balance exhausted, paid call skipped until " + new Date(_ds402Until).toISOString() + " (DEEPSEEK-402-BREAKER-1)");
-  const { temperature, top_p, tool_choice } = opts;
-  const _mt2 = clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT);
-  const body = isOAIUpstream(apiModel) ? { model: apiModel, messages, max_completion_tokens: _mt2, stream: stream || false } : { model: apiModel, messages, max_tokens: _mt2, stream: stream || false };
-  if (tools && tools.length) {
-    body.tools = tools;
-    body.tool_choice = tool_choice || "auto";
-  }
-  if (Number.isFinite(temperature)) body.temperature = temperature;
-  if (Number.isFinite(top_p)) body.top_p = top_p;
-  await spendGuardPaid(env, "deepseek", apiModel);
-  const resp = await fetch(DEEPSEEK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.DEEPSEEK_API_KEY}` },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    if (resp.status === 402) { if (Date.now() >= _ds402Until) console.log("QNFO_AI_DS_402_BREAKER open 60m (" + apiModel + ")"); _ds402Until = Date.now() + DS_402_BREAKER_MS; }
-    throw new Error(`deepseek ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
-  }
-  if (stream) return spendMeterStream(env, resp, "deepseek", apiModel, spendInEstimate(messages));
-  const dsJson = await resp.json();
-  const dsU = spendUsageOf(dsJson, spendInEstimate(messages), spendOutEstimate(dsJson));
-  spendRecord(env, "deepseek", apiModel, dsU.in, dsU.out);
-  return dsJson;
+  return runDynamicChat(env, chatRoute(apiModel), messages, maxTokens, stream, { ...opts, tools });
 }
 __name(callDeepSeek, "callDeepSeek");
 __name2(callDeepSeek, "callDeepSeek");
@@ -2270,18 +2125,14 @@ __name22(callDeepSeek, "callDeepSeek");
 // QNFO-AI-STREAM-SPEND-TWIN-1 (5.40.3): an optional 4th argument receives the model that answered ({ model }), so a stream
 // that is served by the free chain can name that model in its chunks instead of the route the caller asked for.
 async function qnfoAiFreeFallback(env, messages, maxTokens, served) {
-  const _cands = ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.7-code", "@cf/deepseek-ai/deepseek-v4-flash-0731"];
+  const _cands = ["dynamic/value"];
   const _deadline = Date.now() + 120e3;
   for (let _i = 0; _i < _cands.length; _i++) {
     const _remaining = Math.max(0, _deadline - Date.now());
     if (!_remaining) break;
     try {
-      if (!env.AI) return null;
       const _mtF = Math.min(Math.max(maxTokens || 2048, 512), 8192);
-      const _inF = { messages: messages, max_tokens: _mtF };
-      const _effF = reasoningEffortFor(_cands[_i], _mtF, null, false);
-      if (_effF) _inF.reasoning_effort = _effF;
-      const _r = await withTimeout(aiRunAttr(env, "qnfo-ai", "chat-fallback", _cands[_i], _inF), _remaining, "free-fallback");
+      const _r = await withTimeout(runDynamicChat(env, _cands[_i], messages, _mtF, false), _remaining, "free-fallback");
       const _t = _r && (_r.response != null ? _r.response : (_r.choices && _r.choices[0] && _r.choices[0].message && _r.choices[0].message.content)) || "";
       if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); if (served && typeof served === "object") served.model = _cands[_i]; return String(_t); }
     } catch (e) { console.error(JSON.stringify({ evt: "ai:qnfoAiFreeFallback:caught", error: String((e && e.message) || e) })); }
@@ -2290,22 +2141,47 @@ async function qnfoAiFreeFallback(env, messages, maxTokens, served) {
 }
 __name(qnfoAiFreeFallback, "qnfoAiFreeFallback");
 async function callGateway(env, model, messages, maxTokens, stream) {
-  await spendGuardPaid(env, "gateway", model);
-  const resp = await fetch(GW_COMPAT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.CF_API_TOKEN}` },
-    body: JSON.stringify(isOAIUpstream(model) ? { model, messages, max_completion_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false } : { model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
-  });
-  if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
-  if (stream) return spendMeterStream(env, resp, "gateway", model, spendInEstimate(messages));
-  const gJson = await resp.json();
-  const gU = spendUsageOf(gJson, spendInEstimate(messages), spendOutEstimate(gJson));
-  spendRecord(env, "gateway", model, gU.in, gU.out);
-  return gJson;
+  return runDynamicChat(env, chatRoute(model), messages, maxTokens, stream);
 }
 __name(callGateway, "callGateway");
 __name2(callGateway, "callGateway");
 __name22(callGateway, "callGateway");
+async function runDynamicChat(env, route, messages, maxTokens, stream, opts = {}) {
+  if (!isDynamicRoute(route)) throw new Error("unknown dynamic chat route: " + route);
+  const governed = await spendGovern(env, "gateway", route, false);
+  const fleetHit = fleetPaidCapHit(await fleetSteerLoad(env), "gateway", route);
+  if (governed.action !== "allow" || fleetHit) route = "dynamic/value";
+  const input = { messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: !!stream };
+  for (const key of ["temperature", "top_p", "reasoning_effort"]) if (opts[key] != null) input[key] = opts[key];
+  if (opts.tools && opts.tools.length) {
+    input.tools = opts.tools;
+    input.tool_choice = opts.tool_choice || "auto";
+  }
+  let result;
+  if (env.AI) {
+    result = await withTimeout(aiRunAttr(env, "qnfo-ai", "chat-dynamic", route, input, { gateway: { id: "default", metadata: { worker: "qnfo-ai", purpose: "chat" } } }), 120e3, "dynamic-chat");
+    if (stream) {
+      const resp = result instanceof Response ? result : new Response(result, { headers: { "Content-Type": "text/event-stream" } });
+      return spendMeterStream(env, resp, "gateway", route, spendInEstimate(messages));
+    }
+  } else {
+    const resp = await fetch(GW_COMPAT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
+      body: JSON.stringify({ model: route, ...input }),
+      signal: AbortSignal.timeout(120e3)
+    });
+    if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+    const servedModel = resp.headers.get("cf-aig-model") || route;
+    const provider = resp.headers.get("cf-aig-provider") || "gateway";
+    if (stream) return spendMeterStream(env, resp, provider, servedModel, spendInEstimate(messages));
+    result = await resp.json();
+    const usage = spendUsageOf(result, spendInEstimate(messages), spendOutEstimate(result));
+    spendRecord(env, provider, servedModel, usage.in, usage.out, { cached: usage.cached });
+  }
+  if (!stream && !extractWAContent(result) && !extractWAToolCalls(result)) throw new Error("dynamic route returned no content or tool calls: " + route);
+  return result;
+}
 function withTimeout(p, ms, label) {
   let timer;
   const to = new Promise((_, reject) => {
@@ -2362,8 +2238,7 @@ async function runEnsemble(env, messages, maxTokens, domain, opts) {
     }
     return "";
   })();
-  const _pool = useCoderPrimary ? ENSEMBLE_POOL.code : domain === "science" ? ENSEMBLE_POOL.science : ENSEMBLE_POOL.general;
-  const intendedPrimary = _members && _members[0] || seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
+  const intendedPrimary = _members && _members[0] ? chatRoute(_members[0]) : useCoderPrimary || domain === "science" ? "dynamic/premium" : "dynamic/standard";
   let primaryModel = intendedPrimary;
   try {
     var _s1 = Date.now();
@@ -2374,54 +2249,24 @@ async function runEnsemble(env, messages, maxTokens, domain, opts) {
     _mk("primary", _s1, false, e);
     primaryText = "";
   }
-  if (!primaryText) {
-    var _s2 = Date.now();
-    try {
-      // DEEPSEEK-TWIN-1: runModelTurn serves an unfunded DeepSeek key from its Workers AI twin (the stage used to end in 402).
-      const fb = await withTimeout(runModelTurn(env, MODELS["deepseek-v4-flash"], messages, maxTokens, null), _stageCap(0.3, 1.5e4), "ensemble-fallback");
-      primaryText = fb && fb.content || "";
-      primaryModel = "deepseek-v4-flash";
-      _mk("fallback", _s2, !!primaryText);
-    } catch (e2) {
-      _mk("fallback", _s2, false, e2);
-      primaryText = "";
-      primaryModel = "deepseek-v4-flash";
-    }
-  }
-  if (!primaryText) {
-    var _s3 = Date.now();
-    try {
-      const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), _stageCap(0.15, 8e3), "ensemble-primary-retry");
-      const rt = extractWAContent(retry);
-      if (rt && String(rt).trim()) {
-        primaryText = rt;
-        primaryModel = ENSEMBLE.primary.wa;
-      }
-      _mk("retry", _s3, !!primaryText);
-    } catch (e3) {
-      _mk("retry", _s3, false, e3);
-      primaryText = "";
-    }
-  }
   let verificationResult = primaryModel === intendedPrimary ? "passed" : "degraded";
   let agreementRate = 0;
   let validatorVerdict = "skipped";
-  const validatorSpec = ensembleValidatorFor(ENSEMBLE, primaryModel);
+  const validatorSpec = { wa: "dynamic/value", ctx: 65536, switched: false };
   if (_members && _members[1]) {
-    validatorSpec.wa = _members[1];
+    validatorSpec.wa = chatRoute(_members[1]);
     validatorSpec.switched = false;
   }
   // CHANNEL-DIVERSITY-1 (#2146): the judge and the reviewer are never the writer's lineage; a pair that overlaps is not run.
-  const _div = channelDiversity([primaryModel, validatorSpec.wa], channelThreshold(env));
-  const reviewerSpec = ensembleReviewerFor(ENSEMBLE, primaryModel, channelThreshold(env));
+  const _div = { ok: null, threshold: channelThreshold(env), max_overlap: null, reason: "dynamic routes do not guarantee disjoint serving-model families" };
+  const reviewerSpec = { wa: "dynamic/premium", ctx: 65536, switched: false };
   let verifiedBy = validatorSpec.wa;
   let finalText = primaryText;
   let membersRun = ["primary", "validator"];
   if (primaryModel !== ENSEMBLE.primary.wa) {
     verifiedBy = primaryModel;
   }
-  if (primaryText && !_div.ok) {
+  if (primaryText && _div.ok === false) {
     verificationResult = "diversity_refused";
     validatorVerdict = "refused";
     membersRun = ["primary"];
@@ -2665,14 +2510,14 @@ async function mediaProcess(env, id) {
       method: "POST",
       headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
       body: JSON.stringify({
-        model: "@cf/zai-org/glm-5.3-flash",
+        model: "dynamic/value",
         messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
         max_tokens: 2048
       })
     });
     if (gw.ok) {
       const gj = await gw.json();
-      try { const mU = spendUsageOf(gj, 1e3, spendOutEstimate(gj)); spendRecord(env, "workers-ai", SPEND_CHEAP_WA, mU.in, mU.out); } catch (eSp) { console.error(JSON.stringify({ evt: "ai:mediaProcess:caught", error: String((eSp && eSp.message) || eSp) })); }
+      try { const mU = spendUsageOf(gj, 1e3, spendOutEstimate(gj)); spendRecord(env, gw.headers.get("cf-aig-provider") || "gateway", gw.headers.get("cf-aig-model") || gj.model || "dynamic/value", mU.in, mU.out); } catch (eSp) { console.error(JSON.stringify({ evt: "ai:mediaProcess:caught", error: String((eSp && eSp.message) || eSp) })); }
       text = String(gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content || "").trim();
     }
   } catch (e) {
@@ -2838,7 +2683,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
     return ownerKeyRejectedAi();
   }
   }
-  const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
+  const { model = "dynamic/standard", messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
   // AI-ROUTER-SECOND-PATH-1 (#2179): an authenticated caller rehearses "the router is down" and exercises its own
   // direct fallback from a real request. No model call; one cloud_ops_events row (kind router-drill) is the evidence.
   if (body && body.drill === "router-down") {
@@ -3004,15 +2849,15 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   }), "mkLogRec");
   const mkRouter = /* @__PURE__ */ __name22((routed, strategy, extra = {}) => ({
     routed_model: routed,
-    tier: MODELS[routed]?.tier ?? 0,
+    tier: isDynamicRoute(routed) ? null : MODELS[routed]?.tier ?? 0,
     complexity: cls.complexity,
     domain: cls.domain,
     uncertainty: cls.uncertainty,
     divergence: cls.divergence,
     verifiability: cls.verifiability,
     strategy,
-    provider: MODELS[routed]?.family || "unknown",
-    family: MODELS[routed]?.family || "unknown",
+    provider: isDynamicRoute(routed) ? "gateway" : MODELS[routed]?.family || "unknown",
+    family: isDynamicRoute(routed) ? "unknown" : MODELS[routed]?.family || "unknown",
     classification_ms: 0,
     total_latency_ms: Date.now() - t0,
     ...(_govInfo ? { spend_governor: _govInfo } : {}),
@@ -3025,6 +2870,9 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
     ...extra
   }), "mkRouter");
   const reqModel = body.model;
+  if (String(reqModel || "").trim().toLowerCase().startsWith("dynamic/") && !isDynamicRoute(String(reqModel).trim().toLowerCase())) {
+    return json({ error: { type: "invalid_model", message: "unknown dynamic route: " + String(reqModel) } }, 400);
+  }
   const isAuto = reqModel === "auto" || reqModel === "qnfo";
   const isEnsemble = reqModel === "ensemble";
   // ROUTER-RESOLVE-1: every id resolves by a named rule; an unknown one is served by the declared default, says so in
@@ -3047,53 +2895,36 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   // path (no tools, no images, fresh single turn, same routed model, cosine >= 0.95, 30d freshness).
   if (!isAuto && !isEnsemble && !(tools && tools.length) && !wantsCode && !hasImage && !isStream && messages.length <= 2 && !_leanProbe && body.cache !== false) {
     try {
-      const _sc = await withTimeout(semanticCacheLookup(env, stripRoleWrapper(lastUserText(messages)), _resInfo.id), 4e3, "semantic-cache");
+      const _sc = await withTimeout(semanticCacheLookup(env, stripRoleWrapper(lastUserText(messages)), _resInfo.how === "unknown-id-default" || reqModel == null ? "dynamic/standard" : chatRoute(_resInfo.id)), 4e3, "semantic-cache");
       if (_sc && _sc.text) {
         const _screc = { ...mkLogRec(), model: reqModel, streamed: 0, response: String(_sc.text).slice(0, 2e5), prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), cost_usd: 0, latency_ms: Date.now() - t0, _cache_hit: 1 };
         if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, _screc));
-        return json({ id: "chatcmpl-" + rid(8), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: reqModel, choices: [{ index: 0, message: { role: "assistant", content: _sc.text }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), total_tokens: estimateOutputTokens(_sc.text) }, _router: { cache: "semantic", score: _sc.score, source_model: _sc.model, tier: 0, cost_usd: 0 } });
+        return json({ id: "chatcmpl-" + rid(8), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: _sc.model, choices: [{ index: 0, message: { role: "assistant", content: _sc.text }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), total_tokens: estimateOutputTokens(_sc.text) }, _router: { cache: "semantic", score: _sc.score, source_model: _sc.model, tier: 0, cost_usd: 0 } });
       }
     } catch (e) {
       console.log("semantic cache serve failed:", e && e.message || e);
     }
   }
   let estInputTokens = estimateInputTokens(messages);
-  const autoHealth = isAuto ? await loadModelHealth(env) : null;
-  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : _resInfo.id;
-  let spec = MODELS[target];
-  if (hasImage && !isEnsemble) {
-    const v = MODELS[VISION_FALLBACK];
-    if (v && (!spec || !spec.vision)) {
-      target = VISION_FALLBACK;
-      spec = v;
-    }
-  }
-  if ((wantsCode || tools && tools.length) && !isEnsemble && !hasImage && (!spec || !spec.tools)) {
-    if (MODELS["kimi-k2.7-code"]?.tools) {
-      target = "kimi-k2.7-code";
-      spec = MODELS["kimi-k2.7-code"];
-    } else {
-      target = "deepseek-v4-flash";
-      spec = MODELS["deepseek-v4-flash"];
-    }
-  }
+  let target = isAuto || reqModel == null || _resInfo.how === "unknown-id-default"
+    ? (wantsCode || cls.domain === "code" || cls.complexity === "high" ? "dynamic/premium" : "dynamic/standard")
+    : chatRoute(_resInfo.id);
+  let spec = dynamicSpec(target);
   // SPEND-GOVERNOR-1 route gate: price class of the chosen upstream vs the rolling-30d caps.
   const _spendWantEns = isEnsemble || isAuto && !hasImage && !wantsCode && (!tools || !tools.length) && shouldEnsemble(cls);
-  const _spendSpec = MODELS[target] || (isEnsemble ? null : MODELS["deepseek-v4-flash"]);
-  const _gov = await spendGovern(env, _spendWantEns ? "workers-ai" : spendModelProvider(_spendSpec), _spendWantEns ? "ensemble" : _spendSpec ? _spendSpec.wa || _spendSpec.api || _spendSpec.model || target : "deepseek-chat", _spendWantEns);
+  const _spendSpec = spec || (isEnsemble ? null : MODELS["deepseek-v4-flash"]);
+  const _gov = await spendGovern(env, "gateway", _spendWantEns ? "ensemble" : target, _spendWantEns);
   if (_gov.action !== "allow") _govInfo = { action: _gov.action, reason: _gov.reason, caller: _gov.caller, from: _spendWantEns ? "ensemble" : target, to: _gov.to || null };
   if ((_gov.action === "downgrade" || _gov.action === "refuse") && MODELS[_gov.to || SPEND_CHEAP_MODEL]) {
     _gov.to = _gov.to || SPEND_CHEAP_MODEL;
     target = _gov.to;
     spec = MODELS[target];
+    target = "dynamic/value"; spec = dynamicSpec(target);
   }
   const autoEnsemble = isAuto && !hasImage && !wantsCode && (!tools || !tools.length) && shouldEnsemble(cls) && !_gov.noEnsemble;
   const effective = spec ? target : UNKNOWN_MODEL_DEFAULT;
   const effSpec0 = spec ? spec : MODELS[UNKNOWN_MODEL_DEFAULT];
-  // DEEPSEEK-TWIN-1: while the 402 breaker is open the route keeps its name and is served by its Workers AI twin.
-  const _dsTwin = dsTwinSpec(effSpec0);
-  const effSpec = _dsTwin && dsUnfunded() ? _dsTwin : effSpec0;
-  if (effSpec !== effSpec0) _servedBy = effSpec0.waTwin;
+  const effSpec = effSpec0;
   routedModel = effective;
   messages = effSpec.vision ? await inlineRemoteImages(normalizeForVision(messages)) : normalizeMessagesContent(messages);
   const effTemp = Number.isFinite(temperature) ? temperature : Number.isFinite(effSpec.temp) ? effSpec.temp : 0.7;
@@ -3134,21 +2965,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         // call (the 402 breaker, the deepseek cap, the router ledger total or the fleet cap) used to land in the ensemble catch
         // below and answer HTTP 502; the same request answered 200 with the key funded. The refusal is caught here and the
         // request is served by the Workers AI twin of deepseek-v4-flash, truncated to the twin context, and _router names it.
-        let fb, fbTwinName = null, fbTwinWhy = null;
-        try {
-          fb = await callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, fbCap, false);
-        } catch (eFbDs) {
-          const fbDsMsg = String(eFbDs && eFbDs.message || eFbDs || "");
-          const fbTwin = dsTwinSpec(MODELS["deepseek-v4-flash"]);
-          if (!fbTwin || !/^deepseek 402|^spend-governor/.test(fbDsMsg)) throw eFbDs;
-          const fbTwinBudget = modelCtx(fbTwin) - clampTokens(fbCap, fbTwin.maxOut) - CTX_SAFETY_MARGIN;
-          const fbTwinMsgs = estInputTokens > fbTwinBudget ? truncateMessagesToFit(messages, fbTwinBudget) : messages;
-          const fbTwinOut = await runWorkersAI(env, fbTwin.wa, fbTwinMsgs, clampTokens(fbCap, fbTwin.maxOut), false, { temperature: fbTwin.temp, top_p: fbTwin.topP });
-          fb = { choices: [{ message: { content: extractWAContent(fbTwinOut) } }] };
-          fbTwinName = MODELS["deepseek-v4-flash"].waTwin;
-          fbTwinWhy = /^deepseek 402/.test(fbDsMsg) ? "deepseek-402" : "spend-cap";
-          _servedBy = fbTwinName;
-        }
+        const fb = await runDynamicChat(env, "dynamic/standard", messages, fbCap, false);
         const fbContent = fb?.choices?.[0]?.message?.content ?? "";
         const fbText = fbContent || FALLBACK_TEXT;
         const fbOutTokens = estimateOutputTokens(fbText);
@@ -3160,11 +2977,10 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
           model: "ensemble",
           choices: [{ index: 0, message: { role: "assistant", content: fbText }, finish_reason: fbTruncated ? "length" : "stop" }],
           usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: fbOutTokens, total_tokens: estimateInputTokens(messages) + fbOutTokens },
-          _router: mkRouter("deepseek-v4-flash", "ensemble-context-fallback", {
-            ensemble_members: [fbTwinName ? "fallback-deepseek-wa" : "fallback-deepseek"],
+          _router: mkRouter("dynamic/standard", "ensemble-context-fallback", {
+            ensemble_members: ["dynamic/standard"],
             verification_result: "context_fallback",
-            estimated_input_tokens: estInputTokens,
-            ...(fbTwinName ? { served_by: fbTwinName, twin_reason: fbTwinWhy } : {})
+            estimated_input_tokens: estInputTokens
           })
         };
         return ensResp(fbText, fbBody);
@@ -3197,8 +3013,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
           verification_result: ens.verification_result,
           channel_diversity: ens.channel_diversity,
           agreement_rate: ens.agreement_rate,
-          estimated_cost_usd: 0,
-          neurons_remaining: 8e3
+          estimated_cost_usd: null
         })
       };
       return ensResp(ensText, respBody);
@@ -3208,25 +3023,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   }
   if (isStream) {
     try {
-      // QNFO-AI-STREAM-SPEND-TWIN-1 (agent_issues 1000439, 5.40.3; BUDGET-SOFT-ROUTE-1, DEEPSEEK-TWIN-1): runModelTurn serves a refused
-      // paid DeepSeek route (the 402 breaker, the deepseek cap, the router ledger total or the fleet cap) by its Workers AI twin,
-      // by name; this stream branch had no such catch, so the refusal reached the free chain (glm-5.3-flash, tools dropped) and
-      // the chunks carried the route the caller asked for. The refusal is caught here and the twin is served through the
-      // Workers AI stream branch below with the caller's tools; no twin: the free chain as before, now named in its chunks.
-      let streamSpec = effSpec, streamTwinOf = null, dsStreamUp = null;
-      if (!effSpec.wa && effSpec.api) {
-        try {
-          dsStreamUp = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP, tool_choice: clientToolChoice });
-        } catch (eDsS) {
-          const dsSMsg = String(eDsS && eDsS.message || eDsS || "");
-          const twinS = dsTwinSpec(effSpec);
-          if (!twinS || !/^deepseek 402|^spend-governor/.test(dsSMsg)) throw eDsS;
-          streamSpec = twinS;
-          streamTwinOf = effSpec.waTwin;
-          _servedBy = effSpec.waTwin;
-          if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, { ...mkLogRec(), model: routedModel, streamed: 1, response: ("STREAM-SPEND-TWIN: " + (/^deepseek 402/.test(dsSMsg) ? "deepseek-402" : "spend-cap") + " -> " + effSpec.waTwin).slice(0, 400), latency_ms: Date.now() - t0 }));
-        }
-      }
+      const streamSpec = effSpec, streamTwinOf = null;
       if (streamSpec.wa) {
         const sTools = Array.isArray(tools) && tools.length ? tools : null;
         const sToolMode = !!sTools && !!streamSpec.tools;
@@ -3239,19 +3036,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         };
         const sCap0 = clampTokens(max_tokens, MAX_OUT[streamSpec.wa]);
         let waOut0 = null;
-        try {
-          waOut0 = await runWorkersAI(env, streamSpec.wa, messages, sCap0, false, sOpts);
-        } catch (eS) {
-          const sMsg = String(eS && eS.message || eS || "");
-          if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, { ...mkLogRec(), model: routedModel, streamed: 1, response: ("STREAM-UPSTREAM-ERROR: " + sMsg).slice(0, 400), latency_ms: Date.now() - t0 }));
-          if (/3046|request timeout|timed out/i.test(sMsg)) {
-            try {
-              waOut0 = await runWorkersAI(env, streamSpec.wa, messages, Math.max(2048, Math.floor(sCap0 / 2)), false, sOpts);
-            } catch (eS2) {
-              waOut0 = null;
-            }
-          }
-        }
+        waOut0 = await runWorkersAI(env, streamSpec.wa, messages, sCap0, false, sOpts);
         const waToolCalls = sToolMode && waOut0 ? extractWAToolCalls(waOut0) : null;
         const waTCIndexed = (waToolCalls || []).map((tc0, i0) => ({ ...tc0, index: tc0 && tc0.index != null ? tc0.index : i0 }));
         let waContent = stripToolMarkup(extractWAContent(waOut0));
@@ -3268,25 +3053,6 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
           });
           return streamWithLog(new Response(streamT, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
         }
-        if (!waContent || !String(waContent).trim()) {
-          const wafbCands = [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
-          for (const wafb of wafbCands) {
-            if (!wafb || wafb.wa && wafb.wa === streamSpec.wa) continue;
-            if (hasImage && !wafb.vision) continue;
-            try {
-              let wafbOut;
-              if (wafb.wa) wafbOut = await runWorkersAI(env, wafb.wa, messages, clampTokens(max_tokens, Math.min(wafb.maxOut || 8192, DEFAULT_MAX_OUT)), false);
-              else if (wafb.api) wafbOut = await callDeepSeek(env, wafb.api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
-              else continue;
-              const wafbText = stripToolMarkup(extractWAContent(wafbOut));
-              if (wafbText && String(wafbText).trim()) {
-                waContent = wafbText;
-                break;
-              }
-            } catch (e2) {
-            }
-          }
-        }
         waContent = (waContent || "").trim() || FALLBACK_TEXT;
         const waTruncated = waContent !== FALLBACK_TEXT && estimateOutputTokens(waContent) >= clampTokens(max_tokens, MAX_OUT[streamSpec.wa]);
         const enc3 = new TextEncoder();
@@ -3301,17 +3067,9 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         });
         return streamWithLog(new Response(stream0, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
       }
-      if (dsStreamUp) {
-        return streamWithLog(dsStreamUp, env, ctx, mkLogRec());
-      }
-      if (effSpec.gateway) {
-        const upstream = await callGateway(env, effSpec.model, messages, max_tokens, true);
-        return streamWithLog(upstream, env, ctx, mkLogRec());
-      }
       return json({ error: "no stream path for model" }, 400);
     } catch (e) {
       try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
-      try { const _ftServed = {}; const _ft = await qnfoAiFreeFallback(env, messages, max_tokens, _ftServed); if (_ft) { const _enc = new TextEncoder(); const _nl3 = String.fromCharCode(10, 10); const _st = new ReadableStream({ start: function(ctrl) { ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: _ftServed.model || routedModel, choices: [{ index: 0, delta: { role: "assistant", content: _ft }, finish_reason: null }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: _ftServed.model || routedModel, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: [DONE]" + _nl3)); ctrl.close(); } }); return streamWithLog(new Response(_st, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec()); } } catch (_fbErr) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_fbErr && _fbErr.message) || _fbErr) })); }
       return json({ error: "stream failed: " + e.message }, 502);
     }
   }
@@ -3328,56 +3086,19 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       _budgetInfo = _budgetMs;
       const _tB = Date.now();
       const _primaryKey = _servedBy || routedModel;
-      const hb = await runTurnBudgeted(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP, clientToolChoice, { budgetMs: _budgetMs, hedgeMs: hedgeDelayMs(body, _budgetMs), primaryKey: _primaryKey, hedgeKey: _gov.noEnsemble || body.hedge === false ? null : pickHedge(_primaryKey, effSpec, { hasImage, estIn: estInputTokens, maxOut: Math.min(effMaxOut, 4096), tools: !!(modelTools && modelTools.length) }) });
+      const hb = await runTurnBudgeted(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP, clientToolChoice, { budgetMs: _budgetMs, primaryKey: _primaryKey, hedgeKey: null });
       _hedgeInfo = { fired: hb.hedged, winner: hb.winner || null, legs: hb.legs, ms: Date.now() - _tB };
       turn = hb.turn;
       if (turn && hb.winner && hb.winner !== routedModel) _servedBy = hb.winner;
       if (!turn) {
-        const _rem = _budgetMs - (Date.now() - _tB);
-        let _ftB = null;
-        if (_rem > 2e3 && hb.reason !== "deadline") {
-          try { _ftB = await withTimeout(qnfoAiFreeFallback(env, messages, max_tokens), _rem, "budget-free-fallback"); } catch (eFb) { _ftB = null; }
-        }
-        if (_ftB) {
-          turn = { content: _ftB, toolCalls: null, provider: "workers-ai" };
-          _servedBy = "free-fallback";
-        } else {
           if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("ROUTER-TIMEOUT-504: " + JSON.stringify(hb.legs)).slice(0, 400), latency_ms: Date.now() - t0 })));
           return json({ error: { type: "router_timeout", message: "no model answered within the budget (" + (hb.reason || "no-answer") + "); use your direct fallback", budget_ms: _budgetMs, legs: hb.legs }, _router: mkRouter(routedModel, isAuto ? "auto" : "single") }, 504);
-        }
       }
     } else {
       turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP, clientToolChoice);
     }
     if (turn.served_by && !_servedBy) _servedBy = turn.served_by;
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
-    if (!content && !toolCalls && !wantsCode && !_budgetMs) {
-      try {
-        const rt = await runModelTurn(env, effSpec, messages, clampTokens(max_tokens, effSpec.wa ? MAX_OUT[effSpec.wa] : DEFAULT_MAX_OUT), null, 0.2, 0.9);
-        if (rt.content && String(rt.content).trim().length > 0) {
-          content = rt.content;
-          provider = rt.provider || provider;
-        }
-      } catch (e) {
-      }
-      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
-      for (const fbSpec of fbCands) {
-        if (!fbSpec) continue;
-        if (hasImage && !fbSpec.vision) continue;
-        if (effSpec.wa && fbSpec.wa === effSpec.wa) continue;
-        if (effSpec.api && fbSpec.api === effSpec.api) continue;
-        try {
-          const fbCap = Math.min(clampTokens(max_tokens, DEFAULT_MAX_OUT), fbSpec.maxOut || 8192);
-          const fbTurn = await runModelTurn(env, fbSpec, messages, fbCap, null, 0.3, 0.95);
-          if (fbTurn.content && String(fbTurn.content).trim().length > 0) {
-            content = fbTurn.content;
-            provider = fbTurn.provider || provider;
-            break;
-          }
-        } catch (e) {
-        }
-      }
-    }
     if (wantsCode && toolCalls && toolCalls.length) {
       const toolResults = await executeBuiltinTools(env, toolCalls);
       if (toolResults.length) {
@@ -3405,7 +3126,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       choices: [{ index: 0, message: { role: "assistant", content, ...toolCalls ? { tool_calls: toolCalls } : {} }, finish_reason: toolCalls ? "tool_calls" : contentTruncated ? "length" : "stop" }],
       usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: singleOutTokens, total_tokens: estimateInputTokens(messages) + singleOutTokens },
       _router: mkRouter(routedModel, isAuto ? "auto" : "single", {
-        deepseek_profile: effSpec.api || "workers-ai",
+        deepseek_profile: "gateway",
         estimated_cost_usd: effSpec.tier === 0 ? 0 : void 0,
         neurons_remaining: 8e3,
         temperature: effTemp,
@@ -3421,7 +3142,6 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
-    try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) return json({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, message: { role: "assistant", content: _ft }, finish_reason: "stop" }], usage: {}, _router: mkRouter(routedModel, "free-fallback") }); } catch (_fbErr) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_fbErr && _fbErr.message) || _fbErr) })); }
     try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
     return json({ error: e.message }, 502);
   }
@@ -4219,30 +3939,11 @@ function anthTokenOf(request) {
 async function anthRelay(env, oai) {
   // Clean tool-faithful relay: NO research/RAG/ensemble injection. The Anthropic
   // client (Claude Code) owns its own system prompt + tool loop; we just need a
-  // raw, tool-capable model leg. Paid DeepSeek first (tools:true), free on error.
+  // raw OpenAI-shaped premium route. Never send Anthropic Messages to a dynamic route.
   var maxT = oai.max_tokens || 8192;
-  var apiModel = "deepseek-chat";
-  try {
-    var up = await callDeepSeek(env, apiModel, oai.messages, maxT, oai.stream, oai.tools, { temperature: oai.temperature, top_p: oai.top_p, tool_choice: oai.tool_choice });
-    if (oai.stream) return up;
-    return new Response(JSON.stringify({ id: "chatcmpl-" + rid(8), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: (up && up.choices) || [], usage: (up && up.usage) || {} }), { headers: { "Content-Type": "application/json" } });
-  } catch (e) {
-    var errMsg = "relay error: " + ((e && e.message) || e);
-    var ft = null;
-    try { ft = await qnfoAiFreeFallback(env, oai.messages, Math.min(maxT, 8192)); } catch (e2) { console.error(JSON.stringify({ evt: "ai:anthRelay:caught", error: String((e2 && e2.message) || e2) })); }
-    if (oai.stream) {
-      var enc = new TextEncoder();
-      var nl = String.fromCharCode(10, 10);
-      var st = new ReadableStream({ start: function (c) {
-        c.enqueue(enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, delta: { role: "assistant", content: ft || errMsg }, finish_reason: null }] }) + nl));
-        c.enqueue(enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb2", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + nl));
-        c.enqueue(enc.encode("data: [DONE]" + nl));
-        c.close();
-      } });
-      return new Response(st, { headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
-    }
-    return new Response(JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, message: { role: "assistant", content: ft || errMsg }, finish_reason: "stop" }], usage: {} }), { headers: { "Content-Type": "application/json" } });
-  }
+  const up = await runDynamicChat(env, "dynamic/premium", oai.messages, maxT, oai.stream, { tools: oai.tools, temperature: oai.temperature, top_p: oai.top_p, tool_choice: oai.tool_choice });
+  if (oai.stream) return up;
+  return new Response(JSON.stringify({ id: "chatcmpl-" + rid(8), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: up.choices || [], usage: up.usage || {} }), { headers: { "Content-Type": "application/json" } });
 }
 async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   if (!internalCaller(ctx)) {
@@ -4259,7 +3960,9 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   var wantStream = !!(body && body.stream);
   var oai = anthToOpenAI(body);
   if (!oai.messages.length) return json({ type: "error", error: { type: "invalid_request_error", message: "messages required" } }, 400);
-  var resp = await anthRelay(env, oai);
+  var resp;
+  try { resp = await anthRelay(env, oai); }
+  catch (e) { console.error("anthRelay failed: " + String(e && e.message || e)); return json({ type: "error", error: { type: "api_error", message: String(e && e.message || e) } }, 502); }
   var ctype = resp.headers.get("content-type") || "";
   if (ctype.indexOf("text/event-stream") >= 0) {
     if (wantStream) return new Response(anthStreamFromOpenAI(resp, oai.model), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
@@ -4720,11 +4423,11 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   finally {
     // SPEND-GOVERNOR-1: price every binding call into ai_spend_ledger (fail-soft, not awaited).
     try {
-      if (ok) {
+      if (ok && !(isDynamicRoute(model) && input && input.stream)) {
         var sIn = 0;
         try { sIn = Math.ceil(JSON.stringify(input && (input.messages || input.text || input.prompt) || "").length / 4); } catch (e4) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e4 && e4.message) || e4) })); }
         var sU = spendUsageOf(res, sIn, spendOutEstimate(res));
-        spendRecord(env, "workers-ai", String(model), sU.in, sU.out, { cached: sU.cached });
+        spendRecord(env, isDynamicRoute(model) ? "gateway" : "workers-ai", isDynamicRoute(model) ? String(res && res.model || model) : String(model), sU.in, sU.out, { cached: sU.cached });
       }
     } catch (e5) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e5 && e5.message) || e5) })); }
     try {

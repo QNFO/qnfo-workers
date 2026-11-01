@@ -176,11 +176,11 @@ await X.fleetSteerRun(env, GLM, false, r.run);
 ok(r.calls.join() === GLM, "ten failed twins in this isolate revert the switch at once", r.calls);
 
 // 6. The router is wired to the block.
-ok(/async function runWorkersAI\(env, modelId, messages, maxTokens, stream, opts = \{\}\) \{\s*\/\/[^\n]*\n\s*return fleetSteerRun\(env, modelId, !!stream, \(m\) => runWorkersAICore\(/.test(src), "runWorkersAI routes every Workers AI call through fleetSteerRun");
-ok(/async function runWorkersAICore\(env, modelId/.test(src), "the original runner is runWorkersAICore");
+ok(src.includes("return runDynamicChat(env, chatRoute(modelId)"), "chat calls use gateway routes");
+ok(src.includes('fleetPaidCapHit(await fleetSteerLoad(env), "gateway", route)'), "dynamic inference still reads the fleet's spend caps");
 const guard = src.slice(src.indexOf("async function spendGuardPaid"), src.indexOf("function spendMeterStream"));
 ok(/fleetPaidCapHit\(await fleetSteerLoad\(env\), provider, model\)/.test(guard) && /throw new Error\("spend-governor: fleet "/.test(guard), "spendGuardPaid skips a paid upstream at its fleet cap with a spend-governor error (the Workers AI twin answers)");
-ok(/\^spend-governor/.test(src), "runModelTurn still serves a spend-governor DeepSeek skip by its Workers AI twin");
+ok(src.includes('if (governed.action !== "allow" || fleetHit) route = "dynamic/value"'), "a spend cap steers to the value route instead of a local model twin");
 ok(/fleet_cap_steer: env\.__fleetSteers\.slice\(0, 8\)/.test(src), "_router names each switch");
 ok(/__fleetSteers: \[\]/.test(src) && /__pinModel: true/.test(src), "the request env carries the switch list and pin_model");
 ok(/fleet_cap_steer: \{ twins: FLEET_STEER_TWINS, switch_key: FLEET_STEER_SWITCH, state: __fleetSteer\.st \?/.test(src), "/health shows the cached fleet-cap state without a D1 read");
