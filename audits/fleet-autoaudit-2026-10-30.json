@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-30 08:58:26",
+  "audited_at": "2026-10-30 23:57:41",
   "d1_write_failures": [],
   "d1_writes_ok": 128,
   "guard": {
@@ -576,7 +576,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.39.8-compose-cache",
+        "version": "0.40.0-forecast-ledger",
         "worker": "q08-signal-engine"
       },
       {
@@ -631,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.58.1-journey-contract",
+        "version": "0.59.0-empty-draft-close",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -651,7 +651,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.9.11-codeagent",
+        "version": "1.9.12-codeagent",
         "worker": "qnfo-infra"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.40.8-structure-numbering",
+        "version": "0.40.9-errata-claim-fair",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1051,9 +1051,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.39.8-compose-cache",
+      "before": "0.40.0-forecast-ledger",
       "http": 200,
-      "live": "0.39.8-compose-cache",
+      "live": "0.40.0-forecast-ledger",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1400,9 +1400,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.58.1-journey-contract",
+      "before": "0.59.0-empty-draft-close",
       "http": 200,
-      "live": "0.58.1-journey-contract",
+      "live": "0.59.0-empty-draft-close",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1486,9 +1486,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.9.11-codeagent",
+      "before": "1.9.12-codeagent",
       "http": 200,
-      "live": "1.9.11-codeagent",
+      "live": "1.9.12-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
@@ -1656,9 +1656,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.40.8-structure-numbering",
+      "before": "0.40.9-errata-claim-fair",
       "http": 200,
-      "live": "0.40.8-structure-numbering",
+      "live": "0.40.9-errata-claim-fair",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

@@ -64,6 +64,93 @@ def fake_gh2(path, method="GET", body=None):
     return 404, None
 R.gh = fake_gh2
 ok((R.latest_green("cf-ops-actions gen-activitypub-key qnfo-gateway", "2026-10-12T13:53:25Z", wfs) or {}).get("id") == 6, "and closes it on the same action's green run")
+same_red_later = run(51, "cf-ops-actions gen-activitypub-key qnfo-gateway", "failure", "2026-10-12T15:00:00Z")
+def fake_gh2b(path, method="GET", body=None):
+    if "/workflows/7/runs" in path: return 200, {"workflow_runs": [same_red_later, other_green, same_green]}
+    return 404, None
+R.gh = fake_gh2b
+ok(R.latest_green("cf-ops-actions gen-activitypub-key qnfo-gateway", "2026-10-12T13:53:25Z", wfs) is None, "a later red run of the same action keeps it open even though an earlier re-run went green")
+
+# RESOLVE-REF-1: the green run that clears a finding must be on the failing run's own ref (ci-watchdog #5281: a PR branch's green closed a finding about a red main)
+import contextlib, io
+FAIL_T = "2026-10-30T05:00:00Z"
+wfs2 = wfs + [{"id": 12, "name": "deploy-gate", "path": ".github/workflows/deploy-gate.yml", "state": "active"}]
+def rrun(i, concl, t, event="push", branch="main", name="deploy-gate", wf=12):
+    return {"id": i, "name": name, "display_title": "a commit", "conclusion": concl, "created_at": t, "event": event, "head_branch": branch, "workflow_id": wf, "html_url": "https://example.test/" + str(i), "head_sha": "0123456789abcdef"}
+seen = []
+def runs_gh(runs):
+    def f(path, method="GET", body=None):
+        seen.append(path)
+        if "/workflows/12/runs" in path or path.startswith("/repos/" + R.REPO + "/actions/runs?"): return 200, {"workflow_runs": runs}
+        return 404, None
+    return f
+pr_green = rrun(10, "success", "2026-10-30T05:12:00Z", event="pull_request", branch="codeagent-im1000861")
+main_green = rrun(11, "success", "2026-10-30T09:07:00Z")
+R.gh = runs_gh([main_green, pr_green])
+ok((R.latest_green("deploy-gate", FAIL_T, wfs2) or {}).get("id") == 11, "main's own green push run clears a failure of main")
+ok("branch=main" in seen[-1] and "exclude_pull_requests=true" in seen[-1] and "per_page=100" in seen[-1] and "/workflows/12/runs?" in seen[-1], "the query asks for main, pull requests excluded, 100 runs, in one call: " + seen[-1])
+R.gh = runs_gh([pr_green])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, "a green pull-request run on another branch does not clear a failure of main")
+R.gh = runs_gh([rrun(12, "success", "2026-10-30T06:00:00Z", event="pull_request", branch="main")])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, "a pull-request run is not evidence even when its head branch is called main (a fork)")
+R.gh = runs_gh([rrun(13, "success", "2026-10-30T06:00:00Z", event="push", branch="release/1")])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, "a green push on another branch does not clear a failure of main")
+R.gh = runs_gh([rrun(22, "success", "2026-10-30T08:00:00Z"), rrun(21, "failure", "2026-10-30T07:00:00Z")])
+ok((R.latest_green("deploy-gate", FAIL_T, wfs2) or {}).get("id") == 22, "green after a later red: the newest verdict is green")
+R.gh = runs_gh([rrun(21, "failure", "2026-10-30T07:00:00Z"), rrun(20, "success", "2026-10-30T06:00:00Z")])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, "red after the green: main is red again, so the finding stays open")
+for bad in ("timed_out", "startup_failure"):
+    R.gh = runs_gh([rrun(23, bad, "2026-10-30T07:00:00Z"), rrun(20, "success", "2026-10-30T06:00:00Z")])
+    ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, bad + " counts as red")
+R.gh = runs_gh([rrun(30, "cancelled", "2026-10-30T09:00:00Z"), rrun(31, "skipped", "2026-10-30T08:30:00Z"), rrun(32, None, "2026-10-30T08:10:00Z"),
+                rrun(33, "action_required", "2026-10-30T08:00:00Z"), rrun(34, "neutral", "2026-10-30T07:30:00Z"), rrun(35, "success", "2026-10-30T07:00:00Z")])
+ok((R.latest_green("deploy-gate", FAIL_T, wfs2) or {}).get("id") == 35, "cancelled, skipped, unfinished, action_required and neutral runs are no verdict")
+R.gh = runs_gh([rrun(30, "cancelled", "2026-10-30T09:00:00Z"), rrun(32, None, "2026-10-30T08:10:00Z")])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, "and without any decided run there is nothing to close on")
+R.gh = runs_gh([rrun(40, "success", FAIL_T), rrun(41, "success", "2026-10-30T04:00:00Z")])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2) is None, "a green run that is not strictly newer than the failure is no evidence")
+R.gh = runs_gh([rrun(42, "success", "2026-10-30T06:00:00Z")])
+ok((R.latest_green("deploy-gate", None, wfs2) or {}).get("id") == 42 and (R.latest_green("deploy-gate", "", wfs2) or {}).get("id") == 42, "no failure time: the newest decided run decides (main() never calls it that way, FAIL-CLOSED-NO-BASELINE-1)")
+# a finding about a pull-request run (filed before MAIN-ONLY-FINDINGS-1) is cleared by a later green run of the same branch only
+pr_fix = rrun(50, "success", "2026-10-30T06:00:00Z", event="pull_request", branch="feature/x")
+R.gh = runs_gh([pr_fix, rrun(51, "success", "2026-10-30T07:00:00Z", event="pull_request", branch="feature/y")])
+ok((R.latest_green("deploy-gate", FAIL_T, wfs2, "feature/x", True) or {}).get("id") == 50, "a failing pull-request run is cleared by a green run of its own branch")
+ok("branch=feature%2Fx" in seen[-1] and "exclude_pull_requests" not in seen[-1], "the branch is url-encoded and pull-request runs are not excluded for it: " + seen[-1])
+R.gh = runs_gh([rrun(51, "success", "2026-10-30T07:00:00Z", event="pull_request", branch="feature/y"), rrun(52, "success", "2026-10-30T07:30:00Z", event="push", branch="main")])
+ok(R.latest_green("deploy-gate", FAIL_T, wfs2, "feature/x", True) is None, "and not by another branch or by main")
+# a subject that names no listed workflow falls back to the repository run list, with the same filters
+R.gh = runs_gh([rrun(60, "success", "2026-10-30T06:00:00Z", name="orphan-wf", wf=99), rrun(61, "success", "2026-10-30T06:10:00Z", event="pull_request", branch="x", name="orphan-wf", wf=99)])
+ok((R.latest_green("orphan-wf", FAIL_T, wfs2) or {}).get("id") == 60 and seen[-1].startswith("/repos/" + R.REPO + "/actions/runs?branch=main&exclude_pull_requests=true"), "an unlisted workflow name: the run list is read with the same branch and pull-request filters: " + seen[-1])
+
+def resolve_pass(failing, runs, issue_title="[ci-watchdog] suite-red: deploy-gate"):
+    """One main() pass over a single open finding whose body cites `failing`; returns (stdout, closed-by-write calls)."""
+    writes = []
+    def f(path, method="GET", body=None):
+        if method != "GET": writes.append((method, path)); return 200, {}
+        if path == "/rate_limit": return 200, {"resources": {"core": {"remaining": 4000, "limit": 5000, "reset": 0}}}
+        if path.startswith("/repos/" + R.REPO + "/issues?state=open"): return 200, [{"number": 5281, "title": issue_title, "body": "evidence\nrun=%d\n" % failing["id"]}]
+        if path.startswith("/repos/" + R.REPO + "/actions/workflows?per_page=100"): return 200, {"workflows": wfs2}
+        if path == "/repos/%s/actions/runs/%d" % (R.REPO, failing["id"]): return 200, failing
+        if path == "/repos/%s/actions/workflows/12" % R.REPO: return 200, dict(wfs2[-1])
+        if "/workflows/12/runs" in path: return 200, {"workflow_runs": runs}
+        return 404, None
+    R.gh = f; R.DRY = True
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        R.main()
+    return buf.getvalue(), writes
+red_main = rrun(700, "failure", FAIL_T)
+out, _ = resolve_pass(red_main, [pr_green])
+ok("closed=0 kept=1" in out and "NO green run" in out and "branch=main" in out, "main(): a green PR run does not close the finding about a red main: " + out.strip().splitlines()[-1])
+out, _ = resolve_pass(red_main, [main_green, pr_green])
+ok("closed=1 kept=0" in out and "WOULD CLOSE (green 11 " in out, "main(): main's own green push run closes it: " + out.strip().splitlines()[-1])
+out, _ = resolve_pass(red_main, [rrun(21, "failure", "2026-10-30T10:00:00Z"), main_green])
+ok("closed=0 kept=1" in out, "main(): a red main run newer than the green keeps it open")
+red_pr = rrun(701, "failure", FAIL_T, event="pull_request", branch="feature/x")
+out, _ = resolve_pass(red_pr, [pr_fix])
+ok("closed=1 kept=0" in out and "WOULD CLOSE (green 50 " in out, "main(): a finding about a pull-request run is closed by its own branch's green run (the query carries the failing run's branch and event)")
+out, _ = resolve_pass(red_pr, [main_green])
+ok("closed=0 kept=1" in out, "main(): and not by a green main run")
 
 root = HERE.parent / ".github" / "workflows"
 for f, needle in [("cf-ops-actions.yml", "run-name: cf-ops-actions ${{ inputs.action }}"), ("owner-client-keys.yml", "run-name: owner-client-keys ${{ inputs.mode }}"),

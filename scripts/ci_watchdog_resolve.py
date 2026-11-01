@@ -25,6 +25,25 @@ SUBJECT-SHAPE-1 (2026-09-30)
   sat in exactly that state. `_subject_candidates()` now accepts both shapes.
   The change is inert for subjects that are already bare names.
 
+RESOLVE-REF-1 (2026-10-30): THE GREEN RUN MUST BE ON THE FAILING RUN'S OWN REF
+  "A successful run of the SAME workflow" used to mean ANY run of it, from any
+  branch and any event. The watchdog only files findings about main
+  (MAIN-ONLY-FINDINGS-1) and its own superseded_by_green() already requires the
+  same head_branch, but this reaper did not. Since MERGE-STREAMLINE-1 the
+  deploy-gate steps are continue-on-error on pull_request, so a PR run is green
+  while its suites are red, and a PR branch's green closed a finding about
+  main that was still red. Measured on 2026-10-01..10-30: 177 of the 259
+  close-on-green closures (68%) cited a green run that was not on main; #5281
+  (suite-red) was closed at 05:12Z by a PR run while main stayed red until
+  09:07Z, so ~14 suite-red findings were filed and closed inside one 20.5 h red
+  window and no issue-age metric ever showed it. A close now needs the newest
+  DECIDED run of that workflow on the failing run's branch (pull-request runs
+  excluded unless the failing run was one) to be a success newer than the
+  failure; a newer failed run keeps the finding open, a cancelled, skipped,
+  neutral, stale or unfinished run is no verdict. Same rule as
+  qnfo-fleet-control WFI-GREEN-STREAK-1, so the issue and the D1 contract
+  cannot disagree. Same API cost: one call per finding.
+
 Exit: always 0 - this is a reaper, not a gate. Its failures must never turn CI
       red, or the reaper becomes a finding of the thing it reaps.
 
@@ -39,6 +58,7 @@ import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 REPO = os.environ.get("REPO", "QNFO/qnfo-workers")
@@ -51,6 +71,11 @@ PREFIX = "[ci-watchdog]"
 # CodeQL's SARIF upload. This reaper runs on every push to main, so it must not burn the budget blind.
 MIN_BUDGET = 25          # below this many remaining core calls a pass is not worth starting
 RATE_LIMITED = False     # set by gh() when GitHub answers 403/429 with a rate-limit signal
+# RESOLVE-REF-1: a pull-request run is evidence about the pull request, never about main; these conclusions are the ones
+# qnfo-fleet-control's WFI-GREEN-STREAK-1 reads as red, everything else but "success" (cancelled, skipped, neutral, stale,
+# action_required, a run still in progress) is no verdict.
+PR_EVENTS = ("pull_request", "pull_request_target")
+RED_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
 
 
 def _looks_rate_limited(e) -> bool:
@@ -210,31 +235,52 @@ def split_action(subject: str, workflows: list[dict]) -> tuple[str, str | None]:
     return (head, title) if head in names else (title, None)
 
 
-def latest_green(subject: str, since_iso: str | None, workflows: list[dict] | None = None):
-    """Newest successful run of workflow `subject` created strictly after since_iso. For a per-action subject only a run
-    with the same run title counts: a green `report` never closes a failed `gen-activitypub-key` (CI-ACTION-IDENTITY-1)."""
-    subject, action_title = split_action(subject, workflows if workflows is not None else list_workflows())
+def comparable_run(r: dict, branch: str, pr_run: bool) -> bool:
+    """RESOLVE-REF-1: True when run `r` says something about the failing run's own ref: the same head branch, and not a
+    pull-request run unless the failing run was one. Checked here as well as in the query because the server-side
+    filters are not the contract (a fork's pull request can carry the head branch name `main`)."""
+    if (r.get("head_branch") or "") != branch:
+        return False
+    return pr_run or (r.get("event") or "") not in PR_EVENTS
+
+
+def latest_green(subject: str, since_iso: str | None, workflows: list[dict] | None = None,
+                 branch: str = "main", pr_run: bool = False):
+    """The green run that clears a failure of workflow `subject` on `branch`, or None.
+
+    That is the NEWEST DECIDED run of the workflow on `branch` (pull-request runs excluded unless `pr_run`, i.e. the failing
+    run was one), provided it succeeded and was created strictly after since_iso. A newer failed run means the ref is red
+    again, so nothing is cleared; cancelled, skipped, neutral, stale, action_required and unfinished runs carry no verdict
+    and are passed over (RESOLVE-REF-1). For a per-action subject only a run with the same run title counts: a green
+    `report` never closes a failed `gen-activitypub-key` (CI-ACTION-IDENTITY-1)."""
+    ws = workflows if workflows is not None else list_workflows()
+    subject, action_title = split_action(subject, ws)
     cands = _subject_candidates(subject)
     wf_id = None
-    for w in (workflows if workflows is not None else list_workflows()):
+    for w in ws:
         if w.get("name") in cands:
             wf_id = w["id"]
             break
+    q = "branch=" + urllib.parse.quote(branch, safe="") + ("" if pr_run else "&exclude_pull_requests=true") + "&per_page=100"
     if wf_id:
-        st, d = gh(f"/repos/{REPO}/actions/workflows/{wf_id}/runs?per_page=50")
+        st, d = gh(f"/repos/{REPO}/actions/workflows/{wf_id}/runs?{q}")
         rs = (d.get("workflow_runs", []) if st == 200 and d else [])
     else:
-        st, d = gh(f"/repos/{REPO}/actions/runs?per_page=100")
+        st, d = gh(f"/repos/{REPO}/actions/runs?{q}")
         rs = [r for r in (d.get("workflow_runs", []) if st == 200 and d else [])
               if (r.get("name") or "") in cands]
-    for r in rs:  # newest first
-        if r.get("conclusion") != "success":
+    for r in sorted(rs, key=lambda x: x.get("created_at") or "", reverse=True):  # newest first
+        if not comparable_run(r, branch, pr_run):
             continue
         if action_title and " ".join((r.get("display_title") or "").split())[:100] != action_title:
             continue
         if since_iso and (r.get("created_at") or "") <= since_iso:
-            continue
-        return r
+            break  # nothing newer than the failure is left
+        concl = r.get("conclusion")
+        if concl == "success":
+            return r
+        if concl in RED_CONCLUSIONS:
+            return None  # the newest verdict on this ref is red
     return None
 
 
@@ -276,6 +322,7 @@ def main() -> int:
         num = it.get("number")
         m = re.search(r"run=(\d+)", it.get("body") or "")
         fail_run, fail_created, fail_wf_id, why = (m.group(1) if m else None), None, None, None
+        fail_branch, fail_pr = "main", False
         if not fail_run:
             why = "no run id in the issue body"
         else:
@@ -285,13 +332,16 @@ def main() -> int:
             if stx == 200 and rx and rx.get("created_at"):
                 fail_created = rx.get("created_at")
                 fail_wf_id = rx.get("workflow_id")
+                # RESOLVE-REF-1: the green run must be on the failing run's own ref (main for every finding the watchdog files)
+                fail_branch = rx.get("head_branch") or "main"
+                fail_pr = (rx.get("event") or "") in PR_EVENTS
             else:
                 why = f"cannot read failing run {fail_run} (http-{stx})"
         # FAIL-CLOSED-NO-BASELINE-1: the green-run rule means "strictly NEWER than the failure". With no
         # failure timestamp there is nothing to be newer than, and latest_green(subj, None) would accept ANY
         # success, including one older than the failure (reproduced: a 2020 run closed two findings). So the
         # green-run rule only runs when the failure time is known; a retired workflow needs no timestamp.
-        g = latest_green(subj, fail_created, all_wfs) if fail_created else None
+        g = latest_green(subj, fail_created, all_wfs, fail_branch, fail_pr) if fail_created else None
         if not g:
             rw = retired_by_id(fail_wf_id, all_wfs) or retired_workflow(split_action(subj, all_wfs)[0], all_wfs)
             if rw:
@@ -323,7 +373,7 @@ def main() -> int:
                 print(f"  - #{num} {klass}/{subj}: {why}; left open (fail-closed, no baseline to compare against)")
             else:
                 print(f"  - #{num} {klass}/{subj}: NO green run after the failure "
-                      f"(fail_run={fail_run} at {fail_created}, "
+                      f"(fail_run={fail_run} at {fail_created}, branch={fail_branch}, "
                       f"names={_subject_candidates(subj)}); left open")
             kept += 1
             continue
@@ -332,11 +382,13 @@ def main() -> int:
             f"**{klass} / {subj}** is cleared.\n\n"
             f"- failing run: `{fail_run}` created {fail_created}\n"
             f"- green run: [`{g['id']}`]({g.get('html_url')}) conclusion=success "
-            f"created {g.get('created_at')} branch=`{g.get('head_branch')}` "
+            f"created {g.get('created_at')} branch=`{g.get('head_branch')}` event=`{g.get('event')}` "
             f"sha=`{(g.get('head_sha') or '')[:8]}`\n"
-            f"- rule: a SUCCESSFUL run of the SAME workflow, strictly newer than the "
-            f"failure. Absence from the watchdog's 6h window alone never closes an "
-            f"issue, because an aged-out failure is not a fixed failure.\n"
+            f"- rule: the newest decided run of the SAME workflow on the SAME ref as the failing run "
+            f"(`{fail_branch}`, pull-request runs excluded unless the failing run was one) is a SUCCESS "
+            f"strictly newer than the failure (RESOLVE-REF-1). Absence from the watchdog's 6h window alone "
+            f"never closes an issue, because an aged-out failure is not a fixed failure, and a green pull-request "
+            f"run says nothing about main.\n"
         )
         if DRY:
             print(f"  - #{num} {klass}/{subj}: WOULD CLOSE (green {g['id']} "

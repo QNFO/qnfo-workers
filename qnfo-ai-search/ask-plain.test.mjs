@@ -3,7 +3,8 @@
 // phase condenses" on the paper that holds that sentence was answered by repeating the sentence, with the passage that defines its
 // terms missing from the excerpt, a reference marker of the paper ([2]) read as source [2], and nothing checking the opening.
 // Proves: the prompt asks for plain language and forbids circular explanations (and still names no topic); explainTarget reads
-// the wording from an explain / define / what-is question and leaves other questions alone; the pinned paper's excerpt for an
+// the wording from an explain / define / what-is question and leaves other questions alone; dense openings are rewritten on any
+// question, while echoes are rewritten only when an explain target is known; the pinned paper's excerpt for an
 // explain question leaves out the wording's own sentence, the abstract, the references and formula fragments and adds the
 // sentences that define or exemplify its terms; reference markers are removed from excerpts; plainReport flags an echoing or
 // dense opening and passes a plain one; an echoing first draft is rewritten once and the plain rewrite is what is sent, the
@@ -205,14 +206,24 @@ ok(calls.length === 1 && /folded into the base part/.test(answerOf(t)), "a plain
 row = sq.prepare("SELECT plain FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
 ok(row.plain === 1, "plain = 1 (explain question, nothing flagged)", row);
 
-// 4. a question that is not an explain question is never rewritten, but its density is recorded
-outs = [ECHO];
+// 4. a dense ordinary answer gets one rewrite, and only a plainer grounded draft is kept
+const ordinaryQ = "What is the main result, in plain terms?";
+outs = [ECHO, PLAIN];
 calls = [];
-t = await ask("How many assemblies does the paper study?", "widget-paper");
-ok(calls.length === 1, "a non-explain question is never rewritten", calls.length);
+t = await ask(ordinaryQ, "widget-paper");
+ok(calls.length === 2 && /answer the question directly/.test(calls[1][calls[1].length - 1].content), "a dense plain-language result question gets one general rewrite", calls.length);
+ok(/folded into the base part/.test(answerOf(t)) && !/refers to the process/.test(answerOf(t)), "the improved grounded draft replaces the dense opening", answerOf(t).slice(0, 200));
 row = sq.prepare("SELECT plain FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
-ok(row.plain === 4, "its dense opening is recorded (4), without the explain flag", row);
-ok(!/Passages that define/.test(calls[0][calls[0].length - 1].content) && !/wants this wording explained/.test(calls[0][calls[0].length - 1].content), "no explain instruction for an ordinary question");
+ok(row.plain === 8, "a plain ordinary answer records only the rewrite flag", row);
+ok(!/Passages that define/.test(calls[0][calls[0].length - 1].content) && !/wants this wording explained/.test(calls[0][calls[0].length - 1].content), "the ordinary question gets no explain-specific prompt");
+
+// 4a. a rewrite that remains dense is not used
+outs = [ECHO, ECHO];
+calls = [];
+t = await ask(ordinaryQ, "widget-paper");
+ok(calls.length === 2 && /refers to the process/.test(answerOf(t)), "a rewrite that does not improve density is not used", answerOf(t).slice(0, 200));
+row = sq.prepare("SELECT plain FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
+ok(row.plain === 4 + 8, "a still-dense ordinary answer records density and the attempted rewrite", row);
 
 // 4b. ASK-PLAIN-4: an empty answer on the challenger arm is retried once on the champion's model
 sq.prepare("CREATE TABLE IF NOT EXISTS _x (a)").run();
