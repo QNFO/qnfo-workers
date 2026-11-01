@@ -1,8 +1,7 @@
 // PLAN-FIRST-TIME-FIRST-1 offline suite (qnfo-code-orchestrator 0.29.3, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST, pillar autonomy).
 // Measured 2026-10-26 on issue_plans: 48 planner model calls (code_plan_daily_cap 48, the last at 01:47Z), 32 of them re-plans of an issue that already had a verdict and 16
-// first-time plans; open high OWNER-TASK issues older than 120 minutes with no verdict at all stayed unplanned (8 when the issue was filed, 6 at 18:00Z). planIssues ordered each window
-// by priority and id only, so a re-plan (a verdict older than PLAN_RECHECK_DAYS) of a low id beat a first-time plan of the same priority and a higher id. 0.29.3 inserts
-// (p.issue_id IS NULL) DESC between the priority CASE and a.id, in the one string both windows (trusted, untrusted) share.
+// first-time plans; open high OWNER-TASK issues older than 120 minutes with no verdict at all stayed unplanned (8 when the issue was filed, 6 at 18:00Z). Plan selection now honors
+// v_issue_queue_v2 age and score within priority, while first-time plans still precede re-plans and the old priority/id order remains the missing-view fallback.
 // Real SQL (node:sqlite behind a D1-shaped shim), scripted model, scripted GitHub raw reads: the harness of plan-window-trusted.test.mjs.
 // Proves: 1 inside a priority class the first-time plan is taken before the re-plan of a lower id, and the re-plan follows on the next call (ordered, not starved);
 //         2 the priority class still wins: a critical re-plan is taken before a high first-time plan (a plain first-time-first order would fail this);
@@ -34,7 +33,9 @@ function makeD1() {
   };
   db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
     CREATE TABLE service_registry (service TEXT PRIMARY KEY, state TEXT, kind TEXT, base_url TEXT);
-    CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
+    CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+    CREATE TABLE issue_queue_order (id INTEGER PRIMARY KEY, aged INTEGER, score REAL);
+    CREATE VIEW v_issue_queue_v2 AS SELECT a.id, q.aged, q.score FROM agent_issues a LEFT JOIN issue_queue_order q ON q.id = a.id;`);
   for (const n of ["q08-signal-engine", "qnfo-social", "qnfo-ai-search"]) db.prepare("INSERT INTO service_registry VALUES (?, 'live', 'worker', '')").run(n);
   return { prepare: wrap, _db: db };
 }
@@ -123,15 +124,28 @@ ok(ver[0] > 0 || ver[1] > 29 || (ver[1] === 29 && ver[2] >= 3), "health: VERSION
   ok(order.join() === [a, b, c].join(), "4 two first-time plans keep their id order and the re-plan of the lowest id is last", { order, a, b, c });
 }
 
-// 5. the text on main: the marker (the code-probe of agent_issues 1000428), one ord string used by both windows, the mirror identical
+// 5. the driver rank is used for planning, and the marker (the code-probe of agent_issues 1000428) remains in both copies.
 {
+  const { env } = envWith([byWorker, byWorker, byWorker]);
+  await plan(env);
+  const lowScore = issue(env, { title: "METRIC-TRIGGER-83-A: q08-signal-engine", description: "q08-signal-engine route", priority: "high" });
+  const highScore = issue(env, { title: "METRIC-TRIGGER-84-B: qnfo-social", description: "qnfo-social cadence", priority: "high" });
+  const notAged = issue(env, { title: "METRIC-TRIGGER-85-C: qnfo-ai-search", description: "qnfo-ai-search digest", priority: "high" });
+  const d = env.AUDIT_DB._db;
+  d.prepare("INSERT INTO issue_queue_order VALUES (?, ?, ?)").run(lowScore, 1, 100);
+  d.prepare("INSERT INTO issue_queue_order VALUES (?, ?, ?)").run(highScore, 1, 200);
+  d.prepare("INSERT INTO issue_queue_order VALUES (?, ?, ?)").run(notAged, 0, 999);
+  const order = [(await plan(env)).issue, (await plan(env)).issue, (await plan(env)).issue];
+  ok(order.join() === [highScore, lowScore, notAged].join(), "5a the planner follows queue age then score within priority", { order, highScore, lowScore, notAged });
+
   const src = fs.readFileSync(path.join(here, "worker.js"), "utf8");
   const mirror = fs.readFileSync(path.join(here, "deployed-current.worker.js"), "utf8");
-  ok(src === mirror, "5a deployed-current.worker.js is identical to worker.js");
-  ok(src.includes("PLAN-FIRST-TIME-FIRST-1"), "5b worker.js carries PLAN-FIRST-TIME-FIRST-1");
-  ok(src.includes("WHEN 'medium' THEN 2 ELSE 3 END, (p.issue_id IS NULL) DESC, a.id LIMIT \";"), "5c the ORDER BY string puts (p.issue_id IS NULL) DESC between the priority CASE and a.id");
-  ok((src.match(/const ord = "/g) || []).length === 1 && src.includes("sel + tp.sql + ord + PLAN_WINDOW") && src.includes("sel + \"NOT \" + tp.sql + ord + PLAN_CHEAP_PER_TICK"), "5d one ord string, used by the trusted and the untrusted window");
-  ok(src.includes("FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id"), "5e both windows read issue_plans as p, so the clause is valid in both");
+  ok(src === mirror, "5b deployed-current.worker.js is identical to worker.js");
+  ok(src.includes("PLAN-FIRST-TIME-FIRST-1"), "5c worker.js carries PLAN-FIRST-TIME-FIRST-1");
+  ok(src.includes("q.aged DESC, (p.issue_id IS NULL) DESC, q.score DESC, a.id LIMIT \";"), "5d the v2 order honors age and score while retaining first-time-first");
+  ok(src.includes("selV2 + where + tp.sql + ordV2 + PLAN_WINDOW") && src.includes("selV2 + where + \"NOT \" + tp.sql + ordV2 + PLAN_CHEAP_PER_TICK"), "5e both trusted and untrusted windows use the v2 order");
+  ok(src.includes("sel + where + tp.sql + ord + PLAN_WINDOW") && src.includes("sel + where + \"NOT \" + tp.sql + ord + PLAN_CHEAP_PER_TICK"), "5f both windows retain the priority/id fallback");
+  ok(src.includes("FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id"), "5g both windows read issue_plans as p");
 }
 
 console.log("plan-first-time-first.test: " + pass + " passed, " + fail + " failed");
