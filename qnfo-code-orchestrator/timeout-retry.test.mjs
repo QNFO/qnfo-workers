@@ -34,7 +34,7 @@ function makeD1() {
   return { prepare: wrap, _db: db };
 }
 const SRC = 'export default { fetch() { return new Response("a"); } };\n';
-const FILES = { "fx-worker/worker.js": SRC, "fx-worker/deployed-current.worker.js": SRC };
+const FILES = { "fx-worker/worker.js": SRC, "fx-worker/deployed-current.worker.js": SRC, "fx-worker/test.test.mjs": "export const suite = true;\n" };
 globalThis.fetch = async (u) => {
   const m = /^https:\/\/raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/(.+)$/.exec(String(u));
   const p = m ? decodeURIComponent(m[1]) : null;
@@ -124,6 +124,42 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("timeout-retry") >= 0, 
   await tick(env);
   const r = row(env, c.id);
   ok(r.attempts === 1 && /^step threw: boom/.test(r.last_error || "") && ctxOf(r).timeouts == null && events(env, "code-task.timeout").length === 0, "a non-timeout throw costs the attempt and writes no timeout event", { attempts: r.attempts, last_error: r.last_error });
+}
+
+// ===== 5. publisher suite feedback gets one fresh-main retry =====
+{
+  const { env, calls } = envWith([GOOD]);
+  const c = await addTask(env);
+  await tick(env);
+  const db = env.AUDIT_DB._db;
+  const failed = "the worker's suites fail after applying the edits and pass on main without them (PUBLISH-SUITE-CHECK-1); keep the change and fix what these tests assert: FAIL fx-worker/test.test.mjs";
+  db.prepare("UPDATE code_tasks SET status='queued', step='propose', attempts=1, ctx=json_set(ctx, '$.lastError', ?), last_error=?, lease_until=NULL WHERE id=?").run(failed, failed, c.id);
+  const updatedMain = 'export default { fetch() { return new Response("main"); } };\n';
+  FILES["fx-worker/worker.js"] = updatedMain;
+  await tick(env);
+  let r = row(env, c.id);
+  let cx = ctxOf(r);
+  ok(r.step === "read" && r.status === "queued" && r.attempts === 1 && cx.suite_rebase_attempted === true && cx.rereads === 0, "suite failure triggers one fresh read without consuming the large-file reread budget", { step: r.step, status: r.status, attempts: r.attempts, ctx: cx });
+  ok(events(env, "code-task.suite-rebase").length === 1 && calls.length === 0, "the fresh-main retry is audited and does not spend a model call before reading", events(env, "code-task.suite-rebase"));
+  await tick(env);
+  r = row(env, c.id);
+  cx = ctxOf(r);
+  ok(r.step === "propose" && cx.base === updatedMain && /PUBLISH-SUITE-CHECK-1/.test(cx.suite_rebase_reason), "the task rebuilds its proposal base from current main and retains suite feedback", { step: r.step, base: cx.base, reason: cx.suite_rebase_reason });
+  await tick(env);
+  r = row(env, c.id);
+  cx = ctxOf(r);
+  ok(r.step === "read" && cx.extras[0].path === "fx-worker/test.test.mjs", "the failed suite is added as a companion before proposing again", { step: r.step, extras: cx.extras });
+  await tick(env);
+  r = row(env, c.id);
+  cx = ctxOf(r);
+  ok(r.step === "propose" && cx.x[0].path === "fx-worker/test.test.mjs", "the retry loads the failing suite with the freshly read worker", { step: r.step, extras: cx.x.map((x) => x.path) });
+  FILES["fx-worker/worker.js"] = 'export default { fetch() { return new Response("later"); } };\n';
+  const failedAgain = "PUBLISH-SUITE-CHECK-1: second suite failure";
+  db.prepare("UPDATE code_tasks SET status='queued', step='propose', attempts=2, ctx=json_set(ctx, '$.lastError', ?), last_error=?, lease_until=NULL WHERE id=?").run(failedAgain, failedAgain, c.id);
+  const secondRetry = await tick(env);
+  r = row(env, c.id);
+  ok(ctxOf(r).base === updatedMain && r.step === "propose" && calls.length === 1, "a second publisher suite failure does not re-read main again", { step: r.step, status: r.status, base: ctxOf(r).base, calls: calls.length, tick: secondRetry });
+  FILES["fx-worker/worker.js"] = SRC;
 }
 
 console.log("timeout-retry.test: " + pass + " passed, " + fail + " failed");

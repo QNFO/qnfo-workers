@@ -23,7 +23,7 @@
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
 // 0.29.4 PLAN-LARGE-FILE-ANCHORS-1 (2026-11-01, issue 1000819, pillar autonomy; retain bounded source excerpts when planner keyword matches exceed its budget).
-var VERSION = "0.29.4-plan-large-file-anchors"; // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+var VERSION = "0.30.0-suite-rebase-retry"; // 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -2300,11 +2300,11 @@ async function stepTask(env, task) {
   };
   // LARGE-FILE-WINDOW-1: the anchor window is gone from main (the file changed under the task): start again from the anchor,
   // at most LARGE_REREADS times; a file that keeps changing ends needs_human with the reason.
-  const reread = async function (why) {
-    const n = (ctx.rereads || 0) + 1;
-    if (n > LARGE_REREADS) return await fail("LARGE-FILE-WINDOW-1: " + why + "; the file was re-read " + LARGE_REREADS + " times and keeps changing under the task", true);
-    await audit(env, "code-task.reread", task.id + " (" + n + " of " + LARGE_REREADS + "): " + String(why).slice(0, 200), { id: task.id, n: n }, "retry");
-    await tsave({ ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined, last_new_sig_at: ctx.last_new_sig_at || undefined }), step: "read", lease_until: null, last_error: null });
+  const reread = async function (why, suiteRetry) {
+    const n = (ctx.rereads || 0) + (suiteRetry ? 0 : 1);
+    if (!suiteRetry && n > LARGE_REREADS) return await fail("LARGE-FILE-WINDOW-1: " + why + "; the file was re-read " + LARGE_REREADS + " times and keeps changing under the task", true);
+    await audit(env, suiteRetry ? "code-task.suite-rebase" : "code-task.reread", task.id + (suiteRetry ? " (one-time): " : " (" + n + " of " + LARGE_REREADS + "): ") + String(why).slice(0, 200), { id: task.id, n: n }, "retry");
+    await tsave({ ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined, last_new_sig_at: ctx.last_new_sig_at || undefined, suite_rebase_attempted: ctx.suite_rebase_attempted || undefined, suite_rebase_reason: ctx.suite_rebase_reason || undefined }), step: "read", lease_until: null, last_error: null });
     return { ok: true, step: "read", reread: n };
   };
   try {
@@ -2315,6 +2315,14 @@ async function stepTask(env, task) {
     if (ctx.sig_n != null && nAtt < Number(ctx.sig_n)) { ctx.sigs = []; ctx.sig_n = nAtt; ctx.last_new_sig_at = null; }
     const external = nAtt > 0 && !!ctx.lastError && (ctx.sig_n != null ? nAtt > Number(ctx.sig_n) : task.step === "propose");
     if (external) {
+      // PUBLISH-SUITE-REBASE-1 (#100293): publisher suite feedback follows a successful patch apply, but the cached
+      // proposal base may have gone stale. One fresh read retries the same goal against current main before repair attempts.
+      if (!ctx.suite_rebase_attempted && /PUBLISH-SUITE-CHECK-1/.test(String(ctx.lastError))) {
+        ctx.suite_rebase_attempted = true;
+        ctx.suite_rebase_reason = String(ctx.lastError).slice(0, 1200);
+        delete ctx.lastError;
+        return await reread("PUBLISH-SUITE-REBASE-1: retry once from current main after publisher suite feedback", true);
+      }
       // FOLD-PAIR-TASK-1 (0.19.0, agent_issues 100143): a parity suite (a FOLDED member line-identical to its host, or a module
       // inlined into worker.js) fails because a twin file must change in the same commit, which a one-file task cannot do and
       // extraWhy refuses; ct_lbe9bf8c73vhh2 (email-orch-fold) and ct_t97kb31rjog3ky (inline-companion) each spent 3 more
@@ -2393,6 +2401,8 @@ async function stepTask(env, task) {
         nctx.verifier_replay_at = ctx.verifier_replay_at;
         nctx.verifier_replay_reason = ctx.verifier_replay_reason;
       }
+      if (ctx.suite_rebase_attempted) nctx.suite_rebase_attempted = true;
+      if (ctx.suite_rebase_reason) nctx.suite_rebase_reason = ctx.suite_rebase_reason;
       const gv = goalVersion(task.goal); // GOAL-VERSION-1 (a rebuild by the publisher takes the patch bump, which the merge runner's REBASE-INTEGRITY-1 expects)
       if (gv) nctx.version_want = gv.text;
       if (anchor) {
@@ -2430,15 +2440,16 @@ async function stepTask(env, task) {
       // failing test named in the publisher's message is added once as a companion, which the existing MULTI-FILE
       // machinery already allows (same top directory, .mjs, at most MAX_EXTRAS), and the task re-enters read so the
       // companion is loaded before the next propose. Widened once only: a second suite failure is a real failure.
-      if (ctx.lastError) {
-        const _sm = /FAIL ([A-Za-z0-9._\/-]+\.test\.mjs)/.exec(String(ctx.lastError));
+      const _publisherFeedback = ctx.lastError || ctx.suite_rebase_reason;
+      if (_publisherFeedback) {
+        const _sm = /FAIL ([A-Za-z0-9._\/-]+\.test\.mjs)/.exec(String(_publisherFeedback));
         if (_sm) {
           const _tp = _sm[1];
           const _have = Array.isArray(ctx.x) && ctx.x.some(function(x) { return x && x.path === _tp; });
           const _cur = Array.isArray(ctx.extras) ? ctx.extras.slice() : [];
           if (!_have && _cur.length < MAX_EXTRAS && !extraWhy(task.path, _tp)) {
             ctx.extras = _cur.concat([{ path: _tp }]);
-            await tsave({ ctx: JSON.stringify(ctx) });
+            await tsave({ ctx: JSON.stringify(ctx), step: "read", lease_until: null });
             await audit(env, "code-task.suite-scope", task.id + ": " + _tp + " added as a companion because its suite pins the behaviour the goal changes");
             return { ok: true, step: "read" };
           }
@@ -2452,8 +2463,8 @@ async function stepTask(env, task) {
         if (!bf.ok) return bf.gone ? await reread(bf.error) : await fail(bf.error, false);
         const base = bf.base, win = bf.win;
         const multi = Array.isArray(ctx.x) && ctx.x.length > 0; // MULTI-FILE-CODE-TASKS-1
-        const msgs = multi ? promptForMulti(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, windowCut(base, win), ctx.x, ctx.lastError || null, multiPrevText(ctx, task.path))
-          : promptForPatch(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, ctx.lastError || null, ctx.edits || null, windowCut(base, win));
+        const msgs = multi ? promptForMulti(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, windowCut(base, win), ctx.x, ctx.lastError || ctx.suite_rebase_reason || null, multiPrevText(ctx, task.path))
+          : promptForPatch(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, ctx.lastError || ctx.suite_rebase_reason || null, ctx.edits || null, windowCut(base, win));
         if (multi && msgs[1].content.length > MULTI_RUNG1_MAX_CHARS && model === l[0] && l.length > 1) model = l[1];
         attemptModel = model;
         const reply = await ai(env, model, msgs);
@@ -2537,7 +2548,7 @@ async function stepTask(env, task) {
         return { ok: true, step: "verify", model: model };
       }
       attemptModel = model;
-      const txt = await ai(env, model, promptFor(task, ctx.base || "", ctx.lastError || null));
+      const txt = await ai(env, model, promptFor(task, ctx.base || "", ctx.lastError || ctx.suite_rebase_reason || null));
       let file = extractFile(txt);
       // NEWLINE-PRESERVE-1: a fenced block drops the final newline; keep the base file's convention (the smoke PR #297 lost it).
       if (file != null && ctx.base && ctx.base.charAt(ctx.base.length - 1) === "\n" && file.length && file.charAt(file.length - 1) !== "\n") file += "\n";
