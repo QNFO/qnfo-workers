@@ -38,15 +38,22 @@ for (const file of [
 }
 
 const versionBefore = one("SELECT version FROM fleet_tasks WHERE id = 'management-personas'").version;
+// Production's ops_config has a note column (migrations seed it); the shared fixture of management-personas.test.mjs is slimmer.
+db.exec("ALTER TABLE ops_config ADD COLUMN note TEXT");
+// A stand-in for what migration 10 (#5518, applied first, its own backup table) left in the workflow: rolling back 11 must keep it.
+run("UPDATE fleet_tasks SET definition = json_set(definition, '$.applied_before_11', 'kept') WHERE id = 'management-personas'");
 db.exec(migrationSql);
 const versionAfter = one("SELECT version FROM fleet_tasks WHERE id = 'management-personas'").version;
 db.exec(migrationSql);
 ok(Boolean(rollback), "the migration declares a rollback");
 ok(versionAfter === versionBefore + 1 && one("SELECT version FROM fleet_tasks WHERE id = 'management-personas'").version === versionAfter, "the request step is changed once");
+ok(one("SELECT value FROM ops_config WHERE key = 'personal_metric_doers'").value === "off", "the switch is seeded off");
+ok(!/bak_20261101_mp10_workflow/.test(migrationSql) && /bak_20261101_mp11_workflow/.test(rollback), "the rollback uses this migration's own backup table, not the one migration 10 took before its change");
 
 const steps = () => JSON.parse(one("SELECT definition FROM fleet_tasks WHERE id = 'management-personas'").definition).steps;
 const doerRequest = steps().find((step) => step.name === "dg-request");
 ok(doerRequest.sql.includes("f.reason LIKE 'worst off-target metric %'"), "PERSONAL requests are limited to off-target metric focus issues");
+ok(doerRequest.sql.includes("personal_metric_doers"), "the request step reads the switch");
 ok(doerRequest.sql.includes("ORDER BY f.rank, CASE a.priority"), "doer requests retain worst-first program focus ordering");
 ok(doerRequest.sql.includes("Aggregate metric only: "), "PERSONAL requests use their aggregate focus reason");
 ok(!doerRequest.sql.includes("AND f.program_code <> 'QNFO.PERSONAL' AND f.entered_at"), "PERSONAL is no longer excluded from eligible doer requests");
@@ -85,6 +92,10 @@ ok(!focus[2].reason.includes("off-target"), "the in-target PERSONAL metric is no
 
 run("INSERT INTO program_focus (program_code, issue_id, rank, tier, reason, has_doer, entered_at) SELECT program_code, issue_id, rank, tier, reason, has_doer, strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-4 hours') FROM v_program_focus_plan WHERE program_code = 'QNFO.PERSONAL'");
 db.prepare(doerRequest.sql).all();
+const offRequests = q("SELECT instance FROM cf_agent_requests WHERE instance LIKE 'doer-%'");
+ok(offRequests.length === 0, "with the switch off, the default, no PERSONAL doer request is filed", offRequests);
+run("UPDATE ops_config SET value = 'on' WHERE key = 'personal_metric_doers'");
+db.prepare(doerRequest.sql).all();
 const requests = q("SELECT instance, requester, prompt FROM cf_agent_requests WHERE instance LIKE 'doer-%' ORDER BY id");
 ok(requests.map((row) => Number(row.instance.split("-")[1])).join() === "901,902", "only off-target PERSONAL focus metrics receive doer requests, in worst-first order", requests);
 ok(requests.every((row) => row.requester === "program-manager:QNFO.PERSONAL"), "requests are filed by the PERSONAL manager", requests);
@@ -92,10 +103,19 @@ ok(requests.every((row) => row.prompt.includes("Aggregate metric only: worst off
 ok(requests.every((row) => !row.prompt.includes("private issue body") && !row.prompt.includes("METRIC-TRIGGER-")), "PERSONAL issue titles and bodies are not sent in requests", requests);
 ok(one("SELECT COUNT(*) AS count FROM cf_agent_requests WHERE instance LIKE 'doer-903-%'").count === 0, "an in-target PERSONAL metric does not receive a doer request");
 
+run("DELETE FROM cf_agent_requests WHERE instance LIKE 'doer-%'");
+run("UPDATE ops_config SET value = 'off' WHERE key = 'personal_metric_doers'");
+db.prepare(doerRequest.sql).all();
+ok(q("SELECT id FROM cf_agent_requests WHERE instance LIKE 'doer-%'").length === 0, "switching it off again stops the PERSONAL requests without a deploy");
+run("DELETE FROM ops_config WHERE key = 'personal_metric_doers'");
+db.prepare(doerRequest.sql).all();
+ok(q("SELECT id FROM cf_agent_requests WHERE instance LIKE 'doer-%'").length === 0, "an absent switch reads as off");
+
 db.exec(rollback);
 const restored = steps().find((step) => step.name === "dg-request").sql;
 ok(restored.includes("f.program_code <> 'QNFO.PERSONAL'"), "rollback restores the prior PERSONAL exclusion");
 ok(!restored.includes("Aggregate metric only: "), "rollback removes PERSONAL-specific prompt handling");
+ok(one("SELECT json_extract(definition, '$.applied_before_11') AS v FROM fleet_tasks WHERE id = 'management-personas'").v === "kept", "rolling back 11 keeps what migration 10 had already changed in the workflow");
 console.log("management-personas-11-personal: " + pass + " passed, " + fail + " failed");
 db.close();
 process.exit(fail ? 1 : 0);

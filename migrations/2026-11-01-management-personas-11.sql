@@ -5,7 +5,12 @@
 -- ranks these metrics worst-first; the request step excluded PERSONAL entirely.
 -- Personal requests contain only the aggregate focus reason, not the issue title/body,
 -- and remain barred from personal-* code targets and research stores.
--- Prediction: each eligible PERSONAL off-target focus metric without a doer is requested
+-- SWITCHED OFF BY DEFAULT: the step reads ops_config personal_metric_doers (seeded 'off'; absent reads as off), so applying this changes nothing until the switch is 'on'.
+-- Why: Copilot's review of the pull request (High severity) found that the aggregate-only bound lives in the prompt only. qnfo-agents runs every cf_agent_requests row with the
+-- generic loop scope, whose fleet_sql tool can read the referenced issue's title and description, and the instance name carries the issue id. Turn the switch on only after the
+-- consumer authorises by requester: a request whose requester is program-manager:QNFO.PERSONAL must get no fleet_sql, ops_call or Code Mode read of agent_issues text, direct or
+-- through the sandbox (issue 5455). Stop it again without a deploy: INSERT OR REPLACE INTO ops_config (key, value) VALUES ('personal_metric_doers', 'off');
+-- Prediction (once the switch is on): each eligible PERSONAL off-target focus metric without a doer is requested
 -- in breach-rank order, within the existing age and per-tick caps.
 -- Rollback: UPDATE fleet_tasks SET definition = (SELECT definition FROM bak_20261101_mp11_workflow WHERE id = 'management-personas'), version = version + 1 WHERE id = 'management-personas'
 -- APPLY-BY: ci
@@ -39,7 +44,7 @@ SET definition = json_set(
           'CASE WHEN f.program_code = ''QNFO.PERSONAL'' THEN ''Aggregate metric only: '' || f.reason || ''. Do not access personal records or research stores.'' ELSE a.title || char(10) || substr(COALESCE(a.description, ''''), 1, 1500) END'
         ),
         'AND f.program_code <> ''QNFO.PERSONAL'' AND f.entered_at',
-        'AND (f.program_code <> ''QNFO.PERSONAL'' OR f.reason LIKE ''worst off-target metric %'') AND f.entered_at'
+        'AND (f.program_code <> ''QNFO.PERSONAL'' OR (f.reason LIKE ''worst off-target metric %'' AND COALESCE((SELECT value FROM ops_config WHERE key = ''personal_metric_doers''), ''off'') = ''on'')) AND f.entered_at'
       )
     ),
     version = version + 1,
@@ -53,14 +58,17 @@ WHERE id = 'management-personas'
         'AND f.program_code <> ''QNFO.PERSONAL'' AND f.entered_at') > 0
   );
 
+INSERT OR IGNORE INTO ops_config (key, value, note) VALUES
+  ('personal_metric_doers', 'off', 'PERSONAL-METRIC-DOERS-1: on lets the management-personas dg-request step file doer requests for QNFO.PERSONAL off-target metric focus issues. Keep off until qnfo-agents authorises by requester (no agent_issues text for program-manager:QNFO.PERSONAL requests); see issue 5455.');
+
 INSERT OR IGNORE INTO capability_ledger
   (capability, provenance, prerequisites, reliability, acquired_at, evidence)
 VALUES
   ('personal-program-assigns-worst-first-metric-doers', 'migrations/2026-11-01-management-personas-11.sql',
    'management-personas hourly workflow; migration 9 focus ranking; aggregate metric-trigger issues',
-   'off-target PERSONAL metric focus issues without a doer are requested in focus-rank order; personal issue bodies are not sent',
+   'off-target PERSONAL metric focus issues without a doer are requested in focus-rank order once ops_config personal_metric_doers is on (seeded off); personal issue bodies are not sent',
    '2026-11-01',
-   'the dg-request step selects PERSONAL only for worst off-target metric focus reasons and keeps existing age, cap, target, and opt-out rules');
+   'the dg-request step selects PERSONAL only for worst off-target metric focus reasons, only while the switch is on, and keeps existing age, cap, target, and opt-out rules');
 
 INSERT INTO decision_log
   (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
@@ -69,8 +77,8 @@ SELECT
   'PERSONAL off-target metrics should use the existing worst-first focus order and doer workflow without exposing personal issue text',
   'request doers for PERSONAL off-target metric focus issues in focus-rank order using aggregate reasons only',
   'migration 9 ranked PERSONAL metric-trigger issues, but the management-personas dg-request step excluded QNFO.PERSONAL',
-  'pending hourly workflow and metric readback after migration application',
-  'management-personas dg-request step for PERSONAL focus issues; no personal records, personal-* targets, or research stores',
+  'switched off by default (ops_config personal_metric_doers = off); enabling waits for requester-aware aggregate-only authorisation in qnfo-agents',
+  'management-personas dg-request step for PERSONAL focus issues, inert while the switch is off; no personal records, personal-* targets, or research stores',
   'Rollback line of migrations/2026-11-01-management-personas-11.sql',
   'PERSONAL worst-first metric doer dispatch with aggregate-only context',
   'PERSONAL off-target metric focus issues without a doer receive requests in descending normalized breach order; existing caps and privacy boundaries hold',
