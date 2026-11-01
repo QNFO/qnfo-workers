@@ -188,4 +188,41 @@ with tempfile.TemporaryDirectory() as t6:
     r = guard(t6); ok(r.returncode == 1 and "compat-date-stale" in r.stdout, "moving compatibility_date to an old date fails: " + r.stdout)
     (q / "c/wrangler.toml").write_text('name="c"\ncompatibility_date="2026-10-01"\ncompatibility_flags=["nodejs_compat"]\n' + obs + "# edit\n")
     r = guard(t6); ok(r.returncode == 0, "an untouched compatibility_date is not judged: " + r.stdout)
+# NET-ZERO-WORKER-BUDGET-1: additions at/over the 30-worker hard cap need a same-change retirement.
+with tempfile.TemporaryDirectory() as t7:
+    q = pathlib.Path(t7); sh(t7, "git", "init", "-q"); sh(t7, "git", "config", "user.email", "a@b.c"); sh(t7, "git", "config", "user.name", "t")
+    obs = "[observability]\nenabled=true\n[observability.traces]\nenabled=true\n"
+    for i in range(30):
+        d = q / ("w%02d" % i); d.mkdir()
+        (d / "worker.js").write_text("export default {};\n")
+        (d / "wrangler.toml").write_text('name="w%02d"\n' % i + obs)
+    sh(t7, "git", "add", "-A"); sh(t7, "git", "commit", "-qm", "base at worker cap")
+    d = q / "new"; d.mkdir()
+    (d / "worker.js").write_text('export default { fetch() { return new Response("ok"); } };\n')
+    (d / "wrangler.toml").write_text('name="new"\n' + obs)
+    sh(t7, "git", "add", "-A")
+    r = guard(t7)
+    ok(r.returncode == 1 and "worker-budget-net-zero" in r.stdout, "a new Worker at the cap needs a same-change retirement: " + r.stdout)
+    (q / "w00/RETIRED").write_text("retired with live-consumer evidence\n")
+    sh(t7, "git", "add", "-A")
+    r = guard(t7)
+    ok(r.returncode == 0, "a new Worker with a same-change retirement marker passes: " + r.stdout)
+with tempfile.TemporaryDirectory() as t8:
+    q = pathlib.Path(t8); sh(t8, "git", "init", "-q"); sh(t8, "git", "config", "user.email", "a@b.c"); sh(t8, "git", "config", "user.name", "t")
+    for i in range(29):
+        d = q / ("w%02d" % i); d.mkdir()
+        (d / "worker.js").write_text("export default {};\n")
+        (d / "wrangler.toml").write_text('name="w%02d"\n' % i)
+    sh(t8, "git", "add", "-A"); sh(t8, "git", "commit", "-qm", "base below worker cap")
+    for name in ("w29", "w30"):
+        d = q / name; d.mkdir()
+        (d / "worker.js").write_text("export default {};\n")
+        (d / "wrangler.toml").write_text('name="%s"\n' % name + obs)
+    sh(t8, "git", "add", "-A")
+    r = guard(t8)
+    ok(r.returncode == 1 and "worker-budget-net-zero" in r.stdout, "a change that crosses the cap needs only the excess retirement: " + r.stdout)
+    (q / "w00/FOLDED").write_text("folded with live-consumer evidence\n")
+    sh(t8, "git", "add", "-A")
+    r = guard(t8)
+    ok(r.returncode == 0, "one same-change retirement permits additions up to the cap: " + r.stdout)
 print("workers_standards_guard: %s" %("FAILED %d" % fails if fails else "all passed")); sys.exit(1 if fails else 0)
