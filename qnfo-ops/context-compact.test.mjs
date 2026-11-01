@@ -279,8 +279,9 @@ try {
     let res = null, err = null;
     try { res = await wf.run({ payload: { jobId: "job-" + label } }, step); } catch (e) { err = e; } finally { console.log = say; globalThis.fetch = realFetch; }
     const bail = audit.prepare("SELECT meta FROM cloud_ops_events WHERE kind = 'ops_tool_budget_bail'").all().map((r) => JSON.parse(r.meta));
+    const budget = audit.prepare("SELECT meta FROM cloud_ops_events WHERE kind = 'ops_job_tool_budget_guard'").all().map((r) => JSON.parse(r.meta));
     let logged = null; try { logged = audit.prepare("SELECT prompt_tokens, ok FROM ops_ai_log WHERE job_id = ?").get("job-" + label); } catch (e) { logged = null; }
-    return { res, err, seen, bail, logged, job: audit.prepare("SELECT status, response FROM ops_jobs").get() };
+    return { res, err, seen, bail, budget, logged, job: audit.prepare("SELECT status, response FROM ops_jobs").get() };
   }
 
   const r1 = await runJob("cap", { perRound: 25000 });
@@ -289,14 +290,14 @@ try {
   ok(r1.seen[0].tools && r1.seen[0].tools.every((t, i) => t.function.description === leanP[i].function.description && t.function.parameters && JSON.stringify(t.function.parameters) === JSON.stringify(fullP[i].function.parameters)), "the tools the job sends are the lean descriptions over the unchanged parameters");
   ok(r1.seen[27] && r1.seen[27].messages.some((m) => m.role === "system" && /TOOL BUDGET EXHAUSTED/.test(m.content)), "the final round carries the budget-exhausted directive");
   ok(r1.logged && r1.logged.prompt_tokens === 700000 && r1.logged.prompt_tokens < 800000 && r1.logged.ok === 1, "ops_ai_log records 700000 prompt tokens and ok = 1", r1.logged);
-  ok(r1.bail.length === 1 && r1.bail[0].reason === "prompt-cap" && r1.bail[0].iter === 27 && r1.bail[0].maxIters === 40, "one ops_tool_budget_bail event says reason prompt-cap at turn 27", r1.bail);
+  ok(r1.bail.length === 0 && r1.budget.length === 1 && r1.budget[0].reason === "prompt-cap" && r1.budget[0].iter === 27 && r1.budget[0].maxIters === 40, "a prompt-cap final round is a durable-job guard event, not an interactive bail", { bail: r1.bail, budget: r1.budget });
 
   const r2 = await runJob("env", { perRound: 25000, env: { OPS_JOB_PROMPT_CAP: "100000" } });
   ok(r2.seen.length === 4 && !r2.seen[3].tools && r2.seen[2].tools && r2.job.status === "succeeded", "OPS_JOB_PROMPT_CAP = 100000 ends the job on its 4th call", r2.seen.length);
   const r3 = await runJob("small", { perRound: 1000 });
-  ok(r3.seen.length === 41 && !r3.seen[40].tools && r3.seen[39].tools && r3.job.status === "succeeded" && r3.bail.length === 1 && r3.bail[0].reason === undefined && r3.logged && r3.logged.prompt_tokens === 41000, "a small job is untouched: 41 calls, the 40-turn wrap-up as before, no prompt-cap reason", { calls: r3.seen.length, bail: r3.bail, logged: r3.logged });
+  ok(r3.seen.length === 41 && !r3.seen[40].tools && r3.seen[39].tools && r3.job.status === "succeeded" && r3.bail.length === 0 && r3.budget.length === 1 && r3.budget[0].reason === undefined && r3.logged && r3.logged.prompt_tokens === 41000, "a small job is untouched: 41 calls, with the durable-job turn cap recorded separately", { calls: r3.seen.length, bail: r3.bail, budget: r3.budget, logged: r3.logged });
   const r4 = await runJob("nousage", { env: { OPS_JOB_PROMPT_CAP: "100000" } });
-  ok(r4.seen.length > 2 && r4.seen.length < 41 && !r4.seen[r4.seen.length - 1].tools && r4.seen[r4.seen.length - 2].tools && r4.job.status === "succeeded" && r4.bail.length === 1 && r4.bail[0].reason === "prompt-cap", "an upstream that reports no usage does not switch the ceiling off: the loop counts its own estimate and stops", { calls: r4.seen.length, bail: r4.bail });
+  ok(r4.seen.length > 2 && r4.seen.length < 41 && !r4.seen[r4.seen.length - 1].tools && r4.seen[r4.seen.length - 2].tools && r4.job.status === "succeeded" && r4.bail.length === 0 && r4.budget.length === 1 && r4.budget[0].reason === "prompt-cap", "an upstream that reports no usage does not switch the ceiling off: its durable-job guard event stays outside the interactive metric", { calls: r4.seen.length, bail: r4.bail, budget: r4.budget });
 } catch (e) {
   ok(false, "the COMPACT-3 section ran to the end", String(e && e.stack || e).slice(0, 600));
 }
