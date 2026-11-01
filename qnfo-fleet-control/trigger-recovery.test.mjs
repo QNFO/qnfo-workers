@@ -10,10 +10,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const cut = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
 const code = cut("// ---- ACT-BRIDGE-1:BEGIN", "// ---- ACT-BRIDGE-1:END") +
+  cut("async function closeBlockedByContract(env, issueId, database) {", "async function improvementLoopTick(env)") +
   cut("async function evaluateMetricTriggers(env)", "__name(evaluateMetricTriggers") +
   cut("async function metricTriggerValue(db, t)", "__name(metricTriggerValue") +
   (src.indexOf("function triggerNum(") >= 0 ? "\n" + src.slice(src.indexOf("function triggerNum("), src.indexOf("\n}\n", src.indexOf("function triggerNum(")) + 3) : "");
-const sb = { console, Date, JSON, Math, Number, String, isFinite };
+const errors = [];
+const sb = { console: { error: (message) => errors.push(String(message)) }, Date, JSON, Math, Number, String, isFinite };
 vm.createContext(sb);
 vm.runInContext(code + "\n__x = { evaluateMetricTriggers, metricTriggerValue, triggerRecoveryDue, TRIGGER_RECOVERY_MIN };", sb);
 const { evaluateMetricTriggers, metricTriggerValue, triggerRecoveryDue, TRIGGER_RECOVERY_MIN } = sb.__x;
@@ -25,8 +27,19 @@ CREATE TABLE analytics_dash_records (metric TEXT, value TEXT); CREATE TABLE anal
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER, close_channel TEXT);
 CREATE VIEW v_issue_age_ladder AS SELECT id, title, CASE WHEN status = 'open' THEN 1 ELSE 0 END AS breach FROM agent_issues;
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT);
+CREATE TABLE remediation_contracts (issue_id INTEGER, status TEXT, last_verdict TEXT);
 CREATE TABLE analytics_action_log (id INTEGER PRIMARY KEY AUTOINCREMENT, trigger_id INTEGER, fired_at TEXT, metric_value REAL, action TEXT, queue_target TEXT, status TEXT, notes TEXT);
 CREATE TABLE alerts (source TEXT, level TEXT, message TEXT, digested TEXT);
+CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues
+WHEN NEW.status IN ('closed','resolved') AND OLD.status NOT IN ('closed','resolved')
+BEGIN
+  SELECT RAISE(ABORT,'close-without-evidence')
+    WHERE NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '');
+  SELECT RAISE(ABORT,'close-while-contract-fails')
+    WHERE EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id
+      AND c.status IN ('active','holding')
+      AND COALESCE(c.last_verdict,'') IN ('fail','vacuous-probe-result','probe-error','probe-not-machine-executable','probe-same-account-host'));
+END;
 INSERT INTO analytics_metric_triggers VALUES (7, 'ask_error_rate_7d', 'Ask errors high', 'meta', 'gt', 0.1, '7', 'Pillar reach. Fix ask errors.', 'qnfo-ai-search', 'agent_issues', 24, 1);
 INSERT INTO analytics_metric_triggers VALUES (8, 'digest_x', 'Digest only', 'meta', 'gt', 1, 'low', 'note', 'x', 'alerts', 24, 1);
 INSERT INTO analytics_metric_triggers VALUES (9901, 'issues_over_24h_no_doer', 'No-doer issues', 'registry', 'gt', 0, 'critical', 'Pillar autonomy.', 'qnfo-fleet-control', 'agent_issues', 1, 1);
@@ -39,6 +52,7 @@ let fails = 0;
 const check = (c, m, d) => { console.log((c ? "PASS " : "FAIL ") + m + (c || d === undefined ? "" : " :: " + JSON.stringify(d))); if (!c) fails++; };
 const issues = () => sq.prepare("SELECT id, status FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-7-%'").all();
 const log = (st) => sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=7 AND status=?").get(st).n;
+const actionLog = (action) => sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=7 AND action=?").get(action).n;
 const ageStreak = (min) => sq.prepare("UPDATE analytics_action_log SET fired_at = datetime('now', ?) WHERE trigger_id=7 AND status='recovering'").run("-" + min + " minutes");
 
 check(triggerRecoveryDue("2026-10-02 08:00:00", Date.parse("2026-10-02T09:00:00Z"), 60) === true, "60 minutes after the streak opened, recovery is due");
@@ -64,13 +78,21 @@ ageStreak(120); await evaluateMetricTriggers(env);
 check(issues()[0].status === "open", "after a relapse the old streak no longer counts (would otherwise close at once)");
 check(log("recovering") === 2, "recovery after a relapse opens a new streak");
 sq.prepare("UPDATE analytics_action_log SET fired_at = datetime('now','-61 minutes') WHERE trigger_id=7 AND status='recovering' AND id = (SELECT MAX(id) FROM analytics_action_log WHERE trigger_id=7 AND status='recovering')").run();
-const out = await evaluateMetricTriggers(env);
-const tri = sq.prepare("SELECT * FROM issue_triage WHERE issue_id=?").get(issues()[0].id);
+const issueId = issues()[0].id;
+sq.prepare("INSERT INTO remediation_contracts (issue_id, status, last_verdict) VALUES (?, 'active', 'fail')").run(issueId);
+const deferred = await evaluateMetricTriggers(env);
+check(issues()[0].status === "open" && deferred.close_deferred === 1 && errors.length === 0, "a failing active contract defers recovery without attempting a guarded close", { issue: issues()[0], deferred, errors });
+check(log("recovered") === 0 && log("recovering") === 3 && actionLog("recovery close deferred") === 1, "the deferred close is recorded once without ending the recovery streak");
+await evaluateMetricTriggers(env);
+check(actionLog("recovery close deferred") === 1 && errors.length === 0, "repeated ticks do not duplicate the deferral or emit a constraint error");
+sq.prepare("UPDATE remediation_contracts SET last_verdict='pass' WHERE issue_id=?").run(issueId);
+const recovered = await evaluateMetricTriggers(env);
+const tri = sq.prepare("SELECT * FROM issue_triage WHERE issue_id=?").get(issueId);
 check(issues()[0].status === "closed", "61 minutes of recovery closes the issue", issues());
 check(tri && tri.triage_state === "closed" && /TRIGGER-RECOVERY-1 .*ask_error_rate_7d=0.05 no longer gt 0.1/.test(tri.close_evidence), "it closes with close_evidence naming the value and threshold", tri);
-check(log("recovered") === 1 && out.recovered && out.recovered[0].id === 7, "the close is logged and reported");
+check(log("recovered") === 1 && recovered.recovered && recovered.recovered[0].id === 7, "the close is logged and reported after the contract passes");
 await evaluateMetricTriggers(env);
-check(log("recovering") === 2 && log("recovered") === 1, "with no open issue, a recovered metric writes nothing more");
+check(log("recovering") === 3 && log("recovered") === 1 && errors.length === 0, "with no open issue, a recovered metric writes nothing more");
 check(sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=8").get().n === 0, "a digest-only trigger never opens recovery streaks");
 
 sq.prepare("INSERT INTO agent_issues (title, source, category, priority, status, created_at, updated_at) VALUES ('METRIC-TRIGGER-9901-ISSUES-OVER-24H-NO-DOER: open alert', 'qnfo-fleet-control', 'reliability', 'critical', 'open', 1, 1)").run();

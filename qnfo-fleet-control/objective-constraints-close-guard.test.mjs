@@ -29,7 +29,7 @@ const BEGIN = "// ---- OBJECTIVE-CONSTRAINTS-1:BEGIN", END = "// ---- OBJECTIVE-
 const a = src.indexOf(BEGIN), b = src.indexOf(END);
 const grab = (start, end) => { const i = src.indexOf(start), j = src.indexOf(end, i + 1); return i >= 0 && j > i ? src.slice(i, j) : ""; };
 const charter = grab("async function charterRows(env, sql) {", "async function charterFacts(env) {");
-const guard = grab("async function closeBlockedByContract(env, issueId) {", "async function improvementLoopTick(env) {");
+const guard = grab("async function closeBlockedByContract(env, issueId, database) {", "async function improvementLoopTick(env) {");
 if (a < 0 || b < a || !charter || !/async function closeBlockedByContract/.test(src)) { console.error("FAIL blocks missing in worker.js"); console.log("1 failed"); process.exit(1); }
 const HAS_GUARD = /await closeBlockedByContract\(env, openByTitle\[t\]\)/.test(src);
 
