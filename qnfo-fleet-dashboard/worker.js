@@ -12746,6 +12746,17 @@ async function cmdAgentPoll(env, id) {
   await env.AUDIT.prepare("UPDATE cmd_log SET status=?1, answer=?2, error=?3, done_ms=?4 WHERE id=?5 AND status='running'").bind(out.status, answer.slice(0, 16e3), out.error, Date.now(), id).run();
   return out;
 }
+async function cmdCodeSessionFetch(env, path, body) {
+  const svc = env && env.SVC_QNFO_AGENTS;
+  if (!svc || typeof svc.fetch !== "function") return { ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" };
+  try {
+    const r = await svc.fetch("https://agents.qnfo.org" + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(15e3) });
+    const text = await r.text();
+    let j = null;
+    try { j = JSON.parse(text); } catch (e) {}
+    return j ? Object.assign({ http: r.status }, j) : { ok: false, http: r.status, error: "qnfo-agents HTTP " + r.status + ": " + conClip(text, 300) };
+  } catch (e) { return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }; }
+}
 // CMD-VOICE-1: speech to text for the command line. The body is the raw recording (webm, ogg, mp4, wav or mp3, at most 8 MB);
 // the answer is {ok, text, model, ms}. Owner session or loop token only (it spends Workers AI neurons). The first model that
 // answers wins, so a retired model id costs one fallback, not the feature. No vendor SDK: the Workers AI binding only.
@@ -12789,6 +12800,17 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   if (path.indexOf("/api/cmd") !== 0) return null;
   const holder = !!(owner.authed || owner.loop);
   await cmdEnsure(env);
+  const streamMatch = /^\/api\/cmd\/session\/(run_[a-z0-9_]{8,60})\/events$/.exec(path);
+  if (request.method === "GET" && streamMatch) {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The code session needs your email code." }, 401);
+    const svc = env.SVC_QNFO_AGENTS;
+    if (!svc || typeof svc.fetch !== "function") return ownerJson({ ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" }, 503);
+    const after = Math.max(0, Number(new URL(request.url).searchParams.get("after")) || Number(request.headers.get("last-event-id")) || 0);
+    try {
+      const r = await svc.fetch("https://agents.qnfo.org/code-sessions/" + streamMatch[1] + "/events?after=" + after, { method: "GET" });
+      return new Response(r.body, { status: r.status, headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
+    } catch (e) { return ownerJson({ ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }, 502); }
+  }
   if (request.method === "GET" && path.indexOf("/api/cmd/job/") === 0) {
     const id = path.slice("/api/cmd/job/".length);
     if (!/^cmd-[0-9a-f]{20}$/.test(id)) return ownerJson({ error: "bad id" }, 400);
@@ -12993,10 +13015,20 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     }
     return ownerJson({ ok: true, kind: "answer", text: di.text, actions: di.actions || [], holder });
   }
-  // CMD-AGENT-1 (1.77.0, owner 2026-10-29: the command line must work like Claude Code, not answer from a no-tools prompt): for the signed-in
-  // owner a plain-English line is a task for the durable ops agent, which runs the tool loop server-side (code, SQL, GitHub, workspace,
-  // fleet probes) and answers with what the tools returned. If qnfo-ops cannot start the run, the older grounded answer below still runs.
+  // RM-CODE-SESSION-1: only after deterministic commands and fleet reads have declined the request does the owner's natural-language
+  // turn enter the resumable CodeSession stream. The session id is supplied by the existing chat UI/CLI on later turns.
   if (holder) {
+    const existingSession = /^run_[a-z0-9_]{8,60}$/.test(String(b.session_id || "")) ? String(b.session_id) : "";
+    const sessionPath = existingSession ? "/code-sessions/" + existingSession + "/turns" : "/code-sessions";
+    const session = await cmdCodeSessionFetch(env, sessionPath, { text: text });
+    if (session.ok && session.session_id) {
+      try {
+        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, model) VALUES (?1, ?2, ?3, 'agent-stream', 'running', 1, 'deepseek-v4-flash-wa')").bind("cmd-" + cmdRandHex(10), text, from || null).run();
+      } catch (e) {}
+      return ownerJson({ ok: true, kind: "stream", session_id: session.session_id, turn: session.turn, holder }, 202);
+    }
+    console.error(JSON.stringify({ worker: NAME, where: "cmd-code-session-start", http: session.http || 0, error: String(session.error || "").slice(0, 200) }));
+    // Keep the existing qnfo-ops run as an independent fallback if CodeSession is unavailable.
     const aid = "cmd-" + cmdRandHex(10);
     const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", text: text, sid: "console-" + new Date().toISOString().slice(0, 10), run_id: aid, max_iters: 16 }) });
     if (st.json && st.json.ok) {
