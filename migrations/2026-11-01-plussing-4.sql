@@ -110,4 +110,4 @@ SELECT 'management-personas (PLUSSING-4)',
   'pluses are kept only when the same outcome improves and no guard worsens; otherwise the manager initiates a bounded revert',
   'plus_shipped_7d reaches at least 1 for every active plusable product and plus_kept_share_30d reaches at least 0.5 within 30 days',
   'research and reach products receive measured, reversible improvements',
-  'management-personas, plus_outcome_checks, metric_registry, analytics_metric_triggers, ROADMAP-ORIGINATE-1');
+  'management-personas, plus_outcome_checks, metric_registry, analytics_metric_triggers, ROADMAP-ORIGINATE-1';
