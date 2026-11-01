@@ -62,7 +62,7 @@ function mkEnv(opts) {
       async first() { return { n: 0, last_ok: null, fails: 0 }; },
       async run() {
         if (/INSERT INTO analytics_dash_meta/.test(sql)) o.dash[st.a[0]] = st.a[1];
-        if (/INSERT INTO cron_fire_log/.test(sql)) o.fires.push({ expr: st.a[2], outcome: st.a[5] });
+        if (/INSERT INTO cron_fire_log/.test(sql)) o.fires.push({ expr: st.a[2], outcome: st.a[5], note: st.a[7] });
         return { success: true };
       }
     };
@@ -165,7 +165,7 @@ test("scheduled(): at 07:00 only the hourly job is due; at 06:00 the daily work 
   assert.equal(posts.length, 0, "07:00 Monday: nothing submitted");
   assert.equal(hourly.pdf.length, 0);
   assert.equal(hourly.batches, 0);
-  assert.deepEqual(hourly.fires.map((f) => f.expr), ["0 * * * *"], "only the hourly job ran");
+  assert.deepEqual(hourly.fires.map((f) => f.outcome), ["running", "ok"], "the hourly invocation heartbeat precedes its completed job record");
 
   const six = mkEnv({ deltaRows: [] });
   posts = mockFetch();
@@ -175,6 +175,30 @@ test("scheduled(): at 07:00 only the hourly job is due; at 06:00 the daily work 
   assert.equal(six.pdf.length, 5, "the math sample ran once, from the daily job only");
   assert.equal(six.fires.filter((f) => f.outcome === "ok").length, 2, "both jobs were due and both ran ok");
   assert.equal(six.logs.length, 3, "one 7-day window, one qnfo.org core, one Monday full pass; the hourly job added no row");
+});
+
+test("scheduled(): the heartbeat is written before a blocked reader-report sweep", async () => {
+  const o = mkEnv({ deltaRows: [] });
+  let markEntered, unblock;
+  const entered = new Promise((resolve) => { markEntered = resolve; });
+  const blocked = new Promise((resolve) => { unblock = resolve; });
+  const prepare = o.env.AUDIT.prepare;
+  o.env.AUDIT.prepare = (sql) => {
+    const st = prepare(sql);
+    if (/SELECT id FROM reader_reports/.test(sql)) {
+      const all = st.all;
+      st.all = async () => { markEntered(); await blocked; return all(); };
+    }
+    return st;
+  };
+  await atTime("2026-10-26T07:00:00Z", async () => {
+    const run = gw.scheduled({ cron: GATEWAY_HOURLY_CRON, scheduledTime: new RealDate("2026-10-26T07:00:00Z").getTime() }, o.env, cx);
+    await entered;
+    assert.deepEqual(o.fires.map((f) => f.outcome), ["running"], "the cron entry is recorded while reader-report work is still blocked");
+    assert.equal(o.fires[0].note, "scheduled invocation started");
+    unblock();
+    await run;
+  });
 });
 
 test("collectPaperUrls: a delta carries no base pages and uses minutes, not days", async () => {
