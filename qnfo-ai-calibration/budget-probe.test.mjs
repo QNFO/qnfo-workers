@@ -97,6 +97,7 @@ function mkEnv(o) {
         router.push({ url: String(url), body });
         if (/\/health$/.test(String(url))) return new Response(JSON.stringify({ status: "ok", version: "t" }), { status: 200 });
         if (/\/v1\/models$/.test(String(url))) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        if (o.router5xx && body.max_tokens === 16) return new Response(JSON.stringify({ error: "router timeout" }), { status: o.router5xx });
         const reply = body.max_tokens === 256 ? (scripted[body.model] || good) : { choices: [{ message: { content: "OK" }, finish_reason: "stop" }] };
         // o.downgrade: the spend governor answers the 16-token ping with another model (the router did not honour no_downgrade). o.honour models
         // qnfo-ai 5.37.0: a request with no_downgrade: true and at most 512 output tokens from this caller is never swapped.
@@ -366,11 +367,25 @@ const routerBudgets = (t) => t.router.filter((c) => c.body && c.body.max_tokens 
     const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
     ok(/binding = "QNFO_AI"[\s\S]{0,400}props = \{ caller = "qnfo-ai-calibration" \}/.test(toml), "G: the QNFO_AI binding identifies the caller qnfo-ai-calibration by props");
   }
+  // Case H: a transient router 5xx stays visible, but direct confirmation determines model executor health.
+  {
+    const t = mkEnv({ router5xx: 504, prevCf: { "gpt-oss-120b": 1 } });
+    const j = await run(t);
+    const model = rowsOf(j, "model", "gpt-oss-120b");
+    const route = rowsOf(j, "model-route", "gpt-oss-120b");
+    const budget = rowsOf(j, "model-budget", "gpt-oss-120b");
+    ok(model.length === 1 && model[0].status === "pass" && /router http=504/.test(model[0].detail) && /direct ok/.test(model[0].detail), "H: a passing direct probe keeps the model roster healthy while retaining the router 504 detail", model);
+    ok(route.length === 1 && route[0].status === "fail" && /http=504/.test(route[0].detail), "H: the explicit model-route failure is retained independently", route);
+    ok(budget.length === 1 && budget[0].status === "pass" && directCalls(t, GPT).length === 1, "H: direct confirmation is recorded once as model-budget", budget);
+    ok(sweepWrite(t, "gpt-oss-120b").length === 1 && sweepWrite(t, "gpt-oss-120b")[0].status === "ok", "H: direct success clears a previous model failure");
+    ok(rowsOf(j, "model", "deepseek-v4-flash").some((x) => x.status === "fail") && sweepWrite(t, "deepseek-v4-flash")[0].status === "degraded", "H: a 5xx without a direct model id remains degraded");
+  }
 }
 
 // 5. versions and mirror
 ok(versionAtLeast(api.VERSION, "1.6.1"), "qnfo-ai-calibration is at least 1.6.1 (1.6.0 new capability: what ok means; 1.6.1 refreshes rows probed before it)", api.VERSION);
 ok(versionAtLeast(api.VERSION, "1.6.4"), "qnfo-ai-calibration is at least 1.6.4 (SPEND-DOWNGRADE-INCONCLUSIVE-1)", api.VERSION);
+ok(versionAtLeast(api.VERSION, "1.6.6"), "qnfo-ai-calibration is at least 1.6.6 (MODEL-PROBE-FALLBACK-1)", api.VERSION);
 ok(versionAtLeast(api.PROBER_VERSION, "2.3.17"), "the member PROBER_VERSION is at least 2.3.17", api.PROBER_VERSION);
 ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 ok(!/\*\//.test(src.split("\n")[5].replace(/\/\*[\s\S]*?\*\//g, "")), "the VERSION note closes every block comment it opens");

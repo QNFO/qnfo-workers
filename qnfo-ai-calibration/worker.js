@@ -885,7 +885,8 @@ async function calibration(env, trigger) {
   var budgetOn = await budgetProbeOn(env);
   await runPool(sweepModels, 4, async function(m) {
     var res = await probeCompletion(env, m);
-    results.push(Object.assign({ probe: "model", target: m }, res));
+    var modelRow = Object.assign({ probe: "model", target: m }, res);
+    results.push(modelRow);
     var bres = null;
     // SPEND-DOWNGRADE-INCONCLUSIVE-1 (1.6.4), the second path: qnfo-ai 5.37.0 honours no_downgrade for this caller at max_tokens <= 512, so the
     // ping normally reaches the model it names. When the router still swaps it for glm-5.3-flash (flag not honoured, ceiling exceeded, caller not
@@ -900,6 +901,20 @@ async function calibration(env, trigger) {
       bres = await probeBudgetCompletion(env, m);
       results.push(Object.assign({ probe: "model-budget", target: m }, bres));
       res = { status: bres.status, latency_ms: res.latency_ms, detail: bres.detail };
+    } else if (res.status === "fail" && /^http=5\d\d\b/.test(String(res.detail || ""))) {
+      var routeFailure = res;
+      results.push(Object.assign({ probe: "model-route", target: m }, routeFailure));
+      if (budgetOn && BUDGET_DIRECT_IDS[m] && env.AI) {
+        bres = await probeBudgetCompletion(env, m);
+        results.push(Object.assign({ probe: "model-budget", target: m }, bres));
+        res = {
+          status: bres.status,
+          latency_ms: routeFailure.latency_ms,
+          detail: "router " + routeFailure.detail + "; direct " + bres.detail
+        };
+        modelRow.status = res.status;
+        modelRow.detail = res.detail;
+      }
     }
     // BUDGET-PROBE-1 (1.6.0): a model that answers the ping gets one budget-shaped request; a failure there decides the health
     // row (detail and failure count) while the ping row and its latency stay as they were.
