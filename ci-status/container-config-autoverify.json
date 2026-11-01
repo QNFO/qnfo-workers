@@ -11,13 +11,13 @@
     "tail": "",
     "gate": {
       "need_restore": false,
-      "reason": "newest container event is container.exec at 2026-10-30T08:25:50.287Z: container healthy, nothing to restore",
+      "reason": "newest container event is container.exec at 2026-11-01T05:22:41.074Z: container healthy, nothing to restore",
       "evidence": {
         "health_http": 200,
         "newest_container_event": [
           "container.exec",
-          "2026-10-30T08:25:50.287Z",
-          0.2379741668701172
+          "2026-11-01T05:22:41.074Z",
+          3.8975797221064568
         ]
       }
     }
@@ -29,6 +29,6 @@
     "SHELL_CONTAINER"
   ],
   "closed": false,
-  "head": "cfb576dc5fa2cd9fb2ece22d7a3c8973305a5231",
-  "ts": "2026-10-30T08:40:07Z"
+  "head": "cfa4b487c422a30ad94453995d154b9e76915f56",
+  "ts": "2026-11-01T09:16:33Z"
 }

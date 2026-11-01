@@ -63,6 +63,37 @@ eq(x.findings[0] && x.findings[0].severity, "medium", "no target: medium");
 eq(x.findings[0] && x.findings[0].file, false, "IL-DEFECT-ONLY-1: a decline with no target is an early warning, not filed");
 eq(x.metric_regressions_7d, 1, "regression count");
 
+// derived loop scores keep their own trend but do not recursively affect outcome scoring
+const selfHistory = I.IL_SELF_METRICS.map((m) => {
+  const recent = I.ilDirection(m.target) === "up" ? 10 : 20;
+  const prior = I.ilDirection(m.target) === "up" ? 20 : 10;
+  return hist(m.metric, step(recent, prior));
+}).flat();
+x = I.improvementEvaluate({ registry: I.IL_SELF_METRICS.map((m) => reg(m.metric, m.target)), history: selfHistory }, NOW);
+eq(x.evaluable, 0, "derived loop metrics are excluded from outcome scoring");
+eq(x.regressed, 0, "derived loop metrics do not create recursive regressions");
+eq(x.trends.filter((t) => t.verdict === "regressed").length, I.IL_SELF_METRICS.length, "self metrics keep their actual trend for issue recovery");
+
+// small discrete count changes are not material regression signals
+const countHistory = (recent, prior) => hist("queue_count", [99, ...Array(7).fill(recent), ...Array(7).fill(prior)]);
+x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: countHistory(12, 10) }, NOW);
+eq(x.evaluable, 1, "discrete count metric remains measurable");
+eq(x.regressed, 0, "two-count increase is below the materiality floor");
+eq(x.trends[0] && x.trends[0].verdict, "flat", "small count movement is flat");
+x = I.improvementEvaluate({ registry: [reg("queue_count", "<= 24")], history: countHistory(13, 10) }, NOW);
+eq(x.regressed, 1, "three-count increase is material");
+
+// exclude today's incomplete value: trend windows must compare seven complete UTC days
+x = I.improvementEvaluate({
+  registry: [reg("daily_metric", "maximize")],
+  history: hist("daily_metric", [400, ...Array(7).fill(100), ...Array(7).fill(120)])
+}, NOW);
+eq(x.evaluable, 1, "full-day trend is evaluable");
+eq(x.trends[0] && x.trends[0].recent, 100, "recent mean excludes today's partial value");
+eq(x.trends[0] && x.trends[0].prior, 120, "prior mean uses the preceding complete week");
+eq(x.regressed, 1, "current-day outlier cannot turn a full-week decline into an improvement");
+eq(x.improved, 0, "partial-day outlier is not counted as an improvement");
+
 // a cost metric that went DOWN 30% improved; one that went up 10% is flat (under the 15% bar)
 x = I.improvementEvaluate({ registry: [reg("cost_usd_30d", "<= 200"), reg("worker_count", "<= 24")], history: hist("cost_usd_30d", step(315, 450)).concat(hist("worker_count", step(44, 40))) }, NOW);
 eq(x.improved, 1, "cost down 30% improved");
@@ -81,6 +112,23 @@ const inMeets = Array.from({ length: 14 }, () => 1);
 x = I.improvementEvaluate({ registry: [reg("issue_mttr_h_30d", "<= 48")], history: hist("issue_mttr_h_30d", step(12.6, 8), inMeets) }, NOW);
 eq(x.regressed, 1, "an in-target metric that worsened 57% is still counted as regressed");
 eq(x.findings[0] && x.findings[0].file, false, "but it is not filed: inside its target");
+
+// IL-TRIGGER-AWARE-1: a regression is actionable only when an enabled metric trigger is hit.
+const blocker = "blocker_survival_rate_7d";
+const blockerTriggers = { "3393": blocker };
+const blockerPreds = { "3393": { operator: "gt", threshold: 0.25, enabled: 1 } };
+const blockerHistory = (recent, prior) => hist(blocker, step(recent, prior), offMeets);
+x = I.improvementEvaluate({ registry: [reg(blocker, "0")], history: blockerHistory(0.0036, 0.0027), trigger_metric: blockerTriggers, trigger_pred: blockerPreds }, NOW);
+eq(x.regressed, 1, "blocker survival remains a measured regression");
+eq(x.findings[0] && x.findings[0].file, false, "clear enabled trigger makes the registry-target miss an early warning");
+eq(x.findings[0] && x.findings[0].text.includes("enabled triggers (gt 0.25) are clear"), true, "early warning explains the clear trigger");
+eq(!!x.findings[0] && !!x.findings[0].close_evidence && x.findings[0].close_evidence.includes("does not hit any enabled trigger"), true, "close evidence explains why the registry-target miss is not a defect");
+x = I.improvementEvaluate({ registry: [reg(blocker, "0")], history: blockerHistory(0.3, 0.2), trigger_metric: blockerTriggers, trigger_pred: blockerPreds }, NOW);
+eq(x.findings[0] && x.findings[0].file, true, "a hit enabled trigger keeps the regression fileable");
+x = I.improvementEvaluate({ registry: [reg(blocker, "0")], history: blockerHistory(0.0036, 0.0027) }, NOW);
+eq(x.findings[0] && x.findings[0].file, true, "without a readable trigger the registry-target test is preserved");
+x = I.improvementEvaluate({ registry: [reg(blocker, "0")], history: blockerHistory(0.0036, 0.0027), trigger_metric: blockerTriggers, trigger_pred: { "3393": { operator: "gt", threshold: 0.25, enabled: 0 } } }, NOW);
+eq(x.findings[0] && x.findings[0].file, true, "a disabled trigger also falls back to the registry target");
 
 // hysteresis: an open regression stays open at -10%, closes at -5%
 const openReg = ["METRIC-REGRESSION-1: referral_30d"];
@@ -229,6 +277,18 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
   eq(one("SELECT status FROM agent_issues WHERE title='METRIC-REGRESSION-1: issue_mttr_h_30d'").status, "closed", "an in-target regression issue closes");
   eq(/inside its target, so the decline is an early warning/.test(one("SELECT close_evidence e FROM issue_triage WHERE issue_id = (SELECT id FROM agent_issues WHERE title='METRIC-REGRESSION-1: issue_mttr_h_30d')").e), true, "its evidence says why");
   eq(t.filed, 0, "and nothing new is filed for it");
+
+  // IL-TRIGGER-AWARE-1: registry target 0 is stricter than the active blocker-survival trigger (> 0.25).
+  const blockerMetric = "blocker_survival_rate_7d";
+  insReg.run(blockerMetric, "0", "0.0036", "MEASURED");
+  db.prepare("INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, enabled) VALUES (?, 'Blocker survival', 'metric_registry', 'gt', 0.25, 1)").run(blockerMetric);
+  for (let k = 1; k <= 13; k++) ins.run(blockerMetric, dd(k), k < 7 ? 0.0036 : 0.0027, 0);
+  db.prepare("INSERT INTO agent_issues (title, status, created_at, updated_at) VALUES (?, 'open', 0, 0)").run("METRIC-REGRESSION-1: " + blockerMetric);
+  t = await I.improvementLoopTick(env);
+  eq(one("SELECT status FROM agent_issues WHERE title='METRIC-REGRESSION-1: blocker_survival_rate_7d'").status, "closed", "a regression with its trigger clear closes");
+  const blockerEvidence = String((one("SELECT close_evidence e FROM issue_triage WHERE issue_id = (SELECT id FROM agent_issues WHERE title='METRIC-REGRESSION-1: blocker_survival_rate_7d')") || {}).e || "");
+  eq(blockerEvidence.includes("does not hit any enabled trigger (gt 0.25)"), true, "closure evidence names the clear trigger instead of claiming the registry target was met");
+  eq(t.filed, 0, "the trigger-clear regression is not re-filed");
 
   // IL-DEFECT-ONLY-1: an open relapse issue whose metric an open trigger issue carries closes as superseded by that issue
   insReg.run("stuck_items_over_sla", "0", "2", "MEASURED");

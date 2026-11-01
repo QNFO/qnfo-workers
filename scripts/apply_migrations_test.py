@@ -1167,5 +1167,86 @@ _cr = "UPDATE remediation_contracts SET verify_probe = '{\"contains\": \"x; y\"}
 ok(not _psemi(_cr), "a code-read JSON probe is exempt")
 ok(not _psemi("UPDATE agent_issues SET description = 'a; b' WHERE id = 1;"), "other tables are not judged")
 
+# LOOP-BREAKER-1 (1000811): both failed files must recover through the runner, including a partial apply and an older commit's replay.
+shared_db = db
+db = sqlite3.connect(":memory:")
+db.executescript("""
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER, close_channel TEXT);
+CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, close_evidence TEXT);
+CREATE TABLE human_actions (id INTEGER PRIMARY KEY, title TEXT, status TEXT, created_at TEXT, source TEXT, slug TEXT);
+CREATE TABLE blocker_redteam (target TEXT, ts TEXT, verdict TEXT, text_sig TEXT);
+CREATE TABLE failure_modes (
+  fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL,
+  remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL,
+  issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT
+);
+CREATE TABLE decision_log (
+  id INTEGER PRIMARY KEY, actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL,
+  evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL,
+  capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT
+);
+CREATE TABLE products (
+  slug TEXT PRIMARY KEY, name TEXT NOT NULL, surface TEXT NOT NULL, owner_worker TEXT,
+  repo TEXT NOT NULL DEFAULT 'QNFO/qnfo-workers', path TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO products (slug, name, surface) VALUES ('catalog-entry', 'Existing product', 'https://example.org');
+CREATE VIEW v_blocker_claims AS
+  SELECT 'issue:' || id AS target, title AS text, created_at AS created_ms FROM agent_issues WHERE status = 'open';
+""")
+try:
+    for filename, break_sql, expected_error in [
+        ("2026-10-29-blocker-claims-confirmed-sticks.sql",
+         lambda text: text.replace(
+             "  'no signed confirmed-with-evidence red-team verdict whose text signature still matches is listed by v_blocker_claims',\n", ""),
+         "10 values for 11 columns"),
+        ("2026-10-29-plus-1-products.sql",
+         lambda text: text.replace("product_plus_registry", "products"),
+         "table products has no column named key"),
+    ]:
+        path = "migrations/" + filename
+        with open(os.path.join(HERE, "..", path), encoding="utf-8") as fh:
+            fixed = fh.read()
+        broken = break_sql(fixed)
+        ok(broken != fixed, filename + ": the fixture recreates the recorded SQL defect")
+        rc = M.apply_file(path, broken, "a", "t", "before-repair", emit)
+        failure = db.execute("SELECT status, error FROM migration_runs WHERE file = ? ORDER BY id DESC LIMIT 1", (path,)).fetchone()
+        ok(rc == 1 and failure[0] == "error" and expected_error in failure[1],
+           filename + ": the runner records the original failure", (rc, failure))
+        db.execute("INSERT INTO issue_triage (issue_id) SELECT id FROM agent_issues WHERE title = ?",
+                   ("MIGRATION-APPLY-FAILED-1: " + filename,))
+        db.commit()
+        rc = M.apply_file(path, fixed, "a", "t", "repair", emit)
+        ok(rc == 0 and json.loads(out[-1]).get("ok"), filename + ": the repaired SQL completes after a partial apply", out[-1])
+        ok(db.execute("SELECT COUNT(*) FROM migration_runs WHERE file = ? AND status = 'ok'", (path,)).fetchone()[0] == 1,
+           filename + ": recovery records one ok run")
+        issue = db.execute("SELECT a.status, t.close_evidence FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id WHERE a.title = ?",
+                           ("MIGRATION-APPLY-FAILED-1: " + filename,)).fetchone()
+        ok(issue[0] == "closed" and "migration_runs ok for " + path in issue[1],
+           filename + ": recovery closes the failure with ledger evidence", issue)
+        before = db.total_changes
+        rc = M.apply_file(path, fixed, "a", "t", "repair-replay", emit)
+        ok(rc == 0 and json.loads(out[-1]).get("already_applied") and db.total_changes == before,
+           filename + ": the same content is skipped without writes", out[-1])
+        rc = M.apply_file(path, broken, "a", "t", "older-commit", emit)
+        ok(rc == 0 and json.loads(out[-1]).get("superseded") and db.total_changes == before,
+           filename + ": an older failed content cannot restart the loop after recovery", out[-1])
+
+    ok(db.execute("SELECT detector FROM failure_modes WHERE fm_key = 'blocker-verdict-confirmed-expires-daily'").fetchone()[0],
+       "the blocker failure-mode INSERT supplies its required detector")
+    ok(db.execute("SELECT COUNT(*) FROM decision_log").fetchone()[0] == 1,
+       "the blocker repair records exactly one decision across replays")
+    ok(db.execute("SELECT COUNT(*) FROM bak_20261029_v_blocker_claims").fetchone()[0] == 1,
+       "the blocker backup survives the partial apply and recovery")
+    ok(db.execute("SELECT slug, name, surface FROM products").fetchall() == [
+        ("catalog-entry", "Existing product", "https://example.org")],
+       "product registry recovery leaves the existing catalog untouched")
+    ok(db.execute("SELECT COUNT(*) FROM product_plus_registry").fetchone()[0] == 7
+       and db.execute("SELECT COUNT(*) FROM v_product_plus_debt").fetchone()[0] == 7,
+       "product registry recovery seeds all seven products and their debt view")
+finally:
+    db.close()
+    db = shared_db
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

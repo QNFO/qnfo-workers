@@ -84,6 +84,22 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   const again = await plan(env);
   ok(tasks(env).length === 1 && !(again.outcome === "queued" && again.issue === id), "1g an issue is never planned twice", again);
 }
+// A dense keyword region in a large worker can merge into one excerpt larger than the planner budget.
+{
+  const prior = FILES["q08-signal-engine/worker.js"];
+  const large = ['var VERSION = "0.7.37-fixture";', ...Array.from({ length: 1200 }, (_, i) => `function targetSignal${i}() { return ${i}; }`)].join("\n");
+  FILES["q08-signal-engine/worker.js"] = large;
+  const anchor = "function targetSignal0() { return 0; }";
+  const { env, prompts } = envWith([() => FIX(anchor)]);
+  issue(env, { title: "METRIC-TRIGGER-16-C: q08-signal-engine targetSignal handling", description: "The targetSignal handling needs a small fix." });
+  const r = await plan(env);
+  FILES["q08-signal-engine/worker.js"] = prior;
+  const user = prompts[0] && prompts[0].input.messages[1].content || "";
+  const snippets = user.slice(user.indexOf("SNIPPETS:\n") + "SNIPPETS:\n".length);
+  const t = tasks(env)[0];
+  ok(r.outcome === "queued" && snippets.includes(anchor), "1h a large-file plan includes source lines from which the model can select an anchor", { result: r, snippets: snippets.length });
+  ok(snippets.length <= 14000 && t && JSON.parse(t.ctx).anchor === anchor, "1i the large-file anchor is budget-bounded and attached to its code task", { snippets: snippets.length, ctx: t && t.ctx });
+}
 // 2. untrusted sources never become code; 3. refused categories and texts are recorded
 {
   const { env, prompts } = envWith([]);

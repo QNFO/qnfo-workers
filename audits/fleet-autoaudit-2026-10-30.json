@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-30 09:30:30",
+  "audited_at": "2026-10-30 23:57:41",
   "d1_write_failures": [],
   "d1_writes_ok": 128,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -658,7 +651,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.9.11-codeagent",
+        "version": "1.9.12-codeagent",
         "worker": "qnfo-infra"
       },
       {
@@ -1493,9 +1486,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.9.11-codeagent",
+      "before": "1.9.12-codeagent",
       "http": 200,
-      "live": "1.9.11-codeagent",
+      "live": "1.9.12-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"

@@ -146,8 +146,8 @@ ok(res.stage === "review->revise" && get("r-low").stage === "revise", "below the
 audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_max_review_cycles', '2')").run();
 put("r-cap");
 res = await stageReview(env, row("r-cap", "review", { cycles: 2 }));
-// RERUN-ROUTE-1 (0.18.0, agent_issues 2473): the withheld paper re-enters once at revise with its findings, not at ground.
-ok(res.ok === false && res.withheld === "review-hard" && res.hardLeft === 2 && get("r-cap").status === "researching" && get("r-cap").stage === "revise" && /^RERUN-ROUTE-1 revise-once: review: 2 HARD findings unresolved after 2 revise cycles \(H1,H2\)/.test(get("r-cap").error), "at the cap a paper with HARD findings is withheld, not sent to verify", get("r-cap"));
+// The configured review-cycle cap is terminal for HARD findings; do not schedule an unbudgeted extra revise/review cycle.
+ok(res.ok === false && res.withheld === "review-hard" && res.hardLeft === 2 && get("r-cap").status === "wontfix" && get("r-cap").stage === "parked" && /^REVIEW-UNRESOLVED-PARK-1: prior stage review; review: 2 HARD findings unresolved after 2 revise cycles \(H1,H2\)/.test(get("r-cap").error), "at the cap a paper with unresolved HARD findings is withheld and parked without an extra revise pass", get("r-cap"));
 audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_review_gate', 'measure')").run();
 put("r-measure");
 res = await stageReview(env, row("r-measure", "review", { cycles: 2 }));

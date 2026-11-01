@@ -9,8 +9,10 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
+// 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.77.1"; // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+var VERSION = "1.78.0"; // 1.78.0 RM-CODE-SESSION-1 (pillar autonomy; minor): owner command turns enter resumable CodeSession streams, with the existing ops agent as fallback. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+// 1.77.4 ERRATA-CHAIN-DISPATCH-1 + WORKER-OBSERVABILITY-1 (conflict integration): preserve both the folded errata consumer dispatch and affected-service observability changes.
 /* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
 /* 1.71.3 BREACH-DOCTOR-WATCHMAKER-1 (2026-10-26, agent_issues 1000398, pillar autonomy; patch): WATCHMAKER_OPS counts the breach doctor tick of qnfo-fleet-control (BREACH-DOCTOR-1, every 10 minutes), read from the newest event = 'tick' row of breach_diagnosis_events, so watchmaker_index sees a stalled doctor; the BREACH-DOCTOR-1 package left the dashboard alone and the entry was missing (NO-CLAUDE-RUNTIME-DEPENDENCY-1: a recurring operation is listed with the D1 query that proves it ran). */
 /* 1.71.1 PSR-NARRATIVE-CAP-SOFT-1 (2026-10-26, agent_issues 1000409, pillar cost; patch): the weekly program-strategic review writes its narrative at a breached ai_spend cap and when the budget cannot be read, on the free Workers AI model only (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06: a breached cap steers model choice and never stops work); the result carries narrative_tier (normal | lean) and narrative_count in place of narrative_allowed, and the summary names the tier. */
@@ -1155,6 +1157,10 @@ async function dispatchIssue(env, i, gh_number) {
   }
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_issue_dispatch (fingerprint, category, sev, owner, action, payload, gh_number, state, created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET state='queued', action=?, created_at=?, exec_state=CASE WHEN fleet_issue_dispatch.exec_state IN ('no-action','executed','needs-human') THEN fleet_issue_dispatch.exec_state ELSE NULL END, exec_result=CASE WHEN fleet_issue_dispatch.exec_state IN ('no-action','executed','needs-human') THEN fleet_issue_dispatch.exec_result ELSE NULL END").bind(i.id, i.category, i.sev, i.owner || "fleet", action, JSON.stringify({ title: i.title, detail: i.detail, remediation: i.remediation, resource: i.resource }).slice(0, 1500), gh_number || null, "queued", ts, action, ts).run();
+    const target = execTargetFor(i.category, i.resource || i.title || "", env);
+    if (target.safe && target.svc === "SVC_ERRATA_HUB") {
+      await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=NULL, exec_ts=NULL, exec_result=NULL, exec_attempts=0 WHERE fingerprint=?").bind(i.id).run();
+    }
   } catch (e) {
   }
 }
@@ -1178,6 +1184,7 @@ function execTargetFor(category, resource, env) {
     return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run", note: "advance research_queue (research-exec /run)" };
   }
   if (category === "integration-chain") {
+    if (r.indexOf("errata watch") >= 0 && r.indexOf("respond") >= 0 && r.indexOf("publish") >= 0) return { safe: true, svc: "SVC_ERRATA_HUB", path: "/run/errata-respond", note: "queue errata respond on research-exec; the existing gated publish cron drains its output" };
     if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run", note: "advance research pipeline (research-exec /run)" };
     if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
     if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return env && env.REVISER_TOKEN ? { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log", auth: "X-Reviser-Token" } : { safe: false, noAction: true, note: "PAPER-REVISER-SCAN-UNAUTHORIZED-1: /run/scan needs qnfo-paper-reviser X-Reviser-Token which this worker does not hold; qnfo-paper-reviser cron 37 */4 drains it - no auto-dispatch" };
@@ -1309,7 +1316,13 @@ async function loopExecute(env, deadlineMs) {
   for (const row of rows) {
     const es = row.exec_state;
     const att = Number(row.exec_attempts) || 0;
-    if (es === "executed" || es === "needs-human" || es === "no-action") continue;
+    if (es === "executed") continue;
+    if (es === "needs-human" || es === "no-action") {
+      let payload = {};
+      try { payload = JSON.parse(row.payload || "{}") || {}; } catch (e) { continue; }
+      const target = execTargetFor(row.category, payload.resource || payload.title || "", env);
+      if (!target.safe || target.svc !== "SVC_ERRATA_HUB") continue;
+    }
     if (es === "failed") {
       if (att >= 3) continue;
       if (row.exec_ts && Date.now() - new Date(row.exec_ts).getTime() < EXEC_COOLDOWN_MS) continue;
@@ -1506,6 +1519,14 @@ __name2222(loopMaybeSync, "loopMaybeSync");
 // ==== AREA-MAP reliability: fleet state: buildState, the integration view and report-card data ====
 // OUTREACH-WEEKDAY-1 (#1940): whole hours between raw and nowMs that fall on a weekday (UTC); Saturdays and Sundays do
 // not count. Outreach sends Monday to Friday only, so its queue's freshness is judged in these hours.
+async function workerObservability(env, nowMs) {
+  const rows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, GROUP_CONCAT(DISTINCT x.svc) AS workers FROM (SELECT l.fingerprint, COALESCE((SELECT CASE WHEN json_valid(d.payload) THEN CAST(json_extract(d.payload, '$.lastObserved') AS REAL) END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint), (CASE WHEN CAST(l.last_seen AS REAL) > 1e12 THEN CAST(l.last_seen AS REAL) ELSE (julianday(l.last_seen) - 2440587.5) * 864e5 END)) AS seen_ms, (SELECT CASE WHEN json_valid(d.payload) THEN json_extract(d.payload, '$.service') END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint) AS svc FROM fleet_issue_loop l WHERE l.category='worker-observability' AND l.closed_at IS NULL) x WHERE x.seen_ms >= ? AND NOT EXISTS (SELECT 1 FROM fleet_deploys f WHERE x.svc IS NOT NULL AND f.worker = x.svc AND f.ok = 1 AND COALESCE(f.note,'') NOT LIKE 'SETTINGS-ONLY%' AND (julianday(f.ts) - 2440587.5) * 864e5 > x.seen_ms)", [nowMs - ERR_ACTIVE_MS]);
+  const row = rows && rows.length ? rows[0] : {};
+  const workers = String(row.workers || "").split(",").filter((worker) => /^[a-z0-9][a-z0-9_-]{0,62}$/.test(worker));
+  return { count: row.n || 0, workers };
+}
+__name(workerObservability, "workerObservability");
+
 function weekdayHoursSince(raw, nowMs) {
   if (raw == null) return null;
   let ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T"));
@@ -1560,11 +1581,11 @@ async function buildState(env, ctx) {
     // OBS-LASTOBSERVED-1 (2026-10-01): loop.last_seen advances on every re-poll of an Observability API issue that is
     // still "active", so a 502 from 2026-09-30 16:19Z read as "observed in the last 3h" the next morning. Date each issue
     // by the payload's lastObserved (when the error actually happened) and fall back to last_seen without a payload.
-    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM (SELECT l.fingerprint, COALESCE((SELECT CASE WHEN json_valid(d.payload) THEN CAST(json_extract(d.payload, '$.lastObserved') AS REAL) END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint), (CASE WHEN CAST(l.last_seen AS REAL) > 1e12 THEN CAST(l.last_seen AS REAL) ELSE (julianday(l.last_seen) - 2440587.5) * 864e5 END)) AS seen_ms, (SELECT CASE WHEN json_valid(d.payload) THEN json_extract(d.payload, '$.service') END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint) AS svc FROM fleet_issue_loop l WHERE l.category='worker-observability' AND l.closed_at IS NULL) x WHERE x.seen_ms >= ? AND NOT EXISTS (SELECT 1 FROM fleet_deploys f WHERE x.svc IS NOT NULL AND f.worker = x.svc AND f.ok = 1 AND COALESCE(f.note,'') NOT LIKE 'SETTINGS-ONLY%' AND (julianday(f.ts) - 2440587.5) * 864e5 > x.seen_ms)", [nowMs - ERR_ACTIVE_MS]);
+    const obs = await workerObservability(env, nowMs);
     const n = w && w.length ? (w[0].n || 0) : 0;
     const req = w && w.length ? (w[0].req || 0) : 0;
-    const inObs = iss && iss.length ? (iss[0].n || 0) : 0;
-    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) observed in the last " + ERR_ACTIVE_MS / 36e5 + "h", ts: null });
+    const inObs = obs.count;
+    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) observed in the last " + ERR_ACTIVE_MS / 36e5 + "h" + (obs.workers.length ? " (" + obs.workers.join(", ") + ")" : ""), ts: null });
   });
   await safeAudit("errata_queue", "Errata queue", async function() {
     const g = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS c FROM errata_queue GROUP BY status");
@@ -12725,6 +12746,17 @@ async function cmdAgentPoll(env, id) {
   await env.AUDIT.prepare("UPDATE cmd_log SET status=?1, answer=?2, error=?3, done_ms=?4 WHERE id=?5 AND status='running'").bind(out.status, answer.slice(0, 16e3), out.error, Date.now(), id).run();
   return out;
 }
+async function cmdCodeSessionFetch(env, path, body) {
+  const svc = env && env.SVC_QNFO_AGENTS;
+  if (!svc || typeof svc.fetch !== "function") return { ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" };
+  try {
+    const r = await svc.fetch("https://agents.qnfo.org" + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(15e3) });
+    const text = await r.text();
+    let j = null;
+    try { j = JSON.parse(text); } catch (e) {}
+    return j ? Object.assign({ http: r.status }, j) : { ok: false, http: r.status, error: "qnfo-agents HTTP " + r.status + ": " + conClip(text, 300) };
+  } catch (e) { return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }; }
+}
 // CMD-VOICE-1: speech to text for the command line. The body is the raw recording (webm, ogg, mp4, wav or mp3, at most 8 MB);
 // the answer is {ok, text, model, ms}. Owner session or loop token only (it spends Workers AI neurons). The first model that
 // answers wins, so a retired model id costs one fallback, not the feature. No vendor SDK: the Workers AI binding only.
@@ -12768,6 +12800,17 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   if (path.indexOf("/api/cmd") !== 0) return null;
   const holder = !!(owner.authed || owner.loop);
   await cmdEnsure(env);
+  const streamMatch = /^\/api\/cmd\/session\/(run_[a-z0-9_]{8,60})\/events$/.exec(path);
+  if (request.method === "GET" && streamMatch) {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The code session needs your email code." }, 401);
+    const svc = env.SVC_QNFO_AGENTS;
+    if (!svc || typeof svc.fetch !== "function") return ownerJson({ ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" }, 503);
+    const after = Math.max(0, Number(new URL(request.url).searchParams.get("after")) || Number(request.headers.get("last-event-id")) || 0);
+    try {
+      const r = await svc.fetch("https://agents.qnfo.org/code-sessions/" + streamMatch[1] + "/events?after=" + after, { method: "GET" });
+      return new Response(r.body, { status: r.status, headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
+    } catch (e) { return ownerJson({ ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }, 502); }
+  }
   if (request.method === "GET" && path.indexOf("/api/cmd/job/") === 0) {
     const id = path.slice("/api/cmd/job/".length);
     if (!/^cmd-[0-9a-f]{20}$/.test(id)) return ownerJson({ error: "bad id" }, 400);
@@ -12972,10 +13015,20 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     }
     return ownerJson({ ok: true, kind: "answer", text: di.text, actions: di.actions || [], holder });
   }
-  // CMD-AGENT-1 (1.77.0, owner 2026-10-29: the command line must work like Claude Code, not answer from a no-tools prompt): for the signed-in
-  // owner a plain-English line is a task for the durable ops agent, which runs the tool loop server-side (code, SQL, GitHub, workspace,
-  // fleet probes) and answers with what the tools returned. If qnfo-ops cannot start the run, the older grounded answer below still runs.
+  // RM-CODE-SESSION-1: only after deterministic commands and fleet reads have declined the request does the owner's natural-language
+  // turn enter the resumable CodeSession stream. The session id is supplied by the existing chat UI/CLI on later turns.
   if (holder) {
+    const existingSession = /^run_[a-z0-9_]{8,60}$/.test(String(b.session_id || "")) ? String(b.session_id) : "";
+    const sessionPath = existingSession ? "/code-sessions/" + existingSession + "/turns" : "/code-sessions";
+    const session = await cmdCodeSessionFetch(env, sessionPath, { text: text });
+    if (session.ok && session.session_id) {
+      try {
+        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, model) VALUES (?1, ?2, ?3, 'agent-stream', 'running', 1, 'deepseek-v4-flash-wa')").bind("cmd-" + cmdRandHex(10), text, from || null).run();
+      } catch (e) {}
+      return ownerJson({ ok: true, kind: "stream", session_id: session.session_id, turn: session.turn, holder }, 202);
+    }
+    console.error(JSON.stringify({ worker: NAME, where: "cmd-code-session-start", http: session.http || 0, error: String(session.error || "").slice(0, 200) }));
+    // Keep the existing qnfo-ops run as an independent fallback if CodeSession is unavailable.
     const aid = "cmd-" + cmdRandHex(10);
     const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", text: text, sid: "console-" + new Date().toISOString().slice(0, 10), run_id: aid, max_iters: 16 }) });
     if (st.json && st.json.ok) {
