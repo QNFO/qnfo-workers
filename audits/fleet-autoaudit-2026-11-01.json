@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-11-01 18:59:01",
+  "audited_at": "2026-11-01 19:30:03",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -638,7 +631,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.10-doctor-pending-lease",
+        "version": "0.59.12-metric-relapse-monitor",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -653,7 +646,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.10.6",
+        "version": "0.10.7",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1412,9 +1405,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.10-doctor-pending-lease",
+      "before": "0.59.12-metric-relapse-monitor",
       "http": 200,
-      "live": "0.59.10-doctor-pending-lease",
+      "live": "0.59.12-metric-relapse-monitor",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1462,9 +1455,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.10.6",
+      "before": "0.10.7",
       "http": 200,
-      "live": "0.10.6",
+      "live": "0.10.7",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
