@@ -58,7 +58,7 @@ def is_noise(it):
 def title_for(it):
     svc = str(it.get("service") or "?")[:40]
     t = " ".join(str(it.get("title") or "issue").split())[:110]
-    return PREFIX + svc + ": " + t
+    return PREFIX + svc + ": " + t + " [cf-obs:" + str(it.get("id") or "?") + "]"
 
 
 def probe_for(cf_id):
