@@ -18,7 +18,7 @@ db.exec(`CREATE TABLE chat (id INTEGER PRIMARY KEY AUTOINCREMENT, thread TEXT, r
   CREATE TABLE chat_feed_quarantine_20260926 (thread TEXT);
   CREATE TABLE internal_errata (target_kind TEXT, target_ref TEXT, status TEXT);
   CREATE TABLE self_questions (id INTEGER PRIMARY KEY, ts TEXT, question TEXT, status TEXT);
-  CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY, idea TEXT, status TEXT, created_at TEXT);
+  CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY, name TEXT, idea TEXT, status TEXT, created_at TEXT, decision TEXT);
   CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);`);
 let stmts = [], breakFlags = false;
 const env = { QNFO_AUDIT: { prepare(sql) {
