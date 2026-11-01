@@ -93,6 +93,9 @@ try {
   result = await request("https://example.com", [brokenBody]);
   assert.equal(result.status, 502, "body-read errors remain upstream failures");
   assert.equal(result.body.error, "upstream body read failed");
+  const brokenErrorBody = new Response(new ReadableStream({ start(controller) { controller.error(new Error("body disconnected")); } }), { status: 502 });
+  result = await request("https://example.com", [brokenErrorBody, page()]);
+  assert.equal(result.status, 200, "failed error-body cleanup does not prevent the bounded retry");
 
   result = await request("https://example.com", Array.from({ length: 6 }, () => new Response(null, { status: 302, headers: { Location: "/loop" } })));
   assert.equal(result.status, 502, "redirect loops remain bounded");

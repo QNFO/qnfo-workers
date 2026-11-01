@@ -3490,13 +3490,13 @@ async function webFetch(url, maxChars, env) {
       return { error: "upstream fetch failed", url: u.toString() };
     }
     if ([301, 302, 303, 307, 308].includes(resp.status) && resp.headers.has("location")) {
-      await resp.body?.cancel();
+      await resp.body?.cancel().catch(() => {});
       if (redirects++ >= 5) return { error: "too many redirects", url: u.toString() };
       try { u = new URL(resp.headers.get("location"), u); } catch (_e) { return { error: "invalid redirect URL", url: u.toString() }; }
       continue;
     }
     if ([502, 503, 504].includes(resp.status) && !signal.aborted && retries++ < 1) {
-      await resp.body?.cancel();
+      await resp.body?.cancel().catch(() => {});
       continue;
     }
     break;
