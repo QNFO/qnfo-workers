@@ -10,6 +10,9 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 const a = src.indexOf("async function costRunRate(");
 const b = src.indexOf("\n}\n", a) + 2;
 const costRunRate = new Function("__name", src.slice(a, b) + "\nreturn costRunRate;")(() => {});
+const capStart = src.indexOf("async function aiSpendCaps(");
+const capEnd = src.indexOf("\n}\n", capStart) + 2;
+const aiSpendCaps = new Function("__name", "costRunRate", src.slice(capStart, capEnd) + "\nreturn aiSpendCaps;")(() => {}, costRunRate);
 const mk = (rows) => {
   const db = new DatabaseSync(":memory:");
   db.exec("CREATE TABLE r (source_group TEXT, run_rate_30d_7d REAL); CREATE VIEW v_cost_run_rate AS SELECT * FROM r");
@@ -28,5 +31,28 @@ const r2 = await costRunRate(mk([["workers_ai", 1], ["ai_gateway:deepseek", 4]])
 ok(r2.unified === 4, "AIG_BYOK_PROVIDERS naming no gateway provider: every provider is unified", r2);
 ok(await costRunRate(mk([]), {}) === null, "no ledger rows: null, so the 30-day figures stay in use");
 ok(/var rr = await costRunRate\(db, env\)/.test(src) && /aiSpendCaps\(db, byProv, total, byBill, env\)/.test(src), "aiSpendCaps reads the run rate and receives env");
+
+const capWrites = [];
+const capDb = {
+  prepare(sql) {
+    let args = [];
+    const st = {
+      bind(...values) { args = values; return st; },
+      async all() {
+        if (/FROM fleet_budget/.test(sql)) return { results: [{ node_class: "ai_spend:workers-ai", cap: 95, target: 78 }] };
+        if (/FROM v_cost_run_rate/.test(sql)) return { results: [{ source_group: "workers_ai", run_rate_30d_7d: 787.72 }] };
+        return { results: [] };
+      },
+      async first() { return null; },
+      async run() { capWrites.push({ sql, args }); return { meta: { changes: 1 } }; },
+    };
+    return st;
+  },
+};
+await aiSpendCaps(capDb, { "workers-ai": 287.74 }, 287.74, { unified: 0 }, {});
+const capUpdate = capWrites.find((w) => /UPDATE fleet_budget/.test(w.sql));
+const capAlert = capWrites.find((w) => /INSERT INTO alerts/.test(w.sql));
+ok(capUpdate && capUpdate.args[0] === 787.72, "the cap still uses its 7-day run-rate projection");
+ok(capAlert && /7-day run rate x30 cost \$787\.72/.test(capAlert.args[0]) && /trailing 30d actual \$287\.74/.test(capAlert.args[0]), "a projected cap alert shows its comparable trailing-30-day actual");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
