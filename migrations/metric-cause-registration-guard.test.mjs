@@ -17,6 +17,14 @@ const expectedMappings = {
   product_plus_rate_7d: "structure",
   plus_keep_rate_30d: "structure",
 };
+const observedBreaches = [
+  "guard_rcs",
+  "ask_p95_total_ms_7d",
+  "program_focus_without_doer",
+  "compat_date_age_days_max",
+  "agent_tool_calls_outside_allowlist",
+  "fleet_quality_change_7d",
+];
 
 function database() {
   const db = new DatabaseSync(":memory:");
@@ -80,6 +88,31 @@ test("migration maps observed cause gaps and installs a registration detector", 
     assert.equal(db.prepare("SELECT COUNT(*) n FROM failure_modes WHERE fm_key = 'metric-cause-registration-missing'").get().n, 0);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM metric_breach_cause WHERE metric_key = 'unrelated'").get().n, 1);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'METRIC-CAUSE-AT-REGISTRATION-1 detector:%'").get().n, 1);
+  } finally {
+    db.close();
+  }
+});
+
+test("mapped breaches leave the unmapped bucket and missing mappings return", () => {
+  const db = database();
+  try {
+    db.exec(body);
+    db.exec(`
+      CREATE TABLE active_metric_breaches (metric_key TEXT PRIMARY KEY, breaches INTEGER NOT NULL);
+      CREATE VIEW v_breach_by_cause AS
+        SELECT COALESCE(c.cause_key, 'unmapped') AS cause_key, SUM(b.breaches) AS breaches
+        FROM active_metric_breaches b
+        LEFT JOIN metric_breach_cause c ON c.metric_key = b.metric_key
+        GROUP BY COALESCE(c.cause_key, 'unmapped');
+    `);
+    const insert = db.prepare("INSERT INTO active_metric_breaches VALUES (?, 1)");
+    for (const metric of observedBreaches) insert.run(metric);
+
+    const unmapped = () => db.prepare("SELECT COALESCE(SUM(breaches), 0) n FROM v_breach_by_cause WHERE cause_key = 'unmapped'").get().n;
+    assert.equal(unmapped(), 0, "the six observed breaches have mapped causes");
+
+    db.exec("DELETE FROM metric_breach_cause WHERE metric_key = 'guard_rcs'");
+    assert.equal(unmapped(), 1, "a missing cause mapping is visible in the unmapped bucket");
   } finally {
     db.close();
   }
