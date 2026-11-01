@@ -1,6 +1,6 @@
 name: github-settings-actions
 # CI-ACTION-IDENTITY-1: the run title names the action and mode, so scripts/ci_watchdog.py files a failure per action.
-run-name: github-settings-actions ${{ inputs.action }} ${{ inputs.mode }}
+run-name: github-settings-actions ${{ github.event_name == 'push' && 'gh-webhook' || inputs.action }} ${{ github.event_name == 'push' && 'live' || inputs.mode }}
 
 # GITHUB-SETTINGS-ACTIONS-1 (2026-10-19, agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security). Allowlisted GitHub settings actions
 # for QNFO/qnfo-workers, because an agent session holds no repository Administration right (its GET branches/main/protection answers
@@ -19,14 +19,20 @@ run-name: github-settings-actions ${{ inputs.action }} ${{ inputs.mode }}
 #   5. action delete-stuck-runs  DELETE-STUCK-RUNS-1/-2: dry lists queued or in-progress runs older than 24 h with no job running now; live force-cancels
 #                               each (GitHub deletes only a completed run: run 40290472819 got 403 on the delete), reads it until completed, then deletes it,
 #                               at most 25, and stops at the first refusal (the session token and the GitHub connector get 409 on cancel).
+#   6. action gh-webhook        mode live: install the dedicated secret under its lease, register pull_request/check_suite/push,
+#                               and verify a signed test delivery. Dry mode reads only; no secret is printed or passed as an input.
 #   Revert: action ruleset-main-revert, mode live (deletes only the ruleset named main-gate).
-# Dispatch only (GitHub schedule never fires on this repo). Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+# Dispatch or the webhook setup's merge to main, never a schedule. Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/gh-webhook-setup.mjs
   workflow_dispatch:
     inputs:
       action:
-        description: "report | ruleset-main | ruleset-main-revert | secret-scanning | delete-stuck-runs"
+        description: "report | ruleset-main | ruleset-main-revert | secret-scanning | delete-stuck-runs | gh-webhook"
         required: true
         type: choice
         options:
@@ -35,6 +41,7 @@ on:
           - ruleset-main-revert
           - secret-scanning
           - delete-stuck-runs
+          - gh-webhook
       mode:
         description: "dry (default, changes nothing) or live"
         required: false
@@ -59,8 +66,8 @@ jobs:
     env:
       GH_ADMIN_TOKEN: ${{ secrets.QNFO_GH_PAT }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      IN_ACTION: ${{ github.event.inputs.action }}
-      IN_MODE: ${{ github.event.inputs.mode }}
+      IN_ACTION: ${{ github.event_name == 'push' && 'gh-webhook' || inputs.action }}
+      IN_MODE: ${{ github.event_name == 'push' && 'live' || inputs.mode }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -69,4 +76,12 @@ jobs:
           node-version: "22"
 
       - name: Run the allowlisted action
+        if: env.IN_ACTION != 'gh-webhook'
+        run: node scripts/github-settings-actions.mjs "$IN_ACTION" --mode "${IN_MODE:-dry}"
+
+      - name: Configure and verify the signed webhook
+        if: env.IN_ACTION == 'gh-webhook'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/github-settings-actions.mjs "$IN_ACTION" --mode "${IN_MODE:-dry}"

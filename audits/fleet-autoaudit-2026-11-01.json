@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-01 14:50:39",
+  "audited_at": "2026-11-01 17:25:59",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
@@ -551,7 +551,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.15.2-triage-priority",
+        "version": "1.16.1-research-intake-bar",
         "worker": "idea-hub"
       },
       {
@@ -561,7 +561,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.7-codeagent",
+        "version": "1.44.9-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -576,7 +576,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.4-codeagent",
+        "version": "0.40.6",
         "worker": "q08-signal-engine"
       },
       {
@@ -586,12 +586,12 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.41.3-codeagent",
+        "version": "5.41.5-web-fetch-retry",
         "worker": "qnfo-ai"
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.6.4-downgrade-inconclusive",
+        "version": "1.6.5-codeagent",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -606,7 +606,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.30.1-issue-age-retry",
+        "version": "0.31.2-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -616,7 +616,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.4.0-leases-killswitch",
+        "version": "1.4.1-leases-killswitch",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -626,12 +626,12 @@
       },
       {
         "dir": "qnfo-evolve",
-        "version": "0.2.6",
+        "version": "0.2.7",
         "worker": "qnfo-evolve"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.6-metric-trigger-close-contract",
+        "version": "0.59.10-doctor-pending-lease",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -646,12 +646,12 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.10.3-narrative-guard-wording",
+        "version": "0.10.6",
         "worker": "qnfo-github-steward"
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.9.13-codeagent",
+        "version": "1.10.0-secrets-store-cf-token",
         "worker": "qnfo-infra"
       },
       {
@@ -666,7 +666,7 @@
       },
       {
         "dir": "qnfo-jobsearch",
-        "version": "1.3.4-codeagent",
+        "version": "1.3.5-codeagent",
         "worker": "qnfo-jobsearch"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.43.0-paper-provenance",
+        "version": "0.44.0",
         "worker": "qnfo-research-exec"
       },
       {
@@ -851,9 +851,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.15.2-triage-priority",
+      "before": "1.16.1-research-intake-bar",
       "http": 200,
-      "live": "1.15.2-triage-priority",
+      "live": "1.16.1-research-intake-bar",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -996,9 +996,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.7-codeagent",
+      "before": "1.44.9-codeagent",
       "http": 200,
-      "live": "1.44.7-codeagent",
+      "live": "1.44.9-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1056,9 +1056,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.4-codeagent",
+      "before": "0.40.6",
       "http": 200,
-      "live": "0.40.4-codeagent",
+      "live": "0.40.6",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1099,17 +1099,17 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.41.3-codeagent",
+      "before": "5.41.5-web-fetch-retry",
       "http": 200,
-      "live": "5.41.3-codeagent",
+      "live": "5.41.5-web-fetch-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.6.4-downgrade-inconclusive",
+      "before": "1.6.5-codeagent",
       "http": 200,
-      "live": "1.6.4-downgrade-inconclusive",
+      "live": "1.6.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1275,9 +1275,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.30.1-issue-age-retry",
+      "before": "0.31.2-codeagent",
       "http": 200,
-      "live": "0.30.1-issue-age-retry",
+      "live": "0.31.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1300,9 +1300,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.4.0-leases-killswitch",
+      "before": "1.4.1-leases-killswitch",
       "http": 200,
-      "live": "1.4.0-leases-killswitch",
+      "live": "1.4.1-leases-killswitch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1379,9 +1379,9 @@
       "worker": "qnfo-events"
     },
     "qnfo-evolve": {
-      "before": "0.2.6",
+      "before": "0.2.7",
       "http": 200,
-      "live": "0.2.6",
+      "live": "0.2.7",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-evolve"
@@ -1405,9 +1405,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.6-metric-trigger-close-contract",
+      "before": "0.59.10-doctor-pending-lease",
       "http": 200,
-      "live": "0.59.6-metric-trigger-close-contract",
+      "live": "0.59.10-doctor-pending-lease",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1455,9 +1455,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.10.3-narrative-guard-wording",
+      "before": "0.10.6",
       "http": 200,
-      "live": "0.10.3-narrative-guard-wording",
+      "live": "0.10.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1499,9 +1499,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.9.13-codeagent",
+      "before": "1.10.0-secrets-store-cf-token",
       "http": 200,
-      "live": "1.9.13-codeagent",
+      "live": "1.10.0-secrets-store-cf-token",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
@@ -1523,9 +1523,9 @@
       "worker": "qnfo-ipatent"
     },
     "qnfo-jobsearch": {
-      "before": "1.3.4-codeagent",
+      "before": "1.3.5-codeagent",
       "http": 200,
-      "live": "1.3.4-codeagent",
+      "live": "1.3.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-jobsearch"
@@ -1669,9 +1669,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.43.0-paper-provenance",
+      "before": "0.44.0",
       "http": 200,
-      "live": "0.43.0-paper-provenance",
+      "live": "0.44.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

@@ -13,7 +13,17 @@ const good = await A.finalRead(env(4), long, "@cf/nvidia/nemotron-3-120b-a12b", 
 check("a long piece both readers score 4 passes", good.ok === true && good.rows.length >= 2, good);
 const vac = await A.finalRead(env(3), long, "@cf/nvidia/nemotron-3-120b-a12b", "s");
 check("a piece the readers score 3 is not published, and the reason names the vacuous phrases", !vac.ok && /not worth publishing/.test(vac.problems[0]) && /the loop/.test(vac.problems[0]), vac);
-const down = await A.finalRead({ AI: { run: async () => { throw new Error("down"); } } }, long, "@cf/nvidia/nemotron-3-120b-a12b", "s");
-check("no reader verdict fails closed", !down.ok && /fails closed/.test(down.problems[0]), down);
+let retryCalls = 0;
+const retryKeys = [];
+const recovered = await A.finalRead({ AI: { run: async (model, args, options) => {
+  retryCalls++;
+  retryKeys.push({ model, key: options.gateway.cacheKey });
+  if (retryCalls <= 4) throw new Error("temporary reviewer outage");
+  return { response: JSON.stringify({ would_read_to_end: true, score: 4, slop_tells: [], fix: "" }) };
+} } }, long, "@cf/nvidia/nemotron-3-120b-a12b", "s");
+check("one fresh-cache panel retry recovers a transient final-reader outage", recovered.ok && retryCalls === 6 && retryKeys.slice(4).every((x) => retryKeys.slice(0, 4).some((y) => y.model === x.model && y.key !== x.key)), recovered);
+let downCalls = 0;
+const down = await A.finalRead({ AI: { run: async () => { downCalls++; throw new Error("down"); } } }, long, "@cf/nvidia/nemotron-3-120b-a12b", "s");
+check("no reader verdict still fails closed after one retry", !down.ok && /fails closed/.test(down.problems[0]) && downCalls === 8, down);
 console.log("final-read.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);

@@ -33,5 +33,17 @@ ok(/GET \/report and GET \/health are public reads/.test(src), "the header still
 const [maj, min, pat] = String(W.__v).split("-")[0].split(".").map(Number);
 ok(maj === 0 && (min > 7 || (min === 7 && pat >= 4)), "VERSION is at least 0.7.4", W.__v);
 
+for (const name of ["qnfo-code-orchestrator", "qnfo-evolve"]) {
+  const workerSrc = readFileSync(join(here, "..", name, "worker.js"), "utf8");
+  const workerTmp = join(mkdtempSync(join(tmpdir(), "hc-")), "w.mjs");
+  writeFileSync(workerTmp, workerSrc);
+  const worker = await import(pathToFileURL(workerTmp).href);
+  const response = await worker.default.fetch(new Request(`https://${name}.example/health`), {});
+  const health = await response.json();
+  ok(response.status === 200 && health.worker === name, `${name} /health answers for the worker`, health.worker);
+  ok(Array.isArray(health.capabilities) && health.capabilities.length > 0 && health.capabilities.every((c) => typeof c === "string" && c.trim()), `${name} advertises capabilities`, health.capabilities);
+  ok(Array.isArray(health.limitations) && health.limitations.length > 0 && health.limitations.every((l) => typeof l === "string" && l.trim()), `${name} advertises limitations`, health.limitations);
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
