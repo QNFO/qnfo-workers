@@ -102,7 +102,7 @@ async function run(db, gIssues, state) {
   ins.run(305, "mentions qnfo-ai and qnfo-ai-search: the longer worker wins", "session", "optimization", "medium", now);
   ins.run(306, "owner names the worker", "session", "optimization", "high", now);
   db.prepare("INSERT INTO issue_triage (issue_id, owner) VALUES (306, 'qnfo-social')").run();
-  // PIN-PROGRAM-PLACEMENT-1: the managers place the issues they file on a program ("W.<program>", not a project row): a ROADMAP-1 item of QNFO.INFRA stays on QNFO.INFRA.
+  // PIN-PROGRAM-ROW-1: the managers place the issues they file on a program ("W.<program>", not a project row): a ROADMAP-1 item of QNFO.INFRA stays on QNFO.INFRA.
   ins.run(307, "ROADMAP-1: QNFO.INFRA #9: a roadmap item", "management-personas", "feature", "high", now);
   db.prepare("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (307, 'W.QNFO.INFRA', 'QNFO.INFRA', 'feature')").run();
   db.prepare("INSERT INTO gh_issue_links VALUES (301, 6001, 'open', 'open', '')").run();
