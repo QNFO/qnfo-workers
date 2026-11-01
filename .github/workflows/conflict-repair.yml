@@ -2,12 +2,12 @@ name: conflict-repair
 
 # CONFLICT-REPAIR-DOER-1 (agent_issues 2305, charter pillar: autonomy).
 #
-# qnfo-fleet-control files one STALE-PR-CONFLICT-REPAIR-1 issue per quiet pull request that conflicts with main, and until
+# qnfo-fleet-control files one STALE-PR-CONFLICT-REPAIR-1 issue per quiet pull request that conflicts with its base branch, and until
 # now no loop executed the repair. This workflow is the doer: scripts/conflict_repair.py re-applies the pull request onto
-# main on a new branch (repair/pr-<n>-<sha7>), resolves VERSION-line and mirror conflicts only, bumps VERSION above main
+# its base branch on a new branch (repair/pr-<n>-<sha7>), resolves VERSION-line and mirror conflicts only, bumps VERSION above the base
 # and the open claims, runs the suites and guards with no credential in their environment, pushes the branch, opens the
 # replacement pull request and closes the old one as superseded. A semantic overlap is refused and stays with the issue.
-# It NEVER merges, never force-pushes and never touches main.
+# It NEVER merges or force-pushes, and never modifies a base branch.
 #
 # TRIGGERS: workflow_dispatch (one pull request, or every open repair issue when `pr` is empty) and the completion of
 # remediation-consumer, which qnfo-cloud-ops dispatches when it has been idle for 60 minutes (PROBE-CADENCE-1), so the
@@ -15,16 +15,16 @@ name: conflict-repair
 # It pushes only repair/* branches, so the chain is acyclic.
 #
 # CONFLICT-REPAIR-INPLACE-1 (2026-10-19, owner directive "pull requests need to squash, merge and close faster as they are holding up code
-# loops and CI pipelines"): a pull request that conflicted with main waited for the hourly consumer, a repair issue and a quiet window, and
+# loops and CI pipelines"): a pull request that conflicted with its base waited for the hourly consumer, a repair issue and a quiet window, and
 # a code-loop branch (codeagent-*) was never taken at all, so five pull requests sat 75 to 1091 minutes on 2026-10-19. Now every push to
 # main looks for open pull requests GitHub reports as conflicting (mergeable_state dirty) whose newest commit is 10 minutes old, any author
-# and branch, and merges main into the pull request's OWN branch (never forced; VERSION-line and mirror conflicts only; release notes of both
-# sides kept; VERSION raised above main and the other open claims; suites and guards run first), then dispatches the check workflows on it.
+# and branch, and merges the pull request's base into its OWN branch (never forced; VERSION-line and mirror conflicts only; release notes of both
+# sides kept; VERSION raised above the base and other open claims; suites and guards run first), then dispatches the check workflows on it.
 # A cheap probe step skips the whole job when nothing conflicts, so a push to main costs a few API reads.
 #
 # PR-MERGE-SLA-10M-1 (2026-10-26, owner directive: every pull request merges within 10 minutes of opening; agent_issues 1000291): the doer now takes
 # a draft that does not ask to wait (CONFLICT_REPAIR_DRAFTS=off restores the old skip), waits 3 minutes of quiet instead of 10, and decides a pull request
-# GitHub has not computed (mergeable null while main keeps moving) with git merge-tree instead of skipping it. Before this a conflicting session pull
+# GitHub has not computed (mergeable null while a base keeps moving) with git merge-tree against that base instead of skipping it. Before this a conflicting session pull
 # request, always a draft, was never repaired, and a conflicting one GitHub left unknown was not either.
 #
 # OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, owner: "Yes, auto-approve all"): the approval-gated zero-job pull_request runs that a repair push creates are APPROVED, not deleted
@@ -41,7 +41,7 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: "Pull request number to re-apply onto main (empty: every open STALE-PR-CONFLICT-REPAIR-1 issue, up to 3)"
+        description: "Pull request number to re-apply onto its base branch (empty: every open STALE-PR-CONFLICT-REPAIR-1 issue, up to 3)"
         required: false
         default: ""
       push:
@@ -105,7 +105,7 @@ jobs:
           done
           # PR-MERGE-SLA-10M-1: GitHub leaves mergeable null for as long as main keeps moving (every 1 to 5 minutes here), and a pull request it never
           # computes was counted as clean, so it was never repaired. A pull request still unknown after the retries makes the job run; the script
-          # then decides it with git merge-tree (scripts/conflict_repair.py merge_tree_conflicts).
+          # then decides it with git merge-tree against that pull request's base (scripts/conflict_repair.py merge_tree_conflicts).
           dirty=$((dirty+unknown))
           echo "dirty=$dirty" >> "$GITHUB_OUTPUT"
           echo "open pull requests conflicting with main or not yet computed by GitHub: $dirty (unknown: $unknown)"
@@ -134,7 +134,7 @@ jobs:
           if [ ! -f scripts/conflict_repair.py ]; then echo "scripts/conflict_repair.py is not on main yet; nothing to do"; exit 0; fi
           python3 scripts/conflict_repair.py --selftest
 
-      - name: re-apply conflicting quiet pull requests onto main (never merges)
+      - name: re-apply conflicting quiet pull requests onto their base branches (never merges)
         if: steps.probe.outputs.dirty != '0'
         run: |
           set -uo pipefail

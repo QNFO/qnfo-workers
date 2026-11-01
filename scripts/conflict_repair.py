@@ -2,17 +2,17 @@
 """conflict_repair.py -- CONFLICT-REPAIR-DOER-1 (agent_issues 2305, charter pillar: autonomy).
 
 WHAT  The doer for STALE-PR-CONFLICT-REPAIR-1 issues (qnfo-fleet-control files one per quiet pull request that conflicts with
-      main). For one pull request it
+      its base branch). For one pull request it
         1. reads the pull request (open, same repository, not a draft, `mergeable_state: dirty`);
-        2. branches `repair/pr-<n>-<head sha7>` from origin/main and merges the pull request's head into it without committing;
-        3. resolves what can be resolved without judgement, keeping main's meaning everywhere else:
+        2. branches `repair/pr-<n>-<head sha7>` from its base branch and merges the pull request's head into it without committing;
+        3. resolves what can be resolved without judgement, keeping the base branch's meaning everywhere else:
              - a conflict whose every hunk is only the `var VERSION = "..."` line of a worker.js takes the pull request's
                line (the next step bumps it), which is how nearly every conflict on this repository arises: two changes to
                one worker each bump the same line;
              - deployed-current.worker.js is never merged: it is rewritten from the resolved worker.js (mirror-guard);
              - anything else is a semantic overlap. The merge is aborted, nothing is pushed, and the outcome is
                `needs-session` with the files, so the issue stays open for a doer that can read the code;
-        4. bumps each changed worker's VERSION above what main and every other open pull request claim (VERSION-AHEAD-1);
+        4. bumps each changed worker's VERSION above what the base branch and every other open pull request claim (VERSION-AHEAD-1);
         5. runs the checks a pull request gets: node --check, the changed workers' suites (scripts/run-suites.mjs),
            mirror-guard, version-bump-guard and the workers-standards guard;
         6. with --push: pushes the branch, opens the replacement pull request naming the old one, dispatches the check
@@ -301,14 +301,32 @@ def asks_to_wait(pr):
     return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or BODY_HOLD_RE.search(hold_text(pr.get("body"))))
 
 
-def merge_tree_conflicts(number, cwd=None):
-    """PR-MERGE-SLA-10M-1: True when the pull request's head conflicts with origin/main, False when it merges cleanly, None when that cannot
-    be told. GitHub leaves `mergeable` null for as long as main keeps moving (every 1 to 5 minutes here), so a conflicting pull request read
+def valid_base_branch(base_ref, cwd=None):
+    """Whether an API-supplied base branch is a valid Git branch name."""
+    if not base_ref:
+        return False
+    return sh(["git", "check-ref-format", "--branch", str(base_ref)], cwd, check=False, timeout=30).returncode == 0
+
+
+def fetch_base_branch(base_ref, number, cwd=None):
+    """Fetch a validated PR base into an isolated remote-tracking ref."""
+    if not valid_base_branch(base_ref, cwd):
+        return None
+    target = "refs/remotes/origin/pr-base-%d" % int(number)
+    git(["fetch", "-q", "origin", "+refs/heads/%s:%s" % (base_ref, target)], cwd)
+    return target
+
+
+def merge_tree_conflicts(number, cwd=None, base_ref="main"):
+    """PR-MERGE-SLA-10M-1: True when the pull request's head conflicts with its base branch, False when it merges cleanly, None when that cannot
+    be told. GitHub leaves `mergeable` null for as long as a base keeps moving (every 1 to 5 minutes here), so a conflicting pull request read
     as `unknown` was never repaired. git computes it locally: `git merge-tree --write-tree` exits 1 on a conflict and 0 on a clean merge."""
     try:
-        git(["fetch", "-q", "origin", "main"], cwd)
+        base = fetch_base_branch(base_ref, number, cwd)
+        if not base:
+            return None
         git(["fetch", "-q", "origin", "+refs/pull/%d/head:refs/remotes/origin/pr-%d" % (number, number)], cwd)
-        r = sh(["git", "merge-tree", "--write-tree", "--name-only", "origin/main", "refs/remotes/origin/pr-%d" % number], cwd, check=False, timeout=120)
+        r = sh(["git", "merge-tree", "--write-tree", "--name-only", base, "refs/remotes/origin/pr-%d" % number], cwd, check=False, timeout=120)
     except Exception:  # a failed fetch or a git older than 2.38 is "cannot tell", never a conflict
         return None
     if r.returncode == 1:
@@ -317,7 +335,7 @@ def merge_tree_conflicts(number, cwd=None):
 
 
 def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.sleep, mtf=None):
-    """Open pull requests GitHub reports as conflicting with main (mergeable_state dirty), oldest-quiet first, up to limit: any author,
+    """Open pull requests GitHub reports as conflicting with their base (mergeable_state dirty), oldest-quiet first, up to limit: any author,
     any branch except repair/*, a draft, a hold or a fork. A pull request whose newest commit is younger than quiet_min minutes
     is left to its author. GitHub computes mergeability on the first read, so a null is read again a few times; a pull request still null
     after that is tested with git (merge_tree_conflicts) instead of being skipped. A draft is taken unless it asks to wait (DRAFTS)."""
@@ -337,9 +355,10 @@ def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.s
             sleep(5)
         if not isinstance(full, dict) or eligible(full):
             continue
+        base_branch = str((full.get("base") or {}).get("ref") or "")
         conflicting = full.get("mergeable") is False and full.get("mergeable_state") == "dirty"
         if not conflicting and full.get("mergeable") is None:
-            conflicting = mtf(n) is True
+            conflicting = mtf(n, base_branch) is True
         if not conflicting:
             continue
         c = ghf("repos/%s/commits/%s" % (REPO, full["head"]["sha"])) or {}
@@ -365,8 +384,11 @@ def eligible(pr):
     if pr.get("draft") and asks_to_wait(pr):
         return "the pull request is a draft that asks to wait"
     head = pr.get("head") or {}
-    if ((head.get("repo") or {}).get("full_name") or "") != ((pr.get("base") or {}).get("repo") or {}).get("full_name"):
+    base = pr.get("base") or {}
+    if ((head.get("repo") or {}).get("full_name") or "") != (base.get("repo") or {}).get("full_name"):
         return "the head is a fork"
+    if not base.get("ref"):
+        return "the base branch could not be read"
     if str(head.get("ref") or "").startswith("repair/"):
         return "the pull request is itself a repair"
     if pr.get("mergeable") is True:
@@ -379,12 +401,13 @@ def branch_name(pr):
 
 
 def replacement_text(pr, bumped, checks):
+    base_branch = str((pr.get("base") or {}).get("ref") or "main")
     title = re.sub(r"\s*\(re-applied from #\d+\)$", "", str(pr.get("title") or "pull request %s" % pr["number"]))[:200] + " (re-applied from #%d)" % pr["number"]
-    body = ("Charter pillar: autonomy. CONFLICT-REPAIR-DOER-1 (agent_issues 2305): pull request #%d conflicted with main and went quiet, so its "
-            "commits are re-applied here on top of main. Only VERSION-line and mirror conflicts were resolved; every other line is the "
-            "original change or main.\n\n" % pr["number"])
+    body = ("Charter pillar: autonomy. CONFLICT-REPAIR-DOER-1 (agent_issues 2305): pull request #%d conflicted with %s and went quiet, so its "
+            "commits are re-applied here on top of that base. Only VERSION-line and mirror conflicts were resolved; every other line is the "
+            "original change or the base.\n\n" % (pr["number"], base_branch))
     if bumped:
-        body += "VERSION raised above main and the open pull requests: " + "; ".join("%s %s -> %s" % b for b in bumped) + ".\n\n"
+        body += "VERSION raised above the base branch and the open pull requests: " + "; ".join("%s %s -> %s" % b for b in bumped) + ".\n\n"
     body += "Checked on the runner before the push: " + "; ".join("%s %s" % (k, "ok" if v else "FAILED") for k, v in checks) + ".\n\n"
     body += "Supersedes #%d, which is closed with this number.\n\n---\nOriginal description:\n\n%s\n" % (pr["number"], str(pr.get("body") or "")[:6000])
     return title, body
@@ -449,17 +472,17 @@ def reapply(head_ref, base_ref, branch, cwd=None, message=None, in_place=False):
     return {"outcome": "reapplied" if conflicted else "clean", "workers": workers, "resolved": resolved, "changed": changed}
 
 
-def landed_on_main(head_ref, base_ref, cwd=None, min_len=12):
-    """MERGE-LANE-LANDED-1 and -2 (agent_issues 100293, PR 3093): returns the changed files when the pull request's change is already in main's
-    copy of each of them, else None. A pull request whose change reached main by another route has no conflict to repair, so it is closed as
+def landed_on_base(head_ref, base_ref, cwd=None, min_len=12):
+    """MERGE-LANE-LANDED-1 and -2 (agent_issues 100293, PR 3093): returns the changed files when the pull request's change is already in its base's
+    copy of each of them, else None. A pull request whose change reached its base by another route has no conflict to repair, so it is closed as
     superseded instead of left with an issue that says 'needs judgement' (PR 3093 sat conflicted for hours although q08-signal-engine already
     carried its qwen switch).
-    The test is placement-aware (MERGE-LANE-LANDED-2): the first version asked only that each added line occur somewhere in main's file, so a
-    one-line pull request that adds a call main already has in another function (handleB gains the validateInput(...) that handleA has) read as
-    landed and would have been closed with valid work in it. Each change segment of the diff (unified=1) must now appear in main contiguously,
+    The test is placement-aware (MERGE-LANE-LANDED-2): the first version asked only that each added line occur somewhere in the base file, so a
+    one-line pull request that adds a call the base already has in another function (handleB gains the validateInput(...) that handleA has) read as
+    landed and would have been closed with valid work in it. Each change segment of the diff (unified=1) must now appear in the base contiguously,
     with its leading and trailing context line around the added lines (so a pure deletion needs the two context lines adjacent), and a line the
-    pull request removes must be gone from main's file altogether. The VERSION line and the deployed-current mirror never count: a pull
-    request's own bump is never on main and the mirror is a copy of worker.js. Anything uncertain (a changed neighbour, a file main lacks,
+    pull request removes must be gone from the base file altogether. The VERSION line and the deployed-current mirror never count: a pull
+    request's own bump is never on its base and the mirror is a copy of worker.js. Anything uncertain (a changed neighbour, a file the base lacks,
     a segment that mixes a VERSION line) returns None and the pull request is repaired as before. min_len keeps its old meaning for removed lines."""
     out = git(["diff", "--unified=1", "--no-color", "%s...%s" % (base_ref, head_ref)], cwd)
     segs, cur, seg, ctx_before, in_hunk = {}, None, None, None, False
@@ -514,10 +537,12 @@ def landed_on_main(head_ref, base_ref, cwd=None, min_len=12):
     return files
 
 
-def claimed_versions(worker, skip_pr=None):
-    """VERSIONs that main and the open pull requests (except skip_pr) claim for a worker (REST, as CLAUDE.md prescribes)."""
+def claimed_versions(worker, skip_pr=None, base_branch="main"):
+    """VERSIONs that main, the target base, and the other open pull requests claim (REST, as CLAUDE.md prescribes)."""
     out = []
     refs = [("main", None)]
+    if base_branch and base_branch != "main":
+        refs.append((base_branch, None))
     for p in gh("repos/%s/pulls?state=open&per_page=100" % REPO) or []:
         if p.get("number") != skip_pr:
             refs.append((p["head"]["sha"], p["number"]))
@@ -528,7 +553,7 @@ def claimed_versions(worker, skip_pr=None):
     return out
 
 
-def bump_workers(workers, skip_pr, cwd=None, claims=claimed_versions):
+def bump_workers(workers, skip_pr, cwd=None, claims=claimed_versions, base_branch="main"):
     """Raises each worker's VERSION above the claims and mirrors it. Returns [(worker, old, new)] for the ones that moved."""
     moved = []
     for w in workers:
@@ -538,7 +563,8 @@ def bump_workers(workers, skip_pr, cwd=None, claims=claimed_versions):
         with open(path, encoding="utf-8", errors="replace") as fh:
             text = fh.read()
         old = read_version(text)
-        new = bump_above(old, claims(w, skip_pr)) if old else None
+        versions = claims(w, skip_pr, base_branch) if claims is claimed_versions else claims(w, skip_pr)
+        new = bump_above(old, versions) if old else None
         if not new or new == old:
             continue
         fixed = set_version(text, new)
@@ -696,6 +722,9 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             done = settle_issue(number, ev)
             return {"pr": number, "outcome": "settled" if done else "settle-failed", "why": why, "evidence": ev}
         return {"pr": number, "outcome": "skipped", "why": why}
+    base_branch = str((pr.get("base") or {}).get("ref") or "")
+    if not valid_base_branch(base_branch):
+        return {"pr": number, "outcome": "skipped", "why": "the base branch is missing or invalid"}
     head_sha = pr["head"]["sha"]
     if push and attempted(number, head_sha):
         return {"pr": number, "outcome": "skipped", "why": "head %s was already re-applied and pushed" % head_sha[:7]}
@@ -704,36 +733,39 @@ def repair(number, push=False, keep_branch=False, in_place=False):
     head_ref = str(pr["head"].get("ref") or "")
     if in_place:
         branch = "inplace/pr-%d-%s" % (number, head_sha[:7])  # a local work branch; the push goes to the pull request's own branch
-    meta = {"pr": number, "head": head_sha, "branch": head_ref if in_place else branch, "pushed": 0, "in_place": 1 if in_place else 0}
+    meta = {"pr": number, "head": head_sha, "base": base_branch, "branch": head_ref if in_place else branch, "pushed": 0, "in_place": 1 if in_place else 0}
     if any(str(f).startswith(".github/") for f in files):
         res = {"pr": number, "outcome": "needs-session", "why": "the pull request changes .github/, which the Actions token may not push", "files": [f for f in files if str(f).startswith(".github/")]}
         ledger(number, head_sha, "warn", "CONFLICT-REPAIR-DOER-1 PR %d not re-applied: %s" % (number, res["why"]), dict(meta, outcome="needs-session"))
         return res
     start = git(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
-    git(["fetch", "-q", "origin", "main"])
-    git(["fetch", "-q", "origin", "+refs/pull/%d/head:refs/remotes/origin/pr-%d" % (number, number)])
     res = {"pr": number, "branch": head_ref if in_place else branch, "in_place": in_place}
     try:
-        landed = landed_on_main("refs/remotes/origin/pr-%d" % number, "origin/main")
-        if landed:
-            res.update({"outcome": "already-on-main", "files": landed})
-            if push:
-                gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "MERGE-LANE-LANDED-1: every substantive line this pull request adds (%s) is already on main, so there is nothing left to merge or repair. Closing as superseded; the change reached main by another route." % ", ".join(landed)})
-                gh("repos/%s/pulls/%d" % (REPO, number), "PATCH", {"state": "closed"})
-                ledger(number, head_sha, "ok", "MERGE-LANE-LANDED-1 PR %d closed: its change is already on main (%s)" % (number, ", ".join(landed)), dict(meta, outcome="already-on-main", files=landed))
+        base_ref = fetch_base_branch(base_branch, number)
+        if not base_ref:
+            res.update({"outcome": "skipped", "why": "the base branch could not be fetched"})
             return res
-        r = reapply("refs/remotes/origin/pr-%d" % number, "origin/main", branch, in_place=in_place)
+        git(["fetch", "-q", "origin", "+refs/pull/%d/head:refs/remotes/origin/pr-%d" % (number, number)])
+        landed = landed_on_base("refs/remotes/origin/pr-%d" % number, base_ref)
+        if landed:
+            res.update({"outcome": "already-on-base", "files": landed})
+            if push:
+                gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "MERGE-LANE-LANDED-1: every substantive line this pull request adds (%s) is already on base branch `%s`, so there is nothing left to merge or repair. Closing as superseded; the change reached its base by another route." % (", ".join(landed), base_branch)})
+                gh("repos/%s/pulls/%d" % (REPO, number), "PATCH", {"state": "closed"})
+                ledger(number, head_sha, "ok", "MERGE-LANE-LANDED-1 PR %d closed: its change is already on base %s (%s)" % (number, base_branch, ", ".join(landed)), dict(meta, outcome="already-on-base", files=landed))
+            return res
+        r = reapply("refs/remotes/origin/pr-%d" % number, base_ref, branch, in_place=in_place)
         res.update(r)
         if r["outcome"] not in ("reapplied", "clean"):
             ledger(number, head_sha, "warn", "CONFLICT-REPAIR-DOER-1 PR %d not re-applied (%s): %s" % (number, r["outcome"], ", ".join(r.get("files") or []) or r.get("error") or ""), dict(meta, outcome=r["outcome"], files=r.get("files")))
             if push and r["outcome"] == "needs-session":
-                gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "CONFLICT-REPAIR-DOER-1 could not re-apply this pull request onto main without judgement. Overlapping files: `%s`. Only VERSION-line and mirror conflicts are resolved automatically; the repair issue stays open for a session or the code loop." % "`, `".join(r.get("files") or [])})
+                gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "CONFLICT-REPAIR-DOER-1 could not re-apply this pull request onto base branch `%s` without judgement. Overlapping files: `%s`. Only VERSION-line and mirror conflicts are resolved automatically; the repair issue stays open for a session or the code loop." % (base_branch, "`, `".join(r.get("files") or []))})
             return res
-        bumped = bump_workers(r["workers"], number)
+        bumped = bump_workers(r["workers"], number, base_branch=base_branch)
         res["bumped"] = bumped
         git(["-c", "user.name=qnfo-conflict-repair", "-c", "user.email=conflict-repair@users.noreply.github.com", "commit", "-q", "-m",
-             ("merge main into %s (CONFLICT-REPAIR-INPLACE-1, #%d)" % (head_ref, number) if in_place else "re-apply #%d onto main (CONFLICT-REPAIR-DOER-1)" % number) + "\n\n%s\n\nResolved without judgement: %s. VERSION: %s." % ( str(pr.get("title") or "")[:200], ", ".join(r["resolved"]) or "nothing (clean merge)", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged")])
-        checks = run_checks(r["workers"], "origin/main")
+             ("merge %s into %s (CONFLICT-REPAIR-INPLACE-1, #%d)" % (base_branch, head_ref, number) if in_place else "re-apply #%d onto %s (CONFLICT-REPAIR-DOER-1)" % (number, base_branch)) + "\n\n%s\n\nResolved without judgement: %s. VERSION: %s." % ( str(pr.get("title") or "")[:200], ", ".join(r["resolved"]) or "nothing (clean merge)", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged")])
+        checks = run_checks(r["workers"], base_ref)
         res["checks"] = checks
         res["sha"] = git(["rev-parse", "HEAD"]).strip()
         if not all(v for _, v in checks):
@@ -761,31 +793,31 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             if phantoms:
                 emit("PHANTOM-RUN-CLEAR-1 PR %d: %d gated pull_request run(s) on %s, cleared %d (%s)" % (
                     number, len(phantoms), res["sha"][:7], sum(1 for _, _, _, c in phantoms if c), ", ".join("%s %s" % (a, n or "?") for _, n, a, _ in phantoms)))
-            note = ("CONFLICT-REPAIR-INPLACE-1: this pull request conflicted with main and was quiet, so main was merged into `%s` "
+            note = ("CONFLICT-REPAIR-INPLACE-1: this pull request conflicted with base branch `%s` and was quiet, so that base was merged into `%s` "
                     "(only VERSION-line and mirror conflicts were resolved: %s; VERSION: %s). The checks ran on the runner before the push (%s) "
                     "and are dispatched again on the branch.") % (
-                head_ref, ", ".join(r["resolved"]) or "none", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged",
+                base_branch, head_ref, ", ".join(r["resolved"]) or "none", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged",
                 "; ".join("%s %s" % (k, "ok" if v else "FAILED") for k, v in checks))
             gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": note})
             res["outcome"] = "updated"
-            ledger(number, head_sha, "ok", "CONFLICT-REPAIR-INPLACE-1 PR %d: main merged into %s (%s)" % (number, head_ref, res["sha"][:7]),
+            ledger(number, head_sha, "ok", "CONFLICT-REPAIR-INPLACE-1 PR %d: base %s merged into %s (%s)" % (number, base_branch, head_ref, res["sha"][:7]),
                    dict(meta, outcome="updated", sha=res["sha"], bumped=bumped))
             return res
         git(["push", "origin", branch])
         meta["pushed"] = 1
         title, body = replacement_text(pr, bumped, checks)
-        new = gh("repos/%s/pulls" % REPO, "POST", {"title": title, "head": branch, "base": "main", "body": body})
+        new = gh("repos/%s/pulls" % REPO, "POST", {"title": title, "head": branch, "base": base_branch, "body": body})
         if new and new.get("number"):
             res["new_pr"] = new["number"]
             for wf in DISPATCHABLE:
                 sh(["gh", "workflow", "run", wf, "--repo", REPO, "--ref", branch], check=False, timeout=60)
             clear_phantom_runs(res["sha"])
-            gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "Superseded by #%d: CONFLICT-REPAIR-DOER-1 re-applied this change onto main (%s)." % (new["number"], "; ".join("%s %s -> %s" % b for b in bumped) or "no VERSION change")})
+            gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "Superseded by #%d: CONFLICT-REPAIR-DOER-1 re-applied this change onto base branch `%s` (%s)." % (new["number"], base_branch, "; ".join("%s %s -> %s" % b for b in bumped) or "no VERSION change")})
             gh("repos/%s/pulls/%d" % (REPO, number), "PATCH", {"state": "closed"})
             res["outcome"] = "replaced"
         else:
             res["outcome"] = "branch-pushed"
-        ledger(number, head_sha, "ok", "CONFLICT-REPAIR-DOER-1 PR %d re-applied onto main as %s (%s), replacement %s" % (number, branch, res["sha"][:7], ("#%d" % res["new_pr"]) if res.get("new_pr") else "not opened: the branch waits for an opener"),
+        ledger(number, head_sha, "ok", "CONFLICT-REPAIR-DOER-1 PR %d re-applied onto base %s as %s (%s), replacement %s" % (number, base_branch, branch, res["sha"][:7], ("#%d" % res["new_pr"]) if res.get("new_pr") else "not opened: the branch waits for an opener"),
                dict(meta, outcome=res["outcome"], new_pr=res.get("new_pr"), sha=res["sha"], bumped=bumped))
         return res
     finally:
@@ -877,7 +909,7 @@ def selftest():
     ok(resolve_version_only(diff3) == 'top\nvar VERSION = "0.14.0-pr";\n', "diff3 markers are read too")
     ok(resolve_version_only(conflict + '<<<<<<< HEAD\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> pr\n') is None, "a second hunk that is code makes the file a semantic overlap")
     ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1.0.0";\nconst x = 1;\n=======\nvar VERSION = "1.0.1";\n>>>>>>> pr\n') is None and resolve_version_only("no markers") is None and resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n') is None, "a hunk with more than the VERSION line, no hunk, or an unterminated hunk is refused")
-    base_pr = {"number": 7, "state": "open", "draft": False, "mergeable": False, "title": "fix x", "body": "why", "head": {"sha": "abcdef1234", "ref": "fix/x", "repo": {"full_name": "o/r"}}, "base": {"repo": {"full_name": "o/r"}}}
+    base_pr = {"number": 7, "state": "open", "draft": False, "mergeable": False, "title": "fix x", "body": "why", "head": {"sha": "abcdef1234", "ref": "fix/x", "repo": {"full_name": "o/r"}}, "base": {"ref": "main", "repo": {"full_name": "o/r"}}}
     ok(eligible(base_pr) is None and "closed" in eligible(dict(base_pr, state="closed")) and eligible(dict(base_pr, draft=True)) is None and "asks to wait" in eligible(dict(base_pr, draft=True, title="WIP: x")) and "fork" in eligible(dict(base_pr, head=dict(base_pr["head"], repo={"full_name": "x/r"})))
        and "does not conflict" in eligible(dict(base_pr, mergeable=True)) and "itself a repair" in eligible(dict(base_pr, head=dict(base_pr["head"], ref="repair/pr-1-abc"))) and eligible(None), "eligible: open, same repository, conflicting, not a repair; a draft is taken unless it asks to wait")
     global DRAFTS
@@ -998,15 +1030,15 @@ def selftest():
         prs[n] = dict(base_pr, number=n, mergeable=None, mergeable_state="unknown", head=dict(base_pr["head"], sha=sha, ref="fix/n%d" % n))
         ages[sha] = 99999
     tested = []
-    def fake_mt(n):
-        tested.append(n)
+    def fake_mt(n, base_ref):
+        tested.append((n, base_ref))
         return {8: True, 9: False, 10: None}[n]
     got = dirty_prs(9, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None, mtf=fake_mt)
-    ok(8 in got and 9 not in got and 10 not in got and sorted(tested) == [8, 9, 10] and 2 in got and 3 not in got, "dirty_prs: a null mergeability that git says conflicts is taken; clean and cannot-tell are left; a pull request GitHub did compute is not re-tested", (got, tested))
+    ok(8 in got and 9 not in got and 10 not in got and sorted(n for n, _ in tested) == [8, 9, 10] and all(base == "main" for _, base in tested) and 2 in got and 3 not in got, "dirty_prs: a null mergeability that git says conflicts is tested against its base; clean and cannot-tell are left; a pull request GitHub did compute is not re-tested", (got, tested))
     for n in (8, 9, 10):
         del prs[n]
     ages.clear(); ages.update(saved_ages)
-    # PR-MERGE-SLA-10M-1: merge_tree_conflicts against a real remote that serves refs/pull/N/head (what GitHub does)
+    # PR-MERGE-SLA-10M-1: merge_tree_conflicts against a remote with pull refs and non-main base branches.
     with tempfile.TemporaryDirectory() as d:
         bare, work = os.path.join(d, "origin.git"), os.path.join(d, "work")
         def g(cwd, *a):
@@ -1014,16 +1046,23 @@ def selftest():
         os.mkdir(bare); g(bare, "init", "-q", "--bare", "-b", "main")
         os.mkdir(work); g(work, "init", "-q", "-b", "main"); g(work, "config", "user.email", "a@b.c"); g(work, "config", "user.name", "t")
         g(work, "remote", "add", "origin", bare)
-        open(os.path.join(work, "f.txt"), "w").write("one\ntwo\nthree\n"); open(os.path.join(work, "g.txt"), "w").write("g\n")
+        open(os.path.join(work, "f.txt"), "w").write("one\ntwo\nthree\n"); open(os.path.join(work, "g.txt"), "w").write("g\n"); open(os.path.join(work, "h.txt"), "w").write("base\n")
         g(work, "add", "-A"); g(work, "commit", "-qm", "base"); base = g(work, "rev-parse", "HEAD").strip()
-        g(work, "checkout", "-q", "-b", "pr5"); open(os.path.join(work, "f.txt"), "w").write("one\nTWO-pr\nthree\n"); g(work, "commit", "-qam", "pr edit")
+        g(work, "checkout", "-q", "-b", "release/next", base); open(os.path.join(work, "h.txt"), "w").write("release\n"); g(work, "commit", "-qam", "release edit")
+        g(work, "push", "-q", "origin", "release/next")
+        g(work, "checkout", "-q", "-b", "pr5", base); open(os.path.join(work, "f.txt"), "w").write("one\nTWO-pr\nthree\n"); g(work, "commit", "-qam", "pr edit")
         g(work, "push", "-q", "origin", "pr5:refs/pull/5/head")
+        g(work, "checkout", "-q", "-b", "pr8", base); open(os.path.join(work, "h.txt"), "w").write("pr\n"); g(work, "commit", "-qam", "release-target PR edit")
+        g(work, "push", "-q", "origin", "pr8:refs/pull/8/head")
         g(work, "checkout", "-q", "-b", "pr6", base); open(os.path.join(work, "g.txt"), "w").write("g-pr\n"); g(work, "commit", "-qam", "pr edit g")
         g(work, "push", "-q", "origin", "pr6:refs/pull/6/head")
         g(work, "checkout", "-q", "main"); open(os.path.join(work, "f.txt"), "w").write("one\nTWO-main\nthree\n"); g(work, "commit", "-qam", "main edit")
         g(work, "push", "-q", "origin", "main")
         ok(merge_tree_conflicts(5, work) is True, "merge_tree_conflicts: a head editing the line main also edited conflicts")
         ok(merge_tree_conflicts(6, work) is False, "merge_tree_conflicts: a head editing another file merges cleanly")
+        ok(merge_tree_conflicts(8, work, "main") is False and merge_tree_conflicts(8, work, "release/next") is True,
+           "merge_tree_conflicts: a PR's conflict is evaluated against its actual base branch")
+        ok(merge_tree_conflicts(8, work, "--upload-pack=bad") is None, "merge_tree_conflicts: an invalid base ref is not passed to git")
         ok(merge_tree_conflicts(77, work) is None, "merge_tree_conflicts: a pull request ref the remote lacks is 'cannot tell', never a conflict")
     # in-place: main is merged into the pull request's own branch; the pull request keeps its commits and gets main's
     with tempfile.TemporaryDirectory() as d:
@@ -1048,7 +1087,7 @@ def selftest():
         moved = bump_workers(r["workers"], 1, d, claims=lambda w, skip: ["1.0.3-main"])
         g("-c", "user.name=t", "-c", "user.email=a@b.c", "commit", "-qm", "merge main into pr")
         ok(moved == [("w", "1.0.1-pr", "1.0.4-pr")] and git(["log", "--first-parent", "--format=%s", "-3"], d).strip().split("\n")[1] == "pr change", "the merge commit sits on top of the pull request's own commits", moved)
-    # MERGE-LANE-LANDED-1: a pull request whose substantive added lines are already on main is detected; a different change is not
+    # MERGE-LANE-LANDED-1: a pull request whose substantive added lines are already on its base is detected; a different change is not
     with tempfile.TemporaryDirectory() as d:
         def g(*a):
             return git(list(a), d)
@@ -1068,13 +1107,13 @@ def selftest():
         for f in ("worker.js", "deployed-current.worker.js"):
             open(os.path.join(d, "w", f), "w").write(base.replace('"1.0.0"', '"1.0.5-main"').replace("  return 0;", '  if (m.indexOf("qwen") >= 0) return 2; // landed elsewhere\n  return 0;').replace("return 1;", "return 1; /* x */"))
         g("commit", "-qam", "main already has the qwen branch")
-        ok(landed_on_main("same", "main", d) is None, "landed_on_main: a line with a trailing comment on main is not the same line (strict, no false positive)")
+        ok(landed_on_base("same", "main", d) is None, "landed_on_base: a line with a trailing comment on the base is not the same line (strict, no false positive)")
         g("checkout", "-q", "main")
         for f in ("worker.js", "deployed-current.worker.js"):
             open(os.path.join(d, "w", f), "w").write(base.replace('"1.0.0"', '"1.0.5-main"').replace("  return 0;", '  if (m.indexOf("qwen") >= 0) return 2;\n  return 0;'))
         g("commit", "-qam", "main has the exact line")
-        ok(landed_on_main("same", "main", d) == ["w/worker.js"], "landed_on_main: the pull request's added line is on main; VERSION and the mirror are ignored", landed_on_main("same", "main", d))
-        ok(landed_on_main("other", "main", d) is None, "landed_on_main: a change main does not have is not landed")
+        ok(landed_on_base("same", "main", d) == ["w/worker.js"], "landed_on_base: the pull request's added line is on its base; VERSION and the mirror are ignored", landed_on_base("same", "main", d))
+        ok(landed_on_base("other", "main", d) is None, "landed_on_base: a change the base does not have is not landed")
     # MERGE-LANE-LANDED-2: placement matters. A line that occurs elsewhere in main's file does not make the change landed.
     with tempfile.TemporaryDirectory() as d:
         def g(*a):
@@ -1097,15 +1136,15 @@ def selftest():
         put(base.replace('"1.0.0"', '"1.0.1-rep"').replace("oldHelperCall(1);", "newHelperCall(1);"))
         g("commit", "-qam", "rep: replace the helper call")
         g("checkout", "-q", "main")
-        ok(landed_on_main("dup", "main", d) is None, "landed_on_main: a call main has in another function does not make a one-line change landed (the PR 3216 hole)")
+        ok(landed_on_base("dup", "main", d) is None, "landed_on_base: a call the base has in another function does not make a one-line change landed (the PR 3216 hole)")
         put(base.replace('"1.0.0"', '"1.0.5-main"').replace("async function handleB(request, env) {\n", "async function handleB(request, env) {\n  validateInput(request, env);\n"))
         g("commit", "-qam", "main gains the call in handleB")
-        ok(landed_on_main("dup", "main", d) == ["w/worker.js"], "landed_on_main: the same change is landed once handleB has the call itself", landed_on_main("dup", "main", d))
-        ok(landed_on_main("del", "main", d) is None, "landed_on_main: a deletion is not landed while main still has the removed line")
+        ok(landed_on_base("dup", "main", d) == ["w/worker.js"], "landed_on_base: the same change is landed once handleB has the call itself", landed_on_base("dup", "main", d))
+        ok(landed_on_base("del", "main", d) is None, "landed_on_base: a deletion is not landed while the base still has the removed line")
         put(base.replace('"1.0.0"', '"1.0.6-main"').replace("  oldHelperCall(1);\n", ""))
         g("commit", "-qam", "main removes the helper call")
-        ok(landed_on_main("del", "main", d) == ["w/worker.js"], "landed_on_main: a deletion is landed when main lacks the line and the two neighbours are adjacent", landed_on_main("del", "main", d))
-        ok(landed_on_main("rep", "main", d) is None, "landed_on_main: a replacement is not landed while main has neither the new line nor lost the old one in place")
+        ok(landed_on_base("del", "main", d) == ["w/worker.js"], "landed_on_base: a deletion is landed when the base lacks the line and the two neighbours are adjacent", landed_on_base("del", "main", d))
+        ok(landed_on_base("rep", "main", d) is None, "landed_on_base: a replacement is not landed while the base has neither the new line nor lost the old one in place")
     emit("conflict_repair selftest: " + ("ok" if not fails else "%d FAILED" % len(fails)))
     return 1 if fails else 0
 
