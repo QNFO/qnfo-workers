@@ -117,8 +117,10 @@ try {
   // A failed ground/claim write rolls back the publication, not just the forecast record.
   db.exec("CREATE TRIGGER reject_research BEFORE INSERT ON q08_forecasts BEGIN SELECT RAISE(ABORT, 'fixture rejects ground'); END;");
   const before = db.prepare("SELECT COUNT(*) n FROM published_pieces").get().n;
+  const signalsBefore = db.prepare("SELECT COUNT(*) n FROM signal_log").get().n;
   await assert.rejects(F.persistPiece(env, draft, { core_concept: "Acme", friction_point: "Acme roadmap", signal_strength: "Forecast" }, { source: "q08", id: "seed", slug: "archive", title: "Acme", url: "https://q08.org/p/archive", points: 0, num_comments: 0, ratio: 0, volatility_score: 0, forecastGround: snapshot }, draft.model), /fixture rejects ground/);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM published_pieces").get().n, before);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM signal_log").get().n, signalsBefore);
   db.exec("DROP TRIGGER reject_research");
 
   // Settle the child while the main claim is still open and not yet due.
@@ -130,7 +132,12 @@ try {
   assert.equal(JSON.parse(settled.evidence_json).judges.length, 2);
   assert.equal(db.prepare("SELECT status FROM q08_forecasts WHERE id = ?").get(row.id).status, "open");
   const response = await F.worker.fetch(new Request("https://q08.org/api/forecasts"), env, { waitUntil() {} });
-  assert.equal((await response.json()).forecasts[0].secondary_claims.length, 2);
+  const publicClaims = (await response.json()).forecasts[0].secondary_claims;
+  assert.equal(publicClaims.length, 2);
+  assert.ok(publicClaims.every((c) => !("evidence_json" in c) && !("forecast_id" in c) && !("id" in c)));
+  const calibration = await F.worker.fetch(new Request("https://q08.org/api/forecasts/calibration"), env, { waitUntil() {} });
+  assert.equal(calibration.status, 200);
+  assert.ok((await calibration.json()).calibration);
   db.prepare("UPDATE q08_forecasts SET status = 'void', disposition = 'retracted' WHERE id = ?").run(row.id);
   assert.equal(db.prepare("SELECT status FROM q08_forecast_claims WHERE claim_index = 1").get().status, "void");
   assert.equal(db.prepare("SELECT status FROM q08_forecast_claims WHERE claim_index = 2").get().status, "resolved");

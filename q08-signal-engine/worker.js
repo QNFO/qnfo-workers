@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.41.0";
+var VERSION = "0.41.2";
 // Q08-FORECAST-RESEARCH-1 (#4291, agent_issues 1000268, pillar reach): researched forecasts and dated secondary claims.
 /* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
@@ -1973,14 +1973,14 @@ async function persistPiece(env, piece, signal, story, model) {
   // Body without the H1
   var body = piece.text.replace(/^#\s+.+\n?/, "").trim();
   // Persist signal log
-  await env.DB.prepare(
+  var signalLog = env.DB.prepare(
     "INSERT OR IGNORE INTO signal_log (id, source, source_id, title, url, points, num_comments, ratio, volatility_score, friction_point, signal_strength, status, processed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
   ).bind(
     "sig-" + salt, (story.source || "hn"), (story.source || "hn") + ":" + String(story.id || ""),
     story.title, story.url, story.points, story.num_comments,
     story.ratio, story.volatility_score,
     signal.friction_point, signal.signal_strength, "published", nowIso()
-  ).run();
+  );
   // Persist piece
   var publication = env.DB.prepare(
     "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json, property) VALUES (?,?,?,?,?,?,?,?,?,?)"
@@ -1992,7 +1992,7 @@ async function persistPiece(env, piece, signal, story, model) {
   // Q08-FORECAST-1: a forecast piece also gets its q08_forecasts record (the claim, probability, horizon and resolution
   // condition the judges later settle). Its skeleton stays out of the essay prompt pool, which feeds essay few-shots only.
   if (fx) {
-    var writes = [publication, env.DB.prepare("UPDATE published_pieces SET kind = 'forecast' WHERE id = ?").bind(pieceId)];
+    var writes = [signalLog, publication, env.DB.prepare("UPDATE published_pieces SET kind = 'forecast' WHERE id = ?").bind(pieceId)];
     var fAlts = (fx.alternatives || []).map(function (a) { return { claim: String(a.claim || "").trim().slice(0, 300), probability: Math.round(Number(a.probability) * 100) / 100 }; });
     var fInd = (fx.indicators || []).map(function (x) { return String(x).trim().slice(0, 200); });
     var fUrls = (fx.watch_urls || []).map(publicHttpsUrl).filter(Boolean);
@@ -2003,7 +2003,10 @@ async function persistPiece(env, piece, signal, story, model) {
         .bind(i + 1, String(c.claim).trim(), Math.round(Number(c.probability) * 100) / 100, c.horizon, String(c.resolution).trim(), String(c.watch_query).trim(), JSON.stringify((c.watch_urls || []).map(publicHttpsUrl)), nowIso(), slug));
     });
     await env.DB.batch(writes);
-  } else await publication.run();
+  } else {
+    await signalLog.run();
+    await publication.run();
+  }
   // Seed prompt pool with structure skeleton (headings, else title + lead paragraph).
   var skeleton = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
   if (skeleton.length < 50) {
@@ -5167,7 +5170,7 @@ async function q08Fetch(req, env, ctx) {
       var fr2 = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, alternatives_json, status, outcome, brier, checks, created_at, resolved_at, disposition FROM q08_forecasts WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
       var fupd = await env.DB.prepare("SELECT slug, prior_probability, probability, reason, evidence_url, created_at FROM q08_forecast_updates ORDER BY id").all().catch(function () { return { results: [] }; });
       var fby = {}; (fupd.results || []).forEach(function (u) { (fby[u.slug] = fby[u.slug] || []).push({ prior_probability: u.prior_probability, probability: u.probability, reason: u.reason, evidence_url: u.evidence_url, at: u.created_at }); });
-      var claims = await env.DB.prepare("SELECT * FROM q08_forecast_claims WHERE slug IN (SELECT slug FROM q08_forecasts ORDER BY id DESC LIMIT 200) ORDER BY claim_index").all().catch(function () { return { results: [] }; });
+      var claims = await env.DB.prepare("SELECT slug, claim_index, claim, probability, horizon, resolution, watch_query, watch_urls, created_at, status, outcome, brier, checks, last_check_at, resolved_at, disposition FROM q08_forecast_claims WHERE slug IN (SELECT slug FROM q08_forecasts ORDER BY id DESC LIMIT 200) ORDER BY claim_index").all().catch(function () { return { results: [] }; });
       var cby = {}; (claims.results || []).forEach(function (c) { (cby[c.slug] = cby[c.slug] || []).push(c); });
       return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: (fr2.results || []).map(function (f) {
   f.original_probability = f.probability;
