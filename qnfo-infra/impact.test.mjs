@@ -8,8 +8,18 @@ const papers = Array.from({ length: 217 }, (_, i) => ({
   doi: "10.1000/test-" + String(i).padStart(3, "0"),
   created_at: i < 167 ? "2026-10-01 00:00:00" : null
 }));
+const SELECTED_DOIS = [
+  "10.5281/zenodo.21637027",
+  "10.5281/zenodo.22109034",
+  "10.5281/zenodo.21821093",
+  "10.5281/zenodo.21944532",
+  "10.5281/zenodo.21878942",
+  "10.5281/zenodo.22026591",
+  "10.5281/zenodo.23000536"
+];
 const writes = { citations: [], scores: [] };
 let pageReads = 0;
+const openAlexDois = [];
 
 const audit = {
   prepare(sql) {
@@ -17,7 +27,7 @@ const audit = {
     return {
       bind(...values) { args = values; return this; },
       async run() {
-        if (sql.includes("INSERT OR REPLACE INTO citation_stats")) writes.citations.push(args);
+        if (sql.includes("INSERT OR REPLACE INTO citation_stats")) writes.citations.push({ args, sql });
         if (sql.includes("INSERT OR REPLACE INTO impact_scores")) writes.scores.push(args);
         return { success: true };
       },
@@ -61,6 +71,8 @@ globalThis.fetch = async (input) => {
     return Response.json({ message: { "is-referenced-by-count": 2 } });
   }
   if (url.hostname === "api.openalex.org") {
+    const doi = decodeURIComponent(url.pathname).match(/\/works\/doi:(.+)$/)?.[1];
+    if (doi) openAlexDois.push(doi);
     return Response.json({ cited_by_count: 3 });
   }
   throw new Error("unexpected host " + url.hostname);
@@ -75,8 +87,9 @@ try {
   if (response.status !== 200) throw new Error("expected success, received " + response.status);
   if (result.papers !== papers.length) throw new Error("collected " + result.papers + " of " + papers.length + " DOI records");
   if (result.stats.length !== papers.length || result.errors.length) throw new Error("incomplete stats or errors in result");
-  if (writes.scores.length !== papers.length || writes.citations.length !== papers.length * 2) throw new Error("not every DOI was persisted from both sources");
-  if (sourceCalls !== papers.length * 2 || pageReads !== 5) throw new Error("unexpected external calls or page count, including the null-timestamp cursor page");
+  if (writes.scores.length !== papers.length || writes.citations.length !== papers.length * 2 + SELECTED_DOIS.length) throw new Error("not every DOI was persisted from both sources, including selected-work OpenAlex readings");
+  if (!SELECTED_DOIS.every((doi) => openAlexDois.includes(doi) && writes.citations.some((row) => row.args[1] === doi && row.sql.includes("'openalex','cited_by_count'")))) throw new Error("selected-work OpenAlex readings were not fetched and persisted");
+  if (sourceCalls !== papers.length * 2 + SELECTED_DOIS.length || pageReads !== 5) throw new Error("unexpected external calls or page count, including selected works and the null-timestamp cursor page");
   if (writes.scores.some((row) => row[1] !== 5)) throw new Error("citation scores were not aggregated from both providers");
   console.log("citation impact tests passed: all " + papers.length + " DOIs collected across " + pageReads + " pages, including 50 with null created_at");
 } finally {

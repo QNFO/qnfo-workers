@@ -611,7 +611,7 @@ __name2(renderContext, "renderContext");
 // "0 4 * * *" (citation impact) and "5 6 * * *" (render health, purge, index window) moved to this worker. Only its read
 // routes are served, at /indexer/health, /indexer/count, /indexer/stats and /indexer/cron/debug; its token-guarded
 // /webhook, /index, /purge and /run routes are not exposed here. Edit the member here; qnfo-paper-indexer/ is FOLDED.
-var INDEXER_VERSION = "3.0.13-folded";
+var INDEXER_VERSION = "3.0.14-selected-works-openalex";
 var INDEXER_CRONS = ["0 4 * * *", "5 6 * * *"];
 var INDEXER_READ_ROUTES = ["/health", "/count", "/stats", "/cron/debug"];
 var indexerMod = (function() {
