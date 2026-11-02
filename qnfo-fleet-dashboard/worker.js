@@ -11,7 +11,8 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.79.1"; // 1.79.1 LOOP-HEARTBEAT-FRESHNESS-1 (issue #1000839, pillar core; patch): a stale /api/loop read queues the claimed issue-loop sync; prior 1.79.0 // 1.78.0 RM-CODE-SESSION-1 (pillar autonomy; minor): owner command turns enter resumable CodeSession streams, with the existing ops agent as fallback. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+var VERSION = "1.79.2"; // 1.79.1 LOOP-HEARTBEAT-FRESHNESS-1 (issue #1000839, pillar core; patch): a stale /api/loop read queues the claimed issue-loop sync; prior 1.79.0 // 1.78.0 RM-CODE-SESSION-1 (pillar autonomy; minor): owner command turns enter resumable CodeSession streams, with the existing ops agent as fallback. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
+// 1.79.2 EXTERNAL-UTM-AUDIENCE-1 (issue 2607, pillar reach; patch): include verified bot-filtered human visits from externally distributed tagged campaigns in the referral metric, conservatively taking the max with RUM to avoid double counting. // 1.77.0 CMD-AGENT-1 (pillar autonomy; minor): for the signed-in owner a plain-English line in the command line is a task for the durable qnfo-ops agent, which runs its tool loop server-side (code, SQL, GitHub, workspace, fleet probes) in the background; the page shows each tool step as it runs and the answer carries the tool trace. Needs qnfo-ops 2.60.0 (ops-exec start/result); when that is absent the grounded answer still runs. prior 1.76.0 VALUE-DASH-1 (pillar autonomy; minor): the home page leads with yield per $100 (outputs, quality, impact per unit of cost) with push and trim levers, and every item carries what it means, why it is shown and a Fix it / Tell the system action (POST /api/owner/act). // 1.75.0 CMD-VOICE-1 (pillar autonomy; minor): POST /api/cmd/transcribe turns recorded speech into text with Workers AI Whisper (model list in CMD_STT_MODELS, fallback per request) and the command line gets a Speak button; scripts/qcli.mjs is the terminal client of the same route. // 1.74.1 ATTENTION-UNMEASURED-1 (agent_issues 1000458, pillar reach; patch): the attention scorecard counts only measured items; an unmeasured post is reported, never scored as zero.
 // 1.79.0 HA-DEGRADED-READ-1 (issue 2607, pillar reach; minor): a bot-filtered RUM result that sharply conflicts with accepted history is held for one refresh; the next read is accepted and its guard verdict is recorded.
 // 1.77.4 ERRATA-CHAIN-DISPATCH-1 + WORKER-OBSERVABILITY-1 (conflict integration): preserve both the folded errata consumer dispatch and affected-service observability changes.
 /* 1.74.0 FLEET-TRIAGE-1 (2026-10-28, pillar autonomy; minor, new route and page): GET /api/triage answers in one open read which root cause each breaching metric belongs to, which breaching metrics no cause maps (named, never counted as zero), and which failure modes are recurring; GET /triage is the plain-language guide to querying the fleet. Read-only, no new worker, cron or model call. */
@@ -4353,7 +4354,16 @@ function humanAudienceBaseline(list) {
   const passed = !!pick;
   if (!pick) { pick = rows[0]; for (const r of rows) if ((Number(r.m.rows) || 0) > (Number(pick.m.rows) || 0)) pick = r; }
   const m = pick.m;
-  return { ts: pick.ts, rows: Number(m.rows) || 0, external: Number(m.external) || 0, continuation: Number(m.continuation) || 0, direct: Number(m.direct) || 0, passed: passed };
+  return { ts: pick.ts, rows: Number(m.rows) || 0, external: Number(m.rum_external == null ? m.external : m.rum_external) || 0, continuation: Number(m.continuation) || 0, direct: Number(m.direct) || 0, passed: passed };
+}
+var HA_EXTERNAL_UTM_CHANNELS = ["bluesky", "substack", "mastodon", "x", "linkedin", "email", "digest", "chatgpt.com"];
+async function humanAudienceExternalUtm(A, day) {
+  try {
+    const r = await A.prepare("SELECT COALESCE(SUM(value), 0) AS n FROM reach_signals WHERE source = 'utm' AND quality = 'human' AND entity_type = 'campaign' AND metric = 'clicks_human' AND channel IN ('bluesky','substack','mastodon','x','linkedin','email','digest','chatgpt.com') AND date >= date(?1, '-6 days') AND date <= ?1").bind(day).first();
+    return { value: Math.max(0, Number(r && r.n) || 0), why: null };
+  } catch (e) {
+    return { value: null, why: "external UTM read unavailable: " + String(e && e.message || e).slice(0, 80) };
+  }
 }
 async function humanAudienceGuardCheck(A, t) {
   let prev = null, skipped = [];
@@ -4421,6 +4431,11 @@ async function refreshHumanAudience(env, nowMs) {
     if (recorded) return { value: null, why: "degraded read held (" + gd.reason + ")" };
     gd.note = "degraded read not held: the human-audience-degraded row could not be written";
   }
+  const rumExternal = t.external;
+  const tagged = await humanAudienceExternalUtm(A, day);
+  t.rum_external = rumExternal;
+  t.external_utm = tagged.value;
+  t.external = Math.max(rumExternal, tagged.value == null ? 0 : tagged.value);
   for (const sql of HA_REGISTRY) await A.prepare(sql).run();
   await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'external_referred_pageviews_7d'").bind(String(t.external), nowIso).run();
   await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'continuation_pageviews_7d'").bind(String(t.continuation), nowIso).run();
@@ -4428,8 +4443,9 @@ async function refreshHumanAudience(env, nowMs) {
   const refs = {};
   for (const k of top) refs[k] = t.refs[k];
   try {
-    const meta = { external: t.external, continuation: t.continuation, direct: t.direct, rows: t.rows, refs: refs, days: HA_DAYS, guard: "ok" };
+    const meta = { external: t.external, rum_external: rumExternal, external_utm: tagged.value, continuation: t.continuation, direct: t.direct, rows: t.rows, refs: refs, days: HA_DAYS, guard: "ok" };
     if (gd.note) meta.guard_note = gd.note;
+    if (tagged.why) meta.external_utm_note = tagged.why;
     await A.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'human-audience', ?3, ?4, 'qnfo-fleet-dashboard', 'ok')").bind("human-audience-" + day, nowIso, ("human audience 7d: external " + t.external + ", continuation " + t.continuation + ", direct " + t.direct + "; top referrers " + (top.map(function(k) { return k + ":" + t.refs[k]; }).join(", ") || "none")).slice(0, 500), JSON.stringify(meta)).run();
   } catch (e) {
   }
