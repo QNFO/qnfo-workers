@@ -59,6 +59,9 @@ ok(superseded.status === "superseded" && superseded.deferred_since === null && s
 ok(/^superseded:contract-on-closed-issue/.test(superseded.last_verdict), "supersession uses the established closed-issue disposition");
 ok(superseded.verify_probe === oldProbe && one(target, oldProbe).observed === "pending: queued=192", "the original queue condition remains unchanged");
 ok(one(target, closingProbe).observed === "cleared", "issue 1001218 closing probe reads cleared after supersession");
+ok(one(target, "SELECT status FROM agent_issues WHERE id = 100622").status === "closed", "the source issue is not changed");
+ok(one(target, "SELECT close_evidence FROM issue_triage WHERE issue_id = 100622").close_evidence === "remediation_verifications#411462", "the source issue's close evidence is preserved");
+ok(one(target, "SELECT COUNT(*) AS n FROM research_queue WHERE status = 'queued'").n === 192, "the queued research work is not changed");
 ok(contract(target, "issue-100500").status === "active" && contract(target, "issue-100500").deferred_since !== null, "another deferred contract is untouched");
 ok(one(target, "SELECT COUNT(*) AS n FROM decision_log").n === 1, "migration replay inserts one decision row");
 const decision = one(target, "SELECT * FROM decision_log");
