@@ -25,7 +25,7 @@ WHERE a.id = 1000552
   AND l.breach = 1
   AND p.outcome IN ('invalid', 'retry')
   AND p.task_id IS NULL
-  AND p.detail LIKE '%anchor is not one verbatim, unique line of qnfo-fleet-control/worker.js:%'
+  AND instr(p.detail, 'anchor is not one verbatim, unique line of qnfo-fleet-control/worker.js:') > 0
   AND instr(COALESCE(a.description, ''), 'ISSUE-AGE-ANCHOR-REARM-1') = 0
   AND EXISTS (SELECT 1 FROM issue_age_actions ia WHERE ia.issue_id = a.id AND ia.rung = '24h');
 
@@ -35,7 +35,7 @@ SET planned_at = '2000-01-01T00:00:00Z',
 WHERE issue_id IN (SELECT issue_id FROM bak_20261102_issue_1000552_anchor_rearm)
   AND outcome IN ('invalid', 'retry')
   AND task_id IS NULL
-  AND detail LIKE '%anchor is not one verbatim, unique line of qnfo-fleet-control/worker.js:%'
+  AND instr(detail, 'anchor is not one verbatim, unique line of qnfo-fleet-control/worker.js:') > 0
   AND EXISTS (
     SELECT 1 FROM agent_issues a
     WHERE a.id = issue_plans.issue_id
