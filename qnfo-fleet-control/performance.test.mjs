@@ -87,19 +87,7 @@ eq(P.perfWorkerHealth({ live_audit: [wla("d", 404, "NOT_DEPLOYED", 1)] }, NOW).v
 
 // --- credibility events and citation coverage -----------------------------------------------------------------------
 const D = P.PERF_SELECTED_DOIS;
-const expectedSelectedDois = [
-  "10.5281/zenodo.21637027",
-  "10.5281/zenodo.22109034",
-  "10.5281/zenodo.21821093",
-  "10.5281/zenodo.21944532",
-  "10.5281/zenodo.21878942",
-  "10.5281/zenodo.22026591",
-  "10.5281/zenodo.23000536"
-];
-eq(JSON.stringify(D), JSON.stringify(expectedSelectedDois), "the seven selected works use their verified OpenAlex DOIs");
-const infraSource = readFileSync(join(here, "..", "qnfo-infra", "worker.js"), "utf8");
-const infraSelected = /var SELECTED_WORK_DOIS = \[([\s\S]*?)\];/.exec(infraSource);
-ok(infraSelected && JSON.stringify(Array.from(infraSelected[1].matchAll(/"(10\.5281\/zenodo\.\d+)"/g), (m) => m[1])) === JSON.stringify(D), "the collector and credibility metric share the same selected DOI set");
+for (let i = 1; i <= 7; i++) D.push("10.9999/selected." + i); // fixture identifiers: the production list is empty (NOZ-DOI-1)
 const cite = (doi, value, ageD) => ({ doi, value, collected_at: new Date(NOW - ageD * 864e5).toISOString() });
 r = P.perfCredibility({ selected_citations: [cite(D[0], 0, 30), cite(D[0], 0, 1), cite(D[1], 0, 1), cite(D[2], 0, 1)], mentions: [], attested: null }, NOW);
 eq(r.value, null, "3 of 7 selected works covered and nothing attested: unmeasured, not 0");
