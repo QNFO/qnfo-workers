@@ -13235,6 +13235,20 @@ async function bdSetRuleMode(ctx, ruleId, fromMode, toMode, stateText, ev, detai
 async function bdLoadRules(ctx) {
   var db = ctx.db, cfg = ctx.cfg, rules = [];
   var rs = await db.prepare("SELECT * FROM breach_playbooks WHERE enabled = 1 ORDER BY rule_id").all();
+  // Build a set of currently enabled rule IDs and close orphaned open issues (their playbook is gone or disabled)
+  try {
+    var cols = await db.prepare("SELECT 1 AS x FROM pragma_table_info('agent_issues') WHERE name = 'rule_id' LIMIT 1").first();
+    if (cols) {
+      var enabledRuleIds = new Set(((rs && rs.results) || []).map(function (r) { return String(r.rule_id); }));
+      var idList = Array.from(enabledRuleIds);
+      if (idList.length) {
+        await db.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE status = 'open' AND rule_id IS NOT NULL AND rule_id NOT IN (" + idList.map(function () { return "?"; }).join(",") + ")")
+          .bind.apply(null, [ctx.nowIso].concat(idList)).run();
+      } else {
+        await db.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?1 WHERE status = 'open' AND rule_id IS NOT NULL").bind(ctx.nowIso).run();
+      }
+    }
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:orphan-close", error: String(e && e.message).slice(0, 160) })); }
   var rf = await db.prepare("SELECT rule_id, COUNT(*) AS n FROM breach_diagnoses WHERE state IN ('failed', 'reverted') AND last_progress_at > ?1 GROUP BY rule_id").bind(bdIso(ctx.nowMs - 864e5)).all();
   var failed = {};
   ((rf && rf.results) || []).forEach(function (r) { failed[r.rule_id] = Number(r.n) || 0; });
