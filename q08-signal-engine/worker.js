@@ -1852,8 +1852,23 @@ function normalizeDraftCore(text) {
     // obeying "no section headers", leaving a plain sentence title. Promote any compact
     // leading title-like line; strip a trailing sentence punctuator so the gate's title
     // pattern checks still apply.
-    if (line.length <= 100 && line.split(/\s+/).length <= 14) {
-      lines[i] = "# " + line.replace(/[.!?]+$/, "");
+    // Q08-H1-PROMOTE-3 (issue #99929): the writer also emits the title wrapped in
+    // emphasis ("**Three replicas made every write slower**") or behind a "title:"
+    // label, sometimes with quotes. Unwrap those forms before the compact-line
+    // test; the length and word caps stay, so a prose lede sentence (which the
+    // title micro-call and the fact-revision path own) is never promoted.
+    var cand = line;
+    var wm = cand.match(/^[*_]{1,3}\s*(.+?)\s*[*_]{1,3}$/);
+    if (wm) cand = wm[1];
+    else {
+      var lm = cand.match(/^title\s*:\s*(.+)$/i);
+      if (lm) cand = lm[1];
+    }
+    cand = cand.replace(/^[\u201c\u2018"']+\s*/, "").replace(/\s*[\u201d\u2019"']+$/, "");
+    // Do not promote a line that looks like a full sentence (contains sentence punctuation)
+    if (/[.!?]/.test(line)) break;
+    if (cand.length <= 100 && cand.split(/\s+/).length <= 14) {
+      lines[i] = "# " + cand.replace(/[.!?]+$/, "");
       return lines.join("\n");
     }
     break;
@@ -2274,7 +2289,7 @@ async function runLevels(env, a) {
       var edFr = framingRepair(ed.text, edProblems, function (t) { return editGateProblems(t, banned, a.forecast); });
       if (edFr) rows.push(framingRepairRow(edFr, "editor"));
       if (edFr && edFr.accepted) ed = { text: edFr.text, model: ed.model, extra: ed.extra, repaired: edFr.removed.length };
-      else {
+      else if (edFr) {
         var ed2 = null;
         try { ed2 = await compose(env, retryPromptFor(a.prompt, ed.text, edProblems, EDIT_FLOOR), banned, editOrder, a.xform); } catch (e) { ed2 = null; }
         if (ed2 && ed2.text) ed2.text = carryFormat(ed2.text, piece.text);

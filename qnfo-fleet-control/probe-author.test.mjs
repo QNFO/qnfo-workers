@@ -41,7 +41,7 @@ const code = [
 const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, __name: (f) => f });
 // the names the hardening adds are looked up one by one, so this suite still loads (and fails its own checks) against a worker that predates them
 vm.runInContext(code + `
-this.api = { rtAuthorLivePathProbe, setTick(k) { rtProbeAuthorTickKey = k; } };
+this.api = { rtAuthorLivePathProbe, setTick(k) { rtProbeAuthorTickKey = k; }, authorDailyLimit: RT_PROBE_AUTHOR_MAX_PER_DAY };
 for (const n of ["rtProbeAuthorValidSql", "rtProbeAuthorFamily", "RT_PROBE_AUTHOR_ALLOW", "RT_PROBE_AUTHOR_REASONS", "RT_PROBE_AUTHOR_SELF_RE", "RT_PROBE_AUTHOR_MAX_SQL", "RT_PROBE_AUTHOR_MAX_OBSERVED"]) { try { this.api[n] = eval(n); } catch (e) { } }`, cx);
 const api = cx.api;
 const { rtAuthorLivePathProbe, setTick } = api;
@@ -129,6 +129,15 @@ const events = (db, kind) => db.prepare("SELECT * FROM cloud_ops_events WHERE ki
   ok(JSON.stringify(r) === "[true,true,true,false]", "three probes a tick, then the bound", r);
   setTick(11); db.prepare("INSERT INTO ops_config (key, value) VALUES ('rt_probe_author', 'off')").run();
   ok((await rtAuthorLivePathProbe(h, env, orphan(db, 5005))) === false, "ops_config rt_probe_author = off stops it");
+}
+{ // rejected authoring attempts consume the per-tick allowance too
+  const { db, h } = mk(); setTick(12);
+  let calls = 0;
+  const env = { AI: { run: async () => { calls++; return chat("SELECT 1 AS expected, 1 AS observed FROM portfolio_gaps LIMIT 1"); } }, AUDIT: h };
+  const outcomes = [];
+  for (const id of [5101, 5102, 5103, 5104]) outcomes.push(await rtAuthorLivePathProbe(h, env, orphan(db, id)));
+  ok(calls === 3 && JSON.stringify(outcomes) === "[false,false,false,false]", "three failed probes consume the tick budget before the fourth model call", { calls, outcomes });
+  ok(api.authorDailyLimit === 120, "successful authored probes are limited to 120 per day", api.authorDailyLimit);
 }
 
 // ---- PROBE-AUTHOR-HARDEN-1 ----

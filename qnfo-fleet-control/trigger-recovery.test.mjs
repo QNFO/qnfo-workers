@@ -22,7 +22,7 @@ const { evaluateMetricTriggers, metricTriggerValue, triggerRecoveryDue, TRIGGER_
 
 const sq = new DatabaseSync(":memory:");
 sq.exec(`CREATE TABLE analytics_metric_triggers (id INTEGER PRIMARY KEY, metric_key TEXT, title TEXT, source_table TEXT, operator TEXT, threshold REAL, priority TEXT, action TEXT, owner TEXT, queue_target TEXT, cooldown_hours INTEGER, enabled INTEGER);
-CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT);
+CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, refresh_cadence TEXT);
 CREATE TABLE analytics_dash_records (metric TEXT, value TEXT); CREATE TABLE analytics_dash_meta (key TEXT, value TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER, close_channel TEXT);
 CREATE VIEW v_issue_age_ladder AS SELECT id, title, CASE WHEN status = 'open' THEN 1 ELSE 0 END AS breach FROM agent_issues;
@@ -43,7 +43,7 @@ END;
 INSERT INTO analytics_metric_triggers VALUES (7, 'ask_error_rate_7d', 'Ask errors high', 'meta', 'gt', 0.1, '7', 'Pillar reach. Fix ask errors.', 'qnfo-ai-search', 'agent_issues', 24, 1);
 INSERT INTO analytics_metric_triggers VALUES (8, 'digest_x', 'Digest only', 'meta', 'gt', 1, 'low', 'note', 'x', 'alerts', 24, 1);
 INSERT INTO analytics_metric_triggers VALUES (9901, 'issues_over_24h_no_doer', 'No-doer issues', 'registry', 'gt', 0, 'critical', 'Pillar autonomy.', 'qnfo-fleet-control', 'agent_issues', 1, 1);
-INSERT INTO metric_registry VALUES ('ask_error_rate_7d', '0.2'), ('digest_x', '0'), ('issues_over_24h_no_doer', '1');`);
+INSERT INTO metric_registry VALUES ('ask_error_rate_7d', '0.2', '10m'), ('digest_x', '0', '10m'), ('issues_over_24h_no_doer', '1', '10m');`);
 const d1 = { prepare(sql0) { const order = []; const sql = sql0.replace(/\?(\d+)/g, (m, n) => { order.push(+n - 1); return "?"; }); let a = [];
   const st = { bind(...x) { a = order.length ? order.map((i) => x[i]) : x; return st; },
     async first() { return sq.prepare(sql).get(...a) ?? null; }, async all() { return { results: sq.prepare(sql).all(...a) }; }, async run() { sq.prepare(sql).run(...a); return {}; } }; return st; } };
