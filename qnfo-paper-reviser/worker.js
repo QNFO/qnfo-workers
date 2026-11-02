@@ -115,6 +115,7 @@ async function aiText(env, prompt, model, maxTokens) {
   // (13 of 22 thin-prior-work writer calls on 2026-10-18/19 came back 0 chars); q08 factCheckExtra measured thinking:false as the switch.
   const body = { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens || 4096 };
   if (/deepseek/.test(m)) body.chat_template_kwargs = { thinking: false };
+  if (/^@cf\/zai-org\/glm-/.test(m)) body.reasoning_effort = "low";
   const res = await env.AI.run(m, body, { gateway: { id: "default" } });
   let text = "";
   try {
