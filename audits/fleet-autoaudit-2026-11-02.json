@@ -1,11 +1,11 @@
 {
-  "audited_at": "2026-11-02 01:08:40",
+  "audited_at": "2026-11-02 01:46:59",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-ops"
+        "qnfo-fleet-control"
       ],
       "refreshed": true,
       "second_pass": []
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.59.17-remediation-probe-author-retry",
+        "version": "0.59.18-codeagent",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -708,7 +708,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.44.3",
+        "version": "0.44.4-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.59.17-remediation-probe-author-retry",
+      "before": "0.59.18-codeagent",
       "http": 200,
-      "live": "0.59.17-remediation-probe-author-retry",
+      "live": "0.59.18-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1676,9 +1676,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.44.3",
+      "before": "0.44.4-codeagent",
       "http": 200,
-      "live": "0.44.3",
+      "live": "0.44.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
