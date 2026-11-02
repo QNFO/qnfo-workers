@@ -3228,7 +3228,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.11-codeagent";
+var VERSION = "1.44.12-codeagent";
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
 /* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
@@ -6344,10 +6344,11 @@ async function verifyPiece(env, text, ground, writerModel, seedText, opts) {
   var det = groundingProblems(stripAnalysisMark(text), ground, opts);
   if (det.length) return { ok: false, stage: "grounding", problems: det, judges: [], unavailable: false };
   var fc = await factCheck(env, reviewText(text), ground, writerModel, seedText);
-  if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true };
-  if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false };
   var bal = await balanceCheck(env, reviewText(text), writerModel, seedText);
-return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false, inferences: fc.inferences || [], balance: bal };
+  if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true, balance: bal };
+  if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false, balance: bal };
+  if (bal && !bal.unavailable && !bal.ok) return { ok: false, stage: "balance", problems: ["one-sided: " + (bal.reason || ("score " + (bal.score == null ? "unknown" : bal.score)))], judges: fc.judges.concat(bal.model ? [{ model: bal.model, family: bal.family, verdict: "balance-fail" }] : []), unavailable: false, balance: bal };
+  return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false, inferences: fc.inferences || [], balance: bal };
 }
 // Everything a reader is shown: title, subtitle, lede (stored apart from the body when the piece does not open with a heading) and body.
 function pieceText(piece) { return "# " + String(piece.title || "") + "\n\n" + (piece.subtitle ? String(piece.subtitle) + "\n\n" : "") + (piece.lede ? String(piece.lede) + "\n\n" : "") + String(piece.body_md || ""); }

@@ -59,24 +59,57 @@ let threw = false;
 try { await aiRunAttr(bad, "qnfo-ai", "chat", "m", {}); } catch (x) { threw = /model down/.test(String(x && x.message)); }
 ok(threw, "a chat error propagates");
 
-// 5. transient 502/504 errors retry the same dynamic route without adding a local fallback
+// 5. transient 502/503/504 errors retry the same dynamic route without adding a local fallback
 const retryStart = src.indexOf("function __aiAttrEnv(");
 const retryEnd = src.indexOf("\n// AIG-CALLER-METADATA-1", retryStart);
 ok(retryStart > 0 && retryEnd > retryStart, "AI binding retry wrapper found in worker.js");
+const retryLogs = [];
 const retryContext = vm.createContext({
   SPEND_CHEAP_WA: "cheap-model",
   __AI_ATTR_RATES: {},
   d1AttrWriteSkip: () => true,
   setTimeout: (fn) => { queueMicrotask(fn); return 1; },
   clearTimeout() {},
-  console: { log() {}, error() {} }
+  console: { log() {}, error(message) { retryLogs.push(message); } }
 });
 vm.runInContext(src.slice(retryStart, retryEnd) + "\nthis.wrapAI = __aiAttrEnv;", retryContext);
-const wrappedCalls = (run) => {
+const wrappedCalls = (run, withAudit = true) => {
   const calls = [];
-  const wrapped = retryContext.wrapAI({ AI: { async run(model, input, opts) { calls.push(model); return run(model, input, opts); } }, QNFO_AUDIT: {} }, "qnfo-ai", "AI", "QNFO_AUDIT");
+  const wrapped = retryContext.wrapAI({ AI: { async run(model, input, opts) { calls.push(model); return run(model, input, opts); } }, ...(withAudit ? { QNFO_AUDIT: {} } : {}) }, "qnfo-ai", "AI", "QNFO_AUDIT");
   return { calls, ai: wrapped.AI };
 };
+for (const withAudit of [true, false]) {
+  retryContext.d1AttrWriteSkip = () => withAudit;
+  retryLogs.length = 0;
+  let attempts = 0;
+  const input = { messages: [{ role: "user", content: "test" }] };
+  const opts = { gateway: { id: "default" } };
+  const expected = { choices: [{ message: { content: "recovered from overload" } }] };
+  const x = wrappedCalls(async (_model, actualInput, actualOpts) => {
+    ok(actualInput === input && actualOpts === opts, "HTTP 503 recovery preserves the request and gateway options");
+    if (++attempts === 1) throw new Error("HttpServerError · HTTP 503");
+    return expected;
+  }, withAudit);
+  let response;
+  try { response = await x.ai.run("dynamic/standard", input, opts); } catch {}
+  ok(response === expected && x.calls.join() === "dynamic/standard,dynamic/standard", "HTTP 503 recovers on the same route " + (withAudit ? "with" : "without") + " audit storage");
+  ok(retryLogs.length === 0, "HTTP 503 recovery does not attempt writes to missing audit storage");
+}
+retryContext.d1AttrWriteSkip = () => true;
+{
+  const unavailable = new Error("HttpServerError · HTTP 503");
+  const x = wrappedCalls(async () => { throw unavailable; }, false);
+  let error;
+  try { await x.ai.run("dynamic/standard", {}, {}); } catch (e) { error = e; }
+  ok(error === unavailable && x.calls.length === 4 && x.calls.every((model) => model === "dynamic/standard"), "HTTP 503 exhaustion without audit storage is bounded and propagates the failure without a provider fallback");
+}
+{
+  const invalid = new Error("invalid request");
+  const x = wrappedCalls(async () => { throw invalid; }, false);
+  let error;
+  try { await x.ai.run("dynamic/standard", {}, {}); } catch (e) { error = e; }
+  ok(error === invalid && x.calls.length === 1, "permanent errors without audit storage propagate without retries");
+}
 {
   let attempts = 0;
   const x = wrappedCalls(async () => {

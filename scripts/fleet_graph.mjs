@@ -757,7 +757,10 @@ export function computeFindings(ctx) {
   if (codeSql && liveTables) {
     for (const s of codeSql) {
       const known = liveTables.get(s.db);
+      // FLEET-GRAPH-FINDINGS-1: only treat a string as a SQL statement (and its tables as real references)
+      // when it starts with a statement keyword; prose or example strings that merely look like SQL are skipped.
       if (!known || known.has(s.table.toLowerCase()) || s.createdInCode) continue;
+      if (s.sql && !/^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s.sql)) continue;
       add("sql-table-missing", s.worker + ":" + s.db + "." + s.table, s.confidence === "EXTRACTED" ? "warn" : "info", s.unit + " " + s.rel + " " + s.table + " in " + s.db + ", which has no table or view of that name");
     }
   }
@@ -1185,6 +1188,7 @@ export async function selftest(log = console.log) {
       'var OPS_URL = "https://qnfo-ops.q08.workers.dev/ops/x";',
       "async function helper(env) { const db = env.AUDIT; return db.prepare(`SELECT id FROM agent_issues WHERE status = ?1`).bind('open').all(); }",
       "async function writer(env) { const { AUDIT } = env; await AUDIT.prepare('INSERT INTO decision_log (actor) VALUES (?1)').bind('x').run(); return fetch(OPS_URL); }",
+      "function statements() { return ['SELECT id FROM missing_t WHERE active = 1', 'Documentation: SELECT id FROM prose_table WHERE active = 1', `Instructions: UPDATE prose_table SET active = 1`]; }",
       "function steps() { return [helper, writer]; }",
       "var worker_default = { async fetch(req, env) { await helper(env); env.MISSING_THING; return env.OPS.fetch(req); }, async scheduled(e, env, ctx) { ctx.waitUntil(writer(env)); await fetch('https://api.github.com/repos/x'); } };",
       "export { worker_default as default };",
@@ -1196,6 +1200,8 @@ export async function selftest(log = console.log) {
     ok(has("fn:w1#default.scheduled", "calls", "fn:w1#writer"), "scheduled calls writer");
     ok(has("fn:w1#helper", "reads", "d1t:qnfo-audit.agent_issues"), "alias db.prepare read resolved to qnfo-audit");
     ok(has("fn:w1#writer", "writes", "d1t:qnfo-audit.decision_log"), "destructured AUDIT write");
+    ok(has("fn:w1#statements", "reads", "d1t:qnfo-audit.missing_t"), "standalone SQL literal keeps its table reference");
+    ok(!g.nodes.has("d1t:qnfo-audit.prose_table"), "prose containing SQL keywords in literals and templates is not a table reference");
     ok(has("fn:w1#writer", "http_calls", "worker:qnfo-ops"), "fetch through a URL constant maps to a fleet worker");
     ok(has("fn:w1#default.scheduled", "http_calls", "host:api.github.com"), "external host");
     ok(has("fn:w1#default.fetch", "uses_binding", "binding:w1.OPS"), "service binding use");
