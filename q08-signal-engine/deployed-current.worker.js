@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.41.2";
+var VERSION = "0.41.3-codeagent";
 // Q08-FORECAST-RESEARCH-1 (#4291, agent_issues 1000268, pillar reach): researched forecasts and dated secondary claims.
 /* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
@@ -206,7 +206,7 @@ async function metrics7d(env) {
   var pub = await one("SELECT COUNT(*) n FROM published_pieces WHERE published_at >= ?1", [since]);
   var runs = await one("SELECT COUNT(*) n, SUM(CASE WHEN piece_published = 1 THEN 1 ELSE 0 END) ok FROM engine_runs WHERE ran_at >= datetime('now','-7 days') AND status NOT IN ('running','abandoned','async-done','skipped','deferred')");
   var reads = await one("SELECT COALESCE(SUM(human),0) human, COALESCE(SUM(crawler),0) crawler, COUNT(*) days FROM q08_daily_reads WHERE day >= ?1", [since.slice(0, 10)]);
-  var votes = await one("SELECT COUNT(*) n, SUM(CASE WHEN signal = 'good' THEN 1 ELSE 0 END) good FROM q08_feedback WHERE created_at >= ?1", [voteSince]);
+  var votes = await one("SELECT COUNT(*) n, SUM(CASE WHEN signal IN ('yes','good') THEN 1 ELSE 0 END) yes, SUM(CASE WHEN signal = 'flat' THEN 1 ELSE 0 END) flat, SUM(CASE WHEN signal = 'no' THEN 1 ELSE 0 END) no FROM q08_feedback WHERE created_at >= ?1", [voteSince]);
   var subs = await one("SELECT COUNT(*) n FROM subscribers WHERE status = 'confirmed'");
   // Q08-RETRACTION-METRIC-1 (0.36.0): of the pieces published in 30 days, the share that carry a q08_retractions row. On 2026-10-26 131 of
   // the 145 pieces ever published were retracted and no metric showed it. Unknown under 10 pieces is null, never a value.
@@ -234,7 +234,8 @@ async function metrics7d(env) {
     crawler_reads: Number(reads && reads.crawler) || 0,
     read_days_measured: Number(reads && reads.days) || 0,
     verified_votes: nVotes,
-    verified_good_share: ratio(Number(votes && votes.good) || 0, nVotes),
+    verified_good_share: ratio(Number(votes && votes.yes) || 0, nVotes),
+    reader_sentiment: ratio((Number(votes && votes.yes) || 0) - (Number(votes && votes.no) || 0), nVotes),
     neurons: neurons,
     neurons_per_published_piece: neurons == null ? null : ratio(neurons, published),
     confirmed_subscribers: Number(subs && subs.n) || 0,
@@ -244,7 +245,7 @@ async function metrics7d(env) {
 }
 // q08 writes its own registry values (the rows, targets and triggers are in migrations/2026-10-02-q08-metrics.sql). A value
 // that is not a finite number is not written: unknown is never a value.
-var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_confirmed_subscribers", "confirmed_subscribers"], ["q08_retraction_rate_30d", "retraction_rate_30d"], ["q08_panel_unavailable_share_7d", "panel_unavailable_share_7d"], ["q08_forecasts_overdue_open", "forecasts_overdue_open"], ["q08_forecast_void_share", "forecast_void_share"]];
+var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_reader_sentiment_7d", "reader_sentiment"], ["q08_confirmed_subscribers", "confirmed_subscribers"], ["q08_retraction_rate_30d", "retraction_rate_30d"], ["q08_panel_unavailable_share_7d", "panel_unavailable_share_7d"], ["q08_forecasts_overdue_open", "forecasts_overdue_open"], ["q08_forecast_void_share", "forecast_void_share"]];
 // Hours from an ISO timestamp (or epoch ms) to nowMs, rounded to 0.1; null when unparseable or in the future.
 function hoursSince(t, nowMs) {
   if (t == null || t === "") return null;
