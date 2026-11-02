@@ -19,7 +19,7 @@ function fixture(options = {}) {
       state.log.push({ method, path, body });
       if (options.refuse === method) return { ok: false, status: 403, message: "Resource not accessible by integration" };
       if (method === "GET" && path.includes("/deliveries?")) {
-        state.deliveryPolls++;
+        if (state.testRequested) state.deliveryPolls++;
         if (state.testRequested && !state.delivered && !options.noDelivery && state.deliveryPolls >= (options.deliveryAfterPolls || 1)) {
           state.delivered = true;
           state.deliveries.push({
