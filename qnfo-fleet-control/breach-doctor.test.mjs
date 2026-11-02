@@ -718,6 +718,29 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
   ok(contract && contract.status === "active" && contract.verify_probe.includes("rule_id = 'T-EXISTING'"), "a deduplicated existing issue receives an active breach-doctor contract", contract);
   ok(decision && decision.outcome === "found issue " + existingId + " with remediation contract issue-" + existingId, "the deduplicated issue outcome is logged only with its contract", decision);
 }
+for (const kind of ["file-issue", "owner-card"]) {
+  const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
+  const issueId = kind === "file-issue" ? 1000179 : 913;
+  const ruleId = kind === "file-issue" ? "T-FILE-RETRY" : "T-CARD-RETRY";
+  if (kind === "owner-card") liveOwnerQueue(raw);
+  raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES (?, 'TEST', 'test-cause', ?, ?, '[]', '[]', 'SELECT ''ok'' AS expected, ''ok'' AS observed', 3, 12, 1, 'on')")
+    .run(ruleId, kind, kind === "file-issue"
+      ? "SELECT 1000179 AS issue_id, 'dash-405' AS subject, json_object('count', 1) AS facts_json"
+      : "SELECT 913 AS issue_id, 'credential' AS subject, json_object('reason', 'credential') AS facts_json");
+  raw.exec("CREATE TRIGGER fail_breach_decision BEFORE INSERT ON decision_log WHEN NEW.actor = 'qnfo-fleet-control:breach-doctor' BEGIN SELECT RAISE(FAIL, 'transient decision failure'); END");
+  old(raw);
+  await tick(raw);
+  const failed = diag(raw, issueId);
+  ok(failed.state === "failed" && failed.error_code === "decision-log", kind + ": decision append failure leaves the diagnosis retryable", failed);
+  ok(q1(raw, "SELECT COUNT(*) n FROM breach_diagnosis_events WHERE diagnosis_id = ? AND event IN ('action', 'handoff')", failed.id).n === 0, kind + ": no final action event is recorded without its decision", failed.id);
+  raw.exec("DROP TRIGGER fail_breach_decision");
+  raw.prepare("UPDATE breach_diagnoses SET last_progress_at = ? WHERE id = ?")
+    .run(new Date(Date.now() - 61 * 60000).toISOString().slice(0, 19) + "Z", failed.id);
+  await tick(raw);
+  const retried = diag(raw, issueId);
+  ok(retried.state === (kind === "file-issue" ? "queued" : "handed-owner"), kind + ": retry completes only after appending the decision", retried);
+  ok(q1(raw, "SELECT COUNT(*) n FROM breach_diagnosis_events WHERE diagnosis_id = ? AND event IN ('action', 'handoff') AND detail LIKE '%decision=dl%'", retried.id).n === 1, kind + ": the completed action event references its appended decision", retried.id);
+}
 // the card survives the live default-adopt trigger for every owner reason (hard markers such as credential, payment or legal make a decision-shaped title useless: only the empty default is robust)
 {
   const reasons = ["credential", "money", "legal-signing", "owner-account", "personal-data"];
