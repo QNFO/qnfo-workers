@@ -5,7 +5,7 @@ REMEDIATION. THE SYSTEM SHALL AUTOMATICALLY SWEEP FOR ALL KNOWN ISSUES AND RESOL
 WHAT  Closes the loop between Cloudflare Workers Observability Issues and the fleet's own tracker:
       1. SWEEP   reads every page of /workers/observability/issues?status=active (Cloudflare API, read).
       2. TRACK   every live group (seen within FILE_H hours, i.e. not yet quiet; not external scan noise) gets ONE open agent_issues row
-                 "CF-OBS-ISSUE-1: <service>: <title>", deduped on the Cloudflare id carried in its description, with:
+                 "CF-OBS-ISSUE-1: <service>: <title> [cf-obs:<group id>]", deduped on the Cloudflare id carried in its description, with:
                    - a code-task line for <service>/worker.js when that file exists, so the code loop attempts the fix;
                    - its issue-<id> contract re-pointed at a d1-query probe that passes once the group has not recurred for
                      QUIET_H hours (read from fleet_issue_dispatch, which qnfo-fleet-control pollObservability refreshes
