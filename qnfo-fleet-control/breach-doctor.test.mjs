@@ -708,7 +708,7 @@ const cm1Cases = (raw, st) => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses W
   const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
   const existingId = 100700, existingTitle = "BREACH-DOCTOR-1: T-EXISTING existing-subject";
   raw.prepare("INSERT INTO agent_issues (id, title, description, source, priority, status, created_at, updated_at) VALUES (?, ?, '', 'qnfo-fleet-control', 'medium', 'open', ?, ?)")
-    .run(existingId, existingTitle, Date.now(), Date.now());
+    .run(existingId, existingTitle, Date.now() - 2 * H, Date.now() - 2 * H);
   raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-EXISTING', 'TEST', 'test-cause', 'file-issue', ?, '[]', '[]', 'SELECT ''ok'' AS expected, ''ok'' AS observed', 3, 12, 1, 'on')")
     .run("SELECT 1000179 AS issue_id, 'existing-subject' AS subject, json_object('count', 1) AS facts_json");
   old(raw);
