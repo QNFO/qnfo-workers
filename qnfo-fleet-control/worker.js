@@ -11544,7 +11544,7 @@ var worker_default2 = {
   },
   async scheduledOnce(event, env, ctx) {
     // CRON-DISPATCH-ELIMINATION-1 (2026-10-13): any cron that is not a known slow schedule is the fast slot (a live */20 after the */10 change fell through to the hourly fan-out, 19:46-21:50Z).
-    const cron = ["0 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1"].indexOf(event.cron) < 0 ? "*/10 * * * *" : event.cron;
+    const cron = ["5 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1"].indexOf(event.cron) < 0 ? "*/10 * * * *" : event.cron;
     // GH-APP-BROKER-1 (0.32.0): every GitHub call of this tick uses the App installation token, the personal token as fallback.
     env = await ghAppEnv(env);
     // FLEET-HEARTBEAT-SELF-1 (0.33.18, issue 2397): this worker's own fleet_heartbeat row, the upsert the other cron workers
