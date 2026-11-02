@@ -1161,6 +1161,7 @@ const handler = {
     if (p === "/api/prefs" && m === "POST") {
       if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
       let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
+      await ensure(env);
       const ans = {};
       const saved = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_prefs WHERE k='survey'").first();
       if (saved) {
@@ -1172,7 +1173,6 @@ const handler = {
         } catch (e) { logErr("prefs-parse", e); }
       }
       for (const [id, v] of Object.entries(b.answers || {})) { if (!SURVEY_IDS.has(id)) return J({ error: "unknown question " + id }, 400); if (v !== true && v !== false && v !== null) return J({ error: "answers are true, false or null" }, 400); ans[id] = v; }
-      await ensure(env);
       await env.JOBS_DB.prepare("INSERT INTO jobsearch_prefs (k, v, updated_at) VALUES ('survey', ?1, ?2) ON CONFLICT(k) DO UPDATE SET v=?1, updated_at=?2").bind(JSON.stringify(ans), new Date().toISOString()).run();
       ctx.waitUntil(run(env).catch((e) => logErr("rerun-after-prefs", e)));   // the owner's own change bypasses the run cooldown
       return J({ ok: true, saved: Object.keys(ans).length, rerun: true });
