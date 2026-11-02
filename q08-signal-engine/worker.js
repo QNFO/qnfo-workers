@@ -5152,7 +5152,7 @@ async function q08Fetch(req, env, ctx) {
       return html(renderRetractions(rrows.results || []));
     }
     if (path === "/forecasts/calibration" || path === "/api/forecasts/calibration") {
-      var cst = await forecastStats(env);
+var claims = await env.DB.prepare("SELECT slug, claim_index, claim, probability, horizon, resolution, watch_query, watch_urls, created_at, status, outcome, brier, checks, last_check_at, resolved_at, disposition FROM q08_forecast_claims WHERE slug IN (SELECT slug FROM q08_forecasts ORDER BY id DESC LIMIT 200) ORDER BY claim_index").all().catch(function () { return { results: [] }; });
       if (path === "/api/forecasts/calibration") return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), calibration: cst.calibration });
       return html(renderCalibration(cst.calibration));
     }
