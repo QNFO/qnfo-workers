@@ -11174,17 +11174,29 @@ async function ghPokeClaim(env, nowMs) {
     return false;
   }
 }
+async function ghPokeRetryD1(operation, stage) {
+  try {
+    return await operation();
+  } catch (e) {
+    if (!/D1_ERROR:\s*Network connection lost\./i.test(String(e && e.message || e))) throw e;
+    await new Promise(function(resolve) { setTimeout(resolve, 100); });
+    var result = await operation();
+    console.warn(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-run-recovered", stage: stage, attempts: 2 }));
+    return result;
+  }
+}
+async function ghPokeRun(env, hint, nowMs, iso) {
+  var e2 = await ghAppEnv(env);
+  var lane = await ghPokeRetryD1(function() { return branchHygieneTick(e2, { laneOnly: true }); }, "lane");
+  var cm = await ghPokeRetryD1(function() { return codeMergeTick(e2, {}); }, "code-merge");
+  await ghWebhookRecord(env, "poke-" + nowMs, iso, "gh-poke", "PR-MERGE-SLA-10M-1: poke" + (hint ? " (" + hint + ")" : "") + ": lane merged " + ((lane && lane.merged_prs) || []).length + ", runner merges " + ((cm && cm.merges) || 0), { hint: hint, lane_merged: (lane && lane.merged_prs) || [], runner_merges: (cm && cm.merges) || 0 }, "lane-run");
+}
 async function ghPokeHandle(request, env, ctx) {
   if (!(await ghPokeEnabled(env))) return json({ ok: true, enabled: false, ran: false }, 202);
   var nowMs = Date.now(), iso = new Date(nowMs).toISOString();
   if (!(await ghPokeClaim(env, nowMs))) return json({ ok: true, debounced: true, ran: false }, 202);
   var hint = String(request.headers.get("X-Poke-Event") || "").replace(/[^A-Za-z0-9_ .-]/g, "").slice(0, 40);
-  var run = Promise.resolve().then(async function() {
-    var e2 = await ghAppEnv(env);
-    var lane = await branchHygieneTick(e2, { laneOnly: true });
-    var cm = await codeMergeTick(e2, {});
-    await ghWebhookRecord(env, "poke-" + nowMs, iso, "gh-poke", "PR-MERGE-SLA-10M-1: poke" + (hint ? " (" + hint + ")" : "") + ": lane merged " + ((lane && lane.merged_prs) || []).length + ", runner merges " + ((cm && cm.merges) || 0), { hint: hint, lane_merged: (lane && lane.merged_prs) || [], runner_merges: (cm && cm.merges) || 0 }, "lane-run");
-  }).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-run", error: String(e && e.message || e).slice(0, 200) })); });
+  var run = Promise.resolve().then(function() { return ghPokeRun(env, hint, nowMs, iso); }).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-run", error: String(e && e.message || e).slice(0, 200) })); });
   if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(run);
   return json({ ok: true, poked: true, ran: true }, 202);
 }
