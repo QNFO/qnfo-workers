@@ -19,8 +19,18 @@ Autonomous signal engine serving https://q08.org — systems-level critiques of 
 
 ## Forecasts (Q08-FORECAST-1, v0.9.0)
 q08 looks forward as well as back. Every `FORECAST_EVERY` (3) pieces, `generate()` writes a forecast instead of scraping a new
-signal: it takes a published essay of the last 21 days (best reader score first, never one that already has a forecast) and
-projects its mechanism forward.
+signal: it takes an audited published essay of the last 30 days (best reader score first, never one that already has a forecast) and
+projects its mechanism forward. A forecast is also due when none has been published that UTC day, independently of essay cadence;
+the existing daily caps and rejection backpressure still apply.
+- **Research (Q08-FORECAST-RESEARCH-1, #4291, pillar reach).** Before writing, the engine queries Hacker News, GDELT,
+  Wikipedia and arXiv using up to six entities from the essay, then reads linked pages (arXiv HTML, not abstract pages)
+  and external primary-source links. It requires 6–15 usable sources, with at most 15 page fetches, 40,000 characters
+  per page, and 60 verbatim numbered sentences carrying URL and date (retrieval date when publication date is unknown).
+  Insufficient research is logged as deferred and retried next tick, not composed against the essay alone.
+  Dated precedents and base rates may come from this ledger; unsupported facts still fail the accuracy checks.
+  The essay, signal and ledger snapshot is stored in `q08_forecasts.ground_json` atomically with the publication,
+  and every ledger URL enters `sources_json`. Re-audits read that snapshot rather than refetching changed material.
+  Research defaults on; `ops_config q08_forecast_ledger = off` restores the legacy single-essay path.
 - **What a forecast is.** One most-likely scenario told as a dated causal sequence, anchored on a real base case, with rival
   scenarios and their probabilities, leading indicators, and a resolution condition anyone can check. The main scenario must be
   at least as probable as every rival (maximum likelihood) and all stated probabilities sum to at most 1. Probabilities are
@@ -29,6 +39,11 @@ projects its mechanism forward.
   alternatives, indicators, watch_query, watch_urls). `parseForecastBlock` strips it, `validateForecast` checks it (horizon 14..730
   days ahead, the stated percent appears in the prose), and `persistPiece` stores it in D1 `q08_forecasts` and sets
   `published_pieces.kind = 'forecast'`. Both are created lazily by `ensureForecastSchema` (no migration for the q08-signal D1).
+- **Secondary predictions.** Optional `secondary_claims` (up to five) use the same claim, probability, horizon,
+  resolution and watch-source validation. They are stored as immutable dated rows in `q08_forecast_claims`,
+  shown on the piece page and `/api/forecasts`, and independently settled by the existing two-judge process,
+  with the same recheck interval, four-check void rule and Brier formula. Retraction voids open child claims;
+  resolved scores are retained. Main-claim calibration remains unchanged.
 - **Same quality stack as essays.** Deterministic gate, one corrective retry, the two-family reader panel (with a forecast
   reader prompt) and the cross-family editor round. A rejected forecast is logged as a `gate_failed` run (`forecast: ...`) and the
   analysis path still runs that tick; an essay is not retried after 2 rejected forecast drafts, and 3 rejections in a UTC day
@@ -64,7 +79,10 @@ projects its mechanism forward.
   Forecasts count toward `q08_max_per_day`.
 - **Metrics.** `q08_forecasts_overdue_open` (target 0) and `q08_forecast_void_share` (target <= 0.5), registered by
   migrations/2026-10-09-q08-forecast-metrics.sql with triggers.
-- Tests: `forecast.test.mjs` (validator, parser, calibration, judge aggregation, and the real handlers over in-memory SQLite).
+- Tests: `forecast.test.mjs`, `forecast-ledger.test.mjs`, `forecast-research.test.mjs` (including archive cadence,
+  research minimum, atomic rollback, snapshot re-audit and secondary settlement).
+- Closing probe for agent issue 1000268: at least three engine-created open forecasts in seven days, with
+  nonempty stored research snapshots and no retracted engine forecasts in that window. Merge alone does not prove this outcome.
 
 ## Cadence cap (Q08-CADENCE-CAP-1, v0.7.37)
 - Before each generation (cron or `POST /run`) the engine reads qnfo-audit `ops_config` key `q08_max_per_day`: an
