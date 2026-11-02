@@ -83,7 +83,7 @@ WHERE EXISTS (
     JOIN agent_issues a ON a.id = b.id
     WHERE b.id = 1000598
       AND a.status = 'open'
-      AND a.description LIKE '%code-task: repo=qnfo-workers path=qnfo-fleet-dashboard/worker.js%'
+      AND instr(a.description, 'code-task: repo=qnfo-workers path=qnfo-fleet-dashboard/worker.js') > 0
       AND a.description LIKE '%code-anchor: async function ipatentUsage(env) {%'
   )
   AND NOT EXISTS (
