@@ -44,6 +44,32 @@ assert.equal(task.enabled, 1);
 const steps = JSON.parse(task.definition).steps;
 assert.equal(steps.length, 12);
 assert.ok(steps.every((step) => step.type === "sql" && step.db === "AUDIT"));
+const originalMigration = readFileSync(new URL("./2026-11-01-issue-age-live-doers.sql", import.meta.url), "utf8");
+const originalTrigger = originalMigration.match(/CREATE TRIGGER IF NOT EXISTS issue_age_live_doers_tick AFTER INSERT ON fleet_tick_heavy\s+BEGIN([\s\S]*?)\s+END;/)?.[1];
+assert.ok(originalTrigger, "the previous heartbeat trigger exists as the behavior baseline");
+const normalizeSql = (sql) => sql.replace(/\s+/g, " ").trim();
+const splitSql = (sql) => {
+  const statements = [];
+  let start = 0;
+  let quoted = false;
+  for (let i = 0; i < sql.length; i++) {
+    if (sql[i] === "'" && sql[i + 1] === "'") {
+      i++;
+    } else if (sql[i] === "'") {
+      quoted = !quoted;
+    } else if (sql[i] === ";" && !quoted) {
+      statements.push(sql.slice(start, i));
+      start = i + 1;
+    }
+  }
+  statements.push(sql.slice(start));
+  return statements.map(normalizeSql).filter(Boolean);
+};
+assert.deepEqual(
+  steps.map((step) => normalizeSql(step.sql)),
+  splitSql(originalTrigger),
+  "scheduled steps preserve the issue-age trigger's original SQL and order"
+);
 assert.deepEqual({ ...db.prepare("SELECT definition FROM fleet_tasks_canonical WHERE id='issue-age-live-doers'").get() }, { definition: task.definition });
 
 for (const step of steps) db.exec(step.sql);
