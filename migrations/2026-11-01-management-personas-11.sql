@@ -14,6 +14,7 @@
 -- in breach-rank order, within the existing age and per-tick caps.
 -- Rollback: UPDATE fleet_tasks SET definition = (SELECT definition FROM bak_20261101_mp11_workflow WHERE id = 'management-personas'), version = version + 1 WHERE id = 'management-personas'
 -- APPLY-BY: ci
+-- REAPPLY-OK: replay is safe because the fleet_tasks update only matches the prior filter and becomes a no-op after success; ledger inserts are conflict-safe
 -- DB: qnfo-audit
 -- BACKUP: bak_20261101_mp11_workflow
 
