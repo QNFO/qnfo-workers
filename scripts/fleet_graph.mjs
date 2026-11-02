@@ -757,7 +757,10 @@ export function computeFindings(ctx) {
   if (codeSql && liveTables) {
     for (const s of codeSql) {
       const known = liveTables.get(s.db);
+      // FLEET-GRAPH-FINDINGS-1: only treat a string as a SQL statement (and its tables as real references)
+      // when it starts with a statement keyword; prose or example strings that merely look like SQL are skipped.
       if (!known || known.has(s.table.toLowerCase()) || s.createdInCode) continue;
+      if (s.sql && !/^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s.sql)) continue;
       add("sql-table-missing", s.worker + ":" + s.db + "." + s.table, s.confidence === "EXTRACTED" ? "warn" : "info", s.unit + " " + s.rel + " " + s.table + " in " + s.db + ", which has no table or view of that name");
     }
   }
