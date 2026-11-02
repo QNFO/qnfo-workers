@@ -561,7 +561,18 @@ try {
     const panel = [];
     // the worker creates this table once per process (the essay runs above already did), so the fixture takes the worker's own statement
     db.exec(src.match(/"(CREATE TABLE IF NOT EXISTS q08_forecasts \(.*?\))"\)\.run\(\)/)[1]);
-    const env = Object.assign({ DB: shim }, extraEnv || {}, { AI: { run: async (m, a) => {
+    db.exec("ALTER TABLE q08_forecasts ADD COLUMN ground_json TEXT");
+    shim.batch = async (statements) => {
+      db.exec("BEGIN");
+      try {
+        const out = [];
+        for (const statement of statements) out.push(await statement.run());
+        db.exec("COMMIT");
+        return out;
+      } catch (e) { db.exec("ROLLBACK"); throw e; }
+    };
+    const audit = { prepare: (sql) => ({ first: async () => /key = 'q08_forecast_ledger'/.test(sql) ? { value: "off" } : null }) };
+    const env = Object.assign({ DB: shim, AUDIT: audit }, extraEnv || {}, { AI: { run: async (m, a) => {
       const c = (a.messages || []).map((x) => x.content).join("\n");
       if (/strict fact-checker/.test(c)) return { response: '{"unsupported":[],"verdict":"pass"}' };
       if (/busy, intelligent reader/.test(c)) { panel.push(c); return { response: '{"would_read_to_end":true,"score":5,"slop_tells":[],"fix":"none"}' }; }

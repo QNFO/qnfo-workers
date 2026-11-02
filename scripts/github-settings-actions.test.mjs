@@ -57,10 +57,11 @@ function fakeGitHub(opts = {}) {
       ...Array.from({ length: 3 }, () => ({ activity_type: "push", actor: { login: "github-actions[bot]" } })),
       { activity_type: "pr_merge", actor: { login: "qnfo-fleet[bot]" } }, { activity_type: "push", actor: { login: "qnfo-fleet[bot]" } },
       { activity_type: "pr_merge", actor: { login: "rwnq8" } }, ...(opts.stranger ? [{ activity_type: "push", actor: { login: "someone-else" } }] : [])]);
-    if (method === "GET" && (m = /^\/repos\/QNFO\/qnfo-workers\/actions\/runs\?status=(queued|in_progress)/.exec(path))) {
+    if (method === "GET" && (m = /^\/repos\/QNFO\/qnfo-workers\/actions\/runs\?status=(queued|in_progress)&per_page=100&page=(\d+)$/.exec(path))) {
       if (opts.runsList403) return json(403, { message: "Resource not accessible by integration" });
       const rows = st.runs.filter((x) => x.status === m[1]).map(({ jobs, ...x }) => x);
-      return json(200, { total_count: rows.length, workflow_runs: rows });
+      const start = (Number(m[2]) - 1) * 100;
+      return json(200, { total_count: rows.length, workflow_runs: rows.slice(start, start + 100) });
     }
     if (method === "GET" && (m = /\/actions\/runs\/(\d+)\/jobs/.exec(path))) {
       const x = st.runs.find((y) => String(y.id) === m[1]);
@@ -293,6 +294,12 @@ ok(!/ghp_|github_pat_|ghs_[A-Za-z0-9]{10}/.test(readFileSync(join(repoRoot, "scr
   g2 = fakeGitHub({ runs: [] });
   r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin" });
   ok(r2.ok && r2.candidates.length === 0 && r2.deleted.length === 0, "nothing stuck is a pass that deletes nothing");
+
+  const beyondFirstPage = Array.from({ length: 100 }, (_, i) => ({ id: 2000 + i, name: "recent", status: "queued", head_branch: "main", created_at: ago(1), jobs: [] }));
+  beyondFirstPage.push({ id: 2100, name: "old queued run", status: "queued", head_branch: "main", created_at: ago(48), jobs: [] });
+  g2 = fakeGitHub({ runs: beyondFirstPage });
+  r2 = await run("delete-stuck-runs", "dry", wfRoot, g2.fetchImpl, { GITHUB_TOKEN: "ghs_x" });
+  ok(r2.ok && r2.candidates.map((c) => c.id).join() === "2100" && g2.st.log.some((x) => /status=queued&per_page=100&page=2$/.test(x.path)), "dry scans later pages and finds a stale run behind the first 100 recent runs", r2.candidates);
 
   g2 = fakeGitHub({ runs: stuck(), runsList403: true });
   r2 = await run("delete-stuck-runs", "live", wfRoot, g2.fetchImpl, { STUCK_RUN_POLL_MS: "0", GH_ADMIN_TOKEN: "pat_admin" });
