@@ -1,103 +1,231 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3ff39394d6ff",
- "due": 557,
- "pass": 152,
- "fail": 377,
- "skipped": 28,
- "deferred": 27,
+ "verifier": "remediation-consumer@05496216a54e",
+ "due": 640,
+ "pass": 137,
+ "fail": 473,
+ "skipped": 30,
+ "deferred": 29,
  "contracts": [
   {
-   "class": "goal-TWIN-NATIVE-TOOLS-1",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:personal-api/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-q08-repeat-class-extension",
-   "issue_id": null,
+   "class": "issue-1001080",
+   "issue_id": 1001080,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "fm-q08-panel-pass-share-low",
-   "issue_id": null,
+   "class": "issue-1001081",
+   "issue_id": 1001081,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "low round-1 panel pass share",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1000582",
-   "issue_id": 1000582,
+   "class": "issue-1001082",
+   "issue_id": 1001082,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001109",
+   "issue_id": 1001109,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-fleet-census-blind",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "issue-1000794",
+   "issue_id": 1000794,
+   "verdict": "fail",
+   "expected": "tool_allowlist>0,human_actions>0,capability>0,agent_actions>0,analytics_events>0,ae_events>0,fleet_agent_tools>0",
+   "observed": "tool_allowlist=0,human_actions=0,capability=0,agent_actions=0,analytics_events=0,ae_events=0,fleet_agent_tools=0",
+   "written": true
+  },
+  {
+   "class": "issue-1001059",
+   "issue_id": 1001059,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001063",
+   "issue_id": 1001063,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001110",
+   "issue_id": 1001110,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001111",
+   "issue_id": 1001111,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001112",
+   "issue_id": 1001112,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2008",
+   "issue_id": 2008,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "defect: a code-loop pull request failed a required check in the last 14 days",
+   "written": true
+  },
+  {
+   "class": "issue-1000802",
+   "issue_id": 1000802,
+   "verdict": "fail",
+   "expected": "<= 20000",
+   "observed": "> 20000 (115449.9)",
+   "written": true
+  },
+  {
+   "class": "issue-1001062",
+   "issue_id": 1001062,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001068",
+   "issue_id": 1001068,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001113",
+   "issue_id": 1001113,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001114",
+   "issue_id": 1001114,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001116",
+   "issue_id": 1001116,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001117",
+   "issue_id": 1001117,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1000696",
+   "issue_id": 1000696,
+   "verdict": "fail",
+   "expected": "workers-ai 30d spend at or below $95 cap",
+   "observed": "workers-ai 30d spend over cap: $418.10 as of 2026-11-02T03:01:00.343Z",
+   "written": true
+  },
+  {
+   "class": "issue-1000266",
+   "issue_id": 1000266,
+   "verdict": "fail",
+   "expected": "open critical < 11 and 24h drain ratio >= 1.0",
+   "observed": "open critical=454 (>=11), drain ratio=0.0 (<1.0)",
+   "written": true
+  },
+  {
+   "class": "issue-1000286",
+   "issue_id": 1000286,
+   "verdict": "fail",
+   "expected": "no_regression",
+   "observed": "regression",
+   "written": true
+  },
+  {
+   "class": "issue-1000333",
+   "issue_id": 1000333,
+   "verdict": "fail",
+   "expected": "pass",
+   "observed": "fail: claim_coverage not measured",
+   "written": true
+  },
+  {
+   "class": "issue-1000314",
+   "issue_id": 1000314,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-100575",
-   "issue_id": 100575,
+   "class": "issue-1000271",
+   "issue_id": 1000271,
+   "verdict": "fail",
+   "expected": "cron:qnfo-fleet-dashboard row in fleet_tick_heavy within last 6 hours",
+   "observed": "no cron:qnfo-fleet-dashboard row in fleet_tick_heavy within last 6 hours",
+   "written": true
+  },
+  {
+   "class": "issue-1000790",
+   "issue_id": 1000790,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1000167",
-   "issue_id": 1000167,
-   "verdict": "pass",
+   "class": "issue-100293",
+   "issue_id": 100293,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: merged share 0.201 < 0.70 (138 merged of 686 code tasks created in the 7-day window)",
    "written": true
   },
   {
-   "class": "issue-1000316",
-   "issue_id": 1000316,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000619",
-   "issue_id": 1000619,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000673",
-   "issue_id": 1000673,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000712",
-   "issue_id": 1000712,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100360",
-   "issue_id": 100360,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-page-css-never-sent",
+   "class": "rt-page-fleet-area-reliability",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -105,7 +233,7 @@
    "written": true
   },
   {
-   "class": "rt-page-fleet-api-status",
+   "class": "rt-page-fleet-area-platform",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -113,293 +241,142 @@
    "written": true
   },
   {
-   "class": "rt-page-fleet-queue",
+   "class": "issue-1000822",
+   "issue_id": 1000822,
+   "verdict": "fail",
+   "expected": "none",
+   "observed": "social_bot_label_enabled, dmarc_aligned_pass_rate",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-search-outside-window",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000784",
-   "issue_id": 1000784,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-1000808",
-   "issue_id": 1000808,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001198",
-   "issue_id": 1001198,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1001202",
-   "issue_id": 1001202,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001203",
-   "issue_id": 1001203,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-quality-proxy-population-average",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001200",
-   "issue_id": 1001200,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001204",
-   "issue_id": 1001204,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001205",
-   "issue_id": 1001205,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "goal-PAPER-LEARN-4796",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1001209",
-   "issue_id": 1001209,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-issue-age-repair-secondary-notice-fanout",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-grounding-single-source-refused",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100168",
-   "issue_id": 100168,
-   "verdict": "fail",
-   "expected": "yes",
-   "observed": "no",
-   "written": true
-  },
-  {
-   "class": "issue-1000800",
-   "issue_id": 1000800,
-   "verdict": "fail",
-   "expected": "2 of 2 program-manager target metrics hold a value (unmeasured: none)",
-   "observed": "0 of 2 program-manager target metrics hold a value (unmeasured: product_plus_rate_7d, plus_keep_rate_30d)",
-   "written": true
-  },
-  {
-   "class": "issue-1001207",
-   "issue_id": 1001207,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "goal-YT-SHORTS",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": 0,
-   "observed": 7,
-   "written": true
-  },
-  {
-   "class": "issue-1001208",
-   "issue_id": 1001208,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "goal-PAPER-LEARN-4799",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-100310-BACKFILL-1",
-   "issue_id": 100310,
-   "verdict": "fail",
-   "expected": "closed-with-evidence",
-   "observed": "open: issue 100310 is not closed with close_evidence yet (doer: qnfo-ops)",
-   "written": true
-  },
-  {
-   "class": "issue-1001201",
-   "issue_id": 1001201,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1001206",
-   "issue_id": 1001206,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "metric-relapse-2462",
-   "issue_id": 2462,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "14",
-   "written": true
-  },
-  {
-   "class": "metric-relapse-2487",
-   "issue_id": 2487,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "9",
-   "written": true
-  },
-  {
-   "class": "metric-relapse-2542",
-   "issue_id": 2542,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "14",
-   "written": true
-  },
-  {
-   "class": "metric-relapse-2563",
-   "issue_id": 2563,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "14",
-   "written": true
-  },
-  {
-   "class": "issue-1000334",
-   "issue_id": 1000334,
-   "verdict": "fail",
-   "expected": "within target",
-   "observed": "breach: 287.5h",
-   "written": true
-  },
-  {
-   "class": "issue-1000350",
-   "issue_id": 1000350,
-   "verdict": "fail",
-   "expected": "0 KV get-then-put lock/counter hits in the latest static scan",
-   "observed": "1 hit(s): qnfo-ops/worker.js:1599 [kv-counter-rmw]",
-   "written": true
-  },
-  {
-   "class": "issue-1001234",
-   "issue_id": 1001234,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "metric-relapse-2566",
-   "issue_id": 2566,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "14",
-   "written": true
-  },
-  {
-   "class": "issue-1000339",
-   "issue_id": 1000339,
    "verdict": "fail",
    "expected": "0",
    "observed": "4",
    "written": true
   },
   {
-   "class": "issue-1001211",
-   "issue_id": 1001211,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "rt-page-fleet-area-autonomy",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "metric-relapse-2564",
-   "issue_id": 2564,
+   "class": "issue-100294",
+   "issue_id": 100294,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "unmet: 13 families have net inflow above 0 with three or more open, largest ISSUE-AGE-24H-REPAIR-1 +162, RESEARCH-TERMINAL +7, LOOP-BREAKER-1 +5",
+   "written": true
+  },
+  {
+   "class": "issue-100299",
+   "issue_id": 100299,
+   "verdict": "fail",
+   "expected": "7",
+   "observed": "0 of the last 7 daily reads are 0 (latest read 364)",
+   "written": true
+  },
+  {
+   "class": "issue-1000460",
+   "issue_id": 1000460,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-retry-holds-file",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-1978",
+   "issue_id": 1978,
    "verdict": "fail",
    "expected": "0",
    "observed": "14",
    "written": true
   },
   {
-   "class": "issue-1001233",
-   "issue_id": 1001233,
+   "class": "metric-relapse-2168",
+   "issue_id": 2168,
    "verdict": "fail",
-   "expected": "pass",
-   "observed": "regression",
+   "expected": "0",
+   "observed": "6",
    "written": true
   },
   {
-   "class": "goal-TP-5-MEASURE-TO-ACT-1",
-   "issue_id": null,
+   "class": "metric-relapse-2199",
+   "issue_id": 2199,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "unmet: breach_code_task_pct 100.0, needs-machine probe contracts 34",
+   "expected": "0",
+   "observed": "14",
    "written": true
   },
   {
-   "class": "issue-100362-BACKFILL-1",
-   "issue_id": 100362,
+   "class": "metric-relapse-2201",
+   "issue_id": 2201,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "14",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-2228",
+   "issue_id": 2228,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "12",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-2237",
+   "issue_id": 2237,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "14",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-1797",
+   "issue_id": 1797,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "11",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-2600",
+   "issue_id": 2600,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-1780",
+   "issue_id": 1780,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "14",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-2288",
+   "issue_id": 2288,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "14",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-2313",
+   "issue_id": 2313,
+   "ver
