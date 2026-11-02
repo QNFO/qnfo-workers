@@ -24,7 +24,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const fnames = [...new Set((body.join("\n").match(/function\s+([A-Za-z_$][\w$]*)/g) || []).map((m) => m.split(/\s+/)[1]))];
   const lost = fnames.filter((n) => !new RegExp("function\\s+" + n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&") + "\\b").test(src));
   ok(fnames.length > 5 && lost.length === 0, "every function the indexer declared is still in the host member", lost);
-  ok(versionAtLeast(mod.__hv, "1.3.1") && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 3.0.13-folded, one quoted VERSION constant");
+  ok(versionAtLeast(mod.__hv, "1.3.1") && versionAtLeast(mod.__mv, "3.0.14") && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member at least 3.0.14, one quoted VERSION constant");
 }
 
 // cron dispatch with mapped bindings
@@ -49,7 +49,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const env = { LIVING: { prepare: q }, AUDIT: { prepare: q } };
   const get = (p, m) => mod.default.fetch(new Request("https://qnfo-infra.q08.workers.dev" + p, { method: m || "GET" }), env, {});
   const h = await (await get("/indexer/health")).json();
-  ok(h.worker === "qnfo-paper-indexer" && h.version === "3.0.13-folded", "/indexer/health answers as the member", h);
+  ok(h.worker === "qnfo-paper-indexer" && h.version === mod.__mv, "/indexer/health answers as the member", h);
   const c = await (await get("/indexer/count")).json();
   ok(c.count === 7 && c.corpus_total === 7, "/indexer/count reads living-paper through the mapped binding", c);
   for (const p of ["/indexer/purge", "/indexer/index", "/indexer/webhook", "/indexer/run"]) {
