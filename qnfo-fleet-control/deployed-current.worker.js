@@ -13469,22 +13469,27 @@ async function bdTitleTrusted(ctx, title) {
   return false;
 }
 function bdUntrustedDoer() { return "Doer: none yet. The code loop records a " + BD_TITLE_PREFIX + " title as untrusted until ops_config code_merge_trusted_sources lists " + BD_ISSUE_SOURCE + "|" + BD_TITLE_PREFIX + "."; }
+async function bdEnsureIssueContract(db, id, probe) {
+  if (!probe) return;
+  var cid = "issue-" + id;
+  var up = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'breach-doctor-1', precondition = ?3, action = ?4, escalate_to = 'qnfo-fleet-control' WHERE class = ?1")
+    .bind(cid, probe, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause").run();
+  if (bdChanges(up) < 1) await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'breach-doctor-1')")
+    .bind(cid, id, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause", probe).run();
+}
 // file-issue: one deduped issue per rule and subject, source qnfo-fleet-control, a description made only of enums and ids
 async function bdFileIssue(ctx, title, descLines, priority, probe) {
   var db = ctx.db;
   var ex = await db.prepare("SELECT id FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND (status = 'open' OR created_at > ?2) ORDER BY id DESC LIMIT 1").bind(title, ctx.nowMs - 864e5).first();
-  if (ex && ex.id != null) return { id: Number(ex.id), existed: true };
+  if (ex && ex.id != null) {
+    await bdEnsureIssueContract(db, ex.id, probe);
+    return { id: Number(ex.id), existed: true };
+  }
   var ins = await db.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, descLines.join("\n"), priority, ctx.nowMs).run();
   if (bdChanges(ins) < 1) return null;
   var row = await db.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim(?1))").bind(title).first();
   if (!row || row.id == null) return null;
-  if (probe) {
-    var cid = "issue-" + row.id;
-    var up = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'breach-doctor-1', precondition = ?3, action = ?4, escalate_to = 'qnfo-fleet-control' WHERE class = ?1")
-      .bind(cid, probe, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause").run();
-    if (bdChanges(up) < 1) await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'breach-doctor-1')")
-      .bind(cid, row.id, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause", probe).run();
-  }
+  await bdEnsureIssueContract(db, row.id, probe);
   return { id: Number(row.id), existed: false };
 }
 async function bdRecordDecision(ctx, fields) {
