@@ -4057,6 +4057,10 @@ function noIndex(res) {
   return r;
 }
 __name(noIndex, "noIndex");
+function fullDashboardRefreshDue(controller) {
+  return new Date(controller.scheduledTime).getUTCMinutes() % 15 === 0;
+}
+__name(fullDashboardRefreshDue, "fullDashboardRefreshDue");
 // FLEET-TICK-ISOLATE-1 (1.49.2, issue 2600): the fallback fleet_tick producer. The insert fans out through D1 AFTER INSERT triggers, so one
 // failing statement in any of them rolls the tick row back and every other fixer skips the slot; on 2026-10-18 12:14Z-14:38Z a UNIQUE
 // violation on idx_agent_issues_open_title_ci did this for 144 minutes, and this fallback, running the same insert through the same
@@ -4142,6 +4146,12 @@ var worker_default = {
     // leaves no row and fm-single-heartbeat could not tell an idle fallback from a dead one. Each run now records in
     // fleet_heartbeat whether the guarded insert executed (ok 1) or threw (ok 0, the 2026-10-18 12:14Z outage shape).
     const tickOk = await feedFallbackTick(env);
+    try {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-fleet-dashboard', ?, ?, ?)").bind(VERSION, new Date().toISOString(), tickOk).run();
+    } catch (e) {
+      console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_heartbeat", note: String(e && e.message || e) }));
+    }
+    if (!fullDashboardRefreshDue(controller)) return;
     // FLEET-TICK-HEAVY-SECOND-PRODUCER-1 (issue #1000271, RED-DRAIN-1 dispatch): qnfo-fleet-dashboard is the second producer of fleet_tick_heavy,
     // alongside qnfo-code-orchestrator, so heavy D1 steps (BREACH-SELFHEAL-1) keep running when the primary producer is down. Guarded to one row per 9 minutes.
     // STANDBY-PROOF-2 (1.71.2, same issue): like feedFallbackTick above (STANDBY-PROOF-1), this standby wrote nothing while the primary was healthy, because the primary
@@ -4151,11 +4161,6 @@ var worker_default = {
       await env.AUDIT.prepare("INSERT INTO fleet_tick_heavy (source) SELECT 'cron:qnfo-fleet-dashboard' WHERE NOT EXISTS (SELECT 1 FROM fleet_tick_heavy WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes')) OR NOT EXISTS (SELECT 1 FROM fleet_tick_heavy WHERE source LIKE 'cron:qnfo-fleet-dashboard%' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-360 minutes'))").run();
     } catch (e) {
       console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_tick_heavy", note: String(e && e.message || e) }));
-    }
-    try {
-      await env.AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-fleet-dashboard', ?, ?, ?)").bind(VERSION, new Date().toISOString(), tickOk).run();
-    } catch (e) {
-      console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_heartbeat", note: String(e && e.message || e) }));
     }
     const deadline = Date.now() + SCHEDULED_BUDGET_MS;
     const within = function(p, reserveMs) {
