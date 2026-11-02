@@ -2710,7 +2710,14 @@ async function stepTask(env, task) {
         // the current file), hunkPatch returns "" and the task would still be marked ready_to_publish, then fail
         // at publish with "task has no patch in ctx.patch". Fail terminal here with a clear reason instead.
         if (!ctx.patch) return await fail("no change: the patch is empty (the goal is already satisfied in the current file)", true);
-        if (ctx.patch.length > 80000) return await fail("patch too large: exceeds verification limit", true);
+        if (ctx.patch.length > 80000) {
+          const why = "patch too large: exceeds verification limit";
+          delete ctx.patch;
+          ctx.lastError = why;
+          await tsave({ ctx: JSON.stringify(ctx), step: "propose" });
+          task.step = "propose";
+          return await fail(why, false);
+        }
         await tsave({ ctx: JSON.stringify(ctx), status: "ready_to_publish", step: "done", branch: branch, lease_until: null, last_error: null });
         await audit(env, "code-task.ready", task.id + " ready_to_publish on " + branch, { id: task.id }, "ok");
         return { ok: true, step: "done", status: "ready_to_publish" };
@@ -3192,7 +3199,7 @@ async function planMetricOwner(env, key) {
     const r = await env.AUDIT_DB.prepare("SELECT metric, owner FROM metric_registry WHERE lower(replace(metric, '_', '-')) = ? AND owner IS NOT NULL AND owner != '' LIMIT 1").bind(key).first();
     return r && r.owner ? { owner: String(r.owner), metric: String(r.metric) } : null;
   } catch (e) {
-    console.error(JSON.stringify({ worker: WORKER, where: "planMetricOwner", error: String((e && e.message) || e).slice(0, 200) }));
+    console.error({ worker: WORKER, where: "planMetricOwner", error: String((e && e.message) || e).slice(0, 200) });
     return null;
   }
 }
