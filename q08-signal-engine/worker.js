@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.40.9-codeagent";
+var VERSION = "0.40.10-codeagent";
 /* 0.40.5 Q08-FINAL-READ-RETRY-1 (#99929, pillar reach; patch): a missing strict final-reader verdict gets one fresh-cache retry; publication remains fail-closed if the retry has no verdict. FACTS and reader thresholds are unchanged. */
 /* 0.40.0 Q08-FORECAST-LEDGER-1 (2026-10-30, agent_issues 1000512, pillar reach; minor: a data product it did not have, default off): with ops_config q08_forecast_ledger = on, generateForecast adds a research ledger of verbatim sentences (researchLedger: four evidence APIs queried with at most 6 capitalised names, the public https pages they link, at most 10 documents of 40000 characters, 60 lines "[R<n>] <sentence> (<host>, <date>)") to the forecast prompt and to fcGround; a fact may be cited by its tag, stripLedgerTags removes [R<n>] like [S<n>], the ledger is stored in q08_forecasts.ground_json and its sources join sources_json, and groundForPublished appends it for the re-audit. Off (absent or any other value) makes no request and leaves the prompt and ground unchanged. Replaces the unused forecastLedger draft. forecast-ledger.test.mjs. */
 /* 0.39.2 BP26-AI-GATEWAY-BUDGETS-1 (2026-10-28, agent_issues 1000614 and 1000351, pillar cost): compose, title repair, forecast repair, fact-check and forecast-judge calls go through aiGatewayRun (AI Gateway with loop metadata, per-loop budget fallback), not env.AI.run directly; none of them is cached. */
@@ -1815,8 +1815,21 @@ function normalizeDraftCore(text) {
     // obeying "no section headers", leaving a plain sentence title. Promote any compact
     // leading title-like line; strip a trailing sentence punctuator so the gate's title
     // pattern checks still apply.
-    if (line.length <= 100 && line.split(/\s+/).length <= 14) {
-      lines[i] = "# " + line.replace(/[.!?]+$/, "");
+    // Q08-H1-PROMOTE-3 (issue #99929): the writer also emits the title wrapped in
+    // emphasis ("**Three replicas made every write slower**") or behind a "title:"
+    // label, sometimes with quotes. Unwrap those forms before the compact-line
+    // test; the length and word caps stay, so a prose lede sentence (which the
+    // title micro-call and the fact-revision path own) is never promoted.
+    var cand = line;
+    var wm = cand.match(/^[*_]{1,3}\s*(.+?)\s*[*_]{1,3}$/);
+    if (wm) cand = wm[1];
+    else {
+      var lm = cand.match(/^title\s*:\s*(.+)$/i);
+      if (lm) cand = lm[1];
+    }
+    cand = cand.replace(/^[\u201c\u2018"']+\s*/, "").replace(/\s*[\u201d\u2019"']+$/, "");
+    if (cand.length <= 100 && cand.split(/\s+/).length <= 14) {
+      lines[i] = "# " + cand.replace(/[.!?]+$/, "");
       return lines.join("\n");
     }
     break;
