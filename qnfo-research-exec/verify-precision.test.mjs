@@ -122,8 +122,8 @@ ai.answer = (task) => task === "VERIFY_EXTRACT" ? JSON.stringify(goldenClaims) :
 pilotOut = "CLAIM Q1: computed=1.000 expected=1.000 match=yes\nCLAIM Q2: computed=3.000 expected=2.000 match=no";
 put("v-golden-metrics");
 res = await stageVerify(env, row("v-golden-metrics", "verify", { cycles: 1, verifyPass: 0 }));
-const goldenRates = audit.prepare("SELECT catch_rate, false_positive_rate FROM research_golden_runs WHERE row_id = 'v-golden-metrics'").get();
-ok(res.stage === "verify->revise" && goldenRates && goldenRates.catch_rate === 0.5 && goldenRates.false_positive_rate === 0 && goldenRates.catch_rate + goldenRates.false_positive_rate !== 1, "golden-run false-positive rate is independently measured rather than the complement of catch rate", { res, goldenRates });
+const goldenRates = audit.prepare("SELECT catch_rate, false_positive_rate, model_version, prompt_version FROM research_golden_runs WHERE row_id = 'v-golden-metrics'").get();
+ok(res.stage === "verify->revise" && goldenRates && goldenRates.catch_rate === 0.5 && goldenRates.false_positive_rate === 0 && goldenRates.catch_rate + goldenRates.false_positive_rate !== 1 && goldenRates.model_version && goldenRates.prompt_version, "golden-run rates are independent and retain model and prompt versions", { res, goldenRates });
 put("v-bad2");
 res = await stageVerify(env, row("v-bad2", "verify", { cycles: 1, verifyPass: 1 }));
 ok(res.ok === false && res.withheld === "verify-unresolved" && res.mismatches === 1 && get("v-bad2").status === "queued" && /mismatch=true gates=$/.test(get("v-bad2").error), "a second failing pass withholds the paper and re-arms the row, as before", res);
