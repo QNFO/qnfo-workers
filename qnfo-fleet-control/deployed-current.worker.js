@@ -13528,23 +13528,33 @@ async function bdTitleTrusted(ctx, title) {
   return false;
 }
 function bdUntrustedDoer() { return "Doer: none yet. The code loop records a " + BD_TITLE_PREFIX + " title as untrusted until ops_config code_merge_trusted_sources lists " + BD_ISSUE_SOURCE + "|" + BD_TITLE_PREFIX + "."; }
+async function bdEnsureIssueContract(db, id, probe) {
+  if (!probe) return;
+  var cid = "issue-" + id;
+  var up = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'breach-doctor-1', precondition = ?3, action = ?4, escalate_to = 'qnfo-fleet-control' WHERE class = ?1")
+    .bind(cid, probe, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause").run();
+  if (bdChanges(up) < 1) await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'breach-doctor-1')")
+    .bind(cid, id, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause", probe).run();
+}
 // file-issue: one deduped issue per rule and subject, source qnfo-fleet-control, a description made only of enums and ids
 async function bdFileIssue(ctx, title, descLines, priority, probe) {
   var db = ctx.db;
   var ex = await db.prepare("SELECT id FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND (status = 'open' OR created_at > ?2) ORDER BY id DESC LIMIT 1").bind(title, ctx.nowMs - 864e5).first();
-  if (ex && ex.id != null) return { id: Number(ex.id), existed: true };
+  if (ex && ex.id != null) {
+    await bdEnsureIssueContract(db, ex.id, probe);
+    return { id: Number(ex.id), existed: true };
+  }
   var ins = await db.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, descLines.join("\n"), priority, ctx.nowMs).run();
   if (bdChanges(ins) < 1) return null;
   var row = await db.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim(?1))").bind(title).first();
   if (!row || row.id == null) return null;
-  if (probe) {
-    var cid = "issue-" + row.id;
-    var up = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'breach-doctor-1', precondition = ?3, action = ?4, escalate_to = 'qnfo-fleet-control' WHERE class = ?1")
-      .bind(cid, probe, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause").run();
-    if (bdChanges(up) < 1) await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'breach-doctor-1')")
-      .bind(cid, row.id, "the condition that made the breach doctor file this issue still holds", "a playbook row, a fix or the owning loop removes the cause", probe).run();
-  }
+  await bdEnsureIssueContract(db, row.id, probe);
   return { id: Number(row.id), existed: false };
+}
+async function bdRecordDecision(ctx, fields) {
+  var r = await ctx.db.prepare("INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
+    .bind("qnfo-fleet-control:breach-doctor", fields.assumption, fields.action, fields.evidence, fields.outcome, fields.blast_radius, fields.rollback_path, fields.capability_gain, fields.predicted_outcome, fields.reach_gain, fields.surfaces_tested).run();
+  return r && r.meta && r.meta.last_row_id != null ? "dl" + r.meta.last_row_id : "";
 }
 async function bdActFileIssue(ctx, item, diag, rule) {
   var id = item.issue.id, subject = item.hit.subject, lease = bdLeaseIso(ctx, BD_LEASE_MAX_MIN);
@@ -13558,9 +13568,24 @@ async function bdActFileIssue(ctx, item, diag, rule) {
       "Facts: " + bdKv(Object.assign({}, item.hit.facts)), ((await bdTitleTrusted(ctx, title)) ? "Doer: the fleet." : bdUntrustedDoer()) + " Definition of done: issue " + id + " has a doer or is closed with evidence."], "medium", probe);
   } catch (e) { f = null; console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:file-issue", rule: rule.id, error: String(e && e.message).slice(0, 200) })); }
   if (!f) { await bdFail(ctx, diag, item, "queued", "sql-error", ""); return; }
+  var decisionRef = "";
+  try {
+    decisionRef = await bdRecordDecision(ctx, {
+      assumption: "cause_class " + diag.cause + " evidence_hash " + diag.hash,
+      action: "BREACH-DOCTOR-1 " + rule.id + " file-issue subject " + subject + " source " + id + " artifact " + f.id,
+      evidence: "facts_hash " + diag.hash,
+      outcome: (f.existed ? "found" : "filed") + " issue " + f.id + " with remediation contract issue-" + f.id,
+      blast_radius: "agent_issues " + f.id + ", remediation_contracts issue-" + f.id + "; source issue " + id + " only",
+      rollback_path: "no destructive rollback; keep issue " + f.id + " and its contract; close only through issue_triage with evidence after its condition is resolved",
+      capability_gain: "fleet routes a diagnosed breach to a tracked issue with its own probe",
+      predicted_outcome: "issue " + f.id + " stays open with an active remediation contract until the cause is removed",
+      reach_gain: "none",
+      surfaces_tested: "agent_issues,remediation_contracts,breach_diagnoses"
+    });
+  } catch (eL) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:decision-log", rule: rule.id, error: String(eL && eL.message).slice(0, 200) })); }
   await bdBatch(ctx.db, [
     ctx.db.prepare("UPDATE breach_diagnoses SET state = 'queued', action_ref = ?2, applied_at = ?3, verify_class = 'verify_sql', lease_until = ?4, last_progress_at = ?3 WHERE id = ?1").bind(diag.id, String(f.id), ctx.nowIso, lease),
-    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "action", from: "queued", to: "queued", detail: "rule=" + rule.id + " kind=file-issue filed=" + f.id + (f.existed ? " existed" : "") })
+    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "action", from: "queued", to: "queued", detail: "rule=" + rule.id + " kind=file-issue filed=" + f.id + (f.existed ? " existed" : "") + (decisionRef ? " decision=" + decisionRef : "") })
   ]);
   ctx.out.acted++;
 }
@@ -13578,9 +13603,24 @@ async function bdActOwnerCard(ctx, item, diag, rule) {
     await ctx.db.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, source) VALUES (?1, ?2, ?3, '', ?4, '/owner', 'normal', 'qnfo-fleet-control BREACH-DOCTOR-1')")
       .bind(slug, "Owner step needed for issue " + id + " (" + rule.id + ")", why, "Take the step, then resolve this card on https://fleet.qnfo.org/owner.").run();
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:owner-card", rule: rule.id, error: String(e && e.message).slice(0, 200) })); await ctx.db.prepare("UPDATE breach_diagnoses SET mode = 'measure' WHERE id = ?1").bind(diag.id).run(); return; }
+  var decisionRef = "";
+  try {
+    decisionRef = await bdRecordDecision(ctx, {
+      assumption: "cause_class " + diag.cause + " evidence_hash " + diag.hash,
+      action: "BREACH-DOCTOR-1 " + rule.id + " owner-card issue " + id + " reason " + reason + " slug " + slug,
+      evidence: "facts_hash " + diag.hash,
+      outcome: "identity-bound card " + slug + " persisted; no owner act executed",
+      blast_radius: "human_actions " + slug + ", issue " + id + " only",
+      rollback_path: "no owner act was taken; keep the card open until resolved; disable playbook " + rule.id + " by migration to stop future handoffs",
+      capability_gain: "fleet routes an identity-bound step to the owner without attempting it",
+      predicted_outcome: "issue " + id + " remains open and the identity-bound step is visible in the owner queue",
+      reach_gain: "none",
+      surfaces_tested: "human_actions,breach_diagnoses,breach_diagnosis_events"
+    });
+  } catch (eL) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:decision-log", rule: rule.id, error: String(eL && eL.message).slice(0, 200) })); }
   await bdBatch(ctx.db, [
     ctx.db.prepare("UPDATE breach_diagnoses SET state = 'handed-owner', action_kind = 'owner-card', action_ref = ?2, mode = 'on', applied_at = ?3, lease_until = NULL, last_progress_at = ?3, tick_id = ?4 WHERE id = ?1").bind(diag.id, slug, ctx.nowIso, ctx.tickId),
-    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "handoff", from: "diagnosed", to: "handed-owner", detail: "rule=" + rule.id + " reason=" + reason + " card=" + slug })
+    bdEvent(ctx, { issue_id: id, diagnosis_id: diag.id, event: "handoff", from: "diagnosed", to: "handed-owner", detail: "rule=" + rule.id + " reason=" + reason + " card=" + slug + (decisionRef ? " decision=" + decisionRef : "") })
   ]);
   ctx.out.acted++;
 }
