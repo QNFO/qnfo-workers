@@ -13949,6 +13949,15 @@ async function slaTick10m(env) {
     if (r && r.n !== null && r.n !== undefined) {
       await db.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'sla_breaches_over_120m'")
         .bind(String(r.n), new Date().toISOString()).run();
+  try {
+    var row = await db.prepare("SELECT COUNT(*) AS n FROM v_issue_age WHERE age_h >= 24 AND state = 'open'").first();
+    var count = row && row.n ? Number(row.n) : 0;
+    var nowIso = new Date().toISOString();
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'issues_open_over_24h'")
+      .bind(String(count), nowIso).run();
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "fleet-control:issuesOpenOver24hMetric:caught", error: String(e && e.message || e) }));
+  }
       out.sla_breaches_over_120m = Number(r.n); out.issues_open_over_120m = Number(r.issues); out.oldest_open_issue_min = Number(r.oldest);
     }
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:slaTick10m:refresh", error: String(e && e.message || e) })); out.refresh_error = String(e && e.message || e).slice(0, 200); }
