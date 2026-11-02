@@ -230,7 +230,7 @@ test("missing credential or malformed repository makes no requests", async () =>
 test("workflow uses trusted default-branch code and independent nonblocking cadence", () => {
   const wf = readFileSync(new URL("../.github/workflows/repository-age-policy.yml", import.meta.url), "utf8");
   assert.match(wf, /workflows: \["remediation-consumer"\]/);
-  assert.match(wf, /cron: '\*\/10 \* \* \* \*'/);
+  assert.match(wf, /cron: '43 3 \* \* \*'/);
   assert.match(wf, /workflow_dispatch:/);
   assert.match(wf, /types: \[opened, reopened\]/);
   assert.match(wf, /ref: \$\{\{ github.event.repository.default_branch \}\}/);

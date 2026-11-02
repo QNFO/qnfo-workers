@@ -16,7 +16,7 @@ on:
       - .github/workflows/repository-age-policy.yml
       - scripts/repository-age-policy.mjs
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '43 3 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -39,6 +39,7 @@ jobs:
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.head_repository.full_name == github.repository &&
        github.event.workflow_run.head_branch == github.event.repository.default_branch)
+    # RUNNER-PIN-2: pin Ubuntu 24 until the Ubuntu 26 trial is green after 2026-11-19.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
