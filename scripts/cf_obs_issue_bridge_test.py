@@ -137,7 +137,7 @@ def test_live_group_filed_once_and_probe_lifecycle():
     r2 = env.sweep(now)
     assert r2["filed"] == [] and r2["already"] == 1, r2
     row = env.issues()[0]
-    assert row["title"] == "CF-OBS-ISSUE-1: qnfo-ai: HttpServerError · HTTP 502" and "cf-obs-id: g-live" in row["description"], row
+    assert row["title"] == "CF-OBS-ISSUE-1: qnfo-ai: HttpServerError · HTTP 502 [cf-obs:g-live]" and "cf-obs-id: g-live" in row["description"], row
     pr = env.d1("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-%d'" % row["id"])[0]["verify_probe"]
     assert pr.startswith("SELECT '1' AS expected") and "cf-obs-g-live" in pr, pr
     # the probe fails while the dispatch row is live, passes once it is quiet
@@ -146,6 +146,28 @@ def test_live_group_filed_once_and_probe_lifecycle():
     env.c.execute("UPDATE fleet_issue_dispatch SET payload = ?", [json.dumps({"lastObserved": now - 7 * H})])
     assert env.d1(pr)[0]["observed"] == "1"
     assert env.reopens() == 0
+
+
+def test_distinct_group_with_same_title_does_not_reopen_closed_issue():
+    now = B.now_ms()
+    first = grp("g-first", "qnfo-ai", 60e3, now)
+    env = Env([first])
+    filed = env.sweep(now)["filed"]
+    assert len(filed) == 1, env.issues()
+    first_id = filed[0]
+
+    dispatch(env, grp("g-first", "qnfo-ai", 7 * H, now))
+    env.close_by_probe(first_id, ago_ms=5 * 60e3)
+
+    second = grp("g-second", "qnfo-ai", 60e3, now)
+    env.groups = {"g-second": second}
+    result = env.sweep(now)
+
+    assert len(result["filed"]) == 1 and result["relapsed"] == [], result
+    assert env.reopens() == 0, env.issues()
+    rows = env.issues()
+    assert len(rows) == 2 and rows[0]["status"] == "closed" and rows[1]["status"] == "open", rows
+    assert "[cf-obs:g-first]" in rows[0]["title"] and "[cf-obs:g-second]" in rows[1]["title"], rows
 
 
 def test_full_cycle_file_close_resolve_has_no_reopen():
@@ -373,6 +395,7 @@ TESTS = [
     test_quiet_group_with_closed_issue_is_resolved_not_refiled,
     test_quiet_group_without_issue_is_not_filed,
     test_live_group_filed_once_and_probe_lifecycle,
+    test_distinct_group_with_same_title_does_not_reopen_closed_issue,
     test_full_cycle_file_close_resolve_has_no_reopen,
     test_recurrence_after_close_is_a_relapse_not_a_filing,
     test_closed_title_guard_holds_a_group_that_has_not_recurred_since_the_close,

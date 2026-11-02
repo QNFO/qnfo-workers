@@ -20,7 +20,7 @@ const f1 = src.indexOf("async function rtFlagOff(db, key) {"), f2 = src.indexOf(
 const a = src.indexOf("// ---- REOPEN-LIVE-PATH-3:BEGIN ----"), b = src.indexOf("// ---- REOPEN-LIVE-PATH-3:END ----");
 if (f1 < 0 || f2 < f1 || a < 0 || b < a) throw new Error("blocks not found in worker.js");
 const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, console: { error() {}, log() {} }, VERSION: "0.41.0-test" });
-vm.runInContext(src.slice(f1, f2) + "\n" + src.slice(a, b) + "\nthis.api = { rtEnsureLivePath, rtLivePathProbe };", cx);
+vm.runInContext(src.slice(f1, f2) + "\n" + src.slice(a, b) + "\nthis.api = { rtEnsureLivePath, rtLivePathProbe, setAuthor(fn) { rtAuthorLivePathProbe = fn; }, authorDailyLimit: RT_PROBE_AUTHOR_MAX_PER_DAY };", cx);
 const { rtEnsureLivePath, rtLivePathProbe } = cx.api;
 
 function mk() {
@@ -88,6 +88,28 @@ const probeIssues = (db) => db.prepare("SELECT * FROM agent_issues WHERE title L
   db.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = ?").run(orphan);
   ok(read().o === "ok", "ok when the target is no longer open", read());
   ok(rtLivePathProbe("x") === null && rtLivePathProbe("0") === null && rtLivePathProbe("12abc") !== null, "the probe builder takes only a positive integer id");
+}
+// A rejected authoring attempt used to strand its open PROBE-NEEDED ticket forever.
+{
+  const { db, h } = mk();
+  const targets = [
+    add(db, "MEDIUM-1: probe needed", { priority: "medium", contract: "active" }),
+    add(db, "HIGH-1: probe needed", { priority: "high", contract: "superseded" }),
+    add(db, "CRITICAL-1: probe needed", { priority: "critical", contract: "superseded" }),
+    add(db, "COOLDOWN-1: probe needed", { priority: "critical", contract: "superseded" }),
+    add(db, "LOW-1: probe needed", { priority: "low", contract: "superseded" })
+  ];
+  db.prepare("UPDATE remediation_contracts SET verify_probe = ? WHERE issue_id = ?").run("SELECT status FROM agent_issues WHERE id = " + targets[0], targets[0]);
+  for (const id of targets) add(db, "PROBE-NEEDED-1: issue-" + id);
+  db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('recent-reject', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-author-reject', ?, 'qnfo-fleet-control', 'warn')").run("issue=" + targets[3] + " not-allowlisted");
+  for (let i = 0; i < 12; i++) db.prepare("INSERT INTO agent_issues (title, status, created_at, updated_at, priority) VALUES (?, 'closed', ?, ?, 'low')").run("PROBE-NEEDED-1: issue-" + (900 + i), Date.now(), Date.now());
+  const attempted = [];
+  cx.api.setAuthor(async (_db, _env, issue) => { attempted.push(Number(issue.id)); return false; });
+  const out = await tick(h);
+  ok(JSON.stringify(attempted) === JSON.stringify([targets[2], targets[1], targets[0]]), "existing retries run critical-first, skip a recent rejection for six hours, and cap attempts at three per tick", attempted);
+  ok(JSON.stringify(out.probe_author_retried) === JSON.stringify(attempted), "the tick reports every retry attempt even when authoring is rejected", out);
+  ok(out.ensure_live_path_capped === 1, "existing retries still run after the separate daily ticket-filing cap is reached", out);
+  ok(cx.api.authorDailyLimit === 120, "successful authored probes allow a bounded 120-per-day drain", cx.api.authorDailyLimit);
 }
 // bounds
 {

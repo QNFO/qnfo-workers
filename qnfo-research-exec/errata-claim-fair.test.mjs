@@ -1,6 +1,6 @@
 // ERRATA-CLAIM-FAIR-1 (qnfo-research-exec 0.40.9, agent_issues 1000472) offline suite: the claim lane that gives errata remediation rows a bounded share of
 // the claims. 233 errata rows had never been claimed because every other class ranks ahead of the FIFO tier where they wait and the daily neuron budget is spent
-// after about 26 claims. The lane takes one claim per errata_claim_interval_hours window, leaves the three pinned claim ORDER BY texts and the budget alone,
+// after about 26 claims. The lane takes one claim per errata_claim_interval_hours window, respects the class allocator's total window and leaves the budget alone,
 // and fails soft. This runs the real functions from worker.js against SQLite.
 // Run: node qnfo-research-exec/errata-claim-fair.test.mjs -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
@@ -125,14 +125,14 @@ ok(await claimErrataFair(d1(db), T0) === null && one(db, "SELECT COUNT(*) n FROM
 db = mk([{ id: "revision-only", source_id: "revision:p@1#1" }]);
 ok(await claimErrataFair(d1(db), T0) === null && one(db, "SELECT COUNT(*) n FROM cloud_ops_events").n === 0, "with no errata row queued the lane returns null and logs nothing");
 
-// 7 wiring: the lane runs first in every claim path and the pinned claim ORDER BY is not touched
+// 7 wiring: the lane runs first in every claim path before the shared class allocator
 const claim = src.slice(src.indexOf("async function claimNew("), src.indexOf("async function run(env)"));
 ok(claim.indexOf("await claimErrataFair(env)") >= 0 && claim.indexOf("await claimErrataFair(env)") < claim.indexOf("UPDATE research_queue SET status='researching'"), "claimNew takes the errata lane before the atomic claim");
 ok(/if \(!row\) row = await env\.QNFO_AUDIT\.prepare\("UPDATE research_queue SET status='researching'/.test(claim), "the atomic claim runs only when the lane claimed nothing, so its fallback honours the lane too");
 ok(/return await advanceClaimed\(env, row\);/.test(claim), "claimNew hands every claimed row, whichever lane claimed it, to advanceClaimed");
 const legacy = src.slice(src.indexOf("async function run(env)"), src.indexOf('__name(run, "run")'));
-ok(/const errataRow = await claimErrataFair\(env\);\s*if \(errataRow\) return await advanceClaimed\(env, errataRow\);/.test(legacy) && legacy.indexOf("claimErrataFair(env)") < legacy.indexOf("SELECT * FROM research_queue WHERE status='queued' ORDER BY"), "the single-stage path takes the lane before its own claim");
-ok((src.match(/FROM research_queue WHERE status='queued' ORDER BY CASE WHEN source = 'proposal'/g) || []).length === 3, "the claim ORDER BY still appears exactly three times");
+ok(/const errataRow = await claimErrataFair\(env\);\s*if \(errataRow\) return await advanceClaimed\(env, errataRow\);/.test(legacy) && legacy.indexOf("claimErrataFair(env)") < legacy.indexOf("RESEARCH_CLAIM_ID_SQL"), "the single-stage path takes the lane before its own claim");
+ok((src.match(/SELECT \* FROM research_queue WHERE id = \(" \+ RESEARCH_CLAIM_ID_SQL/g) || []).length === 2, "fallback and single-stage claims use the shared class allocator");
 const adv = src.slice(src.indexOf("async function advanceClaimed("), src.indexOf("// RESEARCH-THROUGHPUT-1: the claim half of run()"));
 ok(/RESUMABLE_STAGES\.indexOf/.test(adv) && /MIRROR\.head\("pipeline\//.test(adv) && /logEvent\(env, "claim", "claimed " \+ row\.source_id/.test(adv) && /claimHeartbeat\(env, row\)/.test(adv), "advanceClaimed keeps the draft check, the claim event the window reads, and the heartbeat");
 ok(!src.includes("Ensure errata remediation rows are never claimed") && src.includes('nullify the whole paper")'), "the inert snippet that said errata rows are never claimed is gone from the version comment and the comment reads whole again");
