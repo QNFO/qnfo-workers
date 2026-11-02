@@ -66,4 +66,14 @@ assert.deepEqual({ ...target() }, {
 });
 assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log WHERE action LIKE 'VERIFICATION-DEFERRED-7D-1 park stale issue-100629%'").get().n, 1);
 
+db.prepare("UPDATE agent_issues SET status = 'open' WHERE id = 100629").run();
+db.exec(sql);
+assert.deepEqual({ ...target() }, {
+  status: "active",
+  deferred_since: "2026-10-25 17:31:03",
+  next_due_at: "2026-11-02 18:00:00"
+});
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM bak_20261102_park_stale_deferral_100629").get().n, 0);
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM decision_log WHERE action LIKE 'VERIFICATION-DEFERRED-7D-1 park stale issue-100629%'").get().n, 1);
+
 console.log("verification-deferral-park-100629: passed");
