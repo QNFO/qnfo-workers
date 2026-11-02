@@ -83,6 +83,7 @@ await client.click({ action: "like" });
 ok(JSON.parse(client.context.localStorage.watchState).likes.some((x) => x.by === "Channel B"), "like feedback is saved locally");
 await client.click({ mood: "for-you" });
 ok(client.context.Q[0]?.by === "Channel B", "For You ranks explicitly liked channels first");
+ok(client.requests.every((url) => !url.includes("Channel B") && !url.includes("watchState")), "personal preferences are never sent to the worker");
 await client.click({ mood: "weird" });
 ok(client.requests.at(-1).includes("?mood=weird") && client.context.Q.length === 1 && client.context.Q[0].mood === "weird", "mood controls request and show the selected category");
 await client.click({ action: "next" });
