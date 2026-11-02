@@ -59,3 +59,10 @@ test("inline emphasis in a legacy title is not stripped on successive sweeps", (
   assert.match(p.title, /\*\*\*Our Human Quest\*\*\*/);
   assert.equal(formatPaper(p.body, {}).body, p.body);
 });
+
+test("existing metadata keys are compared literally and case-insensitively", () => {
+  const md = "---\nDC.Rights: \"Kept\"\nauthor: Writer\n---\n\n# Title\n\n## Abstract\n\nThe real abstract.\n";
+  const p = formatPaper(md, {});
+  assert.equal((p.body.match(/dc\.rights:/gi) || []).length, 1);
+  assert.equal(formatPaper(p.body, {}).body, p.body);
+});

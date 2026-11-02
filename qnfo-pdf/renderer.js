@@ -144,7 +144,8 @@ function formatPaper(source, record) {
   const displayBody = (resolvedTitle ? "# " + resolvedTitle + "\n\n" : "") + (sub ? "*" + sub + "*\n\n" : "") + content + "\n";
   // Retain every original YAML field and lift removed byline fields into YAML,
   // rather than discarding bibliographic information during corpus repair.
-  const added = Object.keys(fields).filter((key) => key !== "title" && key !== "abstract" && (!fm || !new RegExp("^" + key.replace(/\./g, "\\.") + ":", "im").test(fm[1])));
+  const originalKeys = new Set(fm ? fm[1].split("\n").filter((line) => /^[\w.-]+:/.test(line)).map((line) => line.slice(0, line.indexOf(":")).toLowerCase()) : []);
+  const added = Object.keys(fields).filter((key) => key !== "title" && key !== "abstract" && !originalKeys.has(key));
   if (added.length) {
     const yaml = added.map((key) => key + ": " + JSON.stringify(fields[key])).join("\n");
     frontmatter = frontmatter ? frontmatter.replace(/\n---$/, "\n" + yaml + "\n---") : "---\n" + yaml + "\n---";
