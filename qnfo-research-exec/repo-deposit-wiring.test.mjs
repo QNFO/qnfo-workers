@@ -300,6 +300,8 @@ test("the old failure shapes are gone from worker.js", async () => {
   assert.ok(!/INSERT INTO publication_artifacts/.test(src), "the wrong-shaped ledger");
   assert.ok(!src.includes('"/contents/" + cycle + "/" + slug'), "the per-file contents PUT");
   assert.ok(src.includes("REPO-DEPOSIT-BEGIN") && src.includes("research_run_ledger"));
+  const discovery = src.slice(src.indexOf("async function repoPaperSyncTick("), src.indexOf("var res = await REPO_DEPOSIT.syncPapers"));
+  assert.doesNotMatch(discovery, /body_md\s*<>\s*''/, "discovery must not scan full paper bodies before selecting a bounded batch");
 });
 
 for (const [name, fn] of tests) {

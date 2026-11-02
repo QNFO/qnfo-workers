@@ -2571,7 +2571,7 @@ async function repoPaperSyncTick(env, t) {
   var cur = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_repo_sync_cursor'").first();
   var cursor = cur && cur.value ? String(cur.value) : "";
   var set = {};
-  var qs = (await env.LIVING_PAPER.prepare("SELECT slug FROM papers WHERE status IN ('published','distributed','external_preprint') AND body_md IS NOT NULL AND body_md <> '' AND slug IS NOT NULL").all()).results || [];
+  var qs = (await env.LIVING_PAPER.prepare("SELECT slug FROM papers WHERE status IN ('published','distributed','external_preprint') AND body_md IS NOT NULL AND slug IS NOT NULL").all()).results || [];
   qs.forEach(function(r) { set[r.slug] = 1; });
   (await REPO_DEPOSIT.listDirNames(env, null, t, "papers")).forEach(function(n) { set[n] = 1; });
   var slugs = Object.keys(set).sort();
