@@ -37,7 +37,7 @@ SELECT 'copilot:issue-1001243',
   'transient preview propagation no longer causes a false deploy failure; no staged traffic shifts before the expected VERSION is observed',
   'preview-related false failures fall to zero while failed or mismatched previews still stop the rollout',
   'no direct reach gain; canonical deployment reliability improves',
-  'offline delayed-visibility and exhausted-retry tests; canonical-deploy self-test on each deployment')
+  'offline delayed-visibility and exhausted-retry tests; canonical-deploy self-test on each deployment'
 WHERE NOT EXISTS (
   SELECT 1 FROM decision_log
   WHERE action = 'GRADUAL-PREVIEW-VISIBILITY-RETRY-1: poll preview health for the uploaded VERSION before shifting staged traffic'
