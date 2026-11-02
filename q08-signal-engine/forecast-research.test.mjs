@@ -117,8 +117,10 @@ try {
   // A failed ground/claim write rolls back the publication, not just the forecast record.
   db.exec("CREATE TRIGGER reject_research BEFORE INSERT ON q08_forecasts BEGIN SELECT RAISE(ABORT, 'fixture rejects ground'); END;");
   const before = db.prepare("SELECT COUNT(*) n FROM published_pieces").get().n;
+  const signalsBefore = db.prepare("SELECT COUNT(*) n FROM signal_log").get().n;
   await assert.rejects(F.persistPiece(env, draft, { core_concept: "Acme", friction_point: "Acme roadmap", signal_strength: "Forecast" }, { source: "q08", id: "seed", slug: "archive", title: "Acme", url: "https://q08.org/p/archive", points: 0, num_comments: 0, ratio: 0, volatility_score: 0, forecastGround: snapshot }, draft.model), /fixture rejects ground/);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM published_pieces").get().n, before);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM signal_log").get().n, signalsBefore);
   db.exec("DROP TRIGGER reject_research");
 
   // Settle the child while the main claim is still open and not yet due.
