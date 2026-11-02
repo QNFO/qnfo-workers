@@ -342,9 +342,13 @@ export async function actionDeleteStuckRuns(api, cfg, mode, now, env) {
   const self = env && env.GITHUB_RUN_ID ? Number(env.GITHUB_RUN_ID) : 0;
   const runs = [], seen = {};
   for (const status of ["queued", "in_progress"]) {
-    const l = await api.call("GET", "/repos/" + repo + "/actions/runs?status=" + status + "&per_page=100");
-    if (!l.ok) { r.refused = { call: "GET runs " + status, status: l.status, message: l.message }; return r; }
-    for (const x of (l.body && l.body.workflow_runs) || []) if (!seen[x.id]) { seen[x.id] = 1; runs.push(x); }
+    for (let page = 1; ; page++) {
+      const l = await api.call("GET", "/repos/" + repo + "/actions/runs?status=" + status + "&per_page=100&page=" + page);
+      if (!l.ok) { r.refused = { call: "GET runs " + status + " page " + page, status: l.status, message: l.message }; return r; }
+      const listed = (l.body && l.body.workflow_runs) || [];
+      for (const x of listed) if (!seen[x.id]) { seen[x.id] = 1; runs.push(x); }
+      if (listed.length < 100) break;
+    }
   }
   for (const x of runs) {
     const row = { id: x.id, name: x.name, status: x.status, branch: x.head_branch, created_at: x.created_at };

@@ -85,6 +85,20 @@ const SMALL_EDIT = JSON.stringify([{ find: S(5), replace: "Step 5 of the derivat
   ok(ev.some((e) => e.kind === "revise-patch" && /refused=below the 20000-char floor/.test(e.text) && /applied=0/.test(e.text)), "the first revise-patch event records applied=0 and the refusal");
 }
 
+// 1b. A mixed patch retains safe edits while refusing the destructive edit; the next review still judges the result.
+{
+  const replacement = "Step 1 of the derivation fixes the intermediate value 7 from the stated inputs and carries it forward with the arithmetic shown in full detail. ";
+  const mixed = JSON.stringify([{ find: S(1), replace: replacement }, { find: BIG_FIND, replace: "" }]);
+  const t = mkEnv(() => mixed);
+  const res = await stageRevise(t.env, row());
+  const stored = t.store["pipeline/r1/reconciled.md"];
+  const ev = events(t);
+  ok(t.calls.length === 1 && res && res.ok === true && res.stage === "revise->review" && res.patch === 1, "a safe edit is retained without paying for a retry of the destructive edit", { calls: t.calls.length, res });
+  ok(stored.includes(replacement) && stored.includes("## 2. Background and Related Work") && stored.length >= BIGP.length * 0.8, "the safe correction is applied while the paper floor and shrink bound hold", { before: BIGP.length, after: stored.length });
+  ok(ev.some((e) => e.kind === "revise-shrink-salvaged" && /proposed=2 applied=1 rejected=1/.test(e.text)), "the salvaged and rejected edit counts are observable", ev);
+  ok(!ev.some((e) => e.kind === "revise-shrink-refused" || e.kind === "revise-noop"), "a mixed patch with a safe edit is not counted as a refused no-op", ev.map((e) => e.kind));
+}
+
 // 2. A one-sentence removal is applied by the first model: no refusal, no retry.
 {
   const t = mkEnv(() => JSON.stringify([{ find: S(5), replace: "" }]));
