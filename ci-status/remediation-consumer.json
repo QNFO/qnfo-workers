@@ -1,275 +1,71 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@634dc3f281c8",
- "due": 560,
- "pass": 280,
- "fail": 263,
- "skipped": 17,
- "deferred": 14,
+ "verifier": "remediation-consumer@77e74f71eb27",
+ "due": 425,
+ "pass": 158,
+ "fail": 252,
+ "skipped": 15,
+ "deferred": 13,
  "contracts": [
   {
-   "class": "issue-2402",
-   "issue_id": 2402,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "goal-TWIN-NATIVE-TOOLS-1",
-   "issue_id": null,
+   "class": "issue-1000701",
+   "issue_id": 1000701,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:personal-api/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-paper-abstract-empty",
-   "issue_id": 2468,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "7",
-   "written": true
-  },
-  {
-   "class": "issue-1000515",
-   "issue_id": 1000515,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-selfheal-executed-unverified",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-grounding-single-source-refused",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-pdf-backlog-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-verification-deferral-unaged",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-seo-metric-refresh-bridge",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-loop-breaker-counts-excluded-tool-errors",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1000641",
-   "issue_id": 1000641,
-   "verdict": "probe-error",
-   "reason": "HTTP 400 from https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query: {\"messages\":[],\"result\":[],\"success\":false,\"errors\":[{\"code\":7500,\"message\":\"no such table: paper_change_ledger: SQLITE_ERROR\"}]}"
-  },
-  {
-   "class": "issue-1000757",
-   "issue_id": 1000757,
-   "verdict": "pass",
-   "expected": "exuvia_reply_or_post_logged_with_predicted_outcome",
-   "observed": "exuvia_reply_or_post_logged_with_predicted_outcome",
-   "written": true
-  },
-  {
-   "class": "issue-1000970",
-   "issue_id": 1000970,
-   "verdict": "probe-error",
-   "reason": "HTTP 400 from https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query: {\"messages\":[],\"result\":[],\"success\":false,\"errors\":[{\"code\":7500,\"message\":\"LIKE or GLOB pattern too complex: SQLITE_ERROR\"}]}"
-  },
-  {
-   "class": "fm-stale-hold",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-workers-standards-debt-unmeasured",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-ops-schema-alter-noise",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-canonical-worker-count-all-state",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-calibration-ping-swapped",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-ops-stream-incomplete-long",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-review-single-model",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-outreach-chain-enum",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-portfolio-gap-ticket-outlives-gap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000516",
-   "issue_id": 1000516,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-autoclose-flap",
-   "issue_id": null,
-   "verdict": "pass",
    "expected": "2",
-   "observed": "2",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "fm-tracker-state-lag",
+   "class": "goal-PAPER-LEARN-4866",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-metric-unmeasured-ask-plain-sample-flap",
-   "issue_id": null,
-   "verdict": "pass",
+   "verdict": "fail",
    "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-ratio-over-failure-only-table",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000792",
-   "issue_id": 1000792,
-   "verdict": "fail",
-   "expected": "shipped",
-   "observed": "proposed",
-   "written": true
-  },
-  {
-   "class": "fm-cf-obs-untracked",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000598",
-   "issue_id": 1000598,
-   "verdict": "fail",
-   "expected": "retired: qnfo-ipatent is retired and qnfo-youtube-shorts is live",
-   "observed": "present: qnfo-ipatent state=live, qnfo-youtube-shorts state=live, last_census=UNMEASURED req24=1399 seen=2026-11-02T14:01:01.114Z",
-   "written": true
-  },
-  {
-   "class": "issue-1000819",
-   "issue_id": 1000819,
-   "verdict": "fail",
-   "expected": "good",
-   "observed": "bad",
-   "written": true
-  },
-  {
-   "class": "issue-1001305",
-   "issue_id": 1001305,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-review-hard-findings-advanced",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "fm-subscribe-send-failure-silent",
+   "class": "goal-PRG-QNFO-RSCH-DEFECTS-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "open defects in QNFO.RSCH: 45",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-5861",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-WORKERS-STANDARDS-ADVISORY-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "above target: the newest workers best-practice audit reads 0 fail and 92 advisory findings at 2026-11-02T20:10:07Z (target 0)",
+   "written": true
+  },
+  {
+   "class": "issue-1001290",
+   "issue_id": 1001290,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-5860",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-remediation-tick-starved",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -277,35 +73,19 @@
    "written": true
   },
   {
-   "class": "fm-version-probe-string-compare",
+   "class": "goal-PAPER-LEARN-4936",
    "issue_id": null,
-   "verdict": "pass",
+   "verdict": "fail",
    "expected": "0",
-   "observed": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-100495",
-   "issue_id": 100495,
-   "verdict": "fail",
-   "expected": "7d mean <= 1",
-   "observed": "7d mean 49.8571",
-   "written": true
-  },
-  {
-   "class": "issue-1001307",
-   "issue_id": 1001307,
-   "verdict": "fail",
+   "class": "issue-1001327",
+   "issue_id": 1001327,
+   "verdict": "pass",
    "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-metric-close-flap",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
+   "observed": "1",
    "written": true
   },
   {
@@ -315,40 +95,56 @@
    "reason": "write-keyword:insert into"
   },
   {
-   "class": "issue-1000927",
-   "issue_id": 1000927,
+   "class": "goal-PRG-QNFO-OPS-DEFECTS-0",
+   "issue_id": null,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "9",
+   "expected": "ok",
+   "observed": "open defects in QNFO.OPS: 454",
    "written": true
   },
   {
-   "class": "issue-100595",
-   "issue_id": 100595,
+   "class": "goal-PRG-QNFO-REACH-DEFECTS-0",
+   "issue_id": null,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "6",
+   "expected": "ok",
+   "observed": "open defects in QNFO.REACH: 22",
    "written": true
   },
   {
-   "class": "issue-1000920",
-   "issue_id": 1000920,
+   "class": "goal-PAPER-LEARN-4784",
+   "issue_id": null,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1000548",
-   "issue_id": 1000548,
+   "class": "goal-PAPER-LEARN-4785",
+   "issue_id": null,
    "verdict": "fail",
-   "expected": "ask_answers_7d >= 70 OR not declining",
-   "observed": "OFF_TARGET latest=13.0 value_7d_ago=26.0 DECLINING",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1001154",
-   "issue_id": 1001154,
+   "class": "goal-PAPER-LEARN-4786",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4937",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4938",
+   "issue_id": null,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
@@ -361,4 +157,230 @@
    "expected": "closed-with-evidence",
    "observed": "pending",
    "reason": "the probe cannot judge yet: pending"
-  
+  },
+  {
+   "class": "goal-PAPER-LEARN-4787",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4789",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4795",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-paper-abstract-empty",
+   "issue_id": 2468,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "7",
+   "written": true
+  },
+  {
+   "class": "fm-metric-close-flap",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "5",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4788",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4794",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-TWIN-NATIVE-TOOLS-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:personal-api/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000598",
+   "issue_id": 1000598,
+   "verdict": "fail",
+   "expected": "retired: qnfo-ipatent is retired and qnfo-youtube-shorts is live",
+   "observed": "present: qnfo-ipatent state=live, qnfo-youtube-shorts state=live, last_census=UNMEASURED req24=1399 seen=2026-11-02T14:01:01.114Z",
+   "written": true
+  },
+  {
+   "class": "issue-100495",
+   "issue_id": 100495,
+   "verdict": "fail",
+   "expected": "7d mean <= 1",
+   "observed": "7d mean 49.8571",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4888",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4890",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1000709",
+   "issue_id": 1000709,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1000792",
+   "issue_id": 1000792,
+   "verdict": "fail",
+   "expected": "shipped",
+   "observed": "proposed",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-4887",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001305",
+   "issue_id": 1001305,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1000548",
+   "issue_id": 1000548,
+   "verdict": "fail",
+   "expected": "ask_answers_7d >= 70 OR not declining",
+   "observed": "OFF_TARGET latest=12.0 value_7d_ago=26.0 DECLINING",
+   "written": true
+  },
+  {
+   "class": "issue-1000501",
+   "issue_id": 1000501,
+   "verdict": "fail",
+   "expected": "count_fine_schedules_using_fleet_exec",
+   "observed": 20,
+   "written": true
+  },
+  {
+   "class": "issue-100595",
+   "issue_id": 100595,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "97",
+   "written": true
+  },
+  {
+   "class": "issue-1000819",
+   "issue_id": 1000819,
+   "verdict": "fail",
+   "expected": "good",
+   "observed": "bad",
+   "written": true
+  },
+  {
+   "class": "issue-1000927",
+   "issue_id": 1000927,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "9",
+   "written": true
+  },
+  {
+   "class": "issue-1001154",
+   "issue_id": 1001154,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1001307",
+   "issue_id": 1001307,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-untracked",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "8",
+   "written": true
+  },
+  {
+   "class": "issue-1000341",
+   "issue_id": 1000341,
+   "verdict": "fail",
+   "expected": "ai_label_coverage=1.0000,ai_interaction_disclosure=1.0000",
+   "observed": "ai_label_coverage=0.8000,ai_interaction_disclosure=0.6667",
+   "written": true
+  },
+  {
+   "class": "issue-1000920",
+   "issue_id": 1000920,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "metric-relapse-1921",
+   "issue_id": 1921,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-remediation-over-budget-metric-lifetime-count",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-10003

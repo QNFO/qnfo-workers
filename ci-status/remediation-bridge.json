@@ -7,8 +7,8 @@
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 1405,
- "active_with_executable_probe": 1083,
+ "active_contracts": 1427,
+ "active_with_executable_probe": 1105,
  "active_with_prose_probe": 322,
  "prose_probe_contracts": [
   {
@@ -213,7 +213,7 @@
   }
  ],
  "contracts_needs_machine_probe": 34,
- "open_issues_without_active_contract": 100,
+ "open_issues_without_active_contract": 95,
  "residual_gap_ids": [
   1753,
   1798,
@@ -223,7 +223,6 @@
   2376,
   2447,
   2522,
-  2564,
   2607,
   2670,
   2862,
@@ -246,7 +245,6 @@
   100222,
   100226,
   100301,
-  100407,
   100423,
   100460,
   100464,
@@ -256,14 +254,12 @@
   1000326,
   1000363,
   1000364,
-  1000391,
   1000403,
-  1000404,
+  1000416,
   1000434,
   1000435,
   1000481,
   1000482,
-  1000486,
   1000518,
   1000519,
   1000520,
@@ -274,9 +270,13 @@
   1000528,
   1000529,
   1000530,
-  1000531
+  1000531,
+  1000533,
+  1000552,
+  1000618,
+  1000621
  ],
- "head": "3d240274abab3d25d2bc9f6fd09a8beabeaf565c",
+ "head": "323e38c5aa1c8c1622f410d185d23cacc8e99b0d",
  "job_status": "success",
- "ts": "2026-11-02T15:36:04Z"
+ "ts": "2026-11-02T20:54:29Z"
 }
