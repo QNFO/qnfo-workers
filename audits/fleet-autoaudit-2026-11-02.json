@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-11-02 00:36:03",
+  "audited_at": "2026-11-02 01:08:40",
   "d1_write_failures": [],
   "d1_writes_ok": 129,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-ops"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -561,7 +568,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.44.10-codeagent",
+        "version": "1.44.11-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -576,7 +583,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.40.9-codeagent",
+        "version": "0.40.10-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -641,7 +648,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.48.3-codeagent",
+        "version": "3.48.4-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -691,7 +698,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.62.3-codeagent",
+        "version": "2.62.5-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -996,9 +1003,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.44.10-codeagent",
+      "before": "1.44.11-codeagent",
       "http": 200,
-      "live": "1.44.10-codeagent",
+      "live": "1.44.11-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1056,9 +1063,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.40.9-codeagent",
+      "before": "0.40.10-codeagent",
       "http": 200,
-      "live": "0.40.9-codeagent",
+      "live": "0.40.10-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1447,9 +1454,9 @@
       "worker": "qnfo-fleet-lee"
     },
     "qnfo-gateway": {
-      "before": "3.48.3-codeagent",
+      "before": "3.48.4-codeagent",
       "http": 200,
-      "live": "3.48.3-codeagent",
+      "live": "3.48.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1581,9 +1588,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.62.3-codeagent",
+      "before": "2.62.5-codeagent",
       "http": 200,
-      "live": "2.62.3-codeagent",
+      "live": "2.62.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
