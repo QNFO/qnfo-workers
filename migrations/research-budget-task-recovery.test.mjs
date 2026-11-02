@@ -124,6 +124,18 @@ assert.equal(task(expired).status, "queued", "an expired lease does not strand a
 expired.prepare("UPDATE code_tasks SET status='failed' WHERE id=?").run(id);
 expired.exec(sql);
 assert.equal(task(expired).status, "failed", "replay never grants another retry to a recovered task that failed again");
+for (const changes of [
+  { status: "read", lease_until: "2999-01-01T00:00:00Z" },
+  { status: "ready_to_publish", lease_until: null },
+]) {
+  const w = world();
+  w.exec(sql);
+  w.prepare("UPDATE code_tasks SET status=?, lease_until=? WHERE id=?").run(changes.status, changes.lease_until, id);
+  const original = [task(w), contract(w)];
+  w.exec(rollback);
+  assert.deepEqual([task(w), contract(w)], original, "rollback never rewinds active or verified work or its recovery probe");
+  w.close();
+}
 const missing = world();
 missing.prepare("DELETE FROM code_tasks WHERE id=?").run(id);
 missing.exec(sql);
