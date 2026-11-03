@@ -82,6 +82,6 @@ SELECT
  'scripts/code-delivery.mjs; scripts/code_delivery.py; scripts/code-task-publish.py; scripts/conflict_repair.py; scripts/copilot-pr-lifecycle.mjs; scripts/assign-copilot-sweep.mjs; qnfo-fleet-control; qnfo-github-steward; regression suites; CLAUDE.md',
  'Implementation branch for PR #6489; merge and deployment not claimed at session closeout',
  'CI-applied directive, failure mode, detector, control, capability and decision records',
- 'Canonical lane owns PR #6489, migration application and deployment. The issue above verifies the source guard on main, not live behavior; production no-code delivery and active-session preservation must also be checked before closing GitHub issue #6487. All 21 remaining repository-suite failures reproduced on the unchanged starting revision.',
+ 'Canonical lane owns PR #6489, migration application and deployment. The issue above verifies the source guard on main, not live behavior; production no-code delivery and active-session preservation must also be checked before closing GitHub issue #6487. Integrated full suite: 1157 passed, 32 failed. Twenty-one failures reproduced on the unchanged starting revision; the eleven failures introduced by incoming main also reproduced on unchanged PR base c503478.',
  0.6666666667, 3, 2, '2026-11-03T03:40:00Z', datetime('now'), datetime('now')
 WHERE NOT EXISTS (SELECT 1 FROM session_records WHERE session_id = 'copilot-code-change-required-20261103');
