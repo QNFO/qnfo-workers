@@ -253,7 +253,7 @@ ok(atLeast(mod.__version, "0.12.0"), "the worker is 0.12.0 or later", mod.__vers
   const U = "fx-worker/second.test.mjs", V = "fx-worker/third.test.mjs", W = "fx-worker/fourth.test.mjs";
   const feedback = (paths) => "PUBLISH-SUITE-CHECK-1: " + paths.map((p) => "FAIL " + p + ": assertion failed").join(" | ");
   const cases = [
-    { initial: [T], last: feedback([T, T, "other-worker/foreign.test.mjs", U, V, W]), expected: [T, U, V] },
+    { initial: [T], last: feedback([T, T, "other-worker/foreign.test.mjs", "fx-worker/../escape.test.mjs", U, U, V, W]), expected: [T, U, V] },
     { initial: [T], last: "edit 1: SEARCH text occurs 0 times", previous: feedback([T, U]), expected: [T, U] },
     { initial: [], last: feedback(["other-worker/foreign.test.mjs", T, U]), expected: [T, U] },
   ];
