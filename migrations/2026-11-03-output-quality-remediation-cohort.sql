@@ -18,11 +18,11 @@ WITH anchor AS (
   SELECT MAX(day) AS day FROM metric_history WHERE metric = 'remediation_latest_pass_pct_7d'
 ), subjects AS (
   SELECT CASE WHEN r.issue_id IS NOT NULL THEN 'issue:' || r.issue_id ELSE 'class:' || r.class END AS subject,
-         MAX(CASE WHEN datetime(r.verified_at) >= datetime(a.day, '-6 days') THEN r.id END) AS now_id,
-         MAX(CASE WHEN datetime(r.verified_at) < datetime(a.day, '-6 days') THEN r.id END) AS prev_id
-  FROM remediation_verifications r CROSS JOIN anchor a
-  WHERE datetime(r.verified_at) >= datetime(a.day, '-13 days')
-    AND datetime(r.verified_at) < datetime(a.day, '+1 day')
+         MAX(CASE WHEN replace(substr(r.verified_at, 1, 19), 'T', ' ') >= datetime(a.day, '-6 days') THEN r.id END) AS now_id,
+         MAX(CASE WHEN replace(substr(r.verified_at, 1, 19), 'T', ' ') < datetime(a.day, '-6 days') THEN r.id END) AS prev_id
+  FROM anchor a CROSS JOIN remediation_verifications r
+  WHERE replace(substr(r.verified_at, 1, 19), 'T', ' ') >= datetime(a.day, '-13 days')
+    AND replace(substr(r.verified_at, 1, 19), 'T', ' ') < datetime(a.day, '+1 day')
     AND (r.issue_id IS NOT NULL OR r.class IS NOT NULL)
   GROUP BY subject
 )
@@ -77,3 +77,17 @@ VALUES ('fm-output-quality-remediation-cohort', NULL, 'SELECT 1 AS ready',
   'Observe only; restore the matched-subject output-quality comparison through a CI migration if missing',
   'SELECT CASE WHEN instr(sql, ''v_output_quality_remediation_cohort'') > 0 THEN ''ok'' ELSE ''missing'' END AS status FROM sqlite_master WHERE name = ''v_output_quality_verdict''',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'verification');
+
+INSERT INTO decision_log
+  (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'copilot-6506', 'Pool pass-rate changes can reflect new verification subjects rather than relapse',
+  'OUTPUT-QUALITY-REMEDIATION-COHORT-1: compare matched remediation subjects for output quality',
+  'Issue 1000621 lever review: pool 80.8 -> 68.6, matched subjects 41.1 -> 44.2; read-only pre-deploy query on 2026-11-03: 1330 matched subjects, 82.4 -> 85.9',
+  'Pending canonical migration and two output_quality_outcomes_worse refreshes at zero; no issue closed by this migration',
+  'v_output_quality_verdict remediation comparison only; all-subject integrity guard unchanged',
+  'Execute this migration Rollback line; original view and caveat retained in bak_20261103_output_quality_verdict',
+  'Distinguish verification-cohort churn from genuine remediation relapse',
+  'New-only subjects do not change the trend; matched pass-to-fail changes still register as worse',
+  'Honest output-quality attribution without hiding failed probes',
+  'Offline SQLite regression, rollback and read-only live cohort query'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action = 'OUTPUT-QUALITY-REMEDIATION-COHORT-1: compare matched remediation subjects for output quality');
