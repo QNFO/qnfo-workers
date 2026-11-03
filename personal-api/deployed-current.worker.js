@@ -607,7 +607,7 @@ async function eventDiscoveryContext(env, at = Date.now()) {
   const rows = (await env.PERSONAL.prepare("SELECT city, country, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ? AND start_date <= ? ORDER BY start_date").bind(new Date(at - 864e5).toISOString().slice(0, 10), new Date(at + 864e5).toISOString().slice(0, 10)).all()).results || [];
   const stay = CMP.stayAt(rows, at);
   const age = loc && at - Date.parse(loc.ts);
-  const fresh = loc && loc.city && Number.isFinite(age) && age >= 0 && age <= 48 * 3600e3;
+  const fresh = loc && loc.city && Number.isFinite(age) && age >= 0 && age <= 48 * 3600e3 && (!stay || Date.parse(loc.ts) >= CMP.eventMs(stay.start + "T00:00", stay.tz));
   const city = fresh ? loc.city : stay ? stay.city : null;
   const profile = (await env.PERSONAL.prepare("SELECT facet, label, statement FROM profile WHERE facet IN ('likes','wants','hobbies','venues','dislikes') AND confidence >= 0.7 ORDER BY confidence DESC LIMIT 40").all()).results || [];
   return { city, location_source: fresh ? "recent-location" : stay ? "current-stay" : "unknown", interests: profile.filter((r) => r.facet !== "dislikes"), dislikes: profile.filter((r) => r.facet === "dislikes") };
