@@ -34,10 +34,15 @@ function replaceOne(text, oldText, newText, label) {
 function inlineWorker(text) {
   const oldVersion = 'var VERSION = "2.62.10-rm1646-qwen-chat";';
   const newVersion = 'var VERSION = "2.62.11-rm1646-qwen-chat";';
-  const releaseNote = " /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker). */";
+  const releaseNote = " /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */";
   if (text.includes(oldVersion)) {
     text = replaceOne(text, oldVersion, newVersion + releaseNote, "old worker version");
-  } else if (!text.includes(newVersion + releaseNote)) {
+  } else if (text.includes(newVersion)) {
+    const noteStart = text.indexOf(" /* 2.62.11 WORKER-LOAD-GATE-1 ");
+    const noteEnd = noteStart < 0 ? -1 : text.indexOf(" */", noteStart);
+    if (noteEnd < 0) throw new Error("qnfo-ops worker release note is missing");
+    text = text.slice(0, noteStart) + releaseNote + text.slice(noteEnd + 3);
+  } else {
     throw new Error("qnfo-ops worker version differs from the expected main version");
   }
 
