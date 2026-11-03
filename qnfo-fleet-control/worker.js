@@ -7491,7 +7491,7 @@ function pfUnpinnedUses(workflows) {
   (workflows || []).forEach(function(f) {
     if (!f || f.type !== "blob" || !/\.(?:ya?ml)$/i.test(String(f.name || ""))) return;
     String(f.text || "").split(/\r?\n/).forEach(function(line) {
-      var m = line.match(/^\s*uses\s*:\s*['"]?([^\s'"#]+)/i);
+      var m = line.match(/^\s*(?:-\s*)?uses\s*:\s*['"]?([^\s'"#]+)/i);
       if (m && !/@[a-f0-9]{40}$/i.test(m[1])) count++;
     });
   });
