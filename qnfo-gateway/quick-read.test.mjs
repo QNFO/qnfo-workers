@@ -551,7 +551,9 @@ const Q = "What did the controller measure about the energy cost of one solution
 
 // ---- 22. PLAIN-RESIDUE-LIKE-1: D1 refuses a LIKE pattern over 50 bytes, so the residue gate SQL must not build one
 {
-  const markers = new Function("return " + src.match(/var PLAIN_PROMPT_MARKERS = (\[[^\]]*\]);/)[1])();
+  const promptMarkers = new Function("return " + src.match(/var PLAIN_PROMPT_MARKERS = (\[[^\]]*\])\.concat\(PLAIN_REFUSAL_MARKERS\);/)[1])();
+  const refusalMarkers = new Function("return " + src.match(/var PLAIN_REFUSAL_MARKERS = (\[[^\]]*\]);/)[1])();
+  const markers = promptMarkers.concat(refusalMarkers);
   ok(markers.some((m) => Buffer.byteLength("%" + m + "%") > 50), "a residue marker is longer than the D1 LIKE limit (the case this guards)");
   ok(!/" LIKE '%" \+ marker/.test(src) && /"instr\(" \+ lower \+ ",'" \+ marker/.test(src), "the residue markers are matched with instr, never LIKE");
   const likeLits = (src.match(/LIKE '[^']*'/g) || []).filter((l) => Buffer.byteLength(l.slice(6, -1)) > 50);
