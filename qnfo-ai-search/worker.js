@@ -29,7 +29,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.12.10-codeagent";
+var VERSION = "2.12.11-codeagent";
 
 // Helper to call AI model with timeout and retry on AI_TIMEOUT
 async function callModelWithRetry(url, payload, timeoutMs = 20000) {
@@ -738,7 +738,7 @@ async function retrieve(env, query, cfg) {
     var c = cat && cat.bySlug.get(g.slug);
     var catMeta = c && c.abstract ? { slug: c.slug, title: c.title, doi: c.doi, abstract: c.abstract } : null;
     if (i < cfg.max_sources && stubOnly(g) && stubReads++ < 1) {
-      return deadline(pinPaper(env, g.slug, query), 7000, "body-" + g.slug).then(function (p) {
+      return deadline(pinPaper(env, g.slug, query), 9000, "body-" + g.slug).then(function (p) {
         if (p && p.excerpt && p.excerpt.length > stubLength(g)) { g.chunks = [p.excerpt]; g.stubs = 0; g.body = true; }
         return p || catMeta;
       }, function (e) { logErr("source-voice body " + g.slug, e); return catMeta; });
