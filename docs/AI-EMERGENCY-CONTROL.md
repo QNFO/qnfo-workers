@@ -13,6 +13,29 @@ claims during implementation. Their proposed changes are preserved separately;
 they are not an exemption. Integrate and verify those callers before presenting
 the feature as fleet-wide.
 
+Related existing work: #5601 (`BP26-LEASES-KILLSWITCH-1`) implements the
+deployment/claim/secret fence `ops_config.fleet_kill_switch`; #5602 tracks
+additional readers. That fence is not an AI dispatch authority and its
+30-second cached lease checks cannot replace per-dispatch primary reads.
+The AI resume endpoint never writes or clears that flag. Effective dispatch
+precedence for an already active fleet fence must also be verified before
+rollout; do not treat an AI-only resume as permission to override another stop.
+See [leases and fencing](LEASES-FENCING.md).
+
+Production reconciliation is also pending: another session reported a
+`qnfo-fleet-lee` deployment with a `KILLSWITCH` Durable Object, followed by a
+rollback to original code `33ab04d6`. Reported migration history now includes
+`v1-killswitch` and `v2-remove-killswitch`, and the restored service has no live
+SHUTDOWN. These live reports are not verified by this branch. Establish the
+actual deployed source, migration history, bindings, exposure and auth before
+rollout; a merged dashboard PR is not deployment evidence. Do not introduce
+another authoritative flag. No rollback or production change is performed here.
+
+The existing dashboard command line recognizes exact `SHUTDOWN`
+deterministically, before inference or the paused/unavailable chat preflight,
+and invokes the owner pause endpoint. No AI response is needed to shut down.
+Resume is always a separate deliberate action.
+
 ## Authority and dashboard contract
 
 The existing `qnfo-deploy-guard` Worker owns the only state, the
@@ -61,6 +84,18 @@ issuer, audience, signature, expiration/not-before, subject and owner email.
 Forwarding an email header is insufficient. Neither mutation is exposed by
 permissive CORS. Dashboard same-origin/JSON checks complement, rather than
 replace, the authority's JWT validation.
+
+**Email-code login is a deployment prerequisite, not a claim made by the JWT
+fixture tests.** Configure a dedicated Cloudflare Access application/audience
+with only the `onetimepin` identity provider, an exact owner-email Allow policy,
+and One-time PIN as a required login method. Disable alternate/all-provider,
+bypass and service-auth rules. Prefer a new audience; invalidate previous
+non-OTP sessions if reusing an application. Pin that same `ACCESS_AUD` in both
+Workers. A standard signed Access JWT has no guaranteed OTP `amr` claim, so
+issuer/audience/email verification alone cannot attest to the login method.
+Verify the actual Access policy and email Send login code/PIN/sign-in flow
+before declaring the deployed feature email-OTP protected. See
+[Cloudflare's One-time PIN documentation](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/).
 
 Dashboard service declaration:
 
@@ -191,6 +226,13 @@ The persisted integration passed 39 assertions with Miniflare
 public spoof rejection, owner state transitions, stale resume, audit entries,
 and missing-table fail-closed behavior. Local D1 executes the first-primary
 Sessions API path, but cannot prove physical production replica selection.
+
+`.github/workflows/ai-emergency-control.yml` runs these focused checks and
+coverage as a separate non-advisory job on pull requests and main. It has no
+`continue-on-error` exemption. The live repository reported no legacy required
+status checks or effective required-status-check rules at implementation time;
+this change does not modify branch protection or cloud permissions. The failed
+coverage job remains visible to the existing merge lane and must not be bypassed.
 
 No rollout or production pause was performed for this build. Before rollout:
 

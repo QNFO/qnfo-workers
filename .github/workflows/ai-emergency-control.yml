@@ -1,0 +1,41 @@
+name: AI emergency control
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-emergency-control-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-emergency-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "24"
+      - name: Authority authorization, audit and stale resume
+        run: node qnfo-deploy-guard/ai-control.test.mjs
+      - name: Fail-closed dispatch, fallback, alarm and workflow regressions
+        run: |
+          node _shared/fleet-ai-control.test.mjs
+          node _shared/fleet-ai-dispatch.test.mjs
+          python scripts/repo_content_index_ai_control_test.py -q
+      - name: Actual workerd, D1 and trusted service-binding integration
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ai-control-runtime" --no-audit --no-fund miniflare@5.20261102.0-beta
+          node qnfo-deploy-guard/ai-control-runtime.mjs "$RUNNER_TEMP/ai-control-runtime/node_modules/miniflare"
+      - name: Single-file deployment mirror parity
+        run: node scripts/fleet-ai-control-sync.mjs --check
+      - name: Complete emergency dispatch coverage
+        if: ${{ !cancelled() }}
+        run: node scripts/fleet-ai-control-coverage.test.mjs
