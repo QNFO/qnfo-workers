@@ -276,9 +276,8 @@ const MAX_OPEN_TASKS = 48;
 // TICK-PARALLEL-N (0.18.0): lanes run concurrently inside one tick. A lane's step is dominated by a model call (network wait,
 // no CPU), so eight lanes cost ~one lane of wall time and ~one lane of CPU per second of overlap. Each lane claims through the
 // same atomic claim(), so two lanes can never hold the same row, and claimEnsure still serialises tasks on the same file.
-// LANES-8-1 (0.18.2, owner directive "MORE PARALLEL WORKERS"): was 4; measured 5 distinct tasks per tick at 4 lanes, so the
-// queue (MAX_OPEN_TASKS) and the planner's work-in-progress cap were raised with it, or the lanes would idle.
-const TICK_LANES = 8;
+// FAMILY-YIELD-1 (#1000779): uncapped work can use the existing 16-lane ceiling; the daily call gate still forces one lane.
+const TICK_LANES = 16;
 // CODE-LOOP-SOFT-BUDGET-1: the unchanged daily call threshold steers model order and batch size, never stops a tick.
 const DAILY_MODEL_CALLS_DEFAULT = 1500;
 // LEASE-FENCE-1 (0.18.23): was 90 s. Measured in ai_call_counters 2026-10-18/19, a ladder call averages 44 s (gpt-oss-120b), 106 s
@@ -355,6 +354,53 @@ const _schemaDbs = new WeakSet(); // schema is ensured once per D1 binding objec
 function ladder(env) {
   const l = String(env.MODEL_LADDER || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
   return l.length ? l : DEFAULT_LADDER;
+}
+const FAMILY_HISTORY_DAYS = 30;
+const FAMILY_HISTORY_MAX = 50;
+const FAMILY_MIN_OUTCOMES = 5;
+const FAMILY_LOW_SUCCESS_RATE = 0.2;
+function taskFamily(path) {
+  const p = String(path || "").replace(/^\/+/, "");
+  const slash = p.indexOf("/");
+  return slash < 0 ? p : p.slice(0, slash);
+}
+function modelCost(model) {
+  const rates = LADDER_RATES[model];
+  return rates ? rates[0] + rates[1] : Infinity;
+}
+async function familyPolicy(env, path) {
+  const family = taskFamily(path);
+  const empty = { family: family, outcomes: 0, merged: 0, successRate: null, retryRounds: RETRY_ROUNDS, preferredModel: null };
+  if (!family) return empty;
+  try {
+    const since = new Date(Date.now() - FAMILY_HISTORY_DAYS * 864e5).toISOString();
+    const rows = await env.AUDIT_DB.prepare(
+      "SELECT status, model FROM code_tasks WHERE (CASE WHEN instr(path, '/') > 0 THEN substr(path, 1, instr(path, '/') - 1) ELSE path END) = ?1 " +
+      "AND updated_at >= ?2 AND status IN ('merged','failed','needs_human','reverted') ORDER BY updated_at DESC LIMIT " + FAMILY_HISTORY_MAX
+    ).bind(family, since).all();
+    const outcomes = rows && Array.isArray(rows.results) ? rows.results : [];
+    const merged = outcomes.filter(function (row) { return row.status === "merged"; });
+    const successRate = outcomes.length ? merged.length / outcomes.length : null;
+    const configured = ladder(env);
+    const proven = Array.from(new Set(merged.map(function (row) { return String(row.model || ""); })))
+      .filter(function (model) { return configured.includes(model) && Number.isFinite(modelCost(model)); })
+      .sort(function (a, b) { return modelCost(a) - modelCost(b) || configured.indexOf(a) - configured.indexOf(b); });
+    return {
+      family: family,
+      outcomes: outcomes.length,
+      merged: merged.length,
+      successRate: successRate,
+      retryRounds: outcomes.length >= FAMILY_MIN_OUTCOMES && successRate < FAMILY_LOW_SUCCESS_RATE ? 1 : RETRY_ROUNDS,
+      preferredModel: proven[0] || null,
+    };
+  } catch (e) {
+    return empty;
+  }
+}
+function familyLadder(env, policy) {
+  const configured = ladder(env);
+  if (!policy || !policy.preferredModel || !configured.includes(policy.preferredModel)) return configured;
+  return [policy.preferredModel].concat(configured.filter(function (model) { return model !== policy.preferredModel; }));
 }
 async function ensureSchema(env) {
   if (_schemaDbs.has(env.AUDIT_DB)) return;
@@ -637,6 +683,9 @@ function taskPathKeySql(alias) {
   const p = alias + ".path";
   return "CASE WHEN " + p + " LIKE '%/deployed-current.worker.js' THEN substr(" + p + ", 1, length(" + p + ") - length('deployed-current.worker.js')) || 'worker.js' ELSE " + p + " END";
 }
+function taskFamilySql(alias) {
+  return "CASE WHEN instr(" + alias + ".path, '/') > 0 THEN substr(" + alias + ".path, 1, instr(" + alias + ".path, '/') - 1) ELSE " + alias + ".path END";
+}
 // CLAIM-PUBLISHED-RELEASE-1 (0.18.20, 2026-10-18): "published" is not in CODE_TASK_DONE and must not be - that list also
 // decides whether a file is busy for CODE-DISPATCH-DEDUPE-1 (a second task on a file with an unmerged PR is exactly what
 // it prevents) and whether a retry is refused as "in flight". But a published task will never edit the file again, and the
@@ -880,11 +929,12 @@ async function claim(env) {
   const now = iso();
   const until = new Date(Date.now() + LEASE_MS).toISOString();
   const waited = new Date(Date.now() - CLAIM_WAIT_MS).toISOString();
+  const recentMerges = "(SELECT COUNT(*) FROM code_tasks h WHERE h.status='merged' AND h.updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + FAMILY_HISTORY_DAYS + " days') AND " + taskFamilySql("h") + "=" + taskFamilySql("q") + ")";
   return await env.AUDIT_DB.prepare(
     "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT q.id FROM code_tasks q WHERE q.status='queued' AND (q.lease_until IS NULL OR q.lease_until < ?) " +
     "AND NOT EXISTS (SELECT 1 FROM code_tasks p WHERE p.repo=q.repo AND " + taskPathKeySql("p") + "=" + taskPathKeySql("q") + " AND p.id<>q.id AND p.status NOT IN " + CODE_TASK_DONE_SQL +
     " AND (p.status<>'queued' OR p.created_at<q.created_at OR (p.created_at=q.created_at AND p.id<q.id))) " +
-    "ORDER BY CASE WHEN q.updated_at < ? THEN 0 ELSE 1 END, q.attempts ASC, q.created_at ASC, q.id ASC LIMIT 1) RETURNING *"
+    "ORDER BY CASE WHEN " + recentMerges + " >= 2 THEN 0 ELSE 1 END, CASE WHEN q.updated_at < ? THEN 0 ELSE 1 END, q.attempts ASC, q.created_at ASC, q.id ASC LIMIT 1) RETURNING *"
   ).bind(until, now, now, waited).first();
 }
 // FENCE-IN-FILE-1 (2026-10-01, code_tasks ct_readme20261001b): the reply's closing fence is the LAST one. The old lazy
@@ -2286,6 +2336,7 @@ async function fileLoopIssue(env, task, msg, attempts, sig) {
 // ONE bounded step. Returns the task's new state; never throws (a throw becomes a recorded failed attempt).
 async function stepTask(env, task) {
   const ctx = getCtx(task);
+  const family = await familyPolicy(env, task.path);
   // LEASE-FENCE-1: every write of this step is fenced on the lease this lane was handed; tsave follows the lease the step itself sets.
   let fence = task.lease_until == null ? null : task.lease_until;
   const tsave = async function (f) {
@@ -2327,13 +2378,15 @@ async function stepTask(env, task) {
     const ns = noteSig(ctx, msg, attempts);
     const sigStop = !terminal && ns.streak >= SIG_REPEAT_MAX;
     const roundEnd = !terminal && attempts % MAX_ATTEMPTS === 0;
-    const giveUp = sigStop || (!terminal && attempts >= MAX_ATTEMPTS * RETRY_ROUNDS);
+    const retryRounds = family.retryRounds;
+    const giveUp = sigStop || (!terminal && attempts >= MAX_ATTEMPTS * retryRounds);
     const retryAt = roundEnd && !giveUp ? new Date(Date.now() + RETRY_BACKOFF_MS[Math.min(round, RETRY_BACKOFF_MS.length) - 1]).toISOString() : null;
-    let note = retryAt ? " [SELF-REPAIR-1: round " + round + " of " + RETRY_ROUNDS + " failed; retried from the first rung after " + retryAt + "]" : "";
+    let note = retryAt ? " [SELF-REPAIR-1: round " + round + " of " + retryRounds + " failed; retried from the first rung after " + retryAt + "]" : "";
     if (giveUp) {
       const iss = await fileLoopIssue(env, task, msg, attempts, sigStop ? ns.sig : null);
       const to = "handed to the fleet as " + (iss ? "agent_issues #" + iss : "an audit error (no issue could be filed)");
-      note = sigStop ? " [FAIL-SIGNATURE-STOP-1: the same failure " + ns.streak + " attempts in a row (" + ns.sig + "); " + to + "]" : " [SELF-REPAIR-1: " + RETRY_ROUNDS + " rounds failed; " + to + "]";
+      const familyStop = retryRounds < RETRY_ROUNDS ? "; FAMILY-YIELD-1 limited retries for " + family.family + " at " + Math.round(family.successRate * 100) + "% across " + family.outcomes + " outcomes" : "";
+      note = sigStop ? " [FAIL-SIGNATURE-STOP-1: the same failure " + ns.streak + " attempts in a row (" + ns.sig + "); " + to + "]" : " [SELF-REPAIR-1: " + retryRounds + " round" + (retryRounds === 1 ? "" : "s") + " failed" + familyStop + "; " + to + "]";
     }
     const dead = !!(terminal || giveUp);
     const f = { attempts: attempts, last_error: String(msg).slice(0, Math.max(100, 500 - note.length)) + note, lease_until: retryAt,
@@ -2365,7 +2418,7 @@ async function stepTask(env, task) {
     const at = new Date(Date.now() + TIMEOUT_WAIT_MS).toISOString();
     await tsave({ ctx: JSON.stringify(cur), lease_until: at });
     // TIMEOUT-MODEL-ATTR-1 (0.18.24): the rung that timed out, by the propose step's own pick, so timeouts are graded per model.
-    const lt = ladder(env), tm = task.step === "propose" ? lt[Math.min((task.attempts + (n - 1)) % MAX_ATTEMPTS, lt.length - 1)] : null;
+    const lt = familyLadder(env, family), tm = task.step === "propose" ? lt[Math.min((task.attempts + (n - 1)) % MAX_ATTEMPTS, lt.length - 1)] : null;
     await audit(env, "code-task.timeout", task.id + " " + task.step + " (" + n + " of " + TIMEOUT_MAX + ")" + (tm ? " on " + tm : "") + ": " + String(msg).slice(0, 160) + "; same attempt, next rung, after " + at, { id: task.id, n: n, step: task.step, retry_at: at, model: tm }, "retry");
     return { ok: false, dead: false, timeout: true, error: String(msg), retry_at: at, n: n };
   };
@@ -2538,7 +2591,7 @@ async function stepTask(env, task) {
           }
         }
       }
-      const l = ladder(env);
+      const l = familyLadder(env, family);
       // Each round climbs the ladder from its first rung (SELF-REPAIR-1); the old clamp ran the last rung for every later attempt.
       let model = l[Math.min((task.attempts + (ctx.timeouts || 0)) % MAX_ATTEMPTS, l.length - 1)]; // TIMEOUT-RETRY-1: a timed-out rung moves on
       if (ctx.mode === "patch") {
@@ -3668,30 +3721,33 @@ async function tick(env, opts) {
   const budget = Math.min(Number(opts && opts.budgetMs) || 20000, 50000); // PLAN-RESERVE-1 (0.18.3): the plan step runs AFTER the lanes and the lanes spend the whole budget, so with a failing queue the tick never reached planning -- measured 2026-10-17: fleet_tick every 10 min, code_tasks moving every minute, WIP below PLAN_WIP, cap headroom, 40 candidates waiting, and issue_plans recorded nothing from 15:21:02Z. Planning gets a reserved slice instead of whatever is left over. The reserve never starves the lanes: it is skipped when the budget is too small to split.
   const PLAN_RESERVE_MS = 15000;
   const laneBudget = budget > PLAN_RESERVE_MS * 2 ? budget - PLAN_RESERVE_MS : budget; // CODE-LOOP-2X-1: caps 50 s / 48 steps (were 25 s / 12)
-  const maxSteps = Math.min(Number(opts && opts.maxSteps) || 8, gate.capped ? 1 : 64);
+  const maxSteps = Math.min(Number(opts && opts.maxSteps) || 16, gate.capped ? 1 : 64);
   // TICK-PARALLEL-N (0.18.0): up to TICK_LANES task lanes run at once. Before, one lane took one step and awaited it, so a
   // single 20-40 s model call consumed the whole budget and the other 15 allowed steps never ran.
   const lanes = gate.capped ? 1 : Math.max(1, Math.min(Number(opts && opts.lanes) || await opsInt(env, "code_tick_lanes", TICK_LANES, 1, 16), 16));
   const t0 = Date.now();
   const done = [];
-  let executed = 0, scanned = 0;
+  let executed = 0, scanned = 0, reserved = 0;
   // A lane that finds nothing claimable ends ITSELF and no other lane: the other lanes hold live steps whose saves free
   // the next rows, and stopping them was measured (test-loop) as a regression to one step per tick.
   const lane = async function () {
-    while ((gate.capped ? executed : done.length) < maxSteps && (!gate.capped || scanned < 64) && Date.now() - t0 < laneBudget) {
+    while (executed + reserved < maxSteps && (!gate.capped || scanned < 64) && Date.now() - t0 < laneBudget) {
       // The claim is atomic (UPDATE ... RETURNING): two lanes can never be handed the same row.
+      reserved++;
       const task = await claim(env);
-      if (!task) return;
+      if (!task) { reserved--; return; }
       scanned++;
       // CLAIMS-FIRST-1: a file a session holds is not built against; the task waits for the claim to lapse.
       let holder = null;
       try { holder = await claimEnsure(env, task); } catch (eH) { holder = null; }
       if (holder) {
+        reserved--;
         await save(env, task.id, { lease_until: new Date(Date.now() + CLAIM_WAIT_MS).toISOString() });
         await audit(env, "code-task.claim-held", task.id + " " + claimKeyOf(task) + " held by " + holder + "; step deferred", { id: task.id, holder: holder }, "held");
         done.push({ id: task.id, step: task.step, ok: false, error: "claim held by " + holder, deferred: true });
         continue;
       }
+      reserved--;
       executed++;
       const res = await stepTask(env, task);
       done.push({ id: task.id, step: task.step, ok: res.ok, error: res.error || null, timeout: res.timeout === true ? true : undefined, retry_at: res.timeout === true ? res.retry_at : undefined });
