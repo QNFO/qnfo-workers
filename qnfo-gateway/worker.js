@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.49.0"; // 3.49.0 PLAIN-ARTICLE-COVERAGE-1 (2026-11-03, pillar reach, qnfo-workers#6437): retry an empty Kimi article reply once with the independent Llama writer; raise the bounded hourly backfill cap to 30.
+var VERSION="3.49.0"; // 3.49.0 PLAIN-ARTICLE-COVERAGE-1 (2026-11-03, pillar reach, qnfo-workers#6437): retry an empty Kimi article reply once with the independent Google writer; raise the bounded hourly backfill cap to 30.
 // 3.48.0 PLAIN-STANDARD-1 (2026-10-28, pillar reach, agent_issues 1000476; minor: the plain-language summary now has a hard readability gate): plainPrompt asks for at most two figures, one everyday comparison, terms defined inline and sentences under 20 words; plainBuild regenerates once and flags a result above Flesch-Kincaid grade 9 as gated, which is never stored or shown (a gated build keeps the old row and waits 6 hours); plainFill queues stored summaries above grade 9 for regeneration, hardest first. qnfo-gateway/plain-standard.test.mjs. // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
 // 3.44.2 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): the apex qnfo.org answered HTML pages with no frame protection (measured 2026-10-26: the *.qnfo.org hosts get X-Frame-Options DENY from a zone rule whose expression is the wildcard *.qnfo.org, which does not match the apex). withPagePolicy now adds X-Frame-Options DENY to every HTML response that has none, on every host, so the apex no longer depends on the zone rule; a handler's own value is kept.
@@ -8119,7 +8119,7 @@ async function plainCoverage(env) { try { if (!env.LIVING_PAPER) return null; aw
 // stale ones (the paper text or version changed), then failed ones. A paper without an article shows the digest and the brief
 // summary, and says that the plain-language version is not ready.
 var ARTICLE_WRITER = "@cf/moonshotai/kimi-k2.6";
-var ARTICLE_WRITER_FALLBACK = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var ARTICLE_WRITER_FALLBACK = "@cf/google/gemma-4-26b-a4b-it";
 var ARTICLE_VERIFIER = "@cf/openai/gpt-oss-120b";
 var ARTICLE_RULES = "pa1";
 var ARTICLE_BODY_MAX = 36000;
@@ -8363,7 +8363,7 @@ async function articleBuild(env, paper) {
   var fixes = p.hard.concat(p.soft);
   if (v.math.length) fixes.push("remove or reword this math-like text: " + v.math.join("; "));
   if (v.jargon.length > 1) fixes.push("an ordinary adult would not know these words and the article does not explain them where they first appear; explain each in the same sentence in everyday words, or say it a simpler way: " + v.jargon.join("; "));
-  var repaired = 0, method = (writerModel === ARTICLE_WRITER ? "kimi" : "llama-fallback") + "+gate" + (v.ok ? "+gptoss-verify" : "");
+  var repaired = 0, method = (writerModel === ARTICLE_WRITER ? "kimi" : "gemma-fallback") + "+gate" + (v.ok ? "+gptoss-verify" : "");
   if (fixes.length) {
     var raw2 = await articleRun(env, ARTICLE_WRITER, articleRepairPrompt(raw, fixes), 2800, { reasoning_effort: "none", temperature: 0.1 });
     var a2 = raw2 ? articleParse(raw2) : null;

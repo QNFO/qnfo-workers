@@ -24,7 +24,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const block = src.slice(src.indexOf("PLAIN-ARTICLE-1:BEGIN"), src.indexOf("PLAIN-ARTICLE-1:END"));
 ok(block.length > 5000 && !/[^\x00-\x7f]/.test(src), "the block exists and the source is ASCII");
 ok(/var ARTICLE_WRITER = "@cf\/moonshotai\/kimi-k2\.6"/.test(block) && /var ARTICLE_VERIFIER = "@cf\/openai\/gpt-oss-120b"/.test(block), "the writer and the verifier are from different families (moonshot, openai)");
-ok(/var ARTICLE_WRITER_FALLBACK = "@cf\/meta\/llama-3\.3-70b-instruct-fp8-fast"/.test(block), "the empty-reply fallback uses a separate model family");
+ok(/var ARTICLE_WRITER_FALLBACK = "@cf\/google\/gemma-4-26b-a4b-it"/.test(block), "the empty-reply fallback uses a separate model family");
 ok(!/qrBuild|plainRun\(/.test(block) && !/function handle/.test(block), "the block builds no quick-read answer and answers no route");
 const digest = src.slice(src.indexOf("QUICK-READ-DIGEST-1:BEGIN"), src.indexOf("QUICK-READ-DIGEST-1:END"));
 ok(!/env\.AI/.test(digest), "the digest block still makes no model call");
@@ -71,7 +71,7 @@ let writerOut = () => GOOD, fallbackOut = () => GOOD, verifierOut = () => "{\"ja
 const AI = { run: async (model, input) => {
   const text = input.messages[0].content;
   if (/kimi/.test(model)) { calls.writer++; writerPrompts.push(text); return { response: typeof writerOut === "function" ? writerOut(calls.writer, text) : writerOut }; }
-  if (/llama/.test(model)) { calls.fallback++; return { response: typeof fallbackOut === "function" ? fallbackOut(calls.fallback, text) : fallbackOut }; }
+  if (/gemma/.test(model)) { calls.fallback++; return { response: typeof fallbackOut === "function" ? fallbackOut(calls.fallback, text) : fallbackOut }; }
   calls.verifier++; return { response: typeof verifierOut === "function" ? verifierOut(calls.verifier, text) : verifierOut };
 } };
 const J = (o) => new Response(JSON.stringify(o), { status: 200, headers: { "content-type": "application/json" } });
@@ -157,7 +157,7 @@ r = await m.articleBuild({ AI }, P);
 ok(r.status === "failed" && /hard rule not met after one repair/.test(r.note) && calls.writer === 2, "an article that still breaks a hard rule after the repair is not stored", r.note);
 fresh(); writerOut = () => "";
 r = await m.articleBuild({ AI }, P);
-ok(r.status === "ok" && calls.writer === 1 && calls.fallback === 1 && /llama-fallback\+gate/.test(r.method), "an empty primary-writer reply falls back once and still passes the normal checks", { status: r.status, method: r.method, calls });
+ok(r.status === "ok" && calls.writer === 1 && calls.fallback === 1 && /gemma-fallback\+gate/.test(r.method), "an empty primary-writer reply falls back once and still passes the normal checks", { status: r.status, method: r.method, calls });
 fresh(); writerOut = () => ""; fallbackOut = () => "";
 r = await m.articleBuild({ AI }, P);
 ok(r.status === "failed" && /no text/.test(r.note) && calls.writer === 1 && calls.fallback === 1, "empty replies from both writers remain failed without looping", r.note);
