@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // REFUSAL-RELOCATE-1 offline suite (qnfo-code-orchestrator 0.23.0, agent_issues 2111 / 99925, pillar autonomy).
 // Measured 2026-10-19 on cloud_ops_events kind code-task.fail: 20 replies of kimi-k2.7-code since 2026-10-18T13Z held no block because the
 // model said the content it was shown lacked the code it was asked to change ("The shown snippet ends before the `learnerRecordPost` call
@@ -11,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

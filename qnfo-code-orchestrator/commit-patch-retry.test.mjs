@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // CODE-PATCH-RETRY-1 regression suite (#1834): oversized diffs stay below the publish limit and retry with feedback.
 // Run: node --no-warnings qnfo-code-orchestrator/commit-patch-retry.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -5,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (condition, message, value) => {
   if (condition) pass++;

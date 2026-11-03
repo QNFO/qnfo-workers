@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // BP26-PROMPT-INJECTION-1 red-team suite (agent_issues 1000359, OWASP LLM01 and Agentic ASI01). Offline: it loads the REAL guard functions of qnfo-email/worker.js the way the other
 // qnfo-email suites do and attacks them with mail, drafts and tool requests an outsider could send; nothing here fabricates production mail and no model, network or secret is used.
 // Each check is one attack or one honest near-miss. The LAST line is `INJECTION_EVAL pass=<n> total=<m>`: scripts/bp26_agentsec.py runs this file on the runner and writes
@@ -8,8 +9,8 @@ import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const SRC = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const src = stripWorkerDefaultExport(SRC);
-const L = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn { VERSION, VOICE_DEFAULT, INJ_RULES, injScan, injSanitizeInbound, injHtmlToText, injWrap, injSanitizeOutbound, injLeaksPrompt, injSingleAddr, injSendDecision, injAgentSurface, injSendGuard, injDrainGuard, sendApi, tierReplyQueue, drainReplyQueue, voiceAi, cmdAgent };")();
+const L = new Function(RUNNING_AI_FIXTURE + (src.replace(/export default\{/, "const __handler={") +
+  "\nreturn { VERSION, VOICE_DEFAULT, INJ_RULES, injScan, injSanitizeInbound, injHtmlToText, injWrap, injSanitizeOutbound, injLeaksPrompt, injSingleAddr, injSendDecision, injAgentSurface, injSendGuard, injDrainGuard, sendApi, tierReplyQueue, drainReplyQueue, voiceAi, cmdAgent };"))();
 
 let pass = 0, total = 0;
 const check = (name, cond, detail) => { total++; if (cond) pass++; else console.log("FAIL " + name + (detail === undefined ? "" : " :: " + JSON.stringify(detail).slice(0, 400))); };

@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
@@ -33,7 +34,7 @@ function load(plan) {
     }
   };
   vm.createContext(sandbox);
-  vm.runInContext(src.slice(start, end) + "\nthis.fallback = qnfoAiFreeFallback;", sandbox);
+  vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(start, end) + "\nthis.fallback = qnfoAiFreeFallback;"), sandbox);
   return { fallback: sandbox.fallback, getNow: () => now, calls, timeouts, logs };
 }
 

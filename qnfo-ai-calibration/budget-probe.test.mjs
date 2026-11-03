@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // BUDGET-PROBE-1 (qnfo-ai-calibration 1.6.0, agent_issues 2829 path A) offline suite. No network, no production data.
 // Before 1.6.0 both writers of ai_model_health.status = 'ok' (the folded prober's probeOne with max_tokens 1, and the sweep's
 // probeCompletion with max_tokens 16 that accepts reasoning_content as an answer) never read the reply a real caller would get,
@@ -25,8 +26,8 @@ const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const mirror = fs.readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
 let mig = "";
 try { mig = fs.readFileSync(new URL("../migrations/2026-10-19-model-health-budget-probe.sql", import.meta.url), "utf8"); } catch (e) { /* absent on the base commit: the migration checks below fail */ }
-const api = new Function(src.replace(/export \{\s*worker_default as default\s*\};?/, "") +
-  "\nreturn { worker_default, VERSION, PROBER_VERSION, judge: typeof judgeBudgetReply === 'function' ? judgeBudgetReply : null, fnv32 };")();
+const api = new Function(RUNNING_AI_FIXTURE + (src.replace(/export \{\s*worker_default as default\s*\};?/, "") +
+  "\nreturn { worker_default, VERSION, PROBER_VERSION, judge: typeof judgeBudgetReply === 'function' ? judgeBudgetReply : null, fnv32 };"))();
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra).slice(0, 300) : "")); } };
 globalThis.fetch = async () => new Response("{}", { status: 200 });

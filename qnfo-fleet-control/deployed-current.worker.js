@@ -27,11 +27,11 @@ var advisorMod = (function() {
   var nowIso = /* @__PURE__ */ __name3(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
   async function workerNameSet(env) {
     try {
-      const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + (env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b") + "/workers/scripts?per_page=100", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "User-Agent": "qnfo-fleet-advisor" }, signal: AbortSignal.timeout(8e3) });
+      const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + (env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b") + "/workers/scripts?per_page=100", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "User-Agent": "qnfo-fleet-advisor" }, signal: AbortSignal.timeout(8e3) });
       if (!r.ok) return null;
       const j = await r.json();
       return new Set((j.result || []).map((x) => x.id));
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return null;
     }
   }
@@ -60,7 +60,7 @@ var advisorMod = (function() {
           return { ok: true, via: h, version: v };
         }
         tried.push(h + ":" + r.status);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         tried.push(h + ":err");
       }
     }
@@ -88,7 +88,7 @@ var advisorMod = (function() {
     if (!env.CF_API_TOKEN) return { skipped: true, reason: "CF_API_TOKEN secret not set" };
     try {
       const url = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/ai-gateway/gateways";
-      const resp = await fetch(url, { headers: { Authorization: "Bearer " + env.CF_API_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      const resp = await fleetAiFetch(env, fetch, url, { headers: { Authorization: "Bearer " + env.CF_API_TOKEN }, signal: AbortSignal.timeout(8e3) });
       const j = await resp.json();
       const list = j && j.result || [];
       const drift = [];
@@ -99,7 +99,7 @@ var advisorMod = (function() {
         if (g.retry_max_attempts !== void 0 && g.retry_max_attempts < 2) drift.push(g.id + ":retries<2");
       }
       return { skipped: false, gateways: list.map((g) => ({ id: g.id, cache_ttl: g.cache_ttl, collect_logs: g.collect_logs, retries: g.retry_max_attempts })), drift };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return { skipped: true, reason: String(e && e.message || e).slice(0, 160) };
     }
   }
@@ -110,13 +110,13 @@ var advisorMod = (function() {
     if (!env.CF_API_TOKEN) return { skipped: true, reason: "no CF_API_TOKEN" };
     try {
       const url = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/ai-gateway/billing/spending-limit";
-      const resp = await fetch(url, { headers: { Authorization: "Bearer " + env.CF_API_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      const resp = await fleetAiFetch(env, fetch, url, { headers: { Authorization: "Bearer " + env.CF_API_TOKEN }, signal: AbortSignal.timeout(8e3) });
       const j = await resp.json();
       const r = j && j.result || {};
       const enabled2 = r.enabled === true;
       const amt = r.config && r.config.amount || 0;
       return { skipped: false, enabled: enabled2, amount: amt, detail: "enabled=" + enabled2 + " amount=" + amt + " " + (r.config && r.config.duration || "") + " " + (r.config && r.config.strategy || "") };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return { skipped: true, reason: String(e && e.message || e).slice(0, 160) };
     }
   }
@@ -174,7 +174,7 @@ var advisorMod = (function() {
         const content = response && response.response || response && response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content;
         const text = String(content || "").trim();
         if (text) return { text, model };
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         if (model === models[models.length - 1]) throw e;
       }
     }
@@ -296,7 +296,7 @@ var advisorMod = (function() {
             ensemble = { proposer: proposed.model, reviewer: modelR, verdict: verdict.indexOf("IMPROVE") >= 0 ? "improved" : "accepted", iterations: rounds };
           }
         });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         suggestion = null;
         ensemble = null;
       }
@@ -363,6 +363,8 @@ var advisorMod = (function() {
   };
   var server_default = {
     async fetch(request, env) {
+    try {
+
       const url = new URL(request.url);
       if (url.pathname === "/health") {
         return Response.json({ ok: true, worker: WORKER, version: VERSION2, model: env.ADVISOR_MODEL || "@cf/zai-org/glm-5.3-flash", bindings: { d1: !!env.AUDIT_DB, ai: !!env.AI, do: !!env.FleetAdvisor }, crons: ["*/10 * * * *"] });
@@ -374,8 +376,12 @@ var advisorMod = (function() {
       }
       if (url.pathname === "/") return new Response("qnfo-fleet-advisor v" + VERSION2 + ": autonomous fleet advisor. GET /health | POST /run-audit (x-advisor-token) | cron */20.", { status: 200 });
       return new Response("not found", { status: 404 });
-    },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
     async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       ctx.waitUntil(runAudit(env));
     }
   };
@@ -541,7 +547,7 @@ var calibratorMod = (function() {
     try {
       const res = await fetch(url, { method: method || "GET", headers: headers || ua(), body, signal: ac.signal, redirect: "follow" });
       return { ms: Date.now() - t0, status: res.status, text: await res.text() };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return { ms: Date.now() - t0, status: -1, text: "", err: String(e && e.message || e).slice(0, 120) };
     } finally {
       clearTimeout(t);
@@ -562,10 +568,10 @@ var calibratorMod = (function() {
       if (svc) {
         res = await svc.fetch(p.url, { method: method || "GET", headers: headers || ua(), body, signal: ac.signal });
       } else {
-        res = await fetch(p.url, { method: method || "GET", headers: headers || ua(), body, signal: ac.signal, redirect: "follow" });
+        res = await fleetAiFetch(env, fetch, p.url, { method: method || "GET", headers: headers || ua(), body, signal: ac.signal, redirect: "follow" });
       }
       return { ms: Date.now() - t0, status: res.status, text: await res.text() };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return { ms: Date.now() - t0, status: -1, text: "", err: String(e && e.message || e).slice(0, 120) };
     } finally {
       clearTimeout(t);
@@ -668,10 +674,10 @@ var calibratorMod = (function() {
         if (svc) {
           res = await svc.fetch(BURST_TARGET, { headers: ua() });
         } else {
-          res = await fetch(BURST_TARGET, { headers: ua() });
+          res = await fleetAiFetch(env, fetch, BURST_TARGET, { headers: ua() });
         }
         results.push(Date.now() - t0);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         results.push(Date.now() - t0);
       }
     }));
@@ -997,7 +1003,7 @@ var calibratorMod = (function() {
         else if (p.kind === "d1") rows = await probeD1(env);
         else if (p.kind === "r2") rows = await probeR2(env);
         else if (p.kind === "vectorize") rows = await probeVec(env);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         rows = [{ probe_id: p.id, kind: p.kind, target: p.url || p.kind, metric: "latency_ms", value: 0, ok: 0, detail: "probe-threw " + String(e && e.message || e).slice(0, 120) }];
       }
       const failed = rows.some(function(r) {
@@ -1059,6 +1065,8 @@ var calibratorMod = (function() {
   __name3(runCalibration, "runCalibration");
   var worker_default3 = {
     async scheduled(controller, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       const cron = controller.cron || "";
       let type = "daily";
       if (cron === "30 3 * * 1") type = "stress"; // CAL-STRESS-CRON-1: the old key '30 3 * * 0' never matched the declared cron. CF-DOW (2026-10-05): Cloudflare weekday 1 is SUNDAY (1=Sun..7=Sat), so this is the Sunday 03:30Z stress run the original calibrator intended ('0' = Sunday in Unix cron); fleet_cal_runs shows it firing on Sundays (2026-09-06..10-04)
@@ -1068,6 +1076,8 @@ var calibratorMod = (function() {
       console.log("calibrator-cron", cron, sjs(out).slice(0, 400));
     },
     async fetch(request, env) {
+    try {
+
       const url = new URL(request.url);
       const p = url.pathname;
       const j = /* @__PURE__ */ __name3(function(o, st) {
@@ -1112,7 +1122,9 @@ var calibratorMod = (function() {
         return j({ ok: true, worker: WORKER, version: VERSION2, runs: runs.results || [], open_anomalies: an.results || [], baselines: base.results || [], recent_actions: acts.results || [], learnings: learnRows.results || [] });
       }
       return j({ ok: false, error: "not-found", worker: WORKER, version: VERSION2 }, 404);
-    }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
   };
   return { default: worker_default3 };
 })();
@@ -1145,7 +1157,7 @@ __name(secretEq, "secretEq");
 // 0.52.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. The generic playbook-gap row is seeded in measure and files no issue (a gap issue carries no anchor the code loop can edit); the self issue after 3 failed cases is the only issue the doctor files by itself, and migrations/2026-10-26-breach-doctor-trust.sql makes the planner read its BREACH-DOCTOR-1: title as trusted. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.61.2-codeagent"; /* 0.59.29 NO-DEAD-DOI-1 (#1456, pillar reach): selected-work citation collection stays unmeasured while the only verified identifiers use the retired prefix. */ /* 0.59.23 BREACH-DOCTOR-DECISION-LEDGER-1: append decision_log records for file-issue and owner-card actions. */ /* 0.59.13 WORKER-HEALTH-TOMBSTONE-EXCLUSION-1 (#100123, charter pillar core; patch): retired TOMBSTONE_ audit rows no longer count as live health failures; unmanaged workers without /health remain visible. */ /* 0.59.11 MERGE-INTEGRATION-1: preserves verification-deferral escalation and doctor pending-lease handling. */ /* 0.59.10 DOCTOR-PENDING-LEASE-1 (#5890 / 1000552, autonomy; patch): pending applied doctor actions wait up to 120 minutes from applied_at instead of failing after the initial 30-minute lease. */ /* 0.59.9 EVOLVE-PROPOSAL-REASK-1 (#3272, charter pillar autonomy; patch): unusable proposal replies receive one corrective retry and record whether it recovered. */ /* 0.59.8 MODEL-GEMMA-CHAT-1 (#3250, charter pillar cost; patch): advisor proposals prefer Gemma with glm-5.3-flash fallback on errors or empty replies; independent review is unchanged. */ /* 0.59.7 prior */ /* 0.59.6 METRIC-TRIGGER-CLOSE-CONTRACT-1: metric-trigger recovery defers closing an issue while its remediation contract still fails. */ /* 0.59.5 prior */ /* 0.59.4 VERIFIED-CORE-RETIREMENT-1 (#1753, charter pillar core; patch): retirement needs a complete 30-day GraphQL usage snapshot and a live service-consumer scan; unknown evidence never falls back to worker_invocations. */ /* 0.59.2 METRIC-REGRESSION-1 (#100495), IMPROVEMENT-FULL-DAY-WINDOWS-1 (#100572): excludes loop-derived metrics from aggregate counts, applies a >=3 absolute count-change floor with prior mean >=1, and evaluates complete UTC-day windows. prior 0.59.1 */ /* 0.59.1 IL-TRIGGER-AWARE-1 (2026-10-30, charter pillar autonomy; patch): improvement regressions use an enabled trigger predicate when available, while clear-trigger trends remain early warnings. */ /* 0.59.0 BH-EMPTY-DRAFT-1 (2026-10-30, pillar autonomy; minor: a close decision the hourly hygiene tick now takes on its own): a draft pull request idle 6 hours whose fresh GitHub read says changed_files 0 is archived (refs/archive/<ref>), commented (the linked issue is NOT resolved) and closed, at most 10 reads a tick, logged as branch_hygiene_log close-empty-draft-pr; ops_config empty_draft_pr_close=off stops it without a deploy. Cause: 67 empty session drafts accumulated because the lane merges drafts but cannot merge an empty one and CYCLE-TIME-1 skips drafts. prior 0.58.1 */ /* 0.58.0 DOCS-ONLY-INCOMPLETE-1 (2026-10-29, pillar autonomy; minor: a merge decision it now takes on its own): the stale-PR lane (bhMergeDecide) and the code loop (cmDecide) refuse a pull request whose every file is documentation, with the reason to implement it in code; exempt: lane-regenerated docs and a body naming "Implemented in: #n" or "docs-exempt: reason"; ops_config docs_only_incomplete=off restores it for the lane. prior 0.57.0 */ /* 0.57.0 0.57.0 WFI-GREEN-STREAK-1 (2026-10-29, pillar autonomy, agent_issues 1000747 and 1000558; minor: a close decision the intake now takes on a stricter rule): workflowFailureIntake closed a WORKFLOW-FAILED-1 issue on a single green main run, so a flapping workflow (deploy-gate: 9 failures in 24 hours) was closed, failed again, and the issue_refile_reopen trigger reopened it (24 reopens in 7 days). It now closes only when the latest decided run succeeded and no main run of the workflow failed in the previous 24 hours (every failing run in the 100-run window is recorded in workflow_failures; a waiting issue is listed in green_wait), and wfiProbe reads the same definition (failure-within-24h). workflow-failure-intake.test.mjs covers the streak. prior 0.56.5 */ /* 0.56.2 IL-CLOSE-VS-PROBE-2 (2026-10-26, pillar autonomy, agent_issues 100355 and 100392; patch). objectiveConstraintsTick closed a constraint issue that meets its target without reading the contract of that issue: issue 2446 (unmanaged_direct_spend_share 0.4989 against 0.5) still carried a contract whose last read was a fail, so the UPDATE aborted on close-while-contract-fails every hour and logged one console.error. It now asks closeBlockedByContract first (the helper PR 3342 added for improvementLoopTick), keeps the issue open, counts close_deferred in the tick result and in the state_json of the run row, and warns once with the issue id. qnfo-fleet-control/objective-constraints-close-guard.test.mjs (36 checks) runs the real tick against the live triggers and fails on 0.56.1. prior 0.56.1 */ /* 0.56.1 STATE-RETIRED-1 (2026-10-26, pillar reliability, agent_issues 1000154 FLEET-HEALTH-RETIRED-410; patch): the hourly fleet state snapshot counted the retired repository-root stub qnfo-workers (HTTP 410 with a RETIRED notice; Workers Builds recreates it on every push, so it cannot be deleted) as down on every snapshot since 2026-10-25, a permanent failure floor that hid any real new failure. An HTTP 410 answer with a retired, decommissioned or tombstone marker (or a service_registry row in state retired that does not answer 200) is now a third state, retired: workers_retired and retired_list join the summary, workers_down and down_list list only real failures, version_unknown skips it, a heartbeat row cannot turn it back into up or down, and its worker_live_audit row carries a TOMBSTONE_410 note instead of being omitted. HEALTH-AUDIT-COVERAGE-1 (agent_issues 1000157): the state pass wrote worker_live_audit with a plain INSERT on a table keyed by worker, which failed on the first worker that already had a row on every pass (live_audit_write_error in every snapshot), so the one registry worker without a row, qnfo-workers, was never audited; a worker with no row now gets one (INSERT OR IGNORE, the sweep keeps its richer notes) and a retired worker is upserted. prior 0.56.0-fleet-hygiene */ /* 0.56.0 WFI-RETIRED-1, PROBE-AUTHOR-SINK-GUARD-1, BH-MERGED-SUCCESSOR-1 (2026-10-26, pillar autonomy and security, agent_issues 1000327, 1000421, 1000018; minor: three decisions the worker now takes on its own). (a) WFI-RETIRED-1: workflowFailureIntake reads the repository workflow list; a workflow that is no longer active or disabled_manually is retired (its workflow_main_state row is kept with conclusion retired, no WORKFLOW-FAILED-1 issue is filed for it, and its open issue is closed with close_evidence after its contract is set to superseded); an unreadable or partial list retires nothing. (b) PROBE-AUTHOR-SINK-GUARD-1: for a contract whose module is probe-author-1 a later pass whose expected or observed is not one short token (1 to 64 characters of letters, digits and _ . : + -) is a probe-error with the reason free-text-value and no value is written, closing the later-pass sink that the 0.54.0 hardening left (the birth dry run was the only gated pass); scripts/remediation_consumer.py carries the same guard. (c) BH-MERGED-SUCCESSOR-1: a code-agent pull request (codeagent- or evolve/ head) whose [issue #N] tag a merged pull request also carries is closed on the hourly hygiene tick (tip archived first, comment naming the successor) instead of waiting for an idle clock that the conflict repair comments keep resetting. prior 0.55.4-codeagent */ /* 0.55.3 CRON-GRID-TICK-SYNTAX-1 (2026-10-26): the 0.55.2 version note wrote a star-slash pair inside this block comment, which ended the comment early; the deploy refused the script (CF 10021, Unexpected identifier at worker.js:1111) and the live worker stayed on 0.55.1. Note rewritten without the pair; scripts/cron-grid-tick-declared.test.mjs now also parses every scanned worker.js. prior 0.55.2-cron-grid-tick */ /* 0.55.2 CRON-GRID-TICK-DECLARED-1 (2026-10-26, pillar autonomy, agent_issues 1000269 CHARTER-TICK-STALE-1 and 2679 loop-heartbeats): 0.45.4 halved the declared fast trigger from every 5 minutes to every 10 minutes but left CRON_GRID_CFG.tick at the 5-minute expression, and cronGridRun evaluates its daily, weekly and monthly jobs only on an event whose cron equals that tick, so from 2026-10-25 09:15Z (the last 5-minute-tick row in cron_fire_log) the 0 3 * * * bundle (charter tick, disposeRetired, danglingBindingsCensus, costImpactGuard, activitySnapshotDaily, calibrator), the weekly 30 3 * * 1 job and the monthly 0 4 1 * * job never ran; the charter snapshot was 37 h old on 2026-10-26. The tick is now the 10-minute expression with tickMin 10 and lagMin 5, so each job slot falls in exactly one tick window (03:00 runs on the 03:10 tick); the first 10-minute tick after the deploy also retries the missed daily run because its last ok row is older than period plus 30 minutes. scripts/cron-grid-tick-declared.test.mjs fails any worker whose grid tick is not a declared trigger or whose job slot is covered by no tick or by two. prior 0.55.1-codeagent */ /* 0.51.0 MERGE-STREAMLINE-1 (2026-10-26, pillar autonomy; owner directive: "DEPLOY GATE REPEATEDLY FAILS. GET RID OF IT! IT'S HOLDING UP PR MERGES."; minor: a decision the lane and the code-loop runner now take on their own): the deploy-gate job `gate` is no longer a required check (EVOLVE_REQUIRED), so a merge waits for guard, mirror-guard and comparator (seconds) and not for the 3 minute gate run; the gate still runs on every PR as advice and strict on main, and canary plus auto-revert stay the safety net. prior 0.50.0-workflows-merge */ /* 0.50.0 prior */ /* 0.50.0 OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, pillar autonomy; minor: a decision the lane now takes on its own): the owner answered "Yes, auto-approve all" to the two items listed as waiting on them, so the stale-PR lane merges a pull request that changes .github/ through every other gate unchanged (required checks green, clean, quiet window, no hold or WIP, canary and revert), recorded in the merge message; ops_config stale_pr_merge_workflows = off restores the refusal (PR-MERGE-SLA-GROUPS-1 then classes it as waits_on session again). The code loop's own merge scope (cmScope) still denies .github/workflows/**: that was not asked. prior 0.49.3-pr-sla-groups */ /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.62.0"; /* 0.59.29 NO-DEAD-DOI-1 (#1456, pillar reach): selected-work citation collection stays unmeasured while the only verified identifiers use the retired prefix. */ /* 0.59.23 BREACH-DOCTOR-DECISION-LEDGER-1: append decision_log records for file-issue and owner-card actions. */ /* 0.59.13 WORKER-HEALTH-TOMBSTONE-EXCLUSION-1 (#100123, charter pillar core; patch): retired TOMBSTONE_ audit rows no longer count as live health failures; unmanaged workers without /health remain visible. */ /* 0.59.11 MERGE-INTEGRATION-1: preserves verification-deferral escalation and doctor pending-lease handling. */ /* 0.59.10 DOCTOR-PENDING-LEASE-1 (#5890 / 1000552, autonomy; patch): pending applied doctor actions wait up to 120 minutes from applied_at instead of failing after the initial 30-minute lease. */ /* 0.59.9 EVOLVE-PROPOSAL-REASK-1 (#3272, charter pillar autonomy; patch): unusable proposal replies receive one corrective retry and record whether it recovered. */ /* 0.59.8 MODEL-GEMMA-CHAT-1 (#3250, charter pillar cost; patch): advisor proposals prefer Gemma with glm-5.3-flash fallback on errors or empty replies; independent review is unchanged. */ /* 0.59.7 prior */ /* 0.59.6 METRIC-TRIGGER-CLOSE-CONTRACT-1: metric-trigger recovery defers closing an issue while its remediation contract still fails. */ /* 0.59.5 prior */ /* 0.59.4 VERIFIED-CORE-RETIREMENT-1 (#1753, charter pillar core; patch): retirement needs a complete 30-day GraphQL usage snapshot and a live service-consumer scan; unknown evidence never falls back to worker_invocations. */ /* 0.59.2 METRIC-REGRESSION-1 (#100495), IMPROVEMENT-FULL-DAY-WINDOWS-1 (#100572): excludes loop-derived metrics from aggregate counts, applies a >=3 absolute count-change floor with prior mean >=1, and evaluates complete UTC-day windows. prior 0.59.1 */ /* 0.59.1 IL-TRIGGER-AWARE-1 (2026-10-30, charter pillar autonomy; patch): improvement regressions use an enabled trigger predicate when available, while clear-trigger trends remain early warnings. */ /* 0.59.0 BH-EMPTY-DRAFT-1 (2026-10-30, pillar autonomy; minor: a close decision the hourly hygiene tick now takes on its own): a draft pull request idle 6 hours whose fresh GitHub read says changed_files 0 is archived (refs/archive/<ref>), commented (the linked issue is NOT resolved) and closed, at most 10 reads a tick, logged as branch_hygiene_log close-empty-draft-pr; ops_config empty_draft_pr_close=off stops it without a deploy. Cause: 67 empty session drafts accumulated because the lane merges drafts but cannot merge an empty one and CYCLE-TIME-1 skips drafts. prior 0.58.1 */ /* 0.58.0 DOCS-ONLY-INCOMPLETE-1 (2026-10-29, pillar autonomy; minor: a merge decision it now takes on its own): the stale-PR lane (bhMergeDecide) and the code loop (cmDecide) refuse a pull request whose every file is documentation, with the reason to implement it in code; exempt: lane-regenerated docs and a body naming "Implemented in: #n" or "docs-exempt: reason"; ops_config docs_only_incomplete=off restores it for the lane. prior 0.57.0 */ /* 0.57.0 0.57.0 WFI-GREEN-STREAK-1 (2026-10-29, pillar autonomy, agent_issues 1000747 and 1000558; minor: a close decision the intake now takes on a stricter rule): workflowFailureIntake closed a WORKFLOW-FAILED-1 issue on a single green main run, so a flapping workflow (deploy-gate: 9 failures in 24 hours) was closed, failed again, and the issue_refile_reopen trigger reopened it (24 reopens in 7 days). It now closes only when the latest decided run succeeded and no main run of the workflow failed in the previous 24 hours (every failing run in the 100-run window is recorded in workflow_failures; a waiting issue is listed in green_wait), and wfiProbe reads the same definition (failure-within-24h). workflow-failure-intake.test.mjs covers the streak. prior 0.56.5 */ /* 0.56.2 IL-CLOSE-VS-PROBE-2 (2026-10-26, pillar autonomy, agent_issues 100355 and 100392; patch). objectiveConstraintsTick closed a constraint issue that meets its target without reading the contract of that issue: issue 2446 (unmanaged_direct_spend_share 0.4989 against 0.5) still carried a contract whose last read was a fail, so the UPDATE aborted on close-while-contract-fails every hour and logged one console.error. It now asks closeBlockedByContract first (the helper PR 3342 added for improvementLoopTick), keeps the issue open, counts close_deferred in the tick result and in the state_json of the run row, and warns once with the issue id. qnfo-fleet-control/objective-constraints-close-guard.test.mjs (36 checks) runs the real tick against the live triggers and fails on 0.56.1. prior 0.56.1 */ /* 0.56.1 STATE-RETIRED-1 (2026-10-26, pillar reliability, agent_issues 1000154 FLEET-HEALTH-RETIRED-410; patch): the hourly fleet state snapshot counted the retired repository-root stub qnfo-workers (HTTP 410 with a RETIRED notice; Workers Builds recreates it on every push, so it cannot be deleted) as down on every snapshot since 2026-10-25, a permanent failure floor that hid any real new failure. An HTTP 410 answer with a retired, decommissioned or tombstone marker (or a service_registry row in state retired that does not answer 200) is now a third state, retired: workers_retired and retired_list join the summary, workers_down and down_list list only real failures, version_unknown skips it, a heartbeat row cannot turn it back into up or down, and its worker_live_audit row carries a TOMBSTONE_410 note instead of being omitted. HEALTH-AUDIT-COVERAGE-1 (agent_issues 1000157): the state pass wrote worker_live_audit with a plain INSERT on a table keyed by worker, which failed on the first worker that already had a row on every pass (live_audit_write_error in every snapshot), so the one registry worker without a row, qnfo-workers, was never audited; a worker with no row now gets one (INSERT OR IGNORE, the sweep keeps its richer notes) and a retired worker is upserted. prior 0.56.0-fleet-hygiene */ /* 0.56.0 WFI-RETIRED-1, PROBE-AUTHOR-SINK-GUARD-1, BH-MERGED-SUCCESSOR-1 (2026-10-26, pillar autonomy and security, agent_issues 1000327, 1000421, 1000018; minor: three decisions the worker now takes on its own). (a) WFI-RETIRED-1: workflowFailureIntake reads the repository workflow list; a workflow that is no longer active or disabled_manually is retired (its workflow_main_state row is kept with conclusion retired, no WORKFLOW-FAILED-1 issue is filed for it, and its open issue is closed with close_evidence after its contract is set to superseded); an unreadable or partial list retires nothing. (b) PROBE-AUTHOR-SINK-GUARD-1: for a contract whose module is probe-author-1 a later pass whose expected or observed is not one short token (1 to 64 characters of letters, digits and _ . : + -) is a probe-error with the reason free-text-value and no value is written, closing the later-pass sink that the 0.54.0 hardening left (the birth dry run was the only gated pass); scripts/remediation_consumer.py carries the same guard. (c) BH-MERGED-SUCCESSOR-1: a code-agent pull request (codeagent- or evolve/ head) whose [issue #N] tag a merged pull request also carries is closed on the hourly hygiene tick (tip archived first, comment naming the successor) instead of waiting for an idle clock that the conflict repair comments keep resetting. prior 0.55.4-codeagent */ /* 0.55.3 CRON-GRID-TICK-SYNTAX-1 (2026-10-26): the 0.55.2 version note wrote a star-slash pair inside this block comment, which ended the comment early; the deploy refused the script (CF 10021, Unexpected identifier at worker.js:1111) and the live worker stayed on 0.55.1. Note rewritten without the pair; scripts/cron-grid-tick-declared.test.mjs now also parses every scanned worker.js. prior 0.55.2-cron-grid-tick */ /* 0.55.2 CRON-GRID-TICK-DECLARED-1 (2026-10-26, pillar autonomy, agent_issues 1000269 CHARTER-TICK-STALE-1 and 2679 loop-heartbeats): 0.45.4 halved the declared fast trigger from every 5 minutes to every 10 minutes but left CRON_GRID_CFG.tick at the 5-minute expression, and cronGridRun evaluates its daily, weekly and monthly jobs only on an event whose cron equals that tick, so from 2026-10-25 09:15Z (the last 5-minute-tick row in cron_fire_log) the 0 3 * * * bundle (charter tick, disposeRetired, danglingBindingsCensus, costImpactGuard, activitySnapshotDaily, calibrator), the weekly 30 3 * * 1 job and the monthly 0 4 1 * * job never ran; the charter snapshot was 37 h old on 2026-10-26. The tick is now the 10-minute expression with tickMin 10 and lagMin 5, so each job slot falls in exactly one tick window (03:00 runs on the 03:10 tick); the first 10-minute tick after the deploy also retries the missed daily run because its last ok row is older than period plus 30 minutes. scripts/cron-grid-tick-declared.test.mjs fails any worker whose grid tick is not a declared trigger or whose job slot is covered by no tick or by two. prior 0.55.1-codeagent */ /* 0.51.0 MERGE-STREAMLINE-1 (2026-10-26, pillar autonomy; owner directive: "DEPLOY GATE REPEATEDLY FAILS. GET RID OF IT! IT'S HOLDING UP PR MERGES."; minor: a decision the lane and the code-loop runner now take on their own): the deploy-gate job `gate` is no longer a required check (EVOLVE_REQUIRED), so a merge waits for guard, mirror-guard and comparator (seconds) and not for the 3 minute gate run; the gate still runs on every PR as advice and strict on main, and canary plus auto-revert stay the safety net. prior 0.50.0-workflows-merge */ /* 0.50.0 prior */ /* 0.50.0 OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, pillar autonomy; minor: a decision the lane now takes on its own): the owner answered "Yes, auto-approve all" to the two items listed as waiting on them, so the stale-PR lane merges a pull request that changes .github/ through every other gate unchanged (required checks green, clean, quiet window, no hold or WIP, canary and revert), recorded in the merge message; ops_config stale_pr_merge_workflows = off restores the refusal (PR-MERGE-SLA-GROUPS-1 then classes it as waits_on session again). The code loop's own merge scope (cmScope) still denies .github/workflows/**: that was not asked. prior 0.49.3-pr-sla-groups */ /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -1215,7 +1227,7 @@ async function selfState(env) {
     }
     var ctrl = new AbortController();
     var to = setTimeout(function () { ctrl.abort(); }, 6e3);
-    return fetch(base + "/health", { signal: ctrl.signal, headers: { "User-Agent": "qnfo-fleet-selfstate/" + VERSION } }).then(function (res) {
+    return fleetAiFetch(env, fetch, base + "/health", { signal: ctrl.signal, headers: { "User-Agent": "qnfo-fleet-selfstate/" + VERSION } }).then(function (res) {
       return res.text().then(function (t) { return { st: res.status, t: t }; });
     }).then(function (o) {
       clearTimeout(to);
@@ -1566,7 +1578,7 @@ async function optimizeFleet(env) {
     names = (lj.result || []).map(function(x) {
       return x.id;
     });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.error = String(e && e.message || e).slice(0, 120);
     return out;
   }
@@ -1635,7 +1647,7 @@ async function optimizeFleet(env) {
           var tt = await rr.text();
           if (tt && tt.length > 0 && tt.slice(0, 4) !== "404:") toml = tt;
         }
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
       }
     }
     if (!toml) {
@@ -1703,7 +1715,7 @@ async function optimizeFleet(env) {
           await env.AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(hv, nowI, n).run();
           out.verUpdated++;
         }
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
       }
     }
   }
@@ -1747,7 +1759,7 @@ async function selfdocAudit(env) {
               var t = await r.text();
               if (t && t.length > 0 && t.slice(0, 4) !== "404:") found = true;
             }
-          } catch (e) {
+          } catch (e) { if (fleetAiStopped(e)) throw e;
           }
         }
       }
@@ -1759,7 +1771,7 @@ async function selfdocAudit(env) {
       var iid = await improvement(env, "scan", n, "hygiene", n + " canonical dir lacks README.md", "no README.md in canonical repo dir (FLEET-SELF-DOC-1)", "P3");
       out.rows.push({ worker: n, id: iid });
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.error = String(e && e.message || e).slice(0, 120);
   }
   return { ok: true, audit: out };
@@ -1809,7 +1821,7 @@ async function canonical(env, worker) {
           return { path: cs[i], code: c };
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   // CANONICAL-FAILOPEN-1 (0.45.4): the last-resort R2 copy is marked stale so nobody deploys it blindly. On 2026-10-25
@@ -1826,7 +1838,7 @@ async function deployedContent(env, worker) {
     var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content/v2", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
     if (!r.ok) return null;
     return await r.text();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -1907,7 +1919,7 @@ async function redeploy(env, worker) {
       return null;
     }) : null;
     lockTok = lj2 && lj2.token ? lj2.token : null;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   var r;
   if (isModule(c.code)) {
@@ -1931,12 +1943,12 @@ async function redeploy(env, worker) {
   if (lockTok) {
     try {
       await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lockTok }) }, 8e3);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   try {
     await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, actor: "qnfo-fleet-control/redeploy", from: depV || "?", to: canV, source_path: c.path, ok, note: String(note || "").slice(0, 280) }) }, 8e3);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
   return { ok, status: ok ? 200 : 502, note, from: depV, to: canV, direction, source: c.path, bytes: c.code.length };
@@ -2087,7 +2099,7 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
         }
       }
     }
-  } catch (e) { errors.push("atomic:" + String(e && e.message || e).slice(0, 80)); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; errors.push("atomic:" + String(e && e.message || e).slice(0, 80)); }
   var ok = landed.length > 0 && errors.length === 0;
   var note = ok ? "landed " + landed.join(", ") : "land-failed " + errors.join(";");
   // close evidence: verified self-heal row (detect -> act -> verify). A bundle refusal is recorded by its deduped
@@ -2195,7 +2207,7 @@ async function declaredCrons(env, worker) {
           if (ta && ta.indexOf("crons") >= 0) return tomlCrons(ta);
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
     try {
       var r = await timedFetch(GH + "qnfo-workers/main/" + cands[a] + "/wrangler.toml?cb=" + Math.floor(Date.now() / FRESH_MS), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
@@ -2203,7 +2215,7 @@ async function declaredCrons(env, worker) {
       var t = await r.text();
       if (!t || t.slice(0, 4) === "404:") continue;
       return tomlCrons(t);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   return null;
@@ -2217,7 +2229,7 @@ async function liveCrons(env, worker) {
     return (j.result && j.result.schedules || []).map(function(x) {
       return x.cron;
     }).sort();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -2242,7 +2254,7 @@ async function cronDrift(env, names, out) {
           var live = await liveCrons(env, n);
           if (live === null) return null;
           return { n, decl, live };
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           return null;
         }
       })();
@@ -2266,7 +2278,7 @@ async function cronDrift(env, names, out) {
           out.cronHealed++;
           await audit(env, r.n, "cron-heal", ls, ds, "wrangler.toml[triggers].crons", true, "restored " + r.decl.length + " cron trigger(s)");
         }
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
       }
     }
   }
@@ -2310,7 +2322,7 @@ async function budgetLiveCounts(env) {
       if (!r || !r.ok) return;
       var n = budgetLiveCount(await r.json());
       if (n != null) live[k] = n;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }));
   return live;
@@ -2557,7 +2569,7 @@ async function scan(env, heal) {
         }
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.errors++;
     out.note = String(e && e.message || e).slice(0, 120);
   }
@@ -2568,7 +2580,7 @@ async function scan(env, heal) {
   }
   try {
     await cronDrift(env, names, out);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   try {
     out.budget = await budgetAudit(env, names);
@@ -2709,6 +2721,8 @@ __name2(registerWatch, "registerWatch");
 __name22(registerWatch, "registerWatch");
 var worker_default = {
   async fetch(request, env) {
+    try {
+
     var u = new URL(request.url);
     var p = u.pathname;
     var ah = request.headers.get("Authorization") || "";
@@ -2870,8 +2884,12 @@ var worker_default = {
       return json({ ok: lfr.ok, worker: wn, deployed: dv, canonical: cv, path: cc ? cc.path : null, result: lfr });
     }
     return json({ error: "not found" }, 404);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
     var opt = await optimizeFleet(env);
@@ -2972,7 +2990,7 @@ async function evGraphql(env, query, variables) {
     var raw = await r.text().catch(function() { return ""; }), j = null;
     if (raw) { try { j = JSON.parse(raw); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evGraphql:caught", status: r.status, error: String(e && e.message) })); } }
     return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
-  } catch (e) { return { status: 0, ok: false, j: { message: String(e && e.message || e).slice(0, 120) } }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { status: 0, ok: false, j: { message: String(e && e.message || e).slice(0, 120) } }; }
 }
 __name(evGraphql, "evGraphql");
 function evDecode(b64) {
@@ -4710,7 +4728,7 @@ async function cmFailureExcerpt(env, checks, failed) {
       if (!r.ok) continue;
       var txt = await r.text();
       byCheck[c.name] = cmFailureLines(txt.length > 3e6 ? txt.slice(0, 3e6) : txt);
-    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmFailureExcerpt:caught", error: String(e && e.message) })); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "fleet-control:cmFailureExcerpt:caught", error: String(e && e.message) })); }
   }
   return cmFailureText(byCheck);
 }
@@ -5098,7 +5116,7 @@ async function cmReviewRun(env, slot, model, prompt, diff, headText) {
     slot.verdict = sc.verdict; slot.harm = sc.harm; slot.defects = sc.defects; slot.cites = sc.cites;
     if (sc.dropped) slot.dropped = sc.dropped;
     if (sc.downgraded) slot.downgraded = sc.downgraded;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     slot.err = String(e && e.message || e).slice(0, 160);
     if (slot.tries >= CM_REVIEW_TRIES) console.error(JSON.stringify({ evt: "fleet-control:cmReviewRun:unreadable", tries: slot.tries, models: slot.models, error: slot.err }));
   }
@@ -5110,7 +5128,7 @@ async function cmFillPatches(env, files, head) {
   var need = (files || []).filter(function(f) { return f && f.filename && !f.patch && f.status !== "removed" && !/(^|\/)deployed-current\.worker\.js$/.test(f.filename); });
   if (!need.length) return { files: files, missing: [], transient: false };
   var mb = null, missing = [], transient = false, filled = {};
-  try { var cmp = await evApi(env, "GET", "/compare/main..." + head); mb = cmp && cmp.j && cmp.j.merge_base_commit && cmp.j.merge_base_commit.sha; } catch (e) { mb = null; }
+  try { var cmp = await evApi(env, "GET", "/compare/main..." + head); mb = cmp && cmp.j && cmp.j.merge_base_commit && cmp.j.merge_base_commit.sha; } catch (e) { if (fleetAiStopped(e)) throw e; mb = null; }
   for (var i = 0; i < need.length; i++) {
     var f = need[i];
     if (!mb) { missing.push(f.filename); transient = true; continue; }
@@ -5131,7 +5149,7 @@ async function cmGoalReview(env, cx, t, cfg, head, files) {
   var prep = async function() {
     if (prompt) return;
     diff = cmReviewDiff(files);
-    try { var ht = await cmRead(env, String(t.path || ""), head); headText = ht && typeof ht.text === "string" ? ht.text : null; } catch (e) { headText = null; }
+    try { var ht = await cmRead(env, String(t.path || ""), head); headText = ht && typeof ht.text === "string" ? ht.text : null; } catch (e) { if (fleetAiStopped(e)) throw e; headText = null; }
     prompt = cmReviewPrompt(t.goal, diff, cmReviewFacts(diff, headText));
   };
   var needDiff = !rv.verdict || (cmReviewDecision(rv).refuse && !(rv.second && (rv.second.verdict || rv.second.skipped)));
@@ -5194,10 +5212,10 @@ async function codeMergeTick(env, opts) {
   // aside there instead of racing it to open the same branch twice.
   if (opts.openOnly && new Date(nowMs).getUTCMinutes() < 5) return { ok: true, open_only: true, idle: "hourly tick owns minute 0" };
   // PUBLISH-DISPATCH-1: both ticks (hourly and */20) start the publisher for a task that has waited CM_PUBLISH_WAIT_MIN minutes.
-  try { var pd = await cmPublishDispatch(env, cx, cfg); if (pd) out.publish_dispatch = pd; } catch (ePd) { out.errors++; }
-  try { var cs = await cmCloseSuperseded(env, cx); if (cs && cs.closed) out.superseded_closed = cs.closed; } catch (eCs) { out.errors++; }
+  try { var pd = await cmPublishDispatch(env, cx, cfg); if (pd) out.publish_dispatch = pd; } catch (ePd) { if (fleetAiStopped(ePd)) throw ePd; out.errors++; }
+  try { var cs = await cmCloseSuperseded(env, cx); if (cs && cs.closed) out.superseded_closed = cs.closed; } catch (eCs) { if (fleetAiStopped(eCs)) throw eCs; out.errors++; }
   if (!opts.openOnly) {
-    try { await cmSweepPublishFailed(env, cx, out); } catch (eSw) { out.errors++; }
+    try { await cmSweepPublishFailed(env, cx, out); } catch (eSw) { if (fleetAiStopped(eSw)) throw eSw; out.errors++; }
     var inflight = await all("SELECT * FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting') ORDER BY merged_at ASC LIMIT 10", [CM_RUNNER]);
     for (var i = 0; i < inflight.length; i++) out.advanced.push(await cmAdvance(env, cx, inflight[i]));
   }
@@ -5798,7 +5816,7 @@ async function branchHygieneTick(env, opts) {
   };
   if (cfg.mergeStale && !dry) {
     var warm = prs.items.filter(laneOk).slice(0, BH_MERGE_MAX);
-    try { await Promise.all(warm.map(function(q) { return evApi(env, "GET", "/pulls/" + q.number).catch(function() { return null; }); })); } catch (eW) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(eW && eW.message) })); }
+    try { await Promise.all(warm.map(function(q) { return evApi(env, "GET", "/pulls/" + q.number).catch(function() { return null; }); })); } catch (eW) { if (fleetAiStopped(eW)) throw eW; console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(eW && eW.message) })); }
     out.prewarmed = warm.length;
   }
   for (var pi = 0; pi < prs.items.length && prClosed < BH_MAX_ACTIONS; pi++) {
@@ -5930,7 +5948,7 @@ async function branchHygieneTick(env, opts) {
       if (dry) out.setting = "would enable delete_branch_on_merge";
       else { var pt = await evApi(env, "PATCH", "", { delete_branch_on_merge: true }); out.setting = pt.ok ? "delete_branch_on_merge enabled" : "delete_branch_on_merge not enabled: HTTP " + pt.status; }
     } else if (rp.ok && rp.j) out.setting = "delete_branch_on_merge already " + rp.j.delete_branch_on_merge;
-  } catch (e) { out.setting = "setting check failed"; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; out.setting = "setting check failed"; }
   if (!dry) {
     try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
   }
@@ -6006,7 +6024,7 @@ async function bhReconcilePrAge(env, items, iso) {
       if (await bhRecordPrAge(env, [g.j], iso)) resolved++;
     }
     return resolved;
-  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhReconcilePrAge:caught", error: String(e && e.message) })); return 0; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "fleet-control:bhReconcilePrAge:caught", error: String(e && e.message) })); return 0; }
 }
 __name(bhReconcilePrAge, "bhReconcilePrAge");
 async function bhMarkPrMerged(env, n, iso) {
@@ -6436,11 +6454,11 @@ function ddcIo(env) {
       var toks = [env.CF_DEPLOY_TOKEN, env.CF_API_TOKEN].filter(Boolean);
       for (var i = 0; i < toks.length; i++) {
         try {
-          var r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + encodeURIComponent(worker) + "/content/v2", { headers: { Authorization: "Bearer " + toks[i] }, signal: AbortSignal.timeout(20000) });
+          var r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + encodeURIComponent(worker) + "/content/v2", { headers: { Authorization: "Bearer " + toks[i] }, signal: AbortSignal.timeout(20000) });
           if (!r.ok) { console.error(JSON.stringify({ step: "deploy-drift-cf-live-read", worker: worker, token: i, http: r.status })); continue; }
           var m = (await r.text()).match(DDC_VERSION_RE);
           return m ? m[1] : null;
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           console.error(JSON.stringify({ step: "deploy-drift-cf-live-read", worker: worker, token: i, error: String(e && e.message || e).slice(0, 160) }));
         }
       }
@@ -7364,7 +7382,7 @@ async function charterFullDoc(commit, block) {
     if (!r.ok) return null;
     var t = await r.text();
     return charterSplice(t, block);
-  } catch (e) { return null; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return null; }
 }
 async function charterMirror(env, doc, ev, sha) {
   if (!env.CANONICAL) return { status: "no-binding", note: "CANONICAL R2 binding missing" };
@@ -7464,6 +7482,90 @@ function pfDays(iso, nowMs) {
   var t = Date.parse(iso || "");
   return isNaN(t) ? null : Math.floor((nowMs - t) / 86400000);
 }
+var PF_STANDARD_FLAGS = ["no-security-policy", "actions-unpinned", "no-dependabot", "stale-license-ref", "committed-credential", "fork-pure-mirror", "fork-actions-enabled", "codeql-setup-failed"];
+function pfUnpinnedUses(workflows) {
+  var count = 0;
+  (workflows || []).forEach(function(f) {
+    if (!f || f.type !== "blob" || !/\.(?:ya?ml)$/i.test(String(f.name || ""))) return;
+    String(f.text || "").split(/\r?\n/).forEach(function(line) {
+      var m = line.match(/^\s*uses\s*:\s*['"]?([^\s'"#]+)/i);
+      if (m && !/@[a-f0-9]{40}$/i.test(m[1])) count++;
+    });
+  });
+  return count;
+}
+function pfLicenseVersion(text) {
+  var m = String(text || "").match(/(?:QNFO\s+(?:Unified\s+)?License(?:\s+Agreement)?|QNFO-ULA|LicenseRef-QNFO-ULA)[^\n]{0,100}?\bv(?:ersion\s*)?(\d+(?:\.\d+)+)\b/i);
+  return m ? m[1] : null;
+}
+function pfVersionIsOlder(a, b) {
+  if (!a || !b) return false;
+  var av = String(a).split(".").map(Number), bv = String(b).split(".").map(Number);
+  for (var i = 0; i < Math.max(av.length, bv.length); i++) {
+    var x = av[i] || 0, y = bv[i] || 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+function pfStaleLicenseRef(readme, currentVersion) {
+  var re = /(?:QNFO\s+(?:Unified\s+)?License(?:\s+Agreement)?|QNFO-ULA|LicenseRef-QNFO-ULA)[^\n]{0,100}?\bv(?:ersion\s*)?(\d+(?:\.\d+)+)\b/gi, m;
+  while ((m = re.exec(String(readme || "")))) if (pfVersionIsOlder(m[1], currentVersion)) return true;
+  return false;
+}
+function pfCredentialMatchCount(texts) {
+  var found = {};
+  (texts || []).forEach(function(text) {
+    var s = String(text || ""), patterns = [/gh[pousr]_[A-Za-z0-9]{20,}/g, /github_pat_[A-Za-z0-9_]{20,}/g, /AKIA[0-9A-Z]{16}/g, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g];
+    patterns.forEach(function(re) { var m; while ((m = re.exec(s))) found[m[0]] = true; });
+  });
+  return Object.keys(found).length;
+}
+function pfCodeqlSetupFailed(state, runs) {
+  if (state !== "FAILURE") return false;
+  var codeql = (runs || []).filter(function(r) {
+    var label = [r && r.name, r && r.workflow_name, r && r.workflow_path].join(" ").toLowerCase();
+    return label.indexOf("codeql") >= 0;
+  }).sort(function(a, b) { return String(b.completed_at || b.started_at || "").localeCompare(String(a.completed_at || a.started_at || "")); });
+  return !!(codeql.length && String(codeql[0].conclusion || "").toUpperCase() !== "SUCCESS" && String(codeql[0].conclusion || "").toUpperCase() !== "SKIPPED");
+}
+function pfStandards(r, tier) {
+  var d = r && r.standard_data;
+  if (!d || d.available !== true || r.visibility === "private" || r.private === true) return null;
+  var flags = [], counts = {};
+  if (tier === "fork") {
+    if (d.fork_pure_mirror === true) flags.push("fork-pure-mirror");
+    if (d.actions_enabled === true) flags.push("fork-actions-enabled");
+  } else if (tier !== "archived" && tier !== "client-config") {
+    if (d.security_policy_enabled === false) flags.push("no-security-policy");
+    counts["actions-unpinned"] = pfUnpinnedUses(d.workflow_files);
+    if (counts["actions-unpinned"] > 0) flags.push("actions-unpinned");
+    if (d.has_root_workflows === true && d.has_dependabot !== true) flags.push("no-dependabot");
+    if (pfStaleLicenseRef(d.readme, d.license_version)) flags.push("stale-license-ref");
+    counts["committed-credential"] = Math.max(Number(d.secret_alert_count || 0), pfCredentialMatchCount([d.readme].concat((d.workflow_files || []).map(function(f) { return f.text || ""; }))));
+    if (counts["committed-credential"] > 0) flags.push("committed-credential");
+    if (pfCodeqlSetupFailed(d.status_check_state, d.codeql_runs)) flags.push("codeql-setup-failed");
+  }
+  return { flags: flags, counts: counts };
+}
+function pfStandardsSummary(rows) {
+  var counts = {}, unknown = 0, repositories = 0;
+  PF_STANDARD_FLAGS.forEach(function(f) { counts[f] = 0; });
+  (rows || []).forEach(function(r) {
+    if (r.visibility !== "public" || r.tier === "archived" || r.tier === "client-config") return;
+    repositories++;
+    if (!r.standards) { unknown++; return; }
+    r.standards.flags.forEach(function(f) {
+      if (f === "actions-unpinned" || f === "committed-credential") counts[f] += Number(r.standards.counts[f] || 0);
+      else counts[f]++;
+    });
+  });
+  return { available: unknown === 0, repositories: repositories, counts: unknown ? null : counts };
+}
+function pfPureMirrorCandidates(ev) {
+  return (ev && ev.rows || []).filter(function(r) {
+    return r.visibility === "public" && r.fork && r.standards && r.standards.flags.indexOf("fork-pure-mirror") >= 0;
+  }).map(function(r) { return r.name; });
+}
 function pfHygiene(r, tier, nowMs) {
   var flags = [];
   if (tier === "archived" || tier === "fork") return flags;
@@ -7501,7 +7603,7 @@ function pfEvaluate(repos, wbsRows, nowIso) {
       archived: !!r.archived, fork: !!r.fork, description: r.description || "", license: r.license || null, topics: r.topics || [],
       homepage: r.homepage || null, language: r.language || null, pushed_at: r.pushed_at || null, has_pages: !!r.has_pages,
       open_issues: Number(r.open_issues_count || r.open_issues || 0), stars: Number(r.stargazers_count || r.stars || 0),
-      wbs: wbsOf(r), flags: pfHygiene(r, tier, nowMs), days_since_push: pfDays(r.pushed_at, nowMs)
+      wbs: wbsOf(r), flags: pfHygiene(r, tier, nowMs), standards: pfStandards(r, tier), days_since_push: pfDays(r.pushed_at, nowMs)
     };
   });
   rows.sort(function(a, b) { return PF_TIER_ORDER.indexOf(a.tier) - PF_TIER_ORDER.indexOf(b.tier) || String(b.pushed_at || "").localeCompare(String(a.pushed_at || "")); });
@@ -7522,7 +7624,8 @@ function pfEvaluate(repos, wbsRows, nowIso) {
     ts: nowIso || new Date().toISOString(), total: rows.length, private_count: priv, tiers: tiers, pillars: pillars, rows: rows,
     graded: graded.length, hygiene_score: graded.length ? Math.round(100 * clean / graded.length) / 100 : null,
     dormant: dormant.map(function(r) { return r.name; }), unlinked_research: unlinked.map(function(r) { return r.name; }),
-    archive_candidates: candidates.map(function(r) { return r.name; }), wbs_linked: Object.keys(linkedWbs).length, wbs_total: (wbsRows || []).length
+    archive_candidates: candidates.map(function(r) { return r.name; }), wbs_linked: Object.keys(linkedWbs).length, wbs_total: (wbsRows || []).length,
+    standards: pfStandardsSummary(rows)
   };
 }
 function pfCell(s) { return String(s === null || s === void 0 ? "" : s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " "); }
@@ -7551,6 +7654,15 @@ function pfRenderBody(ev) {
   L.push("| Dormant graded repositories (no push for " + PF_DORMANT_DAYS + "+ days) | " + ev.dormant.length + " |");
   L.push("| Research repositories with no WBS program code | " + ev.unlinked_research.length + " |");
   L.push("| WBS codes linked to a repository | " + ev.wbs_linked + " of " + ev.wbs_total + " in program_registry |");
+  L.push("");
+  L.push("### Standards (reported separately; not included in the hygiene score)");
+  L.push("");
+  if (!ev.standards || !ev.standards.available) L.push("Standards data unavailable; counts are not reported as zero.");
+  else {
+    L.push("| Flag | Count |");
+    L.push("|---|---:|");
+    PF_STANDARD_FLAGS.forEach(function(f) { L.push("| " + f + " | " + Number(ev.standards.counts[f] || 0) + " |"); });
+  }
   L.push("");
   L.push("### Tiers");
   L.push("");
@@ -7673,6 +7785,76 @@ async function pfSchema(env) {
 function pfGh(env) {
   return { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/portfolio", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
 }
+var PF_GRAPHQL_PAGE_SIZE = 20;
+var PF_STANDARDS_QUERY = "query PortfolioStandards($after: String, $first: Int!) {" +
+  " organization(login: \"QNFO\") {" +
+  "  repositories(first: $first, after: $after, privacy: PUBLIC, isArchived: false, orderBy: {field: NAME, direction: ASC}) {" +
+  "   pageInfo { hasNextPage endCursor } nodes {" +
+  "    name isFork isSecurityPolicyEnabled hasActionsEnabled" +
+  "    defaultBranchRef { target { ... on Commit { oid statusCheckRollup { state checkRuns(first: 100, orderBy: {field: STARTED_AT, direction: DESC}) { nodes { name conclusion startedAt completedAt workflowRun { workflow { name path } } } } } } } }" +
+  "    parent { defaultBranchRef { target { ... on Commit { oid } } } }" +
+  "    readme: object(expression: \"HEAD:README.md\") { ... on Blob { text } }" +
+  "    github: object(expression: \"HEAD:.github\") { ... on Tree { entries { name type } } }" +
+  "    workflows: object(expression: \"HEAD:.github/workflows\") { ... on Tree { entries { name type object { ... on Blob { text } } } } }" +
+  "    secretScanningAlerts(first: 1, states: [OPEN]) { totalCount }" +
+  "   }" +
+  "  }" +
+  "  licenseRepository: repository(name: \"license\") { object(expression: \"HEAD:LICENSE\") { ... on Blob { text } } }" +
+  " }" +
+ "}";
+async function pfFetchStandards(env) {
+  var byName = {}, after = null, licenseVersion = null, pages = 0;
+  while (pages++ < 10) {
+    var response = await timedFetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: pfGh(env),
+      body: JSON.stringify({ query: PF_STANDARDS_QUERY, variables: { after: after, first: PF_GRAPHQL_PAGE_SIZE } })
+    }, 20e3);
+    if (response.status !== 200) return { ok: false, by_name: {}, note: "GraphQL settings query HTTP " + response.status };
+    var payload = await response.json().catch(function() { return null; });
+    if (!payload || payload.errors || !payload.data || !payload.data.organization) return { ok: false, by_name: {}, note: "GraphQL settings query failed" };
+    var org = payload.data.organization, connection = org.repositories;
+    if (licenseVersion === null) licenseVersion = pfLicenseVersion(org.licenseRepository && org.licenseRepository.object && org.licenseRepository.object.text);
+    if (!connection || !Array.isArray(connection.nodes)) return { ok: false, by_name: {}, note: "GraphQL repository page unreadable" };
+    connection.nodes.forEach(function(node) {
+      var rollup = node.defaultBranchRef && node.defaultBranchRef.target && node.defaultBranchRef.target.statusCheckRollup || {};
+      var workflows = node.workflows && node.workflows.entries || [];
+      var workflowFiles = workflows.filter(function(f) { return String(f.type || "").toLowerCase() === "blob" && /\.(?:ya?ml)$/i.test(String(f.name || "")); }).map(function(f) { return { name: f.name, type: f.type, text: f.object && f.object.text || "" }; });
+      var githubEntries = node.github && node.github.entries || [];
+      var dependabot = githubEntries.some(function(f) { return String(f.type || "").toLowerCase() === "blob" && /^dependabot\.ya?ml$/i.test(String(f.name || "")); });
+      var ownOid = node.defaultBranchRef && node.defaultBranchRef.target && node.defaultBranchRef.target.oid;
+      var parentOid = node.parent && node.parent.defaultBranchRef && node.parent.defaultBranchRef.target && node.parent.defaultBranchRef.target.oid;
+      var runs = rollup.checkRuns && rollup.checkRuns.nodes || [];
+      byName[node.name] = {
+        available: true,
+        security_policy_enabled: node.isSecurityPolicyEnabled === true,
+        actions_enabled: node.hasActionsEnabled === true,
+        has_root_workflows: workflowFiles.length > 0,
+        has_dependabot: dependabot,
+        workflow_files: workflowFiles,
+        readme: node.readme && node.readme.text || "",
+        license_version: licenseVersion,
+        secret_alert_count: node.secretScanningAlerts && node.secretScanningAlerts.totalCount || 0,
+        status_check_state: rollup.state || null,
+        codeql_runs: runs.map(function(run) {
+          return {
+            name: run.name || "",
+            conclusion: run.conclusion || "",
+            started_at: run.startedAt || "",
+            completed_at: run.completedAt || "",
+            workflow_name: run.workflowRun && run.workflowRun.workflow && run.workflowRun.workflow.name || "",
+            workflow_path: run.workflowRun && run.workflowRun.workflow && run.workflowRun.workflow.path || ""
+          };
+        }),
+        fork_pure_mirror: !!(node.isFork && ownOid && parentOid && ownOid === parentOid)
+      };
+    });
+    if (!connection.pageInfo || !connection.pageInfo.hasNextPage) break;
+    after = connection.pageInfo.endCursor;
+  }
+  if (pages > 10) return { ok: false, by_name: {}, note: "GraphQL settings page limit exceeded" };
+  return { ok: !!licenseVersion, by_name: licenseVersion ? byName : {}, note: licenseVersion ? "ok" : "canonical license version unavailable" };
+}
 async function pfFetchOrg(env) {
   var out = [];
   for (var page = 1; page <= 5; page++) {
@@ -7685,7 +7867,12 @@ async function pfFetchOrg(env) {
     });
     if (j.length < 100) break;
   }
-  return { ok: out.length > 0, note: out.length ? "ok" : "empty listing", repos: out };
+  if (!out.length) return { ok: false, note: "empty listing", repos: out };
+  var standards = await pfFetchStandards(env);
+  out.forEach(function(repo) {
+    if (repo.visibility === "public" && !repo.archived) repo.standard_data = standards.ok ? standards.by_name[repo.name] || { available: false } : { available: false };
+  });
+  return { ok: true, note: standards.ok ? "ok" : "ok; standards unavailable", repos: out, standards_available: standards.ok };
 }
 async function pfWbs(env) {
   if (!env.PORTFOLIO) return { ok: false, rows: [], note: "no PORTFOLIO (portfolio-state) binding" };
@@ -7699,7 +7886,7 @@ async function pfUpsert(env, ev) {
   var now = ev.ts, stmts = [];
   ev.rows.forEach(function(r) {
     stmts.push(env.AUDIT.prepare("INSERT INTO portfolio_repos (name, full_name, tier, pillar, visibility, archived, fork, description, license, topics, homepage, language, pushed_at, created_at, has_pages, open_issues, stars, wbs, flags, seen, synced_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,1,?20) ON CONFLICT(name) DO UPDATE SET full_name=excluded.full_name, tier=excluded.tier, pillar=excluded.pillar, visibility=excluded.visibility, archived=excluded.archived, fork=excluded.fork, description=excluded.description, license=excluded.license, topics=excluded.topics, homepage=excluded.homepage, language=excluded.language, pushed_at=excluded.pushed_at, created_at=excluded.created_at, has_pages=excluded.has_pages, open_issues=excluded.open_issues, stars=excluded.stars, wbs=excluded.wbs, flags=excluded.flags, seen=1, synced_at=excluded.synced_at")
-      .bind(r.name, PF_ORG + "/" + r.name, r.tier, r.pillar, r.visibility, r.archived ? 1 : 0, r.fork ? 1 : 0, r.description.slice(0, 400), r.license, JSON.stringify(r.topics), r.homepage, r.language, r.pushed_at, null, r.has_pages ? 1 : 0, r.open_issues, r.stars, r.wbs.join(","), r.flags.join(","), now));
+      .bind(r.name, PF_ORG + "/" + r.name, r.tier, r.pillar, r.visibility, r.archived ? 1 : 0, r.fork ? 1 : 0, r.description.slice(0, 400), r.license, JSON.stringify(r.topics), r.homepage, r.language, r.pushed_at, null, r.has_pages ? 1 : 0, r.open_issues, r.stars, r.wbs.join(","), JSON.stringify({ hygiene: r.flags, standards: r.standards }), now));
   });
   for (var i = 0; i < stmts.length; i += 40) await env.AUDIT.batch(stmts.slice(i, i + 40));
   await env.AUDIT.prepare("UPDATE portfolio_repos SET seen=0 WHERE synced_at IS NULL OR synced_at <> ?1").bind(now).run();
@@ -7761,8 +7948,8 @@ async function portfolioSync(env, force) {
   // what was done. The register rows and flags still describe the organisation as read at the top of this run; the
   // next sync measures the effect.
   var actions = [];
-  try { actions = await pfHygieneApply(env, ev, wbs.rows); } catch (e) { actions = [{ repo: "*", action: "hygiene", status: "write-failed", note: String(e && e.message || e).slice(0, 100) }]; }
-  try { actions = actions.concat(await pfCodePublish(env)); } catch (e) { actions.push({ repo: "*", action: "code-publish", status: "write-failed", note: String(e && e.message || e).slice(0, 100) }); }
+  try { actions = await pfHygieneApply(env, ev, wbs.rows); } catch (e) { if (fleetAiStopped(e)) throw e; actions = [{ repo: "*", action: "hygiene", status: "write-failed", note: String(e && e.message || e).slice(0, 100) }]; }
+  try { actions = actions.concat(await pfCodePublish(env)); } catch (e) { if (fleetAiStopped(e)) throw e; actions.push({ repo: "*", action: "code-publish", status: "write-failed", note: String(e && e.message || e).slice(0, 100) }); }
   ev.actions = actions;
   var day = ev.ts.slice(0, 10), msg = "chore(portfolio): PORTFOLIO-LOOP-1 sync " + day + " [skip ci]";
   var writes = [];
@@ -7780,7 +7967,7 @@ async function portfolioSync(env, force) {
   actions = actions.filter(function(a) { return a.status !== "unchanged"; });
   ev.actions = actions;
   try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:portfolioSync:caught", error: String(e && e.message) })); }
-  return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
+  return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, standards: ev.standards, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
 // PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
 // a fully written run (ok) holds for PF_STALE_H. The writes are idempotent (unchanged content is a no-op), so an
@@ -7811,9 +7998,31 @@ async function portfolioLatest(env) {
   var rows = await charterRows(env, "SELECT name, tier, pillar, visibility, archived, fork, description, license, topics, homepage, pushed_at, wbs, flags, seen, synced_at FROM portfolio_repos WHERE seen=1 ORDER BY tier, pushed_at DESC");
   var run = await charterOne(env, "SELECT ts, repos, hygiene, status, note, writes FROM portfolio_sync_runs ORDER BY id DESC LIMIT 1");
   var acts = await charterRows(env, "SELECT ts, repo, action, status, detail FROM portfolio_actions ORDER BY id DESC LIMIT 40");
+  var privateNames = rows.filter(function(r) { return r.visibility === "private"; }).map(function(r) { return String(r.name || ""); }).filter(Boolean);
+  acts = acts.filter(function(a) {
+    var text = String(a.repo || "") + " " + String(a.detail || "");
+    return !privateNames.some(function(name) { return text.indexOf(name) >= 0; });
+  });
   var tiers = {};
   rows.forEach(function(r) { tiers[r.tier] = (tiers[r.tier] || 0) + 1; });
-  return { last_run: run, repos: rows.length, tiers: tiers, actions: acts, rows: rows.map(function(r) { if (r.visibility === "private") return { name: "(private)", tier: r.tier, pillar: r.pillar, visibility: "private" }; r.topics = JSON.parse(r.topics || "[]"); r.wbs = r.wbs ? r.wbs.split(",") : []; r.flags = r.flags ? r.flags.split(",") : []; return r; }) };
+  var decoded = rows.map(function(r) {
+    var stored = null;
+    try { stored = JSON.parse(r.flags || ""); } catch (e) { stored = null; }
+    if (stored && Array.isArray(stored.hygiene)) { r.flags = stored.hygiene; r.standards = stored.standards || null; }
+    else { r.flags = r.flags ? r.flags.split(",") : []; r.standards = null; }
+    r.topics = JSON.parse(r.topics || "[]");
+    r.wbs = r.wbs ? r.wbs.split(",") : [];
+    return r;
+  });
+  var standards = pfStandardsSummary(decoded);
+  return {
+    last_run: run, repos: rows.length, tiers: tiers, actions: acts, standards: standards,
+    rows: decoded.map(function(r) {
+      if (r.visibility === "private") return { name: "(private)", tier: r.tier, pillar: r.pillar, visibility: "private" };
+      delete r.standards;
+      return r;
+    })
+  };
 }
 // ---- PORTFOLIO-HYGIENE-1 (2026-10-01, pillar autonomy) ----
 // The first live register (hygiene 0.08: 32 of 39 graded public repositories lacked a licence file, a description or
@@ -7981,7 +8190,7 @@ async function pfCodePublish(env) {
       var complete = !failed.length && copied + kept === files.length && files.length > 0;
       if (complete) await env.AUDIT.prepare("UPDATE research_code_libraries SET status = 'public', note = COALESCE(note, '') || ?2 WHERE name = ?1").bind(row.name, " | public " + new Date().toISOString().slice(0, 10) + " as " + full + " (PORTFOLIO-CODE-PUBLISH-1)").run();
       out.push({ repo: name, action: "code-publish", status: complete ? "committed" : "partial", note: copied + " copied, " + kept + " present, " + failed.length + " failed" + (failed.length ? ": " + failed.slice(0, 4).join(", ") : "") });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.push({ repo: name, action: "code-publish", status: "write-failed", note: String(e && e.message || e).slice(0, 100) });
     }
   }
@@ -8027,10 +8236,24 @@ async function pfHygieneApply(env, ev, wbsRows) {
           res = u && u.meta && u.meta.changes ? { status: "committed", note: a.code + " -> " + full } : { status: "skipped", note: a.code + " already linked" };
         }
       } else res = { status: "skipped", note: "unknown action" };
-    } catch (e) { res = { status: "write-failed", note: String(e && e.message || e).slice(0, 100) }; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; res = { status: "write-failed", note: String(e && e.message || e).slice(0, 100) }; }
     out.push({ repo: a.repo, action: a.action, status: res.status, note: res.note || "" });
     if (res.status === "unchanged") continue;
     try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, a.repo, a.action, res.status, String(res.note || "").slice(0, 300)).run(); } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e2 && e2.message) })); }
+  }
+  var mirrors = pfPureMirrorCandidates(ev), proposed = {};
+  try {
+    var pending = await charterRows(env, "SELECT repo FROM portfolio_actions WHERE action = 'archive-request' AND status IN ('proposed','requested','committed')");
+    pending.forEach(function(r) { proposed[String(r.repo || "").replace(/^QNFO\//, "")] = true; });
+  } catch (e3) { mirrors = []; }
+  for (var m = 0; m < mirrors.length; m++) {
+    var mirror = mirrors[m];
+    if (proposed[mirror]) continue;
+    var detail = "pure mirror of upstream; archive request proposed only, no repository setting changed";
+    try {
+      await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, 'archive-request', 'proposed', ?3)").bind(ev.ts, mirror, detail).run();
+      out.push({ repo: mirror, action: "archive-request", status: "proposed", note: detail });
+    } catch (e4) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e4 && e4.message) })); }
   }
   // PORTFOLIO-ARCHIVE-1 (0.5.0, REPO-ARCHIVE-1 agent_issues 2045): an explicit archive request is executed here. A session
   // cannot archive a repository (its GitHub proxy refuses repository settings writes: HTTP 403 on 2026-10-06), so
@@ -8056,7 +8279,7 @@ async function pfHygieneApply(env, ev, wbsRows) {
         var pa = await pfGhJson(env, "PATCH", "https://api.github.com/repos/" + fullA, { archived: true });
         resA = pa.status === 200 && pa.json && pa.json.archived === true ? { status: "committed", note: "archived on request " + q.id } : { status: "write-failed", note: "PATCH HTTP " + pa.status + " on request " + q.id };
       }
-    } catch (e5) { resA = { status: "write-failed", note: String(e5 && e5.message || e5).slice(0, 100) }; }
+    } catch (e5) { if (fleetAiStopped(e5)) throw e5; resA = { status: "write-failed", note: String(e5 && e5.message || e5).slice(0, 100) }; }
     out.push({ repo: repoA, action: "archive", status: resA.status, note: resA.note || "" });
     try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, repoA, "archive", resA.status, String(resA.note || "").slice(0, 300)).run(); } catch (e6) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e6 && e6.message) })); }
     try { await env.AUDIT.prepare("UPDATE portfolio_actions SET status = ?1, detail = COALESCE(detail, '') || ' | ' || ?2 WHERE id = ?3").bind(resA.status === "committed" || resA.status === "unchanged" ? "committed" : resA.status === "skipped" ? "skipped" : "failed", ev.ts + " " + resA.status + ": " + String(resA.note || "").slice(0, 120), q.id).run(); } catch (e7) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e7 && e7.message) })); }
@@ -8311,7 +8534,7 @@ async function cfcRun(env, force) {
     return run;
   };
   var feed;
-  try { feed = await cfcFetchFeed(); } catch (e) { feed = { ok: false, note: "feed fetch " + String(e && e.message || e).slice(0, 120) }; }
+  try { feed = await cfcFetchFeed(); } catch (e) { if (fleetAiStopped(e)) throw e; feed = { ok: false, note: "feed fetch " + String(e && e.message || e).slice(0, 120) }; }
   if (!feed.ok) { run.ok = false; run.status = "fetch-failed"; run.note = feed.note; return fin(); }
   run.bytes = feed.bytes;
   var items = cfcParseItems(feed.xml, CFC_MAX_ITEMS);
@@ -8823,9 +9046,9 @@ async function ilRefreshSurfaces(env, nowIso) {
   for (var i = 0; i < IL_SURFACES.length; i++) {
     var sf = IL_SURFACES[i], body = null;
     try {
-      var r = await fetch(sf.url, { headers: { "User-Agent": "qnfo-fleet-control-metrics/" + VERSION }, signal: AbortSignal.timeout(1e4) });
+      var r = await fleetAiFetch(env, fetch, sf.url, { headers: { "User-Agent": "qnfo-fleet-control-metrics/" + VERSION }, signal: AbortSignal.timeout(1e4) });
       if (r.ok) body = await r.json();
-    } catch (e) { body = null; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; body = null; }
     var vals = ilSurfaceValues(sf, body);
     for (var j = 0; j < sf.metrics.length; j++) {
       var m = sf.metrics[j];
@@ -9424,7 +9647,7 @@ async function ideaFetch(url) {
     var r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; qnfo-reach-ideation/" + VERSION + ")" }, redirect: "follow", signal: AbortSignal.timeout(15000) });
     var html = (await r.text()).slice(0, 400000);
     return { status: r.status, ms: Date.now() - t0, html: html };
-  } catch (e) { return { status: 0, ms: Date.now() - t0, html: "" }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { status: 0, ms: Date.now() - t0, html: "" }; }
 }
 async function ideaMetricValue(env, metric) {
   var r = await charterOne(env, "SELECT last_value FROM metric_registry WHERE metric = '" + String(metric).replace(/[^a-z0-9_]/gi, "") + "'");
@@ -9541,14 +9764,14 @@ async function crawlHealthTick(env) {
     var groups = [];
     for (var zi = 0; zi < CRAWL_ZONES.length; zi++) {
       var q = 'query { viewer { zones(filter: { zoneTag: "' + CRAWL_ZONES[zi] + '" }) { httpRequestsAdaptiveGroups(limit: 2000, filter: { datetime_geq: "' + since + '", userAgent_like: "%Googlebot%" }, orderBy: [count_DESC]) { count dimensions { clientRequestHTTPHost clientRequestPath edgeResponseStatus userAgent clientIP } } } } }';
-      var r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(20000) });
+      var r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(20000) });
       var j = await r.json().catch(function() { return null; });
       var z = j && j.data && j.data.viewer && j.data.viewer.zones && j.data.viewer.zones[0];
       if (!z) return { ok: false, error: "graphql zone " + CRAWL_ZONES[zi] + ": " + JSON.stringify(j && j.errors || r.status).slice(0, 200) };
       groups = groups.concat(z.httpRequestsAdaptiveGroups || []);
     }
     var ranges = null;
-    try { var gr = await fetch(GOOGLEBOT_RANGES_URL, { signal: AbortSignal.timeout(8000) }); if (gr.ok) ranges = googlebotRanges(await gr.json()); } catch (e) { ranges = null; }
+    try { var gr = await fleetAiFetch(env, fetch, GOOGLEBOT_RANGES_URL, { signal: AbortSignal.timeout(8000) }); if (gr.ok) ranges = googlebotRanges(await gr.json()); } catch (e) { if (fleetAiStopped(e)) throw e; ranges = null; }
     var ev = crawlHealthEval(groups, ranges);
     var now = new Date().toISOString();
     var put = function(m, v) { return env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = ?3").bind(String(v), now, m).run(); };
@@ -9565,11 +9788,11 @@ async function crawlHealthTick(env) {
       await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:fleet-control/crawl-health', updated_at = ?2 WHERE id = ?1").bind(open.id, Date.now()).run();
     }
     return { ok: true, sitemaps_ok: ev.sitemapsOk, requests: ev.total, err_pct: ev.errPct, failures: ev.failures.length, missing: ev.missing, spoofed: ev.spoofed, spoofed_top: ev.spoofedTop, ranges: ranges ? ranges.length : "fallback" };
-  } catch (e) { return { ok: false, error: String(e && e.message || e).slice(0, 160) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { ok: false, error: String(e && e.message || e).slice(0, 160) }; }
 }
 async function googleIdentityDetect(env) {
   try {
-    var r = await fetch("https://cloudflare-dns.com/dns-query?name=qnfo.org&type=TXT", { headers: { "Accept": "application/dns-json" }, signal: AbortSignal.timeout(8000) });
+    var r = await fleetAiFetch(env, fetch, "https://cloudflare-dns.com/dns-query?name=qnfo.org&type=TXT", { headers: { "Accept": "application/dns-json" }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { ok: false, status: r.status };
     var j = await r.json();
     var recs = (j.Answer || []).map(function(a) { return String(a.data || "").replace(/^"|"$/g, ""); });
@@ -9581,7 +9804,7 @@ async function googleIdentityDetect(env) {
         .bind("auto " + new Date().toISOString().slice(0, 10) + ": GOOGLE-IDENTITY-DETECT-1 found " + gsv[0].slice(0, 80) + " in public DNS for qnfo.org; the Search Console domain property is verified.").run();
     }
     return { ok: true, verified: verified, txt: gsv.length };
-  } catch (e) { return { ok: false, error: String(e && e.message || e).slice(0, 120) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { ok: false, error: String(e && e.message || e).slice(0, 120) }; }
 }
 async function reachIdeationTick(env, force) {
   if (!env.AUDIT) return { ok: false, error: "no AUDIT binding" };
@@ -10777,7 +11000,7 @@ async function jrnTelemetry5xx(env, from, to) {
       try { path = new URL(rq.url || m.url || "").pathname; } catch (x) { path = ""; }
       return { script: String(w.scriptName || m.service || ""), status: Number(rs.status) || 0, path: path };
     }) };
-  } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { error: String(e && e.message || e).slice(0, 120) }; }
 }
 // Real traffic: each worker's captured error events in 24 h (worker_logs; ERROR-DETAIL-CAPTURE-1 keeps at most 200 per capture window,
 // so this is a floor; canceled and responseStreamDisconnected are the client hanging up, not a fault) against its 24 h request count (analytics_dash_workers, pollObservability). The top failing route is named.
@@ -10858,7 +11081,7 @@ async function jrnSource(worker) {
   try {
     var r = await timedFetch("https://raw.githubusercontent.com/QNFO/qnfo-workers/main/" + worker + "/worker.js?cb=" + Math.floor(Date.now() / 6e5), { headers: { "User-Agent": JRN_UA } }, 1e4);
     if (r.ok) txt = (await r.text()).slice(0, 4e6);
-  } catch (e) { txt = null; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; txt = null; }
   JRN_SRC_CACHE[worker] = txt;
   return txt;
 }
@@ -11370,6 +11593,8 @@ async function cronGridRun(db, event, ctx, cfg, run) {
 var CRON_GRID_CFG = {"worker": "qnfo-fleet-control", "tick": "*/10 * * * *", "tickMin": 10, "lagMin": 5, "jobs": [{"cron": "0 3 * * *", "periodMin": 1440, "retry": true}, {"cron": "30 3 * * 1", "periodMin": 10080, "retry": true}, {"cron": "0 4 1 * *", "periodMin": 44640, "retry": true}], "own": "self"};
 var worker_default2 = {
   async fetch(request, env, ctx) {
+    try {
+
     const url = new URL(request.url);
     const p = url.pathname;
     // BREACH-DOCTOR-WATCH-2 (0.55.0): the second runner of the breach doctor, before anything that reads the GitHub App or any other table, so it depends on D1 alone (service binding with props.caller qnfo-cloud-ops only).
@@ -11489,6 +11714,7 @@ var worker_default2 = {
     if (p === "/portfolio.md" && request.method === "GET") {
       var pl = await portfolioLatest(env);
       var pev = pfEvaluate(pl.rows.filter(function(r) { return r.name !== "(private)"; }).map(function(r) { return { name: r.name, description: r.description, visibility: r.visibility, archived: !!r.archived, fork: !!r.fork, pushed_at: r.pushed_at, topics: r.topics, license: r.license, homepage: r.homepage }; }), [], new Date().toISOString());
+      pev.standards = pl.standards;
       return new Response(pfRenderDocBlock(pev), { status: 200, headers: { "Content-Type": "text/markdown; charset=utf-8" } });
     }
     if (p === "/portfolio/sync" && request.method === "POST") {
@@ -11597,8 +11823,12 @@ var worker_default2 = {
       return calibratorMod.default.fetch(new Request(u2.toString(), request), env, ctx);
     }
     return deployDefault.fetch(request, env, ctx);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     return cronGridRun(env.AUDIT, event, ctx, CRON_GRID_CFG, function (ev, c) { return worker_default2.scheduledOnce(ev, env, c); });
   },
   async scheduledOnce(event, env, ctx) {
@@ -11720,14 +11950,14 @@ async function costImpactGuard(env) {
     var impactFlat = impactPrev > 0 ? (impact7 - impactPrev) / impactPrev < 0.1 : impact7 <= 0;
     var cpi = impact7 > 0 ? cost7 / impact7 : (cost7 > 0 ? Infinity : 0);
     var gurl = "https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/gateways/default";
-    var gr = await fetch(gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
+    var gr = await fleetAiFetch(env, fetch, gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
     var gj = await gr.json().catch(function(){ return null; });
     var gw = gj && gj.success ? gj.result : null;
     var rules = gw && gw.spend_limits && gw.spend_limits.rules ? gw.spend_limits.rules : [];
     var curLimit = rules.length && rules[0].limit != null ? Number(rules[0].limit) : null;
     var CEILING = 200, FLOOR = 100;
     var dueCents = null;
-    var pr2 = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/billing/invoice-preview", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
+    var pr2 = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/billing/invoice-preview", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
     var pj2 = await pr2.json().catch(function(){ return null; });
     if (pj2 && pj2.success && pj2.result && pj2.result.amount_due != null) dueCents = Number(pj2.result.amount_due);
     var divergence = cost7 > 0 && impactFlat && share >= 0.4;
@@ -11741,10 +11971,10 @@ async function costImpactGuard(env) {
     }
     if ((action === "tighten" || action === "relax") && newLimit !== curLimit) {
       var newRules = rules.map(function(r, i){ var n = Object.assign({}, r); if (i === 0) n.limit = newLimit; return n; });
-      var pr3 = await fetch(gurl, { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ spend_limits: { enabled: true, rules: newRules } }), signal: AbortSignal.timeout(8e3) });
+      var pr3 = await fleetAiFetch(env, fetch, gurl, { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ spend_limits: { enabled: true, rules: newRules } }), signal: AbortSignal.timeout(8e3) });
       var pj3 = await pr3.json().catch(function(){ return null; });
       var applied = !!(pj3 && pj3.success);
-      var vr = await fetch(gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
+      var vr = await fleetAiFetch(env, fetch, gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
       var vj = await vr.json().catch(function(){ return null; });
       var verified = !!(vj && vj.success && vj.result.spend_limits && vj.result.spend_limits.rules && Number(vj.result.spend_limits.rules[0].limit) === newLimit);
       if (!applied || !verified) {
@@ -11756,7 +11986,7 @@ async function costImpactGuard(env) {
     }
     await db.prepare("INSERT INTO cost_impact_guard (ts, cost_7d, cost_prev_7d, impact_7d, impact_prev_7d, top_model, top_share, cpi, impact_flat, due_cents, gateway_limit_before, gateway_limit_after, action) VALUES (datetime('now'),?,?,?,?,?,?,?,?,?,?,?,?)").bind(cost7, costPrev, impact7, impactPrev, topModel, share, cpi === Infinity ? -1 : cpi, impactFlat ? 1 : 0, dueCents == null ? -1 : dueCents, curLimit, newLimit, action).run();
     return { ok: true, cost7: cost7, impact7: impact7, topModel: topModel, share: share, cpi: cpi === Infinity ? -1 : cpi, divergence: divergence, action: action, limitBefore: curLimit, limitAfter: newLimit };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message || e) };
   }
 }
@@ -11863,7 +12093,7 @@ async function aiAttributionCoverage(env) {
   await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES ('ai_attr_cum', ?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify({ day: day, cum: cum, ts: nowIso })).run();
   // ATTRIBUTION-COVERAGE-DTD-1: the denominator is today's GraphQL total from 00:00Z, not the interval since the last run.
   var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + day + 'T00:00:00Z", datetime_leq: "' + nowIso.replace(/\.\d+Z$/, "Z") + '" }) { sum { totalNeurons } } } } }';
-  var r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+  var r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
   var j = await r.json().catch(function () { return null; });
   var rows = j && j.data && j.data.viewer && j.data.viewer.accounts && j.data.viewer.accounts[0] ? j.data.viewer.accounts[0].aiInferenceAdaptiveGroups || [] : null;
   if (!rows) return { ok: false, error: "graphql" };
@@ -12108,7 +12338,7 @@ async function remediationContractsTick(env, opts) {
           if (passed) out.pass++; else out.fail++;
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       // PROBE-ERROR-VISIBILITY-1 (0.33.8, 2026-10-17): this catch used to swallow the exception, so 529 of 973
       // contracts reported probe-error with nothing to attribute it to (TICK-ERROR-VISIBILITY-1 fixed only the two
       // insert catches). The message goes to console and to cloud_ops_events, deduped per (class, message) for an
@@ -12785,10 +13015,10 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
   rtProbeAuthorTickN++;
   var r, input = { messages: [{ role: "user", content: prompt }], max_tokens: 1500 };
   try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, Object.assign({ reasoning_effort: CM_REVIEW_EFFORT[RT_PROBE_AUTHOR_MODEL] || "low" }, input)); }
-  catch (eR) {
+  catch (eR) { if (fleetAiStopped(eR)) throw eR;
     // the platform may refuse reasoning_effort for a model: one plain retry, as the code loop does after MODEL_OPT_REJECTED
     try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, input); }
-    catch (eR2) { await rtProbeAuthorNote(db, id, "model-error", String(eR2 && eR2.message || eR2)); return false; }
+    catch (eR2) { if (fleetAiStopped(eR2)) throw eR2; await rtProbeAuthorNote(db, id, "model-error", String(eR2 && eR2.message || eR2)); return false; }
   }
   // a chat model answers choices[0].message.content, an older one {response}: cmReviewReply reads both
   var rep = cmReviewReply(Array.isArray(r) ? r[0] : r);
@@ -12856,7 +13086,7 @@ async function rtEnsureLivePath(db, out, env) {
       try {
         out.probe_author_retried.push(retries[r].id);
         if (await rtAuthorLivePathProbe(db, env, retries[r])) out.probe_authored.push(retries[r].id);
-      } catch (eR) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-author-retry", issue: retries[r].id, error: String(eR && eR.message).slice(0, 200) })); }
+      } catch (eR) { if (fleetAiStopped(eR)) throw eR; console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-author-retry", issue: retries[r].id, error: String(eR && eR.message).slice(0, 200) })); }
     }
     var made = await db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE ?1 || '%' AND created_at > ?2").bind(RT_LIVEPATH_PREFIX, Date.now() - 864e5).first();
     var room = Math.min(RT_LIVEPATH_MAX_PER_TICK, RT_LIVEPATH_MAX_PER_DAY - (made ? Number(made.n) || 0 : 0));
@@ -12869,11 +13099,11 @@ async function rtEnsureLivePath(db, out, env) {
         if (nid != null) {
           out.probe_needed_filed.push(rows[i].id);
           try { if (await rtAuthorLivePathProbe(db, env, rows[i])) out.probe_authored.push(rows[i].id); }
-          catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-author", issue: rows[i].id, error: String(e3 && e3.message).slice(0, 200) })); }
+          catch (e3) { if (fleetAiStopped(e3)) throw e3; console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-author", issue: rows[i].id, error: String(e3 && e3.message).slice(0, 200) })); }
         }
-      } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-needed-file", issue: rows[i].id, error: String(e2 && e2.message).slice(0, 200) })); }
+      } catch (e2) { if (fleetAiStopped(e2)) throw e2; console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-needed-file", issue: rows[i].id, error: String(e2 && e2.message).slice(0, 200) })); }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     // a table or column that is not there yet (the migrations land with the deploy) pauses the filer for ten minutes without a log line per tick
     if (/no such (table|column)/i.test(String(e && e.message || e))) { rtLivePathRetryAt = Date.now() + 600000; return; }
     console.error(JSON.stringify({ evt: "fleet-control:remediationTick:ensure-live-path", error: String(e && e.message).slice(0, 200) }));
@@ -14094,7 +14324,7 @@ async function danglingBindingsCensus(env, nowIso) {
   var base = "https://api.cloudflare.com/client/v4/accounts/" + (env.CF_ACCOUNT_ID || ACCOUNT);
   var H = { Authorization: "Bearer " + token, "User-Agent": "qnfo-fleet-control-census/" + VERSION };
   var getJ = async function (path, ms) {
-    try { var r = await fetch(base + path, { headers: H, signal: AbortSignal.timeout(ms || 8e3) }); return await r.json().catch(function () { return null; }); } catch (e) { return null; }
+    try { var r = await fleetAiFetch(env, fetch, base + path, { headers: H, signal: AbortSignal.timeout(ms || 8e3) }); return await r.json().catch(function () { return null; }); } catch (e) { if (fleetAiStopped(e)) throw e; return null; }
   };
   var wj = await getJ("/workers/scripts?per_page=100", 1e4);
   var names = wj && wj.success && Array.isArray(wj.result) ? wj.result.map(function (w) { return w && w.id; }).filter(Boolean) : null;
@@ -14128,7 +14358,7 @@ async function disposeRetired(env) {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
     var token = env.CF_API_TOKEN;
     if (!token) return;
-    try { await refreshScriptUsage(env); } catch (e) { console.error("refreshScriptUsage error:", e && e.message || e); }
+    try { await refreshScriptUsage(env); } catch (e) { if (fleetAiStopped(e)) throw e; console.error("refreshScriptUsage error:", e && e.message || e); }
     var _usageProbe = await scriptUsage7d(env, "qnfo-fleet-control");
     // DEGENERATE-DETECTION-SOURCE-1 (2026-09-30, handoff 29754 P4): worker_invocations is the ONLY
     // usage signal used to justify a destructive retire, and it has held ~1 row fleet-wide, so an
@@ -14164,7 +14394,7 @@ async function disposeRetired(env) {
       }
       var recent = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE ? AND datetime(ts) > datetime('now','-1 day')").bind(name + "%").first();
       if (recent && recent.n > 0) continue;
-      var res = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + name, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
+      var res = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + name, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
       var j = await res.json().catch(function() {
         return {};
       });
@@ -14178,7 +14408,7 @@ async function disposeRetired(env) {
         await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES ('fc-' || lower(hex(randomblob(8))), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: " + String(msg).slice(0, 280)).run();
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
 }
 __name(disposeRetired, "disposeRetired");
@@ -14233,14 +14463,14 @@ async function pollObservability(env) {
     var base = "https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/observability";
     var out = { ok: true, summary: null, issuesIngested: 0, usageWorkers: 0, ignored: 0, resolved: 0 };
     var nowMs = Date.now();
-    var sr = await fetch(base + "/issues/summary", { headers: H, signal: AbortSignal.timeout(8e3) });
+    var sr = await fleetAiFetch(env, fetch, base + "/issues/summary", { headers: H, signal: AbortSignal.timeout(8e3) });
     var sj = await sr.json().catch(function() { return null; });
     out.summary = sj && sj.success ? sj.result : null;
     // CF-OBS-SWEEP-1 (0.33.10): read EVERY page, not page 1. perPage 50, follow the pages until one returns fewer than 50
     // (or a hard cap), so no issue group is invisible to classification and to the left-list resolution below.
     var issues = [], issuesReadComplete = false;
     for (var page = 1; page <= 10; page++) {
-      var ir = await fetch(base + "/issues?status=active&perPage=50&page=" + page, { headers: H, signal: AbortSignal.timeout(8e3) });
+      var ir = await fleetAiFetch(env, fetch, base + "/issues?status=active&perPage=50&page=" + page, { headers: H, signal: AbortSignal.timeout(8e3) });
       var ij = await ir.json().catch(function() { return null; });
       var pageItems = ij && ij.success && Array.isArray(ij.result) ? ij.result : [];
       if (!ij || !ij.success) break; // unreadable page: ingest nothing further, keep what we have
@@ -14265,9 +14495,9 @@ async function pollObservability(env) {
       var decision = cfObsClassify(it, nowMs);
       if (decision === "active") continue;
       try {
-        var pr = await fetch(base + "/issues/" + encodeURIComponent(it.id), { method: "PATCH", headers: { Authorization: H.Authorization, "User-Agent": H["User-Agent"], "Content-Type": "application/json" }, body: JSON.stringify({ status: decision }), signal: AbortSignal.timeout(8e3) });
+        var pr = await fleetAiFetch(env, fetch, base + "/issues/" + encodeURIComponent(it.id), { method: "PATCH", headers: { Authorization: H.Authorization, "User-Agent": H["User-Agent"], "Content-Type": "application/json" }, body: JSON.stringify({ status: decision }), signal: AbortSignal.timeout(8e3) });
         if (pr.ok) { if (decision === "ignored") out.ignored++; else out.resolved++; }
-      } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:pollObservability:patch", id: it.id, decision: decision, error: String(e3 && e3.message) })); }
+      } catch (e3) { if (fleetAiStopped(e3)) throw e3; console.error(JSON.stringify({ evt: "fleet-control:pollObservability:patch", id: it.id, decision: decision, error: String(e3 && e3.message) })); }
     }
     // CF-ISSUES-LOOP-1: a group that left Cloudflare's active list is resolved here too. CF-OBS-SWEEP-1 read every page, so the
     // active list is complete and a group not in it genuinely left (resolved/ignored); resolve its D1 row accordingly.
@@ -14279,7 +14509,7 @@ async function pollObservability(env) {
     }
     var now = Date.now();
     var from = now - 864e5;
-    var ur = await fetch(base + "/usage?from=" + from + "&to=" + now, { headers: H, signal: AbortSignal.timeout(8e3) });
+    var ur = await fleetAiFetch(env, fetch, base + "/usage?from=" + from + "&to=" + now, { headers: H, signal: AbortSignal.timeout(8e3) });
     var uj = await ur.json().catch(function() { return null; });
     var bd = uj && uj.success && uj.result && uj.result.breakdown ? uj.result.breakdown : [];
     var per = {};
@@ -14305,7 +14535,7 @@ async function pollObservability(env) {
         .bind("sweep-" + nowMs, out.summary && out.summary.activeIssues != null ? Number(out.summary.activeIssues) : null, issues.length - out.ignored - out.resolved, out.resolved, out.ignored, issues.length - out.ignored - out.resolved).run();
     } catch (e5) { console.error(JSON.stringify({ evt: "fleet-control:pollObservability:sweep-run", error: String(e5 && e5.message) })); }
     return out;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
 }
@@ -14473,7 +14703,7 @@ async function refreshOwnedMetrics(env) {
   try {
     // DRIFT-CONFIRM-2: one read of the three inputs -> driftParts; a non-zero total is re-read once before it is written.
     var readDriftParts = async function () {
-      var wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(1e4) });
+      var wr = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(1e4) });
       var wj = await wr.json().catch(function () { return null; });
       if (!(wj && wj.success && Array.isArray(wj.result) && wj.result.length)) return null;
       var liveIds = wj.result.map(function (w) { return w && w.id; }).filter(Boolean);
@@ -14490,7 +14720,7 @@ async function refreshOwnedMetrics(env) {
       var second = null;
       if (first.total > 0) {
         await new Promise(function (r) { setTimeout(r, DRIFT_CONFIRM_PAUSE_MS); });
-        try { second = await readDriftParts(); } catch (e2) { second = null; }
+        try { second = await readDriftParts(); } catch (e2) { if (fleetAiStopped(e2)) throw e2; second = null; }
       }
       var conf = driftConfirm(first, second);
       await put("drift_total", conf.value);
@@ -14506,16 +14736,16 @@ async function refreshOwnedMetrics(env) {
     } else {
       out.skipped.drift_total = "CF workers/scripts list unreadable";
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.drift_total = String(e && e.message || e).slice(0, 160);
   }
   try {
-    var gr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/gateways/default", { headers: H, signal: AbortSignal.timeout(8e3) });
+    var gr = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/gateways/default", { headers: H, signal: AbortSignal.timeout(8e3) });
     var gj = await gr.json().catch(function () { return null; });
     var rules = gj && gj.success && gj.result && gj.result.spend_limits && gj.result.spend_limits.rules ? gj.result.spend_limits.rules : [];
     if (rules.length && rules[0].limit != null) await put("gateway_cap_30d_usd", Number(rules[0].limit));
     else out.skipped.gateway_cap_30d_usd = "gateway spend_limits unreadable";
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.gateway_cap_30d_usd = String(e && e.message || e).slice(0, 160);
   }
   // WAI-COST-WRITER-1 (2026-09-30): workers_ai_cost_30d_usd had no automated writer; its formula named
@@ -14526,7 +14756,7 @@ async function refreshOwnedMetrics(env) {
   try {
     var since = new Date(Date.now() - 30 * 864e5).toISOString();
     var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + since + '", datetime_leq: "' + nowIso + '" }) { sum { totalNeurons } } } } }';
-    var qr = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(2e4) });
+    var qr = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(2e4) });
     var qj = await qr.json().catch(function () { return null; });
     var rows = qj && !qj.errors && qj.data && qj.data.viewer && qj.data.viewer.accounts && qj.data.viewer.accounts[0] ? qj.data.viewer.accounts[0].aiInferenceAdaptiveGroups : null;
     if (Array.isArray(rows)) {
@@ -14539,7 +14769,7 @@ async function refreshOwnedMetrics(env) {
     } else {
       out.skipped.workers_ai_cost_30d_usd = "aiInferenceAdaptiveGroups unreadable" + (qj && qj.errors ? ": " + JSON.stringify(qj.errors).slice(0, 120) : "");
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.workers_ai_cost_30d_usd = String(e && e.message || e).slice(0, 160);
   }
   // UNIFIED-AI-SPEND-1 (2026-10-01, #1683 AI-SPEND-OVER-CAP-ALL-PROVIDERS-1): cost_usd_30d was
@@ -14553,7 +14783,7 @@ async function refreshOwnedMetrics(env) {
   try {
     var since2 = new Date(Date.now() - 30 * 864e5).toISOString();
     var gq = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 2000, filter: { datetime_geq: "' + since2 + '", datetime_leq: "' + nowIso + '" }) { count sum { cost } dimensions { provider model } } } } }';
-    var gqr = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: gq }), signal: AbortSignal.timeout(2e4) });
+    var gqr = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: gq }), signal: AbortSignal.timeout(2e4) });
     var gqj = await gqr.json().catch(function () { return null; });
     var grows = gqj && !gqj.errors && gqj.data && gqj.data.viewer && gqj.data.viewer.accounts && gqj.data.viewer.accounts[0] ? gqj.data.viewer.accounts[0].aiGatewayRequestsAdaptiveGroups : null;
     if (Array.isArray(grows)) {
@@ -14579,14 +14809,14 @@ async function refreshOwnedMetrics(env) {
       }
       // OWNER-LOCAL-INGEST-1 (0.11.0): the untagged gateway cost reaches a ledger before the gap is judged.
       try { out.ownerLocal = await ownerLocalIngest(env, db, acct, nowIso); out.written.push("owner_local_ingest=" + out.ownerLocal.taken); }
-      catch (eOl) { out.skipped.owner_local_ingest = String(eOl && eOl.message || eOl).slice(0, 160); }
+      catch (eOl) { if (fleetAiStopped(eOl)) throw eOl; out.skipped.owner_local_ingest = String(eOl && eOl.message || eOl).slice(0, 160); }
       // COST-ATTRIBUTION-GAP-1: the same read over 7 days, against the fleet's own spend ledger.
       try { out.costAttribution = await costAttributionTick(env, db, acct, H, nowIso); out.written.push("cost_attribution_gap_pct=" + out.costAttribution.gap_pct); }
-      catch (eCa) { out.skipped.cost_attribution_gap_pct = String(eCa && eCa.message || eCa).slice(0, 160); }
+      catch (eCa) { if (fleetAiStopped(eCa)) throw eCa; out.skipped.cost_attribution_gap_pct = String(eCa && eCa.message || eCa).slice(0, 160); }
     } else {
       out.skipped.cost_usd_30d_unified = "aiGatewayRequestsAdaptiveGroups unreadable" + (gqj && gqj.errors ? ": " + JSON.stringify(gqj.errors).slice(0, 120) : "");
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.cost_usd_30d_unified = String(e && e.message || e).slice(0, 160);
   }
   return out;
@@ -14625,7 +14855,7 @@ function costAttributionGap(gatewayByProv, ledgerRows) {
 async function costAttributionTick(env, db, acct, H, nowIso) {
   var since7 = new Date(Date.parse(nowIso) - 7 * 864e5).toISOString();
   var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 2000, filter: { datetime_geq: "' + since7 + '", datetime_leq: "' + nowIso + '" }) { count sum { cost } dimensions { provider model } } } } }';
-  var r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(2e4) });
+  var r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(2e4) });
   var j = await r.json().catch(function () { return null; });
   var rows = j && !j.errors && j.data && j.data.viewer && j.data.viewer.accounts && j.data.viewer.accounts[0] ? j.data.viewer.accounts[0].aiGatewayRequestsAdaptiveGroups : null;
   if (!Array.isArray(rows)) throw new Error("aiGatewayRequestsAdaptiveGroups unreadable" + (j && j.errors ? ": " + JSON.stringify(j.errors).slice(0, 120) : ""));
@@ -14660,7 +14890,7 @@ async function costAttributionTick(env, db, acct, H, nowIso) {
 // Neurons are not returned by the binding; calls + input/output chars are the attribution proxy. No new paid service.
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1, res;
-  try { res = await env.AI.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+  try { res = await fleetAiRun(env, env.AI, model, input, opts); return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
   finally {
     try {
       var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
@@ -14880,7 +15110,7 @@ async function ownerLocalIngest(env, db, acct, nowIso) {
   var token = env.CF_API_TOKEN;
   if (!token) return { skipped: "no CF_API_TOKEN", taken: 0 };
   var H = { Authorization: "Bearer " + token }, base = "https://api.cloudflare.com/client/v4/accounts/" + acct;
-  var gl = await fetch(base + "/ai-gateway/gateways?per_page=50", { headers: H, signal: AbortSignal.timeout(1e4) });
+  var gl = await fleetAiFetch(env, fetch, base + "/ai-gateway/gateways?per_page=50", { headers: H, signal: AbortSignal.timeout(1e4) });
   var gj = await gl.json().catch(function () { return null; });
   var gws = gj && gj.success !== false && Array.isArray(gj.result) ? gj.result.map(function (g) { return String(g && g.id || ""); }).filter(Boolean) : null;
   if (!gws) throw new Error("gateway list unreadable HTTP " + gl.status);
@@ -14891,7 +15121,7 @@ async function ownerLocalIngest(env, db, acct, nowIso) {
     var cursor = cr && cr.value ? String(cr.value) : new Date(Date.parse(nowIso) - OL_BACKFILL_DAYS * 864e5).toISOString();
     var rows = [], stop = false, err = null, total = null;
     for (var pg = 1; pg <= OL_MAX_PAGES && !stop; pg++) {
-      var r = await fetch(olLogsUrl(base, gw, cursor, pg), { headers: H, signal: AbortSignal.timeout(15e3) });
+      var r = await fleetAiFetch(env, fetch, olLogsUrl(base, gw, cursor, pg), { headers: H, signal: AbortSignal.timeout(15e3) });
       var j = await r.json().catch(function () { return null; });
       if (r.status !== 200 || !j || !Array.isArray(j.result)) { err = "logs HTTP " + r.status; break; }
       res.pages++;
@@ -15145,8 +15375,8 @@ async function publicationPreflight(env) {
   for (var i = 0; i < PUBLICATION_SURFACES.length; i++) {
     var sf = PUBLICATION_SURFACES[i], checks = [];
     var get = async function (u) {
-      try { var r = await fetch(u, { headers: { "User-Agent": "qnfo-fleet-control-preflight/" + VERSION }, signal: AbortSignal.timeout(15e3) }); return { status: r.status, ct: r.headers.get("content-type") || "", text: (await r.text()).slice(0, 4000) }; }
-      catch (e) { return { status: 0, ct: "", text: String(e && e.message || e).slice(0, 200) }; }
+      try { var r = await fleetAiFetch(env, fetch, u, { headers: { "User-Agent": "qnfo-fleet-control-preflight/" + VERSION }, signal: AbortSignal.timeout(15e3) }); return { status: r.status, ct: r.headers.get("content-type") || "", text: (await r.text()).slice(0, 4000) }; }
+      catch (e) { if (fleetAiStopped(e)) throw e; return { status: 0, ct: "", text: String(e && e.message || e).slice(0, 200) }; }
     };
     var h = await get(sf.health), l = await get(sf.listing), f = await get(sf.feed);
     var hj = null; try { hj = JSON.parse(h.text); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:publicationPreflight:caught", error: String(e && e.message) })); }
@@ -15290,7 +15520,7 @@ async function chaosExercise(env, exercise) {
   if (exercise === "pdf-relay") { var p = await pdfBacklogRelay(env, true); return { ran: !!p.ran, note: p.ran ? "relayed 1 batch, rendered " + p.rendered : (p.skipped || p.error || "no relay") }; }
   if (exercise === "router-drill") {
     if (!env.SVC_QNFO_AI) return { ran: false, note: "no SVC_QNFO_AI binding" };
-    var r = await env.SVC_QNFO_AI.fetch("https://qnfo-ai/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: "drill" }], drill: "router-down" }) });
+    var r = await fleetAiServiceFetch(env, env.SVC_QNFO_AI, "https://qnfo-ai/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: "drill" }], drill: "router-down" }) });
     return { ran: r.status === 503, note: "router answered " + r.status + (r.status === 503 ? " (router_drill, as designed)" : " (expected 503)") };
   }
   return { ran: false, note: "unknown exercise " + exercise };
@@ -15489,7 +15719,7 @@ async function obsDeclared(env, name) {
     }
     if (!b64) return { declared: null, why: "empty contents" };
     return { declared: obsParseToml(evDecode(b64)), why: null };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { declared: null, why: String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -15519,7 +15749,7 @@ async function reassertObservability(env) {
     var base = "https://api.cloudflare.com/client/v4/accounts/" + acct;
     var doMap = {};
     try {
-      var nsr = await fetch(base + "/workers/durable_objects/namespaces", { headers: H, signal: AbortSignal.timeout(8e3) });
+      var nsr = await fleetAiFetch(env, fetch, base + "/workers/durable_objects/namespaces", { headers: H, signal: AbortSignal.timeout(8e3) });
       var nsj = await nsr.json().catch(function() { return null; });
       if (nsj && nsj.success && nsj.result) {
         for (var i = 0; i < nsj.result.length; i++) {
@@ -15527,15 +15757,15 @@ async function reassertObservability(env) {
           if (ns.script && ns.class) doMap[ns.script] = { clazz: ns.class, storage: ns.use_sqlite ? "sqlite" : "legacy-kv" };
         }
       }
-    } catch (e1) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e1 && e1.message) })); }
-    var wr = await fetch(base + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(8e3) });
+    } catch (e1) { if (fleetAiStopped(e1)) throw e1; console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e1 && e1.message) })); }
+    var wr = await fleetAiFetch(env, fetch, base + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(8e3) });
     var wj = await wr.json().catch(function() { return null; });
     var workers = wj && wj.success && wj.result ? wj.result : [];
     var patched = 0, skipped = 0, patchedNames = [], drift = [], unrepaired = [], checked = 0;
     for (var w = 0; w < workers.length; w++) {
       var name = workers[w].id;
       if (!name) continue;
-      var sr = await fetch(base + "/workers/scripts/" + name + "/settings", { headers: H, signal: AbortSignal.timeout(8e3) });
+      var sr = await fleetAiFetch(env, fetch, base + "/workers/scripts/" + name + "/settings", { headers: H, signal: AbortSignal.timeout(8e3) });
       var sj = await sr.json().catch(function() { return null; });
       var o = sj && sj.success && sj.result ? sj.result.observability : null;
       checked++;
@@ -15559,7 +15789,7 @@ async function reassertObservability(env) {
       try {
         var boundary = "----QNFO" + Date.now() + "-" + randHex(8);
         var body = ["--" + boundary, 'Content-Disposition: form-data; name="settings"', "Content-Type: application/json", "", JSON.stringify(settings), "--" + boundary + "--"].join("\u000d\u000a");
-        var pr = await fetch(base + "/workers/scripts/" + name + "/settings", { method: "PATCH", headers: { Authorization: H.Authorization, "User-Agent": H["User-Agent"], "Content-Type": "multipart/form-data; boundary=" + boundary }, body: body, signal: AbortSignal.timeout(8e3) });
+        var pr = await fleetAiFetch(env, fetch, base + "/workers/scripts/" + name + "/settings", { method: "PATCH", headers: { Authorization: H.Authorization, "User-Agent": H["User-Agent"], "Content-Type": "multipart/form-data; boundary=" + boundary }, body: body, signal: AbortSignal.timeout(8e3) });
         var pj = await pr.json().catch(function() { return null; });
         var po = pj && pj.success && pj.result ? pj.result.observability : null;
         var verified = !!(po && po.enabled === true && !(decl.declared && obsDiff(po, desired).length));
@@ -15581,13 +15811,13 @@ async function reassertObservability(env) {
             await env.AUDIT_DB.prepare("INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,NULL,NULL,NULL,NULL,1,?3,?4)").bind(name, "qnfo-fleet-control/obs-reassert", "SETTINGS-ONLY: observability reassert (logs+traces+issues) by qnfo-fleet-control/" + VERSION + " verified=" + verified, (/* @__PURE__ */ new Date()).toISOString()).run();
           } catch (e4) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e4 && e4.message) })); }
         }
-      } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e2 && e2.message) })); }
+      } catch (e2) { if (fleetAiStopped(e2)) throw e2; console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e2 && e2.message) })); }
       if (decl.declared && patchedNames.indexOf(name) < 0) unrepaired.push(name);
     }
     if (patched > 0) { try { await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, text) VALUES ('fc-' || lower(hex(randomblob(8))), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'obs-reassert', 'qnfo-fleet-control', ?)").bind("patched=" + patched + " skipped=" + skipped + " workers=" + patchedNames.join(",")).run(); } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e3 && e3.message) })); } }
     await obsWriteMetric(env, unrepaired, drift, checked);
     return { ok: true, patched: patched, skipped: skipped, workers: patchedNames, checked: checked, drift: drift, unrepaired: unrepaired };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
 }
@@ -15598,3 +15828,114 @@ export {
   worker_default2 as default
 };
 //# sourceMappingURL=worker.js.map
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-fleet-control";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

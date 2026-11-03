@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PUBLICATION-GATE-AUDIT-2 offline suite (q08-signal-engine 0.36.0, charter pillar reach). Evidence: engine_runs, 14 days to 2026-10-26: 20 ok of 537
 // finished runs; 517 gate failures; 38 accuracy failures listed ledger numbers as figures ("figure not in the source: 40,") and tags as names ("name not in
 // the source: S28 S29"); seven of 18 fact-check failures read on 2026-10-24..26 were not claims the draft makes. Proves:
@@ -13,7 +14,7 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-const mod = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href, import.meta.url);
 const F = mod.__factledger, V = mod.__verify, N = mod.__carry.normalizeDraft;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 500) : "")); } };

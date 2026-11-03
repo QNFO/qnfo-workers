@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 /**
  * code-merge.test.mjs -- offline regression lock for CODE-TASK-MERGE-RUNNER-1 (qnfo-fleet-control 0.4.85).
  *
@@ -127,10 +128,10 @@ const sandbox = {
   b64encode: (s) => Buffer.from(String(s), "utf8").toString("base64"), DIFF_MAX_D: 600, __export: null,
 };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmVerAhead, cmVerCore, cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES, cmCompanions, cmTaskGates, cmReviewScreen, cmReviewCombine, cmCiteFound, cmDefectName, cmDefinedIn, cmReviewFacts, cmSecondReviewer, cmReviewPrompt, cmRepairable, CM_REVIEW_DIFF_CHARS, CM_REVIEW_GOAL_CHARS, CM_STALE_RE };", sandbox, { filename: "code-merge-block.js" });
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
+  "\n__export = { cmVerAhead, cmVerCore, cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES, cmCompanions, cmTaskGates, cmReviewScreen, cmReviewCombine, cmCiteFound, cmDefectName, cmDefinedIn, cmReviewFacts, cmSecondReviewer, cmReviewPrompt, cmRepairable, CM_REVIEW_DIFF_CHARS, CM_REVIEW_GOAL_CHARS, CM_STALE_RE };"), sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
-vm.runInContext("EV_MERGE_RETRY_WAIT_MS = 0;", sandbox); // MERGE-RACE-RETRY-1: no real waits in the suite
+vm.runInContext(RUNNING_AI_FIXTURE + ("EV_MERGE_RETRY_WAIT_MS = 0;"), sandbox); // MERGE-RACE-RETRY-1: no real waits in the suite
 
 let passed = 0, failed = 0;
 function ok(c, label, extra) { if (c) { passed++; return; } failed++; console.error("FAIL " + label + (extra !== undefined ? "  -- " + JSON.stringify(extra) : "")); }
@@ -757,7 +758,7 @@ ok(gh.newPulls.length === 2 && r.opened.length === 1 && r.decided.length >= 1, "
 {
   const p1 = orch.indexOf("const PLAN_TRUSTED_DEFAULT = "), p2 = orch.indexOf("const _planDbs");
   ok(p1 > 0 && p2 > p1, "PLAN_TRUSTED_DEFAULT and planTrusted are found in the orchestrator");
-  vm.runInContext(orch.slice(p1, p2) + "\n__export.planTrusted = planTrusted; __export.PLAN_TRUSTED = planTrustRules(); __export.PLAN_TRUSTED_DEFAULT = PLAN_TRUSTED_DEFAULT;", sandbox, { filename: "plan-trusted" });
+  vm.runInContext(RUNNING_AI_FIXTURE + (orch.slice(p1, p2) + "\n__export.planTrusted = planTrusted; __export.PLAN_TRUSTED = planTrustRules(); __export.PLAN_TRUSTED_DEFAULT = PLAN_TRUSTED_DEFAULT;"), sandbox, { filename: "plan-trusted" });
   ok(Array.isArray(W.PLAN_TRUSTED) && W.PLAN_TRUSTED.length >= 6, "the planner's list has its rows", W.PLAN_TRUSTED);
   ok(W.PLAN_TRUSTED_DEFAULT === (/var CM_TRUSTED_SOURCES = "([^"]*)"/.exec(src) || [])[1], "the planner's default list is the runner's constant, character for character");
   W.PLAN_TRUSTED.forEach((r) => {

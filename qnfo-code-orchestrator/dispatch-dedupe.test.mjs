@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // CODE-DISPATCH-DEDUPE-1 + RETIRED-TARGET-1 offline suite (qnfo-code-orchestrator 0.3.16, agent_issues 1876, 1834, 1960).
 // One change per file at a time: direct tasks are refused on busy files; trusted single-file issue tasks queue and run FIFO.
 // Live session work claims (work_claims) still block intake; the planner skips busy files before its model call; a worker.js of a
@@ -10,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -182,7 +183,7 @@ const claim = (env, p, f) => env.AUDIT_DB._db.prepare("INSERT INTO work_claims (
   const decl = /^const VERSION_DECL = .*$/m.exec(src)[0];
   const ctx = {};
   vm.createContext(ctx);
-  vm.runInContext(decl + "\n" + grab("countOf") + "\n" + grab("bumpVersion") + ";this.bumpVersion=bumpVersion;", ctx);
+  vm.runInContext(RUNNING_AI_FIXTURE + (decl + "\n" + grab("countOf") + "\n" + grab("bumpVersion") + ";this.bumpVersion=bumpVersion;"), ctx);
   const em = 'var VERSION="2.3.1-itinerary-ingest"/* note */\nfunction a() { return 1; }\n';
   ok(ctx.bumpVersion(em, em.replace("return 1", "return 2")).startsWith('var VERSION="2.3.2-codeagent"/* note */'), "6a no-space, no-semicolon VERSION is bumped in place", ctx.bumpVersion(em, em.replace("return 1", "return 2")).slice(0, 60));
   const sp = 'var VERSION = "1.2.3"; // c\nx = 1;\n';

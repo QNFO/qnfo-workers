@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397) offline suite for qnfo-intent-orchestrator.
 // Proves: scheduled() upserts fleet_heartbeat once with (worker, VERSION, ISO ts, ok=1) after a successful run, ok=0 when the
 // work throws (the 06:00 digest rethrows after the write) or the triage cron logs an error, and a failing heartbeat write never
@@ -9,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 const VERSION = /var VERSION = "([^"]*)"/.exec(src)[1];
 
 let passed = 0, failed = 0;

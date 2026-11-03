@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROMPT-CACHE-COUNT-4 (issue 2115): qnfo-fleet-control aiRunAttr writes one ai_cache_counters row per text-model call, in the
 // live qnfo-audit schema, and returns the AI result unchanged. Driven against node:sqlite with the production table DDL.
 // Run: node qnfo-fleet-control/cache-count.test.mjs   -> prints "N passed, 0 failed"
@@ -13,7 +14,7 @@ const b = src.indexOf('__name(aiCacheRow, "aiCacheRow");');
 if (a < 0 || b < 0) throw new Error("aiRunAttr / aiCacheRow block not found");
 const sandbox = { __name: (f) => f };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b) + "\n__export = { aiRunAttr, aiCacheRow };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n__export = { aiRunAttr, aiCacheRow };"), sandbox);
 const { aiRunAttr, aiCacheRow } = sandbox.__export;
 
 let pass = 0, fail = 0;

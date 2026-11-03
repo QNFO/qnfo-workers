@@ -29,19 +29,19 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.12.12-codeagent";
+var VERSION = "2.13.0";
 
 // Helper to call AI model with timeout and retry on AI_TIMEOUT
 async function callModelWithRetry(url, payload, timeoutMs = 20000) {
   // First attempt
   try {
     return await fetchWithTimeout(url, payload, timeoutMs);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     if (e.name === "AbortError" || (e.message && e.message.includes("AI_TIMEOUT"))) {
       // Retry once
       try {
         return await fetchWithTimeout(url, payload, timeoutMs);
-      } catch (e2) {
+      } catch (e2) { if (fleetAiStopped(e2)) throw e2;
         // Log structured error before rethrow
         console.error(JSON.stringify({
           worker: "qnfo-ai-search",
@@ -261,7 +261,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
       return async function (model, input, opts) {
         var t0 = Date.now(), ok = 1, res;
-        try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
+        try { res = await fleetAiRun(env, t, model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; if (cTok > 0) /* CF-OBS-ISSUE-1 (RED-DRAIN-1 dispatch): the unconditional per-call write to ai_cache_counters doubled D1 queue depth and produced "D1 DB is overloaded"; a call with no cached tokens no longer writes a zero row, so the common case is one D1 statement per AI call */ await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ worker: "qnfo-ai-search", where: "__aiAttrEnv", error: String(eCc && eCc.message || eCc) })); }
@@ -280,7 +280,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
     copy[aiKey] = wrapped;
     copy.__aiAttr = 1;
     return copy;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return env;
   }
 }
@@ -288,6 +288,8 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
 // ---------------------------------------------------------------- entry
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     env = __aiAttrEnv(env, "qnfo-ai-search", "AI", "QNFO_AUDIT");
     var url = new URL(request.url);
     var path = url.pathname;
@@ -311,11 +313,15 @@ var worker_default = {
         return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ask.qwav.tech/</loc></url></urlset>\n', { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" } });
       }
       return json({ error: "Not found", path: path }, 404);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return json({ error: String((e && e.message) || e).slice(0, 300) }, 500);
     }
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     env = __aiAttrEnv(env, "qnfo-ai-search", "AI", "QNFO_AUDIT");
     ctx.waitUntil((async function () {
       var ok = 1;
@@ -358,10 +364,10 @@ async function up(env, binding, base, path, init, ms) {
     var opts = Object.assign({ signal: ctrl.signal }, init || {});
     opts.headers = Object.assign({ Accept: "application/json", "User-Agent": WORKER + "/" + VERSION }, (init && init.headers) || {});
     var svc = env[binding];
-    var r = svc && typeof svc.fetch === "function" ? await svc.fetch(u, opts) : await fetch(u, opts);
+    var r = svc && typeof svc.fetch === "function" ? await svc.fetch(u, opts) : await fleetAiFetch(env, fetch, u, opts);
     if (!r.ok) return null;
     return await r.json();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   } finally {
     clearTimeout(t);
@@ -405,9 +411,9 @@ async function ingest(request, env) {
     var docId = body.id || "doc-" + Date.now();
     var content = body.content || "";
     if (!content) return json({ error: "content required" }, 400);
-    await env.AI_SEARCH.get(name).items.upload(docId + ".md", content, { metadata: body.metadata || {} });
+    await fleetAiAssert(env).then(() => env.AI_SEARCH.get(name).items.upload(docId + ".md", content, { metadata: body.metadata || {} }));
     return json({ ok: true, instance: name, id: docId, indexed: "async", note: "indexing in progress" });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ error: (e && e.message) || String(e) }, 500);
   }
 }
@@ -418,9 +424,9 @@ async function searchRoute(request, env) {
     if (!query) return json({ error: "query required" }, 400);
     var name = body.instance || DEFAULT_INSTANCE;
     var limit = Math.min(body.limit || 5, 20);
-    var results = await env.AI_SEARCH.get(name).search({ query: query, limit: limit, returnMetadata: body.returnMetadata !== false });
+    var results = await fleetAiAssert(env).then(() => env.AI_SEARCH.get(name).search({ query: query, limit: limit, returnMetadata: body.returnMetadata !== false }));
     return json({ ok: true, instance: name, count: (results && results.chunks && results.chunks.length) || (results && results.results && results.results.length) || (results && results.count) || 0, results: results });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ error: (e && e.message) || String(e) }, 500);
   }
 }
@@ -657,10 +663,10 @@ async function corpusSync(env) {
       var p = await up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(doc.slug), null, 15000);
       if (!p || !p.slug) throw new Error("detail unreadable");
       var text = corpusDoc(p);
-      await env.AI_SEARCH.get(DEFAULT_INSTANCE).items.upload(doc.slug + ".md", text, { metadata: { slug: doc.slug, doi: nzDoi(p.doi) || "", version: String(p.version || ""), source: "papers.qnfo.org" } });
+      await fleetAiAssert(env).then(() => env.AI_SEARCH.get(DEFAULT_INSTANCE).items.upload(doc.slug + ".md", text, { metadata: { slug: doc.slug, doi: nzDoi(p.doi) || "", version: String(p.version || ""), source: "papers.qnfo.org" } }));
       await d.prepare("INSERT OR REPLACE INTO ask_corpus_sync (slug, ingested_at, bytes, source_version, status, error) VALUES (?1, ?2, ?3, ?4, 'uploaded', NULL)").bind(doc.slug, at, text.length, String(p.version || doc.version || "")).run();
       out.uploaded++; out.slugs.push(doc.slug);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.errors++;
       try { await d.prepare("INSERT OR REPLACE INTO ask_corpus_sync (slug, ingested_at, bytes, source_version, status, error) VALUES (?1, ?2, 0, ?3, 'error', ?4)").bind(doc.slug, at, String(doc.version || ""), String((e && e.message) || e).slice(0, 300)).run(); } catch (e2) { logErr("corpusSync error row", e2); }
     }
@@ -670,7 +676,7 @@ async function corpusSync(env) {
 }
 async function corpusSearch(env, query, limit) {
   try {
-    var r = await env.AI_SEARCH.get(DEFAULT_INSTANCE).search({
+    var r = await fleetAiAssert(env).then(() => env.AI_SEARCH.get(DEFAULT_INSTANCE).search({
       query: query,
       limit: limit,
       returnMetadata: true,
@@ -678,9 +684,9 @@ async function corpusSearch(env, query, limit) {
         retrieval: { retrieval_type: "hybrid", fusion_method: "rrf" },
         reranking: { enabled: true, model: "@cf/baai/bge-reranker-base" },
       },
-    });
+    }));
     return (r && (r.chunks || r.data)) || [];
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return [];
   }
 }
@@ -1394,10 +1400,10 @@ async function ask(request, env, ctx) {
       var saidThinking = false;
       // One model run. The tokens are held back (ASK-GROUND-2): the caller checks the whole text before anything is sent.
       var runWriter = async function (msgs) {
-        var start = function (m) { return deadline(env.AI.run(m, Object.assign({ messages: msgs, stream: true, max_tokens: budget(m), temperature: cfg.temperature }, NO_REASONING[m] ? { reasoning_effort: "none" } : {})), ASK_MODEL_START_MS, "the model " + m.replace(/^@cf\//, "")); };
+        var start = function (m) { return deadline(fleetAiRun(env, env.AI, m, Object.assign({ messages: msgs, stream: true, max_tokens: budget(m), temperature: cfg.temperature }, NO_REASONING[m] ? { reasoning_effort: "none" } : {})), ASK_MODEL_START_MS, "the model " + m.replace(/^@cf\//, "")); };
         var out;
         try { out = await start(model); }
-        catch (e) { model = model === FALLBACK_MODEL ? FALLBACK_MODEL_2 : FALLBACK_MODEL; out = await start(model); }
+        catch (e) { if (fleetAiStopped(e)) throw e; model = model === FALLBACK_MODEL ? FALLBACK_MODEL_2 : FALLBACK_MODEL; out = await start(model); }
         ev.model = model;
         var text = "", usage = null, buf = "", inThink = false, reader = out.getReader(), dec = new TextDecoder();
         for (;;) {
@@ -1442,7 +1448,7 @@ async function ask(request, env, ctx) {
             var gen0 = await deadline(runWriter(messages), PLAIN_RETRY_MS, "the retry on " + alt.replace(/^@cf\//, ""));
             spent.push(gen0);
             if (gen0.text.trim()) text = gen0.text;
-          } catch (e) { if (gone) throw e; logErr("empty-answer retry", e); }
+          } catch (e) { if (fleetAiStopped(e)) throw e; if (gone) throw e; logErr("empty-answer retry", e); }
         }
       }
       var sp = splitFollowups(text);
@@ -1459,7 +1465,7 @@ async function ask(request, env, ctx) {
           spent.push(gen2);
           var sp2 = splitFollowups(gen2.text), chk2 = groundBody(sp2.body, gtext, sources.length), rep2 = chk2.text ? plainReport(chk2.text, xt ? xt.target : "") : null;
           if (rep2 && badness(rep2) < badness(rep)) { text = gen2.text; sp = sp2; chk = chk2; rep = rep2; rawCites = citeStats(sp2.body, sources.length); }
-        } catch (e) { if (gone) throw e; logErr("plain rewrite", e); }
+        } catch (e) { if (fleetAiStopped(e)) throw e; if (gone) throw e; logErr("plain rewrite", e); }
       }
       ev.removed = chk.removed;
       sp = { body: chk.text || (text.trim() ? NOT_SUPPORTED_TEXT : ""), followups: chk.text ? sp.followups.filter(function (f) { return !sentenceProblems(f, glow, gnum, sources.length).length; }) : [] };
@@ -1481,7 +1487,7 @@ async function ask(request, env, ctx) {
   ctx.waitUntil((async function () {
     try {
       await deadline(answer(), ASK_TOTAL_MS, "the answer");
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       if (gone) ev.limited = CLIENT_GONE; // the visitor left: not counted as an error or a latency sample
       else {
         ev.error = String((e && e.message) || e).slice(0, 300);
@@ -1625,7 +1631,7 @@ async function refreshGolden(env) {
       if (!completeQuestion(q, r && r.choices && r.choices[0] && r.choices[0].finish_reason)) { rejected++; continue; }
       await d.prepare("INSERT OR IGNORE INTO ask_golden (slug, question, title, added_at) VALUES (?1, ?2, ?3, ?4)").bind(x.slug, q, x.title, new Date().toISOString()).run();
       added.push(x.slug);
-    } catch (e) { logErr("refreshGolden", e); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; logErr("refreshGolden", e); }
   }
   return { have: (Number(have && have.n) || 0) + added.length, added: added, calls: calls, rejected: rejected, lean: budget.breached || undefined };
 }
@@ -1766,7 +1772,7 @@ async function judge(env, max) {
         var s = Math.max(0, Math.floor(Number(j.supported) || 0)), n = Math.max(0, Math.floor(Number(j.total) || 0));
         if (!n || s > n) { why = "bad_counts"; continue; }
         verdict = { s: s, n: n, leg: li };
-      } catch (e) { why = "error"; lastError = String((e && e.message) || e).slice(0, 160); }
+      } catch (e) { if (fleetAiStopped(e)) throw e; why = "error"; lastError = String((e && e.message) || e).slice(0, 160); }
     }
     if (!verdict) { if (why === "no_json") noJson++; else if (why === "bad_counts") badCounts++; else errors++; continue; }
     try {
@@ -1790,7 +1796,7 @@ function bandBreached(band, v) {
 }
 function aiRun(env, model, opts, timeoutMs) {
   return Promise.race([
-    env.AI.run(model, opts),
+    fleetAiRun(env, env.AI, model, opts),
     new Promise((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), timeoutMs))
   ]);
 }
@@ -1883,13 +1889,13 @@ async function turnstileVerify(env, token, ip, action) {
   try {
     var body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
     if (ip) body.set("remoteip", ip);
-    var r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
+    var r = await fleetAiFetch(env, fetch, "https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
     if (!r.ok) return { ok: false, reason: "siteverify-" + r.status };
     var j = await r.json();
     if (!j || j.success !== true) return { ok: false, reason: "rejected:" + String((j && j["error-codes"]) || "").slice(0, 80) };
     if (action && j.action && j.action !== action) return { ok: false, reason: "action-mismatch" };
     return { ok: true, reason: "verified" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, reason: "siteverify-error" };
   }
 }
@@ -3294,3 +3300,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-ai-search ----
 wmAttach(worker_default, "qnfo-ai-search");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "QNFO_AUDIT";
+var FLEET_AI_WORKER = "qnfo-ai-search";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

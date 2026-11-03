@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PSR-NARRATIVE-CAP-SOFT-1 offline suite (qnfo-fleet-dashboard 1.71.1, 2026-10-26, pillar cost; agent_issues 1000409).
 // BUDGET-SOFT-ROUTE-1 (owner directive 2026-10-06): a breached ai_spend cap steers model choice to the cheapest capable model and never stops work. The weekly program-strategic review
 // asked for no narrative at all while any fleet_budget ai_spend cap was breached (ai_spend:workers-ai read 660.09 against a cap of 95) and when the budget could not be read.
@@ -23,7 +24,7 @@ ok(parts.every((p) => p.length > 100), "d1all and the PSR block (psrNarrativeTie
 const id = (f) => f;
 const sb = { console, Math, Number, String, Object, JSON, Array, Date, Promise, isFinite, setTimeout, clearTimeout, AbortController, NAME: "qnfo-fleet-dashboard", VERSION: "test", __name: id, __name2: id, __name22: id, __name222: id, __name2222: id, __name22222: id };
 vm.createContext(sb);
-vm.runInContext(parts.join("\n") + "\n;__x = { psrNarrativeTier, psrNarrative, psrReview, PSR_FREE_MODEL, PSR_PAID_MODEL };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (parts.join("\n") + "\n;__x = { psrNarrativeTier, psrNarrative, psrReview, PSR_FREE_MODEL, PSR_PAID_MODEL };"), sb);
 const X = sb.__x;
 
 // A scripted fake D1. o.budget: fleet_budget rows (undefined = the read throws); o.programs: v_program_health rows; o.prompts: persona prompts by agent id.

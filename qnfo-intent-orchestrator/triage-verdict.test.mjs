@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // INTENT-TRIAGE-SKIP-1 (agent_issues 100066) offline suite for qnfo-intent-orchestrator.
 // Proves: a research idea from a research feed that the classifier typed event is triaged inline and in the 06:30 batch (it sat
 // pending for good before); a calendar item from calendar-sync or mcp in the research domain is NOT sent to research triage;
@@ -13,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 // ensureSchema caches its result per module instance, as it does per isolate; every environment below gets a fresh instance.
 let worker, loads = 0;
-const load = async () => (await import(pathToFileURL(join(here, "worker.js")).href + "?instance=" + (++loads))).default;
+const load = async () => (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href + "?instance=" + (++loads), import.meta.url)).default;
 
 let passed = 0, failed = 0;
 const t = async (name, fn) => { try { await fn(); passed++; console.log("ok   " + name); } catch (e) { failed++; console.log("FAIL " + name + ": " + (e && e.message || e)); } };

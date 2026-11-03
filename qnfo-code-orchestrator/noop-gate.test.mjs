@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // NOOP-PROPOSAL-GATE-1 offline suite (qnfo-code-orchestrator 0.3.17, agent_issues #2018, TP-1e, pillar autonomy).
 // On 2026-10-06 two code tasks answered a feature goal with a two-line edit that reworded a string literal on the anchor line
 // (ct_r3k9lrbd7oijxr pasted the issue prose into an audit message; ct_5fibb664gtvew4 reworded an error message). Both parsed,
@@ -16,7 +17,7 @@ import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
@@ -186,7 +187,7 @@ const REAL = [
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(atLeast(h.version, "0.3.17") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("noop-gate") && h.limitations.some((l) => /NOOP-PROPOSAL-GATE-1/.test(l) && /2 such proposals in a row/.test(l)), "F1 /health names the gate and its limit", { v: h.version });
+  ok(atLeast(h.version, "0.3.17") && /^\d+\.\d+\.\d+(?:-|$)/.test(h.version) && h.capabilities.includes("noop-gate") && h.limitations.some((l) => /NOOP-PROPOSAL-GATE-1/.test(l) && /2 such proposals in a row/.test(l)), "F1 /health names the gate and its limit", { v: h.version });
 }
 
 console.log("noop-gate: " + pass + " passed, " + fail + " failed");

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -10,7 +11,7 @@ const records = fs.readFileSync(path.join(here, "fixtures/planner-replay.jsonl")
 const [task, loggedRequest, loggedResponse] = records;
 assert.deepEqual(records.map((record) => record.type), ["task", "request", "response"]);
 
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE agent_issues (
   id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT,

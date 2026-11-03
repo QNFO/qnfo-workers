@@ -57,7 +57,7 @@ async function infraAIRun(env, model, input, options = {}) {
   const selectedModel = critical ? model : AI_COST_LADDER[model] || model;
   const gateway = { id: "default", skipCache };
   if (!skipCache) gateway.cacheTtl = cacheTtl;
-  return env.AI.run(selectedModel, input, { gateway });
+  return fleetAiRun(env, env.AI, selectedModel, input, { gateway });
 }
 __name(infraAIRun, "infraAIRun");
 __name2(infraAIRun, "infraAIRun");
@@ -106,7 +106,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.10.3-ai-gateway-cost"; /* 1.10.3 QNFO.OPS #1 (issue 1000696): route deterministic infra embeddings through the existing AI Gateway with a one-day per-request cache; non-critical calls use their existing cheaper ladder rung, while critical retrieval preserves its model. */ /* 1.10.2 NO-DEAD-DOI-1 (#1456, pillar reach): selected-work collection omits identifiers on the retired prefix; generic paper collection remains unchanged. */ /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.11.0"; /* 1.10.3 QNFO.OPS #1 (issue 1000696): route deterministic infra embeddings through the existing AI Gateway with a one-day per-request cache; non-critical calls use their existing cheaper ladder rung, while critical retrieval preserves its model. */ /* 1.10.2 NO-DEAD-DOI-1 (#1456, pillar reach): selected-work collection omits identifiers on the retired prefix; generic paper collection remains unchanged. */ /* 1.9.2 HANDOFFS-VZ-CATCHUP-1 (2026-10-26, pillar autonomy, agent_issues 1000176; patch): the producer indexed 100 handoffs an hour, and 707 handoffs older than 90 minutes were still unindexed on 2026-10-26 (the issue asks for the backlog within 24 hours and a new handoff within 60 minutes), so a fire takes 300 rows while more than one normal batch waits, and the normal 100 when the previous run left a FAILED note, so a batch that cannot finish inside the 120 second timeout cannot repeat itself for ever. prior 1.9.1-codeagent */ /* 1.9.0-handoffs-index HANDOFFS-VZ-PRODUCER-1 (2026-10-26, pillar autonomy, agent_issues 1000176): the handoffs vector index had no working producer. PR 4230 added one inside the 06:30 indexer member that selected handoffs.content, a column the table does not have (summary, pending_work, next_action are the text), so it threw into a catch and logged every night while semantic handoff search stayed frozen at 2026-07. The block is removed; indexHandoffs() runs on every hourly fire, reads the real columns, embeds in chunks of 1000 characters with the model the readers query with, upserts ids handoff:<id>:<chunk> with metadata {doc, id, session_id, ts, summary}, and moves the ops_config watermark handoffs_vz_last_id only after the upsert succeeded (100 handoffs per run, so the 1,706-row backfill is done in about 18 hours and a new handoff is indexed within the hour). A handoff of the personal plane (project, WBS or session label: personal, q08, twin, msgraph, owner-, email-strategic-) is skipped and the watermark moves past it, because scope=research retrieval reads this index (51 of 1,706 rows on 2026-10-26); a failure or a call stalled for 120 s is written to the watermark row's note and the state refresh still runs. */ /* 1.8.5-codeagent */ /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 async function auth(token, env) {
   const exp = await infraSecret(env, "INFRA_TOKEN");
   if (!exp || !token) return false;
@@ -121,7 +121,7 @@ __name(auth, "auth");
 __name2(auth, "auth");
 async function cf(env, path) {
   const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
-  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + path, {
+  const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + path, {
     headers: { Authorization: "Bearer " + token, "User-Agent": "Mozilla/5.0 (qnfo-infra)" }
   });
   return r.json();
@@ -130,7 +130,7 @@ __name(cf, "cf");
 __name2(cf, "cf");
 async function cfRaw(env, path) {
   const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
-  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + path, {
+  const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + path, {
     headers: { Authorization: "Bearer " + token, "User-Agent": "Mozilla/5.0 (qnfo-infra)" }
   });
   return r;
@@ -139,7 +139,7 @@ __name(cfRaw, "cfRaw");
 __name2(cfRaw, "cfRaw");
 async function gql(env, query) {
   const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
-  const r = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+  const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-infra)" },
     body: JSON.stringify({ query })
@@ -155,7 +155,7 @@ async function collectState(env) {
     const names = (w.result || []).map((x) => x.id);
     const wNames = names.slice(0, 60);
     out.workers = { count: names.length, shown: wNames.length, truncated: names.length > wNames.length, names: wNames };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.workers = { error: String(e) };
   }
   try {
@@ -175,7 +175,7 @@ async function collectState(env) {
           }
         }
         workerDbBytes.push({ name, bytes });
-      } catch (err) {
+      } catch (err) { if (fleetAiStopped(err)) throw err;
         workerDbBytes.push({ name, bytes: 0, error: String(err) });
       }
     }));
@@ -185,7 +185,7 @@ async function collectState(env) {
     await Promise.all(topHeavy.map(async ({ name }) => {
       try {
         const token = await infraSecret(env, "CF_TOKEN_STORE", "CF_TOKEN");
-        const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/workers/scripts/" + encodeURIComponent(name) + "/settings", {
+        const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/workers/scripts/" + encodeURIComponent(name) + "/settings", {
           method: "PATCH",
           headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-infra)" },
           body: JSON.stringify({ placement_mode: "smart" })
@@ -195,7 +195,7 @@ async function collectState(env) {
           throw new Error((j.errors && j.errors[0] && j.errors[0].message) || r.statusText || "unknown");
         }
         patched.push(name);
-      } catch (err) {
+      } catch (err) { if (fleetAiStopped(err)) throw err;
         patchErrors.push({ name, error: String(err) });
       }
     }));
@@ -208,7 +208,7 @@ async function collectState(env) {
       dbs: dList,
       smart_placement: { candidates: workerDbBytes.length, top_heavy: topHeavy.map((x) => x.name), patched, patch_errors: patchErrors }
     };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.d1 = { error: String(e) };
   }
   try {
@@ -219,12 +219,12 @@ async function collectState(env) {
       try {
         const info = await cf(env, "/vectorize/v2/indexes/" + encodeURIComponent(idx.name) + "/info");
         withCounts.push({ name: idx.name, vectors: (info.result || {}).vectorCount || 0 });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         withCounts.push({ name: idx.name, vectors: -1 });
       }
     }
     out.vectorize = { count: withCounts.length, indexes: withCounts };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.vectorize = { error: String(e) };
   }
   try {
@@ -241,19 +241,19 @@ async function collectState(env) {
     } else {
       out.r2 = { count: 0, buckets: [], raw: txt.slice(0, 200) };
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.r2 = { error: String(e) };
   }
   try {
     const k = await cf(env, "/storage/kv/namespaces?per_page=100");
     out.kv = { count: (k.result || []).length, namespaces: (k.result || []).map((x) => x.title) };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.kv = { error: String(e) };
   }
   try {
     const rum = await cf(env, "/rum/site_info/list?per_page=50");
     out.web_analytics = { count: (rum.result || []).length, sites: (rum.result || []).map((x) => x.ruleset && x.ruleset.zone_name || x.auto_install && typeof x.auto_install === "object" && x.auto_install.host || x.site_tag || "untagged") };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.web_analytics = { error: String(e) };
   }
   try {
@@ -261,7 +261,7 @@ async function collectState(env) {
     // QNFO.OPS #1: report the gateway's live cache_ttl and its spend rules unchanged (guards unchanged);
     // the spend lever is the by-model log breakdown plus the ladder moves collected below.
     out.ai_gateway = { collect_logs: (g.result || {}).collect_logs, log_management: (g.result || {}).log_management, cache_ttl: (g.result || {}).cache_ttl, spend_limit: ((g.result || {}).spend_limits || {}).rules || [] };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.ai_gateway = { error: String(e) };
   }
   try {
@@ -289,7 +289,7 @@ async function collectState(env) {
       byModel[m].cost += l.cost || 0;
     }
     out.gateway_logs = { events: logs.length, requests, tokens_in: tokensIn, tokens_out: tokensOut, cost_usd: Math.round(cost * 1e6) / 1e6, by_model: Object.entries(byModel).slice(0, 8).map(([m, s]) => ({ model: m, requests: s.requests, cost_usd: Math.round(s.cost * 1e6) / 1e6 })) };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.gateway_logs = { error: String(e) };
   }
   return out;
@@ -321,13 +321,13 @@ async function collectAnalytics(env) {
         const m = r.dimensions && r.dimensions.modelId || "unknown";
         byModel[m] = (byModel[m] || 0) + (r.sum && r.sum.totalNeurons || 0);
       }
-    } catch (eM) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "analytics-bymodel", error: String(eM && eM.message || eM) })); }
+    } catch (eM) { if (fleetAiStopped(eM)) throw eM; console.error(JSON.stringify({ worker: "qnfo-infra", where: "analytics-bymodel", error: String(eM && eM.message || eM) })); }
     const byModelAll = Object.entries(byModel).sort((a, b) => b[1] - a[1]);
     // 10,000 neurons/day are free on the Workers AI allowance; the published rate above it is $0.011/1k. The
     // deduction keeps this figure on the same basis as qnfo-audit.cost_daily (source='workers_ai').
     const billable = Math.max(0, neurons - 1e4 * 30);
     out.ai_30d = { neurons, est_cost_usd: Math.round(billable / 1e3 * 0.011 * 100) / 100, basis: "list estimate: max(0, totalNeurons - 10000/day x 30) / 1000 x $0.011", by_model: byModelAll.slice(0, 8).map(([m, n]) => ({ model: m, neurons: n })), by_model_shown: Math.min(8, byModelAll.length), by_model_groups: modelGroups, truncated: modelGroups >= 200 };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.ai_30d = { error: String(e) };
   }
   try {
@@ -345,7 +345,7 @@ async function collectAnalytics(env) {
       byWorker[w] = (byWorker[w] || 0) + n;
     }
     out.workers_30d = { requests: total, errors: totalErrs, by_worker: Object.entries(byWorker).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([w, n]) => ({ worker: w, requests: n })) };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.workers_30d = { error: String(e) };
   }
   return out;
@@ -436,7 +436,7 @@ async function store(env, kind, data) {
     const resp = await infraAIRun(env, "@cf/baai/bge-base-en-v1.5", { text: [text.slice(0, 1e3)] });
     const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
     if (v) await env.VZ.upsert([{ id: "infra:" + id, values: v, metadata: { doc: "infra", id, kind, ts, text: text.slice(0, 800) } }]);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return id;
 }
@@ -673,7 +673,7 @@ var indexerMod = (function() {
       const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "QNFO/qnfo-impact/0.1 (mailto:rowan@qnfo.org)" } });
       if (!r.ok) return null;
       return await r.json();
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return null;
     } finally {
       clearTimeout(t);
@@ -853,7 +853,7 @@ var indexerMod = (function() {
         ).bind(row.slug, chunks.length, hash, row.body_md.length).run();
         indexed++;
         totalChunks += chunks.length;
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         errors++;
       }
     }
@@ -994,7 +994,7 @@ var indexerMod = (function() {
     let embedRes;
     try {
       embedRes = await infraAIRun(env, EMBED_MODEL, { text: [query.trim()] }, { critical: true });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return json({ error: "embedding failed", detail: String(e && e.message || e) }, 500);
     }
     const queryVector = embedRes && embedRes.data && embedRes.data[0];
@@ -1064,6 +1064,8 @@ var indexerMod = (function() {
 
   var worker_default = {
     async fetch(request, env, ctx) {
+    try {
+
       const url = new URL(request.url);
       const path = url.pathname;
       const slug = url.searchParams.get("slug");
@@ -1112,9 +1114,13 @@ var indexerMod = (function() {
           }
           default: return json({ error: "not found" }, 404);
         }
-      } catch (e) { return json({ error: "internal error", detail: e.message }, 500); }
-    },
+      } catch (e) { if (fleetAiStopped(e)) throw e; return json({ error: "internal error", detail: e.message }, 500); }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
     async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       const cron = event.cron;
       console.log("[qnfo-paper-indexer] cron:", cron);
       try {
@@ -1135,12 +1141,12 @@ var indexerMod = (function() {
           // count as paper_math_browser_fail_pages (trigger 798). A sample older than two days, or none, leaves the metric
           // unmeasured (null) rather than passing.
           try {
-            const r = await fetch("https://papers.qnfo.org/api/render-health", { headers: { "User-Agent": "qnfo-paper-indexer/" + VERSION } });
+            const r = await fleetAiFetch(env, fetch, "https://papers.qnfo.org/api/render-health", { headers: { "User-Agent": "qnfo-paper-indexer/" + VERSION } });
             const bs = r.ok ? ((await r.json()) || {}).browser_sample : null;
             const fresh = bs && bs.pages > 0 && Date.now() - Date.parse(bs.checked_at) < 2 * 86400000;
             await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'paper_math_browser_fail_pages'").bind(fresh ? String(bs.failing || 0) : null, new Date().toISOString()).run();
             console.log("[qnfo-paper-indexer] browser math sample:", fresh ? JSON.stringify({ pages: bs.pages, failing: bs.failing, errors: bs.errors }) : "none or stale");
-          } catch (e) { console.error("[qnfo-paper-indexer] browser math sample error:", e.message); }
+          } catch (e) { if (fleetAiStopped(e)) throw e; console.error("[qnfo-paper-indexer] browser math sample error:", e.message); }
           const p = await handlePurge(env, false);
           // HANDOFFS-VZ-PRODUCER-1: handoffs are indexed by indexHandoffs() on every hourly fire (see runScheduled), not here:
           // the block that stood here selected handoffs.content, which does not exist, and could only run at 06:30.
@@ -1157,7 +1163,7 @@ var indexerMod = (function() {
           const result = await handleIndex(env, fakeUrl);
           console.log("[qnfo-paper-indexer] scheduled index:", JSON.stringify(result));
         }
-      } catch (e) { console.error("[qnfo-paper-indexer] scheduled error:", e.message); }
+      } catch (e) { if (fleetAiStopped(e)) throw e; console.error("[qnfo-paper-indexer] scheduled error:", e.message); }
     }
   };
   // SOURCE-VOICE-1: /context re-derives the matched passage of a paper hit with the chunker that indexed it.
@@ -1270,7 +1276,7 @@ async function runScheduled(event, env, ctx) {
     // HANDOFFS-VZ-PRODUCER-1: every fire, so a new handoff is indexed within the hour. A failure or a stalled call (120 s, so the refresh below still runs)
     // is logged, written to the watermark row's note and leaves the watermark where it was.
     try { const h = await withTimeout(indexHandoffs(env), Number(env && env.HANDOFFS_VZ_TIMEOUT_MS) || HANDOFF_TIMEOUT_MS, "indexHandoffs"); if (h && (h.indexed || h.skipped_personal)) console.log("[qnfo-infra] handoffs indexed: " + JSON.stringify(h)); }
-    catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "indexHandoffs", error: String(e && e.message || e) })); await noteHandoffFailure(env, e); }
+    catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ worker: "qnfo-infra", where: "indexHandoffs", error: String(e && e.message || e) })); await noteHandoffFailure(env, e); }
     // INDEXER-FOLD-1: the folded qnfo-paper-indexer member's two jobs (its old "0 4" impact collection and "5 6" render
     // metrics) run on this worker's existing 06:30 trigger, impact first, both after the gateway's 06:00 sweep. No cron is
     // added: a newly registered trigger was seen not to fire (PROBER-ON-CAL-TICK-1), and the cron count drops by two. A
@@ -1419,15 +1425,19 @@ async function credentialStatus(env) {
 var CRON_GRID_CFG = {"worker": "qnfo-infra", "tick": "30 * * * *", "tickMin": 60, "jobs": [{"cron": "30 6 * * *", "periodMin": 1440, "retry": true}, {"cron": "0 18 * * *", "periodMin": 1440, "retry": true}], "own": "0 * * * *", "ownWhenDue": false};
 var worker_default = {
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the row means "the scheduled run finished"; the write never throws or masks the run's error.
     let ok = 1, err = null;
-    try { await cronGridRun(env.AUDIT, event, ctx, CRON_GRID_CFG, function (ev, c) { return runScheduled(ev, env, c); }); } catch (e) { ok = 0; err = e; }
+    try { await cronGridRun(env.AUDIT, event, ctx, CRON_GRID_CFG, function (ev, c) { return runScheduled(ev, env, c); }); } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; err = e; }
     try {
       await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-infra", VERSION, new Date().toISOString(), ok).run();
     } catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", event: "fleet-heartbeat-write-failed", error: String(e && e.message || e) })); }
     if (err) throw err;
   },
   async fetch(request, env) {
+    try {
+
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -1471,7 +1481,7 @@ var worker_default = {
       let payload = fresh && hasCached ? cached : null;
       if (!payload) {
         let live = null;
-        try { live = await collectState(env); } catch (eS) { live = null; }
+        try { live = await collectState(env); } catch (eS) { if (fleetAiStopped(eS)) throw eS; live = null; }
         if (live && typeof live === "object" && Object.keys(live).length > 0) {
           payload = live;
           await store(env, "snapshot", payload);
@@ -1535,7 +1545,7 @@ var worker_default = {
         return new Response(JSON.stringify({ ok: false, error: "Cloudflare API credentials not configured (CF_ACCOUNT_ID, CF_API_TOKEN)", declared: services, live: [], drift: { missing: services, extra: [], in_sync: services.length === 0 } }), { status: 503, headers: { "Content-Type": "application/json", ...cors } });
       }
       try {
-        var cf = await fetch("https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts", { headers: { Authorization: "Bearer " + apiToken } });
+        var cf = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts", { headers: { Authorization: "Bearer " + apiToken } });
         var json = await cf.json();
         if (!cf.ok || !json.success) {
           var msg = json.errors && json.errors.map(function(err){ return err.message; }).join("; ") || "cf http " + cf.status;
@@ -1547,7 +1557,7 @@ var worker_default = {
         var missing = services.filter(function(s){ return !liveSet.has(s.script); });
         var extra = live.filter(function(s){ return !declaredSet.has(s); });
         return new Response(JSON.stringify({ ok: true, declared: services, live: live, drift: { missing: missing, extra: extra, in_sync: missing.length === 0 && extra.length === 0 } }), { headers: { "Content-Type": "application/json", ...cors } });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return new Response(JSON.stringify({ ok: false, error: String(e && e.message || e), declared: services, live: [], drift: { missing: services, extra: [], in_sync: false } }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
       }
     }
@@ -1570,7 +1580,7 @@ var worker_default = {
         const svc = services[i];
         const item = { name: svc.name, script: svc.script, current_deployment_id: null, previous_deployment_id: null, rollback_possible: false, rollback_seconds: null, error: null };
         try {
-          const dep = await fetch("https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts/" + encodeURIComponent(svc.script) + "/deployments", { headers: { Authorization: "Bearer " + apiToken } });
+          const dep = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts/" + encodeURIComponent(svc.script) + "/deployments", { headers: { Authorization: "Bearer " + apiToken } });
           const depJson = await dep.json();
           if (!dep.ok || !depJson.success) {
             const msg = depJson.errors && depJson.errors.map(function(err){ return err.message; }).join("; ") || "cf http " + dep.status;
@@ -1587,7 +1597,7 @@ var worker_default = {
             }
             item.rollback_possible = true;
           }
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           item.error = String(e && e.message || e);
           errors++;
         }
@@ -1609,7 +1619,7 @@ var worker_default = {
         return new Response(JSON.stringify({ error: "Cloudflare API credentials not configured (CF_ACCOUNT_ID, CF_API_TOKEN)" }), { status: 503, headers: { "Content-Type": "application/json", ...cors } });
       }
       try {
-        var cf = await fetch("https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts/" + encodeURIComponent(scriptName) + "/schedules", { headers: { Authorization: "Bearer " + apiToken } });
+        var cf = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(accountId) + "/workers/scripts/" + encodeURIComponent(scriptName) + "/schedules", { headers: { Authorization: "Bearer " + apiToken } });
         var json = await cf.json();
         if (!cf.ok || !json.success) {
           var msg = json.errors && json.errors.map(function(e){ return e.message; }).join("; ") || "cf http " + cf.status;
@@ -1620,14 +1630,127 @@ var worker_default = {
         var missing = declared.filter(function(c){ return !liveSet.has(c); });
         var extra = live.filter(function(c){ return !declaredSet.has(c); });
         return new Response(JSON.stringify({ ok: true, script: scriptName, declared: declared, live: live, drift: { missing: missing, extra: extra, in_sync: missing.length === 0 && extra.length === 0 } }), { headers: { "Content-Type": "application/json", ...cors } });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
       }
     }
     return new Response("not found", { status: 404, headers: cors });
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-infra";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

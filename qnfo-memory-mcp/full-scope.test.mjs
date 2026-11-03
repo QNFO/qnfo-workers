@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // FULLSCOPE-1 offline suite for qnfo-memory-mcp 2.5.0: every tool against a real in-memory sqlite (GRAPH_DB,
 // LIVING_PAPER) plus mocked AI/Vectorize/Exuvia; the repaired SSE transport with /mcp/messages; ?token= auth;
 // MCP_READ_TOKEN scope; remember_fact long content + clamps + category enum; secret-subject filtering on the
@@ -9,8 +10,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const w = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
-const FG = await import(pathToFileURL(join(here, "..", "scripts", "fleet_graph.mjs")).href);
+const w = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
+const FG = await importRunningWorker(pathToFileURL(join(here, "..", "scripts", "fleet_graph.mjs")).href, import.meta.url);
 
 let passed = 0, failed = 0;
 const t = async (name, fn) => { try { await fn(); passed++; console.log("ok   " + name); } catch (e) { failed++; console.log("FAIL " + name + ": " + (e && e.message || e)); } };

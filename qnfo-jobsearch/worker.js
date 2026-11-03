@@ -8,7 +8,7 @@
 // JOBSEARCH-PROFILE-1 (1.3.0): yes/no search survey, role families drawn from the whole record (policy, transport and planning, data, product, program, research, consulting, nonprofit, GIS, contracts, social policy), location gates from the owner answers (Netherlands and remote by default, US and other on-site only when selected), likes and dislikes teach the search, rejected matches stay hidden, "check a job" analysis of a pasted link or text.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.4.2";
+var VERSION = "1.5.0";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -879,7 +879,7 @@ async function llmRerank(env, kept) {
     if (!env.AI || !kept.length) return kept;          // no binding: keep deterministic order
     const top = kept.slice(0, 25), rest = kept.slice(25);
     const items = top.map((j, i) => ({ index: i, id: j.id, title: j.title, company: j.company, location: j.location || "", score: j.match.score, reasons: (j.match.why || []).slice(0, 5) }));
-    const r = await env.AI.fetch("https://qnfo-ai/infer", {
+    const r = await fleetAiServiceFetch(env, env.AI, "https://qnfo-ai/infer", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
         caller: "qnfo-jobsearch",
@@ -905,7 +905,7 @@ async function llmRerank(env, kept) {
       if (typeof rsn === "string" && rsn.trim()) j.match.why = (j.match.why || []).concat(["LLM: " + rsn.trim().replace(/\s+/g, " ").slice(0, 300)]);
     }
     return next.concat(rest);
-  } catch (e) { logErr("llm-rerank", e); return kept; } // any failure: deterministic order stands
+  } catch (e) { if (fleetAiStopped(e)) throw e; logErr("llm-rerank", e); return kept; } // any failure: deterministic order stands
 }
 function artifactsFor(j) {
   const res = buildResume(j, j.match), note = buildNote(j, j.match);
@@ -1225,8 +1225,12 @@ const INDEX = {
 };
 
 const handler = {
-  async scheduled(event, env, ctx) { ctx.waitUntil(run(env).catch((e) => console.log("[jobsearch] run failed " + e.message))); },
+  async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+ ctx.waitUntil(run(env).catch((e) => console.log("[jobsearch] run failed " + e.message))); },
   async fetch(request, env, ctx) {
+    try {
+
     const url = new URL(request.url), p = url.pathname, m = request.method;
     if (m === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type,x-loop-token", "access-control-allow-methods": "GET,POST,OPTIONS" } });
     if (p === "/health") return J({ ok: true, worker: WORKER, version: VERSION, ledger_verified_on: LEDGER_VERIFIED_ON });
@@ -1334,7 +1338,9 @@ const handler = {
       return J({ ok: true, started: true, note: "poll GET /api/runs" }, 202);
     }
     return J({ error: "not found", see: "/api" }, 404);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
 };
 handler.__test = { evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS };
 export default handler;
@@ -1401,3 +1407,114 @@ $('#jgo').onclick=async()=>{const r=$('#jres');r.textContent='Reading the postin
  r.querySelectorAll('.fb').forEach(b=>b.onclick=async()=>{try{await authed(()=>api('/api/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:d.title,company:d.company,verdict:b.dataset.v})}));$('#fbmsg').textContent='Noted. The next search run uses it.'}catch(e){$('#fbmsg').textContent=e.message}})}catch(e){r.textContent=e.message}};
 load();who();loadPrefs();
 </script></body></html>`;
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "JOBS_DB";
+var FLEET_AI_WORKER = "qnfo-jobsearch";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

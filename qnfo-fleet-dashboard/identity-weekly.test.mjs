@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // IDENTITY-WEEKLY-1 offline suite: replays jobIdentityWeekly against a synthetic Identity doc, stubbed public APIs and
 // a recording D1, so CI proves the parser, the drift and claim checks, the deadline arithmetic, the run-row write, the
 // owner queue card and the Monday-once throttle, without network or the owner's private data (the real doc lives only in
@@ -68,7 +69,7 @@ const ctx = vm.createContext({
   ownerStore: async (env) => env.IDENTITY || env.AUDIT, d1all: d1allStub, reachErr: (e) => String(e && e.message || e),
   PORTFOLIO_RUNNING_STALE_MS: 600000, PORTFOLIO_MAX_ATTEMPTS: 3
 });
-const m = vm.runInContext(block, ctx, { filename: "qnfo-fleet-dashboard/worker.js#IDENTITY-WEEKLY-1" });
+const m = vm.runInContext(RUNNING_AI_FIXTURE + (block), ctx, { filename: "qnfo-fleet-dashboard/worker.js#IDENTITY-WEEKLY-1" });
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log("FAIL " + msg); } };

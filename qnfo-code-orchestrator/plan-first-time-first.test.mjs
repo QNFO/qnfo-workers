@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PLAN-FIRST-TIME-FIRST-1 offline suite (qnfo-code-orchestrator 0.29.3, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST, pillar autonomy).
 // Measured 2026-10-26 on issue_plans: 48 planner model calls (code_plan_daily_cap 48, the last at 01:47Z), 32 of them re-plans of an issue that already had a verdict and 16
 // first-time plans; open high OWNER-TASK issues older than 120 minutes with no verdict at all stayed unplanned (8 when the issue was filed, 6 at 18:00Z). Plan selection now honors
@@ -15,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 500) : "")); } };
 

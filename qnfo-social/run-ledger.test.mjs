@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SOCIAL-RUN-LEDGER-1 offline suite (qnfo-social 0.7.27). Drives the real scheduled handler and recordSocialRun against
 // an in-memory SQLite D1 (the real upsert SQL, json_set included) with a stubbed fetch. Proves: one row per operation per
 // UTC day; meta.last_ok carries the last completed run across a later failure; runs counts the day's runs; the 2-hourly
@@ -6,7 +7,7 @@
 // Run: node qnfo-social/run-ledger.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const W = mod.default;
 const VERSION = (/var VERSION = "([^"]+)"/.exec(readFileSync(new URL("./worker.js", import.meta.url), "utf8")) || [])[1];
 

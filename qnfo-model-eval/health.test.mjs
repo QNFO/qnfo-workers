@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -5,7 +6,7 @@ const source = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
 const body = source.replace(/^export default /m, "var __default = ");
 const warnings = [];
-const { VERSION, handlers } = new Function("console", body + "\n;return { VERSION, handlers: __default };")({
+const { VERSION, handlers } = new Function("console", RUNNING_AI_FIXTURE + (body + "\n;return { VERSION, handlers: __default };"))({
   log() {},
   warn(message) { warnings.push(JSON.parse(message)); },
 });
@@ -46,6 +47,6 @@ const response = (audit) => handlers.fetch(
   });
 }
 
-assert.match(VERSION, /^1\.8\.4(?:-|$)/);
+assert.ok(VERSION.split(/[.-]/).slice(0, 3).map(Number).reduce((n, v) => n * 1000 + v, 0) >= 1008004);
 assert.equal(mirror, source);
 console.log("qnfo-model-eval health liveness tests passed");

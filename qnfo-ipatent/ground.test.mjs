@@ -1,10 +1,11 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // IPATENT-GROUND-1 offline suite (qnfo-ipatent 3.16.0, owner directive 2026-10-10): a draft states only what the inventor supplied.
 // Proves: the draft prompt has no EXAMPLE DISCLOSURES block and carries only section headings from the retrieved disclosures (none of
 // their titles, fields or text); the Background rule limits it to the inventor's text and labels existing-approach statements as
 // unverified; the declaration is fixed and makes no novelty statement; an invented prior-art sentence, figure, DOI or citation in the
 // model's draft is removed; a claim reciting an unsupported figure goes with its dependents; every removal is listed in SUPPORT GAPS.
 // Run: node qnfo-ipatent/ground.test.mjs   (prints "N passed, 0 failed")
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const W = mod.default;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 500) : "")); } };

@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // JOB-REASON-1 + CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops). Loads the real worker.js (the cloudflare:sockets import
 // swapped for a stub) and drives its scheduled handler against in-memory SQLite D1s and a stubbed fetch. Proves: a
 // grant-followup run whose Gmail read fails writes a 'degraded' job-run row whose meta.reason names the unread mailbox, which
@@ -11,7 +12,7 @@ import vm from "node:vm";
 const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var connect = function () { throw new Error('no sockets offline'); };")).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var connect = function () { throw new Error('no sockets offline'); };")).toString("base64"), import.meta.url);
 const W = mod.default;
 
 let pass = 0, fail = 0;
@@ -74,7 +75,7 @@ ok(gm && gm.job === "grant-followup" && /^Gmail not read \(error:/.test(gm.reaso
 const dsrc = readFileSync(new URL("../qnfo-fleet-dashboard/worker.js", import.meta.url), "utf8");
 const da = dsrc.indexOf("var WATCHMAKER_OPS = ["), db_ = dsrc.indexOf("\n];", da);
 if (da < 0 || db_ < da) throw new Error("WATCHMAKER_OPS not found in qnfo-fleet-dashboard/worker.js");
-const OPS = vm.runInNewContext(dsrc.slice(da, db_ + 3) + "\nWATCHMAKER_OPS;");
+const OPS = vm.runInNewContext(RUNNING_AI_FIXTURE + (dsrc.slice(da, db_ + 3) + "\nWATCHMAKER_OPS;"));
 const gop = OPS.find((o) => o.key === "grant-followup");
 const last = audit.prepare(gop.sql).get().last;
 ok(last === g[0].ts, "the watchmaker sql dates the degraded run as the runner's last run (not 'never ran')");

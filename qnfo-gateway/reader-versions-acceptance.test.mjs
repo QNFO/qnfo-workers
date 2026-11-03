@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import worker from "./worker.js";
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
+const { default: worker } = await importRunningWorker(new URL("./worker.js", import.meta.url));
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async () => { throw new Error("US10 fixtures must not access a network"); };

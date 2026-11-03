@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // FILING-2: the daily pass files a newly published paper on a shelf AND tags it, with no human step. Proves:
 // the tag vocabulary comes from tag_registry (not a literal), invented tags are dropped, the pass is bounded,
 // an already-filed paper is not touched, and orphan tag rows are swept.
@@ -10,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), "gwa-"));
 writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") +
   "\nexport { fileUnreadPapers, tagSystemPrompt };\n");
-const W = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const W = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 200))); } };

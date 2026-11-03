@@ -1,10 +1,11 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-THIN-PASSED-OVER-1 (0.37.5, agent_issues 100439 and 100607): a candidate measured thin and passed over for a richer one is marked for the
 // 24-hour retry like any measured-thin candidate, so a paper whose arxiv.org/html page answers 404 no longer holds the arXiv lane. Drives generate()
 // over an in-memory q08-signal D1 with stubbed HN, GitHub, arXiv and article fetches; the model is offline, so each run ends at the compose call.
 // Output MUST contain "0 failed".   node q08-signal-engine/thin-passed-over.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const G = mod.__gen;
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 let pass = 0, fail = 0;

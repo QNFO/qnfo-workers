@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // ANALYSIS-RULE-REREAD-1 offline suite (personal-companion 1.26.0, charter pillar: personal; agent_issues 2552).
 // Proves: a critic grounding rejection whose quoted passages all lie after the <!-- analysis --> line gets one re-read by the same
 // critic with its own rubric for that section put back to it; a quote before the line, a draft without the line or a rejection with no
@@ -8,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
+const mod = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };

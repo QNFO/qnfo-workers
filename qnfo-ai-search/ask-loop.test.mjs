@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // ASK-LOOP-1 offline suite (qnfo-ai-search 2.x). No network: AI Search, the gateway (papers + graph), idea-hub and
 // Workers AI are stubbed; D1 is an in-memory node:sqlite database with the production schemas the worker touches.
 // Run: node qnfo-ai-search/ask-loop.test.mjs   (Node 22; node:sqlite)
@@ -81,7 +82,7 @@ const env = { AI, AI_SEARCH, QNFO_AUDIT: D1, GATEWAY: { fetch: gatewayFetch }, I
 
 const dir = mkdtempSync(join(tmpdir(), "askloop-"));
 writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8"));
-const { default: worker } = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const { default: worker } = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 const waits = [];
 const ctx = { waitUntil: (p) => waits.push(p) };
 async function call(path, body, ip) {
@@ -346,7 +347,7 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
   const runBoot = (webdriver) => {
     const listeners = {}, asked = [], t = { value: "", style: {}, form: { addEventListener() {} } }, hint = { textContent: "" };
     const ctxv = vm.createContext({ URLSearchParams, location: { search: "?q=" + encodeURIComponent("What does \u201cQuantum Statistics from the Adelic Product Formula\u201d show?") }, navigator: { webdriver }, window: { addEventListener(n, f) { listeners[n] = f; }, removeEventListener(n) { delete listeners[n]; } }, $: (s) => ({ "#q0": t, "#landing": {}, ".hint": hint })[s] || null, grow() {}, ask(q) { asked.push(q); }, busy: false });
-    vm.runInContext(bootSrc + "\nboot();", ctxv);
+    vm.runInContext(RUNNING_AI_FIXTURE + (bootSrc + "\nboot();"), ctxv);
     return { listeners, asked, t, hint };
   };
   const b1 = runBoot(false);

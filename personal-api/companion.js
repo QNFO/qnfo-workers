@@ -1695,16 +1695,16 @@ export async function transcribe(env, bytes) {
   const errors = [];
   const runOpts = { gateway: { id: "default" } };
   try {
-    const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio: toB64(bytes) }, runOpts);
+    const r = await fleetAiRun(env, env.AI, "@cf/openai/whisper-large-v3-turbo", { audio: toB64(bytes) }, runOpts);
     const t = r && (r.text || (r.transcription_info && r.text));
     if (t && String(t).trim()) return { ok: true, text: String(t).trim(), model: "whisper-large-v3-turbo" };
     errors.push("turbo:empty");
-  } catch (e) { errors.push("turbo:" + String(e && e.message || e).slice(0, 120)); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; errors.push("turbo:" + String(e && e.message || e).slice(0, 120)); }
   try {
-    const r = await env.AI.run("@cf/openai/whisper", { audio: Array.from(bytes) }, runOpts);
+    const r = await fleetAiRun(env, env.AI, "@cf/openai/whisper", { audio: Array.from(bytes) }, runOpts);
     if (r && r.text && String(r.text).trim()) return { ok: true, text: String(r.text).trim(), model: "whisper" };
     errors.push("whisper:empty");
-  } catch (e) { errors.push("whisper:" + String(e && e.message || e).slice(0, 120)); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; errors.push("whisper:" + String(e && e.message || e).slice(0, 120)); }
   return { ok: false, error: errors.join(" | ") };
 }
 export async function capture(env, deps, input) {

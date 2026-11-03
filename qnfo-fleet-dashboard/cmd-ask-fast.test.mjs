@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // CMD-ASK-FAST-1 offline suite (qnfo-fleet-dashboard 1.29.0). Proves: the command line races its models with a staggered
 // start (a failed or silent first model never costs the whole budget, the first answer wins, every failure is named), the
 // dead glm-5.2 id is gone, and a Q08 question reads published_pieces into the context and the no-model fallback, which says
@@ -24,7 +25,7 @@ const raceDirect = race.replace("var ASK_DIRECT_HEDGE_MS = 5e3;", "var ASK_DIREC
 const q08 = cut("var Q08_Q = ", "async function cmdAnswer(");
 const fb = cut("function cmdModelReason(err) {", "// What the owner reads for a request that has no answer at all");
 const mk = (svc) => { const sb = { AbortController, setTimeout, clearTimeout, Date, JSON, Math, String, Promise, Array, Object, Error, RegExp }; vm.createContext(sb);
-  vm.runInContext(helpers + "\n" + race + "\n" + q08 + "\n" + fb + "\n__f = { cmdRaceModels, ASK_MODELS, q08Facts, q08FactsText, cmdFallback, Q08_Q };", sb); return sb.__f; };
+  vm.runInContext(RUNNING_AI_FIXTURE + (helpers + "\n" + race + "\n" + q08 + "\n" + fb + "\n__f = { cmdRaceModels, ASK_MODELS, q08Facts, q08FactsText, cmdFallback, Q08_Q };"), sb); return sb.__f; };
 const resp = (status, content) => ({ ok: status === 200, status, json: async () => ({ choices: [{ message: { content } }] }) });
 const env = (fn, calls) => ({ SVC_QNFO_AI: { fetch: async (u, o) => { const m = JSON.parse(o.body).model; calls.push(m); return fn(m, o); } } });
 
@@ -80,7 +81,7 @@ const d1 = { prepare: (sql) => { const st = db.prepare(sql); return { all: async
 }
 { // CMD-DIRECT-LEG-1 (1.62.0): the router serves every leg with one stalled model; the direct AI binding leg answers
   const sb = { AbortController, setTimeout, clearTimeout, Date, JSON, Math, String, Promise, Array, Object, Error, RegExp }; vm.createContext(sb);
-  vm.runInContext(raceDirect + "\n__f = { cmdRaceModels, ASK_DIRECT_LEGS };", sb);
+  vm.runInContext(RUNNING_AI_FIXTURE + (raceDirect + "\n__f = { cmdRaceModels, ASK_DIRECT_LEGS };"), sb);
   const f = sb.__f, runs = [];
   const stall = { SVC_QNFO_AI: { fetch: (u, o) => new Promise((res, rej) => o.signal.addEventListener("abort", () => rej(new Error("aborted")))) },
     AI: { run: async (id) => { runs.push(id); return { choices: [{ message: { content: "direct " + id } }] }; } } };

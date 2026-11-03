@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SEARCH-FUZZY-1 offline suite (qnfo-code-orchestrator 0.11.0, pillar autonomy).
 // Replays the 25 "SEARCH occurs 0 times" attempt failures (15 tasks, 7 days to 2026-10-12): SEARCH blocks that drift from the file in whitespace, quotes or blank lines.
 // Proves: drift applies and is audited as code-task.edit-fuzzy; ambiguous or absent SEARCH still fails (with the closest file lines); exact match unchanged.
@@ -8,7 +9,7 @@ import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 700) : "")); } };
 

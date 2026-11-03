@@ -56,7 +56,7 @@
 // PROMOTE-TICKET-AFTER-RECONCILE-1 (1.8.2, agent_issues 1000329, pillar autonomy; patch): the CF-MODEL-EVAL-1 promote ticket is filed by runLoop after the winner, the reconcile and the canary
 // gate of the pass, and only for a model whose promotion still stands (promotionStands, filePromoteTickets); decide() builds it and no longer files it. promote-ticket.test.mjs.
 // 1.8.4 HEALTH-LIVENESS-1 (#4188, pillar autonomy; patch): /health stays a liveness check when its optional AUDIT count read fails and reports AUDIT availability separately.
-var VERSION = "1.8.4-codeagent"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+var VERSION = "1.9.0"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -231,7 +231,7 @@ async function runOpsScaleCanary(env, model) {
   let context = "";
   for (let turn = 1; turn <= 8; ++turn) {
     const prompt = `Turn ${turn}. Use the tool to compute the next step. Context: ${context}`;
-    const resp = await env.AI.run(model.model_id, {
+    const resp = await fleetAiRun(env, env.AI, model.model_id, {
       messages: [{ role: "user", content: prompt }],
       stream: false,
     });
@@ -250,7 +250,7 @@ async function scoreDecisionModel(env, model) {
   const { questions, fleetLabels } = await getDecisionBenchmark();
   for (const q of questions) {
     // System One body for typesafe/jev; chat call returns 7003.
-    const resp = await env.AI.run(model.model_id, {
+    const resp = await fleetAiRun(env, env.AI, model.model_id, {
       messages: [{ role: "user", content: q }],
       stream: false,
     });
@@ -358,7 +358,7 @@ function decideVerdict(x) {
 }
 
 async function discoverCatalog(env) {
-  const r = await fetch(DOCS_INDEX, { headers: { "accept": "text/markdown,text/plain,*/*" } });
+  const r = await fleetAiFetch(env, fetch, DOCS_INDEX, { headers: { "accept": "text/markdown,text/plain,*/*" } });
   if (!r.ok) throw new Error(`docs index ${r.status}`);
   const md = await r.text();
   // Raw index.md shape: [...]<h3>slug</h3>AuthorTask Type description...](.../models/slug/)
@@ -390,7 +390,7 @@ async function resolveModel(slug, rec) {
     if (/\|\s*Vision\s*\|+\s*Yes/i.test(md)) out.vision = 1;
     const desc = md.match(/#{1,2}\s*[a-z0-9.\-]+\s*\n+([^\n#]{20,300})/i);
     if (desc) out.description = desc[1].trim().slice(0, 300);
-  } catch (_) { /* keep partial */ }
+  } catch (_) { if (fleetAiStopped(_)) throw _; /* keep partial */ }
   if (!out.model_id) {
     const a = (out.author || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (a) out.model_id = `@cf/${a}/${slug}`;
@@ -474,7 +474,7 @@ async function evalModel(env, modelId, slug, kind, probes) {
     try {
       if (DECISION_KINDS.has(kind)) {
         const opts = JSON.parse(p.options || "{}");
-        const out = await env.AI.run(modelId, {
+        const out = await fleetAiRun(env, env.AI, modelId, {
           model: (modelId.split("/").pop() || "clef"),
           state: p.prompt,
           questions: opts.questions || {}
@@ -486,7 +486,7 @@ async function evalModel(env, modelId, slug, kind, probes) {
           tout += Number(out.usage.output_tokens || 0);
         }
       } else {
-        const out = await env.AI.run(modelId, {
+        const out = await fleetAiRun(env, env.AI, modelId, {
           messages: [
             { role: "system", content: "You are a terse assistant. Obey the required output format exactly. Never explain." },
             { role: "user", content: p.prompt }
@@ -500,7 +500,7 @@ async function evalModel(env, modelId, slug, kind, probes) {
           tout += Number(out.usage.completion_tokens || out.usage.output_tokens || 0);
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       err = String(e && e.message ? e.message : e).slice(0, 220);
     }
     lat += Date.now() - s;
@@ -746,7 +746,7 @@ async function clefCanary(env, modelId, limit = 12, ids = null) {
   for (const r of rows) {
     const s = Date.now();
     try {
-      const out = await env.AI.run(modelId, {
+      const out = await fleetAiRun(env, env.AI, modelId, {
         model: modelId.split("/").pop() || "clef",
         state: `${r.title}\n\n${String(r.des).slice(0, 400)}`,
         questions,
@@ -760,7 +760,7 @@ async function clefCanary(env, modelId, limit = 12, ids = null) {
       if (priOk) priAgree++;
       if (out && out.usage) ton += Number(out.usage.input_tokens || 0);
       pairs.push({ id: r.id, want: `${r.cat}/${r.pri}`, got: `${gotCat}/${gotPri}`, catOk, priOk });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       pairs.push({ id: r.id, err: String(e && e.message ? e.message : e).slice(0, 120) });
     }
     lat += Date.now() - s;
@@ -893,7 +893,7 @@ async function runLoop(env, trigger, opts) {
   const summary = { run_id: runId, trigger, started, sync: null, evaluated: [], skipped: 0, errors: [], maxModels, budgetMs };
 
   try { summary.sync = await syncCatalog(env); }
-  catch (e) { summary.errors.push("sync: " + String(e.message || e)); }
+  catch (e) { if (fleetAiStopped(e)) throw e; summary.errors.push("sync: " + String(e.message || e)); }
 
   // pick work: never-evaluated candidates first, then the oldest scores
   const ctrlList = CONTROLS.map((c) => `'${c.model_id}'`).join(",");
@@ -933,7 +933,7 @@ async function runLoop(env, trigger, opts) {
       await recordEval(env, e, "control");
       controlScores[c.model_id] = e.score;
       summary.evaluated.push({ model_id: e.model_id, score: e.score, passed: e.passed, n: e.n_tasks, verdict: "control" });
-    } catch (err) { summary.errors.push(`control ${c.model_id}: ${String(err.message || err)}`); }
+    } catch (err) { if (fleetAiStopped(err)) throw err; summary.errors.push(`control ${c.model_id}: ${String(err.message || err)}`); }
   }
   const control = controlScores["@cf/zai-org/glm-5.3-flash"] != null
     ? { model_id: "@cf/zai-org/glm-5.3-flash", score: controlScores["@cf/zai-org/glm-5.3-flash"] }
@@ -960,7 +960,7 @@ async function runLoop(env, trigger, opts) {
       const d = await decide(env, e, kind === "chat" ? control : clefControl);
       if (d.promoteTicket) promoteTickets.push(d.promoteTicket);
       summary.evaluated.push({ model_id: e.model_id, score: e.score, passed: e.passed, n: e.n_tasks, verdict: d.verdict, reason: d.reason, failed: e.failed_probes });
-    } catch (err) { summary.errors.push(`${p.model_id}: ${String(err.message || err)}`); }
+    } catch (err) { if (fleetAiStopped(err)) throw err; summary.errors.push(`${p.model_id}: ${String(err.message || err)}`); }
   }
 
   // decision winner + canary over real labelled issues
@@ -977,7 +977,7 @@ async function runLoop(env, trigger, opts) {
           summary.canary ? summary.canary.cat_agreement : null);
         summary.canary_gate = gate;
         if (!gate.ready) await blockDecisionPromotion(env, winner.model_id, gate.reason);
-      } catch (e) { summary.errors.push("canary: " + String(e.message || e)); }
+      } catch (e) { if (fleetAiStopped(e)) throw e; summary.errors.push("canary: " + String(e.message || e)); }
     }
   }
 
@@ -1266,7 +1266,7 @@ async function abChat(env, model, content, maxTokens, timeoutMs) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs || 90000);
   try {
-    const resp = await env.QNFO_AI.fetch("https://qnfo-ai.internal/v1/chat/completions", {
+    const resp = await fleetAiServiceFetch(env, env.QNFO_AI, "https://qnfo-ai.internal/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", "user-agent": "qnfo-model-eval/" + VERSION },
       body: JSON.stringify({ model, messages: [{ role: "user", content }], max_tokens: maxTokens, stream: false, hedge: false, pin_model: true, cache: false, rag: false }),
@@ -1280,7 +1280,7 @@ async function abChat(env, model, content, maxTokens, timeoutMs) {
     const c = choice.message && choice.message.content;
     const text = typeof c === "string" ? c : Array.isArray(c) ? c.map((p) => (p && typeof p.text === "string" ? p.text : "")).join("") : "";
     return { ok: true, text: text.trim(), served: String(data.model || ""), finish: choice.finish_reason || null };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message ? e.message : e).slice(0, 120) };
   } finally { clearTimeout(timer); }
 }
@@ -1295,14 +1295,14 @@ async function abDirect(env, model, content, maxTokens, timeoutMs) {
   let timer;
   try {
     const out = await Promise.race([
-      env.AI.run(model, { messages: [{ role: "user", content }], max_tokens: maxTokens }),
+      fleetAiRun(env, env.AI, model, { messages: [{ role: "user", content }], max_tokens: maxTokens }),
       new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("direct call timed out")), timeoutMs || 90000); }),
     ]);
     const choice = (out && out.choices && out.choices[0]) || {};
     const c = choice.message && choice.message.content;
     const text = typeof out === "string" ? out : out && typeof out.response === "string" ? out.response : typeof c === "string" ? c : "";
     return { ok: true, text: text.trim(), served: model, finish: choice.finish_reason || null, via: "workers-ai" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message ? e.message : e).slice(0, 120) };
   } finally { clearTimeout(timer); }
 }
@@ -1459,12 +1459,12 @@ async function abFetchPolicy(env) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 10000);
   try {
-    const resp = await fetch(url + "?cb=" + Math.floor(Date.now() / 6e5), { headers: { "user-agent": "qnfo-model-eval/" + VERSION }, signal: ctl.signal });
+    const resp = await fleetAiFetch(env, fetch, url + "?cb=" + Math.floor(Date.now() / 6e5), { headers: { "user-agent": "qnfo-model-eval/" + VERSION }, signal: ctl.signal });
     if (!resp.ok) return { ok: false, error: "policy http " + resp.status };
     const p = JSON.parse(await resp.text());
     if (!p || typeof p !== "object" || !p.workers || typeof p.workers !== "object") return { ok: false, error: "policy has no workers object" };
     return { ok: true, policy: p };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: "policy fetch: " + String(e && e.message ? e.message : e).slice(0, 120) };
   } finally { clearTimeout(timer); }
 }
@@ -1641,6 +1641,8 @@ async function manifest(env) {
 
 export default {
   async fetch(req, env) {
+    try {
+
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/$/, "") || "/";
     try {
@@ -1732,11 +1734,15 @@ export default {
         return json({ ok: true, summary });
       }
       return json({ ok: false, error: "not_found", routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run", "/ab/runs", "/ab/fixtures", "/ab/run"] }, 404);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return json({ ok: false, error: String(e && e.message ? e.message : e), version: VERSION }, 500);
     }
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(_event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     return cronGridRun(env.AUDIT, _event, ctx, CRON_GRID_CFG, function (ev, c) { return modelEvalScheduled(ev, env, c); });
   }
 };
@@ -1856,3 +1862,114 @@ async function cronGridRun(db, event, ctx, cfg, run) {
 // ---- CRON-GRID-1:END ----
 var CRON_GRID_CFG = {"worker": "qnfo-model-eval", "tick": "20 * * * *", "tickMin": 60, "jobs": [{"cron": "17 */6 * * *", "periodMin": 360, "retry": true}], "own": "self"};
 
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-model-eval";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

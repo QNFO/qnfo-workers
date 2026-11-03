@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.20.0"; // 3.19.1 BP26-NO-TRACKING-1 (2026-10-26, agent_issues 1000345, pillar security; GDPR and ePrivacy: only strictly necessary cookies): the A/B split no longer sets the cookie ipatent_ab, which is not strictly necessary. Each human page load draws its own arm at random (same share, same redirect), so the two variants are compared per page view and per draft, never per visitor; a browser that still holds the retired cookie is told once to drop it. 3.19.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(1), applicable since 2026-08-02): the landing page states before first use that iPatent is an AI system and that an AI language model writes the draft; the limits list says so too. // 3.18.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 3.17.2 WORKERS-BP-LOGGING-qnfo-ipatent-1 (2026-10-14, agent_issues 2535, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (the 2 browser-script hits are allowlisted) as a structured console.error (worker, where, error); control flow unchanged. // 3.17.1: the version line only (version-bump-guard compares each push; no behaviour change). 3.17.0 IPATENT-UI-OVERHAUL-1 step 3 and IPATENT-COST-PER-DRAFT-1 (2026-10-12, agent_issues 2049, 2055, 1903, 1779; pillars reach and cost; owner: the page must read as a serious one-stop tool for individual inventors, built on what the invention is, what it does and how it works): the drafting page is redesigned for both variants (one HTML, every id, route and function kept): a drawing-sheet system (Archivo for the interface, Source Serif 4 for the document, one action colour, green/amber/red only for support states), a figure of what happens to a description, the description prompt split into what it is / what it does / how it works, the step rail beside the form and result on wide screens and a sticky strip on phones, samples moved behind a disclosure, a limits section (not legal advice, files nothing, no prior-art search, does not supply the invention), a guide index, a skip link, labelled status regions and sentence-case text; /guide, /guide/* and /example take the same tokens. New: GET /api/cost serves the measured model cost per completed draft from qnfo-audit ai_call_counters (neurons, tokens, USD at the published neuron rate; no price is set), every mechanism-card model call is metered as purpose mechanism and every completed draft as purpose draft-done. A draft requested by an automated client is stored as status automated and left out of the drafts and drafters that /api/metrics reports (DRAFT-ROW-AUTOMATED-1). Standards: the admin token is compared in constant time and the benchmark source probe reads a bounded body. Tests: landing.test.mjs, cost.test.mjs. // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.21.0"; // 3.19.1 BP26-NO-TRACKING-1 (2026-10-26, agent_issues 1000345, pillar security; GDPR and ePrivacy: only strictly necessary cookies): the A/B split no longer sets the cookie ipatent_ab, which is not strictly necessary. Each human page load draws its own arm at random (same share, same redirect), so the two variants are compared per page view and per draft, never per visitor; a browser that still holds the retired cookie is told once to drop it. 3.19.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(1), applicable since 2026-08-02): the landing page states before first use that iPatent is an AI system and that an AI language model writes the draft; the limits list says so too. // 3.18.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 3.17.2 WORKERS-BP-LOGGING-qnfo-ipatent-1 (2026-10-14, agent_issues 2535, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (the 2 browser-script hits are allowlisted) as a structured console.error (worker, where, error); control flow unchanged. // 3.17.1: the version line only (version-bump-guard compares each push; no behaviour change). 3.17.0 IPATENT-UI-OVERHAUL-1 step 3 and IPATENT-COST-PER-DRAFT-1 (2026-10-12, agent_issues 2049, 2055, 1903, 1779; pillars reach and cost; owner: the page must read as a serious one-stop tool for individual inventors, built on what the invention is, what it does and how it works): the drafting page is redesigned for both variants (one HTML, every id, route and function kept): a drawing-sheet system (Archivo for the interface, Source Serif 4 for the document, one action colour, green/amber/red only for support states), a figure of what happens to a description, the description prompt split into what it is / what it does / how it works, the step rail beside the form and result on wide screens and a sticky strip on phones, samples moved behind a disclosure, a limits section (not legal advice, files nothing, no prior-art search, does not supply the invention), a guide index, a skip link, labelled status regions and sentence-case text; /guide, /guide/* and /example take the same tokens. New: GET /api/cost serves the measured model cost per completed draft from qnfo-audit ai_call_counters (neurons, tokens, USD at the published neuron rate; no price is set), every mechanism-card model call is metered as purpose mechanism and every completed draft as purpose draft-done. A draft requested by an automated client is stored as status automated and left out of the drafts and drafters that /api/metrics reports (DRAFT-ROW-AUTOMATED-1). Standards: the admin token is compared in constant time and the benchmark source probe reads a bounded body. Tests: landing.test.mjs, cost.test.mjs. // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -304,11 +304,11 @@ async function handleSubscribe(request, env) {
   const email = String(body.email || "").trim().toLowerCase();
   if (!email || email.length > 254 || !/^[^@\s]{1,64}@[^@\s.]{1,255}\.[^@\s.]{2,}$/.test(email)) return json({ ok: false, error: "Please enter a valid email address." }, 400);
   try {
-    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/subscribe", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "qnfo-ipatent/" + VERSION, "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "", "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300) }, body: JSON.stringify({ email, hp: String(body.hp || ""), source: "ipatent" }), signal: AbortSignal.timeout(9000) });
+    const r = await fleetAiFetch(env, fetch, SUBSCRIBERS_ENDPOINT + "/subscribe", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "qnfo-ipatent/" + VERSION, "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "", "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300) }, body: JSON.stringify({ email, hp: String(body.hp || ""), source: "ipatent" }), signal: AbortSignal.timeout(9000) });
     const d = await r.json().catch(() => ({}));
     if (r.ok && d && d.ok !== false) return json({ ok: true });
     return json({ ok: false, error: (d && d.error) || "Could not subscribe right now. Please try again." }, r.status >= 400 && r.status < 500 ? r.status : 502);
-  } catch (e) { return json({ ok: false, error: "Could not subscribe right now. Please try again." }, 502); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return json({ ok: false, error: "Could not subscribe right now. Please try again." }, 502); }
 }
 __name(handleSubscribe, "handleSubscribe");
 var LLMS_TXT = [
@@ -435,7 +435,7 @@ __name2(checkRateLimit, "checkRateLimit");
 __name22(checkRateLimit, "checkRateLimit");
 __name222(checkRateLimit, "checkRateLimit");
 async function embedText(env, text) {
-  const embedResult = await env.AI.run(AI_EMBED_MODEL, { text });
+  const embedResult = await fleetAiRun(env, env.AI, AI_EMBED_MODEL, { text });
   const vector = embedResult?.data;
   if (!vector || !Array.isArray(vector) || vector.length === 0) {
     throw new Error("Embedding generation failed");
@@ -462,7 +462,7 @@ async function searchDisclosures(env, query, limit = VZ_TOP_K) {
       source_file: m.metadata?.source_file || "",
       disclosure_text: m.metadata?.text || m.metadata?.disclosure_text || ""
     }));
-  } catch (err) {
+  } catch (err) { if (fleetAiStopped(err)) throw err;
     console.error("Vectorize search failed:", err.message);
     return [];
   }
@@ -694,7 +694,7 @@ IMPORTANT:
       let timer;
       const deadline = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("deadline " + Math.min(DRAFT_ATTEMPT_MS, left) + " ms")), Math.min(DRAFT_ATTEMPT_MS, left)); });
       let result;
-      try { result = await Promise.race([env.AI.run(model, opts), deadline]); } finally { clearTimeout(timer); }
+      try { result = await Promise.race([fleetAiRun(env, env.AI, model, opts), deadline]); } finally { clearTimeout(timer); }
       await upsertDraftAudit(env, model, inChars, Date.now() - ta, null, result);
       text = typeof result === "string" ? result : (result?.response || result?.choices?.[0]?.message?.content || "");
       text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
@@ -711,7 +711,7 @@ IMPORTANT:
         lastError = `Empty response from ${model}`;
         attempts.push({ model, ms: Date.now() - ta, outcome: "empty" });
       }
-    } catch (err) {
+    } catch (err) { if (fleetAiStopped(err)) throw err;
       await upsertDraftAudit(env, model, inChars, Date.now() - ta, err, null);
       lastError = `${model}: ${err.message}`;
       attempts.push({ model, ms: Date.now() - ta, outcome: "error: " + String(err && err.message || err).slice(0, 120) });
@@ -948,12 +948,12 @@ async function handleMechanism(request, env, ctx) {
       if (DRAFT_EFFORT[model]) opts.reasoning_effort = DRAFT_EFFORT[model];
       var deadline = new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error("deadline")); }, Math.min(MECH_ATTEMPT_MS, left)); });
       var result;
-      try { result = await Promise.race([env.AI.run(model, opts), deadline]); } finally { clearTimeout(timer); }
+      try { result = await Promise.race([fleetAiRun(env, env.AI, model, opts), deadline]); } finally { clearTimeout(timer); }
       await upsertDraftAudit(env, model, prompt.length, Date.now() - ta, null, result, "mechanism");
       var text = typeof result === "string" ? result : (result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content))) || "";
       card = parseMechanism(text);
       attempts.push({ model: model, ms: Date.now() - ta, outcome: card ? "ok" : "unparseable" });
-    } catch (err) {
+    } catch (err) { if (fleetAiStopped(err)) throw err;
       await upsertDraftAudit(env, model, prompt.length, Date.now() - ta, err, null, "mechanism");
       attempts.push({ model: model, ms: Date.now() - ta, outcome: "error: " + String(err && err.message || err).slice(0, 120) });
     }
@@ -1000,7 +1000,7 @@ async function handleDraft(request, env, ctx) {
   let sections;
   try {
     sections = await draftDisclosure(env, { title, technicalField, description, ragContext, mechanism });
-  } catch (err) {
+  } catch (err) { if (fleetAiStopped(err)) throw err;
     return json({ error: "AI drafting failed: " + err.message, attempts: err.attempts || [] }, 503);
   }
   const submissionId = generateId();
@@ -1300,7 +1300,7 @@ async function ppubsProbe() {
     o.claims_chars = txt(tj.claimsHtml).length;
     o.claims_found = o.claims_chars > 200;
     o.provisional_ref_found = /Provisional Application/i.test(txt(tj.backgroundTextHtml) + " " + txt(tj.briefHtml) + " " + txt(tj.descriptionHtml));
-  } catch (e) { console.log("PPUBS_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); o.error = "probe failed (see worker log)"; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; console.log("PPUBS_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); o.error = "probe failed (see worker log)"; }
   return o;
 }
 async function benchSourceProbe(request, ctx) {
@@ -1314,7 +1314,7 @@ async function benchSourceProbe(request, ctx) {
     out.status = r.status; out.bytes = h.length;
     out.claims_found = /class="claim"|itemprop="claims"/.test(h);
     out.provisional_ref_found = /[Pp]rovisional/.test(h);
-  } catch (e) { console.log("SOURCE_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); out.error = "fetch failed (see worker log)"; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; console.log("SOURCE_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); out.error = "fetch failed (see worker log)"; }
   out.ppubs = await ppubsProbe();
   out.keyless_text = !!((out.status === 200 && out.claims_found) || (out.ppubs.status === 200 && out.ppubs.claims_found));
   var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
@@ -1460,7 +1460,7 @@ async function benchDataset(request, env) {
     if (built.patents_total > 0) await env.IPATENT_R2.put(BENCH_DATASET_KEY, JSON.stringify(built), { httpMetadata: { contentType: "application/json" } });
     await env.IPATENT_R2.delete(BENCH_DATASET_PARTIAL);
     return new Response(JSON.stringify(Object.assign({ status: built.patents_total > 0 ? "built" : "empty" }, benchSummary(built))), { status: built.patents_total > 0 ? 201 : 502, headers: jh });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("BENCH_DATASET_ERROR " + String(e && e.message || e).slice(0, 200));
     return new Response(JSON.stringify({ status: "failed", error: "the USPTO source failed mid-field (see worker log); fields already built are kept, POST again to resume" }), { status: 502, headers: jh });
   } finally {
@@ -1605,13 +1605,13 @@ async function turnstileVerify(env, token, ip, action) {
   try {
     var body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
     if (ip) body.set("remoteip", ip);
-    var r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
+    var r = await fleetAiFetch(env, fetch, "https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
     if (!r.ok) return { ok: false, reason: "siteverify-" + r.status };
     var j = await r.json();
     if (!j || j.success !== true) return { ok: false, reason: "rejected:" + String((j && j["error-codes"]) || "").slice(0, 80) };
     if (action && j.action && j.action !== action) return { ok: false, reason: "action-mismatch" };
     return { ok: true, reason: "verified" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, reason: "siteverify-error" };
   }
 }
@@ -2815,6 +2815,8 @@ ${fleetCtlLink(CANONICAL_ORIGIN + "/")}
 `;
 var qnfo_ipatent_default = {
   async fetch(request, env, ctx) {
+    try {
+
     const url = new URL(request.url);
     let path = url.pathname;
     // CANONICAL-HOST-1 (3.5.0): qnfo.org/ipatent served a duplicate of the app (200, no canonical). Pages now 301 to
@@ -2933,11 +2935,13 @@ var qnfo_ipatent_default = {
       if (path === "/api/status" && request.method === "GET") return handleStatus(env);
       if (path === "/api/cost" && request.method === "GET") return handleCost(env);
       return json({ error: "Not found" }, 404);
-    } catch (err) {
+    } catch (err) { if (fleetAiStopped(err)) throw err;
       console.error("Unhandled error:", err.message, err.stack);
       return json({ error: "Internal server error" }, 500);
     }
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 export {
   qnfo_ipatent_default as default,
@@ -3621,3 +3625,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-ipatent ----
 wmAttach(qnfo_ipatent_default, "qnfo-ipatent");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-ipatent";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

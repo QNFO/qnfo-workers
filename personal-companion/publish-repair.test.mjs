@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // COMPANION-PUBLISH-REPAIR-1 + COMPANION-LEDE-1 offline suite (personal-companion 1.17.0, charter pillar: personal).
 // reading.q08.org published nothing for 73h (companion_runs 4549-5339). In the 72h to 2026-10-13 05:16Z, 154 attempts were rejected:
 // grounding 102, length 42, banned phrase 32, critique 17, fact-check 8 (an attempt can carry several). Proves: writer and critic calls
@@ -12,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
+const mod = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify, validatePiece = mod.validatePiece, repair = V.repairGroundingDraft;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 600) : "")); } };

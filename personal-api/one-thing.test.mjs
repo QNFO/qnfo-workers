@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // personal-api/one-thing.test.mjs (COMPANION-FOCUS-1)
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -31,7 +32,7 @@ assert.equal(C.focusOptions([], [], 999, "low")[0].minutes, 2);
 console.log("ok   Focus 5/15/30-minute choices fit time, energy and next-action state");
 
 const scripts = [...C.PAGE_HTML.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-for (const script of scripts) new vm.Script(script.replace(/__VERSION__/g, "test"));
+for (const script of scripts) new vm.Script(RUNNING_AI_FIXTURE + (script.replace(/__VERSION__/g, "test")));
 console.log("ok   all companion scripts parse");
 
 const focus = C.PAGE_HTML.match(/<section id="v-focus"[\s\S]*?<\/section>/)[0];
@@ -101,7 +102,7 @@ function focusHarness(preferences, options) {
     clearInterval() {},
     go() {}
   };
-  vm.runInNewContext(C.PAGE_HTML.slice(focusStart, focusEnd), context);
+  vm.runInNewContext(RUNNING_AI_FIXTURE + (C.PAGE_HTML.slice(focusStart, focusEnd)), context);
   context.FOCUS.options = options;
   return { context, stored, nodes, calls, clipboard };
 }

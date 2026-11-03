@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // qnfo-social 0.14.0 offline suite: SOCIAL-CHECK-FAIL-CLOSED-1 (agent_issues 2501), MASTODON-PUBLIC-STATS-1 (2481, 2374),
 // LEARNER-COVERAGE-1 (2381) and UTM-CREDIT-1 (2036).
 // Proves: a stray "[1]" never reads as a clean thread and an issue list after it is found; an issue keyed problem / claim /
@@ -7,7 +8,7 @@
 // credited with source utm (a pending row and a no-data row re-read), a row with neither stays no-data.
 // Run: node qnfo-social/fail-closed-utm.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };

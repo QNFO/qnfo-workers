@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 /**
  * pr-merge-sla.test.mjs -- offline suite for PR-MERGE-SLA-10M-1 (qnfo-fleet-control 0.49.0, owner directive 2026-10-26:
  * every pull request merges within 10 minutes of opening).
@@ -106,7 +107,7 @@ async function run(sc, opts) {
   const sandbox = { evApi: gh.evApi, evGraphql: gh.evGraphql, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, setTimeout, __export: null };
   vm.createContext(sandbox);
   const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_CONTROL_PLANE = ", "var CM_LOOP_CANARIED = ", "var CM_DENY = ", "var CM_DOCS_ONLY_RE = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmDocsOnly", "cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\nBH_READY_WAIT_MS = 0;\n__export = { bhMergeDecide, bhPrAgeRow, bhReadyForReview, branchHygieneTick, bhHoldText, bhWaitsOn };", sandbox, { filename: "bh-block.js" });
+  vm.runInContext(RUNNING_AI_FIXTURE + (deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\nBH_READY_WAIT_MS = 0;\n__export = { bhMergeDecide, bhPrAgeRow, bhReadyForReview, branchHygieneTick, bhHoldText, bhWaitsOn };"), sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export, sc };
@@ -364,7 +365,7 @@ const scenario = (prs, extra) => Object.assign({ branches: [{ name: "main", prot
       __export: null,
     };
     vm.createContext(sandbox);
-    vm.runInContext(block + "\n__export = { ghPokeHandle, ghPokeStatus, ghPokeEnabled, GH_POKE_DEBOUNCE_S };", sandbox, { filename: "poke-block.js" });
+    vm.runInContext(RUNNING_AI_FIXTURE + (block + "\n__export = { ghPokeHandle, ghPokeStatus, ghPokeEnabled, GH_POKE_DEBOUNCE_S };"), sandbox, { filename: "poke-block.js" });
     const env = brokenSlot ? { AUDIT: { prepare: (sql) => { if (/scheduler_state/.test(sql)) throw new Error("D1_ERROR: boom"); return d1.AUDIT.prepare(sql); } } } : { AUDIT: d1.AUDIT };
     const pending = [];
     const ctx = { waitUntil: (p) => pending.push(p) };

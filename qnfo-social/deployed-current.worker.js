@@ -16,7 +16,7 @@
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
 // 0.19.1 LEARNER-ARMS-PROBE-SCOPE-1: persist policy-exclusion reasons so issue 2722 measures only eligible paper-linked learner rows.
-var VERSION = "0.21.9-codeagent"; /* 0.21.3: use actual Bluesky post times for the 72h engagement metric (#1465, agent_issues 2022, pillar reach). */ /* 0.21.2 CROSSPOST-CAP-1 (2026-10-28, pillar reach; patch: a fix; agent_issues 1000610): the Bluesky cross-post (bufferPost) now applies the same weekly cap and spacing as the channel drain (windowHold, crossPostHold); it ignored both. */ /* 0.21.1 channel-marker */ /* 0.21.1 ART50-CHANNEL-DRAIN-MARKER-1 (2026-10-28, pillars reach and security, cluster D; patch): the channel drain posted to X, LinkedIn, Mastodon and Substack Notes without the AI marker (only Bluesky and the cross-post path used withAutomationMarker); it now marks the text, and the stored 200-character preview keeps the marker so ai_label_coverage can read it. Prediction: ai_label_coverage social row rises from 0 of 42 as marked posts replace unmarked ones in the 14-day window. prior 0.21.0 */ /* 0.21.0 BP26-AI-ACT-ART50-1 (2026-10-28, pillars reach and security, agent_issues 1000341): the post marker now says what Article 50 asks, " [AI-generated]" (it was " [automated]", which names no AI and which the BP26 collector bp26_web.py does not read as an AI marker: 0 of 42 posts of 14 days carried one), and it is never skipped: a post with no room for it is fitted to the limit minus the marker (URLs kept, prose shortened) instead of going out unlabelled. withAutomationMarker, qnfo-social/automation-marker.test.mjs. */ /* 0.20.0 BP26-SOCIAL-AUTOMATION-1 (2026-10-26, pillar reach, agent_issues 1000340): every automated post ends with a short automation marker (" [automated]") until the owner turns on the platform automated-account labels (owner card bp26-social-bot-labels, whose default is exactly this marker). It is appended at the three posting choke points (postText for Bluesky, mastodonCreate, bufferCreate for LinkedIn, X, Substack and the roll-up note) only when it fits the platform limit this worker already fits to, so no post is cut or refused for it; a post at the limit goes out unchanged. withAutomationMarker, qnfo-social/automation-marker.test.mjs. */ /* 0.19.4 LEARNER-ARMS-3 (2026-10-26, pillar reach, agent_issues 2722): the attention learner files a Bluesky roll-up post under the time it was posted, not the time its paper was announced. A roll-up row (dissemination_tracker mode rollup:bluesky) keeps the posted_at of the Substack roll-up that announced the paper and the Bluesky thread carries it days later, so 152 learner rows were anchored on 2026-10-14 although they went out between 10-14 and 10-25, and the 72 hour reward window opened before the post existed: 135 posts read no-data although every one of them has utm human clicks inside its real window (Bluesky is the channel with the most human clicks, 496 in 7 days). The row's posted_at is now the time inside its record key (a Bluesky TID: 13 base32-sortable characters whose first 11 hold microseconds since the epoch) when that is later than the tracker's value (blueskyTidMs, learnerPostedAtOf), the slot follows it, and a roll-up thread post is filed with n_posts 2 so the reply that is the next post of the same thread is not counted as engagement. migrations/2026-10-26-learner-anchor-repair.sql files the rows already stored under the right time. qnfo-social/learner-anchor.test.mjs. */ /* 0.19.3 SOCIAL-ENGAGEMENT-COVERAGE-1 (2026-10-26, pillar reach; guard metric attention_channels_stopped): collectEngagement measures every Bluesky post of the last 60 days. It built its list from social_threads (LIMIT 100) and then dissemination_tracker and stopped at 100 URIs, so each 07:00 run measured the newest 100 thread posts and none of the 203 dissemination posts (194 posted since 2026-10-14 had no social_engagements row), and the attention scorecard counted them as items with zero engagements. The list is now both sources deduplicated, posts without a snapshot first, then newest, up to 400 URIs (planEngagementUris); a URI the AppView omits gets no row; 429 waits and attempts are capped; the rows are written in batches of 400; the result reports candidates, never_measured, skipped_by_cap and omitted. 0.19.2 LINK-SLASH-CANON-1 (2026-10-26, pillar reach): probeLink follows a redirect that only adds or drops the trailing slash of the same URL (one hop, same origin and query) and judges the page it lands on. qnfo-gateway SEO-INDEX-1 (2026-10-25) answers /papers/<slug>/ with a 308 to /papers/<slug>; every dissemination_tracker pages_url ends in a slash, so every probe read 'misrouted': the last Buffer post (Substack, X) left at 2026-10-25 08:31Z, the LinkedIn, Mastodon and X drains held link-misrouted, both roll-ups held no-live-links, and retractDeadLinks overwrote post_text_snippet of 203 posted rows with a MISROUTED note (it no longer overwrites a posted row's text: PRESERVE-POSTED-TEXT-1). A redirect to another path or host stays misrouted (NEVER-RETIRE-ON-REDIRECT-1); a 404/410 on the landing page is gone; the marker check still applies. qnfo-social/link-slash-canon.test.mjs. */ /* 0.19.1-no-registrar */ /* 0.19.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the Mastodon field filter matches the dead DOI prefix, not the registrar name */ /* 0.18.1 BSKY-CREATE-SESSION-COUNT-1 (2026-10-19, pillar reach, agent_issues 100191, residual of 2937): every com.atproto.server.createSession call, ok or refused, adds 1 to metric_history metric bsky_create_session_24h for the UTC day, so the 300-a-day account budget is measured; a failed count is logged and never blocks the post. */ /* 0.18.0 LEARNER-ARMS-2 (2026-10-19, pillar reach, agent_issues 2722): the attention learner learns from the posts it files. 50 of 61 learner rows read not-arm on 2026-10-17 and 124 of 137 on 2026-10-19 because learnerTopicOf named a topic for three keyword lists only and the channel-drain insert stored a null link slug. A post that links a paper now takes the paper's own shelf (living-paper paper_category, read through the new LIVING_PAPER binding; energy, ai-epistemics and ai-operations keep the arm names energy, epistemics and operations; qec, physics, mathematics, logic, synthesis and assessment are arms too) and the generic arm research when the paper has no shelf row or the binding is unreadable; q08, pillar 4 (ultrametric, adelic, p-adic, autaxic, topos), roll-up posts and posts with no paper link stay not-arm. The channel drain stores the paper slug as link_slug (parsed from the posted text, else the known paper slug). learnerVisits joins the utm ledger on the gateway's own campaign key (lower case, 64 characters) and on the row's slug, the campaign the post was tagged with, so a curated thread whose slug differs from its paper slug and a slug longer than 64 characters read their clicks. migrations/2026-10-19-learner-arms-backfill.sql re-files the recoverable not-arm rows. */ /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
+var VERSION = "0.22.0"; /* 0.21.3: use actual Bluesky post times for the 72h engagement metric (#1465, agent_issues 2022, pillar reach). */ /* 0.21.2 CROSSPOST-CAP-1 (2026-10-28, pillar reach; patch: a fix; agent_issues 1000610): the Bluesky cross-post (bufferPost) now applies the same weekly cap and spacing as the channel drain (windowHold, crossPostHold); it ignored both. */ /* 0.21.1 channel-marker */ /* 0.21.1 ART50-CHANNEL-DRAIN-MARKER-1 (2026-10-28, pillars reach and security, cluster D; patch): the channel drain posted to X, LinkedIn, Mastodon and Substack Notes without the AI marker (only Bluesky and the cross-post path used withAutomationMarker); it now marks the text, and the stored 200-character preview keeps the marker so ai_label_coverage can read it. Prediction: ai_label_coverage social row rises from 0 of 42 as marked posts replace unmarked ones in the 14-day window. prior 0.21.0 */ /* 0.21.0 BP26-AI-ACT-ART50-1 (2026-10-28, pillars reach and security, agent_issues 1000341): the post marker now says what Article 50 asks, " [AI-generated]" (it was " [automated]", which names no AI and which the BP26 collector bp26_web.py does not read as an AI marker: 0 of 42 posts of 14 days carried one), and it is never skipped: a post with no room for it is fitted to the limit minus the marker (URLs kept, prose shortened) instead of going out unlabelled. withAutomationMarker, qnfo-social/automation-marker.test.mjs. */ /* 0.20.0 BP26-SOCIAL-AUTOMATION-1 (2026-10-26, pillar reach, agent_issues 1000340): every automated post ends with a short automation marker (" [automated]") until the owner turns on the platform automated-account labels (owner card bp26-social-bot-labels, whose default is exactly this marker). It is appended at the three posting choke points (postText for Bluesky, mastodonCreate, bufferCreate for LinkedIn, X, Substack and the roll-up note) only when it fits the platform limit this worker already fits to, so no post is cut or refused for it; a post at the limit goes out unchanged. withAutomationMarker, qnfo-social/automation-marker.test.mjs. */ /* 0.19.4 LEARNER-ARMS-3 (2026-10-26, pillar reach, agent_issues 2722): the attention learner files a Bluesky roll-up post under the time it was posted, not the time its paper was announced. A roll-up row (dissemination_tracker mode rollup:bluesky) keeps the posted_at of the Substack roll-up that announced the paper and the Bluesky thread carries it days later, so 152 learner rows were anchored on 2026-10-14 although they went out between 10-14 and 10-25, and the 72 hour reward window opened before the post existed: 135 posts read no-data although every one of them has utm human clicks inside its real window (Bluesky is the channel with the most human clicks, 496 in 7 days). The row's posted_at is now the time inside its record key (a Bluesky TID: 13 base32-sortable characters whose first 11 hold microseconds since the epoch) when that is later than the tracker's value (blueskyTidMs, learnerPostedAtOf), the slot follows it, and a roll-up thread post is filed with n_posts 2 so the reply that is the next post of the same thread is not counted as engagement. migrations/2026-10-26-learner-anchor-repair.sql files the rows already stored under the right time. qnfo-social/learner-anchor.test.mjs. */ /* 0.19.3 SOCIAL-ENGAGEMENT-COVERAGE-1 (2026-10-26, pillar reach; guard metric attention_channels_stopped): collectEngagement measures every Bluesky post of the last 60 days. It built its list from social_threads (LIMIT 100) and then dissemination_tracker and stopped at 100 URIs, so each 07:00 run measured the newest 100 thread posts and none of the 203 dissemination posts (194 posted since 2026-10-14 had no social_engagements row), and the attention scorecard counted them as items with zero engagements. The list is now both sources deduplicated, posts without a snapshot first, then newest, up to 400 URIs (planEngagementUris); a URI the AppView omits gets no row; 429 waits and attempts are capped; the rows are written in batches of 400; the result reports candidates, never_measured, skipped_by_cap and omitted. 0.19.2 LINK-SLASH-CANON-1 (2026-10-26, pillar reach): probeLink follows a redirect that only adds or drops the trailing slash of the same URL (one hop, same origin and query) and judges the page it lands on. qnfo-gateway SEO-INDEX-1 (2026-10-25) answers /papers/<slug>/ with a 308 to /papers/<slug>; every dissemination_tracker pages_url ends in a slash, so every probe read 'misrouted': the last Buffer post (Substack, X) left at 2026-10-25 08:31Z, the LinkedIn, Mastodon and X drains held link-misrouted, both roll-ups held no-live-links, and retractDeadLinks overwrote post_text_snippet of 203 posted rows with a MISROUTED note (it no longer overwrites a posted row's text: PRESERVE-POSTED-TEXT-1). A redirect to another path or host stays misrouted (NEVER-RETIRE-ON-REDIRECT-1); a 404/410 on the landing page is gone; the marker check still applies. qnfo-social/link-slash-canon.test.mjs. */ /* 0.19.1-no-registrar */ /* 0.19.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the Mastodon field filter matches the dead DOI prefix, not the registrar name */ /* 0.18.1 BSKY-CREATE-SESSION-COUNT-1 (2026-10-19, pillar reach, agent_issues 100191, residual of 2937): every com.atproto.server.createSession call, ok or refused, adds 1 to metric_history metric bsky_create_session_24h for the UTC day, so the 300-a-day account budget is measured; a failed count is logged and never blocks the post. */ /* 0.18.0 LEARNER-ARMS-2 (2026-10-19, pillar reach, agent_issues 2722): the attention learner learns from the posts it files. 50 of 61 learner rows read not-arm on 2026-10-17 and 124 of 137 on 2026-10-19 because learnerTopicOf named a topic for three keyword lists only and the channel-drain insert stored a null link slug. A post that links a paper now takes the paper's own shelf (living-paper paper_category, read through the new LIVING_PAPER binding; energy, ai-epistemics and ai-operations keep the arm names energy, epistemics and operations; qec, physics, mathematics, logic, synthesis and assessment are arms too) and the generic arm research when the paper has no shelf row or the binding is unreadable; q08, pillar 4 (ultrametric, adelic, p-adic, autaxic, topos), roll-up posts and posts with no paper link stay not-arm. The channel drain stores the paper slug as link_slug (parsed from the posted text, else the known paper slug). learnerVisits joins the utm ledger on the gateway's own campaign key (lower case, 64 characters) and on the row's slug, the campaign the post was tagged with, so a curated thread whose slug differs from its paper slug and a slug longer than 64 characters read their clicks. migrations/2026-10-19-learner-arms-backfill.sql re-files the recoverable not-arm rows. */ /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
 
 
 // Wrap socialPausedBy to log its reads and fail‑closed on errors.
@@ -481,7 +481,7 @@ async function session(env) {
   if (sessionCache.value && sessionCache.key === key && Date.now() - sessionCache.at < SESSION_TTL_MS) return sessionCache.value;
   let r;
   try {
-    r = await fetch(BSKY + '/com.atproto.server.createSession', {
+    r = await fleetAiFetch(env, fetch, BSKY + '/com.atproto.server.createSession', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (qnfo-social)' },
       body: JSON.stringify({ identifier: env.BSKY_HANDLE, password: env.BSKY_APP_PASS })
@@ -515,7 +515,7 @@ function profileReplaceable(desc) {
 }
 async function syncProfile(env) {
   if (!env.BSKY_HANDLE || !env.BSKY_APP_PASS) return { skipped: 'no credentials' };
-  const pub = await fetch('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=' + encodeURIComponent(env.BSKY_HANDLE), { headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' } });
+  const pub = await fleetAiFetch(env, fetch, 'https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=' + encodeURIComponent(env.BSKY_HANDLE), { headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' } });
   if (pub.ok) {
     const pj = await pub.json().catch(() => null);
     if (pj && pj.description === PROFILE_DESCRIPTION) return { unchanged: true };
@@ -523,14 +523,14 @@ async function syncProfile(env) {
   }
   const s = await session(env);
   const H = { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (qnfo-social)', 'Authorization': 'Bearer ' + s.accessJwt };
-  const g = await fetch(BSKY + '/com.atproto.repo.getRecord?repo=' + encodeURIComponent(s.did) + '&collection=app.bsky.actor.profile&rkey=self', { headers: H });
+  const g = await fleetAiFetch(env, fetch, BSKY + '/com.atproto.repo.getRecord?repo=' + encodeURIComponent(s.did) + '&collection=app.bsky.actor.profile&rkey=self', { headers: H });
   if (!g.ok) return { error: 'getRecord ' + g.status };
   const cur = await g.json();
   const value = (cur && cur.value) || {};
   if (value.description === PROFILE_DESCRIPTION) return { unchanged: true };
   if (!profileReplaceable(value.description)) return { held: 'owner-edited', current: String(value.description || '').slice(0, 160) };
   const record = Object.assign({}, value, { $type: 'app.bsky.actor.profile', description: PROFILE_DESCRIPTION });
-  const p = await fetch(BSKY + '/com.atproto.repo.putRecord', { method: 'POST', headers: H, body: JSON.stringify({ repo: s.did, collection: 'app.bsky.actor.profile', rkey: 'self', record: record, swapRecord: cur.cid }) });
+  const p = await fleetAiFetch(env, fetch, BSKY + '/com.atproto.repo.putRecord', { method: 'POST', headers: H, body: JSON.stringify({ repo: s.did, collection: 'app.bsky.actor.profile', rkey: 'self', record: record, swapRecord: cur.cid }) });
   if (!p.ok) return { error: 'putRecord ' + p.status };
   return { updated: true, previous: String(value.description || '').slice(0, 160) };
 }
@@ -665,7 +665,7 @@ async function repostThread(s, th) {
   const oldUris = posts.map(function(p){ return p.uri; });
   const deleted = [];
   for (const u of oldUris) {
-    try { deleted.push(await deleteRecord(s, u)); } catch (e) { deleted.push({ uri: u, error: String(e).slice(0, 150) }); }
+    try { deleted.push(await deleteRecord(s, u)); } catch (e) { if (fleetAiStopped(e)) throw e; deleted.push({ uri: u, error: String(e).slice(0, 150) }); }
     await new Promise((res) => setTimeout(res, 80));
   }
   const revised = posts.map(function(p, i){
@@ -991,10 +991,10 @@ async function autoScan(env) {
   try {
     let swept = 0, repair = null;
     try { swept = await reachSweepDrafts(env); } catch (e) { await logAlert(env, 'scan', 'error', 'REACH-SELECT-1 sweep: ' + String(e).slice(0, 200)); }
-    try { repair = await reachRepairDrafts(env); } catch (e) { repair = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'repair', 'error', repair.error); }
+    try { repair = await reachRepairDrafts(env); } catch (e) { if (fleetAiStopped(e)) throw e; repair = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'repair', 'error', repair.error); }
     console.log('auto-scan: swept', swept, 'repair', JSON.stringify(repair));
     return { swept: swept, repair: repair };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await logAlert(env, 'scan', 'error', String(e));
     console.error('auto-scan failed', String(e));
     return { error: String(e && e.message || e).slice(0, 200) };
@@ -1003,7 +1003,7 @@ async function autoScan(env) {
 
 // ---------- Buffer cross-post (GraphQL: Mastodon + LinkedIn + X) ----------
 async function bufferGql(env, query) {
-  const r = await fetch("https://api.buffer.com", {
+  const r = await fleetAiFetch(env, fetch, "https://api.buffer.com", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.BUFFER_TOKEN || ""), "User-Agent": "qnfo-social/" + VERSION },
     body: JSON.stringify({ query })
@@ -1040,7 +1040,7 @@ async function bufferCreate(env, ch, svc, svcText, liMode) {
     }
     if (cp && cp.post) return { platform: svc, status: draft ? "draft" : queued ? "queued" : "ok", post_id: cp.post.id, text: svcText };
     return { platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) };
-  } catch (e) { return { platform: svc, status: "error", error: String(e && e.message || e) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { platform: svc, status: "error", error: String(e && e.message || e) }; }
 }
 // CROSSPOST-CAP-1 (agent_issues 1000610, chaos drill control social-weekly-caps): pure. The hold a channel's own drain applies (drainChannels: weekly cap, then spacing of 7 days / cap less one hour),
 // returned as a reason or null. The Bluesky cross-post (bufferPost) ignored both: on 2026-10-27 a LinkedIn post went out at 16:31 from the channel drain and another at 21:31 as a cross-post, 5 hours apart
@@ -1083,7 +1083,7 @@ async function bufferPost(env, text, campaign) {
       results.push(res);
       if (res.post_id && res.status !== "error") await recordChannelPost(env, svc, campaign, res, svcText, "cross-post");
     }
-  } catch (e) { results.push({ status: "error", error: String(e && e.message || e) }); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; results.push({ status: "error", error: String(e && e.message || e) }); }
   return { results };
 }
 
@@ -1132,13 +1132,13 @@ async function mastodonCreate(env, svcText) {
   svcText = withAutomationMarker(svcText, MARKER_MAX_CHARS.mastodon);
   try {
     const body = new URLSearchParams({ status: String(svcText || ''), visibility: 'public', language: 'en' });
-    const r = await fetch('https://' + mastodonHost(env) + '/api/v1/statuses', { method: 'POST', headers: { 'Authorization': 'Bearer ' + env.MASTODON_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded', 'Idempotency-Key': await sha256Hex(String(svcText || '')), 'User-Agent': 'qnfo-social/' + VERSION }, body: body.toString(), signal: AbortSignal.timeout(15000) });
+    const r = await fleetAiFetch(env, fetch, 'https://' + mastodonHost(env) + '/api/v1/statuses', { method: 'POST', headers: { 'Authorization': 'Bearer ' + env.MASTODON_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded', 'Idempotency-Key': await sha256Hex(String(svcText || '')), 'User-Agent': 'qnfo-social/' + VERSION }, body: body.toString(), signal: AbortSignal.timeout(15000) });
     const t = await readTextCapped(r, 65536);
     if (r.status < 200 || r.status >= 300) return { platform: 'mastodon', status: 'error', error: 'mastodon ' + r.status + ' ' + t.slice(0, 80) };
     const j = JSON.parse(t);
     if (!j || !j.id) return { platform: 'mastodon', status: 'error', error: 'mastodon: no status id' };
     return { platform: 'mastodon', status: 'ok', post_id: String(j.id), url: j.url ? String(j.url) : null, text: svcText, via: 'mastodon-direct' };
-  } catch (e) { return { platform: 'mastodon', status: 'error', error: 'mastodon: ' + String(e && e.message || e).slice(0, 100) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { platform: 'mastodon', status: 'error', error: 'mastodon: ' + String(e && e.message || e).slice(0, 100) }; }
 }
 async function sha256Hex(s) {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -1471,7 +1471,7 @@ async function drainChannels(env, opts) {
       if (p.verdict !== 'live') { out.channels[channel] = 'held:link-' + p.verdict + '(' + row.slug + ')'; continue; }
     }
     if (!bc) {
-      try { bc = await bufferChannels(env); } catch (e) { bc = { error: String(e && e.message || e) }; }
+      try { bc = await bufferChannels(env); } catch (e) { if (fleetAiStopped(e)) throw e; bc = { error: String(e && e.message || e) }; }
       if (bc.error) { out.channels[channel] = 'error:' + bc.error; out.error = bc.error; break; }
       liMode = await linkedinMode(env);
     }
@@ -1753,7 +1753,7 @@ async function collectReplies(env, uris) {
   const stmts = [];
   for (const uri of (uris || []).slice(0, REPLY_THREADS_PER_RUN)) {
     try {
-      const r = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?depth=1&parentHeight=0&uri=' + encodeURIComponent(uri), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
+      const r = await fleetAiFetch(env, fetch, 'https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?depth=1&parentHeight=0&uri=' + encodeURIComponent(uri), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
       if (!r.ok) { out.errors++; continue; }
       const j = await r.json();
       out.threads++;
@@ -1761,7 +1761,7 @@ async function collectReplies(env, uris) {
         stmts.push(env.DB.prepare("INSERT INTO social_replies (reply_uri, platform, post_id, author_hash, post_created_at, created_at, delay_min, text_len, word_count, collected_at) VALUES (?1,'bluesky',?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(reply_uri) DO NOTHING")
           .bind(row.reply_uri, row.post_id, await sha256Hex16(row.did), row.post_created_at, row.created_at, row.delay_min, row.text_len, row.word_count, now));
       }
-    } catch (e) { out.errors++; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; out.errors++; }
   }
   if (stmts.length) { await env.DB.batch(stmts); out.stored = stmts.length; }
   return out;
@@ -1831,7 +1831,7 @@ async function collectEngagement(env) {
       let attempt = 0;
       while (true) {
         attempt++;
-        r = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?' + chunk.map(function(u) { return 'uris=' + encodeURIComponent(u); }).join('&'), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
+        r = await fleetAiFetch(env, fetch, 'https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?' + chunk.map(function(u) { return 'uris=' + encodeURIComponent(u); }).join('&'), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
         if (r.status !== 429 || attempt >= BSKY_ENGAGEMENT_ATTEMPTS) break;
         // Honor rate-limit headers: Retry-After (seconds) or ratelimit-reset (UTC timestamp)
         const retryAfter = r.headers.get('Retry-After');
@@ -1862,7 +1862,7 @@ async function collectEngagement(env) {
           stmts.push(env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?,?,?,?,?,?) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value").bind('bluesky', String(p.uri), k, Number(m[k]), 'qnfo-social', day));
         }
       }
-    } catch (e) { errors++; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; errors++; }
   }
   // 400 posts are 1600 statements: written in batches of BSKY_ENGAGEMENT_BATCH so one oversized batch cannot lose the day.
   for (let i = 0; i < stmts.length; i += BSKY_ENGAGEMENT_BATCH) {
@@ -1870,7 +1870,7 @@ async function collectEngagement(env) {
   }
   const out = { day: day, uris: uris.length, posts_found: found, rows: stmts.length, errors: errors, candidates: plan.candidates, never_measured: plan.never_measured, skipped_by_cap: plan.skipped_by_cap, omitted: omitted, skipped_by_budget: skippedByBudget };
   // REACH-SIGNALS-1 (issue 2225): the replies themselves, for the posts that have any. Its failure never fails the counts.
-  try { out.replies = await collectReplies(env, withReplies); } catch (e) { out.replies = { error: String(e && e.message || e).slice(0, 160) }; }
+  try { out.replies = await collectReplies(env, withReplies); } catch (e) { if (fleetAiStopped(e)) throw e; out.replies = { error: String(e && e.message || e).slice(0, 160) }; }
   console.log('SOCIAL-ENGAGEMENT-SELF-1 ' + JSON.stringify(out));
   return out;
 }
@@ -1914,13 +1914,13 @@ function bufferStatsQuery(orgId, channelId, fields, after) {
 async function bufferGqlBounded(env, query) {
   let r;
   try {
-    r = await fetch('https://api.buffer.com', {
+    r = await fleetAiFetch(env, fetch, 'https://api.buffer.com', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (env.BUFFER_TOKEN || ''), 'User-Agent': 'qnfo-social/' + VERSION },
       body: JSON.stringify({ query: query }),
       signal: AbortSignal.timeout(BUFFER_STATS_TIMEOUT_MS)
     });
-  } catch (e) { return { ok: false, status: 0, error: 'fetch ' + String(e && e.name || 'error') }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { ok: false, status: 0, error: 'fetch ' + String(e && e.name || 'error') }; }
   let text = '';
   try { text = await readTextCapped(r, BUFFER_STATS_BODY_CAP); } catch (e) { return { ok: false, status: r.status, error: 'body read ' + String(e && e.name || 'error') }; }
   let j = null;
@@ -2010,7 +2010,7 @@ async function mastodonPublicStats(nodes, nowMs) {
         if (j && j[k[1]] !== null && j[k[1]] !== undefined && isFinite(v)) { out.rows.push({ post_id: c.id, metric: k[0], value: v }); had++; }
       }
       if (!had) { out.errors++; console.log('MASTODON-PUBLIC-STATS-1 ' + c.ref.host + ' status ' + c.ref.id + ': no counts in the answer'); }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.errors++;
       console.log('MASTODON-PUBLIC-STATS-1 ' + c.ref.host + ' status ' + c.ref.id + ' failed: ' + String(e && e.message || e).slice(0, 120));
     }
@@ -2179,7 +2179,7 @@ async function probeLink(url, marker, followed) {
     }
     if (st === 404 || st === 410) return { verdict: "gone", status: st };
     return { verdict: "transient", status: st };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { verdict: "transient", status: 0, err: String(e).slice(0, 60) };
   }
 }
@@ -2190,7 +2190,7 @@ async function httpStatus(url) {
   try {
     const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-gate)" } });
     return r.status;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return 0;
   }
 }
@@ -2240,9 +2240,9 @@ async function drainRollup(env, opts) {
     if (await socialPausedBy(env)) return { skipped: 'paused' };
   } catch (e) { return { skipped: 'gate-error' }; }
   // 1. Substack: every queued paper, oldest first.
-  try { out.substack = await rollupSubstack(env, nowMs); } catch (e) { out.substack = { error: String(e && e.message || e).slice(0, 160) }; }
+  try { out.substack = await rollupSubstack(env, nowMs); } catch (e) { if (fleetAiStopped(e)) throw e; out.substack = { error: String(e && e.message || e).slice(0, 160) }; }
   // 2. Bluesky: the announced papers it has not carried (and queued ones when Substack could not take them).
-  try { out.bluesky = await rollupBluesky(env, nowMs); } catch (e) { out.bluesky = { error: String(e && e.message || e).slice(0, 160) }; }
+  try { out.bluesky = await rollupBluesky(env, nowMs); } catch (e) { if (fleetAiStopped(e)) throw e; out.bluesky = { error: String(e && e.message || e).slice(0, 160) }; }
   return out;
 }
 async function rollupSubstack(env, nowMs) {
@@ -2290,7 +2290,7 @@ async function rollupBluesky(env, nowMs) {
     await env.DB.prepare("UPDATE dissemination_tracker SET action = 'posted', mode = 'rollup:bluesky', posted_at = COALESCE(posted_at, datetime('now')), post_id = ?1, post_url = ?2, post_text_snippet = COALESCE(?3, post_text_snippet), updated_at = datetime('now') WHERE id = ?4")
       .bind(r.uri, handle && rkey ? 'https://bsky.app/profile/' + handle + '/post/' + rkey : r.uri, typeof r.stored_text === 'string' ? r.stored_text : null, x.row.id).run();
     done++;
-    } catch (e) { err = String(e && e.message || e).slice(0, 120); break; }   // the rest wait for the next roll-up
+    } catch (e) { if (fleetAiStopped(e)) throw e; err = String(e && e.message || e).slice(0, 120); break; }   // the rest wait for the next roll-up
   }
   if (!done) return { error: err || 'nothing posted' };
   await ensureChannelSchema(env);
@@ -2361,7 +2361,7 @@ async function drainDissemination(env, opts) {
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, r.uri, opts.nowMs);
       else await learnerRecordPost(env, learnerBackfillDecision(row, 'dissem', opts.nowMs, await learnerHintsFor(env, [row], 'dissem')), r.uri, opts.nowMs);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       failed++;
       await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(String(e).slice(0, 180), row.id).run();
     }
@@ -2385,7 +2385,7 @@ async function retractDeadLinks(env) {
     if (p.verdict === "gone") {
       // NEVER-RETIRE-ON-REDIRECT-1: ONLY a hard 404/410 justifies deleting published content.
       try { const s = await session(env); await deleteRecord(s, String(row.post_id)); retracted++; }
-      catch (e) { console.log("RETRACT del fail " + row.id + " " + String(e && e.message || e).slice(0, 80)); }
+      catch (e) { if (fleetAiStopped(e)) throw e; console.log("RETRACT del fail " + row.id + " " + String(e && e.message || e).slice(0, 80)); }
       batchStmts.push(env.DB.prepare("UPDATE dissemination_tracker SET action='link-dead', post_text_snippet='RETRACTED: 404/410 gone', updated_at=datetime('now') WHERE id=?").bind(row.id));
     } else if (p.verdict === "misrouted") {
       // A redirect is NOT a death - flag for repair, never delete. PRESERVE-POSTED-TEXT-1 (0.19.2): and never overwrite the as-posted text
@@ -2497,7 +2497,7 @@ async function drainQueue(env, opts) {
       try {
         const bufText = pickBufferText(posts, threadLink, row.title, 280);
         bufferResult = await bufferPost(env, bufText, row.slug ? String(row.slug) : undefined);
-      } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
+      } catch (e) { if (fleetAiStopped(e)) throw e; bufferResult = { error: String(e && e.message || e) }; }
       // POST-ID-UTM-1 (#1712): status, platform ids and (POST-SENT-TEXT-1) the posted text in one write (markPosted falls
       // back if the column is missing).
       await markPosted(env, row.id, postUriValue(uris[0], bufferResult), sent);
@@ -2508,7 +2508,7 @@ async function drainQueue(env, opts) {
       if (bufferResult && Array.isArray(bufferResult.results)) for (const br of bufferResult.results) buffer.push(String(br.platform || 'buffer') + ':' + String(br.status || '?'));
       else if (bufferResult) buffer.push('buffer:' + (bufferResult.skipped ? 'skipped' : 'error'));
       console.log('drain posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       failed++;
       await env.DB.prepare("UPDATE social_threads SET status='failed', error=?, retry_count=retry_count+1 WHERE id=?").bind(String(e).slice(0, 300), row.id).run();
       await logAlert(env, 'cron', 'error', 'drain post failed ' + row.slug + ': ' + String(e));
@@ -3575,13 +3575,13 @@ async function socialScheduled(event, env) {
     }
     if (event.cron === '0 7 * * *') {
       let eo;
-      try { eo = await collectEngagement(env); } catch (e) { eo = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
+      try { eo = await collectEngagement(env); } catch (e) { if (fleetAiStopped(e)) throw e; eo = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
       // SOCIAL-DISTRIBUTION-LEARNER-1: the 30-day engagement rate from the snapshots just taken (measurement only, never
       // switched off), then the learner's weekly update (Mondays, or catch-up), which records its own ledger row.
       // BUFFER-POST-STATS-1 (0.13.0): the Buffer per-post statistics, with this worker's own token. Isolated from the Bluesky counts.
-      try { eo.buffer = await collectBufferStats(env); } catch (e) { eo.buffer = { error: String(e && e.message || e).slice(0, 200) }; }
+      try { eo.buffer = await collectBufferStats(env); } catch (e) { if (fleetAiStopped(e)) throw e; eo.buffer = { error: String(e && e.message || e).slice(0, 200) }; }
       // MASTODON-DIRECT-1: counts for the posts that bypassed Buffer.
-      try { eo.mastodon_direct = await mastodonDirectStats(env); } catch (e) { eo.mastodon_direct = { error: String(e && e.message || e).slice(0, 200) }; }
+      try { eo.mastodon_direct = await mastodonDirectStats(env); } catch (e) { if (fleetAiStopped(e)) throw e; eo.mastodon_direct = { error: String(e && e.message || e).slice(0, 200) }; }
       // INTEG-MASTODON-VERIFY-1: keep the profile's verified link current.
       try { eo.mastodon_profile = await mastodonProfileSync(env); } catch (e) { eo.mastodon_profile = { error: String(e && e.message || e).slice(0, 200) }; }
       try { eo.rate_30d = await learnerEngagementRate(env); } catch (e) { eo.rate_30d = { error: String(e && e.message || e).slice(0, 160) }; }
@@ -3591,28 +3591,28 @@ async function socialScheduled(event, env) {
       try { await learnerWeeklyTick(env); } catch (e) { console.log('SOCIAL-DISTRIBUTION-LEARNER-1 weekly tick threw: ' + String(e && e.message || e).slice(0, 200)); }
       return;
     }
-    try { await bufferChannelAudit(env); } catch (e) { await logAlert(env, 'buffer-channels', 'error', 'BUFFER-CHANNEL-AUDIT-1 ' + String(e).slice(0, 300)); }
+    try { await bufferChannelAudit(env); } catch (e) { if (fleetAiStopped(e)) throw e; await logAlert(env, 'buffer-channels', 'error', 'BUFFER-CHANNEL-AUDIT-1 ' + String(e).slice(0, 300)); }
     let ps;
     try {
       ps = await syncProfile(env);
       if (ps && (ps.updated || ps.error || ps.held)) console.log('[qnfo-social] profile-sync', JSON.stringify(ps));
-    } catch (e) { ps = { error: 'threw: ' + String(e && e.message || e).slice(0, 200) }; console.log('[qnfo-social] profile-sync threw', ps.error); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; ps = { error: 'threw: ' + String(e && e.message || e).slice(0, 200) }; console.log('[qnfo-social] profile-sync threw', ps.error); }
     await recordSocialRun(env, 'profile-sync', profileRunStatus(ps), ps);
-    try { await recheckDrafts(env); } catch (e) { console.log('[qnfo-social] recheck threw', String(e && e.message || e).slice(0, 200)); }
+    try { await recheckDrafts(env); } catch (e) { if (fleetAiStopped(e)) throw e; console.log('[qnfo-social] recheck threw', String(e && e.message || e).slice(0, 200)); }
     let cr;
     try { cr = await releaseCardApproved(env); } catch (e) { cr = { error: String(e && e.message || e).slice(0, 200) }; }
     // Each drain is isolated: a throw in one used to end the tick before the other drain and the link checks ran.
     let q, d;
-    try { q = await drainQueue(env); } catch (e) { q = { error: String(e && e.message || e).slice(0, 200) }; }
-    try { d = await drainDissemination(env); } catch (e) { d = { error: String(e && e.message || e).slice(0, 200) }; }
+    try { q = await drainQueue(env); } catch (e) { if (fleetAiStopped(e)) throw e; q = { error: String(e && e.message || e).slice(0, 200) }; }
+    try { d = await drainDissemination(env); } catch (e) { if (fleetAiStopped(e)) throw e; d = { error: String(e && e.message || e).slice(0, 200) }; }
     await recordSocialRun(env, 'drain', drainRunStatus(q, d), { queue: q, dissemination: d, card_release: cr });
     // DAILY-DISTRIBUTION-1: after the Bluesky drains (and their cross-posts), fill the room each Buffer channel still has.
     let ch;
-    try { ch = await drainChannels(env); } catch (e) { ch = { error: String(e && e.message || e).slice(0, 200) }; }
+    try { ch = await drainChannels(env); } catch (e) { if (fleetAiStopped(e)) throw e; ch = { error: String(e && e.message || e).slice(0, 200) }; }
     await recordSocialRun(env, 'channels', channelsRunStatus(ch), ch);
     // PAPER-ROLLUP-1: every queued paper reaches Substack this hour, and the Bluesky thread carries the announced ones.
     let ru;
-    try { ru = await drainRollup(env); } catch (e) { ru = { error: String(e && e.message || e).slice(0, 200) }; }
+    try { ru = await drainRollup(env); } catch (e) { if (fleetAiStopped(e)) throw e; ru = { error: String(e && e.message || e).slice(0, 200) }; }
     await recordSocialRun(env, 'rollup', rollupRunStatus(ru), ru);
     await retractDeadLinks(env);
     await restoreMisdeleted(env);
@@ -3620,6 +3620,8 @@ async function socialScheduled(event, env) {
 
 export default {
   async scheduled(event, env) {
+    if (!await fleetAiBackground(env)) return;
+
     // CF-OBS-ISSUE-1: a transient "D1 DB is overloaded" anywhere in the run aborted the whole tick
     // (double-posting risk is nil: each drain re-reads its own ledger first, so a retried drain sees
     // what the first attempt already committed and continues from there). Retry only overload errors.
@@ -3629,7 +3631,7 @@ export default {
         await cronGridRun(env.DB, event, null, CRON_GRID_CFG, function (ev) { return socialScheduled(ev, env); });
         ok = true; err = null;
         break;
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         ok = false; err = e;
         console.error("qnfo-social scheduled run threw (" + String(event && event.cron) + "): " + String(e && e.message || e).slice(0, 300));
         var msg = String(e && e.message || e);
@@ -3642,6 +3644,8 @@ export default {
   },
 
   async fetch(request, env) {
+    try {
+
     const url = new URL(request.url);
     const p = url.pathname, m = request.method;
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Ops-Key' };
@@ -3795,7 +3799,7 @@ export default {
             const r = await repostThread(s, th);
             if (th.slug && r.newRoot) { try { await recordPostUriBySlug(env, String(th.slug), r.newRoot); } catch (eU) { console.error(JSON.stringify({ evt: "social:fetch:caught", error: String((eU && eU.message) || eU) })); } }
             results.push(r);
-          } catch (e) {
+          } catch (e) { if (fleetAiStopped(e)) throw e;
             results.push({ error: String(e).slice(0, 200) });
           }
           await new Promise((res) => setTimeout(res, 120));
@@ -3809,7 +3813,7 @@ export default {
         const out = [];
         for (const u of uris) {
           try { await deleteRecord(s, u); out.push({ uri: u, ok: true }); }
-          catch (e) { out.push({ uri: u, ok: false, error: String(e).slice(0, 120) }); }
+          catch (e) { if (fleetAiStopped(e)) throw e; out.push({ uri: u, ok: false, error: String(e).slice(0, 120) }); }
           await new Promise((res) => setTimeout(res, 60));
         }
         return new Response(JSON.stringify({ ok: true, deleted: out }), { headers: { 'Content-Type': 'application/json', ...cors } });
@@ -3823,10 +3827,12 @@ export default {
         return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       return new Response('not found', { status: 404, headers: cors });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
     }
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 
 // D1-overload guard (CF-OBS-ISSUE-1): only one /drain operation at a time per isolate to avoid queuing heavy D1 work.
@@ -3843,7 +3849,7 @@ var AI_ATTR_DB_BINDINGS = ["DB"];
 var AI_COUNTERS_SCHEMA_READY = false;
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1, res;
-  try { res = await env.AI.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+  try { res = await fleetAiRun(env, env.AI, model, input, opts); return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
   finally {
     try {
       var db = null;
@@ -3879,3 +3885,114 @@ export { planEngagementUris, BSKY_ENGAGEMENT_MAX_URIS, mastodonWantedFields, mas
   learnerClassify, learnerClassifyChannel, learnerCategories, learnerHintsFor, learnerUtmCampaign, learnerDiscover, blueskyTidMs, learnerPostedAtOf, LEARNER_TOPICS, LEARNER_CATEGORY_TOPIC, LEARNER_GENERIC_TOPIC, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
   learnerEngagementRate, learnerReport, parseCheckerIssues, socialHeartbeat, mastodonPublicStats, mastodonStatusRef, learnerBackfillDecision, learnerRecordPost, MASTODON_PUBLIC_MAX, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF , pickPaperRow, PAPER_PROMOTE_DAYS, slashCanonTarget, retractDeadLinks };
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "DB";
+var FLEET_AI_WORKER = "qnfo-social";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

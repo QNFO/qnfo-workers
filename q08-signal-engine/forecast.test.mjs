@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-FORECAST-1 offline suite (q08-signal-engine 0.9.0): the forecast block parser and validator, calibration, the judge
 // verdict parser, and the real fetch/scheduled handlers over in-memory SQLite with a scripted Workers AI binding: a due
 // forecast is written, gated, persisted with its q08_forecasts record, shown on /forecasts and /p/<slug>, settled yes by
@@ -6,7 +7,7 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-const mod = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href, import.meta.url);
 const w = mod.default, F = mod.__forecast;
 let fails = 0, passes = 0;
 const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL " + l + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };

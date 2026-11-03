@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // BACKUP-PAGED-1 (qnfo-lifecycle 1.15.3) offline suite. No network, synthetic data.
 // Proves: the daily 05:00 UTC backup never reads a whole table into memory. Cloudflare Observability recorded
 // "Worker invocation ended with exceededMemory" on qnfo-lifecycle at 05:01Z on each day from 2026-10-20 to 2026-10-26 (group a539fdc8);
@@ -8,7 +9,7 @@
 // Run: node qnfo-lifecycle/backup-paged.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { runBackup as __runBackup, backupTable as __backupTable, BACKUP_PAGE_ROWS as __pg, BACKUP_PART_BYTES as __pb };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { runBackup as __runBackup, backupTable as __backupTable, BACKUP_PAGE_ROWS as __pg, BACKUP_PART_BYTES as __pb };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 const PAGE = mod.__pg, PART = mod.__pb;

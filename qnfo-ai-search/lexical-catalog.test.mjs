@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // ASK-LEXICAL-CATALOG-1 (qnfo-ai-search 2.2.7) offline suite. No network: the gateway (catalog list, detail, keyword
 // search) and AI Search are stubbed in the worker's own sandbox, and retrieve() runs exactly as served.
 // Proves: a paper only the catalog knows (the vector index has had no feeder since 2026-08-11) is ranked first for a
@@ -49,11 +50,11 @@ async function fakeFetch(url) {
 }
 const sb = { console: { log() {}, error() {}, warn() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, AbortController, setTimeout, clearTimeout, crypto, fetch: fakeFetch, encodeURIComponent, decodeURIComponent };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { retrieve, DEFAULT_CONFIG, titleQueryTokens, lexSearch, FIX_ANCHORS };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { retrieve, DEFAULT_CONFIG, titleQueryTokens, lexSearch, FIX_ANCHORS };"), sb);
 const { retrieve, DEFAULT_CONFIG, titleQueryTokens, FIX_ANCHORS } = sb.__x;
 const env = { AI_SEARCH: { get: () => ({ search: async () => ({ chunks: state.chunks }) }) } };
 const chunk = (slug, score, text) => ({ item: { key: slug + ".md" }, score, text });
-const reset = () => vm.runInContext("_catalog = { at: 0, idx: null, loading: null };", sb);
+const reset = () => vm.runInContext(RUNNING_AI_FIXTURE + ("_catalog = { at: 0, idx: null, loading: null };"), sb);
 const cfg = Object.assign({}, DEFAULT_CONFIG);
 
 // 1. A catalog-only paper beats a vector hub essay for a paraphrased question; pages are read once, junk excluded.
@@ -84,7 +85,7 @@ ok(r[0] && r[0].slug === "physics-solved", "a quoted title lifts its catalog pap
 ok(titleQueryTokens(q1).length === 0 && titleQueryTokens("adelic particle spectrum").length === 3 && titleQueryTokens("JPCUB").length === 0, "only quoted spans and 2-5 word questions are title queries");
 
 // 5. Stale copy served while one refresh runs.
-vm.runInContext("_catalog.at = Date.now() - CATALOG_TTL_MS - 1;", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + ("_catalog.at = Date.now() - CATALOG_TTL_MS - 1;"), sb);
 const before = state.listCalls;
 r = await retrieve(env, q1, cfg);
 ok(r[0] && r[0].slug === "the-q-generalized-diameter", "a stale catalog still ranks while it refreshes");
@@ -97,7 +98,7 @@ r = await retrieve(env, q1, cfg);
 ok(r.length > 0 && r[0].slug === "beyond-the-qubit" && !r.some((x) => x.slug === "the-q-generalized-diameter"), "an unreadable catalog leaves the vector ranking as it was", r.map((x) => x.slug));
 // 7. A hanging catalog costs at most CATALOG_WAIT_MS.
 reset(); state.listMode = "hang";
-vm.runInContext("CATALOG_WAIT_MS = 150;", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + ("CATALOG_WAIT_MS = 150;"), sb);
 const t0 = Date.now();
 r = await retrieve(env, q1, cfg);
 const took = Date.now() - t0;

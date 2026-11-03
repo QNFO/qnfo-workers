@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // MAIL-DRAFT-1 / MAIL-DRAFT-COMPLETE-1 offline suite (qnfo-fleet-dashboard 1.35.0). Replays the 2026-10-13 drafts the owner
 // rejected ("Machine Learning Engineer", "QNFO Operations", "\n" shown as text, then [[FILL]] gaps) and proves: a draft request
 // takes the grounded path; the model receives the owner's public profile, the identity document and the repository record of
@@ -33,7 +34,7 @@ const mk = (modelText, rows, logRows) => {
     d1all: async (db, sql, b) => { calls.push({ db, sql, b }); if (/owner_docs/.test(sql)) return [{ body_md: "Rowan Quni builds research systems at QNFO." }]; if (/FROM cmd_log/.test(sql)) return logRows || []; if (/id <> \?2/.test(sql)) return []; return rows; },
     cmdRaceModels: async (env, messages, ms) => { sb.__msgs = messages; sb.__ms = ms; return { ok: true, text: modelText, model: "glm-5.3-flash" }; } };
   vm.createContext(sb);
-  vm.runInContext(mod + "\n__f = { mailDraftReply, mailSendLastDraft, mailDraftClean, mailDraftGuard, MAIL_DRAFT_RX };", sb);
+  vm.runInContext(RUNNING_AI_FIXTURE + (mod + "\n__f = { mailDraftReply, mailSendLastDraft, mailDraftClean, mailDraftGuard, MAIL_DRAFT_RX };"), sb);
   return { f: sb.__f, sb, calls, gh };
 };
 const row = [{ id: 4211, sender: "Varun Kotte <kottevarun@gmail.com>", recipient: "rowan.quni@qnfo.org", subject: "Your router_calibrate.py in qnfo-workers and the UCCI paper", received_at: "2026-10-12T21:04:00Z", body_text: VARUN }];
@@ -77,7 +78,7 @@ const ASK = "I'm not going back and forth with kottevarun@gmail.com. Draft a rep
 {
   const { f } = mk("x", row);
   const sb2 = { RegExp, Number, String }; vm.createContext(sb2);
-  vm.runInContext(cut("var MAIL_REPLY_LITERAL_RX", "// \"send it\" after a draft") + "\n__g = mailReplyInstruction;", sb2);
+  vm.runInContext(RUNNING_AI_FIXTURE + (cut("var MAIL_REPLY_LITERAL_RX", "// \"send it\" after a draft") + "\n__g = mailReplyInstruction;"), sb2);
   const g = sb2.__g;
   const a = g("reply 984 always show me draft first before sending");
   ok(a && a.id === 984 && a.instruction === "always show me draft first before sending", "the screenshot's text is an instruction, not the email", a);

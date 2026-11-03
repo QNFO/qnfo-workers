@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // OWNER-SIGNAL-INTAKE-1 (1.7.0, #1947 #2103 #2104) offline suite. Runs the worker's own triageProposals, runOwnerCorpus,
 // runReentry and thinkSeed in a vm against in-memory SQLite D1s, a scripted Workers AI stub and an in-memory R2 vault.
 // Proves: an owner-authored idea is ACCEPTed and queued even when the model says HOLD; an owner's short chat question is
@@ -16,7 +17,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = stripWorkerDefaultExport(readFileSync(join(here, "worker.js"), "utf8")).replace(/export default\s*\{/, "var __default = {");
 const sb = { console: { log() {}, error() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { ownerPipelineDois, triageProposals, runOwnerCorpus, runReentry, runConsume, thinkSeed, proposalKind, realQuestion, ownerPaper, aiRunAttr, promptCacheOpts, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH, REASONING_MAX_TOKENS, OWNER_CORPUS_FLEET_ERA };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { ownerPipelineDois, triageProposals, runOwnerCorpus, runReentry, runConsume, thinkSeed, proposalKind, realQuestion, ownerPaper, aiRunAttr, promptCacheOpts, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH, REASONING_MAX_TOKENS, OWNER_CORPUS_FLEET_ERA };"), sb);
 const api = sb.__x;
 const mk = () => new DatabaseSync(":memory:");
 const shim = (db) => ({ prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) ?? null; }, async run() { const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; return st; } });

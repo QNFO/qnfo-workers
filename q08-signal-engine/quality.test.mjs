@@ -1,10 +1,11 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-QUALITY-1 offline suite: precedent ban, Title Case and metadata gate rules, reader verdict parsing, owner directives,
 // prompt assembly, reader-test fail-open, and that the register exemplar no longer carries the overused guild precedent.
 // Run: node q08-signal-engine/quality.test.mjs
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-const mod = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href, import.meta.url);
 const q = mod.__quality;
 
 // 1. overused precedents: two uses in the sample trips the ban, one does not
@@ -124,7 +125,7 @@ import { DatabaseSync } from "node:sqlite";
   assert.ok(rep.by_family.some((f) => f.family === "google" && f.role === "judge" && f.n > 0));
   assert.ok(rep.by_round.length >= 1);
   assert.equal(rep.top_tells[0].phrase, "the same dynamic");
-  const w = (await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href)).default;
+  const w = (await importRunningWorker(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href, import.meta.url)).default;
   const resp = await w.fetch(new Request("https://q08.org/api/ensemble", { headers: { "user-agent": "Mozilla/5.0 Firefox/130" } }), env, { waitUntil() {} });
   const body = await resp.json();
   assert.equal(body.ok, true); assert.equal(body.window_days, 30); assert.ok(!JSON.stringify(body).match(/ip_key|cf-connecting/i));

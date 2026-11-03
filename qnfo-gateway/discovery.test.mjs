@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // DISCOVERY-1 offline suite (qnfo-gateway 3.10.1): qnfo.org robots.txt lists its own sitemap and the papers sitemap, qnfo.org
 // serves the IndexNow key, submissions carry the host they are for, and every cron submission is logged.
 // Run: node qnfo-gateway/discovery.test.mjs   -> prints "N passed, 0 failed"
@@ -13,7 +14,7 @@ const logs = [], posts = [];
 const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; }, async all() { return { results: [{ slug: "a-paper", created_at: "2026-10-05" }] }; }, async first() { return null; }, async run() { if (/INSERT INTO indexnow_log/.test(sql)) logs.push(st.a); return {}; } }; return st; };
 const env = { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, QNFO_BUCKET: { get: async () => null } };
 globalThis.fetch = async (url, init) => { if (/indexnow/.test(String(url))) { posts.push({ url: String(url), body: JSON.parse(init.body) }); return new Response("", { status: 202 }); } return new Response("", { status: 404 }); };
-const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const gw = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 const get = async (u) => { const r = await gw.fetch(new Request(u), env, { waitUntil() {} }); return { s: r.status, t: await r.text() }; };
 const rb = await get("https://qnfo.org/robots.txt");
 ok(rb.s === 200 && /Sitemap: https:\/\/qnfo\.org\/sitemap\.xml/.test(rb.t) && /Sitemap: https:\/\/papers\.qnfo\.org\/sitemap\.xml/.test(rb.t), "qnfo.org robots lists both sitemaps", rb.t);

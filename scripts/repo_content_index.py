@@ -137,6 +137,14 @@ def chunk(text):
 
 
 def embed(acct, token, texts):
+    rows, error = q(acct, token, AUDIT_D1,
+                    "SELECT paused, revision FROM fleet_ai_control WHERE id=1")
+    if (error or not rows or type(rows[0].get("paused")) is not int
+            or rows[0]["paused"] not in (0, 1) or type(rows[0].get("revision")) is not int
+            or rows[0]["revision"] < 0):
+        return None, "ai_control_unavailable: embeddings refused"
+    if rows[0]["paused"] == 1:
+        return None, "ai_paused: embeddings refused"
     st, j = http(CF + "/accounts/" + acct + "/ai/run/" + EMBED_MODEL, token, "POST",
                  {"text": texts}, timeout=120)
     if not (200 <= st < 300):

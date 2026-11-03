@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE, importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-REVIEW-2026-10-31 offline suite (agent_issues 1716). Replays the review block from worker.js, with the reach helpers
 // it reuses (reachRumQuery, reachGf, reachRumGroups), against an in-memory SQLite D1 and a stubbed CF GraphQL, and the
 // cadence-cap reader from q08-signal-engine/worker.js. Proves: the pure tally, decision and cap rules; nothing runs before
@@ -86,18 +87,18 @@ const g = (host, path, count) => ({ count, dimensions: { requestHost: host, requ
 // ---- load the block ------------------------------------------------------------------------------------------------
 const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, Array, Map, isNaN, isFinite, AbortSignal, fetch: fakeFetch });
 vm.runInContext(
-  ["var VERSION = 'test'; var NAME = 'qnfo-fleet-dashboard'; var DAY_MS = 864e5;", varSrc(src, "ACCOUNT"), varSrc(src, "REACH_RUM_LIMIT"),
+  RUNNING_AI_FIXTURE + (["var VERSION = 'test'; var NAME = 'qnfo-fleet-dashboard'; var DAY_MS = 864e5;", varSrc(src, "ACCOUNT"), varSrc(src, "REACH_RUM_LIMIT"),
     fnSrc(src, "d1all"), fnSrc(src, "reachErr"), fnSrc(src, "reachShiftDay"), fnSrc(src, "reachYesterday"), fnSrc(src, "reachRumQuery"),
     fnSrc(src, "reachGf"), fnSrc(src, "reachRumGroups"), src.slice(a, b),
     "this.__api = { q08ReviewWindow, q08ReviewTally, q08ReviewDecide, q08ReviewCap, q08ReviewMeasure, q08Review, q08ReviewStatus, reachRumQuery, K: { Q08_REVIEW_KEY, Q08_REVIEW_EVENT, Q08_REVIEW_DUE, Q08_CAP_KEY, Q08_CAP_DEFAULT, Q08_CAP_CUT, Q08_REVIEW_THRESHOLD } };"
-  ].join("\n"), cx);
+  ].join("\n")), cx);
 const api = cx.__api;
 const K = api.K;
 
 // The reader in q08-signal-engine (Q08-CADENCE-CAP-1), loaded from its own source.
 const qx = vm.createContext({ Number, String, Math });
-vm.runInContext([varSrc(q08src, "MAX_PER_DAY"), varSrc(q08src, "CAP_KEY"), varSrc(q08src, "PROPERTY"), varSrc(q08src, "QUOTAS_KEY"), fnSrc(q08src, "parseDailyCap"), fnSrc(q08src, "parseQuota"), fnSrc(q08src, "propertyQuota"), fnSrc(q08src, "sweepForecastCriteria"), fnSrc(q08src, "dailyCap"),
-  "this.__q = { parseDailyCap, dailyCap, CAP_KEY, MAX_PER_DAY };"].join("\n"), qx);
+vm.runInContext(RUNNING_AI_FIXTURE + ([varSrc(q08src, "MAX_PER_DAY"), varSrc(q08src, "CAP_KEY"), varSrc(q08src, "PROPERTY"), varSrc(q08src, "QUOTAS_KEY"), fnSrc(q08src, "parseDailyCap"), fnSrc(q08src, "parseQuota"), fnSrc(q08src, "propertyQuota"), fnSrc(q08src, "sweepForecastCriteria"), fnSrc(q08src, "dailyCap"),
+  "this.__q = { parseDailyCap, dailyCap, CAP_KEY, MAX_PER_DAY };"].join("\n")), qx);
 const q08 = qx.__q;
 
 let pass = 0, fail = 0;
@@ -224,7 +225,7 @@ ok(await q08.dailyCap({}) === 10 && await q08.dailyCap({ AUDIT: { prepare() { th
 {
   const { AUDIT } = mkDb();
   globalThis.fetch = fakeFetch;
-  const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+  const worker = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
   const c = { waitUntil() {}, passThroughOnException() {} };
   let res = await worker.fetch(new Request("https://fleet.qnfo.org/api/q08-review"), { AUDIT }, c);
   let j = await res.json();

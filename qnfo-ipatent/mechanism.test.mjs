@@ -1,10 +1,11 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // MECHANISM-FIRST-1 offline suite (qnfo-ipatent 3.11.0, agent_issues 2053). The real fetch handler with a stubbed model:
 // POST /api/mechanism returns a card and its holes; a description with an effect but no mechanism yields a NOT STATED hole,
 // never an invented mechanism; bots and short descriptions are refused; POST /api/draft with a card puts the card and the
 // claim-derivation rules into the drafting prompt, without a card the prompt carries no card; every draft prompt carries
 // the means-not-law, structure-for-function and enabled-range rules.
 // Run: node qnfo-ipatent/mechanism.test.mjs   (prints "N passed, 0 failed")
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const W = mod.default;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -90,6 +91,6 @@ const page = await (await W.fetch(new Request("https://ipatent.qnfo.org/", { hea
 ok(/<div class="field" id="mechZone" style="display:none" data-mechanism-first="v2">/.test(page) && /id="mechBtn"/.test(page), "the landing page carries the hidden mechanism step");
 ok(/get\('v'\) === '2'/.test(page) && /mechanism: mechCardValue\(\)/.test(page) && /if\(!MECH_V2 \|\| !mechFields\) return null;/.test(page), "only ?v=2 shows the step and only a read card is sent with the draft");
 const scripts = page.split("<script>").slice(1).map((x) => x.split("</script>")[0]); // the page writes its inline scripts as exactly <script>
-ok(scripts.length > 0 && scripts.every((sc) => { try { new Function(sc); return true; } catch (e) { return false; } }), "every inline page script parses");
+ok(scripts.length > 0 && scripts.every((sc) => { try { new Function(RUNNING_AI_FIXTURE + (sc)); return true; } catch (e) { return false; } }), "every inline page script parses");
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // GUIDED-FLOW-1 offline suite (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049). The ?v=2 variant carries the guided flow
 // (describe, mechanism, draft, support map, fix gaps, file with the 12-month date); the default page keeps every flow
 // element hidden and its script runs; the 12-month deadline follows 35 U.S.C. 119(e) with the 21(b) weekend roll; the
@@ -9,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const W = mod.default;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
@@ -17,7 +18,7 @@ const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL 
 // 1. ipDeadline / ipDeadlineIcs, evaluated from the source block.
 const block = src.slice(src.indexOf("// ---- GUIDED-FLOW-1:BEGIN"), src.indexOf("// ---- GUIDED-FLOW-1:END"));
 const sb = { __name: (f) => f }; vm.createContext(sb);
-vm.runInContext(block + "\n__x = { ipDeadline, ipDeadlineIcs, FLOW_STEPS, FLOW_PAGE_JS };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (block + "\n__x = { ipDeadline, ipDeadlineIcs, FLOW_STEPS, FLOW_PAGE_JS };"), sb);
 const { ipDeadline, ipDeadlineIcs, FLOW_STEPS, FLOW_PAGE_JS } = sb.__x;
 let d = ipDeadline("2026-10-08");
 ok(d && d.due === "2027-10-08" && !d.rolled && d.weekday === "Friday", "a weekday date is the same date next year", d);
@@ -51,7 +52,7 @@ for (const id of ["smHero", "fixZone", "fileZone"]) ok(new RegExp('id="' + id + 
 for (const st of FLOW_STEPS) ok(p1.h.includes('id="flow-' + st[0] + '"') && p1.h.includes('href="#flow-' + st[0] + '"'), "step " + st[0] + " has its anchor");
 ok(/12 months/.test(p1.h) && /35 U\.S\.C\. 21\(b\)/.test(p1.h) && /Not legal advice/.test(p1.h), "the filing step names the 12-month rule, the weekend roll and the not-legal-advice line");
 const scripts = [...p1.h.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-let parsed = 0; for (const sc of scripts) { try { new Function(sc); parsed++; } catch (e) { console.error(e.message); } }
+let parsed = 0; for (const sc of scripts) { try { new Function(RUNNING_AI_FIXTURE + (sc)); parsed++; } catch (e) { console.error(e.message); } }
 ok(scripts.length > 0 && parsed === scripts.length, "every inline script parses");
 ok(views.includes("/") && views.includes("/?v=2"), "page views are counted per variant", views);
 

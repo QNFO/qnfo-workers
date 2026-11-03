@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // MULTI-FILE-CODE-TASKS-1 offline suite (qnfo-code-orchestrator 0.12.0, agent_issues 2074, transformation lever T1.24, pillar autonomy).
 // The loop edited one file, so a change that needs the worker's test or a migration with it waited for a session (19 open
 // issues on 2026-10-06), and a task whose goal changes a behaviour a suite pins could only fail that suite. This suite proves:
@@ -22,7 +23,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "orch-multi-"));
 fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") +
   "\nexport { intakeIssues as __intake, parseFileEdits as __parse, validExtras as __valid, migrationWhy as __migration, VERSION as __version };\n");
-const mod = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
+const mod = await importRunningWorker(pathToFileURL(path.join(tmp, "w.mjs")).href, import.meta.url);
 const worker = mod.default;
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 

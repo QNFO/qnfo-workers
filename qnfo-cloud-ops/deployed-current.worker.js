@@ -8,7 +8,7 @@ import { connect } from "cloudflare:sockets";
 // BREACH-DOCTOR-WATCH-1 (1.39.0, agent_issues 1000266, pillar autonomy; minor: a new job that measures another worker's heartbeat and files an issue on its own): the release note is carried by
 // the comment block at BREACH-DOCTOR-WATCH-1:BEGIN, and none is added to the VERSION line below (VERSION-LINE-NOTES-1, 2026-10-19). The older notes stay on that line until the line is pruned.
 // 1.42.4 PAPER-PROVENANCE-TRACE-1: preserve paper-change metadata in the archive proof so body archival cannot erase provenance.
-var VERSION = "1.43.0-paper-provenance-archive"; /* 1.42.1 OWNER-ADDRESS-HYGIENE-1 (2026-10-27): rwnqni@outlook.com is not a valid address and leaves LEARNER_OWNER_ADDRS. */ /* 1.42.0 GCP-INVENTORY-1 (2026-10-26, pillar reach; minor: a new read-only loop): hourly inventory of the Google Cloud project behind the GCP_SA_KEY secret (enabled APIs, the service account's roles) written as gcp-inventory events; POST /run?job=gcp-inventory forces a run. */ /* 1.41.1 DEGENERATE-TEXT-1b (2026-10-26, pillar research; patch): the fresh quality lane wrote nothing when its sweep failed before its own event (the tick ignores the return value), so a failure of the ten-minute gate would have been silent; it now records a quality-fresh error event. */ /* 1.41.0 DEGENERATE-TEXT-1 (2026-10-26, pillar research; minor: the publication sweep now withdraws a defined class on its own; owner 2026-10-26 "errors like this can never make it past review/publish gates"): paper qnf-d66c40b5 was public with an 8,171-token "Te Te Te" model loop and a 24,586-character wall of repeated text ahead of its Abstract and scored 100 (ok), because the score counts characters and nothing looked for repetition. pubGateScore now runs the deterministic DEGENERATE-TEXT detector (qnfo-cloud-ops/degenerate-text.mjs holds the same block; degenerate-text.test.mjs fails when they differ): 200 repeated tokens in one region or a 5% share is degenerate-text and the sweep withdraws that paper alone (status quarantined, ledgered with change_actor and change_reason, one batch each, at most 10 a run, an owner paper never), a shorter stutter is revise (quality:repetition), and the restore step keeps a still-degenerate paper quarantined. ops_config degenerate_text_withdraw = off turns the withdrawal into a revise without a deploy. A fresh lane (jobQualityFresh, every tick, POST /run?job=quality-fresh) gives the same verdicts to the papers published or changed in the last 90 minutes or never gated, so a paper any publish path just wrote is judged within about ten minutes. Measured on all 950 living-paper bodies before the change: one paper flagged (this one), no false positive. PUB_GATE_VERSION pub-gate-v5-degenerate. */ /* 1.40.2 *//* 1.40.1 RESEARCH-WATCHDOG-HELD-1 (2026-10-26, agent_issues 100623, pillar reliability): the research-exec watchdog no longer forces a stage, and no longer files a "no stage finished in N minutes" stall, while the executor holds its stages on purpose because the daily neuron budget is spent (COST-SUSTAIN-1): the executor's own tick logs a research-budget "daily budget exhausted" event, and a hold logged in the last 15 minutes is a refusal by design. 6 forced stages an hour, each answered HTTP 200 and each read as a stall (688 minutes on 2026-10-26), stop; a hold older than 15 minutes means the tick itself stopped and the stall path runs as before; the daily proof stage is unchanged. research-watchdog-held.test.mjs. */ /* 1.38.0 PAPER-LEDGER-ARCHIVE-1 (2026-10-26, pillar research; minor: a new capability): the hourly quality sweep archives the oldest stored paper-ledger bodies to the RELEASES R2 bucket (paper-ledger/<seq>.md) once paper_change_bodies exceeds 300 MB, verifying each object by SHA-256 read-back before the stored body is deleted in one atomic batch with its archive proof, and paperLedgerBody() reads a body from the database or the bucket with the fingerprint checked; new RELEASES binding in wrangler.toml. Until the limit is crossed (about 44 MB held on 2026-10-26, growing about 1.1 MB an hour) the step only measures. 1.37.1 QUALITY-SCORE-MEMORY-1 (2026-10-26, pillar autonomy): the hourly quality sweep read every published paper body in one SELECT (about 40 MB at 1,000 papers) and kept the bodies again in its verdict list; Observability recorded exceededMemory at 2026-10-25T05:21:06Z, four seconds after a 693-paper sweep reported ok. Papers and the quarantines it restores are now read in keyset pages by rowid (QUALITY_SCORE_PAGE_ROWS = 10) and scored and written page by page; snapshots, verdicts and audit rows are unchanged, and a failed page write no longer stops the pages after it. 1.37.0 PAPER-LEDGER-1 (2026-10-26, pillar research and reach): the publication gate attributes the one change it makes that the living-paper revision ledger records, a restore from quarantine (papers.change_actor = qnfo-cloud-ops:<run id>, change_reason = the quarantine it undoes), so paper_change_ledger no longer files it as unattributed; verdict-only writes (release_gate_*) are not ledger events and stay in publication_gate_audit; the structure checker reads "1.0 Title" as section 1. 1.36.1 PUB-GATE-RESTORE-2 (2026-10-26, pillar research and reach): each quarantined paper is restored in its own batch; 11 of the 162 were refused by the living-paper publish floor (under 20,000 chars), and one refusal rolled back its 100-statement chunk and threw out of the run, so most restores never landed. A refusal is logged as publication_gate_audit decision restore-refused and the rest go through. 1.36.0 PUB-GATE-RESTORE-1 (2026-10-26, pillar research and reach): the publication gate sweep no longer withdraws any published paper (PUB-GATE-NO-WITHDRAW-1, owner 2026-10-26: no safety checks the owner did not ask for): failing papers are marked for revision and stay published, and every paper it quarantined for quality is restored. 1.33.2 RESEARCH-WATCHDOG-TIMEOUT-1 (2026-10-25, pillar autonomy, issue 3924): the watchdog aborted its forced stage after 90 s although a p99 stage takes about 10.5 minutes, so queued research stalled 120 minutes; the timeout is now 12 minutes, under the 14-minute research-exec lease and the 15-minute scheduled ceiling. */ /* 1.33.0 RESEARCH-WATCHDOG-1 (2026-10-20, pillar autonomy, agent_issues 2838 EVOLVE-1, SLA-AND-PATHS-1): qnfo-research-exec ran from one trigger, its own cron. Every tick now reads whether the research queue holds work and whether a stage finished in the last 30 minutes, and forces one stage through the new RESEARCH_EXEC service binding (POST /run?sync=1 on an internal host, the path qnfo-ops ops_research_kick uses) when work waits and nothing finished; it also forces one proof stage a day so the second path is exercised, not declared. OWNER-EXEMPT-METRIC-1 (agent_issues 1947): idea_topic_concentration_30d is computed over generated accepts only (a producer whose name holds owner is exempt from the diversity cap by design); the all-sources share rides in the job notes. Each forced stage leaves a cloud_ops_events row of kind research-watchdog; a busy answer (single-flight lease held) is a healthy run, not a failure. */ /* 1.32.1 INBOUND-SLA-GRACE-1 (2026-10-19, agent_issues 100063): the inbound SLA grace is 90 minutes (was 12 h), inside the 120-minute first-action SLA. */ /* 1.32.0 FLEET-GRAPH-CADENCE-1 (2026-10-19, pillar autonomy): the second path of FLEET-GRAPH-1. Every tick reads the last run of fleet-graph.yml (the fleet code + topology graph build, scripts/fleet_graph.mjs) and, when it is older than 60 minutes and no dispatch was sent inside that window, sends repository_dispatch fleet-graph-tick, reusing the pure PROBE-CADENCE-1 decision. Live drift outside git (a raw PUT, a dashboard edit) therefore reaches the graph within about 70 minutes while main is quiet; a push to main rebuilds it at once. State only, no run log per tick; a refused dispatch files FLEET-GRAPH-DISPATCH-1 once. */ /* 1.30.0 GH-TOKEN-WATCH-1 (2026-10-14, pillar autonomy): every 10-minute tick reads GET /rate_limit with GH_TOKEN (no quota used) and writes github_token_ok, github_token_expires_in_min (from the github-authentication-token-expiration header; 999999 when the token has no expiry) and github_api_remaining to metric_registry, state in scheduler_state gh_token_watch; triggers file an issue when the token is refused or expires within 20160 minutes, so the Cloudflare -> GitHub path never stops silently. */ /* 1.29.1 OUTREACH-LOOKUP-120M-1: the job-run row is runScheduledJob's own (no second event). */ /* 1.29.0 OUTREACH-LOOKUP-120M-1 (2026-10-14, pillar reach; owner directive: no SLA exceeds 120 minutes, root causes remediated at once): a new job outreach-lookup runs the email lookup for needs-email rows every 120 minutes, every day, and moves a found address to pending; it never sends. Sends, caps, consent and the weekday 11:00 slot stay in jobOutreach. */ /* 1.28.2 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530, child of 2342, pillar autonomy): the 22 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.28.0 TOPIC-CLUSTERS-DERIVED-1 (ACCURACY-FLEET-2a, agent_issues 2281, pillar research; owner directive 2026-10-10 no topic or noun hard-coded): the daily idea-topic-metric derives the topic clusters from the ACCEPTed idea_proposals of the last 90 days (top content words by document frequency, producer boilerplate dropped, grouped by co-occurrence), caches them in ops_config idea_topic_clusters for idea-hub and computes idea_topic_concentration_30d with them over each row's idea text; the fixed IDEA_TOPIC_CLUSTERS table is gone. Shared block identical to idea-hub 1.10.0. */ /* 1.27.1 REMEDIATION-2X-1 (2026-10-13, pillar autonomy; owner directive "All issue remediation and consumer runs shall be quickened/increased a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): PROBE-CADENCE-1 dispatches remediation-consumer.yml when its last run is older than 30 minutes, was 60, so runtime probes on a quiet main run at least twice an hour. */ /* 1.27.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts qnfo-cloud-ops's own fleet_heartbeat row when a run has finished (ok 0 when a tick job rejected); the folded email-orchestrator member's row is unchanged. */ /* 1.26.3 1.26.3 PROBE-REVIEW-DETECTORS-1 (2026-10-13, pillar autonomy, metric failure_modes_recurring): PROBE-REVIEW-1 no longer judges failure-mode (fm-*) or belief (belief-*) detectors; they are standing recurrence probes that close no issue, and a refusal (fm-paper-abstract-empty, 08:50 UTC) took one out of both executors so it read as unprobed. */ /* 1.26.2 WORKERS-BP-DEBT-2 (2026-10-12, metric workers_bp_findings_open 13 -> 5, pillar security): the eight event and row ids built from Math.random (gtd-line, outreach queue and sent events, learner tag, inbound-sla failure id, recording id) take rndB36 (crypto.getRandomValues); the seeded learner RNG is unchanged; member 0.5.8-folded carries the same id change. */ /* 1.26.1 MAIL-ASK-1 (2026-10-12, pillar autonomy; member 0.5.7-folded): INBOUND-SLA-1 SLA_SOLICIT_RX (emailOrchMod) also matches journal call-for-paper mail ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line, "upcoming issue") and reads 1200 body characters, so such mail is a solicitation, not a person owed a reply; parity with qnfo-fleet-dashboard MAIL_SOLICIT_RX. Merged on top of 1.26.0 DRAFT-GROUNDING-1; both behaviours kept. */ /* 1.26.0 DRAFT-GROUNDING-1 (2026-10-12, agent_issues 2282 and 2272, pillar reach; member 0.5.6-folded): the inbound-mail drafter's prompt names no example subject and escalates anything that needs expertise, judgement, a decision, an opinion or a commitment; a mechanical check (ungroundedTerms) refuses any draft holding a name, number or date the inbound email does not contain, so it falls back to the fixed acknowledgement or a hold; a model-written closing is cut. SLA-GRACE-1 (agent_issues 2204): the grace before a hold, acknowledgement or answer is 12 h, was 24 h, which equalled the target of inbound_first_response_h_median_30d and held the median at 24.1 to 24.3. */ /* 1.24.2 NOZ-DOI-1 (2026-10-10): the weekly external-registry stats job, its slot and catch-up, and every report line about it are removed; the portfolio status and board items carry no DOI; the release card probe checks PyPI only. 1.24.1 1.24.1 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the daily research scan builds its arXiv lanes from the owner's accepted ideas in idea_proposals instead of a fixed query table; its extractor prompt names no topic and uses only the match list; the email triage prompt is unchanged because qnfo-email-orchestrator carries the same line (email-orch-fold parity). */ /* 1.24.0 PROBE-REVIEW-1 (2026-10-07, agent_issues 2112 PROBE-INDEPENDENCE-2, pillar autonomy, core rule 7): every tick reads up to two closing probes (remediation_contracts on open issues, d1-query, not the template ownership probes nor METRIC-TRIGGER probes) whose text it has not judged and asks one Workers AI model (gpt-oss-120b, then deepseek-v4-flash) whether the probe tests the issue's definition of done; self-confirming takes the contract out of the closing path (status probe-review-refused, which neither executor reads, and a note on the issue) until a rewrite is judged tests-dod or partial, which restores it. One verdict per probe text (cloud_ops_events probe-review-<class>-<sha12>), heartbeat probe-review-tick each tick, ops_config probe_review_enabled / probe_review_enforce (record) switches; guard probe_review_refused_share_7d. Sessions write the closing probes for their own fixes, and a probe that checks only that a change was made closes the issue whether or not its outcome arrived. */ /* 1.23.1 WORKERS-AI-ATTRIBUTION-2 (2026-10-07, pillar cost, agent_issues 2097): every env.AI.run of this worker is counted in ai_call_counters through __aiAttrEnv (the helper of scripts/ai-attr-env-patch.py, env rebound at the top of scheduled and fetch); its neurons were unattributed while workers_ai_attribution_coverage_pct read 36.2 against a threshold of 50. */ /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi with evidence once their public results exist (QNFO/license v2.1 file; PyPI and external registry software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 CATCHUP-1 (a stats-job week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when stats table is older than 180h and no run started in 20h; no new cron) and REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 UA-1 (stats-job sends an honest User-Agent; external registry refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */ /* 1.31.0 SLA-120M-INBOUND-1 (2026-10-19, pillar autonomy, agent_issues 2583): inboundSlaMetrics also writes inbound_unactioned_120m (human inbound rows with no first fleet action after INBOUND_SLA.first_action_min = 120 minutes) and runs on the 15-minute member tick instead of the 3-hourly one; the 72 h trigger is disabled by migrations/2026-10-19-resolve-inbound-120m.sql. */ /* 1.30.0 GH-TOKEN-WATCH-1 (2026-10-14, pillar autonomy): every 10-minute tick reads GET /rate_limit with GH_TOKEN (no quota used) and writes github_token_ok, github_token_expires_in_min (from the github-authentication-token-expiration header; 999999 when the token has no expiry) and github_api_remaining to metric_registry, state in scheduler_state gh_token_watch; triggers file an issue when the token is refused or expires within 20160 minutes, so the Cloudflare -> GitHub path never stops silently. */ /* 1.29.1 OUTREACH-LOOKUP-120M-1: the job-run row is runScheduledJob's own (no second event). */ /* 1.29.0 OUTREACH-LOOKUP-120M-1 (2026-10-14, pillar reach; owner directive: no SLA exceeds 120 minutes, root causes remediated at once): a new job outreach-lookup runs the email lookup for needs-email rows every 120 minutes, every day, and moves a found address to pending; it never sends. Sends, caps, consent and the weekday 11:00 slot stay in jobOutreach. */ /* 1.28.2 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530, child of 2342, pillar autonomy): the 22 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.28.0 TOPIC-CLUSTERS-DERIVED-1 (ACCURACY-FLEET-2a, agent_issues 2281, pillar research; owner directive 2026-10-10 no topic or noun hard-coded): the daily idea-topic-metric derives the topic clusters from the ACCEPTed idea_proposals of the last 90 days (top content words by document frequency, producer boilerplate dropped, grouped by co-occurrence), caches them in ops_config idea_topic_clusters for idea-hub and computes idea_topic_concentration_30d with them over each row's idea text; the fixed IDEA_TOPIC_CLUSTERS table is gone. Shared block identical to idea-hub 1.10.0. */ /* 1.27.1 REMEDIATION-2X-1 (2026-10-13, pillar autonomy; owner directive "All issue remediation and consumer runs shall be quickened/increased a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): PROBE-CADENCE-1 dispatches remediation-consumer.yml when its last run is older than 30 minutes, was 60, so runtime probes on a quiet main run at least twice an hour. */ /* 1.27.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts qnfo-cloud-ops's own fleet_heartbeat row when a run has finished (ok 0 when a tick job rejected); the folded email-orchestrator member's row is unchanged. */ /* 1.26.3 1.26.3 PROBE-REVIEW-DETECTORS-1 (2026-10-13, pillar autonomy, metric failure_modes_recurring): PROBE-REVIEW-1 no longer judges failure-mode (fm-*) or belief (belief-*) detectors; they are standing recurrence probes that close no issue, and a refusal (fm-paper-abstract-empty, 08:50 UTC) took one out of both executors so it read as unprobed. */ /* 1.26.2 WORKERS-BP-DEBT-2 (2026-10-12, metric workers_bp_findings_open 13 -> 5, pillar security): the eight event and row ids built from Math.random (gtd-line, outreach queue and sent events, learner tag, inbound-sla failure id, recording id) take rndB36 (crypto.getRandomValues); the seeded learner RNG is unchanged; member 0.5.8-folded carries the same id change. */ /* 1.26.1 MAIL-ASK-1 (2026-10-12, pillar autonomy; member 0.5.7-folded): INBOUND-SLA-1 SLA_SOLICIT_RX (emailOrchMod) also matches journal call-for-paper mail ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line, "upcoming issue") and reads 1200 body characters, so such mail is a solicitation, not a person owed a reply; parity with qnfo-fleet-dashboard MAIL_SOLICIT_RX. Merged on top of 1.26.0 DRAFT-GROUNDING-1; both behaviours kept. */ /* 1.26.0 DRAFT-GROUNDING-1 (2026-10-12, agent_issues 2282 and 2272, pillar reach; member 0.5.6-folded): the inbound-mail drafter's prompt names no example subject and escalates anything that needs expertise, judgement, a decision, an opinion or a commitment; a mechanical check (ungroundedTerms) refuses any draft holding a name, number or date the inbound email does not contain, so it falls back to the fixed acknowledgement or a hold; a model-written closing is cut. SLA-GRACE-1 (agent_issues 2204): the grace before a hold, acknowledgement or answer is 12 h, was 24 h, which equalled the target of inbound_first_response_h_median_30d and held the median at 24.1 to 24.3. */ /* 1.24.2 NOZ-DOI-1 (2026-10-10): the weekly external-registry stats job, its slot and catch-up, and every report line about it are removed; the portfolio status and board items carry no DOI; the release card probe checks PyPI only. 1.24.1 1.24.1 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the daily research scan builds its arXiv lanes from the owner's accepted ideas in idea_proposals instead of a fixed query table; its extractor prompt names no topic and uses only the match list; the email triage prompt is unchanged because qnfo-email-orchestrator carries the same line (email-orch-fold parity). */ /* 1.24.0 PROBE-REVIEW-1 (2026-10-07, agent_issues 2112 PROBE-INDEPENDENCE-2, pillar autonomy, core rule 7): every tick reads up to two closing probes (remediation_contracts on open issues, d1-query, not the template ownership probes nor METRIC-TRIGGER probes) whose text it has not judged and asks one Workers AI model (gpt-oss-120b, then deepseek-v4-flash) whether the probe tests the issue's definition of done; self-confirming takes the contract out of the closing path (status probe-review-refused, which neither executor reads, and a note on the issue) until a rewrite is judged tests-dod or partial, which restores it. One verdict per probe text (cloud_ops_events probe-review-<class>-<sha12>), heartbeat probe-review-tick each tick, ops_config probe_review_enabled / probe_review_enforce (record) switches; guard probe_review_refused_share_7d. Sessions write the closing probes for their own fixes, and a probe that checks only that a change was made closes the issue whether or not its outcome arrived. */ /* 1.23.1 WORKERS-AI-ATTRIBUTION-2 (2026-10-07, pillar cost, agent_issues 2097): every env.AI.run of this worker is counted in ai_call_counters through __aiAttrEnv (the helper of scripts/ai-attr-env-patch.py, env rebound at the top of scheduled and fetch); its neurons were unattributed while workers_ai_attribution_coverage_pct read 36.2 against a threshold of 50. */ /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi with evidence once their public results exist (QNFO/license v2.1 file; PyPI and external registry software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 CATCHUP-1 (a stats-job week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when stats table is older than 180h and no run started in 20h; no new cron) and REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 UA-1 (stats-job sends an honest User-Agent; external registry refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.44.0"; /* 1.42.1 OWNER-ADDRESS-HYGIENE-1 (2026-10-27): rwnqni@outlook.com is not a valid address and leaves LEARNER_OWNER_ADDRS. */ /* 1.42.0 GCP-INVENTORY-1 (2026-10-26, pillar reach; minor: a new read-only loop): hourly inventory of the Google Cloud project behind the GCP_SA_KEY secret (enabled APIs, the service account's roles) written as gcp-inventory events; POST /run?job=gcp-inventory forces a run. */ /* 1.41.1 DEGENERATE-TEXT-1b (2026-10-26, pillar research; patch): the fresh quality lane wrote nothing when its sweep failed before its own event (the tick ignores the return value), so a failure of the ten-minute gate would have been silent; it now records a quality-fresh error event. */ /* 1.41.0 DEGENERATE-TEXT-1 (2026-10-26, pillar research; minor: the publication sweep now withdraws a defined class on its own; owner 2026-10-26 "errors like this can never make it past review/publish gates"): paper qnf-d66c40b5 was public with an 8,171-token "Te Te Te" model loop and a 24,586-character wall of repeated text ahead of its Abstract and scored 100 (ok), because the score counts characters and nothing looked for repetition. pubGateScore now runs the deterministic DEGENERATE-TEXT detector (qnfo-cloud-ops/degenerate-text.mjs holds the same block; degenerate-text.test.mjs fails when they differ): 200 repeated tokens in one region or a 5% share is degenerate-text and the sweep withdraws that paper alone (status quarantined, ledgered with change_actor and change_reason, one batch each, at most 10 a run, an owner paper never), a shorter stutter is revise (quality:repetition), and the restore step keeps a still-degenerate paper quarantined. ops_config degenerate_text_withdraw = off turns the withdrawal into a revise without a deploy. A fresh lane (jobQualityFresh, every tick, POST /run?job=quality-fresh) gives the same verdicts to the papers published or changed in the last 90 minutes or never gated, so a paper any publish path just wrote is judged within about ten minutes. Measured on all 950 living-paper bodies before the change: one paper flagged (this one), no false positive. PUB_GATE_VERSION pub-gate-v5-degenerate. */ /* 1.40.2 *//* 1.40.1 RESEARCH-WATCHDOG-HELD-1 (2026-10-26, agent_issues 100623, pillar reliability): the research-exec watchdog no longer forces a stage, and no longer files a "no stage finished in N minutes" stall, while the executor holds its stages on purpose because the daily neuron budget is spent (COST-SUSTAIN-1): the executor's own tick logs a research-budget "daily budget exhausted" event, and a hold logged in the last 15 minutes is a refusal by design. 6 forced stages an hour, each answered HTTP 200 and each read as a stall (688 minutes on 2026-10-26), stop; a hold older than 15 minutes means the tick itself stopped and the stall path runs as before; the daily proof stage is unchanged. research-watchdog-held.test.mjs. */ /* 1.38.0 PAPER-LEDGER-ARCHIVE-1 (2026-10-26, pillar research; minor: a new capability): the hourly quality sweep archives the oldest stored paper-ledger bodies to the RELEASES R2 bucket (paper-ledger/<seq>.md) once paper_change_bodies exceeds 300 MB, verifying each object by SHA-256 read-back before the stored body is deleted in one atomic batch with its archive proof, and paperLedgerBody() reads a body from the database or the bucket with the fingerprint checked; new RELEASES binding in wrangler.toml. Until the limit is crossed (about 44 MB held on 2026-10-26, growing about 1.1 MB an hour) the step only measures. 1.37.1 QUALITY-SCORE-MEMORY-1 (2026-10-26, pillar autonomy): the hourly quality sweep read every published paper body in one SELECT (about 40 MB at 1,000 papers) and kept the bodies again in its verdict list; Observability recorded exceededMemory at 2026-10-25T05:21:06Z, four seconds after a 693-paper sweep reported ok. Papers and the quarantines it restores are now read in keyset pages by rowid (QUALITY_SCORE_PAGE_ROWS = 10) and scored and written page by page; snapshots, verdicts and audit rows are unchanged, and a failed page write no longer stops the pages after it. 1.37.0 PAPER-LEDGER-1 (2026-10-26, pillar research and reach): the publication gate attributes the one change it makes that the living-paper revision ledger records, a restore from quarantine (papers.change_actor = qnfo-cloud-ops:<run id>, change_reason = the quarantine it undoes), so paper_change_ledger no longer files it as unattributed; verdict-only writes (release_gate_*) are not ledger events and stay in publication_gate_audit; the structure checker reads "1.0 Title" as section 1. 1.36.1 PUB-GATE-RESTORE-2 (2026-10-26, pillar research and reach): each quarantined paper is restored in its own batch; 11 of the 162 were refused by the living-paper publish floor (under 20,000 chars), and one refusal rolled back its 100-statement chunk and threw out of the run, so most restores never landed. A refusal is logged as publication_gate_audit decision restore-refused and the rest go through. 1.36.0 PUB-GATE-RESTORE-1 (2026-10-26, pillar research and reach): the publication gate sweep no longer withdraws any published paper (PUB-GATE-NO-WITHDRAW-1, owner 2026-10-26: no safety checks the owner did not ask for): failing papers are marked for revision and stay published, and every paper it quarantined for quality is restored. 1.33.2 RESEARCH-WATCHDOG-TIMEOUT-1 (2026-10-25, pillar autonomy, issue 3924): the watchdog aborted its forced stage after 90 s although a p99 stage takes about 10.5 minutes, so queued research stalled 120 minutes; the timeout is now 12 minutes, under the 14-minute research-exec lease and the 15-minute scheduled ceiling. */ /* 1.33.0 RESEARCH-WATCHDOG-1 (2026-10-20, pillar autonomy, agent_issues 2838 EVOLVE-1, SLA-AND-PATHS-1): qnfo-research-exec ran from one trigger, its own cron. Every tick now reads whether the research queue holds work and whether a stage finished in the last 30 minutes, and forces one stage through the new RESEARCH_EXEC service binding (POST /run?sync=1 on an internal host, the path qnfo-ops ops_research_kick uses) when work waits and nothing finished; it also forces one proof stage a day so the second path is exercised, not declared. OWNER-EXEMPT-METRIC-1 (agent_issues 1947): idea_topic_concentration_30d is computed over generated accepts only (a producer whose name holds owner is exempt from the diversity cap by design); the all-sources share rides in the job notes. Each forced stage leaves a cloud_ops_events row of kind research-watchdog; a busy answer (single-flight lease held) is a healthy run, not a failure. */ /* 1.32.1 INBOUND-SLA-GRACE-1 (2026-10-19, agent_issues 100063): the inbound SLA grace is 90 minutes (was 12 h), inside the 120-minute first-action SLA. */ /* 1.32.0 FLEET-GRAPH-CADENCE-1 (2026-10-19, pillar autonomy): the second path of FLEET-GRAPH-1. Every tick reads the last run of fleet-graph.yml (the fleet code + topology graph build, scripts/fleet_graph.mjs) and, when it is older than 60 minutes and no dispatch was sent inside that window, sends repository_dispatch fleet-graph-tick, reusing the pure PROBE-CADENCE-1 decision. Live drift outside git (a raw PUT, a dashboard edit) therefore reaches the graph within about 70 minutes while main is quiet; a push to main rebuilds it at once. State only, no run log per tick; a refused dispatch files FLEET-GRAPH-DISPATCH-1 once. */ /* 1.30.0 GH-TOKEN-WATCH-1 (2026-10-14, pillar autonomy): every 10-minute tick reads GET /rate_limit with GH_TOKEN (no quota used) and writes github_token_ok, github_token_expires_in_min (from the github-authentication-token-expiration header; 999999 when the token has no expiry) and github_api_remaining to metric_registry, state in scheduler_state gh_token_watch; triggers file an issue when the token is refused or expires within 20160 minutes, so the Cloudflare -> GitHub path never stops silently. */ /* 1.29.1 OUTREACH-LOOKUP-120M-1: the job-run row is runScheduledJob's own (no second event). */ /* 1.29.0 OUTREACH-LOOKUP-120M-1 (2026-10-14, pillar reach; owner directive: no SLA exceeds 120 minutes, root causes remediated at once): a new job outreach-lookup runs the email lookup for needs-email rows every 120 minutes, every day, and moves a found address to pending; it never sends. Sends, caps, consent and the weekday 11:00 slot stay in jobOutreach. */ /* 1.28.2 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530, child of 2342, pillar autonomy): the 22 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.28.0 TOPIC-CLUSTERS-DERIVED-1 (ACCURACY-FLEET-2a, agent_issues 2281, pillar research; owner directive 2026-10-10 no topic or noun hard-coded): the daily idea-topic-metric derives the topic clusters from the ACCEPTed idea_proposals of the last 90 days (top content words by document frequency, producer boilerplate dropped, grouped by co-occurrence), caches them in ops_config idea_topic_clusters for idea-hub and computes idea_topic_concentration_30d with them over each row's idea text; the fixed IDEA_TOPIC_CLUSTERS table is gone. Shared block identical to idea-hub 1.10.0. */ /* 1.27.1 REMEDIATION-2X-1 (2026-10-13, pillar autonomy; owner directive "All issue remediation and consumer runs shall be quickened/increased a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): PROBE-CADENCE-1 dispatches remediation-consumer.yml when its last run is older than 30 minutes, was 60, so runtime probes on a quiet main run at least twice an hour. */ /* 1.27.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts qnfo-cloud-ops's own fleet_heartbeat row when a run has finished (ok 0 when a tick job rejected); the folded email-orchestrator member's row is unchanged. */ /* 1.26.3 1.26.3 PROBE-REVIEW-DETECTORS-1 (2026-10-13, pillar autonomy, metric failure_modes_recurring): PROBE-REVIEW-1 no longer judges failure-mode (fm-*) or belief (belief-*) detectors; they are standing recurrence probes that close no issue, and a refusal (fm-paper-abstract-empty, 08:50 UTC) took one out of both executors so it read as unprobed. */ /* 1.26.2 WORKERS-BP-DEBT-2 (2026-10-12, metric workers_bp_findings_open 13 -> 5, pillar security): the eight event and row ids built from Math.random (gtd-line, outreach queue and sent events, learner tag, inbound-sla failure id, recording id) take rndB36 (crypto.getRandomValues); the seeded learner RNG is unchanged; member 0.5.8-folded carries the same id change. */ /* 1.26.1 MAIL-ASK-1 (2026-10-12, pillar autonomy; member 0.5.7-folded): INBOUND-SLA-1 SLA_SOLICIT_RX (emailOrchMod) also matches journal call-for-paper mail ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line, "upcoming issue") and reads 1200 body characters, so such mail is a solicitation, not a person owed a reply; parity with qnfo-fleet-dashboard MAIL_SOLICIT_RX. Merged on top of 1.26.0 DRAFT-GROUNDING-1; both behaviours kept. */ /* 1.26.0 DRAFT-GROUNDING-1 (2026-10-12, agent_issues 2282 and 2272, pillar reach; member 0.5.6-folded): the inbound-mail drafter's prompt names no example subject and escalates anything that needs expertise, judgement, a decision, an opinion or a commitment; a mechanical check (ungroundedTerms) refuses any draft holding a name, number or date the inbound email does not contain, so it falls back to the fixed acknowledgement or a hold; a model-written closing is cut. SLA-GRACE-1 (agent_issues 2204): the grace before a hold, acknowledgement or answer is 12 h, was 24 h, which equalled the target of inbound_first_response_h_median_30d and held the median at 24.1 to 24.3. */ /* 1.24.2 NOZ-DOI-1 (2026-10-10): the weekly external-registry stats job, its slot and catch-up, and every report line about it are removed; the portfolio status and board items carry no DOI; the release card probe checks PyPI only. 1.24.1 1.24.1 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the daily research scan builds its arXiv lanes from the owner's accepted ideas in idea_proposals instead of a fixed query table; its extractor prompt names no topic and uses only the match list; the email triage prompt is unchanged because qnfo-email-orchestrator carries the same line (email-orch-fold parity). */ /* 1.24.0 PROBE-REVIEW-1 (2026-10-07, agent_issues 2112 PROBE-INDEPENDENCE-2, pillar autonomy, core rule 7): every tick reads up to two closing probes (remediation_contracts on open issues, d1-query, not the template ownership probes nor METRIC-TRIGGER probes) whose text it has not judged and asks one Workers AI model (gpt-oss-120b, then deepseek-v4-flash) whether the probe tests the issue's definition of done; self-confirming takes the contract out of the closing path (status probe-review-refused, which neither executor reads, and a note on the issue) until a rewrite is judged tests-dod or partial, which restores it. One verdict per probe text (cloud_ops_events probe-review-<class>-<sha12>), heartbeat probe-review-tick each tick, ops_config probe_review_enabled / probe_review_enforce (record) switches; guard probe_review_refused_share_7d. Sessions write the closing probes for their own fixes, and a probe that checks only that a change was made closes the issue whether or not its outcome arrived. */ /* 1.23.1 WORKERS-AI-ATTRIBUTION-2 (2026-10-07, pillar cost, agent_issues 2097): every env.AI.run of this worker is counted in ai_call_counters through __aiAttrEnv (the helper of scripts/ai-attr-env-patch.py, env rebound at the top of scheduled and fetch); its neurons were unattributed while workers_ai_attribution_coverage_pct read 36.2 against a threshold of 50. */ /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi with evidence once their public results exist (QNFO/license v2.1 file; PyPI and external registry software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 CATCHUP-1 (a stats-job week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when stats table is older than 180h and no run started in 20h; no new cron) and REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 UA-1 (stats-job sends an honest User-Agent; external registry refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */ /* 1.31.0 SLA-120M-INBOUND-1 (2026-10-19, pillar autonomy, agent_issues 2583): inboundSlaMetrics also writes inbound_unactioned_120m (human inbound rows with no first fleet action after INBOUND_SLA.first_action_min = 120 minutes) and runs on the 15-minute member tick instead of the 3-hourly one; the 72 h trigger is disabled by migrations/2026-10-19-resolve-inbound-120m.sql. */ /* 1.30.0 GH-TOKEN-WATCH-1 (2026-10-14, pillar autonomy): every 10-minute tick reads GET /rate_limit with GH_TOKEN (no quota used) and writes github_token_ok, github_token_expires_in_min (from the github-authentication-token-expiration header; 999999 when the token has no expiry) and github_api_remaining to metric_registry, state in scheduler_state gh_token_watch; triggers file an issue when the token is refused or expires within 20160 minutes, so the Cloudflare -> GitHub path never stops silently. */ /* 1.29.1 OUTREACH-LOOKUP-120M-1: the job-run row is runScheduledJob's own (no second event). */ /* 1.29.0 OUTREACH-LOOKUP-120M-1 (2026-10-14, pillar reach; owner directive: no SLA exceeds 120 minutes, root causes remediated at once): a new job outreach-lookup runs the email lookup for needs-email rows every 120 minutes, every day, and moves a found address to pending; it never sends. Sends, caps, consent and the weekday 11:00 slot stay in jobOutreach. */ /* 1.28.2 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530, child of 2342, pillar autonomy): the 22 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.28.0 TOPIC-CLUSTERS-DERIVED-1 (ACCURACY-FLEET-2a, agent_issues 2281, pillar research; owner directive 2026-10-10 no topic or noun hard-coded): the daily idea-topic-metric derives the topic clusters from the ACCEPTed idea_proposals of the last 90 days (top content words by document frequency, producer boilerplate dropped, grouped by co-occurrence), caches them in ops_config idea_topic_clusters for idea-hub and computes idea_topic_concentration_30d with them over each row's idea text; the fixed IDEA_TOPIC_CLUSTERS table is gone. Shared block identical to idea-hub 1.10.0. */ /* 1.27.1 REMEDIATION-2X-1 (2026-10-13, pillar autonomy; owner directive "All issue remediation and consumer runs shall be quickened/increased a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): PROBE-CADENCE-1 dispatches remediation-consumer.yml when its last run is older than 30 minutes, was 60, so runtime probes on a quiet main run at least twice an hour. */ /* 1.27.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts qnfo-cloud-ops's own fleet_heartbeat row when a run has finished (ok 0 when a tick job rejected); the folded email-orchestrator member's row is unchanged. */ /* 1.26.3 1.26.3 PROBE-REVIEW-DETECTORS-1 (2026-10-13, pillar autonomy, metric failure_modes_recurring): PROBE-REVIEW-1 no longer judges failure-mode (fm-*) or belief (belief-*) detectors; they are standing recurrence probes that close no issue, and a refusal (fm-paper-abstract-empty, 08:50 UTC) took one out of both executors so it read as unprobed. */ /* 1.26.2 WORKERS-BP-DEBT-2 (2026-10-12, metric workers_bp_findings_open 13 -> 5, pillar security): the eight event and row ids built from Math.random (gtd-line, outreach queue and sent events, learner tag, inbound-sla failure id, recording id) take rndB36 (crypto.getRandomValues); the seeded learner RNG is unchanged; member 0.5.8-folded carries the same id change. */ /* 1.26.1 MAIL-ASK-1 (2026-10-12, pillar autonomy; member 0.5.7-folded): INBOUND-SLA-1 SLA_SOLICIT_RX (emailOrchMod) also matches journal call-for-paper mail ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line, "upcoming issue") and reads 1200 body characters, so such mail is a solicitation, not a person owed a reply; parity with qnfo-fleet-dashboard MAIL_SOLICIT_RX. Merged on top of 1.26.0 DRAFT-GROUNDING-1; both behaviours kept. */ /* 1.26.0 DRAFT-GROUNDING-1 (2026-10-12, agent_issues 2282 and 2272, pillar reach; member 0.5.6-folded): the inbound-mail drafter's prompt names no example subject and escalates anything that needs expertise, judgement, a decision, an opinion or a commitment; a mechanical check (ungroundedTerms) refuses any draft holding a name, number or date the inbound email does not contain, so it falls back to the fixed acknowledgement or a hold; a model-written closing is cut. SLA-GRACE-1 (agent_issues 2204): the grace before a hold, acknowledgement or answer is 12 h, was 24 h, which equalled the target of inbound_first_response_h_median_30d and held the median at 24.1 to 24.3. */ /* 1.24.2 NOZ-DOI-1 (2026-10-10): the weekly external-registry stats job, its slot and catch-up, and every report line about it are removed; the portfolio status and board items carry no DOI; the release card probe checks PyPI only. 1.24.1 1.24.1 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the daily research scan builds its arXiv lanes from the owner's accepted ideas in idea_proposals instead of a fixed query table; its extractor prompt names no topic and uses only the match list; the email triage prompt is unchanged because qnfo-email-orchestrator carries the same line (email-orch-fold parity). */ /* 1.24.0 PROBE-REVIEW-1 (2026-10-07, agent_issues 2112 PROBE-INDEPENDENCE-2, pillar autonomy, core rule 7): every tick reads up to two closing probes (remediation_contracts on open issues, d1-query, not the template ownership probes nor METRIC-TRIGGER probes) whose text it has not judged and asks one Workers AI model (gpt-oss-120b, then deepseek-v4-flash) whether the probe tests the issue's definition of done; self-confirming takes the contract out of the closing path (status probe-review-refused, which neither executor reads, and a note on the issue) until a rewrite is judged tests-dod or partial, which restores it. One verdict per probe text (cloud_ops_events probe-review-<class>-<sha12>), heartbeat probe-review-tick each tick, ops_config probe_review_enabled / probe_review_enforce (record) switches; guard probe_review_refused_share_7d. Sessions write the closing probes for their own fixes, and a probe that checks only that a change was made closes the issue whether or not its outcome arrived. */ /* 1.23.1 WORKERS-AI-ATTRIBUTION-2 (2026-10-07, pillar cost, agent_issues 2097): every env.AI.run of this worker is counted in ai_call_counters through __aiAttrEnv (the helper of scripts/ai-attr-env-patch.py, env rebound at the top of scheduled and fetch); its neurons were unattributed while workers_ai_attribution_coverage_pct read 36.2 against a threshold of 50. */ /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi with evidence once their public results exist (QNFO/license v2.1 file; PyPI and external registry software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 CATCHUP-1 (a stats-job week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when stats table is older than 180h and no run started in 20h; no new cron) and REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 UA-1 (stats-job sends an honest User-Agent; external registry refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -22,7 +22,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
       return async function (model, input, opts) {
         var t0 = Date.now(), ok = 1, res;
-        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        try { res = await fleetAiRun(env, t, model, input, opts); return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {};
@@ -43,7 +43,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
     copy[aiKey] = wrapped;
     copy.__aiAttr = 1;
     return copy;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return env;
   }
 }
@@ -122,10 +122,10 @@ __name(sendDigest, "sendDigest");
 async function embedText(env, text) {
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const resp = await env.AI.run(EMBED_MODEL, { text: [String(text).slice(0, 1800)] }, { gateway: { id: "default" } });
+      const resp = await fleetAiRun(env, env.AI, EMBED_MODEL, { text: [String(text).slice(0, 1800)] }, { gateway: { id: "default" } });
       const v = (resp && resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
       return v || null;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       const msg = String(e && e.message || e || "");
       const isRate = /429|rate limit|capacity|try again/i.test(msg);
       if (isRate && attempt < 3) {
@@ -161,7 +161,7 @@ async function recordEvent(env, kind, id, text, meta) {
         await env.OPS_VZ.upsert([{ id, values: v, metadata: { doc: "cloud-ops", kind, ts: (/* @__PURE__ */ new Date()).toISOString(), text: String(text).slice(0, 1500), ...m } }]);
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ worker: WORKER_NAME, where: "recordEvent", error: String(e && e.message || e) }));
   }
   return { stored: true, id };
@@ -205,7 +205,7 @@ function ghTextB64(text) {
   return btoa(bin);
 }
 async function ghGet(env, path) {
-  const r = await fetch("https://api.github.com" + path, { headers: ghHeaders(env) });
+  const r = await fleetAiFetch(env, fetch, "https://api.github.com" + path, { headers: ghHeaders(env) });
   const txt = await r.text().catch((e) => { console.error(JSON.stringify({ worker: WORKER_NAME, where: "ghGet", error: String(e && e.message || e) })); return ""; });
   let j = null;
   try {
@@ -217,13 +217,13 @@ async function ghGet(env, path) {
 }
 __name(ghGet, "ghGet");
 async function ghPut(env, path, body) {
-  const r = await fetch("https://api.github.com" + path, { method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body || {}) });
+  const r = await fleetAiFetch(env, fetch, "https://api.github.com" + path, { method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body || {}) });
   const j = await r.json().catch((e) => { console.error(JSON.stringify({ worker: WORKER_NAME, where: "ghPut", error: String(e && e.message || e) })); return null; });
   return { status: r.status, body: j };
 }
 __name(ghPut, "ghPut");
 async function cfApi(env, path, method, body) {
-  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + path, {
+  const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + path, {
     method: method || "GET",
     headers: { Authorization: "Bearer " + (env.CF_TOKEN || ""), "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-cloud-ops)" },
     body: body ? JSON.stringify(body) : void 0
@@ -1069,9 +1069,9 @@ async function jobOwnerStepsWatch(env) {
     const res = [];
     for (const u of probe.urls) {
       try {
-        const r = await fetch(u, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION + " (owner-steps-watch)", Accept: "application/json, text/plain" } });
+        const r = await fleetAiFetch(env, fetch, u, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION + " (owner-steps-watch)", Accept: "application/json, text/plain" } });
         res.push({ status: r.status, text: (await r.text()).slice(0, 200000) });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         res.push({ status: 0, text: "" });
       }
     }
@@ -1095,7 +1095,7 @@ async function jobResearchScan(env) {
     if (i > 0) await new Promise((res) => setTimeout(res, 3e3));
     try {
       hits = hits.concat(await researchScanLane(lane));
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       hits.push({ error: e.message, lane: lane.lane });
     }
   }
@@ -1122,14 +1122,14 @@ async function jobResearchScan(env) {
     try {
       const ownerLines = lanes.map((l) => "- " + l.lane + ": " + l.query).join("\n");
       const prompt = "Today's arXiv matches (id | title | authors):\n" + real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") + "\n\nThe owner's own lines of work (search terms taken from the owner's stored ideas):\n" + ownerLines + '\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Use only the match list above; state nothing about a paper beyond its id, title and authors. Extract ONLY genuinely actionable items: (1) outreach candidates \u2014 a paper whose corresponding author should receive an outreach email, only when its title overlaps strongly with one of the owner\'s lines of work; (2) must-reads \u2014 papers whose title bears directly on one of the owner\'s lines of work; (3) dated register lines \u2014 anything with a deadline or action date visible in the list.\nReply with STRICT JSON only: {"gtd_lines":[{"date":"YYYY-MM-DD","text":"one short action line"}],"outreach":[{"paper_id":"","reason":"one line"}],"must_read":[{"paper_id":"","reason":"one line"}]}. Empty arrays are fine. No prose.';
-      const resp = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
+      const resp = await fleetAiRun(env, env.AI, AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
       const content = resp && (resp.response || resp.result && resp.result.response) || "";
       const m = content.match(/\{[\s\S]*\}/);
       if (m) {
         const p = JSON.parse(m[0]);
         if (p && Array.isArray(p.gtd_lines)) extracted = p;
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       extracted = { gtd_lines: [], outreach: [], must_read: [], error: String(e && e.message || e) };
     }
   }
@@ -1142,14 +1142,14 @@ async function jobResearchScan(env) {
       await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("NEXT STEPS", text, date, "research-scan").run();
       addedLines.push({ date, text });
       await recordEvent(env, "gtd-line", "gtd-" + date + "-" + Date.now().toString(36) + rndB36(3), date + " \u2014 " + text, { job: "research-scan" });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   for (const oc of (extracted.outreach || []).slice(0, 4)) {
     try {
       await env.AUDIT.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,NULL,?4,'pending', datetime('now'))").bind("oq-" + Date.now().toString(36) + rndB36(4), String(oc.paper_id || "").slice(0, 40), "", String(oc.reason || "").slice(0, 300)).run();
       await recordEvent(env, "outreach", "oq-" + Date.now().toString(36) + rndB36(4), String(oc.paper_id || "") + " \u2014 " + String(oc.reason || "").slice(0, 300), { job: "research-scan" });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   for (const mr of (extracted.must_read || []).slice(0, 3)) {
@@ -1280,7 +1280,7 @@ async function jobSitemapPing(env) {
   const out = { ok: 0, fail: 0, urls: [] };
   for (const url of SITEMAP_URLS) {
     try {
-      const r = await fetch(url, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION }, cf: { cacheTtl: 0 } });
+      const r = await fleetAiFetch(env, fetch, url, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION }, cf: { cacheTtl: 0 } });
       if (r.status === 200) {
         out.ok++;
         await recordEvent(env, "sitemap-ping", "sp-" + url.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) + "-" + Date.now().toString(36), "sitemap OK " + url, { job: "sitemap-ping", status: "ok", url });
@@ -1289,7 +1289,7 @@ async function jobSitemapPing(env) {
         out.urls.push(url + " -> " + r.status);
         await recordEvent(env, "sitemap-ping", "sp-" + url.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) + "-" + Date.now().toString(36), "sitemap FAIL " + url + " status " + r.status, { job: "sitemap-ping", status: "error", url });
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.fail++;
       out.urls.push(url + " -> " + String(e && e.message || e));
       await recordEvent(env, "sitemap-ping", "sp-" + url.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) + "-" + Date.now().toString(36), "sitemap ERROR " + url + ": " + String(e && e.message || e), { job: "sitemap-ping", status: "error", url });
@@ -1486,13 +1486,13 @@ async function jobWeeklyOps(env) {
     const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
     for (const [name, url] of [["papers", "https://papers.qnfo.org/"], ["qnfo", "https://qnfo.org/"], ["qwav", "https://qwav.org/"], ["qwav-tech", "https://qwav.tech/"]]) {
       try {
-        const r = await fetch(url, { headers: ua });
+        const r = await fleetAiFetch(env, fetch, url, { headers: ua });
         const html = await r.text();
         const title = (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "";
         const ld = html.includes("application/ld+json");
         const ok = r.status === 200 && !!title.trim() && ld;
         seo.push({ name, status: r.status, title: !!title.trim(), jsonld: ld, ok });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         seo.push({ name, error: String(e && e.message || e), ok: false });
       }
     }
@@ -1502,7 +1502,7 @@ async function jobWeeklyOps(env) {
       L.push("SEO FAIL: " + bad.map((s) => s.name + " (" + (s.status || s.error) + (s.title === false ? " no-title" : "") + (s.jsonld === false ? " no-jsonld" : "") + ")").join("; "));
       await recordEvent(env, "seo-fail", "seo-" + Date.now().toString(36), "SEO health failure: " + JSON.stringify(bad), { job: "weekly-ops" });
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     L.push("SEO check error: " + (e && e.message));
   }
   if (cost > 90) L.push("", "\u26A0 COST ALERT: est. 30d Workers AI cost $" + cost + " exceeds $90/30d spend-limit gate (rule 6f5c29f8).");
@@ -1545,7 +1545,7 @@ async function jobPortfolioSync(env) {
   try {
     const r = await ghGet(env, "/search/repositories?q=org:QNFO");
     out.repos = r.body && r.body.total_count || 0;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.repos = -1;
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -1618,7 +1618,7 @@ async function jobBoardSync(env) {
     out.errors.push("registry: " + String(e && e.message || e));
   }
   const gql = /* @__PURE__ */ __name(async (query) => {
-    const r = await fetch("https://api.github.com/graphql", { method: "POST", headers: { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
+    const r = await fleetAiFetch(env, fetch, "https://api.github.com/graphql", { method: "POST", headers: { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
     return r.json().catch(() => null);
   }, "gql");
   const pageQ = /* @__PURE__ */ __name((after) => '{ organization(login: "QNFO") { projectV2(number: 7) { id items(first: 100' + (after ? ', after: "' + after + '"' : "") + ") { totalCount pageInfo { hasNextPage endCursor } nodes { content { ... on DraftIssue { title } } } } fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } } } } }", "pageQ");
@@ -1736,14 +1736,14 @@ async function jobNlnet(env) {
   L.push("Bundle: proposal " + (proposal ? proposal.length + " chars" : "FETCH FAILED") + ", dossier " + (dossier ? dossier.length + " chars" : "FETCH FAILED") + ".");
   let formResult = "not attempted";
   try {
-    const page = await fetch("https://nlnet.nl/propose/", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    const page = await fleetAiFetch(env, fetch, "https://nlnet.nl/propose/", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
     const html = await page.text();
     if (/hcaptcha|recaptcha|cf-turnstile/i.test(html)) {
       formResult = "form captcha-gated \u2014 no autonomous submission path (per OUTREACH-FORM-GATE-1: never circumvent anti-bot controls)";
     } else {
       formResult = "no captcha detected but NLnet submission requires the interactive form; autonomous browser submission deferred";
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     formResult = "page fetch error: " + e.message;
   }
   L.push("Submission: " + formResult + ".");
@@ -1761,7 +1761,7 @@ async function jobBackfill(env) {
       await recordEvent(env, "contact", "ct-" + String(r.email).replace(/[^a-z0-9.@_-]/gi, ""), (r.name || "?") + " <" + r.email + ">", { job: "backfill" });
       out.contacts++;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.contacts = -1;
   }
   try {
@@ -1770,7 +1770,7 @@ async function jobBackfill(env) {
       await recordEvent(env, "gtd-line", "gtd-bf-" + r.id, (r.line_date || "") + " \u2014 " + r.line, { job: "backfill" });
       out.gtd++;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.gtd = -1;
   }
   try {
@@ -1779,7 +1779,7 @@ async function jobBackfill(env) {
       await recordEvent(env, "outreach", "oq-bf-" + r.id, (r.paper_id || "") + " \u2014 " + (r.reason || "") + " [" + (r.status || "") + "]", { job: "backfill" });
       out.outreach++;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.outreach = -1;
   }
   await recordEvent(env, "job-run", "jr-backfill-" + Date.now().toString(36), "backfill completed: " + JSON.stringify(out), { job: "backfill", status: "ok" });
@@ -1812,24 +1812,24 @@ async function verifyArxivEmail(env, paperId) {
   for (const host of ["https://arxiv.org/html/", "https://ar5iv.labs.arxiv.org/html/"]) {
     for (const v of vers) {
       try {
-        const r = await fetch(host + v, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+        const r = await fleetAiFetch(env, fetch, host + v, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
         if (!r.ok) continue;
         const em = pick(await r.text());
         if (em) return em;
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
       }
     }
   }
   try {
-    const r = await fetch("https://export.arxiv.org/api/query?id_list=" + encodeURIComponent(bare) + "&max_results=1", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    const r = await fleetAiFetch(env, fetch, "https://export.arxiv.org/api/query?id_list=" + encodeURIComponent(bare) + "&max_results=1", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
     if (r.ok) {
       const em = pick(await r.text());
       if (em) return em;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   try {
-    const r = await fetch("https://export.arxiv.org/e-print/" + bare, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    const r = await fleetAiFetch(env, fetch, "https://export.arxiv.org/e-print/" + bare, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
     if (!r.ok) return null;
     const buf = await r.arrayBuffer();
     let text = "";
@@ -1847,7 +1847,7 @@ async function verifyArxivEmail(env, paperId) {
       text = new TextDecoder().decode(buf);
     }
     return pick(text);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -2060,7 +2060,7 @@ async function jobOutreach(env) {
         L.picks.push(seg);
         await learnerRecordSend(env, r, email, seg, res && res.messageId || "", "live");
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.errors.push({ id: r.id, error: String(e && e.message || e) });
     }
   }
@@ -2136,11 +2136,11 @@ async function jobOutreach(env) {
           sentToday++;
           await stateSet(env, sentKey, String(sentToday));
           out.followups++;
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           out.errors.push({ id: "fu-" + f.email, error: String(e && e.message || e) });
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   /* OUTREACH-CAP-STATUS-1 (#1662): reserve "error" for genuine failures; report a
@@ -2181,7 +2181,7 @@ async function jobOutreachLookup(env) {
         await env.AUDIT.prepare("UPDATE outreach_queue SET status = ?2, attempts = ?3, error = ?4 WHERE id = ?1 AND status IN ('needs-email', 'needs-contact')").bind(r.id, terminal ? "skipped-no-email" : "needs-email", att, "email lookup failed (HTML+e-print), attempt " + att + (terminal ? " - terminal" : "") + " (outreach-lookup)").run();
         if (terminal) out.terminal++; else out.retry++;
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.errors.push(String(r.id) + ": " + String(e && e.message || e).slice(0, 120));
       console.error(JSON.stringify({ worker: WORKER_NAME, where: "jobOutreachLookup", id: r.id, error: String(e && e.message || e) }));
     }
@@ -2877,7 +2877,7 @@ async function jobWorkerHealth(env) {
     const t0 = Date.now();
     let status = 0, dur = 0, error = "", body = "";
     try {
-      const fetcher = ep.binding && env[ep.binding] && env[ep.binding].fetch ? (u, o) => env[ep.binding].fetch(u, o) : (u, o) => fetch(u, o);
+      const fetcher = ep.binding && env[ep.binding] && env[ep.binding].fetch ? (u, o) => env[ep.binding].fetch(u, o) : (u, o) => fleetAiFetch(env, fetch, u, o);
       const resp = await fetcher(ep.url, { method: ep.body ? "POST" : "GET", headers: ep.headers || {}, body: ep.body ? JSON.stringify(ep.body) : void 0, signal: AbortSignal.timeout(45e3) });
       status = resp.status;
       dur = Date.now() - t0;
@@ -2894,7 +2894,7 @@ async function jobWorkerHealth(env) {
           status = 0;
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       dur = Date.now() - t0;
       error = String(e && e.message || e).slice(0, 200);
       status = 0;
@@ -2932,7 +2932,7 @@ async function jobVisibility(env) {
   const UA = { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + (env.CF_TOKEN || "") };
   try {
     const q = ['query { viewer { zones(filter: {zoneTag: "', ZONE, '"}) { httpRequests1dGroups(limit: 7, filter: {date_geq: "', since, '", date_leq: "', today, '"}) { dimensions { date } sum { requests pageViews } uniq { uniques } } } } }'].join("");
-    const r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { ...UA, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+    const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { ...UA, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
     if (r.ok) {
       const d2 = await r.json();
       const days = d2.data && d2.data.viewer && d2.data.viewer.zones && d2.data.viewer.zones[0] && d2.data.viewer.zones[0].httpRequests1dGroups || [];
@@ -2947,7 +2947,7 @@ async function jobVisibility(env) {
       out.pageviews = pv;
       out.uniques = uniq;
     } else out.web_error = "HTTP " + r.status;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.web_error = String(e && e.message || e);
   }
   try {
@@ -3027,18 +3027,18 @@ async function jobEngagement(env) {
       out.bsky = "no credentials";
     } else {
       const BS = "https://bsky.social/xrpc";
-      const sessR = await fetch(BS + "/com.atproto.server.createSession", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ identifier: env.BSKY_HANDLE, password: env.BSKY_APP_PASS }) });
+      const sessR = await fleetAiFetch(env, fetch, BS + "/com.atproto.server.createSession", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ identifier: env.BSKY_HANDLE, password: env.BSKY_APP_PASS }) });
       const sess = await sessR.json();
       if (!sessR.ok || !sess.accessJwt) {
         out.bsky = "session " + sessR.status;
       } else {
-        const feedR = await fetch(BS + "/app.bsky.feed.getAuthorFeed?actor=" + encodeURIComponent(sess.did) + "&limit=30", { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
+        const feedR = await fleetAiFetch(env, fetch, BS + "/app.bsky.feed.getAuthorFeed?actor=" + encodeURIComponent(sess.did) + "&limit=30", { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
         const feed = await feedR.json();
         const uris = (feed && feed.feed || []).map((f) => f.post && f.post.uri).filter(Boolean);
         let likes = 0, reposts = 0, replies = 0, counted = 0;
         for (let i = 0; i < uris.length; i += 25) {
           const chunk = uris.slice(i, i + 25);
-          const postsR = await fetch(BS + "/app.bsky.feed.getPosts?" + chunk.map((u) => "uris=" + encodeURIComponent(u)).join("&"), { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
+          const postsR = await fleetAiFetch(env, fetch, BS + "/app.bsky.feed.getPosts?" + chunk.map((u) => "uris=" + encodeURIComponent(u)).join("&"), { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
           const posts = await postsR.json();
           for (const p of posts && posts.posts || []) {
             const l = p.likeCount || 0, r = p.repostCount || 0, c = p.replyCount || 0;
@@ -3054,7 +3054,7 @@ async function jobEngagement(env) {
         out.bsky = { posts: counted, likes, reposts, replies };
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.bsky_error = String(e && e.message || e);
   }
   try {
@@ -3062,7 +3062,7 @@ async function jobEngagement(env) {
       out.buffer = "no token";
     } else {
       const gql = /* @__PURE__ */ __name(async (query) => {
-        const r = await fetch("https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
+        const r = await fleetAiFetch(env, fetch, "https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
         if (!r.ok) throw new Error("buffer http " + r.status);
         return r.json();
       }, "gql");
@@ -3099,7 +3099,7 @@ async function jobEngagement(env) {
         row("buffer", "auth", "auth_status", 1, "ok (graphql)");
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.buffer = "error: " + String(e && e.message || e);
     row("buffer", "auth", "auth_status", 0, String(e && e.message || e).slice(0, 80));
   }
@@ -3117,7 +3117,7 @@ async function jobEngagement(env) {
   // its 50-schedule cap). Independent of the collectors above: a Bluesky or Buffer failure never suppresses it.
   try {
     out.sent_as_you = await sentAsYouDigest(env);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.sent_as_you = "error: " + String(e && e.message || e).slice(0, 160);
   }
   return { status: "ok", notes: out };
@@ -3185,7 +3185,7 @@ async function sentAsYouDigest(env) {
   if (env.BUFFER_TOKEN) {
     try {
       const gql = /* @__PURE__ */ __name(async (query) => {
-        const r = await fetch("https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
+        const r = await fleetAiFetch(env, fetch, "https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
         if (!r.ok) throw new Error("buffer http " + r.status);
         return r.json();
       }, "gql");
@@ -3197,7 +3197,7 @@ async function sentAsYouDigest(env) {
         if (pR && pR.errors && pR.errors.length) drafts = "error: " + String(pR.errors[0].message || "").slice(0, 80);
         else drafts = String((pR && pR.data && pR.data.posts && pR.data.posts.edges || []).length);
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       drafts = "error: " + String(e && e.message || e).slice(0, 80);
     }
   } else drafts = "no token";
@@ -3297,7 +3297,7 @@ async function jobGtdReconcile(env) {
     return { status: "ok", open: open && open.n || 0, overdue: overdueN, overdue_ids: ods.map(function(r) {
       return r.id;
     }), waiting_on_human: human && human.n || 0, no_dod: noDod && noDod.n || 0 };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "error", error: String(e).slice(0, 200) };
   }
 }
@@ -3720,7 +3720,7 @@ async function jobQualityFresh(env) {
   if (out && out.status === "error" && !out.notes) {
     try {
       await recordEvent(env, "quality-fresh", "qf-err-" + Date.now().toString(36), "fresh quality lane failed: " + String(out.reason || out.error || "unknown").slice(0, 300), { job: "quality-fresh", status: "error" });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "jobQualityFresh", error: String(e && e.message || e).slice(0, 200) }));
     }
   }
@@ -3901,7 +3901,7 @@ async function jobQualityScore(env, opts) {
     const out = { status, reason, notes, scanned, rows: scored, quarantine_candidates: flagged };
     if (errors.length) out.error = reason;
     return out;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "error", reason: String(e).slice(0, 200), error: String(e).slice(0, 200) };
   }
 }
@@ -4013,7 +4013,7 @@ async function jobProbeCadence(env) {
     const d = probeCadenceDecide(st.last_run_at, st.dispatched_at, now, PROBE_CADENCE_STALE_MIN);
     st.decision = d.why;
     if (d.dispatch) {
-      const r = await fetch("https://api.github.com/repos/" + PROBE_CADENCE_REPO + "/dispatches", { method: "POST", headers: ghHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify({ event_type: PROBE_CADENCE_EVENT, client_payload: { by: "qnfo-cloud-ops/" + VERSION, why: d.why } }) });
+      const r = await fleetAiFetch(env, fetch, "https://api.github.com/repos/" + PROBE_CADENCE_REPO + "/dispatches", { method: "POST", headers: ghHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify({ event_type: PROBE_CADENCE_EVENT, client_payload: { by: "qnfo-cloud-ops/" + VERSION, why: d.why } }) });
       st.dispatched_at = nowIso;
       st.dispatch_status = r.status;
       st.dispatches += r.status === 204 ? 1 : 0;
@@ -4048,7 +4048,7 @@ async function jobFleetGraphCadence(env) {
     const d = probeCadenceDecide(st.last_run_at, st.dispatched_at, now, FLEET_GRAPH_STALE_MIN);
     st.decision = d.why.replace("consumer", "fleet-graph");
     if (d.dispatch) {
-      const r = await fetch("https://api.github.com/repos/" + PROBE_CADENCE_REPO + "/dispatches", { method: "POST", headers: ghHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify({ event_type: FLEET_GRAPH_EVENT, client_payload: { by: "qnfo-cloud-ops/" + VERSION, why: st.decision } }) });
+      const r = await fleetAiFetch(env, fetch, "https://api.github.com/repos/" + PROBE_CADENCE_REPO + "/dispatches", { method: "POST", headers: ghHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify({ event_type: FLEET_GRAPH_EVENT, client_payload: { by: "qnfo-cloud-ops/" + VERSION, why: st.decision } }) });
       st.dispatched_at = nowIso;
       st.dispatch_status = r.status;
       st.dispatches += r.status === 204 ? 1 : 0;
@@ -4145,7 +4145,7 @@ async function jobResearchExecWatchdog(env) {
           st.reaped_lease = { holder: lease.holder, expired_at: new Date(Number(lease.expires_ms)).toISOString() };
           await recordEvent(env, "research-watchdog", "research-watchdog-lease-" + now.toString(36), "RESEARCH-DRAIN-STALL-1: reaped expired single-flight lease held by " + lease.holder + " (expired " + st.reaped_lease.expired_at + "), dispatching a stage", { job: "research-exec-watchdog", status: "ok", reason: "lease-reap" });
         }
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         st.reap_error = String(e && e.message || e).slice(0, 160);
       }
       const ctrl = new AbortController();
@@ -4511,8 +4511,8 @@ async function jobGhTokenWatch(env) {
   const now = Date.now(), nowIso = new Date(now).toISOString();
   let r;
   try {
-    r = await fetch("https://api.github.com/rate_limit", { headers: ghHeaders(env) });
-  } catch (e) {
+    r = await fleetAiFetch(env, fetch, "https://api.github.com/rate_limit", { headers: ghHeaders(env) });
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ worker: WORKER_NAME, where: "gh-token-watch", error: String(e && e.message || e) }));
     return;
   }
@@ -4635,11 +4635,11 @@ async function jobProbeReview(env, opts) {
       const pr = probeReviewPrompt(r.title, r.description, r.verify_probe);
       for (let i = 0; i < PROBE_REVIEW_MODELS.length && !rv.verdict; i++) {
         try {
-          const res = await env.AI.run(PROBE_REVIEW_MODELS[i], { messages: [{ role: "system", content: pr.system }, { role: "user", content: pr.user }], max_tokens: 1500, temperature: 0 });
+          const res = await fleetAiRun(env, env.AI, PROBE_REVIEW_MODELS[i], { messages: [{ role: "system", content: pr.system }, { role: "user", content: pr.user }], max_tokens: 1500, temperature: 0 });
           const txt = typeof res === "string" ? res : res && (res.choices && res.choices[0] && res.choices[0].message ? res.choices[0].message.content : res.response) || "";
           const pv = probeReviewParse(txt);
           if (pv.verdict) { rv.verdict = pv.verdict; rv.reason = pv.reason; rv.model = PROBE_REVIEW_MODELS[i]; } else rv.err = "unreadable reply from " + PROBE_REVIEW_MODELS[i];
-        } catch (e) { rv.err = PROBE_REVIEW_MODELS[i] + ": " + String(e && e.message || e).slice(0, 120); }
+        } catch (e) { if (fleetAiStopped(e)) throw e; rv.err = PROBE_REVIEW_MODELS[i] + ": " + String(e && e.message || e).slice(0, 120); }
       }
       const evStatus = rv.verdict === "self-confirming" ? "refused" : rv.verdict ? "ok" : "retry";
       try {
@@ -4701,7 +4701,7 @@ async function jobGcpInventory(env, opts) {
   try {
     const t = await gcpToken(key, "https://www.googleapis.com/auth/cloud-platform");
     const call = async (url, body) => {
-      const r = await fetch(url, { method: body === void 0 ? "GET" : "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: body === void 0 ? void 0 : JSON.stringify(body), signal: AbortSignal.timeout(2e4) });
+      const r = await fleetAiFetch(env, fetch, url, { method: body === void 0 ? "GET" : "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: body === void 0 ? void 0 : JSON.stringify(body), signal: AbortSignal.timeout(2e4) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(url.split("/")[2] + " " + r.status + " " + String(j.error && j.error.status || "").slice(0, 40));
       return j;
@@ -4719,7 +4719,7 @@ async function jobGcpInventory(env, opts) {
     const roles = (pol.bindings || []).filter((b) => (b.members || []).some((m) => m.endsWith(key.client_email))).map((b) => b.role);
     await recordEvent(env, "gcp-inventory", id, "project " + pid + ": " + apis.length + " APIs enabled; " + key.client_email + " holds " + roles.join(", "), { job: "gcp-inventory", status: "ok", project: pid, sa: key.client_email, roles, api_count: apis.length, apis: apis.join(",").slice(0, 900) });
     return { status: "ok", project: pid, apis: apis.length, roles };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await recordEvent(env, "gcp-inventory", id, "gcp inventory failed: " + String(e && e.message || e).slice(0, 300), { job: "gcp-inventory", status: "error" });
     return { status: "error", reason: String(e && e.message || e).slice(0, 200) };
   }
@@ -4796,7 +4796,7 @@ async function runScheduledJob(env, job) {
     await logRun(env, job, out.status, out.notes || {});
     await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out));
     console.log("cloud-ops", job, out.status, JSON.stringify(out.notes || {}).slice(0, 200));
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await logRun(env, job, "error", { error: String(e && e.message || e) });
     await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), { job, status: "error" });
     console.error("cloud-ops", job, "error", String(e && e.message || e));
@@ -4825,7 +4825,7 @@ async function runCompanion(env, job, extra) {
     const out = await JOBS[job](env);
     await logRun(env, job, out.status, out.notes || {});
     await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out, extra));
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await logRun(env, job, "error", { error: String(e && e.message || e) });
     await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), jobRunMeta(job, { status: "error", reason: String(e && e.message || e) }, extra));
   }
@@ -4855,7 +4855,7 @@ async function runCatchups(env, slot, nowMs) {
       if (!due.due) continue;
       await runCompanion(env, c.job, { via: "catch-up:" + slot, data_last: due.data_last });
       done.push(c.job);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("catch-up", c.job, "check failed", String(e && e.message || e));
     }
   }
@@ -4941,7 +4941,7 @@ async function jobRadar(env) {
       "https://hn.algolia.com/api/v1/search?query=qnfo&tags=(story,comment)&hitsPerPage=50&typoTolerance=false",
       "https://hn.algolia.com/api/v1/search?query=qnfo.org&restrictSearchableAttributes=url&hitsPerPage=50&typoTolerance=false"
     ]) {
-      const r = await fetch(q, ua);
+      const r = await fleetAiFetch(env, fetch, q, ua);
       if (!r.ok) throw new Error("http " + r.status);
       const j = await r.json();
       for (const h of j.hits || []) {
@@ -4952,9 +4952,9 @@ async function jobRadar(env) {
       }
     }
     sources.hn = "ok:" + n;
-  } catch (e) { sources.hn = err(e); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; sources.hn = err(e); }
   try {
-    const r = await fetch("https://lobste.rs/domains/qnfo.org.rss", ua);
+    const r = await fleetAiFetch(env, fetch, "https://lobste.rs/domains/qnfo.org.rss", ua);
     if (r.status === 404) sources.lobsters = "ok:0";
     else if (!r.ok) sources.lobsters = "http:" + r.status;
     else {
@@ -4966,11 +4966,11 @@ async function jobRadar(env) {
       }
       sources.lobsters = "ok:" + items.length;
     }
-  } catch (e) { sources.lobsters = err(e); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; sources.lobsters = err(e); }
   try {
     // RADAR-SE-REASON-1 (#1641): see seFailureNote. A public stackapps key (not a secret) lifts the per-IP quota when set.
     const seKey = env && env.STACKEXCHANGE_KEY ? "&key=" + encodeURIComponent(String(env.STACKEXCHANGE_KEY)) : "";
-    const r = await fetch(SE_SEARCH_URL + seKey, ua);
+    const r = await fleetAiFetch(env, fetch, SE_SEARCH_URL + seKey, ua);
     if (!r.ok) sources.stackexchange = seFailureNote(r.status, await r.text().catch(() => ""));
     else {
       const j = await r.json();
@@ -4981,7 +4981,7 @@ async function jobRadar(env) {
       }
       sources.stackexchange = "ok:" + n;
     }
-  } catch (e) { sources.stackexchange = err(e); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; sources.stackexchange = err(e); }
   try {
     const cr = await env.AUDIT.prepare("SELECT doi, MAX(value) AS cites, MAX(collected_at) AS at FROM citation_stats WHERE source = 'openalex' AND metric = 'cited_by_count' AND collected_at >= ?1 GROUP BY doi HAVING MAX(value) > 0").bind(new Date(Date.now() - 3 * 864e5).toISOString()).all();
     const rows = cr.results || [];
@@ -5910,6 +5910,8 @@ var emailOrchMod = (function() {
   }
   var worker_default = {
     async fetch(request, env) {
+    try {
+
       var url = new URL(request.url);
       var path = url.pathname;
       if (request.method === "OPTIONS") return this.cors();
@@ -5927,7 +5929,9 @@ var emailOrchMod = (function() {
       } catch (e) {
         return this.cors(json({ ok: false, error: e.message }, 500));
       }
-    },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
     cors(res) {
       return res;
     },
@@ -5981,6 +5985,8 @@ var emailOrchMod = (function() {
       return this.cors(json(await this.runRepliesInternal(env, dry)));
     },
     async scheduled(controller, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       var hbOk = 1;
       try { var r = await this.runRepliesInternal(env, false); console.log("reply-draft:", JSON.stringify(r)); }
       catch (e) { hbOk = 0; console.error("reply-draft failed:", String(e && e.message || e)); }
@@ -6067,7 +6073,7 @@ var emailOrchMod = (function() {
       var usr = "From: " + (row.sender || "") + NL + "Subject: " + (row.subject || "") + NL + NL + body;
       var out = { escalate: false, reason: "", draft: "" };
       try {
-        var resp = await env.AI.run("@cf/moonshotai/kimi-k2.6", { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: 200, reasoning_effort: "none" });
+        var resp = await fleetAiRun(env, env.AI, "@cf/moonshotai/kimi-k2.6", { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: 200, reasoning_effort: "none" });
         var txt = String(resp && (resp.response || resp.output || "")).trim();
         var up = txt.toUpperCase();
         if (!txt) { out.escalate = true; out.reason = "empty-model-output"; return out; }
@@ -6079,7 +6085,7 @@ var emailOrchMod = (function() {
         var ung = this.ungroundedTerms(out.draft, (row.subject || "") + NL + String(row.body_text || ""));
         if (ung.length) { out.escalate = true; out.reason = "ungrounded-draft: " + ung.length + " term(s) not in the inbound email"; out.draft = ""; }
         return out;
-      } catch (e) { out.escalate = true; out.reason = "model-error:" + e.message; return out; }
+      } catch (e) { if (fleetAiStopped(e)) throw e; out.escalate = true; out.reason = "model-error:" + e.message; return out; }
     },
     // DRAFT-GROUNDING-1 (ACCURACY-FLEET-2b, agent_issues 2282 and 2272): the mechanical check between the drafter and a send.
     // Returns every number, month or weekday name, and capitalised word of the draft that the inbound email does not
@@ -6250,6 +6256,8 @@ async function cronHeartbeat(env, ok) {
 __name(cronHeartbeat, "cronHeartbeat");
 var worker_default = {
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     env = __aiAttrEnv(env, "qnfo-cloud-ops", "AI", "AUDIT");
     const cron = event.cron;
     try {
@@ -6257,7 +6265,7 @@ var worker_default = {
       if (sr && sr.changed) {
         await stateSet(env, "cron_sync_error", sr.ok ? "" : "PUT failed status=" + sr.status + " at " + (/* @__PURE__ */ new Date()).toISOString());
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("schedule self-repair err", e && e.message || e);
       try {
         await stateSet(env, "cron_sync_error", "threw: " + String(e && e.message || e).slice(0, 200));
@@ -6273,7 +6281,7 @@ var worker_default = {
         console.log("no job for cron", cron, "offset", off);
         try {
           await recordEvent(env, "cron-noop", "cn-" + String(cron).replace(/[^0-9a-z]/gi, "") + "-" + Date.now().toString(36), "CRON-DISPATCH-NOOP-1: no job mapped for registered cron " + cron + " (offset " + off + ")", { cron, offset: off });
-        } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "scheduled", error: String(e && e.message || e) })); }
+        } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "scheduled", error: String(e && e.message || e) })); }
         await cronHeartbeat(env, 1);
         return;
       }
@@ -6312,6 +6320,8 @@ var worker_default = {
     await cronHeartbeat(env, settled.every((r) => r.status === "fulfilled") ? 1 : 0);
   },
   async fetch(request, env, ctx) {
+    try {
+
     env = __aiAttrEnv(env, "qnfo-cloud-ops", "AI", "AUDIT");
     const url = new URL(request.url);
     const path = url.pathname;
@@ -6364,7 +6374,7 @@ var worker_default = {
         await logRun(env, job, out.status, out.notes || {});
         await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out, { via: "manual" }));
         return new Response(JSON.stringify({ ok: true, job, ...out }), { headers: { "Content-Type": "application/json", ...CORS } });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return new Response(JSON.stringify({ ok: false, job, error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...CORS } });
       }
     }
@@ -6431,9 +6441,121 @@ var worker_default = {
       }
     }
     return new Response("not found", { status: 404, headers: CORS });
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-cloud-ops";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const dir = mkdtempSync(join(tmpdir(), "qnfo-ai-web-fetch-"));
 writeFileSync(join(dir, "worker.mjs"), readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
-const worker = (await import(pathToFileURL(join(dir, "worker.mjs")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(dir, "worker.mjs")).href, import.meta.url)).default;
 const realFetch = globalThis.fetch;
 const realTimeout = AbortSignal.timeout;
 let calls = [];

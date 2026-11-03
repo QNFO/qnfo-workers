@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // IDEA-DIVERSITY-CAP-1 (idea-hub 1.5.8, #1947, trigger 1238 idea_topic_concentration_30d) offline suite. Runs the worker's
 // own triageProposals in a vm against an in-memory SQLite D1 and a counting Workers AI stub, and the metric's own
 // classifier (qnfo-cloud-ops TOPIC-CLUSTERS-DERIVED-1 shared block + ideaTopicConcentration, sliced from that file) on the
@@ -31,7 +32,7 @@ ok(block(hubSrc) !== null && block(hubSrc) === block(opsSrc), "the TOPIC-CLUSTER
 ok(!hubSrc.includes("var IDEA_TOPIC_CLUSTERS = [") && !opsSrc.includes("var IDEA_TOPIC_CLUSTERS = ["), "neither worker holds the fixed IDEA_TOPIC_CLUSTERS table (agent_issues 2281 code probe)");
 const oa = opsSrc.indexOf(BEGIN), ob = opsSrc.indexOf("async function jobIdeaTopicMetric", oa);
 const metric = {};
-vm.runInNewContext(opsSrc.slice(oa, ob) + "\nm.ideaTopicConcentration = ideaTopicConcentration;", { m: metric, __name: () => {} });
+vm.runInNewContext(RUNNING_AI_FIXTURE + (opsSrc.slice(oa, ob) + "\nm.ideaTopicConcentration = ideaTopicConcentration;"), { m: metric, __name: () => {} });
 ok(typeof metric.ideaTopicConcentration === "function", "the metric's ideaTopicConcentration loads from qnfo-cloud-ops");
 // The clusters as data (what the derivation caches in ops_config idea_topic_clusters); terms are topicTerms output.
 const CLUSTERS = [{ label: "quantum", terms: ["quantum", "qubit"] }, { label: "ultrametric", terms: ["ultrametric", "adic", "bruhat", "adelic", "archimedean"] }, { label: "energy", terms: ["landauer", "entropy"] }];
@@ -40,7 +41,7 @@ const CLUSTERS = [{ label: "quantum", terms: ["quantum", "qubit"] }, { label: "u
 const src = stripWorkerDefaultExport(hubSrc.replace(/export default\s*\{/, "var __default = {"));
 const sb = { console: { log: () => {}, error: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, proposalCluster, diversityBlocks, loadTopicClusters, TOPIC_CACHE_KEY, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { triageProposals, proposalCluster, diversityBlocks, loadTopicClusters, TOPIC_CACHE_KEY, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };"), sb);
 const api = sb.__x;
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);

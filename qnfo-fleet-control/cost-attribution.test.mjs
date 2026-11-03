@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // COST-ATTRIBUTION-GAP-1 (transformation lever T4.7, pillar cost): cost_attribution_gap_pct compares the AI Gateway's paid
 // list cost over 7 days with the fleet's own spend ledger (ai_spend_ledger) over the same days, per provider, and names the
 // models with the largest unattributed cost. Run: node qnfo-fleet-control/cost-attribution.test.mjs
@@ -16,7 +17,7 @@ const sandbox = {
   fetch: async (url, init) => { fetchCalls.push({ url, body: init && init.body }); return { json: async () => (graphRows === null ? { errors: [{ message: "boom" }] } : { data: { viewer: { accounts: [{ aiGatewayRequestsAdaptiveGroups: graphRows }] } } }) }; }
 };
 vm.createContext(sandbox);
-vm.runInContext(byProv + "\n" + block + "\n__export = { costAttributionGap, costAttributionTick, COST_GAP_MIN_USD };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (byProv + "\n" + block + "\n__export = { costAttributionGap, costAttributionTick, COST_GAP_MIN_USD };"), sandbox);
 const { costAttributionGap, costAttributionTick, COST_GAP_MIN_USD } = sandbox.__export;
 let fails = 0;
 const check = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m + (!c && x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); if (!c) fails++; };
@@ -82,7 +83,7 @@ check(threw && /aiGatewayRequestsAdaptiveGroups unreadable/.test(threw) && write
 // v_cost_run_rate SQL, seeded with the 2026-10-18 shape (the gateway day total equals the owner term).
 const fa = src.indexOf("function fleetCostAfterOwner(");
 check(fa > 0, "worker.js defines fleetCostAfterOwner");
-const fleetCostAfterOwner = fa > 0 ? new Function("__name", src.slice(fa, src.indexOf("\n}\n", fa) + 2) + "\nreturn fleetCostAfterOwner;")(() => {}) : () => ({});
+const fleetCostAfterOwner = fa > 0 ? new Function("__name", RUNNING_AI_FIXTURE + (src.slice(fa, src.indexOf("\n}\n", fa) + 2) + "\nreturn fleetCostAfterOwner;"))(() => {}) : () => ({});
 let sp = fleetCostAfterOwner({ anthropic: 97.03, deepseek: 12.5, "workers-ai": 30 }, [{ provider: "anthropic", usd: 97.03 }]);
 check(sp.byProv.anthropic === 0 && sp.owner.anthropic === 97.03 && sp.byProv.deepseek === 12.5 && sp.total === 42.5 && sp.ownerUsd === 97.03, "an owner term equal to the provider's gateway cost leaves the fleet 0 of it", sp);
 sp = fleetCostAfterOwner({ deepseek: 10, openai: 4 }, [{ provider: "DeepSeek", usd: 3.5 }]);
@@ -110,7 +111,7 @@ for (let k = 1; k <= 8; k++) {
 cdb.exec(viewSql);
 const rrDb = { prepare(sql) { return { all: async () => ({ results: cdb.prepare(sql).all() }) }; } };
 const ca = src.indexOf("async function costRunRate(");
-const costRunRate = new Function("__name", src.slice(ca, src.indexOf("\n}\n", ca) + 2) + "\nreturn costRunRate;")(() => {});
+const costRunRate = new Function("__name", RUNNING_AI_FIXTURE + (src.slice(ca, src.indexOf("\n}\n", ca) + 2) + "\nreturn costRunRate;"))(() => {});
 const rrAll = Object.fromEntries(cdb.prepare("SELECT source_group, run_rate_30d_7d AS v FROM v_cost_run_rate").all().map((r) => [r.source_group, r.v]));
 const rr = await costRunRate(rrDb, {});
 check(rr.byProv.anthropic === 0 && rr.byProv.deepseek === 12 && !("owner_gateway:anthropic" in rr.byProv), "ai_spend:anthropic reads 0 when the owner term equals the gateway total (it read 651.63 against a cap of 15)", rr);

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-FACT-LEDGER-1 offline suite (q08-signal-engine 0.32.0, charter pillar: research; agent_issues 2606 Q08-PUBLISH-STALL-AUTO-1).
 // Proves: (1) buildPrompt numbers the sentences of the item, the signal and the linked article into a SOURCE LEDGER with the rule that the
 // reporting sections reuse a ledger sentence's names and figures and the analysis section stays exempt, and the FACTS rule text is byte for
@@ -23,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url));
-const mod = await import(pathToFileURL(join(here, "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url);
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const F = mod.__factledger || {};
 const G = mod.__gen, L = mod.__lede, A = mod.__analysis, S = mod.__stall;

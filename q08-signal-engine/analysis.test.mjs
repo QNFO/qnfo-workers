@@ -1,5 +1,6 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-ANALYSIS-SECTION-1 (0.19.0): the reporting is fact-checked sentence by sentence, the marked analysis only for invented facts.
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const A = mod.__analysis, V = mod.__verify, Q = mod.__quality, C = mod.__cuts;
 let passes = 0, fails = 0;
 const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL " + l + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -50,8 +51,8 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
 }
 // ---- Q08-ANALYSIS-DEPTH-1 / Q08-DANGLING-CUT-1 (0.20.0, run 380) ----------------------------------------------------------------
 {
-  const A = (await import("./worker.js")).__analysis;
-  const V = (await import("./worker.js")).__verify;
+  const A = (await importRunningWorker("./worker.js", import.meta.url)).__analysis;
+  const V = (await importRunningWorker("./worker.js", import.meta.url)).__verify;
   const rep = "Character.ai filed for Chapter 11 bankruptcy protection and said it is pursuing a sale of its assets to Disney, according to The Verge on Oct 13 2026. ".repeat(3) + "\n\n" + "Character.ai is a chatbot service built by former Google developers; Disney offered $20 million for some of its assets and hired its former chief executive. ".repeat(3);
   const thin = "# T\n\n" + rep + "\n\n<!-- analysis -->\n\nThis information gap discourages rival offers, reinforcing the lead bidder's position because the bidder already employs the staff.\n\nworth your time: yes - x";
   const tp = A.analysisDepthProblems(thin);
@@ -68,7 +69,7 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
 }
 // ---- Q08-MARK-SHIFT-1 (0.20.1, run 381) -----------------------------------------------------------------------------------------
 {
-  const A = (await import("./worker.js")).__analysis;
+  const A = (await importRunningWorker("./worker.js", import.meta.url)).__analysis;
   const rp = "The paper by the grid team reports a detector trained on cost rather than accuracy, published on arXiv this week with its full method. ".repeat(2);
   const an = "Operators are rewarded for low cost, so a detector graded on accuracy optimises the wrong target, and the expensive misses go unpunished. ".repeat(3);
   const early = "# T\n\n" + rp + "\n\n<!-- analysis -->\n\n" + rp + "\n\n" + rp + "\n\n" + an + "\n\n" + an + "\n\nworth your time: yes - x";
@@ -78,7 +79,7 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
 }
 // ---- Q08-ANALYSIS-CONCRETE-1 (0.20.3, run 383) ------------------------------------------------------------------------------
 {
-  const A = (await import("./worker.js")).__analysis;
+  const A = (await importRunningWorker("./worker.js", import.meta.url)).__analysis;
   check("abstract reasoning is not a concrete analysis item", !A.concreteClaim("'Adopting the platform, however, requires learning a new workflow and integrating its outputs into existing practices.' -- source does not mention adoption"));
   check("an open question is not a concrete analysis item", !A.concreteClaim("'Whether the perceived benefit of a verifiable configuration hash will motivate enough users to adopt the platform remains unresolved.' -- not discussed"));
   check("a named organisation doing something is concrete", A.concreteClaim("FACT: the platform was adopted by Google for its swarm lab -- not in source"));
@@ -90,7 +91,7 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
 }
 // ---- Q08-PARAPHRASE-ITEMS-1 (0.24.1, run 387) ---------------------------------------------------------------------------------
 {
-  const A = (await import("./worker.js")).__analysis;
+  const A = (await importRunningWorker("./worker.js", import.meta.url)).__analysis;
   const fc = { ok: false, unavailable: false, inferences: [], judges: [], unsupported: [
     "Next-generation applications need both high data rate and low latency -- not explicitly stated in source",
     "Current transport protocols fall short -- phrasing not in source",
@@ -105,8 +106,8 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
 }
 // ---- Q08-SOURCE-CONCESSION-1 + Q08-PRUNE-BODY-FLOOR-1 (0.24.2, run 388) -------------------------------------------------------------
 {
-  const A = (await import("./worker.js")).__analysis;
-  const V = (await import("./worker.js")).__verify;
+  const A = (await importRunningWorker("./worker.js", import.meta.url)).__analysis;
+  const V = (await importRunningWorker("./worker.js", import.meta.url)).__verify;
   const r = A.paraphraseItemsDropped({ ok: false, unavailable: false, unsupported: [
     "the company expects the sale process to finish by the end of November or early December 2026 -- date not directly from source, but from FAQ in source",
     "the same comment described the filing as the \u201cshell that was left after Google hi-quired the founding team\u201d -- quote from comment, not main source text, but idea is in source",

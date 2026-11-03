@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROBE-TRANSPORTS-1 offline suite (qnfo-fleet-control 0.6.0, agent_issues 2059): remediationContractsTick runs contracts on
 // d1-query, d1-query@portfolio-state and external-https, against node:sqlite and a stubbed fetch. Proves: the spec parser
 // refuses anything but https GET/HEAD on the allowlist with a known check and an expected value; a fleet-host contract is
@@ -60,7 +61,7 @@ const fetchStub = async (url, init) => {
   return { status: r.status, headers: { get: (k) => h[String(k).toLowerCase()] ?? null }, text: async () => r.body || "" };
 };
 const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Number, String, JSON, Object, Array, console, URL, AbortController, setTimeout, clearTimeout, fetch: fetchStub });
-const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, rtHttpSpec, rtHttpObserve, rtHttpFleetHost, RT_TRANSPORTS });", ctx, { filename: "fleet-control#PROBE-TRANSPORTS-1" });
+const W = vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n;({ remediationContractsTick, rtHttpSpec, rtHttpObserve, rtHttpFleetHost, RT_TRANSPORTS });"), ctx, { filename: "fleet-control#PROBE-TRANSPORTS-1" });
 
 // 1. spec parser
 const S = (o) => W.rtHttpSpec(typeof o === "string" ? o : JSON.stringify(o));

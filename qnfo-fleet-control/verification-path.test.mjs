@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // VERIFICATION-PATH-1 offline suite (qnfo-fleet-control 0.38.0, agent_issues 2953 and 2954): the real remediationContractsTick,
 // rtReopenOnRelapse, rtStampDeferral and rtEscalateStaleDeferrals bodies, sliced out of worker.js and run on node:sqlite.
 //   (a) the relapse window starts at the issue_lifecycle close event, not at agent_issues.updated_at: failures between the close and
@@ -60,7 +61,7 @@ function makeDb(opt = {}) {
   return { db, env: { AUDIT: { prepare: (sql) => stmt(sql, []) } } };
 }
 const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Number, String, JSON, Object, console: { error: (m) => logged.push(String(m)), log: console.log } });
-const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, rtDeferralReason: typeof rtDeferralReason === 'function' ? rtDeferralReason : null, rtDeferralProbe: typeof rtDeferralProbe === 'function' ? rtDeferralProbe : null, rtDeferralStampKind: typeof rtDeferralStampKind === 'function' ? rtDeferralStampKind : null });", ctx, { filename: "fleet-control#VERIFICATION-PATH-1" });
+const W = vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n;({ remediationContractsTick, rtDeferralReason: typeof rtDeferralReason === 'function' ? rtDeferralReason : null, rtDeferralProbe: typeof rtDeferralProbe === 'function' ? rtDeferralProbe : null, rtDeferralStampKind: typeof rtDeferralStampKind === 'function' ? rtDeferralStampKind : null });"), ctx, { filename: "fleet-control#VERIFICATION-PATH-1" });
 
 const pad = (n) => String(n).padStart(2, "0");
 const fmt = (d) => d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());

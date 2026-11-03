@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // OWNER-LOCAL-INGEST-1 offline suite (qnfo-fleet-control 0.11.0, 1b in 0.11.1, agent_issues 2080, pillar cost).
 // Replays the COST-ATTRIBUTION-GAP-1 and OWNER-LOCAL-INGEST-1 blocks of worker.js in a sandbox with a scripted Cloudflare
 // API (gateway list, gateway logs, GraphQL) and real SQL (node:sqlite behind a D1-shaped shim). Proves: a log row is classed
@@ -83,7 +84,7 @@ const fakeFetch = async (url, opts) => {
 };
 const sandbox = { __name: (f) => f, fetch: fakeFetch, AbortSignal, console, __export: null, VERSION: vmatch ? vmatch[1] : "0.11.0", encodeURIComponent };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(A, B + END.length) + "\n__export = { olMeta, olProvider, olClassify, olAggregate, olLogsUrl, ownerLocalIngest, costAttributionTick, costAttributionGap, OL_PAGE, OL_MAX_PAGES, OL_SELF_WRITERS, OL_CURSOR_KEY, OL_CURSOR_KEY_V1 };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(A, B + END.length) + "\n__export = { olMeta, olProvider, olClassify, olAggregate, olLogsUrl, ownerLocalIngest, costAttributionTick, costAttributionGap, OL_PAGE, OL_MAX_PAGES, OL_SELF_WRITERS, OL_CURSOR_KEY, OL_CURSOR_KEY_V1 };"), sandbox);
 const W = sandbox.__export;
 
 // ---- 1. pure parts ----

@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): the freshness auditor reads "*/3h" and "2h" with their unit,
 // and reports a never-measured UNMEASURED / n/a metric in its own class instead of as a stale writer.
 // Run: node qnfo-lifecycle/metric-freshness.test.mjs
@@ -17,7 +18,7 @@ CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state T
 CREATE TABLE service_registry (service TEXT PRIMARY KEY);`);
 const d1 = { prepare(sql) { const st = db.prepare(sql); let args = []; const o = { bind(...x) { args = x; return o; }, async first() { return st.get(...args) || null; }, async all() { return { results: st.all(...args) }; }, async run() { const r = st.run(...args); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; } }; return o; } };
 const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, Array, isNaN, parseInt, AbortSignal, QNFO_VERSION: "test", fetch: async () => { throw new Error("offline"); } });
-vm.runInContext(src.slice(a, b) + "\nthis.__k = { metricCadenceMinutes, runMetricFreshness };", cx);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\nthis.__k = { metricCadenceMinutes, runMetricFreshness };"), cx);
 const { metricCadenceMinutes, runMetricFreshness } = cx.__k;
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };

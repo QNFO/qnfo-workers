@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // COMPANION-SOURCES-1 offline suite (personal-companion 1.15.0). Failure mode proven live: after 1.14.1 every generation run ended
 // status=blocked "insufficient anchors" (topic "none"), with no reason recorded, so reading.q08.org stayed empty. Now: source fetches
 // carry a descriptive User-Agent, retry, and record why they failed; Wikipedia and arXiv are independent providers (one down, the
@@ -9,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const load = async () => { const m = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url)); m.__verify.fetchCfg.backoff = [0, 0]; return m.__verify; };
+const load = async () => { const m = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url)); m.__verify.fetchCfg.backoff = [0, 0]; return m.__verify; };
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 500) : "")); } };
 

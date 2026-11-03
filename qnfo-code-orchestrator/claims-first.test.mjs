@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // CLAIMS-FIRST-1 (0.3.21, transformation lever T1.14): every code task reserves its WORK-CLAIM-1 file claim at enqueue and holds it through
 // qnfo-deploy-guard /work-lock to its end; queue-behind tasks use their predecessor's claim; a file a session holds makes the task wait; a finished task releases
 // its claim with the pull request and the outcome; the guard unreachable never breaks the loop.
@@ -7,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

@@ -3232,7 +3232,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.14";
+var VERSION = "1.45.0";
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
@@ -3858,7 +3858,7 @@ async function srcFetch(label, url) {
       if (resp.status !== 429 && resp.status < 500) break;
       var ra = Number(resp.headers && resp.headers.get && resp.headers.get("retry-after"));
       if (t < tries - 1 && ra > 0 && ra <= 5) await sleepMs(ra * 1e3);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       last = "error " + String(e && e.message || e).slice(0, 60);
     }
     if (t < tries - 1) await sleepMs(fetchCfg.backoff[t]);
@@ -3952,7 +3952,7 @@ async function fetchPaperFullText(ref) {
       var t = paperHtmlText(await r.text());
       if (t.length >= PAPER_MIN_CHARS && !/^\s*(?:No HTML for|Conversion to HTML had a Fatal error)/i.test(t)) return { text: t.slice(0, PAPER_TEXT_MAX), url: urls[i] };
       diagNote("paper full text " + urls[i].split("/")[2] + ": " + t.length + " chars");
-    } catch (e) { diagNote("paper full text: " + String(e && e.message || e).slice(0, 60)); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; diagNote("paper full text: " + String(e && e.message || e).slice(0, 60)); }
   }
   return null;
 }
@@ -4204,13 +4204,13 @@ async function fetchEventTitles(seed, n) {
 }
 async function wikiAnchors(used, cooled, seed) {
   var events = [];
-  try { events = await fetchEventTitles(seed, EVENT_POOL); } catch (eE) { diagNote("wikipedia onthisday: " + String(eE && eE.message || eE).slice(0, 60)); } // EVENT-POOL-1
+  try { events = await fetchEventTitles(seed, EVENT_POOL); } catch (eE) { if (fleetAiStopped(eE)) throw eE; diagNote("wikipedia onthisday: " + String(eE && eE.message || eE).slice(0, 60)); } // EVENT-POOL-1
   var random = await fetchRandomTitles(TOPIC_POOL - events.length);
   var pool = events.concat(random.filter(function (x) { return events.indexOf(x) < 0; }));
   if (events.length) diagNote("event pool: " + events.length + " from " + eventDay(seed).join("/"));
   var fresh = pool.filter(function (x) { return used.indexOf("wiki:" + x) < 0 && !cooled["wiki:" + x]; });
   var intros = {};
-  try { intros = await fetchWikiIntros(fresh); } catch (eI) { diagNote("wikipedia intros: " + String(eI && eI.message || eI).slice(0, 60)); }
+  try { intros = await fetchWikiIntros(fresh); } catch (eI) { if (fleetAiStopped(eI)) throw eI; diagNote("wikipedia intros: " + String(eI && eI.message || eI).slice(0, 60)); }
   var scored = screenTopics(fresh, intros);
   if (Object.keys(intros).length) diagNote("intro screen: " + scored.slice(0, 3).map(function (x) { return x.t.slice(0, 40) + " " + x.s; }).join(", "));
   var titles = scored.map(function (x) { return x.t; });
@@ -4284,8 +4284,8 @@ async function pickTopic(env, form) {
   }
   var seed = (Date.now() ^ (Math.random() * 4294967296)) >>> 0;
   var wiki = [], papers = [];
-  try { wiki = await wikiAnchors(used, cooled, seed); } catch (eW) { wiki = []; diagNote("wikipedia: " + String(eW && eW.message || eW).slice(0, 60)); }
-  try { papers = await paperAnchors(wiki.length ? wiki[0].title : "", seed); } catch (eP) { papers = []; diagNote("arxiv: " + String(eP && eP.message || eP).slice(0, 60)); }
+  try { wiki = await wikiAnchors(used, cooled, seed); } catch (eW) { if (fleetAiStopped(eW)) throw eW; wiki = []; diagNote("wikipedia: " + String(eW && eW.message || eW).slice(0, 60)); }
+  try { papers = await paperAnchors(wiki.length ? wiki[0].title : "", seed); } catch (eP) { if (fleetAiStopped(eP)) throw eP; papers = []; diagNote("arxiv: " + String(eP && eP.message || eP).slice(0, 60)); }
   var anchors = [], id = "", subject = "";
   if (wiki.length >= 2) { anchors = wiki.concat(papers.slice(0, 2)); id = "wiki:" + wiki[0].title; subject = wiki[0].title; }
   else if (papers.length >= 2) {
@@ -4418,7 +4418,7 @@ async function callWorkersAI(env, messages, maxTokens, timeoutMs, chain, prevErr
         return { model: m, text: t.text };
       }
       errs.push(m + ": empty (clen=" + String(t.text || "").length + " rlen=" + t.rlen + ")");
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       errs.push(m + ": " + String(e && e.message || e).slice(0, 160));
     }
   }
@@ -4438,7 +4438,7 @@ async function callModel(env, messages, maxTokens, timeoutMs, model, role) {
     var mt = isReasoner ? Math.min(Number(maxTokens) || 16e3, 16e3) : Math.min(Number(maxTokens) || 4e3, 14e3);
     var body = { model: useModel, messages, max_tokens: mt, stream: false };
     body.temperature = isReasoner ? 1 : 0.7;
-    var resp = await fetch(WRITER_URL, {
+    var resp = await fleetAiFetch(env, fetch, WRITER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
       body: JSON.stringify(body),
@@ -4458,7 +4458,7 @@ async function callModel(env, messages, maxTokens, timeoutMs, model, role) {
       if (typeof text === "string" && text.trim().length > 80) return { model: useModel, text };
       dsErr = useModel + ": " + (msg && msg.reasoning_content ? "reasoning only, rlen=" + String(msg.reasoning_content).length : "empty");
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     dsErr = useModel + ": " + String(e && e.message || e).slice(0, 160);
   }
   lastCallFallback = true;
@@ -5423,7 +5423,7 @@ async function similarExists(env, text, excludeSlug) {
         return { slug: m.metadata.slug, score: m.score };
       }
     }
-  } catch (e) { logCaught("similarExists", e); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; logCaught("similarExists", e); }
   return null;
 }
 __name(similarExists, "similarExists");
@@ -5475,7 +5475,7 @@ async function persistPiece(env, piece, form, topic, model, quality, words, grou
         metadata: { kind: "companion-piece", slug, form, title: String(piece.title).slice(0, 200), day }
       }]);
     }
-  } catch (e) { logCaught("persistPiece", e); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; logCaught("persistPiece", e); }
   try {
     await env.MEDIA.put("companion/" + day + "/" + slug + ".md", String(piece.body_md), {
       httpMetadata: { contentType: "text/markdown; charset=utf-8" }
@@ -6173,7 +6173,7 @@ async function balanceCheckOne(env, modelId, draft) {
     var s = parseBalanceScore(out);
     if (s) { s.model = modelId; s.family = familyOf(modelId); return s; }
     return { failed: true, model: modelId, error: "no balance score in reply (" + String(out).length + " chars)" };
-  } catch (e) { return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
 }
 async function balanceCheck(env, draft, writerModel, seedText) {
   var wf = writerModel ? familyOf(writerModel) : "";
@@ -6200,7 +6200,7 @@ async function factCheckOne(env, modelId, draft, ground) {
     var v = parseFactVerdict(out);
     if (v) { v.model = modelId; v.family = familyOf(modelId); return v; }
     return { failed: true, model: modelId, error: "no verdict in reply (" + String(out).length + " chars)" };
-  } catch (e) { return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
 }
 // FACTCHECK-FIRST-TWO-1 + REVIEWER-HEALTH-1 (1.19.6, agent_issues 2222; companion_runs 5404-5408 of 2026-10-13 11:00 UTC): every
 // verification took 220 s, because each of its two rounds waited the full REVIEW_TIMEOUT_MS for glm-5.3 (10 of its 11 fact-check calls
@@ -6910,7 +6910,7 @@ async function generate(env, form, opts) {
     if (topic.cacheId) { try { await env.PERSONAL.prepare("UPDATE companion_anchor_cache SET done = 1 WHERE id = ?").bind(topic.cacheId).run(); } catch (eCd) { logCaught("top", eCd); } }
     await logRun(env, form, model, topic.id, "ok", slug, Date.now() - t0);
     return { ok: true, slug, form, title: best.piece.title, words: best.words, quality: best.quality, topic: topic.id, model };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await logRun(env, form, model, topic ? topic.id : "", "error", String(e && e.message || e), Date.now() - t0);
     return { ok: false, error: String(e && e.message || e) };
   }
@@ -7081,6 +7081,8 @@ async function companionStallDetector(env, nowMs) {
 }
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     if (new URL(request.url).pathname === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // SEO-HYGIENE-1: a private tool / private reading surface, kept out of search engines
     var u = new URL(request.url);
     var p = u.pathname;
@@ -7136,7 +7138,7 @@ var worker_default = {
         try {
           var rp = await aiRunAttr(env, "personal-companion", "probe-ping", MODELS[pi], { messages: [{ role: "user", content: "Reply with the single word: ready" }], max_tokens: 16 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(3e4) });
           ping[MODELS[pi]] = { ms: Date.now() - t0p, resp: String(rp && rp.response || JSON.stringify(rp)).slice(0, 160) };
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           ping[MODELS[pi]] = { ms: Date.now() - t0p, err: String(e && e.message || e).slice(0, 200) };
         }
       }
@@ -7169,7 +7171,7 @@ var worker_default = {
             rc = rq.choices[0].message.reasoning_content || "";
           }
           probe[cand[ci]] = { ms: Date.now() - tt, clen: String(c).length, rlen: String(rc).length, fr: rq && rq.choices && rq.choices[0] && rq.choices[0].finish_reason || "" };
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           probe[cand[ci]] = { ms: Date.now() - tt, err: String(e && e.message || e).slice(0, 160) };
         }
         if (u.searchParams.get("one") === "1") break;
@@ -7278,8 +7280,12 @@ var worker_default = {
       return res2;
     }
     return json({ error: { message: "not found", version: VERSION } }, 404);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     return cronTickDispatch(event, async function (event) {
     if (event.cron === "0 21 * * *") {
       ctx.waitUntil(sendDigest(env).catch(function (eLog) { logCaught("scheduled", eLog); }));
@@ -7289,7 +7295,7 @@ var worker_default = {
       var hbOk = 1;
       // BROADCAST-BATCH-1: continue an unfinished broadcast or digest before anything else on the hourly tick.
       try { await resumeSendRuns(env); } catch (eR) { console.log("resumeSendRuns: " + String(eR && eR.message || eR)); }
-      try { await ensureSchema(env); var _au = await auditPublished(env, 40); if (_au && (_au.retracted || _au.withdrawn || _au.deferred)) console.log("accuracy-audit: " + JSON.stringify(_au)); } catch (eAu) { console.error("accuracy-audit:", String(eAu && eAu.message || eAu)); }
+      try { await ensureSchema(env); var _au = await auditPublished(env, 40); if (_au && (_au.retracted || _au.withdrawn || _au.deferred)) console.log("accuracy-audit: " + JSON.stringify(_au)); } catch (eAu) { if (fleetAiStopped(eAu)) throw eAu; console.error("accuracy-audit:", String(eAu && eAu.message || eAu)); }
       try {
         var nowUtc = /* @__PURE__ */ new Date();
         var utcHour = nowUtc.getUTCHours();
@@ -7332,7 +7338,7 @@ var worker_default = {
         try { var _cm = await refreshConnectionMetrics(env); if (_cm.error) console.error("connection-metrics:", _cm.error); } catch (eCm) { console.error("connection-metrics:", String(eCm && eCm.message || eCm)); }
         try { var _uq = await flagUndeliverableQuestions(env); if (_uq.error) console.error("owner-question-undeliverable:", _uq.error); } catch (eUq) { console.error("owner-question-undeliverable:", String(eUq && eUq.message || eUq)); }
         try { var _op = await deliverOwnerPrompts(env); if (_op.error) console.error("owner-prompts:", _op.error); } catch (eOp) { console.error("owner-prompts:", String(eOp && eOp.message || eOp)); }
-      } catch (e) { hbOk = 0; logCaught("scheduled", e); }
+      } catch (e) { if (fleetAiStopped(e)) throw e; hbOk = 0; logCaught("scheduled", e); }
       // CRON-ONLY-HEARTBEAT-1 (FLEET-HARDENING-2, agent_issues 2397): the hourly tick ends with its fleet_heartbeat row (ok=0 when the tick
       // threw); the write never throws or masks the tick's own error
       try {
@@ -7527,7 +7533,7 @@ var VaultIndexer = (function() {
         var resp = null, lastErr = "";
         for (var attempt = 0; attempt < 3 && !resp; attempt++) {
           try { resp = await aiRunAttr(env, "personal-companion", "embed-index", "@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
-          catch (e) {
+          catch (e) { if (fleetAiStopped(e)) throw e;
             lastErr = String((e && e.message) || e);
             var rt = /429|1010|rate.?limit|throttl|overload|503|502|504|busy|timeout/i.test(lastErr) && !/spend limit|2045|budget|quota/i.test(lastErr);
             if (!rt && attempt >= 1) break;
@@ -7713,14 +7719,14 @@ function travelDeps(env) {
     modelAllowed: modelAllowed,
     // Cloudflare Access public keys (only read when travel_config access_team and access_aud are set); edge-cached 1 h
     accessCerts: async function (team) {
-      var r = await fetch("https://" + encodeURIComponent(team) + ".cloudflareaccess.com/cdn-cgi/access/certs", { cf: { cacheTtl: 3600, cacheEverything: true } });
+      var r = await fleetAiFetch(env, fetch, "https://" + encodeURIComponent(team) + ".cloudflareaccess.com/cdn-cgi/access/certs", { cf: { cacheTtl: 3600, cacheEverything: true } });
       return r.ok ? r.json() : { keys: [] };
     },
     // TRAVEL-TRIP-1: weather and place lookups for the trip view, Open-Meteo hosts only (no key; forecasts edge-cached 30 min)
     http: async function (url) {
       var h = new URL(url).hostname;
       if (["api.open-meteo.com", "archive-api.open-meteo.com", "geocoding-api.open-meteo.com"].indexOf(h) < 0) throw new Error("host not allowed: " + h);
-      var r = await fetch(url, { cf: { cacheTtl: 1800, cacheEverything: true } });
+      var r = await fleetAiFetch(env, fetch, url, { cf: { cacheTtl: 1800, cacheEverything: true } });
       if (!r.ok) throw new Error(h + " " + r.status);
       return r.json();
     }
@@ -8119,10 +8125,21 @@ var GenerationFlow = class extends WorkflowEntrypoint {
   }
   async run(event, step) {
     var form = event && event.payload && event.payload.form || RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
-    var out = await step.do("generate", { timeout: "300 seconds" }, async () => {
-      return await generate(this.env, form, {});
-    });
+    var out;
+    for (var attempt = 0; ; attempt++) {
+      await fleetAiWorkflowWait(this.env, step, "generation-" + attempt);
+      out = await step.do("generate-" + attempt, { timeout: "300 seconds", retries: { limit: 0 } }, async () => {
+        try {
+          return await generate(this.env, form, {});
+        } catch (error) {
+          if (!fleetAiStopped(error)) throw error;
+          return { ok: false, deferred: true, error: error.code };
+        }
+      });
+      if (!out || !out.deferred) break;
+    }
     if (out && out.ok) {
+      await fleetAiWorkflowWait(this.env, step, "publication");
       await step.do("publish", { timeout: "120 seconds" }, async () => {
         try {
           var pr = await this.env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(out.slug).all();
@@ -8144,7 +8161,7 @@ var GenerationFlow = class extends WorkflowEntrypoint {
 var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1;
-  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  try { return await fleetAiRun(env, env.AI, model, input, opts); } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
   finally {
     try {
       var db = null;
@@ -8733,7 +8750,7 @@ async function wmRpc(msg, request, env, ctx, origFetch, workerName) {
     try {
       var result = await wmExecTool(tool, params.arguments || {}, request, origFetch, env, ctx);
       return reply(result);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return reply(wmToolResult(name + " failed: " + String((e && e.message) || e), true));
     }
   }
@@ -8772,7 +8789,7 @@ async function wmMcp(request, env, ctx, origFetch, workerName) {
     }
     if (!out.length) return new Response(null, { status: 202, headers: h });
     return wmJson(batch ? out : out[0], 200, "no-store");
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -8875,7 +8892,7 @@ function wmAttach(target, workerName) {
     };
     target.__wm = WM_VERSION;
     return target;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return target;
   }
 }
@@ -8907,3 +8924,114 @@ function edgeSecure(res) {
   };
 })(worker_default);
 // ---- BP26-EDGE-SECURITY-1:END ----
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "personal-companion";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

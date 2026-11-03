@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // HANDOFFS-VZ-PRODUCER-1 (qnfo-infra 1.9.0) offline suite. No network.
 // Measured 2026-10-26: semantic handoff search was frozen at 2026-07 while qnfo-audit.handoffs held 1,706 rows. PR 4230 had added a producer to the 06:30
 // indexer member that selected handoffs.content, a column the table does not have, so it threw into a catch every night. This suite replays the live
@@ -11,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { indexHandoffs as __index, handoffText as __text, handoffChunks as __chunks, VERSION as __v, runScheduled as __run, handoffIsPersonalPlane as __personal };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { indexHandoffs as __index, handoffText as __text, handoffChunks as __chunks, VERSION as __v, runScheduled as __run, handoffIsPersonalPlane as __personal };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 500) : "")); } };
 

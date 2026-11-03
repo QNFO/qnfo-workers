@@ -66,13 +66,13 @@ function twinRunOpts(model, base) {
 async function twinRun(env, model, base, runOpts) {
   const o = twinRunOpts(model, base);
   try {
-    return await env.AI.run(model, o, runOpts);
-  } catch (e) {
+    return await fleetAiRun(env, env.AI, model, o, runOpts);
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     // Only a rejected parameter is retried without the field; any other error goes straight to the next model.
     const _em = String(e && e.message || e);
     if (!o.reasoning_effort || /timeout|abort|3046/i.test(_em) || !/reasoning|parameter|field|unknown|invalid|unexpected/i.test(_em)) throw e;
     delete o.reasoning_effort;
-    return await env.AI.run(model, o, runOpts);
+    return await fleetAiRun(env, env.AI, model, o, runOpts);
   }
 }
 var BRIEF_MODELS = [
@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.32.0"; // 4.32.0 COMPANION-FOCUS-2 (issue 115, pillar personal): bounded timer, 5/15/30 choices, session handoff, and local free checklist. // 4.30.1 BP26-AI-ACT-ART50-1: successful /v1/chat/completions JSON and SSE replies begin with the AI disclosure. prior 4.30.0 // 4.26.1 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D): the companion Add-action form controls (context, energy, minutes) carry aria-label, three axe label violations on me.q08.org. prior 4.26.0 // 4.26.0 BP26-AI-ACT-ART50-1 (2026-10-28, pillar security, agent_issues 1000341): EU AI Act Art. 50(1): the companion page (me.q08.org/companion) and its guide say on the first screen, in a visible text node, that the companion is an AI system and that an AI language model writes every reply; the Talk view says it again. The BP26 collector (scripts/bp26_web.py ai_interaction_disclosure) reads the page, not a reply. personal-api/ai-disclosure.test.mjs. // 4.25.0 COMPANION-CHECKIN-DELIVER-1 (2026-10-26, pillar personal, owner: "IMPLEMENT AND DEPLOY ALL"): the chat check-in and the me.q08.org setup note were injected on 25 and 26 October but the model left both out while the day was marked used, so neither reached him and no mood was ever logged; the reply now carries the line when the model omits it (never beside a SAFETY or CARE answer), a short answer such as "3" or "4/5 tired" to that day's check-in is saved as his mood by the server, and the setup note keeps to 08:00-22:00. // 4.24.0 COMPANION-READING-1 (2026-10-26, pillar personal, owner: "another subdomain of Q08 that really helps me understand myself better ... not New Age or guru type shit"): Today shows "Something to read", one pick from mind.q08.org/now in a lane chosen from his mood record (gentle after a low day or two, deeper after a steady week, steady otherwise); only the lane name is in the link, and the guide's normal day lists it. // 4.23.0 COMPANION-PACKAGE-1 (2026-10-20, pillar personal, owner: "bundle it all together into a user-friendly package ... I'm tired of micromanaging this ... right now it's scattered and isn't working"): nobody had ever signed in to the companion (no codes, sessions or push subscriptions), so with e-mail off every ask reached no one. One plain-language page at me.q08.org/guide (/companion/guide: what he asked for, two-minute setup, a normal day, controls, crisis lines, the evidence, how it compares); Today opens with a "Start here" list (signed in, home screen, notifications, first check-in, safety plan) until done or hidden; the twin chat he already uses asks how he is once a day when no mood is logged and logs it with cmp_mood, and while no phone is set up for notes mentions me.q08.org at most every three days. // 4.22.0 PERSONAL-LIVE-1 (2026-10-20, pillar personal, owner: "answers that are too shallow ... look at multiple venues ... real-time data when I ask for it ... read-write real-time access through the personal API endpoint"): a going-out or day question reads the live programme pages of eleven Amsterdam venues and listings in parallel (live_sources, owner rows win; 10-minute live_cache, bypassed by now/live/latest), keeps the text around the asked day and gives the model one block per source with its URL and read time; the prompt answers across venues and never shows row ids; tools whats_on, live_sources, live_source_add, live_source_toggle; the travel planner joins the twin (travel_get reads proposals, planned stops and booked stays; travel_choose records pick or no as the planner page does); POST /v1/tools/<name> runs any twin tool (read or write) and GET /v1/live/whatson returns the live listing, each with the personal API key or the signed-in companion device (X-Companion: 1); chat no longer raises tasks more than three days past their date unless asked about tasks (the September Dale, Paradiso and Stevie Wonder reminders), prime reminders are the last 14 days only, the Google Calendar note is no longer a footer, and the system prompt drops the QNFO routing block. // 4.21.0 COMPANION-MCP-CONSENT-CODE-1 (2026-10-20, agent_issues 100232, pillar personal, owner: "stop asking me for keys ... one-time email passwords are fine"): the OAuth consent page at /oauth/authorize no longer asks for the personal API key first: a live cmp_s session approves with one tap (a hidden token binds it to the client, redirect and PKCE challenge), otherwise "E-mail me a code" sends the 6-digit sign-in code and the code approves (and leaves this device signed in); the key field stays only as a fallback inside a details block. // 4.20.0 COMPANION-GP-SUMMARY-1 (2026-10-19, agent_issues 100202, pillar personal): the Data tab can build, when the owner asks, a one-page 90-day summary to show his GP (huisarts) in plain words (mood by week, WHO-5 readings, the sleep proxy labelled as a proxy, what helped; no diagnosis, no chat or capture text; journal lines and mood notes only when ticked), GET /companion/api/gp-summary behind the sign-in, printed or saved as PDF by him from the page; read-only: nothing is stored, mailed, shared or posted by the companion. // 4.19.0 COMPANION-CALENDAR-AWARE-1 (2026-10-19, agent_issues 100200, pillar personal): the companion's nudges now read the owner's calendar (personal-life.events, plus the twin's Google and store calendar through a reader the worker supplies): no ask while a timed event is on; with three or more events the day is lighter (optional asks stop one short of the daily cap and offer only the smallest step); and one short After <event> check-in (kind cmp-after, event name kept off the lock screen) within 75 minutes after a social or heavy event ends, unless he has already logged a mood. Risk-word care and presence are never held back by the calendar. // 4.18.0 COMPANION-TRAVEL-TZ-1 (2026-10-19, agent_issues 100199, pillar personal): while a lodging row in personal-life.events covers now (the stay's own nights plus the check-out morning, in the stay's zone), the companion's day follows the traveller: quiet hours (22:00-07:30), the morning and evening check-in windows, the day keys of moods, journal lines, activities, WHO-5 and nudges, the sleep proxy and the Sunday look-back run in that place's time zone (a fixed country and city table; an unknown place or a stay at home keeps the configured zone), and Today says Times follow you: <place>. // 4.17.0 COMPANION-OFFLINE-1 (2026-10-19, agent_issues 100201, pillar personal): the companion app opens without a signal and loses nothing made offline: the service worker keeps the page shell (HTML, manifest, icon; no personal data) and serves it when the network is down; a capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made, is sent when the connection returns (online, app in front, after Today loads) and is stored at that time, never twice, and the queue is cleared at sign-out; Today shows an offline view with the mood card and the line saved on this phone, and API reads are never cached. // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.33.0"; // 4.32.0 COMPANION-FOCUS-2 (issue 115, pillar personal): bounded timer, 5/15/30 choices, session handoff, and local free checklist. // 4.30.1 BP26-AI-ACT-ART50-1: successful /v1/chat/completions JSON and SSE replies begin with the AI disclosure. prior 4.30.0 // 4.26.1 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D): the companion Add-action form controls (context, energy, minutes) carry aria-label, three axe label violations on me.q08.org. prior 4.26.0 // 4.26.0 BP26-AI-ACT-ART50-1 (2026-10-28, pillar security, agent_issues 1000341): EU AI Act Art. 50(1): the companion page (me.q08.org/companion) and its guide say on the first screen, in a visible text node, that the companion is an AI system and that an AI language model writes every reply; the Talk view says it again. The BP26 collector (scripts/bp26_web.py ai_interaction_disclosure) reads the page, not a reply. personal-api/ai-disclosure.test.mjs. // 4.25.0 COMPANION-CHECKIN-DELIVER-1 (2026-10-26, pillar personal, owner: "IMPLEMENT AND DEPLOY ALL"): the chat check-in and the me.q08.org setup note were injected on 25 and 26 October but the model left both out while the day was marked used, so neither reached him and no mood was ever logged; the reply now carries the line when the model omits it (never beside a SAFETY or CARE answer), a short answer such as "3" or "4/5 tired" to that day's check-in is saved as his mood by the server, and the setup note keeps to 08:00-22:00. // 4.24.0 COMPANION-READING-1 (2026-10-26, pillar personal, owner: "another subdomain of Q08 that really helps me understand myself better ... not New Age or guru type shit"): Today shows "Something to read", one pick from mind.q08.org/now in a lane chosen from his mood record (gentle after a low day or two, deeper after a steady week, steady otherwise); only the lane name is in the link, and the guide's normal day lists it. // 4.23.0 COMPANION-PACKAGE-1 (2026-10-20, pillar personal, owner: "bundle it all together into a user-friendly package ... I'm tired of micromanaging this ... right now it's scattered and isn't working"): nobody had ever signed in to the companion (no codes, sessions or push subscriptions), so with e-mail off every ask reached no one. One plain-language page at me.q08.org/guide (/companion/guide: what he asked for, two-minute setup, a normal day, controls, crisis lines, the evidence, how it compares); Today opens with a "Start here" list (signed in, home screen, notifications, first check-in, safety plan) until done or hidden; the twin chat he already uses asks how he is once a day when no mood is logged and logs it with cmp_mood, and while no phone is set up for notes mentions me.q08.org at most every three days. // 4.22.0 PERSONAL-LIVE-1 (2026-10-20, pillar personal, owner: "answers that are too shallow ... look at multiple venues ... real-time data when I ask for it ... read-write real-time access through the personal API endpoint"): a going-out or day question reads the live programme pages of eleven Amsterdam venues and listings in parallel (live_sources, owner rows win; 10-minute live_cache, bypassed by now/live/latest), keeps the text around the asked day and gives the model one block per source with its URL and read time; the prompt answers across venues and never shows row ids; tools whats_on, live_sources, live_source_add, live_source_toggle; the travel planner joins the twin (travel_get reads proposals, planned stops and booked stays; travel_choose records pick or no as the planner page does); POST /v1/tools/<name> runs any twin tool (read or write) and GET /v1/live/whatson returns the live listing, each with the personal API key or the signed-in companion device (X-Companion: 1); chat no longer raises tasks more than three days past their date unless asked about tasks (the September Dale, Paradiso and Stevie Wonder reminders), prime reminders are the last 14 days only, the Google Calendar note is no longer a footer, and the system prompt drops the QNFO routing block. // 4.21.0 COMPANION-MCP-CONSENT-CODE-1 (2026-10-20, agent_issues 100232, pillar personal, owner: "stop asking me for keys ... one-time email passwords are fine"): the OAuth consent page at /oauth/authorize no longer asks for the personal API key first: a live cmp_s session approves with one tap (a hidden token binds it to the client, redirect and PKCE challenge), otherwise "E-mail me a code" sends the 6-digit sign-in code and the code approves (and leaves this device signed in); the key field stays only as a fallback inside a details block. // 4.20.0 COMPANION-GP-SUMMARY-1 (2026-10-19, agent_issues 100202, pillar personal): the Data tab can build, when the owner asks, a one-page 90-day summary to show his GP (huisarts) in plain words (mood by week, WHO-5 readings, the sleep proxy labelled as a proxy, what helped; no diagnosis, no chat or capture text; journal lines and mood notes only when ticked), GET /companion/api/gp-summary behind the sign-in, printed or saved as PDF by him from the page; read-only: nothing is stored, mailed, shared or posted by the companion. // 4.19.0 COMPANION-CALENDAR-AWARE-1 (2026-10-19, agent_issues 100200, pillar personal): the companion's nudges now read the owner's calendar (personal-life.events, plus the twin's Google and store calendar through a reader the worker supplies): no ask while a timed event is on; with three or more events the day is lighter (optional asks stop one short of the daily cap and offer only the smallest step); and one short After <event> check-in (kind cmp-after, event name kept off the lock screen) within 75 minutes after a social or heavy event ends, unless he has already logged a mood. Risk-word care and presence are never held back by the calendar. // 4.18.0 COMPANION-TRAVEL-TZ-1 (2026-10-19, agent_issues 100199, pillar personal): while a lodging row in personal-life.events covers now (the stay's own nights plus the check-out morning, in the stay's zone), the companion's day follows the traveller: quiet hours (22:00-07:30), the morning and evening check-in windows, the day keys of moods, journal lines, activities, WHO-5 and nudges, the sleep proxy and the Sunday look-back run in that place's time zone (a fixed country and city table; an unknown place or a stay at home keeps the configured zone), and Today says Times follow you: <place>. // 4.17.0 COMPANION-OFFLINE-1 (2026-10-19, agent_issues 100201, pillar personal): the companion app opens without a signal and loses nothing made offline: the service worker keeps the page shell (HTML, manifest, icon; no personal data) and serves it when the network is down; a capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made, is sent when the connection returns (online, app in front, after Today loads) and is stored at that time, never twice, and the queue is cleared at sign-out; Today shows an offline view with the mood card and the line saved on this phone, and API reads are never cached. // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -181,7 +181,7 @@ __name(sha16, "sha16");
 __name2(sha16, "sha16");
 __name22(sha16, "sha16");
 async function embed(env, texts) {
-  const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: texts.slice(0, MAX_EMBED_BATCH) }, { gateway: { id: "default" } });
+  const resp = await fleetAiRun(env, env.AI, "@cf/baai/bge-base-en-v1.5", { text: texts.slice(0, MAX_EMBED_BATCH) }, { gateway: { id: "default" } });
   const vectors = resp && resp.data || [];
   return vectors.filter((v) => Array.isArray(v) && v.length === 768).map((v) => v.map((x) => Number.isFinite(x) ? x : 0));
 }
@@ -237,7 +237,7 @@ async function loadPrimeContext(env, q, currentThread) {
     const _calEvents = [];
     const _awayW = await loadAwayWindows(env, today);
     let _evsApi = null;
-    try { _evsApi = await calList(env, today, tom, 10); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:loadPrimeContext:caught", error: String((e && e.message) || e) })); }
+    try { _evsApi = await calList(env, today, tom, 10); } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "personal-api:loadPrimeContext:caught", error: String((e && e.message) || e) })); }
     if (_evsApi && _evsApi.ok && _evsApi.events) for (const e of awayFilter(_evsApi.events, _awayW, (x) => x.dtstart)) {
       const k = String(e.title || "").slice(0, 60) + "|" + String(e.dtstart || "").slice(0, 10);
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.dtstart || "").slice(0, 10), title: e.title, loc: e.location, tag: e.domain || e.source || "" }); }
@@ -266,7 +266,7 @@ async function loadPrimeContext(env, q, currentThread) {
       for (const r of cr.results) lines.push("- [" + String(r.ts || "").slice(0, 10) + "] " + String(r.content || "").replace(/\s+/g, " ").slice(0, 260));
     }
     return lines.join("\n");
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -283,7 +283,7 @@ async function fetchWx(q) {
     const c = j.current || {};
     const d = j.daily || {};
     return "LIVE WEATHER (Amsterdam, Open-Meteo " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 16) + "Z): now " + (c.temperature_2m != null ? Math.round(c.temperature_2m) + "C" : "?") + " (code " + (c.weather_code ?? "?") + "), today max " + (d.temperature_2m_max ? Math.round(d.temperature_2m_max[0]) : "?") + "C / min " + (d.temperature_2m_min ? Math.round(d.temperature_2m_min[0]) : "?") + "C, precip prob " + (d.precipitation_probability_max ? d.precipitation_probability_max[0] : "?") + "%.";
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -379,7 +379,7 @@ async function fetchWxForLocation(lat, lon, tz) {
       tomorrow_code: d.weather_code ? d.weather_code[1] : null,
       text: "now " + (c.temperature_2m != null ? Math.round(c.temperature_2m) + "C" : "?") + " (feels " + (c.apparent_temperature != null ? Math.round(c.apparent_temperature) + "C" : "?") + "), today max " + (d.temperature_2m_max ? Math.round(d.temperature_2m_max[0]) : "?") + "C / min " + (d.temperature_2m_min ? Math.round(d.temperature_2m_min[0]) : "?") + "C, precip " + (d.precipitation_probability_max ? d.precipitation_probability_max[0] : "?") + "%"
     };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -391,11 +391,11 @@ async function visionRun(env, content, maxTokens) {
   const errors = [];
   for (const model of VISION_MODELS) {
     try {
-      const resp = await env.AI.run(model, { messages: [{ role: "user", content }], max_tokens: maxTokens || 2048, temperature: 0.2 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
+      const resp = await fleetAiRun(env, env.AI, model, { messages: [{ role: "user", content }], max_tokens: maxTokens || 2048, temperature: 0.2 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
       const text = parseResp(resp);
       if (text) return { ok: true, model, text };
       errors.push(model + ":empty");
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       errors.push(model + ":" + String(e && e.message || e).slice(0, 160));
     }
   }
@@ -441,7 +441,7 @@ async function profileUpdate(env, args) {
   try {
     const vecs = await embed(env, [statement.slice(0, 1e3)]);
     if (vecs[0]) await env.VZ.upsert([{ id: "profile:" + id, values: vecs[0], metadata: { doc: "profile", id, facet, label, text: statement.slice(0, 500), ts: (/* @__PURE__ */ new Date()).toISOString() } }]);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return { ok: true, updated: true, id, facet, label };
 }
@@ -458,7 +458,7 @@ async function journalAdd(env, args) {
   try {
     const vecs = await embed(env, [content.slice(0, 1e3)]);
     if (vecs[0]) await env.VZ.upsert([{ id: "journal:" + id, values: vecs[0], metadata: { doc: "journal", id, date, mood, text: content.slice(0, 500), ts } }]);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return { ok: true, created: true, id, date };
 }
@@ -598,7 +598,7 @@ async function suggestEvents(env, args) {
   }
   suggestions.sort((a, b) => b.score - a.score);
   let upcoming = [];
-  try { const cl = await calList(env, isoDateNow(), isoDatePlus(30), 5); if (cl && cl.ok && cl.events) upcoming = cl.events.map(function(e) { return { title: e.title, dtstart: e.dtstart, venue: e.location, source: e.source, domain: e.domain }; }); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:suggestEvents:caught", error: String((e && e.message) || e) })); }
+  try { const cl = await calList(env, isoDateNow(), isoDatePlus(30), 5); if (cl && cl.ok && cl.events) upcoming = cl.events.map(function(e) { return { title: e.title, dtstart: e.dtstart, venue: e.location, source: e.source, domain: e.domain }; }); } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "personal-api:suggestEvents:caught", error: String((e && e.message) || e) })); }
   return { ok: true, city, interests: interests.map((r) => r.label).join(", "), location_source: context.location_source, suggestions: suggestions.slice(0, limit), filtered, note: "Search leads, not confirmed bookings. Check the source for dates, availability and price.", profile_guard: { excluded_topics: guard.exclude, in_person_budget: guard.inPersonMax, in_person_used: guard.inPersonUsed, half: guard.half, budget_spent: guard.budgetSpent }, upcoming_in_archive: upcoming };
 }
 __name(suggestEvents, "suggestEvents");
@@ -724,7 +724,7 @@ async function predictWeek(env, args) {
         return { ok: true, horizon, from, to, predictions: pred.predictions };
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: true, horizon, from, to, predictions: [], degraded: true, reason: "threw: " + String(e && e.message || e).slice(0, 200) };
   }
   return { ok: true, horizon, from, to, predictions: [], degraded: true };
@@ -747,7 +747,7 @@ async function fetchWxJson() {
       precip_prob_pct: d.precipitation_probability_max ? d.precipitation_probability_max[0] : null,
       text: "now " + (c.temperature_2m != null ? Math.round(c.temperature_2m) + "C" : "?") + ", today max " + (d.temperature_2m_max ? Math.round(d.temperature_2m_max[0]) : "?") + "C / min " + (d.temperature_2m_min ? Math.round(d.temperature_2m_min[0]) : "?") + "C, precip prob " + (d.precipitation_probability_max ? d.precipitation_probability_max[0] : "?") + "%"
     };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -815,7 +815,7 @@ function b64urlJson(seg) {
 }
 __name(b64urlJson, "b64urlJson");
 async function gToken(env, form) {
-  const r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString(), signal: AbortSignal.timeout(1e4) });
+  const r = await fleetAiFetch(env, __aigBaseFetch, "https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString(), signal: AbortSignal.timeout(1e4) });
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok && !!j.access_token, status: r.status, j };
 }
@@ -838,7 +838,7 @@ __name(gAccess, "gAccess");
 async function gFetch(env, path, init) {
   const a = await gAccess(env);
   if (!a.ok) return { ok: false, error: a.error };
-  const r = await fetch(GCAL_BASE + path, Object.assign({}, init || {}, { headers: Object.assign({ Authorization: "Bearer " + a.token, "Content-Type": "application/json" }, (init && init.headers) || {}), signal: AbortSignal.timeout(1e4) }));
+  const r = await fleetAiFetch(env, __aigBaseFetch, GCAL_BASE + path, Object.assign({}, init || {}, { headers: Object.assign({ Authorization: "Bearer " + a.token, "Content-Type": "application/json" }, (init && init.headers) || {}), signal: AbortSignal.timeout(1e4) }));
   if (r.status === 204) return { ok: true, j: {} };
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { ok: false, error: "google calendar HTTP " + r.status + ": " + String(j && j.error && j.error.message || "").slice(0, 200) };
@@ -931,12 +931,12 @@ async function gicsList(env, from, to, limit) {
   const f = String(from).slice(0, 10), t = String(to).slice(0, 10);
   const got = await Promise.all(feeds.map(async (fd) => {
     try {
-      const r = await fetch(fd.url, { headers: { "User-Agent": "qnfo-personal-twin/1" }, signal: AbortSignal.timeout(8e3) });
+      const r = await fleetAiFetch(env, __aigBaseFetch, fd.url, { headers: { "User-Agent": "qnfo-personal-twin/1" }, signal: AbortSignal.timeout(8e3) });
       if (!r.ok) return { label: fd.label, ok: false, error: "HTTP " + r.status, events: [] };
       const text = await r.text();
       const events = parseICS(text).filter((e) => e.status !== "CANCELLED").map(icsMap).filter((e) => { const d = String(e.dtstart).slice(0, 10); return d >= f && d <= t; }).map((e) => Object.assign(e, { calendar_name: fd.label }));
       return { label: fd.label, ok: true, events };
-    } catch (e) { return { label: fd.label, ok: false, error: String(e && e.message || e).slice(0, 80), events: [] }; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; return { label: fd.label, ok: false, error: String(e && e.message || e).slice(0, 80), events: [] }; }
   }));
   const seen = new Set(), events = [];
   for (const g of got) for (const e of g.events) {
@@ -1244,7 +1244,7 @@ async function memoryAdd(env, args) {
     const fid = "fact-" + (await sha16(stmt)).slice(0, 24);
     const [vec] = await embed(env, [stmt.slice(0, 1e3)]);
     if (vec) await env.VZ.upsert([{ id: "fact:" + fid, values: vec, metadata: { doc: "fact", kind: "fact", path: "facts/" + isoDateNow() + "/" + fid + ".md", text: stmt.slice(0, 800), ts: (/* @__PURE__ */ new Date()).toISOString() } }]);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return { ok: true, saved: stmt.slice(0, 200) };
 }
@@ -1321,7 +1321,7 @@ async function expressT(env, args) {
   try {
     const [vec] = await embed(env, [desire.slice(0, 1e3)]);
     if (vec) await env.VZ.upsert([{ id: "note:" + (await sha16(id)).slice(0, 24), values: vec, metadata: { doc: "note", kind: "desire", path: "intents/" + isoDateNow() + "/" + id + ".md", text: desire.slice(0, 800), ts: now } }]);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return { ok: true, stored: "notes + vector", id };
 }
@@ -3307,16 +3307,16 @@ async function transcribe(env, bytes) {
   const errors = [];
   const runOpts = { gateway: { id: "default" } };
   try {
-    const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio: toB64(bytes) }, runOpts);
+    const r = await fleetAiRun(env, env.AI, "@cf/openai/whisper-large-v3-turbo", { audio: toB64(bytes) }, runOpts);
     const t = r && (r.text || (r.transcription_info && r.text));
     if (t && String(t).trim()) return { ok: true, text: String(t).trim(), model: "whisper-large-v3-turbo" };
     errors.push("turbo:empty");
-  } catch (e) { errors.push("turbo:" + String(e && e.message || e).slice(0, 120)); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; errors.push("turbo:" + String(e && e.message || e).slice(0, 120)); }
   try {
-    const r = await env.AI.run("@cf/openai/whisper", { audio: Array.from(bytes) }, runOpts);
+    const r = await fleetAiRun(env, env.AI, "@cf/openai/whisper", { audio: Array.from(bytes) }, runOpts);
     if (r && r.text && String(r.text).trim()) return { ok: true, text: String(r.text).trim(), model: "whisper" };
     errors.push("whisper:empty");
-  } catch (e) { errors.push("whisper:" + String(e && e.message || e).slice(0, 120)); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; errors.push("whisper:" + String(e && e.message || e).slice(0, 120)); }
   return { ok: false, error: errors.join(" | ") };
 }
 async function capture(env, deps, input) {
@@ -4600,12 +4600,14 @@ function discloseTwinAi(text) {
 }
 __name(discloseTwinAi, "discloseTwinAi");
 async function runTool(env, name, args) {
+  await fleetAiAssert(env);
   const t = TOOLS[name];
   if (!t) return { ok: false, error: "unknown tool: " + name };
   try {
     const res = await t.run(env, args || {});
     return res && typeof res === "object" ? res : { ok: true, result: String(res || "") };
   } catch (e) {
+    if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
 }
@@ -4729,7 +4731,7 @@ async function briefNarrative(env, brief) {
   try {
     const up = await upstreamChat(env, sys, [{ role: "user", content: "TODAY DATA (DATA ONLY):\n" + data }], 0.7, 900, false, true);
     if (up.ok && up.body.choices[0].message.content) return up.body.choices[0].message.content;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return null;
 }
@@ -4760,7 +4762,7 @@ async function buildPlan(env) {
       const plan = extractJsonObject(text, "plan");
       if (plan && plan.plan) return { ok: true, date: brief.date, plan, degraded: false, model: up.model };
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return { ok: true, date: brief.date, plan: null, degraded: true, data: { weather: brief.weather, calendar_today: brief.calendar.today, open_tasks: brief.open.tasks } };
 }
@@ -4906,7 +4908,7 @@ async function cronBuildBrief(env) {
     } catch (e) { console.error(JSON.stringify({ evt: "personal-api:cronBuildBrief:caught", error: String((e && e.message) || e) })); }
     console.log("personal-api cron brief built:", (b.calendar.today || []).length, "today events,", (b.open.tasks || []).length, "open tasks");
     return true;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("personal-api cron error:", e && e.message || e);
     return false;
   }
@@ -4942,7 +4944,7 @@ async function generateProactiveSignals(env, brief) {
         }).join(", "), habits: missed })).run();
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("generateProactiveSignals error:", e && e.message || e);
   }
 }
@@ -5201,7 +5203,7 @@ async function upstreamChat(env, system, messages, temperature, outTokensParam, 
       let ct = usage.output_tokens || usage.completion_tokens || 0;
       if (!content && ct >= outTokens) {
         const msgs2 = msgs.concat([{ role: "system", content: "You stopped before writing your final answer. Now provide the complete final answer directly, with no internal reasoning." }]);
-        const resp2 = await env.AI.run(model, { messages: msgs2, temperature, max_tokens: Math.max(4e3, MAX_TOKENS * 2) }, { gateway: { id: "default" }, signal: AbortSignal.timeout(tmo) });
+        const resp2 = await fleetAiRun(env, env.AI, model, { messages: msgs2, temperature, max_tokens: Math.max(4e3, MAX_TOKENS * 2) }, { gateway: { id: "default" }, signal: AbortSignal.timeout(tmo) });
         const c2 = parseResp(resp2);
         if (c2) {
           content = c2;
@@ -5221,7 +5223,7 @@ async function upstreamChat(env, system, messages, temperature, outTokensParam, 
       }
       errors.push(model + ":empty");
       await twinCountEmpty(env, model);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       errors.push(model + ":" + (e && e.message || e));
     }
   }
@@ -5421,7 +5423,7 @@ async function harvestIntent(env, q, messages, skipEvents) {
         const fid2 = "fact-" + (await sha16(stmt)).slice(0, 24);
         const [vec] = await embed(env, [stmt.slice(0, 1e3)]);
         if (vec) await env.VZ.upsert([{ id: "fact:" + fid2, values: vec, metadata: { doc: "fact", kind: "fact", path: "facts/" + nowIso.slice(0, 10) + "/" + fid2 + ".md", text: stmt.slice(0, 800), ts: nowIso } }]);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         console.log("harvest fact vector error:", e && e.message || e);
       }
     }
@@ -5433,7 +5435,7 @@ async function harvestIntent(env, q, messages, skipEvents) {
     try {
       const evId = "evt-chat:" + rhex(12) + Date.now().toString(36);
       await calAdd(env, { title: title.slice(0, 300), dtstart: start });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("harvest event error:", e && e.message || e);
     }
   }
@@ -5457,7 +5459,7 @@ async function webSearch(q, k) {
       const isLite = urls[attempt].indexOf("lite") !== -1;
       const parsed = parseDdg(html, isLite, k);
       if (parsed.length) return { engine: isLite ? "duckduckgo-lite" : "duckduckgo", results: parsed };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   return { error: "search engine unreachable" };
@@ -5469,7 +5471,7 @@ async function browserMarkdown(env, url, maxChars) {
   try {
     const token = env.CF_TOKEN || env.CF_API_TOKEN;
     if (!token) return null;
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT + "/browser-rendering/markdown", {
+    const r = await fleetAiFetch(env, __aigBaseFetch, "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT + "/browser-rendering/markdown", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
       body: JSON.stringify({ url }),
@@ -5481,7 +5483,7 @@ async function browserMarkdown(env, url, maxChars) {
     if (!md) return null;
     const cap = Math.max(Number(maxChars) || 6e3, 500);
     return { url, text: md.slice(0, cap), truncated: md.length > cap };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -5493,7 +5495,7 @@ async function webFetch(url, maxChars, env) {
   if (!/^https?:$/i.test(u.protocol)) return { error: "only http(s) URLs" };
   if (isPrivateHost(u.hostname)) return { error: "private/loopback hosts blocked" };
   try {
-    const resp = await fetch(u.toString(), {
+    const resp = await fleetAiFetch(env, __aigBaseFetch, u.toString(), {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept": "text/html,text/plain,application/json;q=0.9,*/*;q=0.5" },
       signal: AbortSignal.timeout(15e3)
     });
@@ -5509,7 +5511,7 @@ async function webFetch(url, maxChars, env) {
       if (br && br.text && br.text.length > result.text.length) return br;
     }
     return result;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { error: "fetch failed: " + (e && e.message || e) };
   }
 }
@@ -5626,7 +5628,7 @@ async function logChat(env, q, asstMsg, thread, ua, model) {
       if (aVecs[0]) ups.push({ id: "chata:" + (await sha16(uId)).slice(0, 24), values: aVecs[0], metadata: { doc: "chat", kind: "assistant", thread, path: "chat/" + day + "/" + thread + ".md", text: asst.slice(0, 800), ts: nowIso } });
     }
     if (ups.length) await env.VZ.upsert(ups);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("personal-api chat log error:", e && e.message || e);
   }
 }
@@ -5708,7 +5710,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
       return async function (model, input, opts) {
         var t0 = Date.now(), ok = 1, res;
-        try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
+        try { res = await fleetAiRun(env, t, model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ evt: "personal-api:__aiAttrEnv:caught", error: String((eCc && eCc.message) || eCc) })); }
@@ -5727,7 +5729,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
     copy[aiKey] = wrapped;
     copy.__aiAttr = 1;
     return copy;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return env;
   }
 }
@@ -5795,7 +5797,7 @@ async function cronGridOne(db, worker, expr, why, ev, ctx, run) {
     for (var k = 0; k < pending.length; k++) { try { await pending[k]; } catch (e) { if (!bad) bad = e || new Error("waitUntil rejected"); } }
     if (bad) throw bad;
     await cronGridLog(db, worker, expr, t0, "ok", why + " " + (Date.now() - t0) + " ms");
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await cronGridLog(db, worker, expr, t0, "error", why + ": " + String(e && e.message || e));
     throw e;
   }
@@ -5808,13 +5810,13 @@ async function cronGridRun(db, event, ctx, cfg, run) {
   var due = await cronGridDue(db, cfg, nowMs), firstErr = null;
   for (var i = 0; i < due.length; i++) {
     try { await cronGridOne(db, cfg.worker, due[i].cron, due[i].why, { cron: due[i].cron, scheduledTime: nowMs, type: "scheduled" }, ctx, run); }
-    catch (e) { if (!firstErr) firstErr = e; }
+    catch (e) { if (fleetAiStopped(e)) throw e; if (!firstErr) firstErr = e; }
   }
   if (cfg.own === "none" || (due.length && cfg.ownWhenDue === false)) {
     if (!due.length) await cronGridLog(db, cfg.worker, cfg.tick, nowMs, "idle", "grid tick: no job due");
   } else {
     var ev = cfg.own && cfg.own !== "self" ? { cron: cfg.own, scheduledTime: nowMs, type: "scheduled" } : event;
-    try { await cronGridOne(db, cfg.worker, cfg.tick, "tick", ev, ctx, run); } catch (e) { if (!firstErr) firstErr = e; }
+    try { await cronGridOne(db, cfg.worker, cfg.tick, "tick", ev, ctx, run); } catch (e) { if (fleetAiStopped(e)) throw e; if (!firstErr) firstErr = e; }
   }
   if (firstErr) throw firstErr;
 }
@@ -5822,6 +5824,8 @@ async function cronGridRun(db, event, ctx, cfg, run) {
 var CRON_GRID_CFG = { worker: "personal-api", tick: "5 * * * *", tickMin: 60, lagMin: 0, jobs: [{ cron: "5 5 * * *", periodMin: 1440, retry: false }], own: "none" };
 var api_default = {
   async fetch(request, env, ctx) {
+    try {
+
     env = __aiAttrEnv(env, "personal-api", "AI", "AUDIT");
     if (new URL(request.url).pathname === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // SEO-HYGIENE-1: a private tool / private reading surface, kept out of search engines
     const url = new URL(request.url);
@@ -5911,7 +5915,7 @@ var api_default = {
               try {
                 const fr = await webFetch(r.url, 3e3, env);
                 if (fr.text && !fr.error) return "[" + r.title + "]\n" + r.url + "\n" + fr.text.slice(0, 3e3);
-              } catch (e) {
+              } catch (e) { if (fleetAiStopped(e)) throw e;
               }
               return null;
             }));
@@ -5919,7 +5923,7 @@ var api_default = {
             if (pages.length) lines.push("--- PAGE EXCERPTS ---\n" + pages.join("\n\n"));
             webContext = lines.join("\n");
           }
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           webContext = null;
         }
       }
@@ -5972,7 +5976,7 @@ var api_default = {
         if (cl.google_error) L2.push("Google Calendar read error: " + cl.google_error);
         if (cl.google !== "connected") L2.push("Note: Google Calendar is not linked, so only the events above are known. Mention this only when Rowan asks about his own calendar or appointments, in one plain sentence with https://me.q08.org/google/connect; never as a footer.");
         calApiContext = L2.join(String.fromCharCode(10));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         calApiContext = null;
       }
       // PERSONAL-LIVE-1: going-out and day questions read the venues' own live programmes, several at once.
@@ -5998,7 +6002,7 @@ var api_default = {
         try {
           const CF_API = "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT;
           const H2 = { Authorization: "Bearer " + env.CF_TOKEN, "Content-Type": "application/json" };
-          const j = /* @__PURE__ */ __name22((p) => fetch(CF_API + p, { headers: H2, signal: AbortSignal.timeout(1e4) }).then((r) => r.json()).catch(() => null), "j");
+          const j = /* @__PURE__ */ __name22((p) => fleetAiFetch(env, __aigBaseFetch, CF_API + p, { headers: H2, signal: AbortSignal.timeout(1e4) }).then((r) => r.json()).catch(() => null), "j");
           const [gw, logs, workers, d1, vz, r2] = await Promise.all([
             j("/ai-gateway/gateways"),
             j("/ai-gateway/gateways/default/logs?per_page=20&page=1"),
@@ -6031,7 +6035,7 @@ var api_default = {
           if (workers && workers.result) lines.push("Workers: " + workers.result.length + " scripts");
           if (d1 && d1.result) lines.push("D1 databases: " + d1.result.length + "; Vectorize indexes: " + (vz && vz.result ? vz.result.length : 0) + "; R2 buckets: " + (r2 && r2.result ? r2.result.length : 0));
           if (lines.length > 1) infraContext = lines.join("\n");
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           infraContext = null;
         }
       }
@@ -6042,7 +6046,7 @@ var api_default = {
           const rr = await retrieve(env, q, 8);
           items = rr.items;
           degraded = rr.degraded;
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           console.log("personal-api retrieve error:", e && e.message || e);
           items = [];
           degraded = true;
@@ -6083,7 +6087,7 @@ var api_default = {
         let up2;
         try {
           up2 = await upstreamChat(env, system + toolAppendix().replace("__TODAY__", (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)), loopMessages, temperature, clampMaxTokens(body && body.max_tokens, isReasonL), isReasonL);
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           up2 = null;
         }
         if (!up2 || !up2.ok) {
@@ -6121,7 +6125,7 @@ var api_default = {
         try {
           const upS = await upstreamChat(env, finalSystem, finalMsgs, temperature, clampMaxTokens(body && body.max_tokens, isReasonL), isReasonL);
           if (upS && upS.ok) _sText = upS.body.choices && upS.body.choices[0] && upS.body.choices[0].message && upS.body.choices[0].message.content || "";
-        } catch (e) { _sText = ""; }
+        } catch (e) { if (fleetAiStopped(e)) throw e; _sText = ""; }
         _sText = discloseTwinAi(CMP.chatFollowUp(companionContext, finalizeText(_sText, toolRounds)));
         ctx.waitUntil(logChat(env, q, _sText, thread, ua, "personal-twin-chat"));
         return sseText(_sText, "chatcmpl-" + Date.now());
@@ -6130,7 +6134,7 @@ var api_default = {
       if (!up) {
         try {
           up = await upstreamChat(env, finalSystem, finalMsgs, temperature, clampMaxTokens(body && body.max_tokens, isReasonL), isReasonL);
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           console.log("personal-api upstream error:", e && e.message || e);
           return json({ error: { message: "upstream error", type: "upstream_error" } }, 502);
         }
@@ -6183,7 +6187,7 @@ var api_default = {
       try {
         const rr = await retrieve(env, q, topK);
         items = rr.items;
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         console.log("personal-api retrieve error:", e && e.message || e);
         return json({ error: { message: "retrieval failed", type: "server_error" } }, 500);
       }
@@ -6237,7 +6241,7 @@ var api_default = {
         const [vec] = await embed(env, [desire.slice(0, 1e3)]);
         if (vec) await env.VZ.upsert([{ id: "note:" + (await sha16(id)).slice(0, 24), values: vec, metadata: { doc: "note", kind: "desire", path: "intents/" + nowIso.slice(0, 10) + "/" + id + ".md", text: desire.slice(0, 800), ts: nowIso } }]);
         return json({ ok: true, id, stored: "notes + vector", ts: nowIso });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6274,7 +6278,7 @@ var api_default = {
           }
         })());
         return json(Object.assign({}, b, { signals: servedSignals }));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6283,7 +6287,7 @@ var api_default = {
       try {
         const b = await buildBrief(env, false);
         return json({ ok: true, date: b.date, generated: b.generated, weather: b.weather, calendar: { today: b.calendar.today, tomorrow: b.calendar.tomorrow }, open: b.open });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6291,7 +6295,7 @@ var api_default = {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
       try {
         return json(await buildPlan(env));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6299,7 +6303,7 @@ var api_default = {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
       try {
         return json(await predictWeek(env, { horizon: url.searchParams.get("horizon") || "7d" }));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6307,7 +6311,7 @@ var api_default = {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
       try {
         return json(await suggestEvents(env, { limit: Number(url.searchParams.get("limit") || 5) }));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6457,7 +6461,7 @@ var api_default = {
         const r = await webSearch(q, k);
         if (r.error) return json({ error: { message: r.error, type: "web_error" } }, 502);
         return json({ query: q, engine: "duckduckgo", count: r.results.length, results: r.results });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6470,7 +6474,7 @@ var api_default = {
         const r = await webFetch(u, max, env);
         if (r.error) return json({ error: { message: r.error, type: "web_error" } }, 502);
         return json(r);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: { message: String(e.message || e), type: "server_error" } }, 500);
       }
     }
@@ -6524,15 +6528,19 @@ var api_default = {
       return json({ ok: true, id, extracted_text: text.slice(0, 8e3) });
     }
     return json({ error: { message: "not found", type: "invalid_request_error" } }, 404);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     env = __aiAttrEnv(env, "personal-api", "AI", "AUDIT");
     return cronGridRun(env.AUDIT, event, ctx, CRON_GRID_CFG, (ev, c) => api_default.scheduledOnce(ev, env, c));
   },
   async scheduledOnce(event, env, ctx) {
     env = __aiAttrEnv(env, "personal-api", "AI", "AUDIT");
     // MSGRAPH-MAIL-1: pull new Outlook.com mail first so the brief built next sees it. A failure here never blocks the brief.
-    try { await msSyncAll(env); } catch (e) { console.log("msgraph sync error:", e && e.message || e); }
+    try { await msSyncAll(env); } catch (e) { if (fleetAiStopped(e)) throw e; console.log("msgraph sync error:", e && e.message || e); }
     // CONNECTION-LEDGER-1: fold new `went` answers (names met) into the Ledger. Never blocks the brief.
     try { await ledgerSyncFeedback(env); } catch (e) { console.log("ledger sync error:", e && e.message || e); }
     // COMPANION-1: the daily run re-arms the companion's 15-minute alarm loop, should it ever have stopped.
@@ -6860,7 +6868,7 @@ async function msPkce() {
   return { verifier, challenge: msB64url(new Uint8Array(digest)) };
 }
 async function msToken(env, form) {
-  const r = await fetch("https://login.microsoftonline.com/" + msTenant(env) + "/oauth2/v2.0/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString(), signal: AbortSignal.timeout(1e4) });
+  const r = await fleetAiFetch(env, __aigBaseFetch, "https://login.microsoftonline.com/" + msTenant(env) + "/oauth2/v2.0/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString(), signal: AbortSignal.timeout(1e4) });
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok && !!j.access_token, status: r.status, j };
 }
@@ -6947,7 +6955,7 @@ async function msEmbedRows(env, rows) {
       const ups = [];
       for (let k = 0; k < part.length; k++) if (vecs[k]) ups.push({ id: "em:" + await sha16(part[k].message_id), values: vecs[k], metadata: { doc: "email", message_id: part[k].message_id, subject: part[k].subject.slice(0, 300), sender: part[k].sender.slice(0, 150), received_at: part[k].received_at, category: part[k].category, text: texts[k].slice(0, 800) } });
       if (ups.length) { await env.VZ.upsert(ups); n += ups.length; }
-    } catch (e) { console.error(JSON.stringify({ evt: "personal-api:msEmbedRows:caught", error: String((e && e.message) || e) })); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "personal-api:msEmbedRows:caught", error: String((e && e.message) || e) })); }
   }
   return n;
 }
@@ -6998,7 +7006,7 @@ async function msSyncAccount(env, email, opts) {
     }
     out.more = !!url && !out.error;
     await env.PERSONAL.prepare("UPDATE ms_oauth SET watermark = ?1, last_sync = ?2, last_synced_count = ?3, last_error = ?4 WHERE email = ?5").bind(watermark, new Date().toISOString(), out.written, out.error ? String(out.error).slice(0, 300) : null, email).run();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.error = "threw: " + String(e && e.message || e).slice(0, 200);
   }
   await msRecordRun(env, out);
@@ -7161,6 +7169,10 @@ var PersonalTwinAgent = class {
     return t.getTime();
   }
   async alarm() {
+    if (!await fleetAiBackground(this.env)) {
+      await this.storage.setAlarm(Date.now() + 600000);
+      return;
+    }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     let tasks = [];
     try {
@@ -7174,6 +7186,11 @@ var PersonalTwinAgent = class {
         else if (t.type === "memory_consolidate") await this._consolidate();
         this.sql.exec("UPDATE twin_schedules SET status='done' WHERE id=?", t.id);
       } catch (e) {
+        if (fleetAiStopped(e)) {
+          this.sql.exec("UPDATE twin_schedules SET status='pending' WHERE id=?", t.id);
+          await this.storage.setAlarm(Date.now() + 600000);
+          return;
+        }
         this.sql.exec("UPDATE twin_schedules SET status='error' WHERE id=?", t.id);
       }
     }
@@ -7206,7 +7223,7 @@ var PersonalTwinAgent = class {
       } catch (e) { console.error(JSON.stringify({ evt: "personal-api:_buildBrief:caught", error: String((e && e.message) || e) })); }
       this._setState("morning_brief_" + today, brief);
       return brief;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return null;
     }
   }
@@ -7336,7 +7353,7 @@ var PersonalTwinAgent = class {
         }
         _errs.push(_m + ":empty");
         await twinCountEmpty(_env, _m);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         _errs.push(_m + ":" + (e && e.message || String(e)));
       }
     }
@@ -7350,3 +7367,114 @@ export {
   api_default as default
 };
 //# sourceMappingURL=worker.js.map
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "personal-api";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // REACH-SELECT-1 offline suite (pillar reach). The fleet composes and queues social threads without asking, so this locks
 // what it may pick and what it may never post:
 //   - eligibility: pillar 1-3 titles yes; pillar 4 / speculative theory no (real titles); no fixed list of works;
@@ -13,7 +14,7 @@ import { pathToFileURL } from "node:url";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const dir = mkdtempSync(join(tmpdir(), "rs-"));
 writeFileSync(join(dir, "w.mjs"), src + "\nexport { reachEligible, reachDenied, reachSweepDrafts, reachRepairDrafts, checkThread, paperLink };\n");
-const W = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const W = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 let fails = 0, passes = 0;
 const ok = (c, m, x) => { if (c) passes++; else { fails++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 

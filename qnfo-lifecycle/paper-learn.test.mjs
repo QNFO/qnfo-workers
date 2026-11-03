@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PAPER-LEARN-1 offline suite (qnfo-lifecycle 1.12.0). Drives the real default export of qnfo-lifecycle/worker.js against an
 // in-memory living-paper and qnfo-audit (node:sqlite behind a small D1 shim) and a scripted Workers AI: the hourly tick reads the
 // newest unread published papers, stores each claim with a verification status decided from the paper (never from the model),
@@ -8,7 +9,7 @@
 // Run: node qnfo-lifecycle/paper-learn.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 
-const W = (await import("./worker.js")).default;
+const W = (await importRunningWorker("./worker.js", import.meta.url)).default;
 const P = W.__paperLearn;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };

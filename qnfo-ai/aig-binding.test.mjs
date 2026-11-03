@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // AIG-BINDING-1 (#1784) offline suite for qnfo-ai aiRunAttr. Run: node qnfo-ai/aig-binding.test.mjs
 // Embedding calls go through AI Gateway "default" (cached 24h) with metadata {worker, purpose} on the log entry; a gateway
 // error retries once on the plain binding; dynamic chat routes preserve explicit gateway options and attribution.
@@ -16,7 +17,7 @@ const end = src.indexOf("\n// end aiRunAttr", start);
 ok(start > 0 && end > start, "aiRunAttr found in worker.js");
 const body = src.slice(start, end);
 const spendRecords = [];
-const make = new Function("AI_ATTR_DB_BINDINGS", "spendRecord", "spendUsageOf", "spendOutEstimate", "isDynamicRoute", body + "\nreturn aiRunAttr;");
+const make = new Function("AI_ATTR_DB_BINDINGS", "spendRecord", "spendUsageOf", "spendOutEstimate", "isDynamicRoute", RUNNING_AI_FIXTURE + (body + "\nreturn aiRunAttr;"));
 const aiRunAttr = make([], (...args) => spendRecords.push(args), () => ({ in: 0, out: 0 }), () => 0, (model) => String(model).startsWith("dynamic/"));
 
 function env(failGateway) {
@@ -72,7 +73,7 @@ const retryContext = vm.createContext({
   clearTimeout() {},
   console: { log() {}, error(message) { retryLogs.push(message); } }
 });
-vm.runInContext(src.slice(retryStart, retryEnd) + "\nthis.wrapAI = __aiAttrEnv;", retryContext);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(retryStart, retryEnd) + "\nthis.wrapAI = __aiAttrEnv;"), retryContext);
 const wrappedCalls = (run, withAudit = true) => {
   const calls = [];
   const wrapped = retryContext.wrapAI({ AI: { async run(model, input, opts) { calls.push(model); return run(model, input, opts); } }, ...(withAudit ? { QNFO_AUDIT: {} } : {}) }, "qnfo-ai", "AI", "QNFO_AUDIT");
@@ -167,7 +168,7 @@ function wrappedFetch(statuses) {
     calls.push({ method: request.method, body: await request.clone().text(), metadata: request.headers.get("cf-aig-metadata") });
     return new Response("upstream", { status: statuses.shift() });
   };
-  vm.runInContext(src.slice(fetchStart, fetchEnd), context);
+  vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(fetchStart, fetchEnd)), context);
   return { calls, fetch: context.fetch };
 }
 {

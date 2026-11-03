@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PAGEVIEWS-HUMAN-1 offline suite (qnfo-fleet-dashboard 1.18.6, pillar reach). Replays refreshRegistryMetrics from
 // worker.js against an in-memory SQLite D1 and a scripted Cloudflare GraphQL that answers like Web Analytics: a query
 // carrying the Exclude-bots filter (bot: 0) gets human page loads only, any other query gets human + crawler loads.
@@ -54,12 +55,12 @@ function load(db, queries) {
   const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, Array, isFinite, isNaN });
   cx.__db = db; cx.__q = queries; cx.__rum = rum;
   vm.runInContext(
-    "var ACCOUNT = 'acct';\n" +
+    RUNNING_AI_FIXTURE + ("var ACCOUNT = 'acct';\n" +
     "async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }\n" +
     "async function roiGf(env, query) { __q.push(query); return { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: __rum(query) }] } }; }\n" +
     "async function refreshEngagedHumanSessions() { return { value: 5580, why: null }; }\n" +
     "async function ghCall() { throw new Error('no GitHub in this suite'); }\n" +
-    consts + fn + "\nthis.__run = refreshRegistryMetrics; this.__k = { REGISTRY_PV_FILTER, REGISTRY_PV_FORMULA };", cx);
+    consts + fn + "\nthis.__run = refreshRegistryMetrics; this.__k = { REGISTRY_PV_FILTER, REGISTRY_PV_FORMULA };"), cx);
   return cx;
 }
 
@@ -96,7 +97,7 @@ function load(db, queries) {
   const db = freshDb(), q = [];
   const cx = load(db, q);
   cx.__rum = () => null;
-  vm.runInContext("roiGf = async function(env, query) { __q.push(query); return null; };", cx);
+  vm.runInContext(RUNNING_AI_FIXTURE + ("roiGf = async function(env, query) { __q.push(query); return null; };"), cx);
   const out = await cx.__run({ AUDIT: d1(db) });
   const pv = db.prepare("SELECT last_value, formula FROM metric_registry WHERE metric = 'pageviews_30d'").get();
   ok(pv.last_value === "6060" && pv.formula === "old formula", "an unreadable RUM read leaves pageviews_30d untouched");

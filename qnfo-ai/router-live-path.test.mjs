@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // qnfo-ai 5.35.0 request-path suite: the whole worker module is loaded and driven through its fetch handler with stub
 // bindings (no network: global fetch is replaced). Covers what the unit suite cannot: the chat route end to end.
 // Run: node qnfo-ai/router-live-path.test.mjs -> prints "N passed, 0 failed".
@@ -7,7 +8,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 const dir = mkdtempSync(join(tmpdir(), "qnfo-ai-"));
 writeFileSync(join(dir, "worker.mjs"), readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
-const worker = (await import(pathToFileURL(join(dir, "worker.mjs")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(dir, "worker.mjs")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
 

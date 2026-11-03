@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // INDEXER-FOLD-1 (qnfo-infra 1.3.0, agent_issues 1756) offline suite. No network, synthetic data.
 // Proves: the qnfo-paper-indexer code runs unchanged as the member indexerMod (only its version constant differs); the
 // host's existing 06:30 trigger runs the member's two jobs ("0 4" impact, then "5 6" render metrics) with LIVING_PAPER and
@@ -10,7 +11,7 @@ import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const guest = readFileSync(new URL("../qnfo-paper-indexer/worker.js", import.meta.url), "utf8");
 const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { indexerMod as __member, INDEXER_VERSION as __mv, VERSION as __hv };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { indexerMod as __member, INDEXER_VERSION as __mv, VERSION as __hv };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 

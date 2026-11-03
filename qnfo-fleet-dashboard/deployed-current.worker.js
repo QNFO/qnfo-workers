@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.81.1";
+var VERSION = "1.82.0";
 // 1.81.0 DASHBOARD-FIX-IT-1 (issue #1000784, pillar autonomy; minor): every visible breach card exposes its one-tap fleet handoff, and parked code/issue-loop cards can be re-audited through their owning loop with evidence-only closure.
 // 1.80.2 LOOP-HEARTBEAT-CRON-FALLBACK-1 (issue #1001283, pillar core; patch): non-quarter-hour dashboard heartbeats also queue a stale issue-loop sync from saved state, recovering when full refreshes time out.
 // 1.80.1 ATTENTION-EFFICACY-SAMPLE-1 (issue #2467, pillar reach; patch): sparse 7-day windows are unmeasured, not flat efficacy results.
@@ -338,7 +338,7 @@ async function analytics24(env) {
     const end = /* @__PURE__ */ new Date();
     const start = new Date(end.getTime() - DAY_MS);
     const query = 'query { viewer { accounts(filter:{accountTag:"' + ACCOUNT + '"}) { workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:"' + start.toISOString() + '", datetime_leq:"' + end.toISOString() + '"}) { sum { requests errors } dimensions { scriptName status datetimeHour } } } } }';
-    const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+    const resp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_TOKEN },
       body: JSON.stringify({ query }),
@@ -389,7 +389,7 @@ async function analytics24(env) {
       return b.errors - a.errors;
     });
     out.ts = (/* @__PURE__ */ new Date()).toISOString();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.error = "graphql exc " + String(e.message || e).slice(0, 200);
   }
   return out;
@@ -410,7 +410,7 @@ async function lastRuns30(env) {
         const gq = dim === "date" ? "date_geq" : "datetime_geq";
         const lq = dim === "date" ? "date_leq" : "datetime_leq";
         const query = 'query { viewer { accounts(filter:{accountTag:"' + ACCOUNT + '"}) { workersInvocationsAdaptive(limit:10000, filter:{' + gq + ':"' + start.toISOString() + '", ' + lq + ':"' + end.toISOString() + '"}) { sum { requests } dimensions { scriptName ' + dim + " } } } } }";
-        const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+        const resp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_TOKEN },
           body: JSON.stringify({ query }),
@@ -428,7 +428,7 @@ async function lastRuns30(env) {
           if (!out[nm] || dt > out[nm]) out[nm] = dt;
         }
         if (rows.length > 0) return out;
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
       }
     }
   }
@@ -478,9 +478,9 @@ async function healthProbes(env, liveNames) {
       let r = null;
       for (let attempt = 0; attempt < attempts; attempt++) {
         try {
-          r = svc ? await svc.fetch("https://internal/health", { signal: AbortSignal.timeout(tmo), headers: { "User-Agent": PROBE_UA } }) : await fetch(hp.url, { signal: AbortSignal.timeout(tmo), headers: { "User-Agent": PROBE_UA } });
+          r = svc ? await svc.fetch("https://internal/health", { signal: AbortSignal.timeout(tmo), headers: { "User-Agent": PROBE_UA } }) : await fleetAiFetch(env, fetch, hp.url, { signal: AbortSignal.timeout(tmo), headers: { "User-Agent": PROBE_UA } });
           if (r && (r.ok || r.status < 500)) break;
-        } catch (err) {
+        } catch (err) { if (fleetAiStopped(err)) throw err;
           if (attempt < attempts - 1) await new Promise(function(res) {
             setTimeout(res, 500);
           });
@@ -504,7 +504,7 @@ async function healthProbes(env, liveNames) {
       }
       await logRow(out);
       return out;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       const out2 = { name: hp.name, url: hp.url || "", transport: hp.binding ? "binding" : "http", kind, ok: false, status: 0, ms: Date.now() - t0, body: "ERR " + squash(String(e.message || e)) };
       if (kind === "worker" && Array.isArray(liveNames) && liveNames.indexOf(hp.name) >= 0) {
         out2.ok = true;
@@ -556,11 +556,11 @@ __name2222(failish, "failish");
 async function d1Count(env) {
   try {
     if (!env.CF_TOKEN) return null;
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/d1/database?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+    const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/d1/database?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     if (!r.ok) return null;
     const j = await r.json();
     return Array.isArray(j.result) ? j.result.length : null;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -629,7 +629,7 @@ async function liveScheduled(env, liveNames) {
         const chunk = names.slice(i, i + 8);
         const rs = await Promise.all(chunk.map(async function(n) {
           try {
-            const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+            const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
             if (!r.ok) return { n, c: [], ok: false };
             const j = await r.json();
             if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
@@ -639,7 +639,7 @@ async function liveScheduled(env, liveNames) {
             return { n, c: arr.map(function(s) {
               return s.cron;
             }), created: co, ok: true };
-          } catch (e) {
+          } catch (e) { if (fleetAiStopped(e)) throw e;
             return { n, c: [], ok: false };
           }
         }));
@@ -659,7 +659,7 @@ async function liveScheduled(env, liveNames) {
         }
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp, created_on FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
   const out = [];
@@ -729,14 +729,14 @@ __name2222(liveSaiInputs, "liveSaiInputs");
 async function liveScripts(env) {
   try {
     if (!env.CF_TOKEN) return null;
-    const resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+    const resp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     if (!resp.ok) return null;
     const j = await resp.json();
     const list = j && j.result || [];
     return list.map(function(x) {
       return x.id;
     });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -966,14 +966,14 @@ __name222(ghHeaders, "ghHeaders");
 __name2222(ghHeaders, "ghHeaders");
 async function ghCall(env, method, path, body) {
   try {
-    const r = await fetch(GH_API + path, { method, headers: ghHeaders(env, body ? { "Content-Type": "application/json" } : null), body: body ? JSON.stringify(body) : void 0, signal: AbortSignal.timeout(15e3) });
+    const r = await fleetAiFetch(env, fetch, GH_API + path, { method, headers: ghHeaders(env, body ? { "Content-Type": "application/json" } : null), body: body ? JSON.stringify(body) : void 0, signal: AbortSignal.timeout(15e3) });
     let j = null;
     try {
       j = await r.json();
     } catch (e) {
     }
     return { ok: r.ok, status: r.status, json: j };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, status: 0, json: null, error: String(e.message || e).slice(0, 160) };
   }
 }
@@ -1512,7 +1512,7 @@ async function loopMaybeSync(env, st) {
         res({ ok: false, error: "LOOP-SYNC-DEADLINE-1: abandoned after " + LOOP_SYNC_HARD_MS + "ms" });
       }, LOOP_SYNC_HARD_MS);
     })]);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e.message || e).slice(0, 200) };
   }
 }
@@ -1622,11 +1622,11 @@ async function buildState(env, ctx) {
     const base = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&start_date=" + encodeURIComponent(since);
     let fail24 = null, all24 = null, liveErr = null;
     try {
-      const gf = await fetch(base + "&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      const gf = await fleetAiFetch(env, fetch, base + "&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
       if (gf.ok) { const g = await gf.json(); fail24 = g.result_info && g.result_info.total_count; } else liveErr = "HTTP " + gf.status;
-      const gt = await fetch(base, { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      const gt = await fleetAiFetch(env, fetch, base, { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
       if (gt.ok) { const g = await gt.json(); all24 = g.result_info && g.result_info.total_count; } else if (!liveErr) liveErr = "HTTP " + gt.status;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       liveErr = String(e && e.message || e).slice(0, 60);
     }
     const rate = all24 && fail24 != null ? fail24 / all24 : null;
@@ -3913,7 +3913,7 @@ async function runRefresh(env, ctx, opts) {
       })]).finally(function() {
         clearTimeout(deadlineTimer);
       });
-    } catch (eD) {
+    } catch (eD) { if (fleetAiStopped(eD)) throw eD;
       const prev = await loadState(env);
       if (prev && prev.state) return prev.state;
       return { generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION, refresh_ms: Date.now() - t0, deadline_error: String(eD && eD.message || eD), fleet: { workers: 0, scheduled: 0, probes: 0, d1_databases: 0, analytics_error: "refresh deadline" }, totals: { req24: 0, err24: 0 }, scheduled: [], audits: [], probes: [], chains: [], issues: [], issue_counts: { err: 0, warn: 0, total: 0 }, integration: {}, meta: {}, verdict: "UNKNOWN" };
@@ -4134,6 +4134,8 @@ __name(feedFallbackTick, "feedFallbackTick");
 var MIC_PERMISSIONS_POLICY = "camera=(), microphone=(self), geolocation=()";
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     const res = await worker_default.fetchInner(request, env, ctx);
     try {
       if (res && res.status !== 101 && /^text\/html/i.test(res.headers.get("Content-Type") || "") && !res.headers.has("Permissions-Policy")) {
@@ -4145,7 +4147,9 @@ var worker_default = {
       console.log(JSON.stringify({ worker: NAME, where: "mic-policy", note: String(e && e.message || e) }));
     }
     return res;
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async fetchInner(request, env, ctx) {
     const requestUrl = new URL(request.url);
     if (requestUrl.pathname === "/sitemap.xml" && request.method === "GET") {
@@ -4170,13 +4174,15 @@ var worker_default = {
     let res;
     try {
       res = await handleRequest(request, env, ctx);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.error(JSON.stringify({ worker: NAME, where: "fetch:handleRequest", method: request.method, path: new URL(request.url).pathname, error: String(e && e.message || e) }));
       res = json({ ok: false, error: String(e.message || e) }, 500);
     }
     return noIndex(res);
   },
   async scheduled(controller, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     // D1-TRIGGER-DEPTH-1 (1.27.0): the second direct producer of qnfo-audit.fleet_tick (qnfo-code-orchestrator */10 is the
     // first; at most one row per 9 minutes between them), so the 10-minute D1 fixers keep running when the fleet-cron
     // dispatcher is down. First, before any long step can use the wall time; a failure is logged, never thrown.
@@ -4292,7 +4298,7 @@ var worker_default = {
       })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
-      } catch (e3) {
+      } catch (e3) { if (fleetAiStopped(e3)) throw e3;
       }
       try {
         const _lf = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
@@ -4303,7 +4309,7 @@ var worker_default = {
       } catch (e4) {
       }
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.error(JSON.stringify({ worker: NAME, where: "scheduled", error: String(e && e.message || e) }));
       return new Response("err " + String(e.message || e), { status: 500 });
     }
@@ -4524,7 +4530,7 @@ async function refreshRegistryMetrics(env) {
     if (Array.isArray(ra)) pv30 = ra.reduce(function(x, r) { return x + (r.count || 0); }, 0);
     if (Array.isArray(rb)) pvPrior = rb.reduce(function(x, r) { return x + (r.count || 0); }, 0);
     if (Array.isArray(rb)) priorDays = rumDaysCovered(rb);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   if (pv30 != null) await put("pageviews_30d", pv30, "MEASURED", ", formula=?5", [REGISTRY_PV_FORMULA]);
   else out.skipped.push("pageviews_30d: RUM unreadable");
@@ -4548,7 +4554,7 @@ async function refreshRegistryMetrics(env) {
       }, 0);
       await put("referral_30d", ref, "MEASURED");
     } else out.skipped.push("referral_30d: refererHost dimension unreadable");
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.push("referral_30d: " + String(e && e.message || e).slice(0, 60));
   }
   // PERFORMANCE-LOOP-1 (1.17.4): engaged human sessions, the STRATEGY s6.3 reach KPI (bot-filtered RUM page views, 28d).
@@ -4556,7 +4562,7 @@ async function refreshRegistryMetrics(env) {
     const eh = await refreshEngagedHumanSessions(env, Date.now());
     if (eh.value != null) out.refreshed.push("engaged_human_sessions_28d");
     else out.skipped.push("engaged_human_sessions_28d: " + eh.why);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.push("engaged_human_sessions_28d: " + String(e && e.message || e).slice(0, 80));
   }
   // HUMAN-AUDIENCE-1 (1.22.3): readers who came from outside the fleet, and readers who clicked on to a second page.
@@ -4564,7 +4570,7 @@ async function refreshRegistryMetrics(env) {
     const ha = await refreshHumanAudience(env, Date.now());
     if (ha.value != null) { out.refreshed.push("external_referred_pageviews_7d"); out.refreshed.push("continuation_pageviews_7d"); }
     else out.skipped.push("external_referred_pageviews_7d, continuation_pageviews_7d: " + ha.why);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped.push("external_referred_pageviews_7d, continuation_pageviews_7d: " + String(e && e.message || e).slice(0, 80));
   }
   // guard_rcs: the local guards it named were retired with the local machine's recurring jobs; the
@@ -4674,7 +4680,7 @@ async function persistRoiSnapshot(env) {
       tot.gateway_req = rows.reduce(function(a, x) {
         return a + x.count;
       }, 0);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
     try {
       const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(Date.now() - 720 * 36e5).toISOString() + '", datetime_leq: "' + (/* @__PURE__ */ new Date()).toISOString() + '" }) { count } } } }');
@@ -4682,7 +4688,7 @@ async function persistRoiSnapshot(env) {
       tot.pageviews = rows.reduce(function(a, x) {
         return a + x.count;
       }, 0);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
     try {
       const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool'");
@@ -4691,13 +4697,13 @@ async function persistRoiSnapshot(env) {
     }
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS roi_daily_snapshots (d TEXT PRIMARY KEY, papers INTEGER, chars INTEGER, subscribers INTEGER, gateway_req INTEGER, pageviews INTEGER, ops_events INTEGER, created_at TEXT)").run();
     await env.AUDIT.prepare("INSERT OR REPLACE INTO roi_daily_snapshots (d, papers, chars, subscribers, gateway_req, pageviews, ops_events, created_at) VALUES (?,?,?,?,?,?,?,?)").bind(d, tot.papers, tot.chars, tot.subscribers, tot.gateway_req, tot.pageviews, tot.ops_events, (/* @__PURE__ */ new Date()).toISOString()).run();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
 }
 __name(persistRoiSnapshot, "persistRoiSnapshot");
 __name2(persistRoiSnapshot, "persistRoiSnapshot");
 async function roiGf(env, query) {
-  const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+  const resp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.CF_TOKEN },
     body: JSON.stringify({ query }),
@@ -4846,7 +4852,7 @@ function reachRumQuery(dims, geq, leq, extraFilter) {
 async function reachGf(env, query) {
   if (!env.CF_TOKEN) return { data: null, err: "CF_TOKEN unset" };
   try {
-    const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+    const resp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.CF_TOKEN },
       body: JSON.stringify({ query }),
@@ -4864,7 +4870,7 @@ async function reachGf(env, query) {
       return { data: null, err: "graphql http " + resp.status + ": " + msg.slice(0, 300) };
     }
     return g.data ? { data: g.data, err: null } : { data: null, err: "graphql: empty data" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { data: null, err: "graphql: " + reachErr(e) };
   }
 }
@@ -7896,10 +7902,10 @@ async function governanceSnapshotRun(env, st) {
   };
   const billing = async function(path) {
     try {
-      const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/" + path, { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
+      const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/" + path, { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
       const j = await r.json();
       return j && j.success !== false ? j.result || null : null;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return null;
     }
   };
@@ -7912,7 +7918,7 @@ async function governanceSnapshotRun(env, st) {
     priorDays = prior ? prior.days : null;
     // IMPRESSIONS-METRIC-PRIOR-WINDOW-1: no growth figure from a prior window with missing days (it read a false +394%).
     trueMoM = rumTotal != null && rumPrior > 0 && priorDays != null && priorDays >= RUM_MIN_PRIOR_DAYS ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   try {
     const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + iso(720) + '", datetime_leq: "' + iso(0) + '" }) { sum { totalNeurons } } } } }');
@@ -7921,7 +7927,7 @@ async function governanceSnapshotRun(env, st) {
       return a + (x.sum && x.sum.totalNeurons || 0);
     }, 0) : null;
     if (!(aiN > 0)) aiN = null;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   // Metered = ESTIMATED LIST cost over every gateway request (incl. BYOK). Context only; never the cash basis.
   try {
@@ -7942,7 +7948,7 @@ async function governanceSnapshotRun(env, st) {
         return b.usd - a.usd;
       }).slice(0, 3);
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   // OWNER-MORNING-1: what draws on the prepaid credit (third-party providers through the gateway), last 7 days and 24 h.
   let creditBurn7 = null, creditBurn24 = null;
@@ -7959,7 +7965,7 @@ async function governanceSnapshotRun(env, st) {
     };
     creditBurn7 = third(await gq(168));
     creditBurn24 = third(await gq(24));
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   const inv = await billing("billing/invoice-preview");
   const bal = await billing("billing/credit-balance");
@@ -10745,13 +10751,13 @@ async function changelogEnsure(env) {
 async function changelogCreated(env) {
   try {
     if (!env.CF_TOKEN) return null;
-    const resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+    const resp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     if (!resp.ok) return null;
     const j = await resp.json();
     const out = {};
     for (const x of j && j.result || []) if (x && x.id && x.created_on) out[x.id] = x.created_on;
     return out;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -12088,12 +12094,12 @@ async function ipatentUsage(env) {
   if (hit && Date.now() - hit.at < 3e5) return hit.data;
   try {
     const req = new Request("https://ipatent.qnfo.org/api/metrics", { headers: { "User-Agent": "qnfo-fleet-dashboard/" + VERSION } });
-    const r = await (env.SVC_QNFO_IPATENT ? env.SVC_QNFO_IPATENT.fetch(req) : fetch(req, { signal: AbortSignal.timeout(8e3) }));
+    const r = await (env.SVC_QNFO_IPATENT ? env.SVC_QNFO_IPATENT.fetch(req) : fleetAiFetch(env, fetch, req, { signal: AbortSignal.timeout(8e3) }));
     if (!r.ok) return { error: "iPatent metrics HTTP " + r.status };
     const j = await r.json();
     IPATENT_CACHE.set(key, { at: Date.now(), data: j });
     return j;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { error: "iPatent metrics unreachable: " + String(e && e.message || e).slice(0, 100) };
   }
 }
@@ -12231,7 +12237,7 @@ async function cmdModelCallImpl(env, model, messages, timeoutMs) {
     ac.abort();
   }, timeoutMs);
   try {
-    const r = await env.SVC_QNFO_AI.fetch("https://ai.qnfo.org/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 700, timeout_ms: cmdRouterTimeout(timeoutMs) }), signal: ac.signal });
+    const r = await fleetAiServiceFetch(env, env.SVC_QNFO_AI, "https://ai.qnfo.org/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 700, timeout_ms: cmdRouterTimeout(timeoutMs) }), signal: ac.signal });
     const j = await r.json().catch(function() {
       return null;
     });
@@ -12240,7 +12246,7 @@ async function cmdModelCallImpl(env, model, messages, timeoutMs) {
     if (r.status === 504) return { ok: false, error: model + ": router_timeout " + Math.round(cmdRouterTimeout(timeoutMs) / 1e3) + "s" };
     if (r.status === 401 || r.status === 403 || r.status >= 500) return await cmdDirectModel(env, model, messages, "http " + r.status, t0, timeoutMs);
     return { ok: false, error: model + ": http " + r.status };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     if (!ac.signal.aborted) return await cmdDirectModel(env, model, messages, String(e && e.message || e).slice(0, 100), t0, timeoutMs);
     return { ok: false, error: model + ": " + (ac.signal.aborted ? "timeout " + Math.round(timeoutMs / 1e3) + "s" : String(e && e.message || e).slice(0, 100)) };
   } finally {
@@ -12288,7 +12294,7 @@ async function cmdDirectModel(env, model, messages, why, t0, timeoutMs) {
   try {
     const input = { messages, max_tokens: 700 };
     if (wa[1]) input.reasoning_effort = wa[1];
-    const out = await Promise.race([env.AI.run(wa[0], input), new Promise(function(_, rej) {
+    const out = await Promise.race([fleetAiRun(env, env.AI, wa[0], input), new Promise(function(_, rej) {
       timer = setTimeout(function() {
         rej(new Error("timeout " + Math.round(left / 1e3) + "s"));
       }, left);
@@ -12296,7 +12302,7 @@ async function cmdDirectModel(env, model, messages, why, t0, timeoutMs) {
     const text = cmdAiText(out);
     if (text.trim()) return { ok: true, text, model: model + " (direct)" };
     return { ok: false, error: model + ": " + why + "; direct: empty answer" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: model + ": " + why + "; direct: " + String(e && e.message || e).slice(0, 100) };
   } finally {
     if (timer) clearTimeout(timer);
@@ -12549,9 +12555,9 @@ async function mailOwnerFacts(env) {
 }
 async function mailGh(env, path) {
   try {
-    const r = await fetch(GH_API + path, { headers: ghHeaders(env), signal: AbortSignal.timeout(MAIL_DRAFT_FACTS_MS) });
+    const r = await fleetAiFetch(env, fetch, GH_API + path, { headers: ghHeaders(env), signal: AbortSignal.timeout(MAIL_DRAFT_FACTS_MS) });
     return r.ok ? await r.json() : null;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -12722,7 +12728,7 @@ async function askRetry(env) {
       }
       out.retried.push({ id: r.id, ok: a.ok });
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.skipped = String(e && e.message || e).slice(0, 200);
   }
   return out;
@@ -12930,11 +12936,11 @@ async function cmdTranscribe(request, env, holder) {
     const model = CMD_STT_MODELS[k];
     try {
       const input = k === 0 ? { audio: cmdB64(u8) } : { audio: Array.from(u8) };
-      const r = await env.AI.run(model, input);
+      const r = await fleetAiRun(env, env.AI, model, input);
       const text = String(r && r.text || "").trim();
       if (!text) { lastErr = model + ": no speech found"; continue; }
       return ownerJson({ ok: true, text: text.slice(0, 8e3), model: model, ms: Date.now() - t0, bytes: u8.length }, 200);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       lastErr = model + ": " + String(e && e.message || e).slice(0, 200);
     }
   }
@@ -13992,7 +13998,7 @@ async function conExec(env, owner, op, args) {
       const url = "https://" + worker + ".q08.workers.dev" + path;
       const init = { method, headers: { "Content-Type": "application/json", "User-Agent": NAME + "/" + VERSION + " fleet-console" }, body: method === "GET" ? void 0 : args.body || void 0, signal: AbortSignal.timeout(25e3) };
       const svc = CON_SVC[worker] && env[CON_SVC[worker]];
-      const r = svc ? await svc.fetch(url, init) : await fetch(url, init);
+      const r = svc ? await svc.fetch(url, init) : await fleetAiFetch(env, fetch, url, init);
       const body = await r.text();
       return { ok: r.status < 500, text: method + " " + worker + path + (svc ? " (service binding)" : "") + " -> HTTP " + r.status + " " + (r.headers.get("content-type") || "") + "\n" + conClip(body, 4e3), error: r.status >= 500 ? "HTTP " + r.status + ": " + conClip(body, 600) : void 0 };
     }
@@ -14072,7 +14078,7 @@ async function conExec(env, owner, op, args) {
       if (!r.ok) return { ok: false, error: conGhErr(r) };
       return { ok: true, text: "Re-running the failed jobs of run " + id + "." };
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: op + ": " + String(e && e.message || e).slice(0, 400) };
   }
   return { ok: false, error: "unknown console action " + op };
@@ -15179,13 +15185,13 @@ async function turnstileVerify(env, token, ip, action) {
   try {
     var body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
     if (ip) body.set("remoteip", ip);
-    var r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
+    var r = await fleetAiFetch(env, fetch, "https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
     if (!r.ok) return { ok: false, reason: "siteverify-" + r.status };
     var j = await r.json();
     if (!j || j.success !== true) return { ok: false, reason: "rejected:" + String((j && j["error-codes"]) || "").slice(0, 80) };
     if (action && j.action && j.action !== action) return { ok: false, reason: "action-mismatch" };
     return { ok: true, reason: "verified" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, reason: "siteverify-error" };
   }
 }
@@ -16093,9 +16099,9 @@ async function jobIdentityWeekly(env) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 8e3);
     try {
-      const r = await fetch(o.url, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops identity review)" }, redirect: "follow", signal: ctl.signal });
+      const r = await fleetAiFetch(env, fetch, o.url, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops identity review)" }, redirect: "follow", signal: ctl.signal });
       o.page_status = r.status;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       o.page_status = "fetch-error";
     } finally {
       clearTimeout(t);
@@ -16517,7 +16523,7 @@ async function psrNarrative(env, personaId, promptText, freeOnly) {
       const t = setTimeout(function() {
         ctl.abort();
       }, 8000);
-      const r = await env.SVC_QNFO_AI.fetch("https://ai.qnfo.org/v1/chat/completions", {
+      const r = await fleetAiServiceFetch(env, env.SVC_QNFO_AI, "https://ai.qnfo.org/v1/chat/completions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ model, messages: [{ role: "system", content: persona || "You are the QNFO portfolio manager. Report facts only, one short paragraph." }, { role: "user", content: promptText }], max_tokens: 300, temperature: 0.3 }),
@@ -16528,7 +16534,7 @@ async function psrNarrative(env, personaId, promptText, freeOnly) {
       const j = await r.json();
       const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
       if (txt && String(txt).trim()) return String(txt).trim().slice(0, 700);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   return null;
@@ -17467,3 +17473,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-fleet-dashboard ----
 wmAttach(worker_default, "qnfo-fleet-dashboard");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-fleet-dashboard";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

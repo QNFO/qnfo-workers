@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROMOTE-TICKET-AFTER-RECONCILE-1 offline suite (qnfo-model-eval 1.8.2, agent_issues 1000329). Loads worker.js the way eval-logic.test.mjs and typed-input.test.mjs do and runs decide(), filePromoteTickets() and the
 // whole runLoop() against an in-memory SQLite D1 (node:sqlite) with a fake AI binding; the docs fetch is stubbed as down (the catalog sync fails and the pass goes on, as it does live).
 // Measured 2026-10-26 (ISSUE-HYGIENE-3): decide() filed "CF-MODEL-EVAL-1: promote <model> on the <lane> battery" at once, and later in the same pass selectClefWinner, reconcileDecisionPromotions and the canary gate
@@ -18,8 +19,8 @@ const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 
 const body = src.replace(/^export default /m, "var __default = ");
 const downFetch = async () => ({ ok: false, status: 503, text: async () => "" });
-const mod = new Function("console", "fetch", body +
-  "\n;return { decide, runLoop, filePromoteTickets, promotionStands, VERSION, BATTERY_VERSION };")({ log() {}, error() {}, warn() {} }, downFetch);
+const mod = new Function("console", "fetch", RUNNING_AI_FIXTURE + (body +
+  "\n;return { decide, runLoop, filePromoteTickets, promotionStands, VERSION, BATTERY_VERSION };"))({ log() {}, error() {}, warn() {} }, downFetch);
 
 const CTRL_FLASH = "@cf/zai-org/glm-5.3-flash", CTRL_OSS = "@cf/openai/gpt-oss-120b";
 const A = "@cf/cloudflare/clef-a", B = "@cf/cloudflare/clef-b", C = "@cf/cloudflare/clef-c";

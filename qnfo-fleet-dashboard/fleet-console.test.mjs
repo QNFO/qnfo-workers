@@ -6,11 +6,12 @@
 // fleet credential; the model may only propose console read commands.
 // Run: node qnfo-fleet-dashboard/fleet-console.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 const net = [];
 globalThis.fetch = async (u, o) => {
   const url = String(u && u.url || u);

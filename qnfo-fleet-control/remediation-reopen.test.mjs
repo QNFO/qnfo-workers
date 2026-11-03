@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // REMEDIATION-REOPEN-1 + REMEDIATION-HOLD-1 + REMEDIATION-PENDING-PREFIX-1 offline suite (qnfo-fleet-control 0.4.119/0.4.121/0.4.123/0.4.128, agent_issues 1297): remediationContractsTick against
 // node:sqlite with the live tables and the live auto-close trigger. Proves: a contract on a wontfix issue is marked
 // superseded without a probe run; a probe that fails max_attempts times after its issue was closed reopens the issue once
@@ -43,7 +44,7 @@ function makeDb() {
   return { db, env: { AUDIT: { prepare: (sql) => stmt(sql, []) } } };
 }
 const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Number, String, JSON, Object, console });
-const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick });", ctx, { filename: "fleet-control#REMEDIATION-REOPEN-1" });
+const W = vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n;({ remediationContractsTick });"), ctx, { filename: "fleet-control#REMEDIATION-REOPEN-1" });
 
 const probe = (k) => "SELECT 'ok' AS expected, (SELECT v FROM probe_src WHERE k = '" + k + "') AS observed";
 const closedLongAgo = Date.now() - 3 * 86400e3;

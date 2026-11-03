@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.42.0-codeagent";
+var VERSION = "0.43.0";
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
 // Q08-FORECAST-RESEARCH-1 (#4291, agent_issues 1000268, pillar reach): researched forecasts and dated secondary claims.
@@ -106,7 +106,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
       return async function (model, input, opts) {
         var t0 = Date.now(), ok = 1, res;
-        try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
+        try { res = await fleetAiRun(env, t, model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ evt: "q08-signal-engine:__aiAttrEnv:caught", error: String((eCc && eCc.message) || eCc) })); }
@@ -125,7 +125,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
     copy[aiKey] = wrapped;
     copy.__aiAttr = 1;
     return copy;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return env;
   }
 }
@@ -716,11 +716,11 @@ async function sweepForecastCriteria(env) {
         // require a source, a date and an edge-case rule), so the republished forecast closes the gap.
         if (typeof generateForecast === "function") {
           try { await generateForecast(env, { replaceId: row.id }); }
-          catch (e) { console.error(JSON.stringify({ worker: "q08-signal-engine", event: "forecast-criteria-republish-queue", id: row.id, error: String((e && e.message) || e).slice(0, 200) })); }
+          catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ worker: "q08-signal-engine", event: "forecast-criteria-republish-queue", id: row.id, error: String((e && e.message) || e).slice(0, 200) })); }
         }
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ worker: "q08-signal-engine", event: "forecast-criteria-republish-sweep", error: String((e && e.message) || e).slice(0, 200) }));
   }
   return n;
@@ -873,7 +873,7 @@ async function arxivPoolSize(env) {
 async function scrapeArxiv(env) {
   var q = "cat:cs.DC OR cat:cs.CR OR cat:cs.DB OR cat:cs.PL OR cat:cs.OS OR cat:cs.NI OR cat:cs.SY OR cat:cs.SE OR cat:cs.AR";
   var url = "http://export.arxiv.org/api/query?search_query=" + encodeURIComponent(q) + "&sortBy=submittedDate&sortOrder=descending&max_results=" + (await arxivPoolSize(env));
-  var resp = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+  var resp = await fleetAiFetch(env, fetch, url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
   if (!resp.ok) throw new Error("arxiv " + resp.status);
   var xml = await resp.text();
   var out = [];
@@ -1238,7 +1238,7 @@ async function aiGatewayRun(env, modelId, input, meta) {
   else { gw.skipCache = true; }
   var opts = { gateway: gw };
   if (m.signal) opts.signal = m.signal;
-  var resp = await env.AI.run(model, callInput, opts);
+  var resp = await fleetAiRun(env, env.AI, model, callInput, opts);
   var u = (resp && resp.usage) || {};
   if (b) b.used += (Number(u.prompt_tokens) || 0) + (Number(u.completion_tokens) || 0);
   return resp && typeof resp === "object" ? Object.assign({}, resp, { __q08Model: model }) : { response: resp, __q08Model: model };
@@ -1255,7 +1255,7 @@ async function readerTest(env, modelId, text, rprompt, cacheSuffix) {
     var v = parseReaderVerdict(String(out).replace(/<think>[\s\S]*?<\/think>/gi, ""));
     if (v) { v.model = modelId; v.family = familyOf(modelId); }
     return v;
-  } catch (e) { return null; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return null; }
 }
 // Panel verdict: passes when the mean score is at least 4 and a strict majority would read to the end. With 2 judges that means
 // both. Judges that error are replaced by the next candidate family once; no valid verdict at all returns null (fail open).
@@ -1658,7 +1658,7 @@ async function compose(env, prompt, banned, order, xform, opts) {
       // writer before the next writer is tried; the body is kept byte for byte and the whole gate runs again.
       if (opts && opts.titleRepair && titleOnlyProblems(allProblems)) {
         var titled = null, tErr = "";
-        try { titled = await titleMicroCall(env, modelId, norm); } catch (eT) { tErr = String((eT && eT.message) || eT).slice(0, 160); console.error(JSON.stringify({ evt: "q08-signal-engine:titleMicroCall:caught", model: modelId, error: tErr })); }
+        try { titled = await titleMicroCall(env, modelId, norm); } catch (eT) { if (fleetAiStopped(eT)) throw eT; tErr = String((eT && eT.message) || eT).slice(0, 160); console.error(JSON.stringify({ evt: "q08-signal-engine:titleMicroCall:caught", model: modelId, error: tErr })); }
         // Q08-TITLE-REPAIR-2 (0.26.1): an attempt that yields no title is recorded too (runs 405 and 406 of 2026-10-14 left no trace of it)
         if (titled && titled.reply !== undefined) { trail.push({ model: modelId, problems: ["title repair: no title line in the reply: " + String(titled.reply).replace(/\s+/g, " ").slice(0, 120)], chars: norm.length }); titled = null; }
         else if (!titled) trail.push({ model: modelId, problems: ["title repair failed: " + (tErr || "no reply")], chars: norm.length });
@@ -1670,7 +1670,7 @@ async function compose(env, prompt, banned, order, xform, opts) {
         }
       }
       if (!best || norm.length > best.text.length) best = { text: norm, model: usedModel, problems: allProblems, extra: xr ? xr.extra : undefined };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       lastErr = e;
       trail.push({ model: modelId, problems: ["error: " + String(e && e.message || e).slice(0, 160)] });
     }
@@ -2280,7 +2280,7 @@ async function runLevels(env, a) {
     ed = { text: rc1.text, model: piece.model, extra: piece.extra };
     rows.push({ round: 2, role: "reader_cuts", model: "", family: "", pass: 1, fix: "Q08-READER-CUTS-1: deleted paragraphs " + rc1.cut.join(", ") });
   } else {
-    try { ed = await compose(env, edPrompt, banned, editOrder, a.xform); } catch (e) { ed = null; }
+    try { ed = await compose(env, edPrompt, banned, editOrder, a.xform); } catch (e) { if (fleetAiStopped(e)) throw e; ed = null; }
   }
   if (ed && a.forecast && !ed.extra && piece.extra) ed.extra = piece.extra;
   // Q08-EDITOR-VERDICT-CARRY-1 (0.14.1, run 337): the editor's rewrite dropped the final 'worth your time' line, a format marker the gate
@@ -2297,7 +2297,7 @@ async function runLevels(env, a) {
       if (edFr && edFr.accepted) ed = { text: edFr.text, model: ed.model, extra: ed.extra, repaired: edFr.removed.length };
       else if (edFr) {
         var ed2 = null;
-        try { ed2 = await compose(env, retryPromptFor(a.prompt, ed.text, edProblems, EDIT_FLOOR), banned, editOrder, a.xform); } catch (e) { ed2 = null; }
+        try { ed2 = await compose(env, retryPromptFor(a.prompt, ed.text, edProblems, EDIT_FLOOR), banned, editOrder, a.xform); } catch (e) { if (fleetAiStopped(e)) throw e; ed2 = null; }
         if (ed2 && ed2.text) ed2.text = carryFormat(ed2.text, piece.text);
       if (ed2 && ed2.text && !editGateProblems(ed2.text, banned, a.forecast).length) ed = ed2;
       }
@@ -2319,7 +2319,7 @@ async function runLevels(env, a) {
     var ed3 = null;
     var rc2 = applyReaderCuts(ed.text, p2.fix);
     if (rc2 && !editGateProblems(rc2.text, banned, false).length) { ed3 = { text: rc2.text, model: ed.model, extra: ed.extra }; rows.push({ round: 3, role: "reader_cuts", model: "", family: "", pass: 1, fix: "Q08-READER-CUTS-1: deleted paragraphs " + rc2.cut.join(", ") }); }
-    else try { ed3 = await compose(env, a.prompt + "\n\n--- EDITOR PASS 2: below is an edited draft. Two fresh readers scored it " + p2.mean + " of 5. Apply exactly what they asked: " + p2.fix + (p2.tells.length ? " Phrases they flagged as generic machine prose: " + p2.tells.join(" | ") + "." : "") + " Delete and reorder; never add a name, date, figure, quotation or example that is not already in the draft or the source material above. Keep the title line first and the verdict line last, keep it at least " + EDIT_FLOOR + " characters, and return the full essay. " + FRAMING_RULE + " ---\n\n--- DRAFT ---\n" + ed.text, banned, editOrder, a.xform); } catch (e) { ed3 = null; }
+    else try { ed3 = await compose(env, a.prompt + "\n\n--- EDITOR PASS 2: below is an edited draft. Two fresh readers scored it " + p2.mean + " of 5. Apply exactly what they asked: " + p2.fix + (p2.tells.length ? " Phrases they flagged as generic machine prose: " + p2.tells.join(" | ") + "." : "") + " Delete and reorder; never add a name, date, figure, quotation or example that is not already in the draft or the source material above. Keep the title line first and the verdict line last, keep it at least " + EDIT_FLOOR + " characters, and return the full essay. " + FRAMING_RULE + " ---\n\n--- DRAFT ---\n" + ed.text, banned, editOrder, a.xform); } catch (e) { if (fleetAiStopped(e)) throw e; ed3 = null; }
     if (ed3 && ed3.text) ed3.text = carryFormat(ed3.text, ed.text);
     if (ed3 && ed3.text && !editGateProblems(ed3.text, banned, false).length) {
       var p3 = await panelRead(env, ed3.text, [writerFam, familyOf(ed3.model)], seed + 2, 2, a.readerPrompt);
@@ -2425,12 +2425,12 @@ async function generate(env) {
       // being killed at the scheduled-run limit with no row (run 366, 2026-10-13 06:35Z).
       if (Date.now() - t0 > ESSAY_AFTER_FORECAST_MS) return await quit("deferred", "the essay waits for the next tick: the forecast attempt used " + Math.round((Date.now() - t0) / 1000) + " s of this one");
     }
-  } catch (e) { console.error("q08 forecast path failed: " + String(e && e.message || e).slice(0, 200)); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; console.error("q08 forecast path failed: " + String(e && e.message || e).slice(0, 200)); }
   // Scrape + rank \u2014 three sources (break the filter bubble)
   var stories = [];
   try { stories = stories.concat(await scrapeHN()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
   try { stories = stories.concat(await scrapeGitHub()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
-  try { stories = stories.concat(await scrapeArxiv(env)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  try { stories = stories.concat(await scrapeArxiv(env)); } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
   if (!stories.length) return await quit("skipped", "no signals scraped");
   // Skip already-processed signal IDs (source-scoped). Q08-SIGNAL-RETRY-1 (2026-10-17): a 7-day window over EVERY
   // status exhausted the candidate pool (15:00Z run: "all signals already processed") because ~30 runs/day mark
@@ -2538,7 +2538,7 @@ async function generate(env) {
     try {
       var v0 = await verdictMicroCall(env, piece.text);
       if (v0) { var vt0 = piece.text.replace(/\s*$/, "") + "\n\n" + v0, vg0 = gateW(vt0); if (vg0.ok) { piece = Object.assign({}, piece, { text: vt0 }); gateResult = vg0; } }
-    } catch (e) { console.error("q08 verdict micro-call failed: " + String(e && e.message || e).slice(0, 200)); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; console.error("q08 verdict micro-call failed: " + String(e && e.message || e).slice(0, 200)); }
   }
   if (!gateResult.ok) {
     var retryPrompt = retryPromptFor(prompt, piece.text, gateResult.problems);
@@ -2553,7 +2553,7 @@ async function generate(env) {
     const RETRY_MODEL_CAP = 2;
     if (retryModels.length > RETRY_MODEL_CAP) retryModels = retryModels.slice(0, RETRY_MODEL_CAP);
     if (retryModels.length) {
-      try { retryPiece = await compose(env, retryPrompt, banned, retryModels, undefined, TITLE_REPAIR_ON); } catch (e) { retryPiece = null; }
+      try { retryPiece = await compose(env, retryPrompt, banned, retryModels, undefined, TITLE_REPAIR_ON); } catch (e) { if (fleetAiStopped(e)) throw e; retryPiece = null; }
     }
     if (retryPiece && retryPiece.text) {
       var retryGate = gateW(retryPiece.text);
@@ -2571,7 +2571,7 @@ async function generate(env) {
             retryGate = gateW(retryPiece.text);
             if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
           }
-        } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:tryFramingRepair:caught", error: String((e && e.message) || e) })); }
+        } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "q08-signal-engine:tryFramingRepair:caught", error: String((e && e.message) || e) })); }
       }
     }
   }
@@ -2885,7 +2885,7 @@ async function repairForecastJson(env, essayText, src, signalText) {
       if (!m) continue;
       var f = JSON.parse(m[0]);
       if (!validateForecast(f, essayText, Date.now()).length) return f;
-    } catch (e) {}
+    } catch (e) { if (fleetAiStopped(e)) throw e;}
   }
   return null;
 }
@@ -2941,14 +2941,14 @@ async function generateForecast(env, t0) {
   var topSig = ("q08-forecast:" + src.slug).slice(0, 80);
   var fcSrcChars = String(src.title || "").length + String(src.body_md || "").length + signalText.length + ledger.lines.join("\n").length;
   var piece = null, problems = [];
-  try { piece = await compose(env, prompt, banned, undefined, forecastXform, TITLE_REPAIR_ON); } catch (e) { problems = ["compose failed: " + String(e && e.message || e).slice(0, 160)]; }
+  try { piece = await compose(env, prompt, banned, undefined, forecastXform, TITLE_REPAIR_ON); } catch (e) { if (fleetAiStopped(e)) throw e; problems = ["compose failed: " + String(e && e.message || e).slice(0, 160)]; }
   // Q08-LEDE-1 (0.17.3): a forecast opens with a news lede too; the subject is the essay's case (its title and signal)
   var fctx = { source: "q08", title: String(src.title || "") + " " + String(signalText || "").slice(0, 300), url: "" };
   if (piece) problems = forecastProblems(piece, banned).concat(ledeProblems(piece.text, fctx));
   if (piece && problems.length) {
     var rp = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Write the whole piece again, in the same output format (H1 title first, the prose, one FORECAST-JSON line, the verdict line), fixing these problems ---\n" + problems.join("; ");
     var retry = null;
-    try { retry = await compose(env, rp, banned, undefined, forecastXform, TITLE_REPAIR_ON); } catch (e) { retry = null; }
+    try { retry = await compose(env, rp, banned, undefined, forecastXform, TITLE_REPAIR_ON); } catch (e) { if (fleetAiStopped(e)) throw e; retry = null; }
     if (retry) { var rprob = forecastProblems(retry, banned).concat(ledeProblems(retry.text, fctx)); if (!rprob.length) { piece = retry; problems = []; } else problems = problems.concat(["retry: " + rprob.join("; ")]); }
   }
   // Q08-FORECAST-REPAIR-1: one JSON-only extraction pass when the block is missing/invalid but the prose exists.
@@ -3525,7 +3525,7 @@ async function factCheckOne(env, modelId, essay, ground, prompt) {
     var v = parseFactVerdict(out);
     if (v) { v.model = modelId; v.family = familyOf(modelId); return v; }
     return { failed: true, model: modelId, error: "no verdict in reply (" + String(out).length + " chars, finish " + String(resp && resp.choices && resp.choices[0] && resp.choices[0].finish_reason) + ")" };
-  } catch (e) { return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
 }
 // Two valid verdicts from two different families, neither the writer's. Fewer than two valid verdicts is "unavailable" (fail closed).
 // Candidates run one at a time (parallel calls from one run shared a failure), and each failure's cause is kept in the reason.
@@ -3818,7 +3818,7 @@ async function verifyAndRevise(env, a) {
       var revProblems = a.src && a.src.title ? problems.concat(["keep the first paragraph a news lede, at most 70 words, that names " + String(a.src.title).slice(0, 120) + (a.src.url ? " and where it appeared (" + hostOf(a.src.url) + ")" : "") + " and says what happened and why it matters"]) : problems;
       var base = shortPruned || cur.text;
       if (shortPruned) trail.push("r" + (round + 1) + " extending the pruned draft (" + publishBody(shortPruned).length + " chars of body)");
-      try { rev = await compose(env, shortPruned ? extendRevisionPrompt(a.prompt, shortPruned, cutClaims, a.ground) : factRevisionPrompt(a.prompt, cur.text, revProblems, a.ground, a.forecast ? cur.extra : null), a.banned, undefined, a.xform); } catch (e) { rev = null; }
+      try { rev = await compose(env, shortPruned ? extendRevisionPrompt(a.prompt, shortPruned, cutClaims, a.ground) : factRevisionPrompt(a.prompt, cur.text, revProblems, a.ground, a.forecast ? cur.extra : null), a.banned, undefined, a.xform); } catch (e) { if (fleetAiStopped(e)) throw e; rev = null; }
       if (!rev || !rev.text) return fail([shortPruned ? "length revision produced no draft" : "fact revision produced no draft"]);
       if (a.forecast && !rev.extra && cur.extra) rev.extra = cur.extra;
       // Q08-FACT-REVISION-FORMAT-1 (0.14.7, run 349): the fact revision fixed the facts and failed only on a label title it wrote. The draft's
@@ -3944,7 +3944,7 @@ async function repairPublished(env, p, ground, problems) {
   if (p.kind === "forecast") return { ok: false, reason: "forecasts are retracted, not repaired" };
   var draft = "# " + p.title + "\n" + p.body_md;
   var rev = null;
-  try { rev = await compose(env, factRevisionPrompt(Q08_DIRECTIVE, draft, problems, ground, null), []); } catch (e) { rev = null; }
+  try { rev = await compose(env, factRevisionPrompt(Q08_DIRECTIVE, draft, problems, ground, null), []); } catch (e) { if (fleetAiStopped(e)) throw e; rev = null; }
   if (!rev || !rev.text) return { ok: false, reason: "no revision produced" };
   var text = rev.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   var tm = text.match(/^#\s+(.+)$/m);
@@ -4104,7 +4104,7 @@ async function judgeForecast(env, f, evidence) {
       var v = parseJudgeVerdict(out);
       if (v) v.model = id;
       return v;
-    } catch (e) { return null; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; return null; }
   }));
   var agg = aggregateJudges(got);
   agg.judges = got.filter(Boolean).map(function (j) { return { model: j.model, outcome: j.outcome }; });
@@ -4410,7 +4410,7 @@ function turnstileWidget(env, action) {
 async function turnstileVerify(env, token, ip, action) {
   var e = env || {};
   var secret = e.TURNSTILE_SECRET || "";
-  var res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+  var res = await fleetAiFetch(env, fetch, "https://challenges.cloudflare.com/turnstile/v0/siteverify", {
     method: "POST",
     body: new URLSearchParams({ secret: secret, response: token, remoteip: ip, action: action })
   });
@@ -4636,13 +4636,13 @@ async function sendDigest(env) {
 // IndexNow: instant search-index ping for a newly published URL (no auth needed).
 async function pingIndexNow(env, url) {
   try {
-    var resp = await fetch("https://api.indexnow.org/indexnow", {
+    var resp = await fleetAiFetch(env, fetch, "https://api.indexnow.org/indexnow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ host: "q08.org", key: INDEXNOW_KEY, keyLocation: ORIGIN + "/" + INDEXNOW_KEY + ".txt", urlList: [url] })
     });
     return { ok: resp.ok, status: resp.status };
-  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return { ok: false, error: String(e && e.message || e) }; }
 }
 
 // Distribution via qnfo-social (Bluesky + Buffer cross-post). Tokenless:
@@ -4971,8 +4971,14 @@ async function cronGridRun(db, event, ctx, cfg, run) {
 // ---- CRON-GRID-1:END ----
 var CRON_GRID_CFG = {"worker": "q08-signal-engine", "tick": "0 * * * *", "tickMin": 60, "jobs": [{"cron": "0 17 * * *", "periodMin": 1440, "retry": false}], "own": "self"};
 var __wm_default = {
-  async fetch(req, env, ctx) { return edgeCachedFetch(req, env, ctx, q08Fetch); },
-  async scheduled(controller, env, ctx) { return cronGridRun(env.AUDIT, controller, ctx, CRON_GRID_CFG, function (ev, c) { return q08Scheduled(ev, env, c); }); }
+  async fetch(req, env, ctx) {
+    try {
+ return edgeCachedFetch(req, env, ctx, q08Fetch);
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
+  async scheduled(controller, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+ return cronGridRun(env.AUDIT, controller, ctx, CRON_GRID_CFG, function (ev, c) { return q08Scheduled(ev, env, c); }); }
 };
 async function q08Fetch(req, env, ctx) {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
@@ -5066,7 +5072,7 @@ async function q08Fetch(req, env, ctx) {
       if (!gateResult.ok) {
         var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + gateResult.problems.join("; ");
         var retryPiece = null;
-        try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
+        try { retryPiece = await compose(env, retryPrompt); } catch (e) { if (fleetAiStopped(e)) throw e; retryPiece = null; }
         if (retryPiece && retryPiece.text) {
           var retryGate = gate(retryPiece.text);
           if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
@@ -5075,7 +5081,7 @@ async function q08Fetch(req, env, ctx) {
               var vp2 = await compose(env, "You have written an essay that passed all editorial checks. Output exactly one line, nothing else, in this form:\nworth your time: yes|flat|no \u2014 one clause of justification\nUse flat only if a reader gains little beyond the source material; use no if the piece is not worth publishing.");
               var vm3 = (vp2 && vp2.text || "").match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
               if (vm3) { retryPiece.text = retryPiece.text.replace(/\s*$/, "") + "\n\n" + vm3[0]; retryGate = gate(retryPiece.text); if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; } }
-            } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:q08Fetch:caught", error: String((e && e.message) || e) })); }
+            } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "q08-signal-engine:q08Fetch:caught", error: String((e && e.message) || e) })); }
           }
         }
       }
@@ -6120,3 +6126,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH q08-signal-engine ----
 wmAttach(__wm_default, "q08-signal-engine");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "q08-signal-engine";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SOCIAL-DISTRIBUTION-LEARNER-1 offline suite (qnfo-social 0.7.28). Drives the real worker.js (drainQueue,
 // drainDissemination, the weekly update, the metric and GET /learner) against an in-memory SQLite D1 with the production
 // schemas (metric_registry with its METRIC-INTEGRITY-1 and cadence triggers) and a stubbed fetch, with a seeded RNG.
@@ -14,7 +15,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const W = mod.default;
 
 const db = new DatabaseSync(":memory:");

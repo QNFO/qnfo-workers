@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-TITLE-REPAIR-1 offline suite (q08-signal-engine 0.26.0, charter pillar: reach; agent_issues 2284, 2503).
 // Proves: a writer draft whose only writer-gate problems are its title gets one short title call to the same writer, keeps its body
 // byte for byte, is gated again and is returned as that writer's draft, so the next writer is not asked; a draft with any other
@@ -5,7 +6,7 @@
 // Run: node q08-signal-engine/title-repair.test.mjs   -> prints "N passed, 0 failed"
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-const mod = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href, import.meta.url);
 const T = mod.__title;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };

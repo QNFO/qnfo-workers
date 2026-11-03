@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -18,7 +19,7 @@ try {
   const workerPath = path.join(tempDir, "worker.mjs");
   const source = fs.readFileSync(path.join(here, "worker.js"), "utf8");
   fs.writeFileSync(workerPath, `${source}\nexport { tick, spendGate, budgetEnv, budgetLadder, ensureSchema, planIssues };\n`);
-  const { tick, spendGate, budgetEnv, budgetLadder, ensureSchema, planIssues } = await import(pathToFileURL(workerPath).href);
+  const { tick, spendGate, budgetEnv, budgetLadder, ensureSchema, planIssues } = await importRunningWorker(pathToFileURL(workerPath).href, import.meta.url);
 
   function makeEnv(calls = 141) {
     const db = new DatabaseSync(":memory:");

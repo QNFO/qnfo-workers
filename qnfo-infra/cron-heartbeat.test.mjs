@@ -1,9 +1,10 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // CRON-ONLY-HEARTBEAT-1 (qnfo-infra 1.5.0, agent_issues 2397) offline suite. Proves: scheduled() upserts one fleet_heartbeat
 // row (worker, VERSION, ISO ts, ok=1) after a finished run, writes ok=0 when the work throws (and still rethrows),
 // and a D1 failure on the heartbeat write never throws out of scheduled(). Run: node qnfo-infra/cron-heartbeat.test.mjs
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { VERSION as __v };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { VERSION as __v };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 const mkEnv = (failWrite) => {

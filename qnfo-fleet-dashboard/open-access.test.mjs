@@ -6,11 +6,12 @@
 // still use them; private owner documents stay private; a visitor's question is never shown to other visitors.
 // Run: node qnfo-fleet-dashboard/open-access.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
 
 const STATE = { schema_version: "fleet-state/v1", generated_at: new Date().toISOString(), version: "t", verdict: "HEALTHY", window: {}, fleet: { workers: 44 }, totals: {}, scheduled: [], audits: [], probes: [], integration: {}, report_card: {}, chains: [], device: {}, issues: [], issue_counts: { err: 0, warn: 0, total: 0 }, queues: [], coverage: {}, unattributed_errors: 0, recovered_workers: [], error_workers: [], loop: {}, meta: {}, refresh_ms: 1 };

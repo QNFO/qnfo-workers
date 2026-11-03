@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // EMAIL-TIER2-GATE-1 offline suite (qnfo-email 2.11.1, agent_issues 1000469, pillar personal). Tier 2 of the voice drafter marks a reply "cleared for auto-send" and the drain sends it
 // from rowan.quni@qnfo.org with no owner reply. email_reply_queue 75 and 76 (2026-10-22) went out that way to a recipient of the fleet's own cold-outreach follow-up, the second one
 // in answer to a mail that called the note spam from an incompetent AI agent. This suite loads the real worker.js the way voice-drafter.test.mjs does and drives tierReplyQueue over
@@ -10,8 +11,8 @@ import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
 const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
-const lib = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn { VERSION, VOICE_DEFAULT, VOICE_COMPLAINT_RX, tierByRules, tier2AutosendOn, tierReplyQueue };")();
+const lib = new Function(RUNNING_AI_FIXTURE + (src.replace(/export default\{/, "const __handler={") +
+  "\nreturn { VERSION, VOICE_DEFAULT, VOICE_COMPLAINT_RX, tierByRules, tier2AutosendOn, tierReplyQueue };"))();
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };

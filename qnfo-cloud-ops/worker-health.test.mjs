@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 offline suite (qnfo-cloud-ops 1.18.2). Replays jobWorkerHealth
 // and the GMAIL_PASS guard of jobGmailTriage from worker.js with stubbed fetch, service binding and D1. Proves: the qnfo-ai
 // chat probe goes through the QNFO_AI binding with no Authorization header (props auth, #1703); a probe whose credential the
@@ -21,12 +22,12 @@ const gmailGuard = slice("async function jobGmailTriage(env) {", "const out = { 
 const log = { fetch: [], digests: [], events: [], alerts: [], invocations: [] };
 let respond = async () => new Response("{}", { status: 200 });
 const api = new Function("NL", "fetchStub", "log",
-  "var __name = function(f) { return f; };\n" +
+  RUNNING_AI_FIXTURE + ("var __name = function(f) { return f; };\n" +
   "var fetch = function(u, i) { return fetchStub(u, i, 'public'); };\n" +
   "async function sendDigest(env, subject, text) { log.digests.push({ subject: subject, text: text }); return { sent: true }; }\n" +
   "async function recordEvent() { log.events.push(Array.from(arguments).slice(1)); }\n" +
   healthSrc + "\n" + gmailGuard + " return { status: 'would-run' }; }\n" +
-  "return { jobWorkerHealth, workerHealthEndpoints, jobGmailTriage };"
+  "return { jobWorkerHealth, workerHealthEndpoints, jobGmailTriage };")
 )("\n", (u, i, via) => { log.fetch.push({ u: String(u), i, via }); return respond(String(u), i, via); }, log);
 
 const AUDIT = {

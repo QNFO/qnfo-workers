@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // COMPANION-VERIFY-1 offline suite (personal-companion 1.14.0, charter pillar: personal). Owner directive 2026-10-10: published
 // content is 100% accurate and independently fact-checked; prompts carry process and style only; if a check or reviewer is
 // unavailable nothing is published. Proves: an invented name, year or figure is rejected before any model reviewer sees it; two
@@ -10,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
+const mod = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify, W = mod.default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };

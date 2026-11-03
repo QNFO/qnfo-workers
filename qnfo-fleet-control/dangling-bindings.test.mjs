@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // DANGLING-BINDINGS-1 (transformation lever T9.4, pillar core): a daily census of every live script's bindings against the
 // account's D1, KV, R2, queue, Vectorize and script lists; a binding whose target is gone is counted and named, an unreadable
 // list, a list longer than one page or an unverifiable binding type is never a false dangling.
@@ -16,7 +17,7 @@ const sandbox = {
   fetch: async (url) => { calls.push(url); const p = String(url).replace("https://api.cloudflare.com/client/v4/accounts/acct0", ""); if (api[p] === "throw") throw new Error("ECONNRESET"); return { json: async () => (api[p] === undefined ? { success: false, errors: [{ code: 10000, message: "unknown" }] } : api[p]) }; }
 };
 vm.createContext(sandbox);
-vm.runInContext(block + "\n__export = { dbCensusIds, bindingTarget, danglingBindings, danglingBindingsCensus, DB_CENSUS_SOURCES };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (block + "\n__export = { dbCensusIds, bindingTarget, danglingBindings, danglingBindingsCensus, DB_CENSUS_SOURCES };"), sandbox);
 const { dbCensusIds, bindingTarget, danglingBindings, danglingBindingsCensus, DB_CENSUS_SOURCES } = sandbox.__export;
 let fails = 0;
 const check = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m + (!c && x !== undefined ? " -- " + JSON.stringify(x).slice(0, 500) : "")); if (!c) fails++; };

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // FOLDED-TARGET-REDIRECT-1 offline suite (qnfo-code-orchestrator 0.6.0, agent_issues 2102, pillar autonomy).
 // A FOLDED member's code lives on in its host (fold_worker.py mounts it as a module), so a task that names the member's
 // worker.js is a task for the host: issue 2027 named qnfo-autonomy-scorer/worker.js after SCORER-FOLD-1 and a session did
@@ -11,7 +12,7 @@ import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

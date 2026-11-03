@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // ASK-CORPUS-FEEDER-1 + QGEN-COMPLETE-1 (qnfo-ai-search 2.2.8, agent_issues 2029) offline suite. The worker runs in a vm
 // with an in-memory node:sqlite D1, a stubbed gateway (catalog list and detail) and stubbed AI Search / Workers AI.
 // Proves (BUDGET-SOFT-ROUTE-1, 2.3.0): while any ai_spend cap is breached (or fleet_budget is unreadable) the feeder
@@ -44,7 +45,7 @@ const env = {
 };
 const sb = { console: { log() {}, error() {}, warn() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, AbortController, setTimeout, clearTimeout, crypto, fetch: fakeFetch, encodeURIComponent, decodeURIComponent };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { corpusSync, refreshGolden, completeQuestion, retrievalScore, CORPUS_SYNC_PER_RUN, CORPUS_SYNC_LEAN, QGEN_LEAN_CALLS, GOLDEN_COMPLETE_SQL };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { corpusSync, refreshGolden, completeQuestion, retrievalScore, CORPUS_SYNC_PER_RUN, CORPUS_SYNC_LEAN, QGEN_LEAN_CALLS, GOLDEN_COMPLETE_SQL };"), sb);
 const api = sb.__x;
 const led = () => db.prepare("SELECT slug, status, source_version, error FROM ask_corpus_sync ORDER BY slug").all();
 
@@ -91,7 +92,7 @@ r = await api.corpusSync(env);
 ok(r.uploaded === 1 && led().find((x) => x.slug === "paper-1").status === "uploaded", "after CORPUS_RETRY_H the failed paper is retried and recorded", r);
 // 4. A new version is uploaded again (after the catalog's TTL; the cache is cleared here as its expiry would).
 PAPERS[3].version = "1.1.0";
-vm.runInContext("_catalog = { at: 0, idx: null, loading: null };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + ("_catalog = { at: 0, idx: null, loading: null };"), sb);
 r = await api.corpusSync(env);
 ok(r.uploaded === 1 && state.uploads[state.uploads.length - 1].key === "paper-3.md" && led().find((x) => x.slug === "paper-3").source_version === "1.1.0", "a paper at a new version is uploaded again", r);
 

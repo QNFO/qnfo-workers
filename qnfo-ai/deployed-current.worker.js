@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.44.0"; /* 5.44.0 GLM-4.7-FLASH-CHAT-1 (#5535, pillar cost; minor): add the evaluated GLM-4.7 Flash model to the chat catalog and attribution. */ /* 5.42.4 D1-OVERLOAD-TELEMETRY-BREAKER-1 (#5269, pillar core; patch): share the 60s D1 overload breaker with optional cost, query and ensemble telemetry while preserving in-memory spend accounting. */ /* 5.42.0 CF-OBS-ISSUE-1 (#1000993, charter pillar core; minor): after transient gateway 502/503/504 retries and dynamic/value fallback exhaust, recover through the independent Workers AI binding. */ /* 5.41.8 DYNAMIC-ROUTE-TRANSIENT-FAILOVER-1 (#1001231, charter pillar core; patch): after same-route retries exhaust on a transient gateway 502/503/504, retry once through dynamic/value with the remaining request budget. */ /* 5.41.3 CF-OBS-502-RETRY-1 (#1468, charter pillar core; patch): retry transient upstream HTTP 502 errors with bounded same-route retries before fallback. */ /* 5.41.1 CF-OBS-504-RETRY-1 (#1558, charter pillar core; patch): retry transient upstream HTTP 504 errors on the same route within the existing bounded backoff. */ /* 5.40.7 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D; patch): the chat page model select carries aria-label (axe label violation on ai.qnfo.org). prior 5.40.6-codeagent */ /* 5.40.3 QNFO-AI-SPEND-TWIN-PATHS-1 (2026-10-26, pillar cost, agent_issues 1000439, 1000440; patch): (a) QNFO-AI-SWALLOW-REVERT-1: the 5.40.2 code-loop change in the Workers AI binding wrapper (__aiAttrEnv) returned an empty successful reply for any error whose text matched spend, budget or cap, which includes the capacity error 3040, so a capacity error stopped reaching the fallback chains as an error; the wrapper rethrows again. (b) QNFO-AI-STREAM-SPEND-TWIN-1: a streamed deepseek-v4-pro or deepseek-v4-flash request whose paid call is refused (402 breaker, deepseek cap, router ledger total, fleet cap) is served by its Workers AI twin through the Workers AI stream branch with the caller's tools, the chunks name the twin, and the free chain that answers when there is no twin names the model that answered instead of the requested route. (c) QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1: the oversize-ensemble context fallback serves a refused paid call from the twin of deepseek-v4-flash (truncated to the twin context, _router.served_by and twin_reason name it) instead of HTTP 502. Suite: spend-twin-paths.test.mjs. prior 5.40.2-codeagent */ /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.45.0"; /* 5.44.0 GLM-4.7-FLASH-CHAT-1 (#5535, pillar cost; minor): add the evaluated GLM-4.7 Flash model to the chat catalog and attribution. */ /* 5.42.4 D1-OVERLOAD-TELEMETRY-BREAKER-1 (#5269, pillar core; patch): share the 60s D1 overload breaker with optional cost, query and ensemble telemetry while preserving in-memory spend accounting. */ /* 5.42.0 CF-OBS-ISSUE-1 (#1000993, charter pillar core; minor): after transient gateway 502/503/504 retries and dynamic/value fallback exhaust, recover through the independent Workers AI binding. */ /* 5.41.8 DYNAMIC-ROUTE-TRANSIENT-FAILOVER-1 (#1001231, charter pillar core; patch): after same-route retries exhaust on a transient gateway 502/503/504, retry once through dynamic/value with the remaining request budget. */ /* 5.41.3 CF-OBS-502-RETRY-1 (#1468, charter pillar core; patch): retry transient upstream HTTP 502 errors with bounded same-route retries before fallback. */ /* 5.41.1 CF-OBS-504-RETRY-1 (#1558, charter pillar core; patch): retry transient upstream HTTP 504 errors on the same route within the existing bounded backoff. */ /* 5.40.7 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D; patch): the chat page model select carries aria-label (axe label violation on ai.qnfo.org). prior 5.40.6-codeagent */ /* 5.40.3 QNFO-AI-SPEND-TWIN-PATHS-1 (2026-10-26, pillar cost, agent_issues 1000439, 1000440; patch): (a) QNFO-AI-SWALLOW-REVERT-1: the 5.40.2 code-loop change in the Workers AI binding wrapper (__aiAttrEnv) returned an empty successful reply for any error whose text matched spend, budget or cap, which includes the capacity error 3040, so a capacity error stopped reaching the fallback chains as an error; the wrapper rethrows again. (b) QNFO-AI-STREAM-SPEND-TWIN-1: a streamed deepseek-v4-pro or deepseek-v4-flash request whose paid call is refused (402 breaker, deepseek cap, router ledger total, fleet cap) is served by its Workers AI twin through the Workers AI stream branch with the caller's tools, the chunks name the twin, and the free chain that answers when there is no twin names the model that answered instead of the requested route. (c) QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1: the oversize-ensemble context fallback serves a refused paid call from the twin of deepseek-v4-flash (truncated to the twin context, _router.served_by and twin_reason name it) instead of HTTP 502. Suite: spend-twin-paths.test.mjs. prior 5.40.2-codeagent */ /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -33,9 +33,9 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       return async function (model, input, opts) {
       var t0 = Date.now(), ok = 1, res;
       try {
-        res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })());
+        res = await fleetAiRun(env, t, model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })());
         return res;
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         ok = 0;
         var errMsg = String((e && e.message) || e || "");
         // CF-OBS-ISSUE-1 (#2911, RED-DRAIN-1): a Workers AI per-minute inference rate limit reached callers as a
@@ -54,10 +54,10 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
           for (var attempt = 1; attempt <= 3 && Date.now() - t0 < 5e3; attempt++) {
             await new Promise(function (resolve) { setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt - 1), 4000) + Date.now() % 250); });
             try {
-              res = await t.run(model, input, opts);
+              res = await fleetAiRun(env, t, model, input, opts);
               ok = 1;
               return res;
-            } catch (e2) {
+            } catch (e2) { if (fleetAiStopped(e2)) throw e2;
               if (!/rate limit|429|too many requests|502|503|504|bad gateway|gateway timeout|service unavailable|capacity|temporarily/i.test(String((e2 && e2.message) || e2 || ""))) throw e2;
             }
           }
@@ -86,9 +86,9 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
               } else {
                 fbOpts.reasoning = { effort: "low" };
               }
-              res = await t.run(SPEND_CHEAP_WA, input, fbOpts);
+              res = await fleetAiRun(env, t, SPEND_CHEAP_WA, input, fbOpts);
               return res;
-            } catch (e3) {
+            } catch (e3) { if (fleetAiStopped(e3)) throw e3;
               if (!/rate limit|429|too many requests|502|503|504|bad gateway|gateway timeout|service unavailable|capacity|temporarily/i.test(String((e3 && e3.message) || e3 || ""))) break;
             }
           }
@@ -141,7 +141,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
     copy[aiKey] = wrapped;
     copy.__aiAttr = 1;
     return copy;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return env;
   }
 }
@@ -839,7 +839,7 @@ function runTurnBudgeted(env, spec, messages, maxTokens, tools, temp, topP, tool
       var pr;
       try {
         pr = runModelTurn(env, sp, messages, maxTokens, isP || sp.tools ? tools : null, isP ? temp : sp.temp, isP ? topP : sp.topP, toolChoice);
-      } catch (e0) {
+      } catch (e0) { if (fleetAiStopped(e0)) throw e0;
         pr = Promise.reject(e0);
       }
       pr.then(function (r) {
@@ -1283,7 +1283,7 @@ async function inlineRemoteImages(messages) {
         if (p.image_url && typeof p.image_url === "object") p.image_url.url = dataUrl;
         else if (typeof p.image_url === "string") p.image_url = dataUrl;
         else p.image_url = { url: dataUrl };
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         m.content[i] = { type: "text", text: "[IMAGE UNAVAILABLE: remote fetch failed (" + String(e && e.message || e).slice(0, 120) + ")]" };
       }
     }
@@ -1835,7 +1835,7 @@ async function callGatewayService(env, svc, path, opts) {
       if (!svc) return { ok: false, error: "service binding missing: " + cfg.internal };
       resp = await svc.fetch(cfg.base + path, { method, headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
     } else {
-      resp = await fetch(cfg.base + path, { method, headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+      resp = await fleetAiFetch(env, __aigBaseFetch, cfg.base + path, { method, headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
     }
     var text = await resp.text();
     var data;
@@ -1845,7 +1845,7 @@ async function callGatewayService(env, svc, path, opts) {
       data = { raw: text.slice(0, 500) };
     }
     return { ok: resp.ok, status: resp.status, data };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: e && e.message ? e.message : String(e) };
   }
 }
@@ -1942,6 +1942,7 @@ var GATEWAY_ACTION_TOOLS = [
 ];
 var GATEWAY_TOOLS = [RUN_CODE_TOOL].concat(GATEWAY_ACTION_TOOLS);
 async function executeGatewayTool(env, fnName, args) {
+  await fleetAiAssert(env);
   args = args || {};
   try {
     if (fnName === "run_code") return await executeDynamicCode(env, args.code || "");
@@ -2035,7 +2036,7 @@ async function executeGatewayTool(env, fnName, args) {
       return r5.ok ? { ok: true, intent: r5.data } : r5;
     }
     return { ok: false, error: "unknown tool: " + fnName };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: "tool error: " + (e && e.message ? e.message : String(e)) };
   }
 }
@@ -2163,7 +2164,7 @@ async function qnfoAiFreeFallback(env, messages, maxTokens, served) {
       const _r = await withTimeout(runDynamicChat(env, _cands[_i], messages, _mtF, false), _remaining, "free-fallback");
       const _t = _r && (_r.response != null ? _r.response : (_r.choices && _r.choices[0] && _r.choices[0].message && _r.choices[0].message.content)) || "";
       if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); if (served && typeof served === "object") served.model = _cands[_i]; return String(_t); }
-    } catch (e) { console.error(JSON.stringify({ evt: "ai:qnfoAiFreeFallback:caught", error: String((e && e.message) || e) })); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "ai:qnfoAiFreeFallback:caught", error: String((e && e.message) || e) })); }
   }
   return null;
 }
@@ -2208,13 +2209,13 @@ async function runDynamicChat(env, route, messages, maxTokens, stream, opts = {}
     };
     try {
       result = await run(route);
-    } catch (error) {
+    } catch (error) { if (fleetAiStopped(error)) throw error;
       if (Date.now() >= deadline || !isTransientGatewayError(error)) throw error;
       if (route !== "dynamic/value") {
         route = "dynamic/value";
         try {
           result = await run(route);
-        } catch (fallbackError) {
+        } catch (fallbackError) { if (fleetAiStopped(fallbackError)) throw fallbackError;
           if (Date.now() >= deadline || !isTransientGatewayError(fallbackError)) throw fallbackError;
           await runWorkersAIFallback();
         }
@@ -2227,7 +2228,7 @@ async function runDynamicChat(env, route, messages, maxTokens, stream, opts = {}
       return spendMeterStream(env, resp, usedWorkersAIFallback ? "workers-ai" : "gateway", usedWorkersAIFallback ? SPEND_CHEAP_WA : route, spendInEstimate(messages));
     }
   } else {
-    const resp = await fetch(GW_COMPAT, {
+    const resp = await fleetAiFetch(env, __aigBaseFetch, GW_COMPAT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
       body: JSON.stringify({ model: route, ...input }),
@@ -2307,7 +2308,7 @@ async function runEnsemble(env, messages, maxTokens, domain, opts) {
     const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), _stageCap(0.5, 2e4), "ensemble-primary");
     primaryText = extractWAContent(primary);
     _mk("primary", _s1, !!primaryText);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     _mk("primary", _s1, false, e);
     primaryText = "";
   }
@@ -2354,7 +2355,7 @@ async function runEnsemble(env, messages, maxTokens, domain, opts) {
       try {
         vOut = await withTimeout(runWorkersAI(env, validatorSpec.wa, truncateMessagesToFit(vMsg, validatorSpec.ctx), 1024, false), _stageCap(0.3, 15e3), "ensemble-validator");
         _mk("validator", _sv, true);
-      } catch (eV) {
+      } catch (eV) { if (fleetAiStopped(eV)) throw eV;
         _mk("validator", _sv, false, eV);
         throw eV;
       }
@@ -2380,12 +2381,12 @@ async function runEnsemble(env, messages, maxTokens, domain, opts) {
           }
           membersRun.push("reviewer");
           _mk("reviewer", _sr, !!rText.trim());
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           _mk("reviewer", _sr, false, e);
           verificationResult = "reviewed";
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       verificationResult = "skipped";
     }
   } else {
@@ -2422,17 +2423,17 @@ async function expressIdea(env, text, threadId, source) {
     if (existing) return;
     await env.QNFO_AUDIT.prepare("INSERT INTO intent_express_log (thread_id, ts) VALUES (?1, ?2)").bind(threadId, (/* @__PURE__ */ new Date()).toISOString()).run();
     try {
-      const fetcher = env.QNFO_INTENT && env.QNFO_INTENT.fetch ? env.QNFO_INTENT : { fetch: /* @__PURE__ */ __name2((u, o) => fetch(u, o), "fetch") };
+      const fetcher = env.QNFO_INTENT && env.QNFO_INTENT.fetch ? env.QNFO_INTENT : { fetch: /* @__PURE__ */ __name2((u, o) => fleetAiFetch(env, __aigBaseFetch, u, o), "fetch") };
       const resp = await withTimeout(fetcher.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN },
         body: JSON.stringify({ desire: String(text || "").slice(0, 500), source: source || "chatbox-auto", device: source === "chatbox" ? "mobile" : "desktop" })
       }), 25e3, "express-intent");
       await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("http:" + String(resp.status), threadId).run();
-    } catch (e2) {
+    } catch (e2) { if (fleetAiStopped(e2)) throw e2;
       await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("err:" + String(e2 && e2.message || e2).slice(0, 120), threadId).run();
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("intent express failed:", e && e.message || e);
   }
 }
@@ -2565,7 +2566,7 @@ async function mediaProcess(env, id) {
   const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + b64;
   let text = "";
   try {
-    const gw = await fetch(GW_COMPAT, {
+    const gw = await fleetAiFetch(env, __aigBaseFetch, GW_COMPAT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
       body: JSON.stringify({
@@ -2579,7 +2580,7 @@ async function mediaProcess(env, id) {
       try { const mU = spendUsageOf(gj, 1e3, spendOutEstimate(gj)); spendRecord(env, gw.headers.get("cf-aig-provider") || "gateway", gw.headers.get("cf-aig-model") || gj.model || "dynamic/value", mU.in, mU.out); } catch (eSp) { console.error(JSON.stringify({ evt: "ai:mediaProcess:caught", error: String((eSp && eSp.message) || eSp) })); }
       text = String(gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content || "").trim();
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     text = "";
   }
   if (!text) return { ok: false, error: "vision ocr unavailable (gateway)", id };
@@ -2836,13 +2837,13 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
             try {
               const fr = await withTimeout(webFetch(r.url, 4e3, env), 6e3, "web-fetch");
               if (fr.text && !fr.error) fetched.push("[" + (fetched.length + 1) + "] " + r.title + "\n" + r.url + "\n" + fr.text.slice(0, 4e3));
-            } catch (e) {
+            } catch (e) { if (fleetAiStopped(e)) throw e;
             }
           }
           if (fetched.length) lines.push("--- PAGE EXCERPTS ---\n" + fetched.join("\n\n"));
           messages = [{ role: "system", content: lines.join("\n") }, ...messages];
         }
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         webSources = null;
       }
     }
@@ -2960,7 +2961,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, _screc));
         return json({ id: "chatcmpl-" + rid(8), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: _sc.model, choices: [{ index: 0, message: { role: "assistant", content: _sc.text }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), total_tokens: estimateOutputTokens(_sc.text) }, _router: { cache: "semantic", score: _sc.score, source_model: _sc.model, tier: 0, cost_usd: 0 } });
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("semantic cache serve failed:", e && e.message || e);
     }
   }
@@ -3076,7 +3077,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         })
       };
       return ensResp(ensText, respBody);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return json({ error: "ensemble failed: " + e.message }, 502);
     }
   }
@@ -3127,8 +3128,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
         return streamWithLog(new Response(stream0, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
       }
       return json({ error: "no stream path for model" }, 400);
-    } catch (e) {
-      try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
+    } catch (e) { if (fleetAiStopped(e)) throw e;
+      try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { if (fleetAiStopped(_e)) throw _e; console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
       return json({ error: "stream failed: " + e.message }, 502);
     }
   }
@@ -3201,8 +3202,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
     const logRec = { ...mkLogRec(), streamed: 0, response: content.slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
-  } catch (e) {
-    try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
+  } catch (e) { if (fleetAiStopped(e)) throw e;
+    try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { if (fleetAiStopped(_e)) throw _e; console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
     return json({ error: e.message }, 502);
   }
 }
@@ -3251,7 +3252,7 @@ async function semanticCacheLookup(env, q, model) {
         return { text: String(text).slice(0, 8000), score: m.score, model: md.model || null };
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("semantic cache lookup failed:", e && e.message || e);
   }
   return null;
@@ -3322,7 +3323,7 @@ async function logQuery(env, record) {
         }
       }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log("qnfo-ai-log upsert failed:", e && e.message || e);
   }
 }
@@ -3480,7 +3481,7 @@ async function webSearch(q, k) {
       const isLite = urls[attempt].indexOf("lite") !== -1;
       const parsed = parseDdg(html, isLite, k);
       if (parsed.length) return { engine: isLite ? "duckduckgo-lite" : "duckduckgo", results: parsed };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   return { error: "search engine unreachable" };
@@ -3492,7 +3493,7 @@ async function browserMarkdown(env, url, maxChars) {
   try {
     const token = env.CF_TOKEN || env.CF_API_TOKEN;
     if (!token) return null;
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/browser-rendering/markdown", {
+    const r = await fleetAiFetch(env, __aigBaseFetch, "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/browser-rendering/markdown", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
       body: JSON.stringify({ url, gotoOptions: { timeout: 10e3 } }),
@@ -3504,7 +3505,7 @@ async function browserMarkdown(env, url, maxChars) {
     if (!md) return null;
     const cap = Math.max(Number(maxChars) || 6e3, 500);
     return { url, text: md.slice(0, cap), truncated: md.length > cap };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -3521,12 +3522,12 @@ async function webFetch(url, maxChars, env) {
     if (!/^https?:$/i.test(u.protocol)) return { error: "only http(s) URLs", status: 400 };
     if (isPrivateHost(u.hostname)) return { error: "private/loopback hosts blocked", status: 400 };
     try {
-      resp = await fetch(u.toString(), {
+      resp = await fleetAiFetch(env, __aigBaseFetch, u.toString(), {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept": "text/html,text/plain,application/json;q=0.9,*/*;q=0.5" },
         redirect: "manual",
         signal
       });
-    } catch (_e) {
+    } catch (_e) { if (fleetAiStopped(_e)) throw _e;
       if (!signal.aborted && retries++ < 1) continue;
       return { error: "upstream fetch failed", url: u.toString() };
     }
@@ -4068,7 +4069,7 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   if (!oai.messages.length) return json({ type: "error", error: { type: "invalid_request_error", message: "messages required" } }, 400);
   var resp;
   try { resp = await anthRelay(env, oai); }
-  catch (e) { console.error("anthRelay failed: " + String(e && e.message || e)); return json({ type: "error", error: { type: "api_error", message: String(e && e.message || e) } }, 502); }
+  catch (e) { if (fleetAiStopped(e)) throw e; console.error("anthRelay failed: " + String(e && e.message || e)); return json({ type: "error", error: { type: "api_error", message: String(e && e.message || e) } }, 502); }
   var ctype = resp.headers.get("content-type") || "";
   if (ctype.indexOf("text/event-stream") >= 0) {
     if (wantStream) return new Response(anthStreamFromOpenAI(resp, oai.model), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
@@ -4178,7 +4179,7 @@ async function autoRouterShadowRun(env, limit) {
           }
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       result.status = "failed";
       result.error_type = String(e && e.name || "Error").slice(0, 40);
     }
@@ -4227,6 +4228,8 @@ async function autoRouterShadowHash(text) {
 }
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     env = __aiAttrEnv(env, "qnfo-ai", "AI", "QNFO_AUDIT");
     if (new URL(request.url).pathname === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // SEO-HYGIENE-1: a private tool / private reading surface, kept out of search engines
     // SPEND-GOVERNOR-1: request-scoped caller identity for the spend ledger (a fresh copy, so env is never mutated).
@@ -4325,7 +4328,7 @@ var worker_default = {
       const limit = Math.min(Math.max(parseInt(body.limit || "3", 10) || 3, 1), 5);
       try {
         return json(await autoRouterShadowRun(env, limit));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ ok: false, error: "shadow evaluation unavailable" }, 500);
       }
     }
@@ -4502,7 +4505,7 @@ var worker_default = {
           for (const r of rows) flat.push({ index: b, ...r.id !== void 0 ? { id: r.id } : {}, ...r.score !== void 0 ? { score: r.score } : {}, ...r.metadata ? { metadata: r.metadata } : {}, ...r.error ? { error: r.error } : {} });
         }
         return json({ query: q, count: out.total, results: flat, sources: out.sources });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: e.message }, 500);
       }
     }
@@ -4518,7 +4521,7 @@ var worker_default = {
           if (!vec) return json({ error: "embedding generation failed" }, 502);
           const matches = await env.LOG_VZ.query(vec, { topK: Math.min(Math.max(parseInt(url.searchParams.get("k") || "10", 10), 1), 20), returnMetadata: "all" });
           return json({ index: "qnfo-ai-log", query: q, count: (matches.matches || []).length, results: (matches.matches || []).map((m) => ({ id: m.id, score: Math.round((m.score || 0) * 1e4) / 1e4, metadata: m.metadata || {} })) });
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           return json({ error: e.message }, 500);
         }
       }
@@ -4591,7 +4594,7 @@ var worker_default = {
         const r = await webSearch(q, k);
         if (r.error) return json({ error: r.error }, 502);
         return json({ query: q, engine: "duckduckgo", count: r.results.length, results: r.results });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: e.message }, 500);
       }
     }
@@ -4605,7 +4608,7 @@ var worker_default = {
         const r = await webFetch(u, max, env);
         if (r.error) return json({ error: r.error }, r.status || 502);
         return json(r);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return json({ error: e.message }, 500);
       }
     }
@@ -4650,7 +4653,9 @@ var worker_default = {
       return json(pr, pr.ok ? 200 : 502);
     }
     return json({ error: "Not found" }, 404);
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 // WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
 // per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
@@ -4666,7 +4671,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   // log attributes these requests to qnfo-ai, the second half of #1784's definition of done.
   var viaGw = !opts && String(purpose).indexOf("embed") === 0;
   var gwOpts = viaGw ? { gateway: { id: "default", cacheTtl: 86400, metadata: { worker: String(worker || "qnfo-ai"), purpose: String(purpose) } } } : opts;
-  try { try { res = await env.AI.run(model, input, gwOpts); } catch (eg) { if (!viaGw) throw eg; res = await env.AI.run(model, input); } return res; } catch (e) { ok = 0; throw e; }
+  try { try { res = await fleetAiRun(env, env.AI, model, input, gwOpts); } catch (eg) { if (fleetAiStopped(eg)) throw eg; if (!viaGw) throw eg; res = await fleetAiRun(env, env.AI, model, input); } return res; } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
   finally {
     // SPEND-GOVERNOR-1: price every binding call into ai_spend_ledger (fail-soft, not awaited).
     try {
@@ -4701,3 +4706,113 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "QNFO_AUDIT";
+var FLEET_AI_WORKER = "qnfo-ai";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

@@ -1,5 +1,6 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-READER-CUTS-1 (0.15.0): the paragraph cuts readers name are applied deterministically before the model editor.
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const C = mod.__cuts, Q = mod.__quality;
 let passes = 0, fails = 0;
 function check(name, cond, info) { if (cond) passes++; else { fails++; console.log("FAIL " + name + (info !== undefined ? " -- " + JSON.stringify(info) : "")); } }

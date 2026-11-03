@@ -1,4 +1,4 @@
-var VERSION = "0.4.1-oauth"; /* 0.4.1: new Shorts descriptions include the QNFO channel context. */ /* #5479, pillar reach: authenticated re-consent and code exchange with the stored OAuth client. */ /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
+var VERSION = "0.5.0"; /* 0.4.1: new Shorts descriptions include the QNFO channel context. */ /* #5479, pillar reach: authenticated re-consent and code exchange with the stored OAuth client. */ /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // Owner directive 2026-10-27: "all of this needs to run 100% server-side on Cloudflare Quniverse". docs/YOUTUBE-PIPELINE.md has the design.
 // State machine per paper (D1 qnfo-audit.youtube_videos.state): queued -> directed -> audio -> rendering -> rendered -> uploaded;
 // terminal: rejected (director left too few supported beats), failed (4 attempts), uploaded. Every tick resumes an unfinished row before
@@ -203,12 +203,12 @@ async function aiJson(env, system, user, maxTokens) {
   var msgs = [{ role: "system", content: system }, { role: "user", content: user }], notes = [];
   var sources = [];
   if (env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") sources.push({ n: "qnfo-ai", run: async function () {
-    var r = await env.QNFO_AI.fetch("https://qnfo-ai.internal/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "auto", messages: msgs, max_tokens: maxTokens, stream: false, temperature: 0.3 }) });
+    var r = await fleetAiServiceFetch(env, env.QNFO_AI, "https://qnfo-ai.internal/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "auto", messages: msgs, max_tokens: maxTokens, stream: false, temperature: 0.3 }) });
     if (!r.ok) throw new Error("http " + r.status + " " + (await r.text()).slice(0, 120));
     return modelText(await r.json());
   } });
-  sources.push({ n: "kimi", run: async function () { return modelText(await env.AI.run(WRITE_FALLBACK_MODEL, { messages: msgs, max_tokens: maxTokens, reasoning_effort: "none", temperature: 0.3 })); } });
-  sources.push({ n: "gpt-oss", run: async function () { return modelText(await env.AI.run(CHECK_MODEL, { messages: msgs, max_tokens: maxTokens + 1500, reasoning_effort: "low", temperature: 0.3 })); } });
+  sources.push({ n: "kimi", run: async function () { return modelText(await fleetAiRun(env, env.AI, WRITE_FALLBACK_MODEL, { messages: msgs, max_tokens: maxTokens, reasoning_effort: "none", temperature: 0.3 })); } });
+  sources.push({ n: "gpt-oss", run: async function () { return modelText(await fleetAiRun(env, env.AI, CHECK_MODEL, { messages: msgs, max_tokens: maxTokens + 1500, reasoning_effort: "low", temperature: 0.3 })); } });
   for (var i = 0; i < sources.length; i++) {
     try {
       var t = await sources[i].run();
@@ -242,7 +242,7 @@ async function stageDirect(env, row) {
   var pre = validateBeats(spec.beats, article, []);
   var unsupported = [];
   if (pre.kept.length) {
-    var chk = await env.AI.run(CHECK_MODEL, {
+    var chk = await fleetAiRun(env, env.AI, CHECK_MODEL, {
       messages: [
         { role: "system", content: "You check video narration against its source article. For each numbered narration, decide if EVERY factual claim in it is stated in the article. Reply JSON only: {\"unsupported\":[numbers of narrations with any claim not in the article]}." },
         { role: "user", content: "ARTICLE:\n" + text.slice(0, 9000) + "\n\nNARRATIONS:\n" + (spec.beats || []).map(function (b, i) { return i + ". " + (b && b.narr); }).join("\n") }],
@@ -265,13 +265,13 @@ async function stageDirect(env, row) {
 }
 async function ttsSentence(env, text) {
   try {   // YT-QUALITY-1: Aura 2 first (natural prosody); any failure falls back to melotts so a run never stops on the voice
-    var resp = await env.AI.run(TTS_PRIMARY, { text: text, speaker: TTS_SPEAKER, encoding: "mp3" }, { returnRawResponse: true });
+    var resp = await fleetAiRun(env, env.AI, TTS_PRIMARY, { text: text, speaker: TTS_SPEAKER, encoding: "mp3" }, { returnRawResponse: true });
     var buf = await resp.arrayBuffer();
     if (buf && buf.byteLength > 1000) return { b64: b64FromBytes(new Uint8Array(buf)), aura: true };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ worker: WORKER, where: "tts-aura", error: String(e && e.message || e).slice(0, 200) }));
   }
-  var r = await env.AI.run(TTS_MODEL, { prompt: text, lang: "en" });
+  var r = await fleetAiRun(env, env.AI, TTS_MODEL, { prompt: text, lang: "en" });
   if (r && typeof r.audio === "string") return { b64: r.audio, aura: false };
   if (r instanceof ArrayBuffer) return { b64: b64FromBytes(new Uint8Array(r)), aura: false };
   if (r && r.byteLength !== undefined) return { b64: b64FromBytes(new Uint8Array(r)), aura: false };
@@ -369,7 +369,7 @@ async function handleOAuth(request, env, path) {
     if (!Number.isFinite(grant.expires) || grant.expires <= Date.now()) throw new Error("expired state");
   } catch (_) { return oauthJson({ ok: false, error: "invalid or expired consent state; code and returned state required" }, 400); }
   try {
-    var r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+    var r = await fleetAiFetch(env, fetch, "https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: env.YT_CLIENT_ID, client_secret: env.YT_CLIENT_SECRET, code: body.code, redirect_uri: grant.redirect_uri, grant_type: "authorization_code", code_verifier: await oauthMac(env, "pkce:" + body.state) }).toString() });
     var token = await r.json().catch(function () { return {}; });
     if (!r.ok || !token.access_token) return oauthJson({ ok: false, error: "Google code exchange failed", upstream_status: r.status }, 502);
@@ -379,10 +379,10 @@ async function handleOAuth(request, env, path) {
     if (typeof token.refresh_token !== "string" || !token.refresh_token) return oauthJson({ ok: false, error: "Google returned no refresh token; repeat offline consent" }, 409);
     // Only the authenticated operator receives the new token; installation still requires the secret-lock lease.
     return oauthJson({ ok: true, refresh_token: token.refresh_token, scopes: scopes, install: "Acquire the deploy-guard secret-lock lease, put YT_REFRESH_TOKEN on qnfo-youtube-shorts, release the lease, then verify numeric views via /status." });
-  } catch (_) { return oauthJson({ ok: false, error: "Google code exchange unavailable" }, 502); }
+  } catch (_) { if (fleetAiStopped(_)) throw _; return oauthJson({ ok: false, error: "Google code exchange unavailable" }, 502); }
 }
 async function accessToken(env) {
-  var r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+  var r = await fleetAiFetch(env, fetch, "https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: env.YT_CLIENT_ID, client_secret: env.YT_CLIENT_SECRET, refresh_token: env.YT_REFRESH_TOKEN, grant_type: "refresh_token" }).toString() });
   var j = await r.json().catch(function () { return {}; });
   if (!r.ok || !j.access_token) throw new Error("oauth refresh " + r.status + ": " + JSON.stringify(j).slice(0, 300));
@@ -399,14 +399,14 @@ async function stageUpload(env, row) {
   if (!obj) throw new Error("short.mp4 missing in R2");
   var bytes = await obj.arrayBuffer();
   var tok = await accessToken(env);
-  var init = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+  var init = await fleetAiFetch(env, fetch, "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
     method: "POST",
     headers: { authorization: "Bearer " + tok, "content-type": "application/json; charset=UTF-8", "x-upload-content-type": "video/mp4", "x-upload-content-length": String(bytes.byteLength) },
     body: JSON.stringify({ snippet: { title: meta.title, description: meta.description, tags: meta.tags, categoryId: meta.categoryId }, status: { privacyStatus: PRIVACY, selfDeclaredMadeForKids: false, containsSyntheticMedia: true } })
   });
   var loc = init.headers.get("location");
   if (!init.ok || !loc) throw new Error("youtube init " + init.status + ": " + (await init.text()).slice(0, 400));
-  var up = await fetch(loc, { method: "PUT", headers: { "content-type": "video/mp4", "content-length": String(bytes.byteLength) }, body: bytes });
+  var up = await fleetAiFetch(env, fetch, loc, { method: "PUT", headers: { "content-type": "video/mp4", "content-length": String(bytes.byteLength) }, body: bytes });
   var uj = await up.json().catch(function () { return {}; });
   if (!up.ok || !uj.id) throw new Error("youtube upload " + up.status + ": " + JSON.stringify(uj).slice(0, 400));
   for (var w = 0; w < 3; w++) {
@@ -431,7 +431,7 @@ async function advance(env, row, deadline) {
       else if (row.state === "rendering") { if (!(await stagePoll(env, row, deadline))) { if ((await env.QNFO_AUDIT.prepare("SELECT state FROM youtube_videos WHERE id = ?1").bind(row.id).first()).state === "rendering") return row.id; } }
       else if (row.state === "rendered") { if (!(await stageUpload(env, row))) return row.id; }
       else return row.id; // uploaded, rejected, failed
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       var msg = String(e && e.message || e);
       var attempts = (row.attempts || 0) + 1;
       var state = attempts >= MAX_ATTEMPTS ? "failed" : (row.state === "rendering" ? "audio" : row.state);
@@ -503,12 +503,12 @@ async function readRetention(env, nowMs) {
   var ids = rows.map(function (r) { return r.video_id; });
   var auth = { headers: { authorization: "Bearer " + token } };
   var stats = {}, report = {}, failure = null;
-  var d = await fetch("https://www.googleapis.com/youtube/v3/videos?part=statistics&id=" + encodeURIComponent(ids.join(",")), auth);
+  var d = await fleetAiFetch(env, fetch, "https://www.googleapis.com/youtube/v3/videos?part=statistics&id=" + encodeURIComponent(ids.join(",")), auth);
   var dText = await d.text();
   if (d.ok) { try { stats = parseVideoStats(JSON.parse(dText)); } catch (e) { stats = {}; } } else failure = retentionFailure(d.status, dText);
   var from = rows.map(function (r) { return String(r.uploaded_at || "").slice(0, 10); }).filter(Boolean).sort()[0] || new Date(nowMs - 30 * 864e5).toISOString().slice(0, 10);
   var to = new Date(nowMs).toISOString().slice(0, 10);
-  var a = await fetch("https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=" + from + "&endDate=" + to + "&metrics=views,averageViewDuration&dimensions=video&sort=-views&maxResults=50&filters=" + encodeURIComponent("video==" + ids.join(",")), auth);
+  var a = await fleetAiFetch(env, fetch, "https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=" + from + "&endDate=" + to + "&metrics=views,averageViewDuration&dimensions=video&sort=-views&maxResults=50&filters=" + encodeURIComponent("video==" + ids.join(",")), auth);
   var aText = await a.text();
   if (a.ok) { try { report = parseRetentionReport(JSON.parse(aText)); } catch (e) { report = {}; } } else if (!failure) failure = retentionFailure(a.status, aText);
   var wrote = 0;
@@ -562,7 +562,7 @@ async function runTick(env, opts) {
       }
     }
   }
-  try { res.retention = await readRetention(env); } catch (e) { res.retention = { error: String(e && e.message || e).slice(0, 200) }; await logEvent(env, "youtube.retention_error", res.retention.error, null, "warn"); }
+  try { res.retention = await readRetention(env); } catch (e) { if (fleetAiStopped(e)) throw e; res.retention = { error: String(e && e.message || e).slice(0, 200) }; await logEvent(env, "youtube.retention_error", res.retention.error, null, "warn"); }
   res.uploaded_30d = await refreshMetric(env);
   try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, 1)").bind(WORKER, VERSION, nowIso()).run(); } catch (e) { console.error(JSON.stringify({ worker: WORKER, where: "heartbeat", error: String(e && e.message || e) })); }
   return res;
@@ -614,6 +614,8 @@ async function status(env) {
 
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     var url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION,
       capabilities: ["paper-to-short-video", "tts-voice-over", "container-render", "youtube-upload", "retention-read", "status-report", "oauth-reconsent"],
@@ -628,16 +630,131 @@ var worker_default = {
         var rr = await runTick(env, { ignoreCap: url.searchParams.get("ignore_cap") === "1", budgetMs: budget * 1000 });
         await logEvent(env, "youtube.run", JSON.stringify(rr), rr, "ok");
         return json({ ok: true, result: rr, status: await status(env) });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         await logEvent(env, "youtube.run", String(e && e.message || e), null, "error");
         return json({ ok: false, error: String(e && e.message || e) }, 500);
       }
     }
     return json({ ok: false, error: "not found" }, 404);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     ctx.waitUntil(runTick(env, {}).then(function (r) { return logEvent(env, "youtube.tick", JSON.stringify(r), r, "ok"); }).catch(function (e) { console.error(JSON.stringify({ worker: WORKER, where: "scheduled", error: String(e && e.message || e) })); return logEvent(env, "youtube.tick", String(e && e.message || e), null, "error"); }));
   }
 };
 export { RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION, parseRetentionReport, parseVideoStats, retentionDue, retentionFailure, readRetention };
 export default worker_default;
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "QNFO_AUDIT";
+var FLEET_AI_WORKER = "qnfo-youtube-shorts";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

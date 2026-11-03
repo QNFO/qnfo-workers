@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE, importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // AB-HARNESS-1 offline suite (agent_issues 2828 MODEL-QUALITY-PARITY-1, qnfo-model-eval 1.6.0,
 // migrations/2026-10-19-model-ab.sql, scripts/model-policy.json).
 //
@@ -43,11 +44,11 @@ const POLICY = JSON.parse(readFileSync(new URL("../scripts/model-policy.json", i
 // calls whatever is current.
 let fetchImpl = async () => { throw new Error("unexpected fetch"); };
 const body = src.replace(/^export default /m, "var __default = ");
-const mod = new Function("console", "fetch", body +
+const mod = new Function("console", "fetch", RUNNING_AI_FIXTURE + (body +
   "\n;return { AB_FIXTURES, AB_THRESHOLD, AB_MIN_VALID, AB_JUDGE_POOL, AB_CLASSIFY_SET, VERSION, abCanon, abSameModel, abFamily, abPickJudges," +
   " abParseVerdict, abVerdictScore, abSummarize, abJudgePrompt, abRunPair, abExecute, abTick, abObservedCandidates, abPolicyCandidates, clefCanary," +
   " abOneFixture, abAlreadyRun, abPersist, abStaleRevCandidates: typeof abStaleRevCandidates === 'undefined' ? undefined : abStaleRevCandidates, AB_HARNESS_REV: typeof AB_HARNESS_REV === 'undefined' ? undefined : AB_HARNESS_REV," +
-  " AB_RETRY_MAX_TOKENS: typeof AB_RETRY_MAX_TOKENS === 'undefined' ? undefined : AB_RETRY_MAX_TOKENS, handlers: __default };")
+  " AB_RETRY_MAX_TOKENS: typeof AB_RETRY_MAX_TOKENS === 'undefined' ? undefined : AB_RETRY_MAX_TOKENS, handlers: __default };"))
   ({ log() {}, error() {} }, (...a) => fetchImpl(...a));
 
 /* ---- scaffolding: the production DDL the harness reads or writes, then the real migration ------------------------------ */
@@ -897,7 +898,7 @@ ok(!/ROUTER_AUTH_KEY|QNFO_ROUTER_KEY|Bearer /.test(src.slice(src.indexOf("AB-HAR
   for (const [w, e] of Object.entries(POLICY.workers)) ok(/^[a-z0-9-]+$/.test(w) && typeof e.model === "string" && e.model && (e.task_set === undefined || known.has(e.task_set)), "policy entry " + w + " is valid", e);
 }
 {
-  const guard = await import("../scripts/model-floor-guard.mjs");
+  const guard = await importRunningWorker("../scripts/model-floor-guard.mjs", import.meta.url);
   const hits = guard.scan(src).filter((h) => h.kind === "VIOLATION");
   ok(hits.length === 0, "the worker names no sub-frontier model in code (MODEL-FLOOR-1)", hits);
   const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");

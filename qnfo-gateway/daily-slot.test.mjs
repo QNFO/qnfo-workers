@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // GATEWAY-DAILY-SLOT-1 (qnfo-gateway 3.43.3): the 06:00 daily bundle must not run on the hourly fire.
 // CRON_GRID_CFG lists two jobs ("0 6 * * *" and "0 * * * *") that share one runner, gatewayDaily. Measured 2026-10-26:
 // 38 papers.qnfo.org IndexNow runs and 11,174 URLs in one day (77 to 89 URLs once a day before 2026-10-20), http 429 from
@@ -13,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const dir = mkdtempSync(join(tmpdir(), "gwd-"));
 writeFileSync(join(dir, "w.mjs"), src + "\nexport { gatewayDaily, collectPaperUrls, indexNowEnginesAccepted, seoPublishMetrics, CRON_GRID_CFG, GATEWAY_HOURLY_CRON, GATEWAY_DELTA_MINUTES };\n");
-const mod = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const mod = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 const { gatewayDaily, collectPaperUrls, indexNowEnginesAccepted, seoPublishMetrics, CRON_GRID_CFG, GATEWAY_HOURLY_CRON, GATEWAY_DELTA_MINUTES } = mod;
 const gw = mod.default;
 

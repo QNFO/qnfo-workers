@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // DASHBOARD-FULL-ACCESS-1 offline suite (qnfo-fleet-dashboard 1.31.0). Proves: a model leg that qnfo-ai refuses with 401
 // (the binding lost its props after a dashboard secret edit, 2026-10-12) or 5xx runs the same Workers AI model through the
 // direct AI binding and answers; a timeout is not retried there; the console reads the inbox (list, search, one message in
@@ -24,7 +25,7 @@ ok(/mail \[word\|id\]/.test(src), "help lists the mail command");
 const race = cut("var ASK_MODELS = ", "async function sha256hex(").replace("var ASK_HEDGE_MS = 4e3;", "var ASK_HEDGE_MS = 150;")
   + "\n" + cut("// One model call with a real abort", "// One plain-English answer: models raced");
 const mk = () => { const sb = { AbortController, setTimeout, clearTimeout, Date, JSON, Math, String, Promise, Array, Object, Error, Number }; vm.createContext(sb);
-  vm.runInContext(race + "\n__f = { cmdRaceModels, cmdModelCall };", sb); return sb.__f; };
+  vm.runInContext(RUNNING_AI_FIXTURE + (race + "\n__f = { cmdRaceModels, cmdModelCall };"), sb); return sb.__f; };
 const resp = (status, content) => ({ ok: status === 200, status, json: async () => ({ choices: [{ message: { content } }] }) });
 {
   const f = mk(), runs = [];
@@ -66,7 +67,7 @@ const con = cut("async function d1all(", "__name(d1all") + "\n" + cut("var CON_D
   + "\nasync function conSqlRead() { return { ok: true, text: 'read' }; }\nasync function conLogs() { return { text: 'logs' }; }\nfunction conDbOf(w) { w = String(w || '').toLowerCase(); return CON_DBS[w] ? w : null; }"
   + "\n" + cut("async function conSqlWrite(", "async function conFirst(");
 const sb = { JSON, Math, String, Number, Promise, Array, Object, Error, RegExp, Date }; vm.createContext(sb);
-vm.runInContext(con.replace(/async function conIssue[\s\S]*?(?=async function conRead)/, "") + "\n__c = { conRead, conSqlWrite, CON_DBS };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (con.replace(/async function conIssue[\s\S]*?(?=async function conRead)/, "") + "\n__c = { conRead, conSqlWrite, CON_DBS };"), sb);
 const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup: false } };
 {
   const r = await C.conRead(env, "mail", {}, null);
@@ -89,7 +90,7 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
 // --- MAIL-ASK-1: questions about mail reach the message text; journal call-for-paper mail is a solicitation ---
 {
   const sb2 = { RegExp, String }; vm.createContext(sb2);
-  vm.runInContext(cut("var MAIL_SOLICIT_RX = ", "var MAIL_NO_CARD") + "\n" + cut("var MAIL_ASK_RX = ", "async function mailAskFacts(") + "\n__m = { MAIL_SOLICIT_RX, MAIL_ASK_RX, MAIL_FOLLOWUP_RX, mailDomainNamed };", sb2);
+  vm.runInContext(RUNNING_AI_FIXTURE + (cut("var MAIL_SOLICIT_RX = ", "var MAIL_NO_CARD") + "\n" + cut("var MAIL_ASK_RX = ", "async function mailAskFacts(") + "\n__m = { MAIL_SOLICIT_RX, MAIL_ASK_RX, MAIL_FOLLOWUP_RX, mailDomainNamed };"), sb2);
   const M = sb2.__m;
   const subj = "We Invite Your Research Article for Upcoming Issue: International Journal of Quantum Technologies";
   const body = 'Dear Dr. Rowan Brad Quni-Gudzinas,\r\n\r\nYour posted article: "Dimensionless Physics: A Unified Framework" fits for\r\nour journal scope.\r\n\r\nGreetings from our esteemed International Journal of Quantum Technologies\r\nISSN: 3068-9090 database.\r\n\r\nEasy to contribute: submit your full-length article to this mail as an\r\nattachment before October 27th, 2026';
@@ -115,7 +116,7 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
   const sent = [];
   const svc = { fetch: async (u, o) => { sent.push({ u, b: JSON.parse(o.body) }); db2.prepare("UPDATE emails SET status = 'replied' WHERE id = ?").run(JSON.parse(o.body).reply_to_id); return { ok: true, status: 200, json: async () => ({ success: true }) }; } };
   const code = cut("// INBOX-REPLY-1 (1.31.0", "// Read commands. Returns null") + "\n" + cut("async function d1all(", "__name(d1all") + "\n" + cut("function conClip(s, n) {", "function conCmd(") + "\nasync function mailFacts() { return [{}]; }\n__r = { conMailReply, conMailSpam };";
-  const sb3 = { JSON, Math, String, Number, Promise, Array, Object, Error, RegExp, Date, AbortSignal }; vm.createContext(sb3); vm.runInContext(code, sb3);
+  const sb3 = { JSON, Math, String, Number, Promise, Array, Object, Error, RegExp, Date, AbortSignal }; vm.createContext(sb3); vm.runInContext(RUNNING_AI_FIXTURE + (code), sb3);
   const R = sb3.__r;
   const r1 = await R.conMailReply({ AUDIT: D, SVC_QNFO_EMAIL: svc }, 984, "Thank you, happy to help. Send me the draft.");
   ok(r1.ok && sent[0].b.to === "kottevarun@gmail.com" && sent[0].b.from === "rowan.quni@qnfo.org" && sent[0].b.subject === "Re: Your router_calibrate.py in qnfo-workers" && sent[0].b.reply_to_id === 984 && /\/send$/.test(sent[0].u), "reply sends through qnfo-email /send as the address it was written to, Re: subject, original marked", sent[0]);

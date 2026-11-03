@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // MODEL-HEALTH-SWEEP-1 offline suite (qnfo-lifecycle 1.13.0): slices modelHealthDue and sweepModelHealthIssues out of worker.js and runs them against an in-memory SQLite D1
 // (node:sqlite) that carries the close guard of issue_close_evidence_required. Measured 2026-10-19 21:5xZ: six "[ai-cal] model probe failing" and MODEL-DEGRADED issues open since
 // 17:15Z while every named model read ok in ai_model_health; the backlog member runs once a day and reads only the first 40 rows by priority and oldest updated_at.
@@ -19,7 +20,7 @@ const a = src.indexOf("function modelHealthDue(event)"), b = src.indexOf("// ---
 const endFn = src.indexOf("\n}\n", src.indexOf("async function sweepModelHealthIssues(")) + 3;
 if (a < 0 || endFn < a) throw new Error("sweep block not found");
 const cx = vm.createContext({ Date, Number, String, JSON, console, TICK_CRON: "0 * * * *", VERSION: "1.13.0-test" });
-vm.runInContext(src.slice(a, endFn) + "\nthis.due = modelHealthDue; this.sweep = sweepModelHealthIssues;", cx);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, endFn) + "\nthis.due = modelHealthDue; this.sweep = sweepModelHealthIssues;"), cx);
 
 function mk() {
   const db = new DatabaseSync(":memory:");
@@ -90,10 +91,10 @@ const st = (db, id) => db.prepare("SELECT status FROM agent_issues WHERE id = ?"
 ok(cx.due({ cron: "0 * * * *" }) === true && cx.due({ cron: "0 * * * *", scheduledTime: Date.parse("2026-10-19T07:00:00Z") }) === true, "due on the hourly tick at any hour");
 ok(cx.due({ cron: "0 * * * *", tickEntry: true }) === false && cx.due({ cron: "5 5 * * *" }) === false && cx.due(null) === false && cx.due(undefined) === false, "not due on a table entry, another cron or no event");
 // wiring
-const sched = src.slice(src.indexOf("  async scheduled(event, env, ctx) {\n    if (modelHealthDue"));
+const sched = src.slice(src.lastIndexOf("  async scheduled(event, env, ctx) {", src.indexOf("if (modelHealthDue(event))")));
 const backlogAt = sched.indexOf("if (await backlogDue(event, env))");
 ok(sched.indexOf("sweepModelHealthIssues(env)") > 0 && sched.indexOf("sweepModelHealthIssues(env)") < backlogAt, "the host's scheduled handler runs the sweep ahead of the daily member");
-ok(/\.catch\(function \(e\) \{ console\.error\("model-health sweep: "/.test(sched.slice(0, 400)), "a sweep failure is logged and never stops the tick");
+ok(/\.catch\(function \(e\) \{(?: if \(fleetAiStopped\(e\)\) throw e;)? console\.error\("model-health sweep: "/.test(sched.slice(0, 600)), "a sweep failure is logged and never stops the tick");
 const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(v && (Number(v[1]) > 1 || Number(v[2]) > 13 || (Number(v[2]) === 13 && Number(v[3]) >= 0)), "VERSION is at least 1.13.0", v && v[0]);
 ok(mirror === src, "deployed-current.worker.js is identical to worker.js");

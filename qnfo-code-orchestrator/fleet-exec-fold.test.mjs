@@ -1,3 +1,4 @@
+import { importRunningWorker, dispatchComparisonSource } from "../_shared/fleet-ai-running-fixture.mjs";
 // FLEET-EXEC-FOLD-1 (qnfo-code-orchestrator 0.3.18, agent_issues 1756) offline suite. No network, synthetic data.
 // Proves: the fleet-exec code runs unchanged as the member fleetExecMod (only its VERSION line and its export differ); the
 // host's */10 tick runs the member's fleet_crons dispatcher with only AUDIT (the host's AUDIT_DB) and AI, and the handler
@@ -9,7 +10,7 @@ import { readFileSync, existsSync } from "node:fs";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const guest = readFileSync(new URL("../fleet-exec/worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { fleetExecMod as __member, FLEET_EXEC_VERSION as __mv, VERSION as __hv };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { fleetExecMod as __member, FLEET_EXEC_VERSION as __mv, VERSION as __hv };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
@@ -17,7 +18,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   // D1-TRIGGER-DEPTH-1 (0.9.0): the member's scheduled handler logs a failed tick and feeds fleet_tick, so its swallowing
   // catch line is the one allowed change to the frozen guest (fleet-exec is FOLDED; the member evolves here).
   const allowed = (l) => l.startsWith("var VERSION = ") || l.startsWith("export default schedDefault") || l.trim() === "try { await runTick(env); } catch (e) {}";
-  const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
+  const missing = guest.split("\n").filter((l) => l.trim() && !dispatchComparisonSource(src).includes(l.trim()));
   ok(missing.every(allowed) && missing.some((l) => l.startsWith("var VERSION = ")) && /feedFleetTick\(env\)/.test(src), "every fleet-exec line is in the host except its VERSION line, its export and the logged tick catch", missing.map((l) => l.slice(0, 60)));
   ok(atLeast(mod.__hv, "0.3.18") && mod.__mv === "1.0.4-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.3.18 or later, member 1.0.4-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
@@ -42,7 +43,7 @@ function mkDb() {
   mod.__member.scheduled = async (ev, env, c) => { seenEnv = env; c.waitUntil(new Promise((r) => setTimeout(() => { done = true; r(); }, 50))); };
   const ai = { run: async () => ({ response: "x" }) };
   await mod.default.scheduled({ cron: "*/10 * * * *", scheduledTime: Date.now() }, { AUDIT_DB: db }, { waitUntil() {} });
-  ok(seenEnv && seenEnv.AUDIT === db && Object.keys(seenEnv).sort().join() === "AI,AUDIT", "the member gets AUDIT = AUDIT_DB and AI only", seenEnv && Object.keys(seenEnv));
+  ok(seenEnv && seenEnv.AUDIT === db && seenEnv.AUDIT_DB === db && Object.keys(seenEnv).sort().join() === "AI,AUDIT,AUDIT_DB", "the member retains the host emergency audit binding alongside AUDIT and AI", seenEnv && Object.keys(seenEnv));
   ok(done, "the handler awaits the member's waitUntil work (the host's own loop was skipped: no AI binding)");
   mod.__member.scheduled = real;
   // the real member: one due fleet_crons row is dispatched to the executor and recorded

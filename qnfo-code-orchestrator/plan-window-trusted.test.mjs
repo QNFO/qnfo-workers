@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PLAN-TRUSTED-FIRST-1 offline suite (qnfo-code-orchestrator 0.23.0, agent_issues 99925, pillar autonomy).
 // Measured 2026-10-19 09:05Z: planIssues read the 40 highest-priority open issues with no recent plan and only then dropped the
 // untrusted ones in JS, so untrusted issues (loop-breaker, feeds, sessions of other kinds) ranked above every trusted one filled the
@@ -12,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 500) : "")); } };
 

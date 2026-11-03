@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // FAIL-SIGNATURE-STOP-1 (qnfo-code-orchestrator 0.16.0, failure mode code-task-retry-holds-file, agent_issues 1834/2491, pillar autonomy).
 // On 2026-10-13 ct_oevdiafbcde2mg failed math-latex.test.mjs on all 5 attempts and ct_53djh2yfqk3ocj broke diversity-cap.test.mjs on
 // all 8, each renewing its file claim for hours: the publisher's suite feedback added attempts outside fail(), so no round backoff
@@ -15,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 700) : "")); } };
 

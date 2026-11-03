@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PLAN-DENY-NEGATION-1 offline suite (agent_issues 1807): the issue planner refuses an issue that ASKS to change a cap, a
 // secret or a deletion, and no longer refuses one whose advice FORBIDS it ("never raise a cap"). The texts below are the
 // live analytics_metric_triggers.action rows (qnfo-audit, read 2026-10-02) and the issue's own definition of done.
@@ -8,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 400) : "")); } };

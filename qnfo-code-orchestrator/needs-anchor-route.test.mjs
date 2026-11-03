@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // NEEDS-ANCHOR-ROUTE-1 offline suite (qnfo-code-orchestrator 0.23.0, agent_issues 99925 / 2007 second half, pillar autonomy).
 // ct_im99981, ct_im99982 and ct_im99989 (2026-10-19 06:17Z, RED-DRAIN-1 dispatch on a 628k-char qnfo-gateway/worker.js, a stack-trace goal with
 // no code keyword) ended "file larger than 60000 chars needs an anchor ... (ANCHOR-LOCATOR-1 found no unique line near the goal either)":
@@ -11,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

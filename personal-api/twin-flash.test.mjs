@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // TWIN-FLASH-1 offline suite (personal-api 4.8.0, owner directive 2026-10-05, agent_issues 1818): the twin answers with
 // glm-5.3-flash first (reasoning_effort low), falls back to deepseek-v4-pro in the same request on an error or an empty
 // reply, counts an empty reply as a failed answer, retries once without reasoning_effort if a model rejects it, and
@@ -8,7 +9,7 @@ import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const patched = src + "\nexport { upstreamChat as __upstream, twinChatModels as __order, CHAT_MODELS as __models, TWIN_PRIMARY as __primary, TWIN_PREVIOUS as __previous };\nexport function __resetTwin() { _twinOrder = null; }\n";
-const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(patched).toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra) : "")); } };
 const FLASH = "@cf/zai-org/glm-5.3-flash", DS = "@cf/deepseek-ai/deepseek-v4-pro-0813";

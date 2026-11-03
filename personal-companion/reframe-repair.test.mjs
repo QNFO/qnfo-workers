@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // REFRAME-REPAIR-1 offline suite (personal-companion 1.23.0, charter pillar: personal; agent_issues 2222).
 // Proves: on a critic rejection for grounding or argument, one editor call rewrites the flagged sentences (reasoning stated as fact becomes
 // explicit reasoning, invented events are deleted, nothing is added); the editor is the writer's family at the judge's temperature and never
@@ -8,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
+const mod = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };

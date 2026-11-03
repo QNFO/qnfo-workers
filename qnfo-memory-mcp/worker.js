@@ -6,7 +6,7 @@ var PROTOCOL_VERSION = "2024-11-05";
 var SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18"];
 var NL = String.fromCharCode(10);
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.7.1"; /* 2.7.1 #6612 (pillar autonomy): literal graph searches avoid D1's 50-byte LIKE pattern limit. */ /* 2.7.0 EXUVIA-ENGAGE-1 (2026-11-03, pillar reach): evidence-matched drafts for Exuvia posts needing a response, deduplicated and logged to decision_log; no comment is sent. */ /* 2.5.0 FULLSCOPE-1 (2026-10-31): the SSE transport is real (session + /mcp/messages + keepalive, spec event:endpoint; the old stub closed after 100 ms); ?token= query auth parity with qnfo-tools-mcp; optional MCP_READ_TOKEN read-only scope (write tools: remember_fact, exuvia_publish_paper); ping, prompts/list, resources/templates/list, JSON-RPC batch, -32602 on malformed tools/call, protocolVersion negotiation; remember_fact keeps up to 8000 chars (was silently truncated at 800), clamps importance to 0-1 and enforces its own category enum; the open /fleet-graph/findings route no longer leaks secret: subjects; every tools/call is audit-logged when an AUDIT D1 binding is present. */ /* 2.4.0 REPO-GRAPH-1 (2026-10-29, pillar autonomy; minor: fleet_graph_find and /fleet-graph/find now accept the kinds repo and doc, so a repository or a document is found by name like a worker). */ // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
+var VERSION = "2.8.0"; /* 2.7.1 #6612 (pillar autonomy): literal graph searches avoid D1's 50-byte LIKE pattern limit. */ /* 2.7.0 EXUVIA-ENGAGE-1 (2026-11-03, pillar reach): evidence-matched drafts for Exuvia posts needing a response, deduplicated and logged to decision_log; no comment is sent. */ /* 2.5.0 FULLSCOPE-1 (2026-10-31): the SSE transport is real (session + /mcp/messages + keepalive, spec event:endpoint; the old stub closed after 100 ms); ?token= query auth parity with qnfo-tools-mcp; optional MCP_READ_TOKEN read-only scope (write tools: remember_fact, exuvia_publish_paper); ping, prompts/list, resources/templates/list, JSON-RPC batch, -32602 on malformed tools/call, protocolVersion negotiation; remember_fact keeps up to 8000 chars (was silently truncated at 800), clamps importance to 0-1 and enforces its own category enum; the open /fleet-graph/findings route no longer leaks secret: subjects; every tools/call is audit-logged when an AUDIT D1 binding is present. */ /* 2.4.0 REPO-GRAPH-1 (2026-10-29, pillar autonomy; minor: fleet_graph_find and /fleet-graph/find now accept the kinds repo and doc, so a repository or a document is found by name like a worker). */ // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // NO-REGISTRAR-1: a DOI under the dead 10.5281 prefix is never returned; third-party DOIs pass through.
 function nozDoi(d) { return d && !/10\.5281\//.test(String(d)) ? d : null; }
 var SERVER_VERSION = VERSION;
@@ -65,7 +65,7 @@ return String(s == null ? "" : s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u00
 }
 __name(sanitizeLong, "sanitizeLong");
 async function embed(env, text) {
-  const result = await env.AI.run(EMBED_MODEL, { text: [text] });
+  const result = await fleetAiRun(env, env.AI, EMBED_MODEL, { text: [text] });
   return result.data[0];
 }
 __name(embed, "embed");
@@ -349,7 +349,7 @@ async function exFetch(env, path, init) {
   const headers = { Accept: "application/json" };
   if (env.EXUVIA_API_KEY) headers["x-api-key"] = env.EXUVIA_API_KEY;
   if (init && init.body) headers["Content-Type"] = "application/json";
-  const r = await fetch(exBase(env) + path, { ...(init || {}), headers });
+  const r = await fleetAiFetch(env, fetch, exBase(env) + path, { ...(init || {}), headers });
   const text = await r.text();
   let data; try { data = JSON.parse(text); } catch (e) { data = { raw: text.slice(0, 500) }; }
   return { status: r.status, data };
@@ -444,7 +444,7 @@ async function exuviaEngageTick(env) {
     try {
       const searched = await tool_search_papers({ query, limit: 5 }, env);
       matches = JSON.parse(searched.content[0].text).results || [];
-    } catch (e) { errors.push({ post_id: postId, error: "paper search failed" }); continue; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; errors.push({ post_id: postId, error: "paper search failed" }); continue; }
     let draft = null;
     for (const match of matches) {
       const score = Number(match.score);
@@ -788,6 +788,8 @@ __name(handleRpcBody, "handleRpcBody");
 var sessions = /* @__PURE__ */ new Map();
 var worker_default = {
   async fetch(request, env) {
+    try {
+
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (url.pathname === "/health") {
@@ -879,8 +881,121 @@ var worker_default = {
       return json({ error: "method_not_allowed", detail: "POST JSON-RPC here, or open the SSE stream at /mcp/sse" }, 405);
     }
     return json({ error: "Not found", path: url.pathname }, 404);
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 export {
   worker_default as default
 };
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-memory-mcp";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // IPATENT-DRAFT-METERING-1 offline suite (qnfo-ipatent 3.13.0, agent_issues 2055 and 1903). The real fetch handler with a
 // stubbed model and an in-memory qnfo-audit: every draft model call is one ai_call_counters row (worker qnfo-ipatent,
 // purpose draft) keyed by day and model; a call that throws counts as an error; usage tokens are kept when the binding
@@ -5,7 +6,7 @@
 // Run: node qnfo-ipatent/draft-metering.test.mjs   (prints "N passed, 0 failed")
 import { DatabaseSync } from "node:sqlite";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
-const W = (await import("./worker.js")).default;
+const W = (await importRunningWorker("./worker.js", import.meta.url)).default;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
 const stmt = () => { const s = { bind() { return s; }, async run() { return {}; }, async first() { return null; }, async all() { return { results: [] }; } }; return s; };

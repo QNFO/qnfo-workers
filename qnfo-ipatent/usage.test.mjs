@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // IPATENT-USAGE-1 offline test: searches are counted per day by broad topic only, bots are not counted, the query text is
 // never stored, and /api/metrics serves the totals.
 // Run: node qnfo-ipatent/usage.test.mjs
@@ -5,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };
 const db = new DatabaseSync(":memory:");

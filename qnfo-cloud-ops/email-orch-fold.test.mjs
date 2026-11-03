@@ -1,3 +1,4 @@
+import { importRunningWorker, dispatchComparisonSource } from "../_shared/fleet-ai-running-fixture.mjs";
 // EMAIL-ORCH-FOLD-1 (qnfo-cloud-ops 1.20.0, agent_issues 1756) offline suite. No network, synthetic data.
 // Proves: the qnfo-email-orchestrator code runs unchanged as the member emailOrchMod (only its version constant differs);
 // on the single */10 tick it runs four times an hour (:00, :20, :30, :50, like its old */15 cron) and its metrics step at
@@ -15,7 +16,7 @@ const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
   "\nexport { emailOrchMod as __member, emailOrchCrons as __crons, runEmailOrchMember as __run, EMAIL_ORCH_VERSION as __mv, VERSION as __hv };\n";
-const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(patched).toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
@@ -23,7 +24,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const lines = guest.split("\n");
   const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "')), lines.indexOf("export {"));
-  const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
+  const missing = body.filter((l) => l.trim() && !dispatchComparisonSource(src).includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every orchestrator line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
   // a minimum, not an exact pin (CLAUDE.md: an exact VERSION pin breaks on the next bump)
   const hv = String(mod.__hv).split("-")[0].split(".").map(Number);

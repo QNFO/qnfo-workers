@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // FACTCHECK-FIRST-TWO-1 + REVIEWER-HEALTH-1 offline suite (personal-companion 1.19.6, charter pillar: personal; agent_issues 2222).
 // companion_runs 5404-5408 of 2026-10-13 11:00 UTC: every verification took 220 s because each round waited the full reviewer timeout for
 // one reviewer (glm-5.3 failed 10 of 11 fact-check calls that day) while the other had answered; the run's budget went on three
@@ -10,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
+const mod = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 600) : "")); } };

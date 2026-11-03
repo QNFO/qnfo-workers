@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SOURCE-VOICE-1 offline suite (qnfo-infra 1.4.0, agent_issues 2468). Proves:
 //  1. a PAPER_VZ hit in retrieveRecords carries the body passage that matched (the indexer's chunk), after the abstract;
 //  2. a paper with a NULL abstract still carries its passage (it reached qnfo-ai as its title alone before);
@@ -6,7 +7,7 @@
 // Run: node qnfo-infra/context-passage.test.mjs
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { retrieveRecords as __rr, paperHitPassage as __php, indexerMod as __im };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { retrieveRecords as __rr, paperHitPassage as __php, indexerMod as __im };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
 

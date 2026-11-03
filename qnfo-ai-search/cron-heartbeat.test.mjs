@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // CRON-ONLY-HEARTBEAT-1 offline suite (agent_issues 2397): scheduled() upserts the qnfo-ai-search fleet_heartbeat row once,
 // after the tick finishes, ok=1 on success, ok=0 when the tick throws, and a failing heartbeat write never throws out.
 // Run: node qnfo-ai-search/cron-heartbeat.test.mjs   (Node 22)
@@ -20,7 +21,7 @@ let n = 0;
 async function load() {
   const dir = mkdtempSync(join(tmpdir(), "cronhb-"));
   writeFileSync(join(dir, "w" + (n++) + ".mjs"), src);
-  return (await import(pathToFileURL(join(dir, "w" + (n - 1) + ".mjs")).href)).default;
+  return (await importRunningWorker(pathToFileURL(join(dir, "w" + (n - 1) + ".mjs")).href, import.meta.url)).default;
 }
 // Fake D1: records every prepare/bind; the schema batch fails when failTick, the heartbeat write fails when failBeat.
 function fakeEnv({ failTick, failBeat }) {

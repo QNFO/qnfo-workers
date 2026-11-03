@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // personal-api Google Calendar ICS-bridge suite (4.7.0, GOOGLE-ICS-BRIDGE-1, 2026-10-04).
 // Loads the real worker.js and drives the MCP tool calendar_today and GET /health against a minimal env with the
 // secret GOOGLE_ICS_URL set and a stubbed global fetch that serves a fixed Google iCal feed. Proves: with only the
@@ -8,7 +9,7 @@
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src).toString("base64"), import.meta.url);
 const W = mod.default;
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };

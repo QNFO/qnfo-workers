@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // ANCHOR-LOCATOR-1 offline suite (qnfo-code-orchestrator 0.4.0, agent_issues 2007 second half, human_actions 60, pillar autonomy).
 // ANCHOR-REPAIR-1 (0.3.19) repairs an anchor without a model call (whitespace, longest unique line). What still parked tasks
 // needs_human on 2026-10-06: an anchor that occurs 0 times and cannot be repaired (ct_qjjo05t4elayld on qnfo-ipatent), an anchor
@@ -17,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };

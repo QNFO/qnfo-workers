@@ -1,3 +1,4 @@
+import { importRunningWorker, runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // US-08 / charter pillar personal. Synthetic handler evidence, never live delivery evidence.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -5,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { importWorker } from "../personal-companion/_harness-import-worker.mjs";
 
 const emailSource = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mail = await import("data:text/javascript;base64," + Buffer.from(emailSource + `
+const mail = await importRunningWorker("data:text/javascript;base64," + Buffer.from(emailSource + `
 const privacyCalls = {};
 const watch = (name, fn) => (...args) => { privacyCalls[name] = (privacyCalls[name] || 0) + 1; return fn(...args); };
 storeEmail = watch("storeEmail", storeEmail); archiveRaw = watch("archiveRaw", archiveRaw);
@@ -13,7 +14,7 @@ processCommand = watch("processCommand", processCommand); enqueueHumanReply = wa
 itineraryIngest = watch("itineraryIngest", itineraryIngest); enqueueHandoff = watch("enqueueHandoff", enqueueHandoff);
 recordParseFailure = watch("recordParseFailure", recordParseFailure);
 export { drainCalendarMail, privacyCalls };
-`).toString("base64"));
+`).toString("base64"), import.meta.url);
 const email = mail.default;
 const stores = [];
 const database = () => {
@@ -384,11 +385,11 @@ try {
 
   // Use the deployed host, not the retired calendar-intake implementation or only the standalone member.
   const lifecycleSource = readFileSync(new URL("../qnfo-lifecycle/worker.js", import.meta.url), "utf8");
-  const lifecycleModule = await import("data:text/javascript;base64," + Buffer.from(
+  const lifecycleModule = await importRunningWorker("data:text/javascript;base64," + Buffer.from(
     lifecycleSource.replace(/^import \{([^}]*)\} from "cloudflare:[^"]+";$/gm,
       (_, names) => names.split(",").map(name => "class " + name.trim().split(/\s+as\s+/).pop() + " {}").join("\n")) +
       "\nexport { __fk_calendarApi_default as calendarWrapper };"
-  ).toString("base64"));
+  ).toString("base64"), import.meta.url);
   const lifecycle = lifecycleModule.default;
   const calendarStore = audit;
   const objects = new Map();
@@ -446,7 +447,7 @@ try {
   evidence.gaps.push("Calendar HTTP /ingest remains unsupported; active raw invite intake is the authenticated email handler. UTC-only single-event subset; no RSVP or recurrence support.");
 
   const companionSource = readFileSync(new URL("../personal-companion/worker.js", import.meta.url), "utf8");
-  const companion = await importWorker(() => companionSource.replace(
+  const companion = await runningWorkerHarness(importWorker, () => companionSource.replace(
     'import { WorkflowEntrypoint } from "cloudflare:workers";', "class WorkflowEntrypoint {}"
   ), new URL("../personal-companion/", import.meta.url));
   const personal = database(), briefAudit = database(), briefQueries = [];

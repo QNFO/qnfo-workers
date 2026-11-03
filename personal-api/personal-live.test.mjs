@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // personal-api PERSONAL-LIVE-1 suite (4.22.0, charter pillar: personal).
 // Proves: the day a going-out question asks about; the date forms venue pages use; excerpts keep only the text around the
 // day; liveWhatsOn reads every enabled source in parallel, labels each listed / nothing-for-day / unreachable, caches ten
@@ -10,7 +11,7 @@ import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const patched = src + "\nexport { liveExcerpt as __excerpt, liveDayFor as __dayFor, liveWhatsOn as __whatsOn, isWhatsOnQuery as __isWhatsOn, travelChooseT as __choose, travelGetT as __travelGet, liveSourceAddT as __addSrc, liveSourceToggleT as __toggleSrc };\n";
-const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(patched).toString("base64"), import.meta.url);
 const W = mod.default;
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra).slice(0, 600) : "")); } };

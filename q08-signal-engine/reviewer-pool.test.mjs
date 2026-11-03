@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-REVIEWER-SWAP-1 + Q08-REVIEWER-HEALTH-1 offline suite (q08-signal-engine 0.31.0, charter pillar: research, cost second;
 // agent_issues 2606 and 100118, cluster publish-stalls).
 // Measured 2026-10-19 from qnfo-audit ai_call_counters (worker q08-signal-engine, three days): qwen3.8-27b errored on 104 of 134 calls at
@@ -13,7 +14,7 @@ import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const mod = await import(pathToFileURL(join(here, "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 500) : "")); } };
 const R = mod.__reviewers;
@@ -36,7 +37,7 @@ ok(src.includes("var PANEL_POOL = ["), "the PANEL_POOL declaration trigger 797 a
 
 // ---- 2. the MODEL-FLOOR-1 guard: no banned model id is chosen in code ----------------------------------------------------------------
 {
-  const guard = await import(pathToFileURL(join(here, "..", "scripts", "model-floor-guard.mjs")).href);
+  const guard = await importRunningWorker(pathToFileURL(join(here, "..", "scripts", "model-floor-guard.mjs")).href, import.meta.url);
   const hits = guard.scan(src).filter((h) => h.kind === "VIOLATION");
   ok(hits.length === 0, "model-floor-guard finds no banned model in worker.js (qwen3-30b, llama and gemma-4 stay out)", hits);
   const banned = ["qwen3-30b", "llama", "gemma-4"];

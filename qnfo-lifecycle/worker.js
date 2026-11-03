@@ -1,4 +1,4 @@
-var VERSION = "1.17.5-codeagent"; /* 1.17.1 BACKLOG-CATCHUP-1 (2026-11-02, issue 1001290, pillar autonomy): the folded daily backlog member catches up on an hourly tick after a missed daily run. */ /* 1.17.0 PAPER-LEARN-GAP-PROBATION-1 (2026-11-01, issue 100294, pillar autonomy): model-identified direct learnings without a verified cover become owned goals with a completion probe instead of remaining silently proposed. */ /* 1.15.3 BACKUP-PAGED-1 (2026-10-26, pillar reliability; CF-OBS group a539fdc8, agent_issues 100522, 1000239, 1000265, FLEET-JOURNEY traffic-health 1000262): the daily 05:00 UTC backup no longer reads a whole table into memory; tables are paged by rowid and written in parts, and the result is logged. */ /* prior: 1.15.1-codeagent */ /* 1.15.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and is not used or named in any code): the finished hourly body scrub and its status route are removed. */ /* prior: 1.14.1-close-channel */ /* 1.14.1 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MODEL-HEALTH-SWEEP-1 closes write close_channel auto:lifecycle/model-health-sweep. */ /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks) /* 1.15.2 PAPER-LEARN-ANCHOR-1 (2026-10-26, pillar research; patch): PAPER-LEARN-1 errata now carry an `At: "<passage>"` anchor in claim_text, the contract errata-hub's internal confirm already reads (qnfo-paper-reviser and READER-REPORT-1 write one), so the third-model confirm centres its excerpt on the passage instead of reading the first 24,000 characters. paper-learn-anchor.test.mjs. */ /* prior: 1.15.1-codeagent */ /* 1.15.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and is not used or named in any code): the finished hourly body scrub and its status route are removed. */ /* prior: 1.14.1-close-channel */ /* 1.14.1 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MODEL-HEALTH-SWEEP-1 closes write close_channel auto:lifecycle/model-health-sweep. */ /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.18.0"; /* 1.17.1 BACKLOG-CATCHUP-1 (2026-11-02, issue 1001290, pillar autonomy): the folded daily backlog member catches up on an hourly tick after a missed daily run. */ /* 1.17.0 PAPER-LEARN-GAP-PROBATION-1 (2026-11-01, issue 100294, pillar autonomy): model-identified direct learnings without a verified cover become owned goals with a completion probe instead of remaining silently proposed. */ /* 1.15.3 BACKUP-PAGED-1 (2026-10-26, pillar reliability; CF-OBS group a539fdc8, agent_issues 100522, 1000239, 1000265, FLEET-JOURNEY traffic-health 1000262): the daily 05:00 UTC backup no longer reads a whole table into memory; tables are paged by rowid and written in parts, and the result is logged. */ /* prior: 1.15.1-codeagent */ /* 1.15.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and is not used or named in any code): the finished hourly body scrub and its status route are removed. */ /* prior: 1.14.1-close-channel */ /* 1.14.1 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MODEL-HEALTH-SWEEP-1 closes write close_channel auto:lifecycle/model-health-sweep. */ /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks) /* 1.15.2 PAPER-LEARN-ANCHOR-1 (2026-10-26, pillar research; patch): PAPER-LEARN-1 errata now carry an `At: "<passage>"` anchor in claim_text, the contract errata-hub's internal confirm already reads (qnfo-paper-reviser and READER-REPORT-1 write one), so the third-model confirm centres its excerpt on the passage instead of reading the first 24,000 characters. paper-learn-anchor.test.mjs. */ /* prior: 1.15.1-codeagent */ /* 1.15.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and is not used or named in any code): the finished hourly body scrub and its status route are removed. */ /* prior: 1.14.1-close-channel */ /* 1.14.1 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MODEL-HEALTH-SWEEP-1 closes write close_channel auto:lifecycle/model-health-sweep. */ /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 const EXPECTED_QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
@@ -385,7 +385,7 @@ async function probeHealth(name) {
       const r = await fetch("https://" + h + "/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-backlog-exec)" }, signal: ctl.signal });
       clearTimeout(timer);
       if (r.ok) return { ok: true, host: h, status: r.status, transport: "worker-same-zone" };
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
   }
   return { ok: false, host: null, status: 0, transport: "worker-same-zone" };
@@ -682,6 +682,8 @@ async function run(env) {
 __name(run, "run");
 var worker_default = {
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     if (env.FLEET_FEED) {
       try {
         var fr = await env.FLEET_FEED.fetch("https://qnfo-fleet-feed.q08.workers.dev/feed/self?worker=qnfo-backlog-exec");
@@ -712,12 +714,14 @@ var worker_default = {
     try {
       const out = await run(env);
       console.log("backlog-exec", JSON.stringify(out));
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.error("backlog-exec", String(e && e.message || e));
       await alert(env, WORKER, "error", "run failed: " + String(e && e.message || e));
     }
   },
   async fetch(request, env) {
+    try {
+
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       const open = await env.AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status='open'").first().catch(() => null);
@@ -759,7 +763,9 @@ var worker_default = {
       return json({ ok: true, worker: WORKER, version: VERSION, out });
     }
     return json({ error: "not found" }, 404);
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 return worker_default;
 })();
@@ -820,6 +826,8 @@ async function sweepModelHealthIssues(env, nowMs) {
 }
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     if (backlogMemberCall(ctx)) return backlogMod.fetch(request, backlogEnv(env), ctx);
     const u = new URL(request.url), p = u.pathname;
     if (p === "/backlog/health" && request.method === "GET") return backlogMod.fetch(new Request(new URL("/health", u)), backlogEnv(env), ctx);
@@ -845,8 +853,12 @@ var worker_default = {
     if (p === "/run/memory-maintain") return handleMemoryMaintain(request, env, origin);
     if (p === "/run/metrics-refresh") return handleMetricsRefresh(env, origin);
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: h });
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     if (modelHealthDue(event)) await sweepModelHealthIssues(env).catch(function (e) { console.error("model-health sweep: " + String(e && e.message || e)); });
     if (await backlogDue(event, env)) await backlogMod.scheduled(event, backlogEnv(env), ctx).catch(function (e) { console.error("backlog member: " + String(e && e.message || e)); });
     return cronTickDispatch(event, async function (event) {
@@ -875,7 +887,7 @@ var worker_default = {
       }
       else if (cron === "0 8 * * 1") await runSecretsAudit(env);
       else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); await runPing(env); } // LIFECYCLE-PING-DEAD-1 (#1810): runPing folded onto the single live hourly trigger
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.error("[qnfo-lifecycle] cron error:", e.message);
     }
     });
@@ -990,7 +1002,7 @@ async function runUlaCheck(env) {
   for (var i = 0; i < ULA_LOCATIONS.length; i++) {
     var loc = ULA_LOCATIONS[i];
     try {
-      var resp = await fetch(loc.url, { method: "GET", headers: { "User-Agent": "qnfo-lifecycle-ula-check/1.4" } });
+      var resp = await fleetAiFetch(env, fetch, loc.url, { method: "GET", headers: { "User-Agent": "qnfo-lifecycle-ula-check/1.4" } });
       var body = await resp.text();
       var byteSize = new TextEncoder().encode(body).length;
       var locResult = { url: loc.url, httpStatus: resp.status, byteSize, ok: resp.status === 200 && byteSize >= EXPECTED_MIN_SIZE };
@@ -1016,7 +1028,7 @@ async function runUlaCheck(env) {
         locResult.ok = false;
       }
       result.locations[loc.name] = locResult;
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       result.locations[loc.name] = { url: loc.url, error: e.message, ok: false };
       result.findings.push("FETCH FAILED at " + loc.name + ": " + e.message);
     }
@@ -1151,13 +1163,13 @@ async function runMetricFreshness(env) {
     }
   } catch (e) { out.refresh_error_publications = e.message; }
   try {
-    var sm = await fetch("https://papers.qnfo.org/sitemap.xml", { headers: { "User-Agent": "qnfo-lifecycle/" + QNFO_VERSION }, signal: AbortSignal.timeout(15000) });
+    var sm = await fleetAiFetch(env, fetch, "https://papers.qnfo.org/sitemap.xml", { headers: { "User-Agent": "qnfo-lifecycle/" + QNFO_VERSION }, signal: AbortSignal.timeout(15000) });
     if (!sm.ok) throw new Error("sitemap http " + sm.status);
     var locs = ((await sm.text()).match(/<loc>/g) || []).length;
     if (locs <= 0) throw new Error("sitemap carries no <loc> entries");
     await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(locs), nowIso, "MEASURED", "indexed_surface").run();
     out.refreshed.push("indexed_surface");
-  } catch (e) { out.refresh_error_indexed_surface = e.message; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; out.refresh_error_indexed_surface = e.message; }
   var remaining = out.stale + out.never + out.unparsed_cadence;
   var stTitle = "METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence";
   if (remaining === 0) {
@@ -1337,7 +1349,7 @@ async function runDriftAudit(env) {
   }
   if (env.CF_API_TOKEN) {
     try {
-      var apiResp = await fetch("https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json" } });
+      var apiResp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json" } });
       if (apiResp.ok) {
         var data = await apiResp.json();
         var liveWorkers = data.result || [];
@@ -1355,7 +1367,7 @@ async function runDriftAudit(env) {
       } else {
         result.warnings.push("Cloudflare API returned HTTP " + apiResp.status);
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       result.warnings.push("Cloudflare API fetch failed: " + e.message);
     }
   } else {
@@ -1390,14 +1402,14 @@ async function runSecretsAudit(env) {
   }
   if (env.CF_API_TOKEN) {
     try {
-      var apiResp = await fetch("https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json" } });
+      var apiResp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json" } });
       if (apiResp.ok) {
         var data = await apiResp.json();
         var workers = data.result || [];
         for (var i = 0; i < workers.length; i++) {
           var w = workers[i];
           try {
-            var secretsResp = await fetch("https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts/" + w.id + "/secrets", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN } });
+            var secretsResp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts/" + w.id + "/secrets", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN } });
             if (secretsResp.ok) {
               var secretsData = await secretsResp.json();
               var secrets = secretsData.result || [];
@@ -1412,12 +1424,12 @@ async function runSecretsAudit(env) {
                 }
               }
             }
-          } catch (e) {
+          } catch (e) { if (fleetAiStopped(e)) throw e;
             result.findings.push("Failed to query secrets for " + w.id + ": " + e.message);
           }
         }
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       result.findings.push("Cloudflare API fetch failed: " + e.message);
     }
   } else {
@@ -1454,13 +1466,13 @@ async function runSecretsAudit(env) {
         result.recommendations.push("GOV-DUE: " + gp.policy_id + " review due in " + daysLeft + " days (" + gp.review_date + ")");
       }
     }
-    var tokResp = await fetch("https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts?per_page=1", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN } });
+    var tokResp = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/workers/scripts?per_page=1", { headers: { Authorization: "Bearer " + env.CF_API_TOKEN } });
     if (tokResp.ok) {
       result.findings.push("TOKEN-OK: CLOUDFLARE_API_TOKEN valid for Workers API (GOV-POL-004 compliance)");
     } else {
       result.findings.push("TOKEN-REVIEW: CLOUDFLARE_API_TOKEN Workers API probe HTTP " + tokResp.status + " (rotation deadline check per GOV-POL-004 90d schedule)");
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     result.findings.push("Governance check error: " + e.message);
   }
   result.totalFindings = result.findings.length;
@@ -1488,7 +1500,7 @@ async function runSync(env) {
       out.checked++;
       var url = (r.base_url || ("https://" + r.service + ".q08.workers.dev")).replace(/\/+$/, "");
       try {
-        var resp = await fetch(url + "/health", { signal: AbortSignal.timeout(6000) });
+        var resp = await fleetAiFetch(env, fetch, url + "/health", { signal: AbortSignal.timeout(6000) });
         if (!resp.ok) { out.failed++; return; }
         var t = (await resp.text()).replace(/\s+/g, " ");
         var m = t.match(/"version"\s*:\s*"([^"]{1,60})"/);
@@ -1499,12 +1511,12 @@ async function runSync(env) {
           out.updated++;
           if (out.changes.length < 30) out.changes.push(r.service + ": " + (r.version || "null") + " -> " + live);
         }
-      } catch (e) { out.failed++; }
+      } catch (e) { if (fleetAiStopped(e)) throw e; out.failed++; }
     };
     for (var i = 0; i < list.length; i += 10) {
       await Promise.all(list.slice(i, i + 10).map(probe));
     }
-  } catch (e) { out.error = String(e && e.message || e).slice(0, 160); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; out.error = String(e && e.message || e).slice(0, 160); }
   console.log("[lifecycle] registry sync: checked=" + out.checked + " updated=" + out.updated + " failed=" + out.failed);
   return out;
 }
@@ -1524,9 +1536,9 @@ async function runPing(env) {
   var targets = ["https://qnfo.org/health"];
   for (var i = 0; i < targets.length; i++) {
     try {
-      var r = await fetch(targets[i], { method: "GET" });
+      var r = await fleetAiFetch(env, fetch, targets[i], { method: "GET" });
       if (!r.ok) console.error("[lifecycle] PING FAIL " + targets[i] + ": HTTP " + r.status);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.error("[lifecycle] PING ERROR " + targets[i] + ": " + e.message);
     }
   }
@@ -2325,6 +2337,8 @@ async function queueOwnerQuestions(env) {
 __name(queueOwnerQuestions, "queueOwnerQuestions");
 var worker_default = {
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     ctx.waitUntil((async () => {
       if (env.VAULT) {
         try { await notesIntakeRun(env); } catch (e) { console.log("calendar-api notes intake error:", e && e.message || e); }
@@ -2334,6 +2348,8 @@ var worker_default = {
     })());
   },
   async fetch(request, env, ctx) {
+    try {
+
     await ensureSchema(env);
     const url = new URL(request.url);
     const method = request.method;
@@ -2472,7 +2488,9 @@ var worker_default = {
       }
     }
     return json({ error: "not found: " + path + " (" + method + ")" }, 404);
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 return worker_default;
 })();
@@ -2488,6 +2506,7 @@ function __foldWrap(host, m) {
   var derived = null;
   async function memberEnv(env) {
     var e = m.env(env), dk = Object.keys(m.derive || {});
+    e[FLEET_AI_AUDIT_BINDING] = env[FLEET_AI_AUDIT_BINDING];
     if (m.consts) Object.assign(e, m.consts);
     if (dk.length) {
       if (!derived) {
@@ -2510,6 +2529,8 @@ function __foldWrap(host, m) {
   }
   var wrapped = Object.assign({}, host, {
     async fetch(request, env, ctx) {
+    try {
+
       var p = ctx && ctx.props, c = String(p && p.caller || "");
       if (p && p.member === m.name && (/^qnfo-[a-z0-9-]{1,60}$/.test(c) || (m.callers || []).indexOf(c) >= 0)) {
         var req = request, menv = await memberEnv(env);
@@ -2538,8 +2559,12 @@ function __foldWrap(host, m) {
         }
       }
       return host.fetch ? host.fetch(request, env, ctx) : new Response("not found", { status: 404 });
-    },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
     async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       var at = Number(event && event.scheduledTime) || Date.now(), job = null;
       try { job = m.due(at, event && event.cron); } catch (e) { job = null; }
       var run = null;
@@ -2594,12 +2619,16 @@ function spareHostResponse(url) {
 function withRetiredHosts(inner) {
   var out = Object.assign({}, inner, {
     async fetch(request, env, ctx) {
+    try {
+
       var url = new URL(request.url), host = url.hostname;
       if (RETIRED_HOSTS[host] === 1) return retiredHostResponse(host);
       var spare = spareHostResponse(url);
       if (spare) return spare;
       return inner.fetch(request, env, ctx);
-    }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
   });
   ["__foldHost", "__foldMember"].forEach(function (k) { if (inner[k] !== undefined) Object.defineProperty(out, k, { value: inner[k], enumerable: false }); });
   return out;
@@ -2640,7 +2669,7 @@ var PL_D1_RETRIES = 2, PL_D1_RETRY_BASE_MS = 100;
 async function plD1Retry(run) {
   for (var attempt = 0; ; attempt++) {
     try { return await run(); }
-    catch (e) {
+    catch (e) { if (fleetAiStopped(e)) throw e;
       if (attempt >= PL_D1_RETRIES || !/D1_ERROR:\s*D1 DB is overloaded\. Requests queued for too long\./i.test(String(e && e.message || e))) throw e;
       await new Promise(function (resolve) { setTimeout(resolve, PL_D1_RETRY_BASE_MS * Math.pow(2, attempt)); });
     }
@@ -2807,7 +2836,7 @@ function plNormalize(parsed) {
 async function plAi(env, model, prompt, maxTokens) {
   var opts = { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens || 4096, temperature: 0.2 };
   if (/^@cf\/zai-org\/glm-/.test(model)) opts.reasoning_effort = "low";
-  var r = await env.AI.run(model, opts);
+  var r = await fleetAiRun(env, env.AI, model, opts);
   if (typeof r === "string") return r;
   if (r && typeof r.response === "string") return r.response;
   if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
@@ -2822,7 +2851,7 @@ async function plRead(env, prompt, maxTokens, order) {
       var j = plJson(t);
       if (j) return { model: models[i], json: j };
       errs.push(models[i].split("/").pop() + ": no JSON");
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       errs.push(models[i].split("/").pop() + ": " + String(e && e.message || e).slice(0, 120));
     }
   }
@@ -2957,7 +2986,7 @@ async function paperLearnTick(env, opts) {
   var n = o.slug ? 1 : cfg.perTick;
   for (var i = 0; i < pick.length && out.read.length < n; i++) {
     try { out.read.push(await plLearnOne(env, pick[i], out)); }
-    catch (e) { out.errors.push(String(pick[i].slug).slice(0, 60) + ": " + String(e && e.message || e).slice(0, 160)); }
+    catch (e) { if (fleetAiStopped(e)) throw e; out.errors.push(String(pick[i].slug).slice(0, 60) + ": " + String(e && e.message || e).slice(0, 160)); }
   }
   // papers_unlearned_over_120m: versions still unread after this tick that have waited longer than the SLA.
   var done = {};
@@ -3110,7 +3139,7 @@ async function plTriageTick(env, opts) {
         }
       } else out.kept++;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.error = String(e && e.message || e).slice(0, 200);
   }
   return out;
@@ -3118,6 +3147,8 @@ async function plTriageTick(env, opts) {
 function withPaperLearn(inner) {
   var out = Object.assign({}, inner, {
     async fetch(request, env, ctx) {
+    try {
+
       var u = new URL(request.url);
       if ((u.pathname === "/paper-learn/status" || u.pathname === "/paper-learn/learnings") && request.method === "GET") {
         var st;
@@ -3126,8 +3157,12 @@ function withPaperLearn(inner) {
         return new Response(JSON.stringify(st), { status: st.error ? 500 : 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
       }
       return inner.fetch(request, env, ctx);
-    },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
     async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       var first = null;
       try { await inner.scheduled(event, env, ctx); } catch (e) { first = e; }
       // Once per hourly tick: a former trigger handed straight to the dispatcher (not the tick) does not read papers again.
@@ -3140,7 +3175,7 @@ function withPaperLearn(inner) {
             await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'job-run', ?3, ?4, 'paper-learn', ?5)")
               .bind("jr-paper-learn-" + Date.now().toString(36), r.at, "PAPER-LEARN-1: " + r.read.length + " papers read, " + learned + " learnings, " + errata + " errata routed, " + r.waiting + " waiting (" + r.overdue + " over 120 min)", JSON.stringify(r).slice(0, 800), r.errors.length ? "error" : "ok").run();
           }
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           console.error("[qnfo-lifecycle] paper-learn error:", String(e && e.message || e));
         }
       }
@@ -3833,3 +3868,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-lifecycle ----
 wmAttach(__paper_learn_default, "qnfo-lifecycle");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "QNFO_AUDIT";
+var FLEET_AI_WORKER = "qnfo-lifecycle";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

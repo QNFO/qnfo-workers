@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // BSKY-CREATE-SESSION-COUNT-1 (qnfo-social 0.18.1, agent_issues 100191), offline on node:sqlite. No network.
 // Proves: session() counts every createSession call (ok and refused) into metric_history bsky_create_session_24h for the UTC day,
 // a cached session adds no count, meets flips at 301, and a missing table is logged, never thrown.
@@ -9,7 +10,7 @@ const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const a = src.indexOf("var SESSION_TTL_MS"), b = src.indexOf("// PROFILE-SYNC-1 (2026-10-01)");
 let status = 200;
 const fetchStub = async () => new Response(JSON.stringify({ accessJwt: "t", did: "did:x" }), { status });
-const mod = new Function("fetch", "BSKY", src.slice(a, b) + "\nreturn { session, countCreateSession, reset: () => { sessionCache = { key: '', at: 0, value: null }; } };")(fetchStub, "https://bsky.invalid/xrpc");
+const mod = new Function("fetch", "BSKY", RUNNING_AI_FIXTURE + (src.slice(a, b) + "\nreturn { session, countCreateSession, reset: () => { sessionCache = { key: '', at: 0, value: null }; } };"))(fetchStub, "https://bsky.invalid/xrpc");
 const sq = new DatabaseSync(":memory:");
 sq.exec("CREATE TABLE metric_history (metric TEXT NOT NULL, day TEXT NOT NULL, value REAL, meets INTEGER, target TEXT, ts TEXT, PRIMARY KEY (metric, day))");
 const D1 = (db) => ({ prepare: (q) => ({ bind: (...v) => ({ run: async () => db.prepare(q).run(...v) }) }) });

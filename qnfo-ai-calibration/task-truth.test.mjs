@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // CALIBRATION-TASK-TRUTH-1 (qnfo-ai-calibration 1.5.0, agent_issues 2338) offline suite. Replays the task-truth block from
 // worker.js against an in-memory SQLite D1 and a stubbed router. Proves: the generator is deterministic per UTC hour and the
 // expected value is computed, never listed; the integer extractor; the pair table (n11, n10, n01, n00, kappa); one row per
@@ -36,7 +37,7 @@ function load(handler, cfg) {
   const jfetch = async (env, url, headers, body) => { calls.push(body); return handler(body); };
   const cfgGet = async (env, key, def) => (cfg && cfg[key] != null ? cfg[key] : def);
   const mod = new Function("ALL_MODELS", "jfetch", "cfgGet", "__name",
-    runPoolSrc + "\n" + block + "\nreturn { truthItems, truthExtract, truthPairs, truthTick, truthReport, TRUTH_KEEP_MS };")(MODELS, jfetch, cfgGet, (f) => f);
+    RUNNING_AI_FIXTURE + (runPoolSrc + "\n" + block + "\nreturn { truthItems, truthExtract, truthPairs, truthTick, truthReport, TRUTH_KEEP_MS };"))(MODELS, jfetch, cfgGet, (f) => f);
   return { mod, calls };
 }
 const expectedOf = (prompt) => {

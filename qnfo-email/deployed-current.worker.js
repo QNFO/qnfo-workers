@@ -1,4 +1,4 @@
-var VERSION="2.12.4-codeagent";/* 2.12.4 OWNER-ADDRESS-HYGIENE-1 (2026-10-27, pillar security, owner directive): rwnqni@outlook.com is not a valid address and leaves OWNER_NOTIFY, OWNER_SENDERS and INJ_OWNER; rwnquni@gmail.com joins OWNER_NOTIFY (the handoff/notify send exemption), so a sign-in code or notice can go to it. OWNER_SENDERS (who counts as the owner on inbound mail) is not widened. */ /* 2.12.2 EMAIL-TIER2-GATE-1 (2026-10-26, pillar personal, agent_issues 1000469): a tier 2 reply is sent in the owner's name only while ops_config email_tier2_autosend is on (absent, any other value or an unreadable config is off: the draft goes to the owner like a tier 3 and nothing is sent without him); a reply from a recipient of the fleet's own outreach (outreach_log) is never tier 2; complaint or accusation wording in what the sender wrote is tier 3. email_reply_queue 75 and 76 (2026-10-22) were sent as tier 2 to a recipient of the cold outreach follow-up, the second one in answer to a mail that called the note spam from an incompetent AI agent. */ /* 2.12.1 BP26-PROMPT-INJECTION-1 refinements: the rules keep a machine-written solicitation at tier 1 even when it carries injection markers (no model, no owner notice), legal local-part characters pass the single-address check, only agent sends and refusals write a trace row. */ /* 2.12.0 BP26-PROMPT-INJECTION-1 (agent_issues 1000359, pillar security): inbound mail is data. The drafter scans, sanitises and delimits it, states an instruction hierarchy, and lets no model read a mail that tries to instruct it; every draft is checked for removed markup, links, addresses, secret-shaped strings and recitation of the voice document before it can be cleared; /send pins a reply to the original sender and refuses an agent surface a cold send outside the allow-list; the reply drain re-checks recipient and text; each decision is a row in agent_mail_trace. Kill switch: ops_config agent_send_policy = off. *//* 2.11.0 PERSONAL-CALENDAR-MAIL-1: private authenticated invite intake and consent-aware scheduled delivery. */
+var VERSION="2.13.0";/* 2.12.4 OWNER-ADDRESS-HYGIENE-1 (2026-10-27, pillar security, owner directive): rwnqni@outlook.com is not a valid address and leaves OWNER_NOTIFY, OWNER_SENDERS and INJ_OWNER; rwnquni@gmail.com joins OWNER_NOTIFY (the handoff/notify send exemption), so a sign-in code or notice can go to it. OWNER_SENDERS (who counts as the owner on inbound mail) is not widened. */ /* 2.12.2 EMAIL-TIER2-GATE-1 (2026-10-26, pillar personal, agent_issues 1000469): a tier 2 reply is sent in the owner's name only while ops_config email_tier2_autosend is on (absent, any other value or an unreadable config is off: the draft goes to the owner like a tier 3 and nothing is sent without him); a reply from a recipient of the fleet's own outreach (outreach_log) is never tier 2; complaint or accusation wording in what the sender wrote is tier 3. email_reply_queue 75 and 76 (2026-10-22) were sent as tier 2 to a recipient of the cold outreach follow-up, the second one in answer to a mail that called the note spam from an incompetent AI agent. */ /* 2.12.1 BP26-PROMPT-INJECTION-1 refinements: the rules keep a machine-written solicitation at tier 1 even when it carries injection markers (no model, no owner notice), legal local-part characters pass the single-address check, only agent sends and refusals write a trace row. */ /* 2.12.0 BP26-PROMPT-INJECTION-1 (agent_issues 1000359, pillar security): inbound mail is data. The drafter scans, sanitises and delimits it, states an instruction hierarchy, and lets no model read a mail that tries to instruct it; every draft is checked for removed markup, links, addresses, secret-shaped strings and recitation of the voice document before it can be cleared; /send pins a reply to the original sender and refuses an agent surface a cold send outside the allow-list; the reply drain re-checks recipient and text; each decision is a row in agent_mail_trace. Kill switch: ops_config agent_send_policy = off. *//* 2.11.0 PERSONAL-CALENDAR-MAIL-1: private authenticated invite intake and consent-aware scheduled delivery. */
 /* 2.10.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the daily 07:00 trigger is gone; the index, freshness and voice-learning steps run on the first 15-minute fire after 07:00 and are retried hourly (at most 3 times) while their last good run is over 24.5 h old. Every fire is logged to cron_fire_log for CRON-WATCH-1. *//* 2.9.5 CORRUPT-SPLICE-REPAIR-1 (2026-10-18): PR #1693, merged by the code loop, duplicated a 128-character run inside the 2.7.0 NOTICE-REPLY-COLD-HUMAN-1 version comment ("...whose mail is a repl" + the same sentence again). It was inert -- comment text only -- but it is evidence that a corrupt SEARCH/REPLACE can pass verify and merge. Repaired here; the corruption guard now fails CI on this shape. */const EMAIL_DAILY_CRON="0 7 * * *",EMAIL_TICK_CRON="*/15 * * * *"/* 2.9.2 SLA-120M (2026-10-14): replyStallGuard raises its handoff after 120 minutes, not 24 hours. */ /* 2.8.0 EMAIL-VOICE-DRAFTER-1 (2026-10-12, pillar personal; agent_issues 2373, owner request): every escalated human thread is classed into tier 1 NO REPLY (machine-written, uncertain), tier 2 AUTO-SEND or tier 3 OWNER SENDS by rules first (signed statements, letters, money, contracts, legal, press, authorities are tier 3; templated praise with an ask is tier 1) and then a classifier model; tiers 2 and 3 get a draft from a writer model and an editor model of another family, held to the owner voice document owner_docs.email-voice-v1 (read through the dashboard binding, seeded by this worker when absent, edited by the owner at fleet.qnfo.org/owner/edit/email-voice-v1): Never-list phrases and claims the inbound mail does not contain are cut, and a draft that still carries one becomes tier 3. Tier 2 is cleared for the existing send path (suppression checked there too); tier 3 goes to the owner in the [handoff] notice with the draft, and a reply of SEND sends it as written; tier 1 is logged, no notice. A weekly job proposes email-voice-v1-proposal from the owner edits. 2.7.0 NOTICE-REPLY-COLD-HUMAN-1 (2026-10-12, pillar personal; agent_issues 2444): a first-time human sender whose mail is a reply or carries no first-contact solicitation wording is escalated at insert (decision escalate, human_score 2) and the owner gets the [handoff] notice the known-contact branch sends; a solicitation keeps the NOTICE-REPLY-1 skip (the D1 trigger of migrations/2026-10-12-cold-human-escalate.sql stays as the second path). SOURCE-FRESHNESS-LIMITS-1 (agent_issues 2162): the personal-life.events source (bookings and venue programmes, written when mail or a programme arrives) is measured against a 30-day limit (FRESH_LIMIT_DAYS_EVENTS) instead of the inbox sources' 3-day limit; the issue title names the limit that applied. */ /* 2.6.1 NOTICE-REPLY-MATCH-1 (2026-10-12, pillar personal; agent_issues 2109, 2161): (1) a reply to a "[handoff]" notice is recognised when its Subject header is RFC 2047 encoded (email_commands 14 arrived as "=?Windows-1252?..." and was parsed as an ops verb); (2) a reply whose quoted text lost the "queue id" line is matched to the one waiting queue row with the same subject instead of being refused; (3) the owner's reply to a notice is never filed as ITINERARY-PARSE-MISS-1 (issue 2109 was the owner's own reply, whose quoted subject contained the word the booking test looks for); (4) an ops HTTP 401 names what was refused (the OPS binding caller and the OPS_KEY secret); (5) API keys are compared in constant time (the same keys are accepted). 2.6.0 NOTICE-REPLY-1 (2026-10-09, pillar personal, owner complaint: a handoff notice about a predatory-journal pitch could only be answered in D1, and his reply was run as an ops task that died with HTTP 401): (1) a reply to a "[handoff]" notice is no longer an ops command: typed text is sent to the sender, SPAM/JUNK blocks the sender (email_filters row + emails.status spam), IGNORE drops it, and one "[done]" mail confirms; (2) only a sender already in contact_ledger gets an owner notice, cold senders are queued as skip; (3) the notice carries an excerpt and says what a reply does; (4) predatoryBody also matches an "editorial office" pitch with author guidelines or a submission call and a link; (5) opsFetch calls ops through the OPS service binding (props caller qnfo-email) before the public host, so a router-key rotation no longer strands owner commands. 2.5.6 ITIN-AUDIT-1 (#1881, 2026-10-06, pillar personal): (1) stale ordering uses max(Date, receive-5min) for a Date within 24h of receipt, and a mail received after the stored one is stale only when its Date is more than 24h older (a skewed sender clock no longer hides a newer confirmation); (2) the confirmation marker moved from inline notes text to the last notes line "QNFO-META: [lc:..] [rc:..] [dt:..]" (events has no spare column), itinStripMeta() removes it, legacy inline [lc:] still read; (3) ITIN-CANCEL-WHOLE-1: a whole-booking/reservation/trip cancellation (not partial) of a ref whose active rows form one trip window cancels them all; (4) ITINERARY-PARSE-MISS-1 files one issue per sender + subject shape, not per email; (5) the gate tolerates a parenthesised dmarc policy comment before header.from. 2.5.5 ITIN-STALE-CONFIRM-1 + ITIN-CANCEL-AMBIGUOUS-1 (#1881 gap D, 2026-10-06, pillar personal): a confirmation mail older than the newest one already applied to a row (Date header vs the "[lc:<iso>]" marker kept in events.notes; no schema change) is ignored, so a stale re-delivery cannot move a rebooked row back; a cancellation whose ref matches more than one active row cancels only rows whose date or flight number the mail names, and if none is named cancels nothing and files one agent_issues row "ITINERARY-CANCEL-AMBIGUOUS-1: <ref>" (medium). 2.5.4 2.5.4 UNSUB-LINK-1 (2026-10-06, pillar security): qnfo-outreach footers link https://qnfo.org/email/unsubscribe?e=<email>&t=<first 16 hex of sha256(email+":qnfo-unsub-2026")>; that route belongs to this worker and answered 401, so every outreach opt-out link was dead. /email/unsubscribe is now public (GET or the RFC 8058 one-click POST): a verified link adds the address to qnfo-audit.email_suppression (checked by both outreach engines before every send) and never removes or overwrites a row; an unverifiable link changes nothing and points to the reply-STOP path. 2.5.3 PUBLIC-ERROR-2: parseBody keeps the exception text in the log and returns "parse failed" (CodeQL js/stack-trace-exposure on PR 624); 2.5.2 ITIN-BOOKING-2026-LAYOUT-1 + ITIN-ESKY-LAYOUT-1 (#1881): real Booking.com 2026 hotel mails (city only in the body, 12-hour times, time windows) and eSky ticket mails (Dutch flight blocks, PNR without a colon, HTML arrows) parsed; both returned nothing before; EMAIL-INDEX-NO-CODES-1: one-time-code mail (forwarding confirmations, sign-in codes) is not copied into email_index; FWD-NOT-COMMAND-1: a forwarded mail from an owner mailbox with nothing typed above it is filed, not run as an ops command; FRESHNESS-KEEP-NOTES-1: the daily freshness refresh keeps notes appended to an open issue. 2.5.1 EMAIL-CALLER-PROPS-1 (#1923): a service-binding caller named by ctx.props.caller is authenticated like API_KEY (personal-companion holds no key copy); PREDATORY-BODY-1 (#1924): heuristicSpam also reads the body (Dear Colleague + Scopus/multidisciplinary + journal pitch);  REBOOK-CANCEL-1 (#1881 gap D): a confirmation whose booking ref matches an existing row with other dates updates that row and its calendar mirror; a gated cancellation marks them CANCELLED, never deletes;  EMAIL-INDEX-WRITER-1 (#1962): the 07:00 cron copies new qnfo-audit.emails rows into personal-life.email_index (store qnfo.org); RETIRED_STORES;  HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
 async function unsubscribeLink(u,e){const em=String(u.searchParams.get("e")||"").trim().toLowerCase(),t=String(u.searchParams.get("t")||"").trim().toLowerCase();const esc=v=>String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);const page=(st,msg)=>new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QNFO email preferences</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem"><h1>QNFO email preferences</h1><p>'+msg+"</p></body></html>",{status:st,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex"}});const stop="Reply STOP to the email you received and you will not be contacted again.";if(!em||em.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)||!/^[0-9a-f]{16}$/.test(t))return page(400,"This unsubscribe link is incomplete. "+stop);const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(em+":qnfo-unsub-2026"));const h=Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);if(h!==t)return page(400,"This unsubscribe link could not be verified. "+stop);if(!e.AUDIT_DB)return page(503,"The preference store is unavailable right now. "+stop);try{await e.AUDIT_DB.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1,'unsubscribe','qnfo-email /email/unsubscribe') ON CONFLICT(email) DO NOTHING").bind(em).run()}catch(x){return page(503,"The preference store is unavailable right now. "+stop)}return page(200,"Unsubscribed: QNFO will not email "+esc(em)+" again.")}
 const BODY_MAX_TEXT=1e4,BODY_MAX_HTML=2e4;
@@ -93,11 +93,13 @@ async function cronGridRun(db, event, ctx, cfg, run) {
 var CRON_GRID_CFG = {"worker": "qnfo-email", "tick": "*/15 * * * *", "tickMin": 15, "jobs": [{"cron": "0 7 * * *", "periodMin": 1440, "retry": true}], "own": "self", "ownWhenDue": false};
 async function emailScheduled(controller,env,ctx){/* EMAIL-TICK-1 (2.9.0): the only cron was the daily 07:00 digest, so the voice drafter (2.8.0) and the reply drain ran once a day and a tier-2 answer or an owner SEND waited up to 24 h. The 15-minute cron tiers, drains and checks stalls; the index, freshness and voice-learning steps stay on the daily cron (a manual run with no cron string does everything). */const cronExpr=String(controller&&controller.cron||"");const daily=cronExpr===""||cronExpr===EMAIL_DAILY_CRON;
 let calendarError;try{console.log("qnfo-email calendar",JSON.stringify(await drainCalendarMail(env)))}catch(e){console.error("personal-calendar tick failed");calendarError=e}
-try{console.log("qnfo-email voice",JSON.stringify(await tierReplyQueue(env)))}catch(e){console.error("voice",e&&e.message||e)}try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){console.error("reply-stall-guard",e&&e.message||e)}if(daily){try{console.log("qnfo-email email-index",JSON.stringify(await emailIndexSync(env)))}catch(e){console.error("email-index",e&&e.message||e)}try{console.log("qnfo-email freshness",JSON.stringify(await freshnessGuard(env)))}catch(e){console.error("freshness",e&&e.message||e)}try{console.log("qnfo-email voice-learn",JSON.stringify(await voiceLearnWeekly(env)))}catch(e){console.error("voice-learn",e&&e.message||e)}}if(calendarError)throw calendarError;console.log("qnfo-email v2.1.5 scheduled done cron="+cronExpr+" daily="+daily)}
+try{console.log("qnfo-email voice",JSON.stringify(await tierReplyQueue(env)))}catch(e){ if (fleetAiStopped(e)) throw e;console.error("voice",e&&e.message||e)}try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){console.error("reply-stall-guard",e&&e.message||e)}if(daily){try{console.log("qnfo-email email-index",JSON.stringify(await emailIndexSync(env)))}catch(e){console.error("email-index",e&&e.message||e)}try{console.log("qnfo-email freshness",JSON.stringify(await freshnessGuard(env)))}catch(e){console.error("freshness",e&&e.message||e)}try{console.log("qnfo-email voice-learn",JSON.stringify(await voiceLearnWeekly(env)))}catch(e){ if (fleetAiStopped(e)) throw e;console.error("voice-learn",e&&e.message||e)}}if(calendarError)throw calendarError;console.log("qnfo-email v2.1.5 scheduled done cron="+cronExpr+" daily="+daily)}
 var __wm_default = {async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"";
 if(isCalendarMail(rawText)){await receiveCalendarMail(m,e,rawText,bodyText);return}
-const headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(itineraryIngest(e,{emailId,from,subject,bodyText,bodyHtml,authResults:h.get("authentication-results")||"",sentAt:h.get("date")||""}));const spam=(filter.action==="spam")||heuristicSpam(from,subject,bodyText||bodyHtml);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){console.error("processCommand",err&&err.message||err)}
-await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){return cronGridRun(env.AUDIT_DB,controller,ctx,CRON_GRID_CFG,function(ev,c){return emailScheduled(ev,env,c)})},async fetch(req,e,ctx){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue", "injection-guard"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY, or an internal service binding that declares props.caller", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies are tiered and drained every 15 minutes (EMAIL-TICK-1); the index, freshness and voice-learning steps run on the first 15-minute fire after 07:00 UTC (CRON-GRID-1)"],command_control:true,raw_archive:true,mime_guard:true,injection_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* UNSUB-LINK-1: the opt-out link is public and only ever adds a suppression row */if(p==="/unsubscribe"&&(req.method==="GET"||req.method==="POST"))return unsubscribeLink(u,e);/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=!!internalCaller(ctx)||(e.API_KEY&&(keyEq(a,"Bearer "+e.API_KEY)||keyEq(x,e.API_KEY)))||(e.GATEWAY_EMAIL_KEY&&(keyEq(a,"Bearer "+e.GATEWAY_EMAIL_KEY)||keyEq(x,e.GATEWAY_EMAIL_KEY)));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/index-sync"&&req.method==="POST")return J(await emailIndexSync(e));if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:pubErr(err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=pubErr(err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/emails/index-sync","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:pubErr(err)},500)}}};
+const headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(itineraryIngest(e,{emailId,from,subject,bodyText,bodyHtml,authResults:h.get("authentication-results")||"",sentAt:h.get("date")||""}));const spam=(filter.action==="spam")||heuristicSpam(from,subject,bodyText||bodyHtml);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){ if (fleetAiStopped(err)) throw err;console.error("processCommand",err&&err.message||err)}
+await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){
+    if (!await fleetAiBackground(env)) return;
+return cronGridRun(env.AUDIT_DB,controller,ctx,CRON_GRID_CFG,function(ev,c){return emailScheduled(ev,env,c)})},async fetch(req,e,ctx){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue", "injection-guard"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY, or an internal service binding that declares props.caller", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies are tiered and drained every 15 minutes (EMAIL-TICK-1); the index, freshness and voice-learning steps run on the first 15-minute fire after 07:00 UTC (CRON-GRID-1)"],command_control:true,raw_archive:true,mime_guard:true,injection_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* UNSUB-LINK-1: the opt-out link is public and only ever adds a suppression row */if(p==="/unsubscribe"&&(req.method==="GET"||req.method==="POST"))return unsubscribeLink(u,e);/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=!!internalCaller(ctx)||(e.API_KEY&&(keyEq(a,"Bearer "+e.API_KEY)||keyEq(x,e.API_KEY)))||(e.GATEWAY_EMAIL_KEY&&(keyEq(a,"Bearer "+e.GATEWAY_EMAIL_KEY)||keyEq(x,e.GATEWAY_EMAIL_KEY)));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/index-sync"&&req.method==="POST")return J(await emailIndexSync(e));if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){ if (fleetAiStopped(err)) throw err;result={ok:false,error:pubErr(err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=pubErr(err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){ if (fleetAiStopped(err)) throw err;return J({error:pubErr(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/emails/index-sync","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){ if (fleetAiStopped(err)) throw err;return J({error:pubErr(err)},500)}}};
 function trunc(s,n){return String(s||"").slice(0,n)}function classifyAddress(to){to=String(to||"").toLowerCase();return to.includes("rowan")||to.includes("rwn")?"personal":"general"}
 // EMAIL-CLASSIFICATION-PERSONAL-CATCHALL-1 (#1474, 2026-10-01): the owner alias alone used to make every
 // message "personal", so the class was dominated by conference spam and vendor promos and could not route
@@ -163,14 +165,14 @@ async function opsFetch(path, init, env) {
   }
   for (const base of OPS_BASES) {
     try {
-      const res = await fetch(base + path, init);
+      const res = await fleetAiFetch(env, fetch, base + path, init);
       if (res.status >= 520 && res.status <= 530) { last = res; continue; }
       if (res.status === 404) {
         const peek = await res.clone().text().catch(function () { return ""; });
         if (/error code:?\s*1042/i.test(peek)) { last = res; continue; }
       }
       return res;
-    } catch (e) { last = e; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; last = e; }
   }
   if (last instanceof Response) return last;
   throw last || new Error("ops unreachable on every base");
@@ -587,7 +589,7 @@ async function processCommand(env, c) {
 
   let result;
   try { result = await routeCommand(env, pc.verb, pc.commandText, kind); }
-  catch (e) { result = { ok: false, error: String(e && e.message || e) }; }
+  catch (e) { if (fleetAiStopped(e)) throw e; result = { ok: false, error: String(e && e.message || e) }; }
   if (ownerAuth && !ownerAuth.ok) {
     result.owner_auth = "downgraded to read-only: " + ownerAuth.why + " (OWNER-CMD-DMARC-GATE-1)";
     if (result.ok === false && result.error) result.error += " [owner sender not authenticated: " + ownerAuth.why + "]";
@@ -609,7 +611,7 @@ async function getJson(url) {
     const txt = await res.text();
     if (!res.ok) return null;
     try { return JSON.parse(txt); } catch (e) { return null; }
-  } catch (e) { return null; }
+  } catch (e) { if (fleetAiStopped(e)) throw e; return null; }
 }
 
 async function cmdOps(env, path) {
@@ -684,7 +686,7 @@ async function cmdJob(env, commandText) {
     try { j = JSON.parse(txt); } catch (e) { j = null; }
     if (!j) return { ok: false, error: "ops returned non-JSON (HTTP " + res.status + "): " + txt.slice(0, 180) };
     return { ok: true, text: truncate(JSON.stringify(j, null, 2), 3000) };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: "ops unreachable: " + String(e && e.message || e).slice(0, 160) };
   }
 }
@@ -716,7 +718,7 @@ async function cmdAgent(env, verb, commandText, kind) {
       const txt = await res.text();
       if (res.status === 202) { try { j = JSON.parse(txt); } catch (e) { j = null; } }
       if (!j) lastErr = "HTTP " + res.status + " " + txt.slice(0, 120) + (res.status === 401 ? " [qnfo-ops refused qnfo-email: neither the OPS service binding caller nor the OPS_KEY secret was accepted]" : "");
-    } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; lastErr = String(e && e.message || e).slice(0, 120); }
     if (!j && attempt < 2) await new Promise(function(r){ setTimeout(r, 1000 * (attempt + 1)); });
   }
   if (!j || !j.id) return { ok: false, error: "ops job queue unavailable (" + lastErr + ")" };
@@ -734,7 +736,7 @@ async function cmdAgent(env, verb, commandText, kind) {
         const out = pj.response || (pj.job && pj.job.response) || pj.error || (pj.job && pj.job.error) || "";
         return { ok: st === "succeeded", job_id: j.id, status: st, text: "job " + j.id + " " + st + (out ? ":\n" + truncate(String(out), 3500) : "") };
       }
-    } catch (e) { console.error(JSON.stringify({ evt: "email:cmdAgent:caught", error: String((e && e.message) || e) })); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ evt: "email:cmdAgent:caught", error: String((e && e.message) || e) })); }
   }
   return { ok: true, queued: true, job_id: j.id, note: "ops-exec agent job queued; reply 'job " + j.id + "' to poll" };
 }
@@ -1673,7 +1675,7 @@ function parseTierJson(text) {
 }
 async function voiceAi(env, model, system, user, maxTokens) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("no AI binding");
-  const r = await env.AI.run(model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: maxTokens || 900, temperature: 0.3 });
+  const r = await fleetAiRun(env, env.AI, model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: maxTokens || 900, temperature: 0.3 });
   if (typeof r === "string") return r;
   if (r && typeof r.response === "string") return r.response;
   if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
@@ -1710,7 +1712,7 @@ async function classifyTier(env, voice, mail) {
     const usr = "From: " + mail.sender + "\nSubject: " + mail.subject + "\nKnown correspondent: " + (mail.known ? "yes" : "no") + "\n\n" + injWrap(String(mail.body || "").slice(0, 4000));
     const txt = await voiceAi(env, VOICE_EDITOR_MODEL, sys, usr, 300);
     return Object.assign({ by: "model" }, parseTierJson(txt));
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { by: "model-error", tier: "1", reason: "classifier unavailable (" + String(e && e.message || e).slice(0, 80) + "): tier 1 by rule" };
   }
 }
@@ -1720,7 +1722,7 @@ async function draftReply(env, voice, mail) {
   const usr = "Inbound mail from " + mail.sender + "\nSubject: " + mail.subject + "\n\n" + injWrap(String(mail.body || "").slice(0, 6000));
   let draft = (await voiceAi(env, VOICE_WRITER_MODEL, sys1, usr, 700)).trim();
   const sys2 = "You edit a reply drafted in Rowan Brad Quni-Gudzinas's voice. Remove every phrase on the Never list, every sentence that states a fact the inbound mail does not contain, and anything that reads as written by a machine. Keep the meaning and the shape (answer first, at most one question, sign-off Rowan). Output the edited reply body only.\n\n" + INJ_RULES + "\n\nNever list:\n- " + never.join("\n- ") + "\n\nShape:\n" + voiceSection(voice, "Shape");
-  try { const ed = (await voiceAi(env, VOICE_EDITOR_MODEL, sys2, "Inbound mail:\n" + injWrap(String(mail.body || "").slice(0, 4000)) + "\n\nDraft:\n" + draft, 700)).trim(); if (ed && ed.length > 20) draft = ed; } catch (e) { console.error("qnfo-email voice editor", e && e.message || e); }
+  try { const ed = (await voiceAi(env, VOICE_EDITOR_MODEL, sys2, "Inbound mail:\n" + injWrap(String(mail.body || "").slice(0, 4000)) + "\n\nDraft:\n" + draft, 700)).trim(); if (ed && ed.length > 20) draft = ed; } catch (e) { if (fleetAiStopped(e)) throw e; console.error("qnfo-email voice editor", e && e.message || e); }
   const san = injSanitizeOutbound(draft, { recipient: injSingleAddr(mail.sender), ground: [mail.subject, mail.body, voice].join("\n") });
   draft = san.text;
   const leak = injLeaksPrompt(draft, [voice, sys1, sys2]);
@@ -1786,7 +1788,7 @@ async function tierReplyQueue(env) {
       try {
         await notifyOwner(env, "[handoff] " + mail.subject, "Tier 3 (owner sends): " + reason.slice(0, 300) + "\nFrom: " + q.sender + "\nqueue id: " + q.id + "\n\nDraft in your voice" + (keepOwn ? " (an earlier draft on this thread is kept; this one is the proposal)" : "") + ":\n\n" + d.text.slice(0, 3000) + "\n\n---\nReply SEND to send this draft as written, type your own reply to send that instead, IGNORE to drop it, or SPAM to block the sender.\n\nInbound mail:\n" + body.slice(0, 1500));
       } catch (e) { console.error("qnfo-email tier-3 notice", e && e.message || e); }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.errors++;
       console.error("qnfo-email voice row " + q.id, e && e.message || e);
     }
@@ -1815,7 +1817,7 @@ async function voiceLearnWeekly(env) {
     const w = await dashDoc(env, "POST", VOICE_PROPOSAL_KEY, { create: true, title: "Email voice v1 proposal", body_md: proposal });
     out.ran = true; out.written = w.status;
     if (w.status === 200) { try { await notifyOwner(env, "[fleet] email voice proposal ready", "From " + pairs.length + " replies you edited in the last 30 days, the fleet wrote a proposed next version of your email voice document: fleet.qnfo.org/owner/doc/" + VOICE_PROPOSAL_KEY + "\n\nMerge what you agree with into email-voice-v1 at fleet.qnfo.org/owner/edit/email-voice-v1; the live document is not changed by this proposal."); } catch (e) { console.error("qnfo-email voice-learn notice", e && e.message || e); } }
-  } catch (e) { out.error = String(e && e.message || e).slice(0, 200); }
+  } catch (e) { if (fleetAiStopped(e)) throw e; out.error = String(e && e.message || e).slice(0, 200); }
   return out;
 }
 /* ---- EMAIL-VOICE-DRAFTER-1:END ---- */
@@ -2309,3 +2311,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-email ----
 wmAttach(__wm_default, "qnfo-email");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT_DB";
+var FLEET_AI_WORKER = "qnfo-email";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

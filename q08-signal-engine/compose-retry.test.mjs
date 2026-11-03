@@ -1,13 +1,14 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const start = src.indexOf("    var retryModels =");
 const end = src.indexOf("    if (retryPiece && retryPiece.text)", start);
 assert.ok(start >= 0 && end > start, "extract the essay's corrective retry, including its provider call");
 const retry = new Function("compose", "COMPOSE_MODELS", "TITLE_REPAIR_ON", "composeOrder",
-  "return async function(env, piece) { var retryPiece = null, retryPrompt = 'CORRECTIVE', banned = [];\n"
-  + src.slice(start, end) + "\nreturn retryPiece; }")(
+  RUNNING_AI_FIXTURE + ("return async function(env, piece) { var retryPiece = null, retryPrompt = 'CORRECTIVE', banned = [];\n"
+  + src.slice(start, end) + "\nreturn retryPiece; }"))(
   mod.__title.compose, mod.__gen.COMPOSE_MODELS, { titleRepair: true }, mod.__gen.composeOrder);
 const [N, G, K] = mod.__gen.COMPOSE_MODELS;
 const para = (i) => `The operators of the storage cluster in paragraph ${i} chose to keep three replicas of every block because a single disk failure during a rebuild would otherwise lose data, and that choice set the cost of every write they accepted from then on. The trade is plain: each extra replica buys time during a rebuild and charges it back on every ordinary write, so the cluster paid for safety in latency long before any disk failed.`;

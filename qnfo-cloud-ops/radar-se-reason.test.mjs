@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // RADAR-SE-REASON-1 (#1641): the mention radar names why StackExchange failed (the API answers HTTP 400 for every error
 // class), reports a per-address throttle as capped:<why>, and appends a public stackapps key only when one is configured.
 // Run: node --no-warnings qnfo-cloud-ops/radar-se-reason.test.mjs
@@ -10,7 +11,7 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 const block = src.slice(src.indexOf("// ---- RADAR-SE-REASON-1:BEGIN"), src.indexOf("// ---- RADAR-SE-REASON-1:END"));
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(block + "\n__export = { seFailureNote, SE_SEARCH_URL };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (block + "\n__export = { seFailureNote, SE_SEARCH_URL };"), sandbox);
 const { seFailureNote, SE_SEARCH_URL } = sandbox.__export;
 let fails = 0;
 const check = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
@@ -31,7 +32,7 @@ check(seFailureNote(400, JSON.stringify({ error_name: "x", error_message: "y".re
 check(/^https:\/\/api\.stackexchange\.com\/2\.3\/search\/advanced\?/.test(SE_SEARCH_URL) && /site=stackoverflow/.test(SE_SEARCH_URL) && !/key=/.test(SE_SEARCH_URL), "the base URL carries no key");
 // wiring: the radar fetches SE_SEARCH_URL plus the optional key, and records the failure note from the body
 check(/const seKey = env && env\.STACKEXCHANGE_KEY \? "&key=" \+ encodeURIComponent\(String\(env\.STACKEXCHANGE_KEY\)\) : "";/.test(src), "the key is appended only when STACKEXCHANGE_KEY is set");
-check(/const r = await fetch\(SE_SEARCH_URL \+ seKey, ua\);\s*if \(!r\.ok\) sources\.stackexchange = seFailureNote\(r\.status, await r\.text\(\)\.catch\(\(\) => ""\)\);/.test(src), "a failed response is read and classified");
+check(/const r = await fleetAiFetch\(env, fetch, SE_SEARCH_URL \+ seKey, ua\);\s*if \(!r\.ok\) sources\.stackexchange = seFailureNote\(r\.status, await r\.text\(\)\.catch\(\(\) => ""\)\);/.test(src), "a failed response is read and classified");
 check(!/sources\.stackexchange = "http:" \+ r\.status;/.test(src), "the bare http:<status> note is gone");
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);

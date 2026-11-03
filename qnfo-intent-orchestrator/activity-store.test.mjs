@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // AUTOAUDIT-DEAD-CALLERS-1 (agent_issues 2302) offline suite for qnfo-intent-orchestrator.
 // Proves: the worker names no retired search worker; an activity intent is stored in the vector index and ends done with
 // processed_at set; a store failure ends the intent failed with the error logged (never swallowed); GET /personal/search
@@ -10,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 
 let passed = 0, failed = 0;
 const t = async (name, fn) => { try { await fn(); passed++; console.log("ok   " + name); } catch (e) { failed++; console.log("FAIL " + name + ": " + (e && e.message || e)); } };

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 offline suite (qnfo-code-orchestrator 0.25.0, agent_issues 100303, owner task op-mvg9vjkbaedc).
 // The planner kept six hardcoded trusted entries while the merge runner reads ops_config code_merge_trusted_sources (18 live entries:
 // session*, chat-session*, owner-queue*, qnfo-code-orchestrator ...), so issues from those sources were recorded "untrusted" and never
@@ -11,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 500) : "")); } };
 

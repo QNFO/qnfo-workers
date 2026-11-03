@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): offline proof for personal-companion aiRunAttr. Run: node personal-companion/ai-attribution.test.mjs (a *.test.mjs in the worker directory, so scripts/run-suites.mjs runs it on every personal-companion change; AI-ATTRIBUTION-COMPANION-TEST-STALE-1, #2483)
 import fs from "node:fs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
@@ -5,7 +6,7 @@ const a = src.indexOf("var AI_ATTR_DB_BINDINGS");
 const b = src.indexOf("// end aiRunAttr");
 if (a < 0 || b < a) throw new Error("helper markers missing");
 const helper = src.slice(a, b);
-const aiRunAttr = new Function(helper + "; return aiRunAttr;")();
+const aiRunAttr = new Function(RUNNING_AI_FIXTURE + (helper + "; return aiRunAttr;"))();
 const BINDING = "AUDIT";
 let fail = 0;
 const ok = (c, m) => { if (!c) { fail++; console.error("FAIL", m); } };

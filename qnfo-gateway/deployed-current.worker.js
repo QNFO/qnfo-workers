@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.50.0"; // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
+var VERSION="3.51.0"; // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // 3.49.0 PLAIN-ARTICLE-COVERAGE-1 (2026-11-03, pillar reach, qnfo-workers#6437): retry an empty Kimi article reply once with the independent Google writer; raise the bounded hourly backfill cap to 30.
 // 3.48.0 PLAIN-STANDARD-1 (2026-10-28, pillar reach, agent_issues 1000476; minor: the plain-language summary now has a hard readability gate): plainPrompt asks for at most two figures, one everyday comparison, terms defined inline and sentences under 20 words; plainBuild regenerates once and flags a result above Flesch-Kincaid grade 9 as gated, which is never stored or shown (a gated build keeps the old row and waits 6 hours); plainFill queues stored summaries above grade 9 for regeneration, hardest first. qnfo-gateway/plain-standard.test.mjs. // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
@@ -1264,10 +1264,10 @@ var FILL_FALLBACK_MODEL = "@cf/openai/gpt-oss-120b";
 async function fillRun(env, system, lines, maxTokens) {
   const messages = [{ role: "system", content: system }, { role: "user", content: "Papers:\n" + lines }];
   let items = null, err = null;
-  try { items = aiItems(await env.AI.run(FILL_MODEL, { messages, max_tokens: maxTokens, reasoning_effort: "none", temperature: 0.05 })); } catch (e) { err = e; }
+  try { items = aiItems(await fleetAiRun(env, env.AI, FILL_MODEL, { messages, max_tokens: maxTokens, reasoning_effort: "none", temperature: 0.05 })); } catch (e) { if (fleetAiStopped(e)) throw e; err = e; }
   if (Array.isArray(items)) return items;
   console.log(JSON.stringify({ ev: "paper_filing_fallback", model: FILL_FALLBACK_MODEL, error: String(err && err.message || err || "no items").slice(0, 160) }));
-  return aiItems(await env.AI.run(FILL_FALLBACK_MODEL, { messages, max_tokens: maxTokens + 1200, reasoning_effort: "low", temperature: 0.05 }));
+  return aiItems(await fleetAiRun(env, env.AI, FILL_FALLBACK_MODEL, { messages, max_tokens: maxTokens + 1200, reasoning_effort: "low", temperature: 0.05 }));
 }
 // FILING-2: the tag vocabulary comes from tag_registry, not from a literal in this file, so adding or retiring a
 // tag is one row in D1 and the daily filer picks it up on its next run.
@@ -1315,7 +1315,7 @@ async function fileUnreadPapers(env, maxPapers) {
     let items = null;
     try {
       items = await fillRun(env, FILL_SYSTEM_PROMPT, lines, 1400);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log(JSON.stringify({ ev: "paper_filing_model_failed", error: String(e && e.message || e).slice(0, 160) }));
     }
     if (!Array.isArray(items)) continue;
@@ -1352,7 +1352,7 @@ async function fileUnreadPapers(env, maxPapers) {
       let items = null;
       try {
         items = await fillRun(env, prompt, lines, 1200);
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         console.log(JSON.stringify({ ev: "paper_tagging_model_failed", error: String(e && e.message || e).slice(0, 160) }));
       }
       if (!Array.isArray(items)) continue;
@@ -1371,7 +1371,7 @@ async function fileUnreadPapers(env, maxPapers) {
       }
       if (stmts.length) { await env.LIVING_PAPER.batch(stmts); result.tagged += batch.length; }
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log(JSON.stringify({ ev: "paper_tagging_failed", error: String(e && e.message || e).slice(0, 160) }));
   }
   // Orphan sweep: a tag removed from the vocabulary must stop appearing on papers, or the filter offers a chip
@@ -3096,7 +3096,7 @@ async function handlePaperDetail(request, env, path) {
     // reaches a paper whose summary is missing or stale, run the fill for this paper first (newest
     // papers have no summary, so they are filled first), guarded so a fill failure never breaks the page.
     if (!paper._plain && typeof plainFill === "function") {
-      try { await plainFill(env, [paper]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperDetail", error: String(e && e.message || e) })); }
+      try { await plainFill(env, [paper]); } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperDetail", error: String(e && e.message || e) })); }
       try { paper._plain = await plainGet(env, paper); } catch (e) { paper._plain = null; }
     }
     const accept = request.headers.get("Accept") || "";
@@ -3113,7 +3113,7 @@ async function handlePaperDetail(request, env, path) {
       });
     }
     return json(Object.assign({}, paper, { body_md: retiredLines(fixMojibake(paper.body_md || "")), version: retiredTag(paper.version) }));
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ error: e.message }, 500);
   }
 }
@@ -4222,13 +4222,13 @@ async function ulaText(env, ver) {
   if (o) return o.text();
   if ((ulaMissUntil[ver] || 0) > Date.now()) return null;
   try {
-    const r = await fetch("https://raw.githubusercontent.com/QNFO/license/HEAD/QNFO-ULA-v" + ver + ".md", { headers: { "User-Agent": "qnfo-gateway/" + VERSION } });
+    const r = await fleetAiFetch(env, fetch, "https://raw.githubusercontent.com/QNFO/license/HEAD/QNFO-ULA-v" + ver + ".md", { headers: { "User-Agent": "qnfo-gateway/" + VERSION } });
     const t = r.status === 200 ? await r.text() : "";
     if (t.length > 2000 && t.indexOf("QNFO Unified License Agreement") >= 0 && t.indexOf("Version " + ver) >= 0) {
       await env.QNFO_BUCKET.put(key, t, { httpMetadata: { contentType: "text/markdown; charset=utf-8" } });
       return t;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   ulaMissUntil[ver] = Date.now() + 3600 * 1000;
   return null;
@@ -4262,7 +4262,7 @@ async function handleLegal(path, env) {
     const others = ULA_VERSIONS.filter((v) => v !== ver).map((v) => '<a href="/v' + v + '">v' + v + "</a>").join(", ");
     const body = '<div class="q-wrap"><article class="q-article"><div><header class="q-article-head"><p class="q-eyebrow">License</p><h1 class="q-h1">QNFO Unified License Agreement, version ' + ver + '</h1><p class="q-meta">The license for all QNFO research, data, code and sites. <a href="' + (vm ? "/v" + ver + "/plain" : "/plain") + '">Plain text</a>' + (others ? " \u00b7 Other versions: " + others : "") + '</p></header><div class="q-prose">' + renderMarkdown(md) + '</div></div><aside class="q-article-aside" aria-label="Contents"><section class="q-toc-wrap"><h2>Contents</h2><ol class="q-toc" data-q-toc=".q-prose"></ol></section></aside></article></div>';
     return new Response(qdsPage({ title: "QNFO Unified License Agreement v" + ver + " (QNFO-ULA)", description: "The QNFO Unified License Agreement v" + ver + ": open science with commercial protections, for all QNFO research, data, code and sites.", canonical: "https://legal.qnfo.org/" + (vm ? "v" + ver : ""), math: false, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ error: e.message }, 500);
   }
 }
@@ -4392,7 +4392,7 @@ async function handleAskAI(request, env) {
     // ASK-MODEL-1 (3.8.4): glm-5.3-flash is a reasoning model; within 2048 tokens it often returned no answer at all
     // (measured on ask.qwav.tech, ASK-LOOP-1 2.0.2). Same non-reasoning model as ask.qwav.tech's champion; any <think>
     // block is removed. Paper pages ask through ask.qwav.tech; this route stays for API callers.
-    const result = await env.AI.run("@cf/moonshotai/kimi-k2.6", {
+    const result = await fleetAiRun(env, env.AI, "@cf/moonshotai/kimi-k2.6", {
       messages: [
         { role: "system", content: askSystemPrompt(paperTitle) },
         { role: "user", content: "QUESTION: " + question + "\n\nPAPER TEXT" + (truncated ? " (first " + ASK_PAPER_MAX + " characters of a longer paper)" : "") + ":\n" + paperBody }
@@ -4405,7 +4405,7 @@ async function handleAskAI(request, env) {
     if (!raw) return json({ error: "The model returned no answer; try again later." }, 502);
     const g = askGroundAnswer(raw, paperTitle + "\n" + question + "\n" + paperBody);
     return json({ answer: g.text || "No part of the generated answer could be matched to the paper text, so no answer is given.", slug, grounded: true, removed_statements: g.removed, source_chars: paperBody.length, source_truncated: truncated, model: "kimi-k2.6" });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ error: "The model call failed; try again later." }, 502);
   }
 }
@@ -4717,10 +4717,10 @@ async function handleConfirmProxy(request, env) {
     ctrl.abort();
   }, 9e3);
   try {
-    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/confirm?token=" + encodeURIComponent(token), { signal: ctrl.signal });
+    const r = await fleetAiFetch(env, fetch, SUBSCRIBERS_ENDPOINT + "/confirm?token=" + encodeURIComponent(token), { signal: ctrl.signal });
     const body = await r.text();
     return new Response(body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return new Response("Confirmation is unavailable right now.", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   } finally {
     clearTimeout(timer);
@@ -4774,7 +4774,7 @@ async function handleSubscribeProxy(request, env) {
   }, 9e3);
   try {
     const rU = referrerUtm(request);
-    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/subscribe", {
+    const r = await fleetAiFetch(env, fetch, SUBSCRIBERS_ENDPOINT + "/subscribe", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -4789,7 +4789,7 @@ async function handleSubscribeProxy(request, env) {
       return {};
     });
     return json(data && typeof data === "object" ? data : { ok: false, error: "Sign-up failed." }, r.status);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ ok: false, error: "Sign-up is unavailable right now. Please try again shortly." }, 502);
   } finally {
     clearTimeout(timer);
@@ -4807,7 +4807,7 @@ __name2(handleSubscribeProxy, "handleSubscribeProxy");
 function subscribersFetch(env, path, init) {
   const target = SUBSCRIBERS_ENDPOINT + path;
   if (env && env.SUBSCRIBERS && typeof env.SUBSCRIBERS.fetch === "function") return env.SUBSCRIBERS.fetch(new Request(target, init));
-  return fetch(target, Object.assign({ signal: AbortSignal.timeout(8e3) }, init));
+  return fleetAiFetch(env, fetch, target, Object.assign({ signal: AbortSignal.timeout(8e3) }, init));
 }
 function funnelViewSource(v) {
   return String(v || "").replace(/[^A-Za-z0-9._\/|-]/g, "").slice(0, 80);
@@ -4841,7 +4841,7 @@ async function handleSubscribePage(request, env) {
       const raw = (await request.text()).slice(0, 4096);
       const r = await subscribersFetch(env, "/subscribe", { method: "POST", headers: Object.assign({ "Content-Type": request.headers.get("Content-Type") || "application/x-www-form-urlencoded", "Accept": request.headers.get("Accept") || "text/html" }, fwd), body: raw });
       return new Response(r.body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       return new Response("Sign-up is unavailable right now. Please try again shortly.", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
   }
@@ -4852,7 +4852,7 @@ async function handleSubscribePage(request, env) {
     const ct = r.headers.get("Content-Type") || "";
     if (r.status === 200 && ct.indexOf("text/html") === 0) return new Response(r.body, { status: 200, headers: { "Content-Type": ct, "Cache-Control": "no-store", "X-Subscribe-Page": "qnfo-subscribers" } });
     if (r.body) await r.body.cancel();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.log(JSON.stringify({ ev: "subscribe_page_upstream_failed", error: String(e && e.message || e).slice(0, 120) }));
   }
   return new Response(renderSubscribeFallbackHTML(), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300", "X-Subscribe-Page": "gateway-fallback" } });
@@ -4977,10 +4977,10 @@ async function handleUnsubscribeProxy(request, env) {
     ctrl.abort();
   }, 9e3);
   try {
-    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/unsubscribe?token=" + encodeURIComponent(token), { signal: ctrl.signal });
+    const r = await fleetAiFetch(env, fetch, SUBSCRIBERS_ENDPOINT + "/unsubscribe?token=" + encodeURIComponent(token), { signal: ctrl.signal });
     const body = await r.text();
     return new Response(body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return new Response("Unsubscribe is unavailable right now.", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   } finally {
     clearTimeout(timer);
@@ -5672,9 +5672,9 @@ async function rrCheck(env, id) {
   }
   let v = null, err = null;
   try {
-    const res = await env.AI.run(RR_MODEL, { messages: [{ role: "user", content: rrPrompt(row, paper, rrExcerpt(paper.body_md, row.passage || row.note)) }], max_tokens: 1200, temperature: 0, reasoning_effort: "low" });
+    const res = await fleetAiRun(env, env.AI, RR_MODEL, { messages: [{ role: "user", content: rrPrompt(row, paper, rrExcerpt(paper.body_md, row.passage || row.note)) }], max_tokens: 1200, temperature: 0, reasoning_effort: "low" });
     v = rrVerdict(rrReplyText(res));
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     err = String(e && e.message || e).slice(0, 200);
   }
   if (!v) {
@@ -5706,7 +5706,7 @@ async function rrSweep(env) {
       out.checked++;
       out.results[s || "skipped"] = (out.results[s || "skipped"] || 0) + 1;
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.ok = false;
     out.error = String(e && e.message || e).slice(0, 200);
   }
@@ -6074,7 +6074,7 @@ function qrExtractive(ranked, terms, idx) {
 async function qrModel(env, title, question, sections) {
   if (!env.AI || !sections.length) return null;
   var passages = sections.map(function(s) { return "### " + s.title + "\n" + s.text; }).join("\n\n");
-  var run = env.AI.run(QR_MODEL, {
+  var run = fleetAiRun(env, env.AI, QR_MODEL, {
     messages: [
       { role: "system", content: qrSystemPrompt(title) },
       { role: "user", content: "QUESTION: " + question + "\n\nPASSAGES:\n" + passages }
@@ -6097,12 +6097,12 @@ async function qrModel(env, title, question, sections) {
 async function qrEmbed(env, texts) {
   if (!env.AI || !Array.isArray(texts) || !texts.length) return null;
   try {
-    var r = await env.AI.run(QR_SEM_MODEL, { text: texts });
+    var r = await fleetAiRun(env, env.AI, QR_SEM_MODEL, { text: texts });
     var d = r && r.data;
     if (!Array.isArray(d) || d.length !== texts.length) return null;
     for (var i = 0; i < d.length; i++) if (!Array.isArray(d[i]) || !d[i].length) return null;
     return d;
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ worker: "qnfo-gateway", where: "qrEmbed", error: String(e && e.message || e).slice(0, 200) }));
     return null;
   }
@@ -6617,7 +6617,7 @@ async function turnstileVerify(env, token, ip, action) {
   params.set("response", token);
   if (ip) params.set("remoteip", ip);
   if (action) params.set("action", action);
-  var resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: params }).catch(function() { return null; });
+  var resp = await fleetAiFetch(env, fetch, "https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: params }).catch(function() { return null; });
   if (!resp) return { success: false, error_codes: ["network-error"] };
   try { return await resp.json(); } catch (e) { return { success: false, error_codes: ["bad-response"] }; }
 }
@@ -7590,6 +7590,8 @@ async function seoPublishMetrics(env) {
 }
 var gateway_worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     // IDENTITY-WELLKNOWN-1 (3.18.9, 2026-10-18): RFC 9116 security.txt on every gateway host, and the AT Protocol handle
     // proof on qnfo.org so the Bluesky account (did:plc:vad2yeqflg5uznmp557zge5c) can carry the domain handle qnfo.org
     // instead of qnfo.bsky.social. Static answers, no binding, answered before the page router.
@@ -7625,7 +7627,9 @@ var gateway_worker_default = {
     const utmRow = utmClickRow(request, served);
     if (utmRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(utmRecord(env, utmRow).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "fetch", error: String(e && e.message || e) })); }));
     return withFleetCtl(await withReachLayer(served, request));
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async serve(request, env, ctx) {
     const u = new URL(request.url);
     const p = u.pathname.replace(/\/+$/, "") || "/";
@@ -7813,12 +7817,14 @@ var gateway_worker_default = {
     return notFoundPage(request, env, host, p, null);
   },
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     await cronGridLog(env.AUDIT, "qnfo-gateway", String(event && event.cron || "manual"), Number(event && event.scheduledTime) || Date.now(), "running", "scheduled invocation started");
     // READER-REPORT-1: reader reports still pending after the request-time check are retried on every hourly fire.
     try {
       const rr = await rrSweep(env);
       if (rr.checked || !rr.ok) console.log("READER-REPORT-1 sweep: " + JSON.stringify(rr));
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("READER-REPORT-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
     }
     try {
@@ -7895,7 +7901,7 @@ async function gatewayDaily(event, env, ctx) {
     // PLAIN-FILL-1: plain-language summaries are built here, never on a reader's GET; a failure is logged and never fails the run.
     try {
       await plainFill(env);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("PLAIN-FILL-1 fill failed: " + String(e && e.message || e).slice(0, 200));
     }
     // PLAIN-ARTICLE-1: the Quick Read's plain-language article, up to ARTICLE_FILL_MAX papers a run (newest first), never on a GET.
@@ -7922,7 +7928,7 @@ async function gatewayDaily(event, env, ctx) {
     // falls back to the keyword classifier and the shelves drift; with it, every paper has a shelf within a day.
     try {
       await fileUnreadPapers(env, 24);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       console.log("PAPER-AUDIENCE-CATEGORIES-1 filing failed: " + String(e && e.message || e).slice(0, 200));
     }
     // FLEET-HARDENING-2 (agent_issues 2397): the daily run ends with its fleet_heartbeat row (ok=0 when the IndexNow step threw); a
@@ -8068,7 +8074,7 @@ function plainResidueSql(column) {
 function plainPrompt(paper, digest, strict) { var bits = []; if (digest.claim) bits.push("CLAIM: " + String(digest.claim)); if (digest.abstract && digest.abstract.length) bits.push("ABSTRACT: " + digest.abstract.join(" ")); if (digest.numbers && digest.numbers.length) bits.push("REPORTED FIGURES: " + digest.numbers.map(function (n) { return n.quote; }).join(" ")); if (digest.limits && digest.limits.length) bits.push("STATED LIMITS: " + digest.limits.map(function (n) { return n.quote; }).join(" ")); var base = "Restate ONE research paper, titled \"" + String(paper.title || "") + "\", in plain language for a reader with no background in the field. Use everyday words and active voice; where a technical term is unavoidable, say what it means in one short clause or leave it out. Cover, in this order: what the paper set out to find, what it found (its claim), and why it matters in practice. Use at most two figures, rounded or written in words, and no DOI, link, citation marker or et al. Define every technical term once, in one clause of everyday words. Add one short everyday comparison that makes the main result easy to picture; the comparison must add no number, name or fact that is not in the text below. Keep every sentence under 20 words, for an average adult reader (about grade 8). At most " + PLAIN_MAX_SENT + " sentences. Hard rules: every specific number, name, date, link or DOI you write must already appear in the text below; add nothing from memory. Output only the plain-language sentences, no heading and no code fence."; if (strict) { base += " Keep every sentence short (under 16 words), avoid any word longer than two syllables where a shorter one exists, and use no technical terms at all."; } var example = "EXAMPLE INPUT: CLAIM: \"Fault-tolerant quantum error correction is achieved at a logical error rate below 10^-6 per cycle.\"\nEXAMPLE OUTPUT: The team built a system that catches and fixes mistakes in quantum computing automatically. In tests it got the error rate down to less than one mistake in every million steps, which is good enough to start using for real calculations."; return base + "\n\n" + example + "\n\n" + bits.join("\n"); }
 function plainUngrounded(text, paper) { var src = String(paper.title || "") + " " + String(paper.abstract || "") + " " + String(paper.body_md || ""); var words = {}; src.toLowerCase().replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) { words[w.replace(/[.'-]+$/, "")] = 1; return ""; }); var dropped = []; String(text || "").split(/(?<=[.!?])\s+/).forEach(function (sent) { var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.-]*/g) || []; for (var i = 1; i < toks.length; i++) { var t = toks[i].replace(/[.'-]+$/, ""); if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t)) continue; var low = t.toLowerCase(); if (PLAIN_ALLOW.test(low) || words[low] || words[t.toLowerCase()]) continue; dropped.push(sent); break; } }); return dropped; }
 function plainGround(text, paper) { var body = String(paper.title || "") + "\n" + String(paper.abstract || "") + "\n" + String(paper.body_md || ""); var g = askGroundAnswer(String(text || ""), body); var clean = String(g.text || "").replace(/\n{2}_\d+ statements? removed: each carried a DOI, link, author citation or figure that is not in the paper text\._$/, ""); var names = plainUngrounded(clean, paper); var kept = []; String(clean).split(/(?<=[.!?])\s+/).forEach(function (sent) { if (names.indexOf(sent) >= 0) return; kept.push(sent); }); return { text: kept.join(" ").replace(/\s+/g, " ").trim(), dropped: (g.removed || 0) + names.length }; }
-async function plainRun(env, prompt) { try { var res = await env.AI.run(PLAIN_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: PLAIN_MAX_TOKENS, temperature: 0.2, reasoning_effort: "low" }); return String(res && (res.response || (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim(); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "plainRun", error: String(e && e.message || e).slice(0, 200) })); return ""; } }
+async function plainRun(env, prompt) { try { var res = await fleetAiRun(env, env.AI, PLAIN_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: PLAIN_MAX_TOKENS, temperature: 0.2, reasoning_effort: "low" }); return String(res && (res.response || (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim(); } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ worker: "qnfo-gateway", where: "plainRun", error: String(e && e.message || e).slice(0, 200) })); return ""; } }
 async function plainBuild(env, paper, digest) { if (!env.AI) return null; var cands = []; var raw = await plainRun(env, plainPrompt(paper, digest, false)); if (raw && raw.length >= PLAIN_MIN_LEN && !plainHasPromptResidue(raw)) cands.push({ raw: raw, strict: false }); if (!cands.length || (cands[0] && fleschGrade(cands[0].raw) > PLAIN_TARGET_GRADE)) { var raw2 = await plainRun(env, plainPrompt(paper, digest, true)); if (raw2 && raw2.length >= PLAIN_MIN_LEN && !plainHasPromptResidue(raw2)) cands.push({ raw: raw2, strict: true }); } if (!cands.length) return null; var best = null; for (var i = 0; i < cands.length; i++) { var gg = plainGround(cands[i].raw, paper); if (gg.text.length < PLAIN_MIN_LEN || plainHasPromptResidue(gg.text)) continue; var cand = { text: gg.text, dropped: gg.dropped, grade: fleschGrade(gg.text), method: "model+ground+v2" }; if (!best || cand.grade < best.grade) best = cand; } if (best && best.grade > 12) best.gated = true; return best; }
 async function plainTable(env) { if (plainReady) return; await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS plain_summary (slug TEXT PRIMARY KEY, rev TEXT NOT NULL, text TEXT NOT NULL, dropped INTEGER NOT NULL DEFAULT 0, grade REAL NOT NULL DEFAULT 0, method TEXT NOT NULL, generated_at TEXT NOT NULL)").run(); plainReady = true; }
 function fnv32(s) { var h = 0x811c9dc5; s = String(s || ""); for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0; } return h.toString(16); }
@@ -8289,9 +8295,9 @@ function articleGround(a, paper) {
 async function articleRun(env, model, prompt, maxTokens, extra) {
   var timer, guard = new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error("model call timed out")); }, ARTICLE_CALL_MS); });
   try {
-    var res = await Promise.race([env.AI.run(model, Object.assign({ messages: [{ role: "user", content: prompt }], max_tokens: maxTokens, temperature: 0.2 }, extra || {})), guard]);
+    var res = await Promise.race([fleetAiRun(env, env.AI, model, Object.assign({ messages: [{ role: "user", content: prompt }], max_tokens: maxTokens, temperature: 0.2 }, extra || {})), guard]);
     return String(res && (res.response || (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ worker: "qnfo-gateway", where: "articleRun", model: model, error: String(e && e.message || e).slice(0, 200) }));
     return "";
   } finally { clearTimeout(timer); }
@@ -8426,7 +8432,7 @@ async function articleFill(env, only) {
         var res = await articleBuild(env, paper);
         await articlePut(env, paper, res, res.status === "ok" ? 0 : Number(c.attempts || 0) + 1);
         return res.status === "ok" ? 1 : -1;
-      } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "articleFill", slug: c.slug, error: String(e && e.message || e).slice(0, 200) })); return -1; }
+      } catch (e) { if (fleetAiStopped(e)) throw e; console.error(JSON.stringify({ worker: "qnfo-gateway", where: "articleFill", slug: c.slug, error: String(e && e.message || e).slice(0, 200) })); return -1; }
     }));
     results.forEach(function (x) { tried++; if (x > 0) built++; else if (x < 0) failed++; });
   }
@@ -9152,3 +9158,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-gateway ----
 wmAttach(gateway_worker_default, "qnfo-gateway");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "AUDIT";
+var FLEET_AI_WORKER = "qnfo-gateway";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // WHOLE-FILE-PATCH-1 offline suite (qnfo-code-orchestrator 0.18.24, pillar autonomy).
 // Measured 2026-10-19 on code_tasks: every task since 2026-10-05 whose file was between WINDOW_CHARS (24000) and MAX_FILE_CHARS
 // (60000) with no anchor ran in whole-file mode and failed (10 of 10: 3046 timeouts and "returned no ```file block"), because the
@@ -13,7 +14,7 @@ import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

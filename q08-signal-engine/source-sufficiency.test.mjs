@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-YIELD-1 offline suite (q08-signal-engine 0.31.0, charter pillar: research, cost second; agent_issues 99929, 99930).
 // Proves: (1) every generation insert logs source_chars, source_kind, compose_calls, verify_calls, panel_calls and factcheck_calls, through nullable columns the worker
 // adds itself to a table created elsewhere (pragma_table_info guard), and a failed bootstrap never costs a run its row; (2) the thin-source
@@ -11,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url));
-const mod = await import(pathToFileURL(join(here, "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url);
 const G = mod.__gen, V = Object.assign({ publishBody: mod.__analysis.publishBody }, mod.__verify);
 const src = readFileSync(join(here, "worker.js"), "utf8");
 let pass = 0, fail = 0;

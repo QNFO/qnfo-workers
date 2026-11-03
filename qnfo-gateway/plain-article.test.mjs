@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PLAIN-ARTICLE-1 offline suite (qnfo-gateway 3.44.0, 2026-10-26, owner directive, pillar reach).
 // The Quick Read rewrites each paper in plain language: no jargon, no mathematics, no domain terms; the paper page's brief
 // "In plain language" box links to it; "Learn more" links are Simple English Wikipedia pages confirmed by the API.
@@ -93,7 +94,7 @@ globalThis.fetch = async (u) => {
 };
 const dir = mkdtempSync(join(tmpdir(), "plainart-"));
 writeFileSync(join(dir, "w.mjs"), src + "\nexport { articleParse, articleProblems, articleGround, articleLookup, articleLinks, articleBuild, articleFill, articleGet, articleRev, articleSource, articlePrompt, articleStats, articleTargetWords, plainHasRefusal, plainRefusalSql, ARTICLE_FILL_MAX, ARTICLE_FILL_BATCH };\n");
-const m = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const m = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 const gw = m.default;
 
 // ---- parse ----

@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // READER-REPORT-1 (qnfo-gateway 3.29.0): POST /api/paper-report stores an anonymous reader report, refuses bots and repeats,
 // and only a report the checker confirms becomes an internal_errata row the revision loop reads.
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
@@ -7,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), "gwrr-"));
 writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { handleReaderReport, rrCheck, rrSweep, rrLocate, rrClaim, LP_PAPER_JS, RR_DIALOG };\n");
-const { handleReaderReport, rrCheck, rrSweep, rrLocate, rrClaim, LP_PAPER_JS, RR_DIALOG } = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const { handleReaderReport, rrCheck, rrSweep, rrLocate, rrClaim, LP_PAPER_JS, RR_DIALOG } = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 let fails = 0;
 const ok = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) { fails++; if (x !== undefined) console.log("   ", JSON.stringify(x).slice(0, 400)); } };
 
@@ -83,7 +84,7 @@ ok(f.reports[j.id].status === "error" && f.reports[j.id].attempts === 3, "after 
 
 ok(rrLocate("alpha beta The system converges well", "the system converges") > 0 && rrLocate("abc", "nothing here at all") === -1, "rrLocate finds a rendered passage in the markdown body");
 ok(!/"/.test(rrClaim({ kind: "typo", version: "1", passage: 'a "quoted" word', note: "" }, { why: "w", correction: "" }).split('At: "')[1].split('"')[0].replace(/^a /, "").slice(0, 1)), "straight quotes in the passage cannot end the At: capture");
-new Function(LP_PAPER_JS);
+new Function(RUNNING_AI_FIXTURE + (LP_PAPER_JS));
 ok(/openReport/.test(LP_PAPER_JS) && /\/api\/paper-report/.test(LP_PAPER_JS) && /touchend/.test(LP_PAPER_JS), "the page script opens the report dialog, posts to /api/paper-report and listens for touch selections");
 ok(/id="rep-d"/.test(RR_DIALOG) && /name="rr_hp"/.test(RR_DIALOG) && !/name="website"/.test(RR_DIALOG), "the dialog carries the hidden field under a name autofill does not fill");
 if (fails) { console.log(fails + " failing"); process.exit(1); }

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // IPATENT-COST-PER-DRAFT-1 offline suite (qnfo-ipatent 3.17.0, agent_issues 1903 and 2055). The real fetch handler with a
 // stubbed model and an in-memory qnfo-audit: a completed draft writes one draft-done row, a mechanism-card call is metered
 // as purpose mechanism, GET /api/cost reports the measured cost per completed draft at the published neuron rate and sets
@@ -5,7 +6,7 @@
 // Run: node qnfo-ipatent/cost.test.mjs   (prints "N passed, 0 failed")
 import { DatabaseSync } from "node:sqlite";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
-const W = (await import("./worker.js")).default;
+const W = (await importRunningWorker("./worker.js", import.meta.url)).default;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 500) : "")); } };
 const stmt = () => { const s = { bind() { return s; }, async run() { return {}; }, async first() { return null; }, async all() { return { results: [] }; } }; return s; };

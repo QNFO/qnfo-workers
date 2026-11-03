@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // ASK-GROUND-1 offline suite (qnfo-gateway 3.13.0, owner directive 2026-10-10): POST /api/ask answers only from the text of one
 // published paper. Proves: a missing slug is 400 no_source and an unknown slug 404 no_source, both without a model call; the
 // prompt is process-only; more of the paper is supplied (36000 chars, was 6000) and truncation is stated; an invented DOI, link,
@@ -23,7 +24,7 @@ let modelCalls = 0, lastMsgs = null, modelOut = "";
 const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; }, async first() { if (/FROM papers/.test(sql)) return papers[st.a[0]] || null; return { n: 1 }; }, async run() { return {}; }, async all() { return { results: [] }; } }; return st; };
 const env = { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI: { run: async (m, input) => { modelCalls++; lastMsgs = input.messages; return { response: modelOut }; } }, QNFO_BUCKET: { get: async () => null } };
 globalThis.fetch = async () => new Response("", { status: 404 });
-const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const gw = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 const ask = async (b) => { const r = await gw.fetch(new Request("https://papers.qnfo.org/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }), env, { waitUntil() {} }); let j = null; try { j = await r.json(); } catch (e) {} return { s: r.status, j }; };
 
 let r = await ask({ question: "What happened?" });

@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.7.3-codeagent"; /* 1.7.1 SUITE-IDLE-TIMER-1 (2026-10-26, pillar autonomy; patch): withTimeout clears its deadline timer when the race settles. prior 1.7.0-triage-verdict */ /* 1.7.0 INTENT-TRIAGE-SKIP-1 (2026-10-19, agent_issues 100066, pillar autonomy): a research idea submitted by a research feed (source ending -research-feed) is triaged whatever type the classifier gave it. The rule classifier types any text containing "event", "call" or "schedule" as event and promoteCalendar leaves such a row pending for good, so int-fad566fcmvewvdtb sat untriaged; calendar items from other sources (calendar-sync, mcp) are not research ideas and are left alone. Every terminal triage state now carries its verdict: triaged_at, triage_decision (TO-RESEARCH-CANDIDATE, BELOW-THRESHOLD, NOISE, DUPLICATE), triage_score and triage_model (9 of 10 triaged research rows had none). */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */ /* 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one trigger, 0,30 every hour; the 06:00 digest (retry false: it mails the owner) and the 06:30 triage (retried up to 3 times) run on the grid fire of their slot, and every run is a cron_fire_log row CRON-WATCH-1 reads. */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.8.0"; /* 1.7.1 SUITE-IDLE-TIMER-1 (2026-10-26, pillar autonomy; patch): withTimeout clears its deadline timer when the race settles. prior 1.7.0-triage-verdict */ /* 1.7.0 INTENT-TRIAGE-SKIP-1 (2026-10-19, agent_issues 100066, pillar autonomy): a research idea submitted by a research feed (source ending -research-feed) is triaged whatever type the classifier gave it. The rule classifier types any text containing "event", "call" or "schedule" as event and promoteCalendar leaves such a row pending for good, so int-fad566fcmvewvdtb sat untriaged; calendar items from other sources (calendar-sync, mcp) are not research ideas and are left alone. Every terminal triage state now carries its verdict: triaged_at, triage_decision (TO-RESEARCH-CANDIDATE, BELOW-THRESHOLD, NOISE, DUPLICATE), triage_score and triage_model (9 of 10 triaged research rows had none). */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */ /* 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one trigger, 0,30 every hour; the 06:00 digest (retry false: it mails the owner) and the 06:30 triage (retried up to 3 times) run on the grid fire of their slot, and every run is a cron_fire_log row CRON-WATCH-1 reads. */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -87,7 +87,7 @@ async function classifyAI(env, desire) {
   for (let i = 0; i < order.length; i++) {
     const model = order[i];
     try {
-      const r = await withTimeout(env.QNFO_AI.fetch(ROUTER + "/v1/chat/completions", {
+      const r = await withTimeout(fleetAiServiceFetch(env, env.QNFO_AI, ROUTER + "/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.RT },
         body: JSON.stringify({
@@ -112,7 +112,7 @@ async function classifyAI(env, desire) {
         return { type: p.type, domain: p.domain || "general", priority: p.priority || "medium", summary: clamp(p.summary, 120), due: p.due || null };
       }
       await recordClassify(env, model, false, i > 0);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       await recordClassify(env, model, false, i > 0);
     }
   }
@@ -125,20 +125,20 @@ async function storeNote(env, intent) {
     const text = intent.desire;
     const day = intent.created_at.slice(0, 10);
     if (intent.domain === "personal") {
-      const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
+      const resp = await fleetAiRun(env, env.AI, "@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
       const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
       if (v) await env.VZ_P.upsert([{ id: "intent:" + intent.id, values: v, metadata: { doc: "note", kind: "intent", path: "intents/" + day + "/" + intent.id + ".md", text: clamp(text, 800), ts: intent.created_at } }]);
     } else {
-      const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
+      const resp = await fleetAiRun(env, env.AI, "@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
       const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
       if (v) await env.VZ_R.upsert([{ id: "intent:" + intent.id, values: v, metadata: { doc: "note", kind: "intent", path: "intents/" + day + "/" + intent.id + ".md", text: clamp(text, 800), ts: intent.created_at } }]);
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     console.error(JSON.stringify({ at: "note-store", intent: intent.id, error: String(e && e.message || e).slice(0, 300) }));
   }
 }
 async function embedText(env, text) {
-  const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
+  const resp = await fleetAiRun(env, env.AI, "@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
   return (resp && resp.data || []).find((x) => Array.isArray(x) && x.length === 768) || null;
 }
 __name(embedText, "embedText");
@@ -151,7 +151,7 @@ async function storeActivity(env, intent, when) {
     if (!index) return { ok: false, error: "vector index binding missing" };
     await index.upsert([{ id: "activity:" + intent.id, values: v, metadata: { doc: "activity", kind: "intent", path: "activities/" + when + "/" + intent.id + ".md", date: when, title: clamp(title, 200), category: intent.domain === "research" ? "research" : "other", text: clamp(intent.desire, 800), ts: intent.created_at } }]);
     return { ok: true };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
 }
@@ -231,10 +231,10 @@ async function handleIntent(env, body, source, device) {
       const payload = { doc: "activity", date: when, title: cls.summary || desire.slice(0, 120), category: domain === "research" ? "research" : "other", venue: "", notes: desire.slice(0, 500) };
       const headers = { "Content-Type": "application/json" };
       if (env.INDEX_TOKEN) headers["X-Index-Token"] = env.INDEX_TOKEN;
-      const resp = await withTimeout(fetch("https://personal-api.q08.workers.dev/activity", { method: "POST", headers, body: JSON.stringify(payload) }), 5e3, "personal-api activity");
+      const resp = await withTimeout(fleetAiFetch(env, fetch, "https://personal-api.q08.workers.dev/activity", { method: "POST", headers, body: JSON.stringify(payload) }), 5e3, "personal-api activity");
       intent.forwarded = resp.ok;
       if (!resp.ok) console.log("activity forward failed:", "personal-api returned " + resp.status);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       intent.forwarded = false;
       console.log("activity forward failed:", String(e && e.message || e).slice(0, 240));
     }
@@ -287,7 +287,7 @@ var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com 
 async function sendDigest(env, subject, text) {
   const dom = String(env.DIGEST_TO || "").split("@")[1] || "";
   if (HUMAN_DOMAINS.has(dom)) return { skipped: "personal-domain", to: env.DIGEST_TO };
-  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/email/send", {
+  const r = await fleetAiFetch(env, fetch, "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/email/send", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.CF_TOKEN },
     body: JSON.stringify({
@@ -373,7 +373,7 @@ async function triageAI(env, desire) {
   } catch (e) {
   }
   try {
-    const r = await env.QNFO_AI.fetch(ROUTER + "/v1/chat/completions", {
+    const r = await fleetAiServiceFetch(env, env.QNFO_AI, ROUTER + "/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.RT },
       body: JSON.stringify({
@@ -402,7 +402,7 @@ async function triageAI(env, desire) {
       novelty: num(p.novelty, 0, 100),
       feasibility: num(p.feasibility, 0, 100)
     };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return null;
   }
 }
@@ -415,7 +415,7 @@ __name(scoreOf, "scoreOf");
 __name2(scoreOf, "scoreOf");
 async function storeIntentEmbed(env, row) {
   try {
-    const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
+    const resp = await fleetAiRun(env, env.AI, "@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
     const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
     if (!v) return;
     const day = (row.created_at || "").slice(0, 10);
@@ -424,20 +424,20 @@ async function storeIntentEmbed(env, row) {
     } else {
       await env.VZ_R.upsert([{ id: "intent:" + row.id, values: v, metadata: { doc: "intent", kind: "intent", path: "intents/" + day + "/" + row.id + ".md", text: clamp(row.desire, 800), ts: row.created_at } }]);
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
 }
 __name(storeIntentEmbed, "storeIntentEmbed");
 __name2(storeIntentEmbed, "storeIntentEmbed");
 async function findDuplicate(env, row) {
   try {
-    const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
+    const resp = await fleetAiRun(env, env.AI, "@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
     const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
     if (!v) return null;
     const q = await env.VZ_R.query(v, { topK: 1, returnMetadata: "all" });
     const m = (q.matches || [])[0];
     if (m && typeof m.score === "number" && m.score >= DEDUP_SIM && m.id && String(m.id).startsWith("intent:")) return String(m.id).slice(7);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   return null;
 }
@@ -495,7 +495,7 @@ async function triageIntent(env, row) {
     await env.D1.prepare("UPDATE intents SET status='triaged', processed_at=?1, triaged_at=?1, triage_decision='BELOW-THRESHOLD', triage_score=?2, triage_model=?3 WHERE id=?4").bind(now, score, TRIAGE_MODEL, id).run();
     await storeIntentEmbed(env, row);
     return { id, verdict: "below-threshold", score };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     await env.D1.prepare("UPDATE intents SET status='pending' WHERE id=? AND status='triaging'").bind(id).run();
     return { id, verdict: "error", error: String(e && e.message || e).slice(0, 200) };
   }
@@ -543,7 +543,7 @@ __name(researchPrompt, "researchPrompt");
 __name2(researchPrompt, "researchPrompt");
 async function dispatchCandidate(env, c) {
   if (!env.DISPATCH_TOKEN) return { dispatched: false, error: "DISPATCH_TOKEN not configured" };
-  const r = await fetch(AGENT_ORCH + "/task", {
+  const r = await fleetAiFetch(env, fetch, AGENT_ORCH + "/task", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Sync-Token": env.DISPATCH_TOKEN },
     body: JSON.stringify({ prompt: researchPrompt(c), max_steps: 6 })
@@ -564,7 +564,7 @@ async function syncDispatched(env) {
   for (const c of rows.results) {
     if (!c.agent_task_id) continue;
     try {
-      const r = await fetch(AGENT_ORCH + "/task/" + c.agent_task_id);
+      const r = await fleetAiFetch(env, fetch, AGENT_ORCH + "/task/" + c.agent_task_id);
       if (!r.ok) {
         out.push({ id: c.id, task: c.agent_task_id, status: "http-" + r.status });
         continue;
@@ -579,7 +579,7 @@ async function syncDispatched(env) {
       } else {
         out.push({ id: c.id, task: c.agent_task_id, status: st.status });
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.push({ id: c.id, task: c.agent_task_id, error: String(e && e.message || e).slice(0, 120) });
     }
   }
@@ -709,6 +709,8 @@ async function cronGridRun(db, event, ctx, cfg, run) {
 var CRON_GRID_CFG = { worker: "qnfo-intent-orchestrator", tick: "0,30 * * * *", tickMin: 30, lagMin: 0, jobs: [{ cron: "0 6 * * *", periodMin: 1440, retry: false }, { cron: "30 6 * * *", periodMin: 1440, retry: true }], own: "none" };
 var worker_default = {
   async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     return cronGridRun(env.D1, event, ctx, CRON_GRID_CFG, (ev) => worker_default.scheduledOnce(ev, env));
   },
   async scheduledOnce(event, env) {
@@ -735,12 +737,12 @@ var worker_default = {
         const s = await syncDispatched(env);
         const d = await autoDispatch(env);
         console.log("[triage-cron]", JSON.stringify({ counts: t.counts, sync: s.slice(0, 5), dispatch: d }).slice(0, 2500));
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         hbOk = 0;
         console.log("[triage-cron] error:", e && e.message || e);
       }
     }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       hbOk = 0;
       throw e;
     } finally {
@@ -753,6 +755,8 @@ var worker_default = {
     }
   },
   async fetch(request, env, ctx) {
+    try {
+
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -792,7 +796,7 @@ var worker_default = {
       const topK = Math.min(Math.max(parseInt(url.searchParams.get("topK") || "8", 10) || 8, 1), 20);
       try {
         return new Response(JSON.stringify(await personalSearch(env, q, topK)), { headers: { "Content-Type": "application/json", ...cors } });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         console.error(JSON.stringify({ at: "personal-search", error: String(e && e.message || e).slice(0, 300) }));
         return new Response(JSON.stringify({ error: "search failed" }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
       }
@@ -823,7 +827,7 @@ var worker_default = {
       try {
         const r = await runBatchTriage(env);
         return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json", ...cors } });
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...cors } });
       }
     }
@@ -871,9 +875,122 @@ var worker_default = {
       return new Response(JSON.stringify({ ok: upd.meta.changes > 0, candidate_id: body.candidate_id, status: body.status }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     return new Response("not found", { status: 404, headers: cors });
-  }
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}
 };
 export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "D1";
+var FLEET_AI_WORKER = "qnfo-intent-orchestrator";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

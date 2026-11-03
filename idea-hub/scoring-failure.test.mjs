@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // IDEA-SCORING-POISON-1 (idea-hub 1.13.0, agent_issues 100145) offline suite. Runs the worker's own triageProposals in a vm against in-memory SQLite.
 // A row that no model in T_CHAIN could score stayed status new, was scored again on every hourly cycle and counted out.errors, so fleet_heartbeat
 // idea-hub read ok=0 on every cycle (CRON-FAULT-1 100145). Proves:
@@ -21,7 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = stripWorkerDefaultExport(readFileSync(join(here, "worker.js"), "utf8")).replace(/export default\s*\{/, "var __default = {");
 const sb = { console: { log() {}, error() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, scoringErrorState, TRIAGE_BATCH, SCORING_RETRY_FAST, SCORING_RETRY_SLOW_MS };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { triageProposals, scoringErrorState, TRIAGE_BATCH, SCORING_RETRY_FAST, SCORING_RETRY_SLOW_MS };"), sb);
 const api = sb.__x;
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 400))); } };

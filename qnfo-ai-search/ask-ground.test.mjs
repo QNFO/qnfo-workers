@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE, importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // ASK-GROUND-2 offline suite (qnfo-ai-search 2.4.0, owner directive 2026-10-10): an answer on ask.qwav.tech is published only
 // after it is checked against its excerpts. Proves: the system prompt names no topic and allows no general-knowledge content;
 // an invented DOI, link, author citation, figure, missing-excerpt citation or "general knowledge" sentence is removed before
@@ -26,7 +27,7 @@ ok(/drawTree\(\[\]\);/.test(src), "fallback seeds are empty");
 const a = src.indexOf("// ---- ASK-GROUND-BEGIN"), b = src.indexOf("// ---- ASK-GROUND-END ----");
 const sb = { Set, String, Number, Array };
 vm.createContext(sb);
-vm.runInContext(src.slice(a, b) + "\n;__x = { groundBody, groundText, sentenceProblems, groundNums, NO_EXCERPTS_TEXT, NOT_SUPPORTED_TEXT };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n;__x = { groundBody, groundText, sentenceProblems, groundNums, NO_EXCERPTS_TEXT, NOT_SUPPORTED_TEXT };"), sb);
 const { groundBody, groundText, NO_EXCERPTS_TEXT, NOT_SUPPORTED_TEXT } = sb.__x;
 const sources = [{ n: 1, title: "Paper One", doi: "10.1111/one.1", excerpt: "The device ran 42 trials and reports a ratio of 0.75. See https://example.test/one for details." }, { n: 2, title: "Paper Two", excerpt: "A second excerpt about method." }];
 const ground = groundText(sources, "What did it report?", [], null);
@@ -88,7 +89,7 @@ globalThis.caches = { default: { async match() { return undefined; }, async put(
 const env = { AI, AI_SEARCH, GATEWAY: { fetch: gatewayFetch }, IDEAS: { fetch: async () => J({ sessions: [] }) }, SPEND_CAP_TOTAL_USD: "60" };
 const dir = mkdtempSync(join(tmpdir(), "askground-"));
 writeFileSync(join(dir, "w.mjs"), src);
-const { default: worker } = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const { default: worker } = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 const waits = [], ctx = { waitUntil: (p) => waits.push(p) };
 const ask = async (q) => { const r = await worker.fetch(new Request("https://ask.qwav.tech/api/ask", { method: "POST", headers: { "content-type": "application/json", "CF-Connecting-IP": "8.8.8.8" }, body: JSON.stringify({ query: q }) }), env, ctx); const t = await r.text(); await Promise.allSettled(waits.splice(0)); return t; };
 const sse = (t, ev) => t.split("\n\n").filter((x) => x.startsWith("event: " + ev)).map((x) => JSON.parse(x.split("data: ")[1]));

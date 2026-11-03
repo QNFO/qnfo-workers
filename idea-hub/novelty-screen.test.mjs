@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // IDEA-NOVELTY-1 (idea-hub 1.9.0, agent_issues 2409) offline suite. Runs the worker's own triageProposals in a vm against
 // an in-memory SQLite D1 (qnfo-audit and living-paper), a PAPER_VZ stub, an arXiv Atom stub and a Workers AI stub whose
 // scorecard always answers ACCEPT and whose novelty labeller answers what each case sets.
@@ -26,7 +27,7 @@ const atom = '<feed><entry><id>http://arxiv.org/abs/2401.00001v1</id><title>Prio
 const sb = { console: { log() {}, error() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto,
   fetch: async (u) => { fetches.push(String(u)); if (!arxivUp) throw new Error("arXiv down"); return new Response(atom, { status: 200 }); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, proposalCluster, noveltyTerms, T_MODELS, T_CHAIN, NOVELTY_MODELS, NOVELTY_FOUNDATIONAL_QUOTA };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { triageProposals, proposalCluster, noveltyTerms, T_MODELS, T_CHAIN, NOVELTY_MODELS, NOVELTY_FOUNDATIONAL_QUOTA };"), sb);
 const api = sb.__x;
 
 const mk = (ddl) => { const db = new DatabaseSync(":memory:"); db.exec(ddl); return db; };

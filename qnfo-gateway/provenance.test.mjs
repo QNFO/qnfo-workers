@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROVENANCE-SIDECAR-1 offline suite (qnfo-gateway 3.47.0; BP26-AI-ACT-ART50-1, BP26-PROVENANCE-MARKING-1).
 // Locks: the visible AI label and JSON-LD flags on every paper page (with or without the signing secret); the label can never say AI-assisted without a named
 // reviewer; absent secret = no sidecar, no manifest link, 503 on the sidecar and key routes; with a key the sidecar verifies against the published public key, a
@@ -37,7 +38,7 @@ const stmt = (sql) => {
 };
 const mk = (extra) => Object.assign({ LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AUDIT: { prepare: stmt }, QNFO_BUCKET: { get: async () => null }, RELEASES: { head: async () => null, get: async () => null } }, extra || {});
 globalThis.fetch = async () => new Response("", { status: 404 });
-const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const gw = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 const get = async (env, host, path, accept) => { const r = await gw.fetch(new Request("https://" + host + path, { headers: { Accept: accept || "text/html" } }), env, { waitUntil() {} }); return { s: r.status, t: await r.text(), h: r.headers }; };
 
 // the collector's rules (scripts/bp26_web.py)

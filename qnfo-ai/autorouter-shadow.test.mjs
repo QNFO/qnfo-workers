@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // RM-AUTOROUTER-EVAL-1: bounded, authenticated replay of logged prompts against AI Gateway Auto Router.
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const dir = mkdtempSync(join(tmpdir(), "qnfo-ai-autorouter-"));
 writeFileSync(join(dir, "worker.mjs"), readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
-const worker = (await import(pathToFileURL(join(dir, "worker.mjs")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(join(dir, "worker.mjs")).href, import.meta.url)).default;
 const checks = [];
 const ok = (condition, name, actual) => checks.push({ condition, name, actual });
 const rows = [

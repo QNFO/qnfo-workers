@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -30,7 +31,7 @@ const context = vm.createContext({
     return { ok: true, status: 200, json: async () => ({ items: [] }) };
   }
 });
-const jobRadar = vm.runInContext(source.slice(start, end) + "\njobRadar;", context);
+const jobRadar = vm.runInContext(RUNNING_AI_FIXTURE + (source.slice(start, end) + "\njobRadar;"), context);
 const env = {
   AUDIT: {
     prepare(sql) {

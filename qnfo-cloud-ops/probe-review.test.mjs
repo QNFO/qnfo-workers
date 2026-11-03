@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROBE-REVIEW-1 (qnfo-cloud-ops 1.24.0, agent_issues 2112): closing probes are judged against their issue's definition of done;
 // a self-confirming probe leaves the closing path until a rewrite passes the review; one verdict per probe text; switches.
 // Run: node qnfo-cloud-ops/probe-review.test.mjs   (prints "N passed, 0 failed")
@@ -14,7 +15,7 @@ const ok = (c, m, x) => { if (c) passed++; else { failed++; console.error("FAIL 
 ok(a > 0 && b > a, "the block is marked");
 const sandbox = { crypto: globalThis.crypto, TextEncoder, JSON, Map, Array, Uint8Array, Date, String, Number, Object, Promise, Math, console };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b) + "\n__export = { probeReviewPrompt, probeReviewParse, probeReviewDecision, probeReviewSha, probeReviewOwnership, jobProbeReview, PROBE_REVIEW_SELECT, PROBE_REVIEW_PER_TICK, PROBE_REVIEW_TRIES, PROBE_REVIEW_MODELS };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n__export = { probeReviewPrompt, probeReviewParse, probeReviewDecision, probeReviewSha, probeReviewOwnership, jobProbeReview, PROBE_REVIEW_SELECT, PROBE_REVIEW_PER_TICK, PROBE_REVIEW_TRIES, PROBE_REVIEW_MODELS };"), sandbox);
 const P = sandbox.__export;
 
 // pure parts

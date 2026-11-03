@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROMPT-CACHE-COUNT-3b (issue 2114): qnfo-social aiRunAttr writes ai_cache_counters in the live qnfo-audit schema (the 0.8.3
 // write named columns the table lacks and failed silently). Driven against node:sqlite with the production table DDL.
 // Run: node qnfo-social/cache-count.test.mjs   -> prints "N passed, 0 failed"
@@ -13,7 +14,7 @@ const b = src.indexOf("// end aiRunAttr");
 if (a < 0 || b < 0) throw new Error("aiRunAttr block not found");
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b) + "\n__export = { aiRunAttr };", sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n__export = { aiRunAttr };"), sandbox);
 const { aiRunAttr } = sandbox.__export;
 
 let pass = 0, fail = 0;

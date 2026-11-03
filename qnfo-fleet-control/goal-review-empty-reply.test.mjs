@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 /**
  * goal-review-empty-reply.test.mjs -- offline regression lock for REVIEW-ROTATE-1 (agent_issues 2909).
  * Slices the GOAL-REVIEW-1 block plus cmReviewRun / cmGoalReview out of worker.js and drives them with a scripted reviewer.
@@ -51,7 +52,7 @@ const sandbox = {
   aiRunAttr: async (env, worker, purpose, model, input) => { calls.push({ model, input }); const r = script(model, input, calls.length); if (r instanceof Error) throw r; return r; }
 };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(g1, g2) + "\n" + src.slice(r1, r2) + '\n__export = { cmReviewModel, cmSecondReviewer, cmReviewRun, cmGoalReview, CM_REVIEW_MODELS, CM_REVIEW_MAX_TOKENS_RETRY, CM_REVIEW_TRIES, cmReviewReply: typeof cmReviewReply === "function" ? cmReviewReply : function() { return {}; }, CM_REVIEW_MAX_TOKENS: typeof CM_REVIEW_MAX_TOKENS === "number" ? CM_REVIEW_MAX_TOKENS : 3000 };', sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(g1, g2) + "\n" + src.slice(r1, r2) + '\n__export = { cmReviewModel, cmSecondReviewer, cmReviewRun, cmGoalReview, CM_REVIEW_MODELS, CM_REVIEW_MAX_TOKENS_RETRY, CM_REVIEW_TRIES, cmReviewReply: typeof cmReviewReply === "function" ? cmReviewReply : function() { return {}; }, CM_REVIEW_MAX_TOKENS: typeof CM_REVIEW_MAX_TOKENS === "number" ? CM_REVIEW_MAX_TOKENS : 3000 };'), sandbox);
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;

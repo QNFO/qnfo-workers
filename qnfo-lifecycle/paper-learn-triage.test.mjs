@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // PAPER-LEARN-TRIAGE-1 offline suite (qnfo-lifecycle 1.14.0). Drives the triage step of the real default export against an in-memory qnfo-audit
 // (node:sqlite behind a D1 shim) and a scripted Workers AI. Proves: a learning that matches a catalogue mechanism whose probe reads ok is settled
 // already-in-place with the citation and no model call; a match whose probe fails is not (it goes to the model path); a reject needs both model
@@ -7,7 +8,7 @@
 // Run: node --no-warnings qnfo-lifecycle/paper-learn-triage.test.mjs
 import { DatabaseSync } from "node:sqlite";
 
-const W = (await import("./worker.js")).default;
+const W = (await importRunningWorker("./worker.js", import.meta.url)).default;
 const P = W.__paperLearn;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };

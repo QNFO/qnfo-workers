@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // SLA-PATHS-1 offline suite (qnfo-fleet-control 0.33.4, owner directive 2026-10-17, pillar autonomy).
 // The directive: every step and every process carries an SLA and more than one execution / remediation / workaround
 // path to a successful definition of done. Evidence persistence had one path - INSERT INTO remediation_verifications -
@@ -21,7 +22,7 @@ if (a < 0 || b < a) throw new Error("remediation block not found in worker.js");
 let fails = 0, n = 0;
 const check = (c, m, x) => { n++; if (!c) { fails++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };
 
-const v = /var VERSION = "0\.(\d+)\.(\d+)-/.exec(src);
+const v = /var VERSION = "0\.(\d+)\.(\d+)(?:-|")/.exec(src);
 check(!!v && (+v[1] > 33 || (+v[1] === 33 && +v[2] >= 8)), "VERSION carries the SLA-PATHS-1 delta (0.33.8-probe-error-visible or later)", v && v[0]);
 
 // node:sqlite on Node 22.16 refuses positional binding to ?N placeholders ("column index out of range"), so the
@@ -68,7 +69,7 @@ const seed = (db, cls, issueId) => {
     .run(cls, issueId, "SELECT 'ok' AS expected, 'ok' AS observed", "d1-query");
 };
 const ctx = vm.createContext({ VERSION: "0.33.7-sla-paths-readers", __name: (f) => f, Date, Math, Number, String, JSON, Object, Array, console, URL, AbortController, setTimeout, clearTimeout, fetch: async () => ({ status: 599, headers: { get: () => null }, text: async () => "" }) });
-const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, verificationFallback, rtCloseOnVerifiedEvidence, rtPassStreakDays });", ctx, { filename: "fleet-control#SLA-PATHS-1" });
+const W = vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n;({ remediationContractsTick, verificationFallback, rtCloseOnVerifiedEvidence, rtPassStreakDays });"), ctx, { filename: "fleet-control#SLA-PATHS-1" });
 
 // 1. path A refused: the row still lands, on path B, and the verdict survives
 {

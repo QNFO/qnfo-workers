@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -13,7 +14,7 @@ const claim = (probability = 0.55) => ({
 });
 const extra = { ...claim(), alternatives: [{ claim: "Acme keeps supporting the existing library.", probability: 0.25 }], indicators: ["Acme publishes a release roadmap", "Acme opens a successor repository"], secondary_claims: [claim(0.65)] };
 let draft = { text: "# Acme will publish its successor\n\nAcme will release its successor with 55 percent probability, and publish a roadmap with 65 percent probability.", model: "@cf/qwen/qwen3-30b-a3b-fp8", extra };
-const make = new Function("stubs", code.replace(/^export const /gm, "const ").replace(/^export default /m, "const worker = ") + `
+const make = new Function("stubs", RUNNING_AI_FIXTURE + (code.replace(/^export const /gm, "const ").replace(/^export default /m, "const worker = ") + `
   compose = stubs.compose;
   forecastProblems = () => [];
   ledeProblems = () => [];
@@ -23,7 +24,7 @@ const make = new Function("stubs", code.replace(/^export const /gm, "const ").re
   insertRun = async (env, run) => stubs.runs.push(run);
   saveReaderTests = recordAudit = queueForDistribution = pingIndexNow = emitContentSignal = async () => {};
   return { generateForecast, persistPiece, forecastDue, pickForecastSource, groundForPublished, resolveForecasts, validateForecast, renderForecastBox, worker };
-`);
+`));
 const F = make({
   compose: async (env, prompt) => { prompts.push(prompt); return structuredClone(draft); },
   verify: async (env, args) => { grounds.push(args.ground); return { ok: true, piece: args.piece, vr: { judges: [] } }; },

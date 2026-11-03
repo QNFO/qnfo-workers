@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // REMEDIATION-TICK-SLOT-1 offline suite (qnfo-fleet-control 0.23.0, agent_issues 2461 and 2199, pillar autonomy).
 // On 2026-10-13 at 04:00 and 05:00 UTC the remediation tick verified 10 and 11 contracts instead of about 150: it ran inside
 // the hourly fan-out of about 25 parallel D1 jobs and was cut off when the event ended, so 203 active contracts went overdue,
@@ -64,7 +65,7 @@ const mk = () => {
   return db;
 };
 const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Number, String, JSON, Object, Array, console, URL, AbortController, setTimeout, clearTimeout, fetch: async () => ({ status: 599, headers: { get: () => null }, text: async () => "" }) });
-const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, rtNextDueOffset, RT_REPROBE_EARLY_MIN });", ctx, { filename: "fleet-control#REMEDIATION-TICK-SLOT-1" });
+const W = vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, b) + "\n;({ remediationContractsTick, rtNextDueOffset, RT_REPROBE_EARLY_MIN });"), ctx, { filename: "fleet-control#REMEDIATION-TICK-SLOT-1" });
 
 // next-due offsets
 // REMEDIATION-2X-1: half the earlier offset (35 -> 18 minutes), floor 10 minutes; the 24 h post-close hold is unchanged.

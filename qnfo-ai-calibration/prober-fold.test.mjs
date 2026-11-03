@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE, dispatchComparisonSource } from "../_shared/fleet-ai-running-fixture.mjs";
 // PROBER-FOLD-1 (qnfo-ai-calibration 1.3.0) and PROBER-ON-CAL-TICK-1 (1.3.1, agent_issues 1756) offline suite. No network,
 // no production data. Proves: the ai-health-prober code runs unchanged as the member proberMod (only its version constant
 // and its limitation text differ from ai-health-prober/worker.js); the */30 tick runs the calibration AND the prober, and
@@ -12,8 +13,8 @@ import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const prober = fs.readFileSync(new URL("../ai-health-prober/worker.js", import.meta.url), "utf8");
 const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
-const api = new Function(src.replace(/export \{\s*worker_default as default\s*\};?/, "") +
-  "\nreturn { worker_default, proberMod, PROBER_CRON, PROBER_VERSION, VERSION };")();
+const api = new Function(RUNNING_AI_FIXTURE + (src.replace(/export \{\s*worker_default as default\s*\};?/, "") +
+  "\nreturn { worker_default, proberMod, PROBER_CRON, PROBER_VERSION, VERSION };"))();
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra).slice(0, 300) : "")); } };
 
@@ -29,7 +30,7 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
   const fs0 = body.findIndex((l) => l.includes("async function checkFreshness(")), fe = body.findIndex((l) => l.includes("__name(checkFreshness"));
   const ps = body.findIndex((l, i) => i > fs0 && l.includes("var _roster = []")) - 1, pe = body.findIndex((l, i) => i > ps && l.trim() === "} catch (e) {}");
   const inPrune = (l) => { const i = body.indexOf(l); return ps > fs0 && pe > ps && pe < fe && i >= ps && i <= pe; };
-  const changed = body.filter((l) => l.trim() && !src.includes(l.trim()) && !inCov(l) && !inPrune(l));
+  const changed = body.filter((l) => l.trim() && !dispatchComparisonSource(src).includes(l.trim()) && !inCov(l) && !inPrune(l));
   ok(cs > 0 && ce > cs && changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
   ok(versionAtLeast(api.VERSION, "1.3.1") && versionAtLeast(api.PROBER_VERSION, "2.3.15") && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15 or later, legacy member cron */20 kept for dispatch");
   ok(!/"kaizen", "kaizen_candidates"/.test(src), "the prober SIGNALS in the host no longer grade the retired kaizen register (FOLD-HYGIENE-1)");
@@ -109,8 +110,8 @@ ok(fs.existsSync(new URL("../ai-health-prober/FOLDED", import.meta.url)), "ai-he
   };
   const fresh = now - 3600e3, old = now - 40 * 3600e3;
   const grab = (start, end) => { const i = src.indexOf(start), j = src.indexOf(end, i); return i >= 0 && j > i ? src.slice(i, j) : ""; };
-  const lib = new Function("__name", grab("  var MODELS = [", "\n") + "\n" + grab("  function canonicalId(m) {", "__name(canonicalId") + grab("  async function checkHealthCoverage(env, now) {", "__name(checkHealthCoverage") +
-    "\nreturn { cov: checkHealthCoverage, roster: function () { var r = []; for (var i = 0; i < MODELS.length; i++) { var id = canonicalId(MODELS[i].internal || MODELS[i].id); if (r.indexOf(id) < 0) r.push(id); } return r; } };")(function (f) { return f; });
+  const lib = new Function("__name", RUNNING_AI_FIXTURE + (grab("  var MODELS = [", "\n") + "\n" + grab("  function canonicalId(m) {", "__name(canonicalId") + grab("  async function checkHealthCoverage(env, now) {", "__name(checkHealthCoverage") +
+    "\nreturn { cov: checkHealthCoverage, roster: function () { var r = []; for (var i = 0; i < MODELS.length; i++) { var id = canonicalId(MODELS[i].internal || MODELS[i].id); if (r.indexOf(id) < 0) r.push(id); } return r; } };"))(function (f) { return f; });
   // Every roster model fresh, 24 external never-probed ids outside the roster: fresh, and the 24 are named.
   const ext = Array.from({ length: 24 }, (_, i) => ({ model_id: "openai/x-" + i, last_probe_ts: null }));
   const cov = await lib.cov(mkCov(lib.roster().map((m) => ({ model_id: m, last_probe_ts: fresh })).concat(ext)).env, now);

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // REASONING-LOW-1 offline suite (qnfo-code-orchestrator 0.23.0, agent_issues 2857 / 99925, pillar autonomy).
 // Measured 2026-10-19 on qnfo-audit.ai_call_counters: glm-5.3, the second rung of the ladder, made 24 calls averaging 15.1k output tokens
 // against its 16,384 budget (363,084 tokens, 4,635 s, 193 s a call against the 240 s ceiling), and 28 of its replies in 24 h were empty
@@ -11,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // ISSUE-PLANNER-1 offline suite: prose issues from trusted sources become code tasks the existing loop can carry; everything
 // else is refused or recorded with a reason, never silently dropped and never turned into code.
 // Real SQL (node:sqlite behind a D1-shaped shim), scripted model, scripted GitHub raw reads.
@@ -8,7 +9,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 400) : "")); } };

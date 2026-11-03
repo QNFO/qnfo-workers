@@ -1,7 +1,8 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-TICK-BUDGET-1 (0.17.4, agent_issues 2479): every early exit of generate() writes an engine_runs row, the essay after a failed
 // forecast waits for the next tick when the tick is mostly used, and repair rounds stop at a tick deadline.
 import { DatabaseSync } from "node:sqlite";
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const G = mod.__gen;
 let passes = 0, fails = 0;
 const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL " + l + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };

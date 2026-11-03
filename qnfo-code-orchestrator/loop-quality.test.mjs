@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Offline suite for the 0.12.0 code-loop quality levers (pillar autonomy; issues 2111, 2007, 2008, 1834, 2313, 2168).
 // Each case replays a failure read from qnfo-audit.code_tasks on 2026-10-12 (the last 40 failed / publish_failed rows):
 //   WINDOW-LONG-LINE-1      ct_i03tgmilanmuzk: a 128,767-char window on a file with very long lines (5021 / timeouts / search 0);
@@ -19,7 +20,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "orch-quality-"));
 fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") +
   "\nexport { windowFor as __windowFor, windowCut as __windowCut, applyEdits as __applyEdits, danglingRefs as __dangling, bumpVersion as __bump, intakeIssues as __intake, goalVersion as __goalVersion, promptForPatch as __prompt, randId as __randId, VERSION as __version, WINDOW_CHARS as __WINDOW };\n");
-const mod = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
+const mod = await importRunningWorker(pathToFileURL(path.join(tmp, "w.mjs")).href, import.meta.url);
 const worker = mod.default;
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 

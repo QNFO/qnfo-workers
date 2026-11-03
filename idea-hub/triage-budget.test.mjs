@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // BUDGET-SOFT-ROUTE-1 (1.6.0, replaces IDEA-TRIAGE-BREACH-DEFER-1 #1878) + COST-ATTRIBUTION (#1833) + OWNER-TOKEN-SHADOW-1 (#1966) offline suite. Runs the
 // worker's own triageProposals, runConsume backpressure and ownerOk in a vm against an in-memory SQLite D1 and a counting
 // Workers AI stub. Proves: while a fleet_budget ai_spend cap is breached each proposal is scored by one cheap model and
@@ -17,7 +18,7 @@ const src = stripWorkerDefaultExport(readFileSync(join(here, "worker.js"), "utf8
 const logs = [];
 const sb = { console: { log: (m) => logs.push(String(m)), error: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, runConsume, ownerOk, aiBudgetBreach, TRIAGE_BATCH, PROPOSAL_BACKPRESSURE };", sb);
+vm.runInContext(RUNNING_AI_FIXTURE + (src + "\n__x = { triageProposals, runConsume, ownerOk, aiBudgetBreach, TRIAGE_BATCH, PROPOSAL_BACKPRESSURE };"), sb);
 const api = sb.__x;
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);

@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // PAPER-LEARN-ANCHOR-1 offline suite (qnfo-lifecycle 1.15.2). No network, synthetic data.
 // Proves: an erratum PAPER-LEARN-1 routes to internal_errata carries the `At: "<passage>"` anchor that errata-hub's internal confirm
 // (ERRATA-INTERNAL-CONFIRM-1) centres its excerpt on, so a finding about a passage deep in a long paper is judged against that passage and
@@ -9,7 +10,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 
-const W = (await import("./worker.js")).default;
+const W = (await importRunningWorker("./worker.js", import.meta.url)).default;
 const P = W.__paperLearn;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -19,7 +20,7 @@ const hub = readFileSync(new URL("../errata-hub/worker.js", import.meta.url), "u
 const maxLine = hub.match(/^var CONFIRM_EXCERPT_MAX = [^;]+;/m);
 const fnSrc = hub.match(/^function confirmExcerpt\(body, claim\) \{[\s\S]*?\n\}/m);
 ok(maxLine && fnSrc, "confirmExcerpt and CONFIRM_EXCERPT_MAX are found in errata-hub/worker.js");
-const confirmExcerpt = new Function(maxLine[0] + "\n" + fnSrc[0] + "\nreturn confirmExcerpt;")();
+const confirmExcerpt = new Function(RUNNING_AI_FIXTURE + (maxLine[0] + "\n" + fnSrc[0] + "\nreturn confirmExcerpt;"))();
 const WINDOW = Number(maxLine[0].match(/= ([^;]+);/)[1].replace(/e(\d)/, "e$1")) || eval(maxLine[0].match(/= ([^;]+);/)[1]);
 ok(WINDOW >= 12e3 && WINDOW <= 48e3, "the confirm window is read from the consumer", WINDOW);
 

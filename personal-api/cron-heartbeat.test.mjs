@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // personal-api cron-heartbeat suite (4.9.0, CRON-ONLY-HEARTBEAT-1, charter pillar: autonomy, agent_issues 2397).
 // Loads the real worker.js and drives scheduled() against in-memory SQLite stand-ins for personal-life (PERSONAL) and
 // qnfo-audit (AUDIT). Proves: one fleet_heartbeat upsert (worker, VERSION, ISO ts, ok=1) after a finished run, ok=0 when
@@ -7,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src).toString("base64"), import.meta.url);
 const W = mod.default;
 const VERSION = /var VERSION = "([^"]*)"/.exec(src)[1];
 let pass = 0, fail = 0;

@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SEARCH-NEAREST-1 offline suite (qnfo-code-orchestrator 0.19.0, pillar autonomy; agent_issues 2111).
 // Measured 2026-10-19 on cloud_ops_events: 90 "SEARCH text occurs 0 times in the shown content" failures in 7 days, 39 in the last 24 h,
 // nearly all from the rung that rewrites a block from memory. The ones whose message names how many SEARCH lines are file lines
@@ -15,7 +16,7 @@ const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || 
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 700) : "")); } };
 

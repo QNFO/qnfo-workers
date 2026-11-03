@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // EXUVIA-ENGAGE-1 offline suite: evidence-backed response drafts are logged without posting, and public publishing still
 // requires confirm=true and a key. Run: node qnfo-memory-mcp/exuvia.test.mjs
 import { dirname, join } from "node:path";
@@ -5,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
-const w = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const w = (await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url)).default;
 
 const KEY = "ex_secretkey123";
 const paper = { slug: "demo-paper", title: "Demo Paper", doi: "10.1234/demo", authors: "A", abstract: "An abstract.", body_md: "word ".repeat(5000), status: "published" };

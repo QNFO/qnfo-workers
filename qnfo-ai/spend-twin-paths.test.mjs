@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -32,9 +33,9 @@ const sb = {
   }
 };
 vm.createContext(sb);
-vm.runInContext(cut("function isDynamicRoute(", "var MODEL_ALIASES") +
+vm.runInContext(RUNNING_AI_FIXTURE + (cut("function isDynamicRoute(", "var MODEL_ALIASES") +
   cut("async function runDynamicChat(", "function stripToolMarkup(") +
-  "\nthis.run = runDynamicChat;", Object.assign(sb, { __name() {}, __name2() {}, __name22() {} }));
+  "\nthis.run = runDynamicChat;"), Object.assign(sb, { __name() {}, __name2() {}, __name22() {} }));
 
 const tools = [{ type: "function", function: { name: "lookup", parameters: { type: "object", properties: {} } } }];
 for (const route of sb.DYNAMIC_ROUTES) {

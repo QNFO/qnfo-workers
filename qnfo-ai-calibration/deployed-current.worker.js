@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.6.9"; /* 1.6.6 MODEL-PROBE-FALLBACK-1 (2026-11-01, pillar cost): retain router 5xx as route failures while using direct confirmation for known model IDs before updating model health. */ /* 1.6.1 BUDGET-PROBE-REFRESH-1 (2026-10-19, pillar cost, agent_issues 2828 and 2829 closeout): the prober member skipped an ok row for 9 hours after its last probe (PROBE_OK_INTERVAL_MS), so the rows BUDGET-PROBE-1 exists for kept the verdict of the OLD ping-only probe after the 12:25Z deploy: glm-5.3-flash (last probed 12:00:37Z, 0.506 error share over 6,346 calls) and qwen3.8-27b (09:30:42Z, 0.763 over 118) were still ok, and eight other rows were probed only as their own 9 hours lapsed. An ok row whose last probe predates BUDGET_PROBE_SINCE_MS (the 1.6.0 deploy) is now due on the next tick, once; after that probe it carries a budget-shaped verdict and the 9-hour interval applies again. The sweep already probes every model on its full tick. Tests: budget-probe.test.mjs. */ /* 1.6.0 BUDGET-PROBE-1 (2026-10-19, pillar cost, agent_issues 2829 path A): ai_model_health stops reading ok for a model that answers a one-token ping and an empty reply to a real request (glm-5.3-flash 0.53 error share over 5,991 calls, qwen3.8-27b 0.77 over 105, both ok). Both writers of status ok, the sweep (probeBudgetCompletion) and the folded prober member 2.3.16 (applyBudgetProbe), keep the cheap ping and send text models one more request: a trivial sum, max_tokens 256, a DONE marker; empty content (finish_reason length) or no marker is a failed probe on the existing degraded then failing path, with no new status value. Models with a Workers AI id are probed through env.AI.run by both writers (probeBudgetDirect): the router's small-answer lane (reasoning_effort low or none at max_tokens <= 2048) would hide the empty reply; only deepseek-v4-flash and -thinking use the router. ai_calibration_config budget_probe = off reverts to the ping-only verdict without a deploy (control_registry ai-calibration-budget-probe-switch); fm-health-ok-but-empty detects ok rows with a 0.5 error share. */
+var VERSION = "1.7.0"; /* 1.6.6 MODEL-PROBE-FALLBACK-1 (2026-11-01, pillar cost): retain router 5xx as route failures while using direct confirmation for known model IDs before updating model health. */ /* 1.6.1 BUDGET-PROBE-REFRESH-1 (2026-10-19, pillar cost, agent_issues 2828 and 2829 closeout): the prober member skipped an ok row for 9 hours after its last probe (PROBE_OK_INTERVAL_MS), so the rows BUDGET-PROBE-1 exists for kept the verdict of the OLD ping-only probe after the 12:25Z deploy: glm-5.3-flash (last probed 12:00:37Z, 0.506 error share over 6,346 calls) and qwen3.8-27b (09:30:42Z, 0.763 over 118) were still ok, and eight other rows were probed only as their own 9 hours lapsed. An ok row whose last probe predates BUDGET_PROBE_SINCE_MS (the 1.6.0 deploy) is now due on the next tick, once; after that probe it carries a budget-shaped verdict and the 9-hour interval applies again. The sweep already probes every model on its full tick. Tests: budget-probe.test.mjs. */ /* 1.6.0 BUDGET-PROBE-1 (2026-10-19, pillar cost, agent_issues 2829 path A): ai_model_health stops reading ok for a model that answers a one-token ping and an empty reply to a real request (glm-5.3-flash 0.53 error share over 5,991 calls, qwen3.8-27b 0.77 over 105, both ok). Both writers of status ok, the sweep (probeBudgetCompletion) and the folded prober member 2.3.16 (applyBudgetProbe), keep the cheap ping and send text models one more request: a trivial sum, max_tokens 256, a DONE marker; empty content (finish_reason length) or no marker is a failed probe on the existing degraded then failing path, with no new status value. Models with a Workers AI id are probed through env.AI.run by both writers (probeBudgetDirect): the router's small-answer lane (reasoning_effort low or none at max_tokens <= 2048) would hide the empty reply; only deepseek-v4-flash and -thinking use the router. ai_calibration_config budget_probe = off reverts to the ping-only verdict without a deploy (control_registry ai-calibration-budget-probe-switch); fm-health-ok-but-empty detects ok rows with a 0.5 error share. */
 /* 1.6.9 MODEL-PROBE-DIRECT-CONFIRM-1 (2026-11-02, pillar cost): canonical deepseek-v4-flash shares the existing Workers AI ID for deepseek-v4-flash-wa, so router failures and downgrades can be confirmed directly before changing model health. */ /* 1.5.1 CALIBRATION-TASK-TRUTH-1 (agent_issues 2338): the truth probe sends hedge:false; the first run (2026-10-13 19:00Z) measured the router hedge, not the models: 16 of 20 answers came from llama-3.3-70b-instruct-fp8-fast through the TURN-BUDGET-1 fast lane. */ /* 1.5.0 1.5.0 CALIBRATION-TASK-TRUTH-1 (2026-10-13, pillar research, agent_issues 2338): once an hour every model answers a few integer sums, differences and products whose operands come from the UTC hour and whose answers the code computes; one row per item and model in ai_calibration_truth (right or wrong, served_by), 30 days kept, GET /truth gives the pair table (n11, n10, n01, n00, kappa) of the last 7 days; ai_calibration_config truth_probe_items sets the items an hour, 0 is off. */ /* 1.4.0 1.4.0 PROBE-CADENCE-COST-1 (2026-10-12, pillar cost, agent_issues 2118): the full model/vision/tools/stream/routing sweep runs every 4th 30-minute tick (ai_calibration_config model_sweep_every_ticks); the ticks between re-probe only models whose ai_model_health row is not ok. About 2,500 Workers AI calls a day through qnfo-ai become about 700. */ /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 /* 1.6.4 SPEND-DOWNGRADE-INCONCLUSIVE-1 (2026-10-19, pillar cost; patch, a fix): the second path for a router-swapped ping. qnfo-ai 5.37.0 (MODEL-HEALTH-FLAP-1, #3161) honours no_downgrade for the caller qnfo-ai-calibration (props.caller on the QNFO_AI binding) at max_tokens 512 or less, so the 16-token ping reaches the model it names; that router change is what clears the [ai-cal] model probe failing rows, and this change does not claim them. Where the router still answers the ping with glm-5.3-flash (the flag not honoured, the token ceiling exceeded, the caller not identified, an older router) the ping is "downgraded" and says nothing about the model that was asked, so it is no longer scored as a model failure: a model with a Workers AI id is judged on the direct env.AI.run probe (probeBudgetCompletion; a pass writes ok with 0 failures and closes the open issue, a failure takes the unchanged degraded then failing path), a model without one is left unwritten, and budget_probe = off writes nothing. The probe = model row is not rewritten: it stays "downgraded", the verdict is the probe = model-budget row. Tests: budget-probe.test.mjs section 4c. New notes go in a block like this one, never on the VERSION line (VERSION-LINE-NOTES-1). */
 var DEEPSEEK = "https://api.deepseek.com/v1";
@@ -114,7 +114,7 @@ async function jfetch(env, url, headers, body, timeoutMs, bindName) {
   var init = { method: body ? "POST" : "GET", headers: Object.assign({ "Content-Type": "application/json", "User-Agent": UA }, headers || {}) };
   if (body) init.body = JSON.stringify(body);
   var bind = bindName ? env[bindName] : null;
-  var resp = await withTimeout(bind ? bind.fetch(url, init) : fetch(url, init), timeoutMs || 45e3);
+  var resp = await withTimeout(bind ? bind.fetch(url, init) : fleetAiFetch(env, fetch, url, init), timeoutMs || 45e3);
   var text = await resp.text();
   var data = null;
   try {
@@ -234,7 +234,7 @@ async function truthTick(env, nowMs) {
         var got = truthExtract(content);
         var served = (r.data._router && r.data._router.served_by) || r.data.model || j.m;
         rows.push({ run_id: runId, ts: nowMs, item_id: j.it.item_id, model: j.m, expected: j.it.expected, got: got == null ? "" : got, correct: got === j.it.expected ? 1 : 0, served_by: String(served).slice(0, 80), latency_ms: Date.now() - t0 });
-      } catch (e) { errors++; }
+      } catch (e) { if (fleetAiStopped(e)) throw e; errors++; }
     });
     if (rows.length) {
       var stmt = env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO ai_calibration_truth (run_id, ts, item_id, model, expected, got, correct, served_by, latency_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)");
@@ -242,7 +242,7 @@ async function truthTick(env, nowMs) {
     }
     await env.QNFO_AUDIT.prepare("DELETE FROM ai_calibration_truth WHERE ts < ?1").bind(nowMs - TRUTH_KEEP_MS).run();
     return { ran: true, run_id: runId, items: nItems, rows: rows.length, errors: errors, unscorable: unscorable };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ran: false, error: String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -300,7 +300,7 @@ async function probeCompletion(env, model) {
     var status = pass ? "pass" : downgraded ? "downgraded" : "fail";
     var detail = pass ? "ok" : downgraded ? "downgraded to glm-5.3-flash" : "http=" + r.status + " echo=" + echo + " " + JSON.stringify(String(content || "").slice(0, 60));
     return { status: status, latency_ms: Date.now() - t0, detail: detail };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "fail", latency_ms: Date.now() - t0, detail: "err " + String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -355,8 +355,8 @@ async function probeBudgetDirect(env, cfId) {
   var v = null, lastErr = null;
   for (var i = 0; i < bodies.length && !v; i++) {
     try {
-      v = judgeBudgetReply(await env.AI.run(cfId, bodies[i]));
-    } catch (e) {
+      v = judgeBudgetReply(await fleetAiRun(env, env.AI, cfId, bodies[i]));
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       lastErr = String(e && e.message || e).slice(0, 100);
     }
   }
@@ -383,7 +383,7 @@ async function probeBudgetCompletion(env, model) {
     if (!(r.data && r.data.model === model)) return { status: "pass", latency_ms: Date.now() - t0, detail: "inconclusive: served by " + String(r.data && r.data.model).slice(0, 60) };
     var v = judgeBudgetReply(r.data);
     return { status: v.ok ? "pass" : "fail", latency_ms: Date.now() - t0, detail: v.ok ? "ok router" : "budget router " + v.reason };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "fail", latency_ms: Date.now() - t0, detail: "budget router err " + String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -406,7 +406,7 @@ async function probeVision(env, model) {
     var noSee = /cannot see|can't view|cannot view|no image|unsupported image|not able to see|can not see/i.test(s);
     var pass = r.status === 200 && s.trim().length > 0 && !noSee;
     return { status: pass ? "pass" : "fail", latency_ms: Date.now() - t0, detail: pass ? "ok " + s.slice(0, 40) : "http=" + r.status + " noSee=" + noSee + " " + s.slice(0, 80) };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "fail", latency_ms: Date.now() - t0, detail: "err " + String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -426,7 +426,7 @@ async function probeTools(env) {
     var tc = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.tool_calls;
     var pass = r.status === 200 && Array.isArray(tc) && tc.length > 0;
     return { status: pass ? "pass" : "fail", latency_ms: Date.now() - t0, detail: pass ? "tool_calls=" + tc.length : "http=" + r.status };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "fail", latency_ms: Date.now() - t0, detail: "err " + String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -444,7 +444,7 @@ async function probeStream(env) {
     );
     var pass = r.status === 200 && r.text.indexOf("[DONE]") >= 0 && r.text.indexOf("data:") >= 0;
     return { status: pass ? "pass" : "fail", latency_ms: Date.now() - t0, detail: pass ? "sse ok" : "http=" + r.status + " done=" + (r.text.indexOf("[DONE]") >= 0) };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { status: "fail", latency_ms: Date.now() - t0, detail: "err " + String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -464,7 +464,7 @@ async function probeRouting(env) {
     var content = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content;
     var pass = r.status === 200 && !!rt && !!rt.routed_model && !!content && String(content).trim().length > 0;
     out.push({ probe: "routing", target: "auto/simple", status: pass ? "pass" : "fail", latency_ms: 0, detail: pass ? "routed=" + rt.routed_model : "http=" + r.status + " " + JSON.stringify(rt || {}).slice(0, 100) });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.push({ probe: "routing", target: "auto/simple", status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 100) });
   }
   try {
@@ -479,7 +479,7 @@ async function probeRouting(env) {
     var c2 = r2.data && r2.data.choices && r2.data.choices[0] && r2.data.choices[0].message && r2.data.choices[0].message.content;
     var pass2 = r2.status === 200 && r2.data.model === "ensemble" && !!c2 && String(c2).trim().length > 0;
     out.push({ probe: "routing", target: "ensemble/math", status: pass2 ? "pass" : "fail", latency_ms: 0, detail: pass2 ? "out=" + String(c2).slice(0, 40) : "http=" + r2.status });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.push({ probe: "routing", target: "ensemble/math", status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 100) });
   }
   try {
@@ -493,7 +493,7 @@ async function probeRouting(env) {
     );
     var pass3 = r3.status === 200 && r3.data && r3.data.model === "deepseek-v4-flash";
     out.push({ probe: "routing", target: "unknown-fallback", status: pass3 ? "pass" : "fail", latency_ms: 0, detail: pass3 ? "fallback=deepseek-v4-flash" : "http=" + r3.status + " model=" + (r3.data && r3.data.model) });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.push({ probe: "routing", target: "unknown-fallback", status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 100) });
   }
   for (var i = 0; i < 2; i++) {
@@ -508,7 +508,7 @@ async function probeRouting(env) {
         "QNFO_AI"
       );
       out.push({ probe: "routing", target: "boundary/max_tokens=" + mt, status: r4.status === 200 ? "pass" : "fail", latency_ms: 0, detail: "http=" + r4.status });
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       out.push({ probe: "routing", target: "boundary/max_tokens=" + mt, status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 100) });
     }
   }
@@ -527,7 +527,7 @@ async function probeEndpoint(env, name, url, key, body, bindName) {
       pass = r.status === 200 && r.text.indexOf("deepseek-v4-flash") >= 0;
     }
     return { probe: "endpoint", target: name, status: pass ? "pass" : "fail", latency_ms: Date.now() - t0, detail: pass ? "ok" : "http=" + r.status };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { probe: "endpoint", target: name, status: "fail", latency_ms: Date.now() - t0, detail: "err " + String(e && e.message || e).slice(0, 120) };
   }
 }
@@ -547,7 +547,7 @@ async function auditRoster(env, rosterData) {
     var r;
     try {
       r = await jfetch(env, CATALOG + "/ai/models/search?search=" + encodeURIComponent(short), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 3e4);
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
       drifts.push({ model: id, field: "catalog-fetch", advertised: "ok", catalog: "err" });
       continue;
     }
@@ -698,7 +698,7 @@ async function gatewayFailureSweep(env, t0) {
         setTimeout(res, 5);
       });
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     out.ok = false;
     out.summary = "fetch err " + String(e && e.message || e).slice(0, 120);
     return out;
@@ -718,7 +718,7 @@ async function gatewayFailureSweep(env, t0) {
         clsLabel = gwErrorClass(b.status, rh);
         b.sample = rh.slice(0, 200) || b.sample;
       }
-    } catch (e) {
+    } catch (e) { if (fleetAiStopped(e)) throw e;
     }
     try {
       await env.QNFO_AUDIT.prepare("INSERT INTO ai_gateway_failures (ts, model, status, count, error_class, sample_detail, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'qnfo-ai-calibration')").bind(t0, b.model, b.status, b.count, clsLabel, String(b.sample || "").slice(0, 300)).run();
@@ -807,7 +807,7 @@ async function calibration(env, trigger) {
   try {
     gwSweepRes = await gatewayFailureSweep(env, t0);
     if (gwSweepRes) results.push({ probe: "gateway-sweep", target: "ai-gateway-default", status: gwSweepRes.ok ? "pass" : "fail", latency_ms: 0, detail: String(gwSweepRes.summary || "").slice(0, 300) });
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
   }
   var failing = {};
   var driftByModel = {};
@@ -835,7 +835,7 @@ async function calibration(env, trigger) {
     } else {
       results.push({ probe: "roster", target: "qnfo-ai", status: "fail", latency_ms: 0, detail: "http=" + r.status });
     }
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     results.push({ probe: "health", target: "qnfo-ai", status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 100) });
   }
   if (authBlind) {
@@ -967,8 +967,8 @@ async function calibration(env, trigger) {
     results.push(Object.assign({ probe: "stream", target: "deepseek-v4-flash" }, await probeStream(env)));
     results = results.concat(await probeRouting(env));
   }
-  results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://qnfo-ops.internal/health",null,null,2e4,"QNFO_OPS"); return {probe:"endpoint",target:"qnfo-ops/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ return {probe:"endpoint",target:"qnfo-ops/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
-  results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://personal-api.internal/health",null,null,2e4,"PT_API"); return {probe:"endpoint",target:"personal-api/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ return {probe:"endpoint",target:"personal-api/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
+  results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://qnfo-ops.internal/health",null,null,2e4,"QNFO_OPS"); return {probe:"endpoint",target:"qnfo-ops/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ if (fleetAiStopped(e)) throw e; return {probe:"endpoint",target:"qnfo-ops/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
+  results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://personal-api.internal/health",null,null,2e4,"PT_API"); return {probe:"endpoint",target:"personal-api/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ if (fleetAiStopped(e)) throw e; return {probe:"endpoint",target:"personal-api/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
   // RETIRED-DIRECT-PATH-REMOVAL-1 (#1267): api.deepseek.com direct path is retired; DEEPSEEK_KEY is expired (HTTP 401 every run) and the fleet routes deepseek via AI Gateway / Workers-AI (@cf/deepseek-ai/*). Probing it only manufactured a permanent fail that the digest then masked.
   var pass = 0, fail = 0, driftCount = 0;
   for (var i = 0; i < results.length; i++) {
@@ -1047,9 +1047,9 @@ var proberMod = (function() {
     for (let i = 0; i < bodies.length; i++) {
       try {
         const t0 = Date.now();
-        await env.AI.run(m.id, bodies[i]);
+        await fleetAiRun(env, env.AI, m.id, bodies[i]);
         return { ok: true, ms: Date.now() - t0 };
-      } catch (e) {
+      } catch (e) { if (fleetAiStopped(e)) throw e;
         lastErr = String(e && e.message || e).slice(0, 120);
       }
     }
@@ -1306,6 +1306,8 @@ var proberMod = (function() {
   }
   var worker_default = {
     async fetch(request, env, ctx) {
+    try {
+
       const u = new URL(request.url);
       if (u.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: CAPS, limitations: LIMS, models: MODELS.length, signals: SIGNALS.length });
       if (u.pathname === "/run") {
@@ -1322,8 +1324,12 @@ var proberMod = (function() {
       }
       if (u.pathname === "/freshness") return json(await checkFreshness(env));
       return json({ ok: false, error: "not found" }, 404);
-    },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
     async scheduled(event, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
       ctx.waitUntil((async function() {
         var ok = 1;
         try {
@@ -1331,7 +1337,7 @@ var proberMod = (function() {
           await checkFreshness(env);
           await checkHealthCoverage(env, Date.now());
           await checkOwnerClientKeys(env, Date.now());
-        } catch (e) {
+        } catch (e) { if (fleetAiStopped(e)) throw e;
           ok = 0;
         }
         await capSelfReport(env.QNFO_AUDIT, WORKER);
@@ -1349,6 +1355,8 @@ var proberMod = (function() {
 })();
 var worker_default = {
   async fetch(request, env, ctx) {
+    try {
+
     var url = new URL(request.url);
     var path = url.pathname;
     if (path === "/prober" || path.indexOf("/prober/") === 0) {
@@ -1377,8 +1385,12 @@ var worker_default = {
     if (path === "/truth" && request.method === "GET") return json(await truthReport(env, Date.now()));
     if (path === "/") return json({ service: "qnfo-ai-calibration", version: VERSION, routes: ["/health", "/manifest", "/run", "/results", "/truth"] });
     return json({ error: "not found" }, 404);
-  },
+
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+},
   async scheduled(controller, env, ctx) {
+    if (!await fleetAiBackground(env)) return;
+
     // PROBER-ON-CAL-TICK-1 (1.3.1): the prober member runs on the calibration tick, concurrently with the calibration. Its
     // own scheduled() hands its work to waitUntil, which would leave it the 30-second window after this handler returns;
     // the host collects those promises and awaits them, so the invocation lives until the probe is done (15-minute limit).
@@ -1396,3 +1408,113 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "QNFO_AUDIT";
+var FLEET_AI_WORKER = "qnfo-ai-calibration";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

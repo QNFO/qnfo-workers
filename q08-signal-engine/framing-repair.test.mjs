@@ -1,3 +1,4 @@
+import { importRunningWorker, RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // FRAMING-REPAIR-1 + FACTCHECK-DEGRADE-1 offline suite (q08-signal-engine 0.13.0, agent_issues 2284, 2286, 2288).
 // A gate failure made only of phrase-level, body-sentence problems is repaired without a model call: the sentences that hold the
 // flagged phrases are removed, the full gate is re-run, and the result is accepted only when it passes and at most a quarter of the
@@ -11,7 +12,7 @@ import { dirname, join } from "node:path";
 import vm from "node:vm";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const mod = await import(pathToFileURL(join(here, "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url);
 const F = mod.__framing, gate = mod.__quality.gate, V = mod.__verify;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -22,7 +23,7 @@ const gateSrc = src.slice(src.indexOf("function gate("), src.indexOf("\n}\n", sr
 const block = src.slice(src.indexOf("var PHRASE_LEVEL_RE"), src.indexOf("async function runLevels"));
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(constants + "\n" + gateSrc + "\n" + block, sandbox);
+vm.runInContext(RUNNING_AI_FIXTURE + (constants + "\n" + gateSrc + "\n" + block), sandbox);
 ok(typeof sandbox.framingRepair === "function" && typeof sandbox.gate === "function" && typeof sandbox.problemsWithSentences === "function", "the slice evaluates on its own (no hidden dependency on the rest of the module)");
 
 // ---- a draft that passes the gate, then the same draft with two tell sentences added -------------------------------------------

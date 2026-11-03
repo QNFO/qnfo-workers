@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SOCIAL-GROUND-1 offline suite (qnfo-social 0.11.0): a thread is queued only when every capitalised name, year and figure in it
 // occurs in the title, author or abstract it was written from (mechanical, no model can override it) AND the LLM checker returns a
 // clean verdict; an unavailable checker returns null (the callers hold the thread as a draft). The composer and checker prompts
@@ -9,7 +10,7 @@ import { pathToFileURL } from "node:url";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const dir = mkdtempSync(join(tmpdir(), "gr-"));
 writeFileSync(join(dir, "w.mjs"), src + "\nexport { checkThread };\n");
-const W = await import(pathToFileURL(join(dir, "w.mjs")).href);
+const W = await importRunningWorker(pathToFileURL(join(dir, "w.mjs")).href, import.meta.url);
 let fails = 0, passes = 0;
 const ok = (c, m, x) => { if (c) passes++; else { fails++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 

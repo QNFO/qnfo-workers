@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // WINDOW-RELOCATE-1 + MERGE-SCOPE-PARITY-1 offline suite (qnfo-code-orchestrator 0.18.29, pillar autonomy).
 // Measured 2026-10-19 on code_tasks: 8 of the 20 failed tasks between 2026-10-18T13Z and 2026-10-19T09Z ended on "SEARCH text
 // occurs 0 times in the shown content", and in each one checked the SEARCH named code that sits once in the file but outside the
@@ -13,7 +14,7 @@ import path from "node:path";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
 

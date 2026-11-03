@@ -1,3 +1,4 @@
+import { runningWorkerHarness } from "../_shared/fleet-ai-running-fixture.mjs";
 // personal-companion 1.13.2 COMPANION-FALLBACK-FLOOR-1 suite (charter pillar: core).
 // Failure mode proven: 2026-10-07/08, 40+ gpt-oss-120b drafts landed at 1100-1750 words against a 1700-2000 floor; nothing
 // published for 78h. A Workers AI draft is held to 70% of the floor; a DeepSeek draft keeps the full floor.
@@ -6,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const { callModel, validatePiece, expandFeedback } = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
+const { callModel, validatePiece, expandFeedback } = await runningWorkerHarness(importWorker, () => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 const body = (n, h) => Array.from({ length: h }, (_, i) => "## Item " + (i + 1) + "\n" + ("word ".repeat(Math.floor(n / h)))).join("\n");

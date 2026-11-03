@@ -1,12 +1,13 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-RETRY-PROGRESS-1: compare real provider-call sites with the prior repair loop (only the cycle check removed).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const guard = '    if (reviewedDrafts.indexOf(cand.text) >= 0) { trail.push("r" + (round + 1) + " stopped: repair repeated an already rejected draft"); return fail(); }\n';
 assert.equal(src.split(guard).length, 2, "the differential removes exactly the cycle check");
-const prior = await import("data:text/javascript;base64," + Buffer.from(src.replace(guard, "")).toString("base64"));
+const prior = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src.replace(guard, "")).toString("base64"), import.meta.url);
 let checks = 0;
 function check(condition, label) { assert.ok(condition, label); checks++; }
 const tags = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven"];

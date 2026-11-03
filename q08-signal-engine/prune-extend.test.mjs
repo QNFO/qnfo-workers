@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-PRUNE-EXTEND-1 offline suite (q08-signal-engine 0.28.1, charter pillar: reach; agent_issues 2284).
 // Proves: when deleting the flagged sentences leaves a clean draft whose only gate problem is the 2800-character body floor (29 of 77
 // failed runs in the 48 h to 2026-10-14 13:30 UTC, run 418 at 2701 characters), the one model revision extends THAT pruned draft
@@ -9,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url));
-const mod = await import(pathToFileURL(join(here, "worker.js")).href);
+const mod = await importRunningWorker(pathToFileURL(join(here, "worker.js")).href, import.meta.url);
 const V = Object.assign({ publishBody: mod.__analysis.publishBody }, mod.__verify);
 const src = readFileSync(join(here, "worker.js"), "utf8");
 let pass = 0, fail = 0;

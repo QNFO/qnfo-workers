@@ -1,7 +1,8 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { infraAIRun as __infraAIRun, AI_COST_LADDER as __ladder };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { infraAIRun as __infraAIRun, AI_COST_LADDER as __ladder };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (condition, message, value) => {
   if (condition) pass++;
@@ -33,7 +34,7 @@ const ok = (condition, message, value) => {
 }
 
 ok((src.match(/await infraAIRun\(env,/g) || []).length === 5, "all five infra embedding call sites use the gateway helper");
-ok((src.match(/env\.AI\.run\(/g) || []).length === 1, "the only direct inference call is inside the gateway helper");
+ok((src.match(/fleetAiRun\(env, env\.AI,/g) || []).length === 1, "the only gated inference call is inside the gateway helper");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

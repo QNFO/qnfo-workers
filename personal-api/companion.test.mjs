@@ -3,7 +3,8 @@
 // Offline: D1 is node:sqlite behind a D1-shaped adapter, R2/Vectorize/AI/push endpoints are in-memory fakes.
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
-import * as C from "./companion.js";
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
+const C = await importRunningWorker(new URL("./companion.js", import.meta.url));
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {

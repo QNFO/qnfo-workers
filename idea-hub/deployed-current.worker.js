@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.16.2-owner-diversity"; // 1.14.6 IDEAS-HUB-SLOW-RSS-1 part 2 (agent_issues 1000460): all() reads the public-gate flags of every thread in one query (threadFlags, blockedBy) instead of one blocked() query per thread that pulled up to 200 message bodies, so a cold build of the feed and the sessions list drops from 3 to 4.5 s to well under 1 s; the gate rules are unchanged and archive rows with no chat rows are skipped without a query. 1.14.5 IDEAS-HUB-SLOW-RSS-1 (agent_issues 1000460): /rss.xml and /api/sessions (also /api/feed) are served from the ideasCached stored copy (max-age 120, rebuilt in the background after 2 minutes, keyed by the clamped limit) instead of building 500 threads with one gate query each on every read (3 to 5 s, one read in four timed out). 1.14.4 IDEA-TRIAGE-COOLING-STARVE-1 (agent_issues 1000411; see the comment above triageProposals). // 1.14.3 PROPOSAL-COOLING-1 + REENTRY-EVENT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): (1) a proposal that IDEA-SCORING-POISON-1 could not score (a "[scoring-error" marker in rationale, 24 of the 33 'new' rows on 2026-10-26) no longer counts against PROPOSAL_BACKPRESSURE and PROPOSAL_FILL_TO in proposalRoom, runConsume, runOwnerCorpus, thinkLoop and runAskGap, which had held the count above 30 and kept re-entry consumption and the producers paused; triage's own selection of those rows is unchanged. It does not by itself clear the chaos drill of 1000244. (2) The re-entry leg's result is persisted once per cycle to cloud_ops_events id 'idea-reentry' (scanned, emitted, emit_error, owner_dois, owner_dois_capped, scan_capped; status error when the leg threw or its emission block failed), and a run that reads REENTRY_SCAN_LIMIT (500) papers says so in scan_capped. idea-hub/reentry-drain.test.mjs, idea-hub/proposal-headroom.test.mjs, migrations/2026-10-26-reentry-bind-limit.sql. // 1.14.2 REENTRY-BIND-LIMIT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): runReentry bound the 5 owner identifier types plus up to 200 owner-pipeline DOIs in one IN (?,?,...) list, and D1 allows 100 bound parameters per query ("too many SQL variables"); the owner pipeline reached 99 DOIs at the 2026-10-19 00:25Z cycle, so the papers query threw on every hourly cycle after it (ideationCycle swallowed the throw into r.reentry), emission and both drain legs never ran, and 17 artifact_reentry rows stayed new with weight 0, none consumed in 7 days. The DOIs now travel as one JSON parameter read by json_each(?) (6 bound parameters at any DOI count), the owner-DOI slice(0, 200) that would have silently dropped papers past 200 is a 5000 growth bound that reports itself, a failure of the emission block (papers or signals read) no longer stops the drain legs, and the swallowed cycle error is logged. idea-hub/reentry-drain.test.mjs. // 1.14.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 1.13.0 IDEA-SCORING-POISON-1 (2026-10-19, agent_issues 100145, pillar autonomy; minor: a decision triage now takes on its own): a row that no model in T_CHAIN can score (no JSON, an invalid scorecard) stayed status new, was scored again by up to four models on every hourly cycle, and counted out.errors, so fleet_heartbeat idea-hub read ok=0 on every cycle since 2026-10-19 10:32Z (CRON-FAULT-1 100145, four consecutive failures by 16:32Z) while ai_call_counters showed no API error (0 errors in 130 triage calls a day, the fallback models glm-5.3 and deepseek answering 74 of them). Row 1923 (owner-corpus) sat new from 13:25Z. A scoring failure of a generated or corpus row is now recorded on the row (rationale [scoring-error N ISO] reason, no new column), the row is retried on the next cycles up to 3 times and then once every 24 hours, rows without a failure marker are taken first so a failing row cannot starve the batch, and it is counted as scoring_failed (event meta scoring_failed, scoring_cooling, scoring_error, errors) and not as errors: a model that cannot read one text is not a cron fault, while a thrown error still is. A row scored later has its marker replaced by the rationale. idea-hub/scoring-failure.test.mjs. // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged; ops_config ideas_cap_trickle_per_run (0 to 12) overrides the rate and 0 restores the old hold without a deploy. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
+var VERSION = "1.17.0"; // 1.14.6 IDEAS-HUB-SLOW-RSS-1 part 2 (agent_issues 1000460): all() reads the public-gate flags of every thread in one query (threadFlags, blockedBy) instead of one blocked() query per thread that pulled up to 200 message bodies, so a cold build of the feed and the sessions list drops from 3 to 4.5 s to well under 1 s; the gate rules are unchanged and archive rows with no chat rows are skipped without a query. 1.14.5 IDEAS-HUB-SLOW-RSS-1 (agent_issues 1000460): /rss.xml and /api/sessions (also /api/feed) are served from the ideasCached stored copy (max-age 120, rebuilt in the background after 2 minutes, keyed by the clamped limit) instead of building 500 threads with one gate query each on every read (3 to 5 s, one read in four timed out). 1.14.4 IDEA-TRIAGE-COOLING-STARVE-1 (agent_issues 1000411; see the comment above triageProposals). // 1.14.3 PROPOSAL-COOLING-1 + REENTRY-EVENT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): (1) a proposal that IDEA-SCORING-POISON-1 could not score (a "[scoring-error" marker in rationale, 24 of the 33 'new' rows on 2026-10-26) no longer counts against PROPOSAL_BACKPRESSURE and PROPOSAL_FILL_TO in proposalRoom, runConsume, runOwnerCorpus, thinkLoop and runAskGap, which had held the count above 30 and kept re-entry consumption and the producers paused; triage's own selection of those rows is unchanged. It does not by itself clear the chaos drill of 1000244. (2) The re-entry leg's result is persisted once per cycle to cloud_ops_events id 'idea-reentry' (scanned, emitted, emit_error, owner_dois, owner_dois_capped, scan_capped; status error when the leg threw or its emission block failed), and a run that reads REENTRY_SCAN_LIMIT (500) papers says so in scan_capped. idea-hub/reentry-drain.test.mjs, idea-hub/proposal-headroom.test.mjs, migrations/2026-10-26-reentry-bind-limit.sql. // 1.14.2 REENTRY-BIND-LIMIT-1 (2026-10-26, agent_issues 1000244, pillar autonomy): runReentry bound the 5 owner identifier types plus up to 200 owner-pipeline DOIs in one IN (?,?,...) list, and D1 allows 100 bound parameters per query ("too many SQL variables"); the owner pipeline reached 99 DOIs at the 2026-10-19 00:25Z cycle, so the papers query threw on every hourly cycle after it (ideationCycle swallowed the throw into r.reentry), emission and both drain legs never ran, and 17 artifact_reentry rows stayed new with weight 0, none consumed in 7 days. The DOIs now travel as one JSON parameter read by json_each(?) (6 bound parameters at any DOI count), the owner-DOI slice(0, 200) that would have silently dropped papers past 200 is a 5000 growth bound that reports itself, a failure of the emission block (papers or signals read) no longer stops the drain legs, and the swallowed cycle error is logged. idea-hub/reentry-drain.test.mjs. // 1.14.0 WEBMCP-FLEET-1: expose the generated tool bridge on the rendered page. // 1.13.0 IDEA-SCORING-POISON-1 (2026-10-19, agent_issues 100145, pillar autonomy; minor: a decision triage now takes on its own): a row that no model in T_CHAIN can score (no JSON, an invalid scorecard) stayed status new, was scored again by up to four models on every hourly cycle, and counted out.errors, so fleet_heartbeat idea-hub read ok=0 on every cycle since 2026-10-19 10:32Z (CRON-FAULT-1 100145, four consecutive failures by 16:32Z) while ai_call_counters showed no API error (0 errors in 130 triage calls a day, the fallback models glm-5.3 and deepseek answering 74 of them). Row 1923 (owner-corpus) sat new from 13:25Z. A scoring failure of a generated or corpus row is now recorded on the row (rationale [scoring-error N ISO] reason, no new column), the row is retried on the next cycles up to 3 times and then once every 24 hours, rows without a failure marker are taken first so a failing row cannot starve the batch, and it is counted as scoring_failed (event meta scoring_failed, scoring_cooling, scoring_error, errors) and not as errors: a model that cannot read one text is not a cron fault, while a thrown error still is. A row scored later has its marker replaced by the rationale. idea-hub/scoring-failure.test.mjs. // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged; ops_config ideas_cap_trickle_per_run (0 to 12) overrides the rate and 0 restores the old hold without a deploy. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
 // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
 const MAX_TOPIC_SHARE = 0.5;
 async function applyDiversityConstraint(proposal, getRecentAccepts) {
@@ -314,7 +314,7 @@ function tExtract(r) {
 // per-worker/purpose call counter to D1 ai_call_counters (fail-soft, never blocks or alters the AI call).
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1, res;
-  try { res = await env.AI.run(model, input, promptCacheOpts(model, input, opts)); } catch (e) { ok = 0; throw e; }
+  try { res = await fleetAiRun(env, env.AI, model, input, promptCacheOpts(model, input, opts)); } catch (e) { if (fleetAiStopped(e)) throw e; ok = 0; throw e; }
   finally {
     try {
       var db = env.QNFO_AUDIT;
@@ -373,7 +373,7 @@ async function tRunModel(env, name, prompt) {
       for (var k = 0; k < T_KEYS.length; k++) { var v = parseFloat(c[T_KEYS[k]]); if (!isFinite(v)) { ok = false; break; } c[T_KEYS[k]] = Math.max(0, Math.min(1, v)); }
       if (!ok) { lastErr = chain[i] + ": invalid scorecard"; continue; }
       return { card: c, model: chain[i] };
-    } catch (e) { lastErr = chain[i] + ": " + (e && e.message || e); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; lastErr = chain[i] + ": " + (e && e.message || e); }
   }
   return { error: lastErr };
 }
@@ -509,8 +509,8 @@ function noveltyVerdict(lab, nbrs, mix) {
 }
 async function noveltyScreen(env, idea, mix, lean) {
   var nbrs = [], errs = [];
-  try { nbrs = nbrs.concat(await corpusNeighbours(env, idea)); } catch (e) { errs.push("corpus: " + String(e && e.message || e).slice(0, 80)); }
-  try { nbrs = nbrs.concat(await arxivNeighbours(idea)); } catch (e) { errs.push("arxiv: " + String(e && e.message || e).slice(0, 80)); }
+  try { nbrs = nbrs.concat(await corpusNeighbours(env, idea)); } catch (e) { if (fleetAiStopped(e)) throw e; errs.push("corpus: " + String(e && e.message || e).slice(0, 80)); }
+  try { nbrs = nbrs.concat(await arxivNeighbours(idea)); } catch (e) { if (fleetAiStopped(e)) throw e; errs.push("arxiv: " + String(e && e.message || e).slice(0, 80)); }
   if (!nbrs.length) return { screened: false, error: errs.join("; ") || "no neighbours" };
   var prompt = NOVELTY_PROMPT + "IDEA: " + String(idea || "").slice(0, 2000) + "\n" + nbrs.map(function (n, i) { return "NEIGHBOUR " + (i + 1) + " (" + n.ref + "): " + n.title + ". " + n.text; }).join("\n");
   var models = lean ? NOVELTY_MODELS.slice().reverse() : NOVELTY_MODELS;
@@ -522,7 +522,7 @@ async function noveltyScreen(env, idea, mix, lean) {
       var v = noveltyVerdict(lab, nbrs, mix);
       v.screened = true; v.model = models[i]; v.errors = errs;
       return v;
-    } catch (e) { errs.push(models[i] + ": " + String(e && e.message || e).slice(0, 80)); }
+    } catch (e) { if (fleetAiStopped(e)) throw e; errs.push(models[i] + ": " + String(e && e.message || e).slice(0, 80)); }
   }
   return { screened: false, error: errs.join("; ") };
 }
@@ -897,7 +897,7 @@ async function triageProposals(env, deadline) {
         out.accepted++;
         if (mix) { mix.n++; mix.by[cluster] = (mix.by[cluster] || 0) + 1; if (fq) mix.foundational++; }
       }
-    } catch (e) { out.errors++; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; out.errors++; }
   }
   if (mix) {
     try { await diversityRelease(env, mix, false, out); } catch (e) { out.errors++; }
@@ -1247,7 +1247,7 @@ async function runOwnerCorpus(env, deadline) {
           else { outcome = "error"; note = "unparseable model reply"; out.errors++; }
         }
       }
-    } catch (e) { outcome = "error"; note = String(e && e.message || e).slice(0, 200); out.errors++; }
+    } catch (e) { if (fleetAiStopped(e)) throw e; outcome = "error"; note = String(e && e.message || e).slice(0, 200); out.errors++; }
     if (outcome === "error") { var tries = /^error(\d)$/.exec(String(n.prev || "")); outcome = "error" + Math.min(3, (tries ? Number(tries[1]) : (n.prev === "error" ? 1 : 0)) + 1); }
     try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO owner_corpus_seen (path, sig, ts, outcome, proposal_id, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(n.path, n.sig || null, now, outcome, pid, note).run(); } catch (e) { out.errors++; }
   }
@@ -1341,8 +1341,8 @@ async function ideationCycle(env) {
   r.triage = await triageProposals(env, WALL_DEADLINE);
   if (left() > 30000) { try { r.consume = await runConsume(env); } catch (e) { r.consume = { error: String(e && e.message || e) }; } } else r.consume = { skipped: "budget" };
   if (left() > 30000) { try { r.askgap = await runAskGap(env); } catch (e) { r.askgap = { error: String(e && e.message || e) }; } } else r.askgap = { skipped: "budget" };
-  if (left() > 60000) { try { r.corpus = await runOwnerCorpus(env, WALL_DEADLINE); } catch (e) { r.corpus = { error: String(e && e.message || e) }; } } else r.corpus = { skipped: "budget" };
-  if (left() > 60000 && new Date().getUTCHours() % THINK_EVERY_H === 0) { try { r.think = await thinkLoop(env); } catch (e) { r.think = { error: String(e && e.message || e) }; } }
+  if (left() > 60000) { try { r.corpus = await runOwnerCorpus(env, WALL_DEADLINE); } catch (e) { if (fleetAiStopped(e)) throw e; r.corpus = { error: String(e && e.message || e) }; } } else r.corpus = { skipped: "budget" };
+  if (left() > 60000 && new Date().getUTCHours() % THINK_EVERY_H === 0) { try { r.think = await thinkLoop(env); } catch (e) { if (fleetAiStopped(e)) throw e; r.think = { error: String(e && e.message || e) }; } }
   return r;
 }
 // ---- IDEAS-QDS-1 (2026-10-02, pillar reach): ideas.qnfo.org as a readable page on the QNFO design system ----
@@ -1646,13 +1646,13 @@ async function turnstileVerify(env, token, ip, action) {
   try {
     var body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
     if (ip) body.set("remoteip", ip);
-    var r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
+    var r = await fleetAiFetch(env, fetch, "https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: body, signal: AbortSignal.timeout(10000) });
     if (!r.ok) return { ok: false, reason: "siteverify-" + r.status };
     var j = await r.json();
     if (!j || j.success !== true) return { ok: false, reason: "rejected:" + String((j && j["error-codes"]) || "").slice(0, 80) };
     if (action && j.action && j.action !== action) return { ok: false, reason: "action-mismatch" };
     return { ok: true, reason: "verified" };
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return { ok: false, reason: "siteverify-error" };
   }
 }
@@ -1666,15 +1666,21 @@ async function subscribeProxy(req, env) {
   if (!ts.ok) return json({ ok: false, error: "Verification failed. Reload the page and try again." }, 403);
   var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 9000);
   try {
-    var r = await fetch(SUBSCRIBERS_ENDPOINT + "/subscribe", { method: "POST", signal: ctrl.signal, headers: { "Content-Type": "application/json", "User-Agent": "idea-hub/" + VERSION, "X-Forwarded-For": req.headers.get("CF-Connecting-IP") || "", "X-Client-UA": String(req.headers.get("User-Agent") || "").slice(0, 300) },
+    var r = await fleetAiFetch(env, fetch, SUBSCRIBERS_ENDPOINT + "/subscribe", { method: "POST", signal: ctrl.signal, headers: { "Content-Type": "application/json", "User-Agent": "idea-hub/" + VERSION, "X-Forwarded-For": req.headers.get("CF-Connecting-IP") || "", "X-Client-UA": String(req.headers.get("User-Agent") || "").slice(0, 300) },
       body: JSON.stringify({ email: email, hp: String(payload && (payload.hp || payload.website) || ""), source: "ideas.qnfo.org" }) });
     var data = await r.json().catch(function () { return {}; });
     return json(data && typeof data === "object" ? data : { ok: false, error: "Sign-up failed." }, r.status);
-  } catch (e) {
+  } catch (e) { if (fleetAiStopped(e)) throw e;
     return json({ ok: false, error: "Sign-up is unavailable right now. Please try again shortly." }, 502);
   } finally { clearTimeout(timer); }
 }
-var __wm_default = {async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(u.pathname==='/robots.txt')return new Response('User-agent: *\nAllow: /\nSitemap: https://ideas.qnfo.org/sitemap.xml\n',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=86400'}});if(u.pathname==='/sitemap.xml')return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ideas.qnfo.org/</loc><changefreq>daily</changefreq></url></urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'}});/* SEO-HYGIENE-1: robots + sitemap (home only: the idea pages are machine-generated questions, not invited into the index) */if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req,env);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"quarantine",error:String(e&&e.message||e)}))}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"deferred",error:String(e&&e.message||e)}))}let oc=null;try{oc={};((await env.QNFO_AUDIT.prepare("SELECT outcome, COUNT(*) AS n FROM owner_corpus_seen GROUP BY outcome").all()).results||[]).forEach(function(x){oc[x.outcome]=x.n})}catch(e){oc=null;console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"owner_corpus_seen",error:String(e&&e.message||e)}))}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,owner_signal_intake:{vault_bound:!!env.VAULT,corpus_seen:oc,reentry_owner_types:REENTRY_OWNER_TYPES,corpus_score_min:OWNER_CORPUS_SCORE_MIN},triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},novelty_screen:{models:NOVELTY_MODELS,neighbours_per_source:NOVELTY_K,sources:["qnfo-corpus","arxiv"],payoff_min:NOVELTY_PAYOFF_MIN,foundational_quota:NOVELTY_FOUNDATIONAL_QUOTA,corpus_bound:!!(env.PAPER_VZ&&env.LIVING_PAPER)},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake", "novelty-screen"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :25 cron", "while a fleet_budget ai_spend cap is breached, triage still runs and scores on one cheap model (BUDGET-SOFT-ROUTE-1); rows left as status deferred_budget by older versions are released every run (count in triage_deferred_budget)", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return ideasCached(req,ctx,function(){return rss(env)},{maxAge:120,freshMs:FEED_FRESH_MS});if(u.pathname==='/api/sessions'||u.pathname==='/api/feed'){const lim=parseInt(u.searchParams.get('limit')||'50',10);return ideasCached(req,ctx,function(){return sessions(u,env)},{variant:'&limit='+(Number.isFinite(lim)?Math.min(Math.max(lim,1),100):'x'),maxAge:120,freshMs:FEED_FRESH_MS})}if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+var __wm_default = {async scheduled(event,env,ctx){
+    if (!await fleetAiBackground(env)) return;
+ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){
+    try {
+const u=new URL(req.url);if(u.pathname==='/robots.txt')return new Response('User-agent: *\nAllow: /\nSitemap: https://ideas.qnfo.org/sitemap.xml\n',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=86400'}});if(u.pathname==='/sitemap.xml')return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ideas.qnfo.org/</loc><changefreq>daily</changefreq></url></urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'}});/* SEO-HYGIENE-1: robots + sitemap (home only: the idea pages are machine-generated questions, not invited into the index) */if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req,env);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"quarantine",error:String(e&&e.message||e)}))}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"deferred",error:String(e&&e.message||e)}))}let oc=null;try{oc={};((await env.QNFO_AUDIT.prepare("SELECT outcome, COUNT(*) AS n FROM owner_corpus_seen GROUP BY outcome").all()).results||[]).forEach(function(x){oc[x.outcome]=x.n})}catch(e){oc=null;console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"owner_corpus_seen",error:String(e&&e.message||e)}))}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,owner_signal_intake:{vault_bound:!!env.VAULT,corpus_seen:oc,reentry_owner_types:REENTRY_OWNER_TYPES,corpus_score_min:OWNER_CORPUS_SCORE_MIN},triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},novelty_screen:{models:NOVELTY_MODELS,neighbours_per_source:NOVELTY_K,sources:["qnfo-corpus","arxiv"],payoff_min:NOVELTY_PAYOFF_MIN,foundational_quota:NOVELTY_FOUNDATIONAL_QUOTA,corpus_bound:!!(env.PAPER_VZ&&env.LIVING_PAPER)},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake", "novelty-screen"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :25 cron", "while a fleet_budget ai_spend cap is breached, triage still runs and scores on one cheap model (BUDGET-SOFT-ROUTE-1); rows left as status deferred_budget by older versions are released every run (count in triage_deferred_budget)", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return ideasCached(req,ctx,function(){return rss(env)},{maxAge:120,freshMs:FEED_FRESH_MS});if(u.pathname==='/api/sessions'||u.pathname==='/api/feed'){const lim=parseInt(u.searchParams.get('limit')||'50',10);return ideasCached(req,ctx,function(){return sessions(u,env)},{variant:'&limit='+(Number.isFinite(lim)?Math.min(Math.max(lim,1),100):'x'),maxAge:120,freshMs:FEED_FRESH_MS})}if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){ if (fleetAiStopped(e)) throw e;return json({error:'Server error: '+(e&&e.message||String(e))},500)}
+    } catch (aiControlError) { if (fleetAiStopped(aiControlError)) return fleetAiResponse(aiControlError); throw aiControlError; }
+}};
 export default __wm_default;
 
 // ---- WEBMCP-FLEET-1:BEGIN (sourced from _shared/webmcp.js; applied by scripts/webmcp-apply.mjs; do not edit inside a worker) ----
@@ -2352,3 +2358,114 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH idea-hub ----
 wmAttach(__wm_default, "idea-hub");
+
+// BEGIN FLEET-AI-CONTROL-1
+var FLEET_AI_AUDIT_BINDING = "QNFO_AUDIT";
+var FLEET_AI_WORKER = "idea-hub";
+// FLEET-AI-CONTROL-1: inlined by scripts/fleet-ai-control-sync.mjs; no cached allows.
+function fleetAiStopped(error) {
+  return !!error && (error.code === "ai_paused" || error.code === "ai_control_unavailable");
+}
+async function fleetAiAssert(env) {
+  var timeoutId;
+  try {
+    var db = env && env[FLEET_AI_AUDIT_BINDING];
+    if (!db || typeof db.withSession !== "function") throw new Error("primary audit session unavailable");
+    var row = await Promise.race([
+      db.withSession("first-primary").prepare("SELECT paused, revision FROM fleet_ai_control WHERE id=1").first(),
+      new Promise(function (_, reject) { timeoutId = setTimeout(function () { reject(new Error("AI control read timed out")); }, 3000); })
+    ]);
+    if (!row || (row.paused !== 0 && row.paused !== 1) || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      throw new Error("invalid or uninitialized AI control state");
+    }
+    if (row.paused === 1) {
+      var paused = new Error("Owner has paused fleet AI");
+      paused.code = "ai_paused";
+      paused.retryable = false;
+      throw paused;
+    }
+  } catch (error) {
+    if (fleetAiStopped(error)) throw error;
+    console.error(JSON.stringify({ event: "ai_control_unavailable", error: String(error && error.message || error) }));
+    var unavailable = new Error("AI dispatch refused: emergency control unavailable");
+    unavailable.code = "ai_control_unavailable";
+    unavailable.retryable = false;
+    throw unavailable;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function fleetAiRun(env, binding, ...args) {
+  await fleetAiAssert(env);
+  return binding.run(...args);
+}
+function fleetAiBillableUrl(input) {
+  var url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  var host = url.hostname.toLowerCase();
+  return /(^|\.)gateway\.ai\.cloudflare\.com$/.test(host)
+    || /^(api\.(deepseek|openai|anthropic|groq|together|cerebras|mistral)\.(com|ai)|openrouter\.ai|generativelanguage\.googleapis\.com|[a-z0-9-]+-aiplatform\.googleapis\.com)$/.test(host)
+    || (host === "api.cloudflare.com" && /\/(ai\/(run|v1)|autorag|ai-search|browser-rendering)\//.test(url.pathname));
+}
+async function fleetAiFetch(env, fetcher, input, init) {
+  if (fleetAiBillableUrl(input)) {
+    await fleetAiAssert(env);
+    if (new URL(typeof input === "string" || input instanceof URL ? input : input.url).hostname === "gateway.ai.cloudflare.com") {
+      var request = new Request(input, init);
+      var headers = new Headers(request.headers);
+      if (!headers.has("cf-aig-metadata")) headers.set("cf-aig-metadata", JSON.stringify({ worker: FLEET_AI_WORKER }));
+      var tagged = new Request(request, { headers: headers });
+      var response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+      for (var attempt = 1; response && [502, 503, 504].includes(response.status) && attempt <= 2; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 2000) + Date.now() % 250));
+        await fleetAiAssert(env);
+        try {
+          response = fleetAiCheckedResponse(await fetcher(tagged.clone()));
+        } catch (error) {
+          if (fleetAiStopped(error)) throw error;
+          console.error(JSON.stringify({ event: "ai_gateway_retry_failed", error: String(error && error.message || error) }));
+          return response;
+        }
+      }
+      return response;
+    }
+  }
+  return fleetAiCheckedResponse(await fetcher(input, init));
+}
+function fleetAiCheckedResponse(response) {
+  var code = response && response.status === 503 && response.headers.get("x-fleet-ai-control");
+  if (code === "ai_paused" || code === "ai_control_unavailable") {
+    var error = new Error("AI dispatch refused by upstream emergency control");
+    error.code = code;
+    error.retryable = false;
+    throw error;
+  }
+  return response;
+}
+async function fleetAiServiceFetch(env, binding, input, init) {
+  await fleetAiAssert(env);
+  return fleetAiCheckedResponse(await binding.fetch(input, init));
+}
+async function fleetAiBackground(env) {
+  try {
+    await fleetAiAssert(env);
+    return true;
+  } catch (error) {
+    if (!fleetAiStopped(error)) throw error;
+    console.warn(JSON.stringify({ event: "ai_background_deferred", reason: error.code }));
+    return false;
+  }
+}
+function fleetAiResponse(error) {
+  return new Response(JSON.stringify({ ok: false, error: error.code, paused: true }), {
+    status: 503,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-fleet-ai-control": error.code }
+  });
+}
+async function fleetAiWorkflowWait(env, step, name) {
+  for (var check = 0; ; check++) {
+    var running = await step.do("ai-control-" + name + "-" + check, { retries: { limit: 0 } }, () => fleetAiBackground(env));
+    if (running) return;
+    await step.sleep("ai-paused-" + name + "-" + check, "10 minutes");
+  }
+}
+// END FLEET-AI-CONTROL-1

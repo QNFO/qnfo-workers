@@ -2,6 +2,7 @@
 // model is asked first, and the owner's history includes command-line asks.
 // Run: node qnfo-fleet-dashboard/ask-retry.test.mjs
 import { DatabaseSync } from "node:sqlite";
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -10,7 +11,7 @@ import { writeFileSync, readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 const tmpd = mkdtempSync(join(tmpdir(), "askretry-"));
 writeFileSync(join(tmpd, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { askRetry as __askRetry, cmdSweep as __cmdSweep, ownerPromptsView as __view, ASK_MODELS as __models };\n");
-const W = await import(pathToFileURL(join(tmpd, "w.mjs")).href);
+const W = await importRunningWorker(pathToFileURL(join(tmpd, "w.mjs")).href, import.meta.url);
 const worker = W.default;
 globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
 

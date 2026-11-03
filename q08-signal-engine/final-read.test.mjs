@@ -1,5 +1,6 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // Q08-FINAL-READ-1 (0.21.0): the published text is read last, with a floor and a fail-closed panel.
-const mod = await import("./worker.js");
+const mod = await importRunningWorker("./worker.js", import.meta.url);
 const A = mod.__analysis;
 let passes = 0, fails = 0;
 const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL " + l + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };

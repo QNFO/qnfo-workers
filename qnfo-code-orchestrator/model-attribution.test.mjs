@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // MODEL-ATTRIBUTION-1 (qnfo-code-orchestrator 0.18.16, 2026-10-18). Failure mode: a rung's failure rate could not be
 // measured. code_tasks.model was written only where a proposal built ("model: model" on the way to verify), so a task
 // that failed at propose kept model=NULL: 8 of the 14 distinct failures in the 24h to 2026-10-18T20:26Z, and four of
@@ -11,7 +12,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 700) : "")); } };
 

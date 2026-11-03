@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // CMD-VOICE-1 offline suite (qnfo-fleet-dashboard 1.75.0). Proves: /api/cmd/transcribe needs the header and the owner, rejects empty
 // and oversize recordings, answers with the Whisper text, falls back to the next model when the first fails, and names the failure;
 // the command line page carries the Speak button; the terminal client sends a recording to that route with its session cookie.
@@ -17,7 +18,7 @@ const code = cut("var CMD_STT_MODELS", "async function cmdRoutes(") + "\nthis.cm
 const calls = [];
 const ctx = { ownerJson: (d, s) => ({ status: s || 200, body: d }), btoa, Uint8Array, String, Array, JSON, Date };
 vm.createContext(ctx);
-vm.runInContext(code, ctx);
+vm.runInContext(RUNNING_AI_FIXTURE + (code), ctx);
 const req = (bytes, hdr) => ({ headers: { get: (k) => (hdr === undefined ? { "x-fleet-ui": "1" } : hdr)[k] || null }, arrayBuffer: async () => new Uint8Array(bytes).buffer });
 const env = (run) => ({ AI: { run: async (m, i) => { calls.push([m, i]); return run(m, i); } } });
 

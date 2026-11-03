@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // personal-api WORKERS-AI-ATTRIBUTION-1 suite (4.7.2, agent_issues #1833, charter pillar: cost).
 // personal-api called env.AI.run directly, so its Workers AI spend reached no fleet counter. Proves: the __aiAttrEnv shim
 // records one ai_call_counters row per day/model with calls, tokens and neurons (counts only, no text); errors are counted
@@ -9,7 +10,7 @@ import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const patched = src + "\nexport { __aiAttrEnv as __attr };\n";
-const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(patched).toString("base64"), import.meta.url);
 const attr = mod.__attr;
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra) : "")); } };
@@ -47,8 +48,8 @@ const env = { AI, AUDIT, PERSONAL: { tag: "personal" } };
   ok(attr(bare, "personal-api", "AI", "AUDIT") === bare, "without AUDIT the env is returned unchanged");
 }
 {
-  ok(/async fetch\(request, env, ctx\) \{\n    env = __aiAttrEnv\(env, "personal-api", "AI", "AUDIT"\);/.test(src), "the fetch handler wraps env");
-  ok(/async scheduled\(event, env, ctx\) \{\n    env = __aiAttrEnv\(env, "personal-api", "AI", "AUDIT"\);/.test(src), "the cron handler wraps env");
+  ok(/async fetch\(request, env, ctx\) \{[\s\S]{0,160}env = __aiAttrEnv\(env, "personal-api", "AI", "AUDIT"\);/.test(src), "the fetch handler wraps env");
+  ok(/async scheduled\(event, env, ctx\) \{[\s\S]{0,160}env = __aiAttrEnv\(env, "personal-api", "AI", "AUDIT"\);/.test(src), "the cron handler wraps env");
   ok(!/this\.env\.AI\.run\(/.test(src), "the Durable Object chat call is wrapped too");
   const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
   ok(/binding = "AUDIT"\ndatabase_name = "qnfo-audit"/.test(toml), "wrangler.toml declares the AUDIT binding");

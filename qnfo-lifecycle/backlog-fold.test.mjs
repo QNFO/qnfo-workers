@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // BACKLOG-FOLD-1 (qnfo-lifecycle 1.8.0, agent_issues 1756) offline suite. No network, synthetic data.
 // Proves: the qnfo-backlog-exec code runs unchanged as the member backlogMod (only its VERSION line and its export differ);
 // the host's hourly tick runs it once a day, on the 02:00 UTC tick (its old "10 1 * * *" at the next full hour), awaited,
@@ -11,7 +12,7 @@ import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const guest = readFileSync(new URL("../qnfo-backlog-exec/worker.js", import.meta.url), "utf8");
 const opsToml = readFileSync(new URL("../qnfo-ops/wrangler.toml", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { backlogMod as __member, BACKLOG_VERSION as __mv, VERSION as __hv, backlogDue as __due };\n").toString("base64"));
+const mod = await importRunningWorker("data:text/javascript;base64," + Buffer.from(src + "\nexport { backlogMod as __member, BACKLOG_VERSION as __mv, VERSION as __hv, backlogDue as __due };\n").toString("base64"), import.meta.url);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 

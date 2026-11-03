@@ -1,3 +1,4 @@
+import { importRunningWorker } from "../_shared/fleet-ai-running-fixture.mjs";
 // SELF-REPAIR-1 offline suite (qnfo-code-orchestrator 0.3.7, agent_issues #1768, pillar autonomy).
 // Replays code task ct_qldqse7ngltdth (issue #1763, Q08-VOTE-CUTOFF-1): a ~93 KB worker.js with no final newline, an anchor on
 // feedbackScan, and a goal that edits BOTH of two near-identical SQL lines. Live on 2026-10-02 rung 1 matched both lines, rungs 2 and
@@ -19,7 +20,7 @@ import os from "node:os";
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
+const worker = (await importRunningWorker(pathToFileURL(path.join(here, "worker.js")).href, import.meta.url)).default;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
@@ -211,7 +212,7 @@ function fileIssue(env) {
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /5m, then 15m/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
+  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+(?:-|$)/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /5m, then 15m/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
 }
 
 console.log("self-repair: " + pass + " passed, " + fail + " failed");

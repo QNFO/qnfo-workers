@@ -1,3 +1,4 @@
+import { RUNNING_AI_FIXTURE } from "../_shared/fleet-ai-running-fixture.mjs";
 // WORKERS-AI-ATTRIBUTION-2 offline suite (qnfo-ai-search, agent_issues 1997): the entry wraps env.AI with __aiAttrEnv, so every Workers AI
 // call is counted in qnfo-audit ai_call_counters (purpose 'binding', worker 'qnfo-ai-search'); results, streams and errors pass through.
 // Run: node --no-warnings qnfo-ai-search/ai-attribution.test.mjs   -> prints "N passed, 0 failed"
@@ -11,7 +12,7 @@ const e = src.indexOf("\n}\n", b);
 if (a < 0 || b < a || e < b) throw new Error("WORKERS-AI-ATTRIBUTION block not found in worker.js");
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
-const W = vm.runInContext(src.slice(a, e + 2) + "\n;({ __aiAttrEnv, __AI_ATTR_RATES });", vm.createContext({ Proxy, Reflect, Object, JSON, Date, Number, String }));
+const W = vm.runInContext(RUNNING_AI_FIXTURE + (src.slice(a, e + 2) + "\n;({ __aiAttrEnv, __AI_ATTR_RATES });"), vm.createContext({ Proxy, Reflect, Object, JSON, Date, Number, String }));
 
 const db = new DatabaseSync(":memory:");
 db.exec("CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))");
