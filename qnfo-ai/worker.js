@@ -62,7 +62,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
             }
           }
         }
-        if (!String(model).startsWith("dynamic/")) {
+        if (!String(model).startsWith("dynamic/") && String(model) !== "cloudflare/auto") {
         // Attempt fallback to cheap model if not already using it, retrying a rate
         // limit with backoff instead of letting one burst blow the fallback's budget.
         // CF-OBS-ISSUE-1 (#100560, RED-DRAIN-1): the 45s bound let the primary's backoff
@@ -584,7 +584,7 @@ async function spendReport(env) {
   return out;
 }
 
-var ROUTES = ["/health", "/", "/spend", "/v1/chat/completions", "/v1/messages", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch", "/v1/ensemble/policy"];
+var ROUTES = ["/health", "/", "/spend", "/v1/chat/completions", "/v1/messages", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch", "/v1/ensemble/policy", "/internal/eval/autorouter-shadow"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var VISION_FALLBACK = "glm-5.3-flash";
@@ -4097,6 +4097,130 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   return new Response(anthSSE(events), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
 }
 // =================== end ANTHROPIC-COMPAT-1 ===================
+async function autoRouterShadowRun(env, limit) {
+  const start = new Date(Date.now() - 7 * 864e5).toISOString();
+  const rows = await env.QNFO_AUDIT.prepare(
+    "SELECT id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, streamed FROM ai_queries WHERE ts >= ?1 AND prompt IS NOT NULL AND response IS NOT NULL AND COALESCE(streamed, 0) = 0 ORDER BY ts DESC LIMIT ?2"
+  ).bind(start, limit * 10).all();
+  const runId = rid(12);
+  const results = [];
+  for (const row of rows && rows.results || []) {
+    if (results.length >= limit) break;
+    const prompt = String(row.prompt || "").trim();
+    const baseline = String(row.response || "").trim();
+    if (!row.id || !prompt || prompt.length > 4e3 || !baseline || baseline.length > 1e4 ||
+        /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(prompt) ||
+        /\b(?:Bearer\s+[A-Za-z0-9._~+/-]{12,}|(?:sk|pk|ghp|github_pat)_[A-Za-z0-9_-]{12,})\b/i.test(prompt) ||
+        /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(prompt) ||
+        /\b(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}\b/.test(prompt) ||
+        /\b\d{3}-\d{2}-\d{4}\b/.test(prompt)) continue;
+    const sourceHash = await autoRouterShadowHash(String(row.id));
+    const result = {
+      source_hash: sourceHash,
+      baseline_model: String(row.model || "").slice(0, 120) || null,
+      baseline_cost_usd: row.cost_usd != null && Number.isFinite(Number(row.cost_usd)) ? Number(row.cost_usd) : null,
+      baseline_latency_ms: row.latency_ms != null && Number.isFinite(Number(row.latency_ms)) ? Number(row.latency_ms) : null,
+      status: "failed",
+      selected_model: null,
+      auto_cost_estimate_usd: null,
+      cost_delta_usd: null,
+      auto_latency_ms: null,
+      auto_input_tokens: null,
+      auto_output_tokens: null,
+      baseline_response_sha256: await autoRouterShadowHash(baseline),
+      auto_response_sha256: null,
+      exact_match: null,
+      output_length_ratio: null,
+      quality_verdict: "unjudged",
+      recorded: false
+    };
+    const eventId = "autorouter-shadow-" + runId + "-" + sourceHash.slice(0, 12);
+    try {
+      const governed = await spendGovern(env, "gateway", "cloudflare/auto", false);
+      if (governed.action !== "allow") {
+        result.status = "skipped_budget";
+      } else {
+        const messages = [{ role: "user", content: prompt }];
+        const startedAt = Date.now();
+        const response = await aiRunAttr(env, "qnfo-ai", "autorouter-shadow", "cloudflare/auto", {
+          messages,
+          max_tokens: 512
+        }, {
+          gateway: {
+            id: "default",
+            cacheTtl: 0,
+            metadata: { worker: "qnfo-ai", purpose: "autorouter-shadow" }
+          }
+        });
+        const text = String(response && (response.response ||
+          response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content) || "").trim();
+        const usage = spendUsageOf(response, spendInEstimate(messages), spendOutEstimate(response));
+        const selected = response && (response.model || response.result && response.result.model);
+        result.status = text ? "ok" : "empty";
+        result.selected_model = selected ? String(selected).slice(0, 120) : null;
+        result.auto_latency_ms = Date.now() - startedAt;
+        result.auto_input_tokens = usage.in;
+        result.auto_output_tokens = usage.out;
+        result.auto_response_sha256 = await autoRouterShadowHash(text);
+        result.exact_match = !!text && text.toLowerCase().replace(/\s+/g, " ") === baseline.toLowerCase().replace(/\s+/g, " ");
+        result.output_length_ratio = text ? Math.round(text.length / baseline.length * 1e4) / 1e4 : null;
+        const hasWorkersAiRate = !!selected && Object.prototype.hasOwnProperty.call(__AI_ATTR_RATES, String(selected));
+        const hasGatewayRate = !!selected && Object.prototype.hasOwnProperty.call(SPEND_PRICES.gateway, String(selected));
+        if (hasWorkersAiRate || hasGatewayRate) {
+          const provider = hasWorkersAiRate ? "workers-ai" : "gateway";
+          result.auto_cost_estimate_usd = spendUsd(provider, selected, usage.in, usage.out);
+          if (result.baseline_cost_usd != null) {
+            result.cost_delta_usd = Math.round((result.auto_cost_estimate_usd - result.baseline_cost_usd) * 1e6) / 1e6;
+          }
+        }
+      }
+    } catch (e) {
+      result.status = "failed";
+      result.error_type = String(e && e.name || "Error").slice(0, 40);
+    }
+    try {
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'autorouter-shadow', ?3, ?4, 'qnfo-ai', ?5)"
+      ).bind(eventId, new Date().toISOString(), "Auto Router shadow " + result.status + " for historical sample " + sourceHash.slice(0, 12), JSON.stringify({
+        run_id: runId,
+        source_hash: sourceHash,
+        baseline_model: result.baseline_model,
+        baseline_cost_usd: result.baseline_cost_usd,
+        baseline_latency_ms: result.baseline_latency_ms,
+        selected_model: result.selected_model,
+        auto_cost_estimate_usd: result.auto_cost_estimate_usd,
+        cost_delta_usd: result.cost_delta_usd,
+        auto_latency_ms: result.auto_latency_ms,
+        auto_input_tokens: result.auto_input_tokens,
+        auto_output_tokens: result.auto_output_tokens,
+        baseline_response_sha256: result.baseline_response_sha256,
+        auto_response_sha256: result.auto_response_sha256,
+        exact_match: result.exact_match,
+        output_length_ratio: result.output_length_ratio,
+        quality_verdict: result.quality_verdict,
+        error_type: result.error_type || null
+      }), result.status === "ok" ? "ok" : result.status).run();
+      result.recorded = true;
+    } catch (e) {
+      result.recorded = false;
+    }
+    results.push(result);
+  }
+  return {
+    ok: results.length > 0 && results.every((r) => r.recorded),
+    run_id: runId,
+    window_days: 7,
+    requested: limit,
+    sampled: results.length,
+    ...results.length ? {} : { reason: "no eligible logged prompts in the 7-day window" },
+    quality_comparison: "unjudged; exact-match and output-length fields are descriptive proxies only",
+    results
+  };
+}
+async function autoRouterShadowHash(text) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text || "")));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
 var worker_default = {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-ai", "AI", "QNFO_AUDIT");
@@ -4182,6 +4306,23 @@ var worker_default = {
         return json(await spendReport(env));
       } catch (e) {
         return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500);
+      }
+    }
+    if (path === "/internal/eval/autorouter-shadow" && method === "POST") {
+      if (!await authOk(request.headers.get("Authorization") || "", env, ctx)) return json({ error: "Unauthorized" }, 401);
+      if (!env.QNFO_AUDIT || !env.AI) return json({ error: "AI and QNFO_AUDIT bindings required" }, 503);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: "invalid JSON" }, 400);
+      }
+      if (!body || body.confirm !== true) return json({ error: "confirm must be true to replay logged prompts" }, 400);
+      const limit = Math.min(Math.max(parseInt(body.limit || "3", 10) || 3, 1), 5);
+      try {
+        return json(await autoRouterShadowRun(env, limit));
+      } catch (e) {
+        return json({ ok: false, error: "shadow evaluation unavailable" }, 500);
       }
     }
     if (path === "/v1/models" && method === "GET") {
@@ -4525,11 +4666,12 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   finally {
     // SPEND-GOVERNOR-1: price every binding call into ai_spend_ledger (fail-soft, not awaited).
     try {
-      if (ok && !(isDynamicRoute(model) && input && input.stream)) {
+      var isGatewayRoute = isDynamicRoute(model) || String(model) === "cloudflare/auto";
+      if (ok && !(isGatewayRoute && input && input.stream)) {
         var sIn = 0;
         try { sIn = Math.ceil(JSON.stringify(input && (input.messages || input.text || input.prompt) || "").length / 4); } catch (e4) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e4 && e4.message) || e4) })); }
         var sU = spendUsageOf(res, sIn, spendOutEstimate(res));
-        spendRecord(env, isDynamicRoute(model) ? "gateway" : "workers-ai", isDynamicRoute(model) ? String(res && res.model || model) : String(model), sU.in, sU.out, { cached: sU.cached });
+        spendRecord(env, isGatewayRoute ? "gateway" : "workers-ai", isGatewayRoute ? String(res && res.model || model) : String(model), sU.in, sU.out, { cached: sU.cached });
       }
     } catch (e5) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e5 && e5.message) || e5) })); }
     try {
