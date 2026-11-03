@@ -134,7 +134,7 @@ function mkEnv() {
         plainFillQueries.push(sql);
         let results = Object.values(papers).map((p) => Object.assign({}, p, { plain_rev: (plain.get(p.slug) || {}).rev || null, plain_text: (plain.get(p.slug) || {}).text || null }));
         if (/ORDER BY CASE WHEN/.test(sql)) {
-          const rank = (p) => p.plain_text && /use everyday words|we must restate|output only the plain-language sentences|sorry, but i can|without the necessary details/i.test(p.plain_text) ? 0 : (!p.plain_rev || !p.plain_text ? 1 : 2);
+          const rank = (p) => p.plain_text && /use everyday words|we must restate|output only the plain-language sentences|sorry, but i can|i cannot|i can't|i can’t|i am unable|i'm unable|i’m unable|i am not able|i'm not able|i’m not able|i apologize, but|i'm sorry|i’m sorry|unable to comply|without the necessary details/i.test(p.plain_text) ? 0 : (!p.plain_rev || !p.plain_text ? 1 : 2);
           results.sort((a, b) => rank(a) - rank(b) || String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
           const limit = Number((sql.match(/\bLIMIT\s+(\d+)/i) || [])[1] || results.length);
           results = results.slice(0, limit);
@@ -531,6 +531,12 @@ const Q = "What did the controller measure about the energy cost of one solution
     env._plain.set(AFFECTED_SLUG, { ...repaired, text: refusal });
     const refusedApi = await call(env, "https://papers.qnfo.org/api/quickread/" + AFFECTED_SLUG);
     ok((await refusedApi.json()).plain === null, "a model refusal is not served as a reader-facing summary");
+    for (const variant of ["I cannot provide a summary.", "I can’t help with this request.", "I’m unable to rewrite the paper."]) {
+      env._plain.set(AFFECTED_SLUG, { ...repaired, text: variant });
+      const variantApi = await call(env, "https://papers.qnfo.org/api/quickread/" + AFFECTED_SLUG);
+      ok((await variantApi.json()).plain === null, "common refusal wording is rejected: " + variant);
+    }
+    env._plain.set(AFFECTED_SLUG, { ...repaired, text: refusal });
     aiOut = refusal;
     await gw.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} });
     const stillRefused = await call(env, "https://papers.qnfo.org/api/quickread/" + AFFECTED_SLUG);
