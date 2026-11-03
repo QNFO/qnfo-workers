@@ -187,11 +187,24 @@ const breakerRows = (t) => t.audit.prepare("SELECT kind, status, meta FROM cloud
   ok(res.status === 200 && /Free-tier answer/.test(text), "H non-streamed 429 answered from the free tier: " + text.slice(0, 200));
   ok(gwCalls(t).length === 1, "H one paid attempt before the breaker opens, saw " + gwCalls(t).length);
   ok(breakerRows(t).length === 1, "H one shared breaker row for the 429");
-  const next = await call(W, t, Q(true));
-  ok(next.res.status === 200 && /Free-tier answer/.test(next.text), "H streamed request answered from free tier while breaker is open");
-  ok(gwCalls(t).length === 1, "H no further paid fetch on the streamed path while breaker is open, saw " + gwCalls(t).length);
+  const W2 = await load();
+  const t2 = mk(429);
+  t2.env.QNFO_AUDIT = t.env.QNFO_AUDIT;
+  const next = await call(W2, t2, Q(true));
+  ok(next.res.status === 200 && /Free-tier answer/.test(next.text), "H fresh isolate answered from free tier while breaker is open");
+  ok(gwCalls(t2).length === 0, "H another isolate skips the paid path after the shared 429 breaker opens, saw " + gwCalls(t2).length);
   const errors = t.audit.prepare("SELECT status FROM cloud_ops_events WHERE kind = 'ops_upstream_error'").all();
   ok(errors.length === 1 && errors[0].status === "error", "H the original 429 remains recorded as an upstream error: " + JSON.stringify(errors));
+}
+
+// I. a first streamed 429 also opens the shared breaker before falling back.
+{
+  const W = await load();
+  const t = mk(429);
+  const { res, text } = await call(W, t, Q(true));
+  ok(res.status === 200 && /Free-tier answer/.test(text), "I streamed 429 answered from the free tier: " + text.slice(0, 200));
+  ok(gwCalls(t).length === 1, "I one paid streamed attempt before the breaker opens");
+  ok(breakerRows(t).length === 1, "I streamed 429 opens the shared breaker");
 }
 
 say(pass + " passed, " + fail + " failed");
