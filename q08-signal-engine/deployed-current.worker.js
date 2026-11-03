@@ -4196,9 +4196,12 @@ function lastForecastUpdateScore(f, updates) {
   if (!last) return null;
   var probability = Number(last.probability);
   var bounded = Math.min(0.999, Math.max(0.001, probability));
+  var originalProbability = Number(f.probability);
+  var originalBounded = Math.min(0.999, Math.max(0.001, originalProbability));
   return {
     probability: probability,
     at: last.at,
+    original_log_score: Math.round(Math.log(f.outcome === 1 ? originalBounded : 1 - originalBounded) * 1000) / 1000,
     brier: Math.round(Math.pow(probability - f.outcome, 2) * 1000) / 1000,
     log_score: Math.round(Math.log(f.outcome === 1 ? bounded : 1 - bounded) * 1000) / 1000
   };
@@ -4208,6 +4211,7 @@ function attachForecastUpdateScore(f, updates) {
   if (score) {
     f.updated_probability = score.probability;
     f.updated_at = score.at;
+    f.original_log_score = score.original_log_score;
     f.updated_brier = score.brier;
     f.updated_log_score = score.log_score;
   }
@@ -4240,7 +4244,8 @@ function renderCalibration(c) {
 function renderForecasts(rows, stats) {
   var item = function (f) {
     var updated = f.updated_brier != null ? " &middot; Last pre-horizon update (" + fcPct(f.updated_probability) + ") Brier " + escHtml(String(f.updated_brier)) + ", log score " + escHtml(String(f.updated_log_score)) : "";
-    var extra = f.status === "resolved" ? " &middot; " + escHtml(fcStatus(f)) + (f.brier != null ? " &middot; Brier " + escHtml(String(f.brier)) : "") + updated : " &middot; " + escHtml(fcStatus(f));
+    var original = f.brier != null ? " &middot; Original Brier " + escHtml(String(f.brier)) + (f.original_log_score != null ? ", log score " + escHtml(String(f.original_log_score)) : "") : "";
+    var extra = f.status === "resolved" ? " &middot; " + escHtml(fcStatus(f)) + original + updated : " &middot; " + escHtml(fcStatus(f));
     return '<li class="q-item"><a class="q-item-title" href="/p/' + escHtml(f.slug) + '">' + q08Inline(f.claim) + '</a><div class="q-item-meta"><span class="q-badge">' + fcPct(f.probability) + '</span> settled by ' + escHtml(f.horizon) + extra + '</div></li>';
   };
   var open = rows.filter(function (f) { return f.status === "open"; }).sort(function (a, b) { return String(a.horizon).localeCompare(String(b.horizon)); });

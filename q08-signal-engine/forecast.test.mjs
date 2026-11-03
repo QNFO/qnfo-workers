@@ -48,8 +48,8 @@ check("publicHttpsUrl refuses private hosts", !F.publicHttpsUrl("https://localho
     { probability: 0.1, at: "2026-03-10T00:00:00Z" },
     { probability: 0.99, at: "2026-03-11T00:00:00Z" }
   ];
-  const score = F.lastForecastUpdateScore({ status: "resolved", outcome: 1, horizon: "2026-03-10" }, updates);
-  check("update scoring selects the latest update strictly before the horizon and uses the resolved outcome", score && score.probability === 0.8 && score.at === updates[1].at && score.brier === 0.04 && score.log_score === -0.223, score);
+  const score = F.lastForecastUpdateScore({ status: "resolved", outcome: 1, probability: 0.55, horizon: "2026-03-10" }, updates);
+  check("update scoring selects the latest update strictly before the horizon and uses the resolved outcome", score && score.probability === 0.8 && score.at === updates[1].at && score.original_log_score === -0.598 && score.brier === 0.04 && score.log_score === -0.223, score);
   const no = (f) => F.lastForecastUpdateScore(f, updates) === null;
   check("update scoring skips open or void forecasts and invalid horizons", no({ status: "open", outcome: 1, horizon: "2026-03-10" }) && no({ status: "void", outcome: 0, horizon: "2026-03-10" }) && no({ status: "resolved", outcome: 1, horizon: "unknown" }));
 }
@@ -184,10 +184,10 @@ for (const [probability, at] of [[0.6, updateAt(-2 * 864e5)], [0.8, updateAt(-86
   db.prepare("INSERT INTO q08_forecast_updates (forecast_id, slug, prior_probability, probability, reason, evidence_url, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?)").run(settled.id, settled.slug, 0.55, probability, "A new reason for the changed probability.", at);
 }
 page = await (await get("/forecasts")).text();
-check("/forecasts shows the settled forecast with the original and last pre-horizon update scores", /came true/.test(page) && /Brier 0\.2025/.test(page) && /Last pre-horizon update \(80%\) Brier 0\.04, log score -0\.223/.test(page));
+check("/forecasts shows the settled forecast with the original and last pre-horizon update scores", /came true/.test(page) && /Original Brier 0\.2025, log score -0\.598/.test(page) && /Last pre-horizon update \(80%\) Brier 0\.04, log score -0\.223/.test(page));
 api = await (await get("/api/forecasts")).json();
 const scored = api.forecasts.find((f) => f.slug === settled.slug);
-check("/api/forecasts returns the latest pre-horizon update probability and Brier/log scores", scored && scored.original_probability === 0.55 && scored.updated_probability === 0.8 && scored.updated_at === updateAt(-864e5) && scored.updated_brier === 0.04 && scored.updated_log_score === -0.223, scored);
+check("/api/forecasts returns the latest pre-horizon update probability and original/updated Brier/log scores", scored && scored.original_probability === 0.55 && scored.original_log_score === -0.598 && scored.updated_probability === 0.8 && scored.updated_at === updateAt(-864e5) && scored.updated_brier === 0.04 && scored.updated_log_score === -0.223, scored);
 
 // void path: undecidable evidence four times in a row, rechecked weekly, never dropped silently
 db.prepare("UPDATE q08_forecasts SET status = 'open', outcome = NULL, brier = NULL, checks = 0, last_check_at = NULL, resolved_at = NULL, disposition = NULL").run();
