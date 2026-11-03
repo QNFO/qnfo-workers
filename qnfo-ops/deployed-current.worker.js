@@ -1581,8 +1581,12 @@ function publicTrimMessages(msgs) {
   return out;
 }
 __name(publicTrimMessages, "publicTrimMessages");
+var OPS_PUBLIC_RATE_LIMIT_SCHEMA = "CREATE TABLE IF NOT EXISTS ops_public_rate_limits (bucket TEXT PRIMARY KEY, hits INTEGER NOT NULL, updated_at INTEGER NOT NULL)";
+var OPS_PUBLIC_RATE_LIMIT_CLEANUP = "DELETE FROM ops_public_rate_limits WHERE updated_at < ?";
+var OPS_PUBLIC_RATE_LIMIT_INCREMENT = "INSERT INTO ops_public_rate_limits (bucket, hits, updated_at) VALUES (?, 1, ?) ON CONFLICT(bucket) DO UPDATE SET hits = hits + 1, updated_at = excluded.updated_at WHERE ops_public_rate_limits.hits < ? RETURNING hits";
 async function opsPublicGate(env, ip) {
-  const day = iso().slice(0, 10);
+  const hour = iso().slice(0, 13);
+  const day = hour.slice(0, 10);
   const perDay = envInt(env, "OPS_PUBLIC_DAY", 60);
   const perHour = envInt(env, "OPS_PUBLIC_PER_IP_HOUR", 10);
   // The daily count is read from ops_ai_log (strongly consistent); a failed read refuses rather than serves unmetered.
@@ -1592,14 +1596,24 @@ async function opsPublicGate(env, ip) {
   } catch (e) {
     return { blocked: true, error: "public read mode is unavailable right now (usage ledger unreadable); please retry shortly" };
   }
-  if (env.OPS_CACHE_KV) {
-    try {
-      const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(ip || "unknown") + "|" + day + "|" + WORKER));
-      const vk = "opspub:" + Array.from(new Uint8Array(h)).slice(0, 8).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("") + ":" + iso().slice(0, 13);
-      const n = Number(await env.OPS_CACHE_KV.get(vk)) || 0;
-      if (n >= perHour) return { blocked: true, error: "public read mode answers " + perHour + " questions per visitor per hour; please try again later" };
-      await env.OPS_CACHE_KV.put(vk, String(n + 1), { expirationTtl: 7200 });
-    } catch (e) { console.error(JSON.stringify({ evt: "ops:opsPublicGate:caught", error: String((e && e.message) || e) })); }
+  if (!env.AGENTIC_OPS_EXEC) return { blocked: true, status: 503, error: "public read mode is unavailable right now (visitor quota unavailable); please retry shortly" };
+  try {
+    const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(ip || "unknown") + "|" + day + "|" + WORKER));
+    const digest = Array.from(new Uint8Array(h)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+    const bucket = digest + ":" + hour;
+    const stub = env.AGENTIC_OPS_EXEC.get(env.AGENTIC_OPS_EXEC.idFromName("ops-exec"));
+    const response = await stub.fetch(new Request("https://agentic-ops-exec.internal/_internal/public-rate-limit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bucket, limit: Math.max(0, Math.floor(perHour)), now: Date.now() })
+    }));
+    if (!response.ok) throw new Error("Durable Object returned " + response.status);
+    const result = await response.json();
+    if (!result || typeof result.allowed !== "boolean") throw new Error("Durable Object returned an invalid quota result");
+    if (!result.allowed) return { blocked: true, error: "public read mode answers " + perHour + " questions per visitor per hour; please try again later" };
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "ops:opsPublicGate:caught", error: String((e && e.message) || e) }));
+    return { blocked: true, status: 503, error: "public read mode is unavailable right now (visitor quota unavailable); please retry shortly" };
   }
   return { blocked: false };
 }
@@ -7190,7 +7204,7 @@ async function handleChat(env, body, authHeader, ua, ctx, ip) {
     // Authorization header) keep OPS-PUBLIC-READ-1 unchanged, and no cap is raised or weakened.
     if (keyRejected) return json({ error: "Unauthorized - the Bearer token presented was rejected: it matches no OPS_ROUTER_AUTH_KEY and no owner session. Public read mode is not applied to a request that carries an invalid key, so this is an authentication failure, not a rate limit. Correct the key and retry." }, 401);
     const _pg = await opsPublicGate(env, ip);
-    if (_pg.blocked) return markPublicRead(json({ error: _pg.error }, 429), keyRejected);
+    if (_pg.blocked) return markPublicRead(json({ error: _pg.error }, _pg.status || 429), keyRejected);
   }
   const resp = await handleChatCore(env, body, ua, ctx, pub);
   return pub ? markPublicRead(resp, keyRejected) : resp;
@@ -8729,6 +8743,26 @@ var AgenticOpsExec = class extends DurableObject {
   }
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === "/_internal/public-rate-limit") {
+      if (request.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
+      let body = {};
+      try {
+        body = await request.json();
+      } catch (e) {
+        return json({ ok: false, error: "invalid JSON" }, 400);
+      }
+      const bucket = String(body && body.bucket || "");
+      const limit = Number(body && body.limit);
+      const now = Number(body && body.now);
+      if (!/^[a-f0-9]{64}:\d{4}-\d{2}-\d{2}T\d{2}$/.test(bucket) || !Number.isSafeInteger(limit) || limit < 0 || limit > 1e6 || !Number.isSafeInteger(now) || now < 0) {
+        return json({ ok: false, error: "invalid quota request" }, 400);
+      }
+      if (limit === 0) return json({ allowed: false, count: 0 });
+      this.ctx.storage.sql.exec(OPS_PUBLIC_RATE_LIMIT_SCHEMA);
+      this.ctx.storage.sql.exec(OPS_PUBLIC_RATE_LIMIT_CLEANUP, now - 7200000);
+      const row = this.ctx.storage.sql.exec(OPS_PUBLIC_RATE_LIMIT_INCREMENT, bucket, now, limit).toArray()[0];
+      return json({ allowed: !!row, count: row ? Number(row.hits) : limit });
+    }
     if (request.headers.get("Upgrade") === "websocket") {
       const sid = url.searchParams.get("sid") || randId("sess-");
       const pair = new WebSocketPair();
