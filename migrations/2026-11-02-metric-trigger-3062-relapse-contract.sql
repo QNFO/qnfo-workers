@@ -50,7 +50,7 @@ WHERE issue_id = 2196
     JOIN analytics_metric_triggers retired ON retired.id = 3062
       AND retired.metric_key = 'issues_open_over_24h' AND retired.enabled = 0
     JOIN metric_registry old_metric ON old_metric.metric = retired.metric_key
-      AND old_metric.target LIKE '%[superseded by issues_open_over_120m, SLA-120M-2]%'
+      AND instr(old_metric.target, '[superseded by issues_open_over_120m, SLA-120M-2]') > 0
     JOIN analytics_metric_triggers current_trigger ON current_trigger.id = 5937
       AND current_trigger.metric_key = 'issues_open_over_120m'
       AND current_trigger.enabled = 1 AND current_trigger.operator = 'gt'
@@ -93,7 +93,7 @@ WHERE issue_id = 2196
     SELECT 1
     FROM analytics_metric_triggers retired
     JOIN metric_registry old_metric ON old_metric.metric = retired.metric_key
-      AND old_metric.target LIKE '%[superseded by issues_open_over_120m, SLA-120M-2]%'
+      AND instr(old_metric.target, '[superseded by issues_open_over_120m, SLA-120M-2]') > 0
     JOIN analytics_metric_triggers current_trigger ON current_trigger.id = 5937
       AND current_trigger.metric_key = 'issues_open_over_120m'
       AND current_trigger.enabled = 1 AND current_trigger.operator = 'gt'
