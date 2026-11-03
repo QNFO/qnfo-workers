@@ -31,7 +31,7 @@ def collect(ctx):
     except Exception as e:  # noqa: BLE001
         return [Result("claim_coverage", None, "unknown: claims ledger unreadable: " + str(e)[:100], [])]
     if n == 0:
-        return [Result("claim_coverage", None, "unknown: paper_claims holds no atomic claim of a paper published in the last 7 days (the ledger writer has not run)", [])]
+        return [Result("claim_coverage", None, "unknown: paper_claims holds no atomic claim of a paper published in the last 7 days", [])]
     rows = [("state:%s" % s["s"], 1 if s["s"] == "verified" else 0, "%d claim(s)" % int(s["n"])) for s in states]
     return [Result("claim_coverage", round(v / n, 4), "%d of %d atomic claims of papers published in 7 days are verified (paper_claims ledger)" % (v, n), rows)]
 
