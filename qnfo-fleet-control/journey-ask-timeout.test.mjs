@@ -45,7 +45,7 @@ r = await mk(500)({ SVC: slowSvc(10, seen) }, j, "SVC", "https://x.internal/heal
 ok(r.status === 200 && r.text.length > 0 && !r.timedOut, "a hop without timeoutMs keeps JRN_TIMEOUT_MS");
 
 // 4. wiring
-ok(/var JRN_ASK_TIMEOUT_MS = 60e3;/.test(src) && /var JRN_TIMEOUT_MS = 12e3;/.test(src), "the ask hop gets 60 s, every other hop keeps 12 s");
+ok(/var JRN_ASK_TIMEOUT_MS = 60e3;/.test(src) && /var JRN_TIMEOUT_MS = 20e3;/.test(src), "the ask hop gets 60 s, every other hop keeps 20 s");
 ok(/body: JSON\.stringify\(\{ query: JRN_ASK_QUERY \}\), timeoutMs: JRN_ASK_TIMEOUT_MS \}\);/.test(src), "jAskPath passes JRN_ASK_TIMEOUT_MS");
 ok(/r\.timedOut \? " \(stream still open at the "/.test(src), "the ask-streams check names a timeout when the stream was cut");
 
