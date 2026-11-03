@@ -127,6 +127,6 @@ VALUES (
   'Restore the trigger definitions saved in bak_20261103_monitoring_pass_autoclose and revert the worker source/mirror together.',
   'A bounded hourly verification path for open issues that preserves issue ownership and contract state.',
   'Monitoring contracts older than 55 minutes gain a real verification row; contract statuses and issue states remain unchanged.',
-  'Expected to reduce issues_unprobed_60m from the issue baseline of 131 to below 20 after deployment, with no increase in false closures.',
+  'Expected to reduce issues_unprobed_60m from the live baseline of 113 (refreshed 2026-11-03T06:40:23Z) to below 20 after deployment, with no increase in false closures.',
   'qnfo-fleet-control/monitoring-pass.test.mjs; remediation-contract query LIMIT 60; autoclose insert/update trigger tests'
 );
