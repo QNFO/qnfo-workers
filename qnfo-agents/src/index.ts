@@ -246,7 +246,9 @@ async function codeModeTool(c: ToolCtx, direct: Record<string, any>) {
     fns[n] = tool({
       description: o.name === "send_email" ? o.description + " This action pauses for explicit approval and resumes the same durable execution." : o.description,
       inputSchema: jsonSchema(o.parameters || { type: "object", properties: {} }) as any,
+      execute: async (args: any) => o.name === "send_email"
         ? c.agent!.sendEmail(args, c.runId!, c.caller)
+        : opsCall(c.env, c.scope, o.name, args)
     });
   }
   const executor = new DynamicWorkerExecutor({ loader: c.env.LOADER, timeout: 120000, globalOutbound: null } as any);
