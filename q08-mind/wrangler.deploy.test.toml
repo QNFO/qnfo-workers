@@ -1,0 +1,13 @@
+# Trigger-created placeholder for mind worker.
+# See QNFO/qnfo-workers for the real source.
+name = "q08-mind"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# MIND-DIR-CONVERGE-1 (0.33.2, 2026-10-25): the directory carried the deployed worker's old short name, so the fleet graph
+# reported both halves of one fact: "mind" was an undeployed directory and "q08-mind" a deployed script with no tracked
+# source, and the missing [observability] block was the single severity=fail anti-pattern behind
+# metric workers_bp_findings_open = 1. One rename plus this block clears all three.
+
+[observability]
+enabled = false
