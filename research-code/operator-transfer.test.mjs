@@ -8,12 +8,12 @@ test("convolve1d uses centered zero padding and accepts typed arrays", () => {
 });
 
 test("operator transfer reports prediction gain when the shared primitive transfers", () => {
-  const domains = ["physics", "computing"].map((name) => ({
+  const domains = [
+    { name: "physics", inputs: [[0, 1, 2, 3], [0, 2, 4, 6]] },
+    { name: "computing", inputs: [[0, 0, 1, 1], [1, 1, 0, 0]] }
+  ].map(({ name, inputs }) => ({
     name,
-    samples: [
-      { input: [1, 4, 2, 8], target: convolve1d([1, 4, 2, 8], [0, 1, -1]) },
-      { input: [3, 5, 9, 2], target: convolve1d([3, 5, 9, 2], [0, 1, -1]) }
-    ]
+    samples: inputs.map((input) => ({ input, target: convolve1d(input, [0, 1, -1]) }))
   }));
   const identity = (input) => input;
   const result = evaluateOperatorTransfer({
