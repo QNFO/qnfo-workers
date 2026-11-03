@@ -49,5 +49,5 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM decision_log
   WHERE actor = 'PLUS-SUBSTRATE-RECONCILE-1'
-    AND action LIKE 'Add catalog rows for jobs, travel and shorts-channel;%'
+    AND instr(action, 'Add catalog rows for jobs, travel and shorts-channel;') = 1
 );
