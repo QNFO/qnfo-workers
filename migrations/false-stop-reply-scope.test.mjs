@@ -131,13 +131,21 @@ ok(d.prepare("SELECT COUNT(*) AS n FROM decision_log WHERE action LIKE 'FALSE-ST
 
 // refusal-with-reason phrases take precedence over a conditional-offer phrase, including stored hits.
 const dispositionTs = hoursAgo(1);
-log.run("ops-row-16", dispositionTs, "agent-tools", "If you want them actually gone, that requires a D1 DELETE.", 300, "[]", "public");
-hit.run(16, dispositionTs, "ops-row-16", dispositionTs, "conditional-offer", "if you want", "If you want them actually gone, that requires a D1 DELETE.");
+const dispositionReplies = [
+  [16, "If you want them actually gone, that requires a D1 DELETE."],
+  [17, "The request is waiting to be verified. If you want owner access, a fresh code has to be emailed first."],
+  [18, "The request wasn't accepted. If you want owner access, a fresh code has to be emailed first."],
+];
+for (const [id, response] of dispositionReplies) {
+  const replyId = "ops-row-" + id;
+  log.run(replyId, dispositionTs, "agent-tools", response, 300, "[]", "public");
+  hit.run(id, dispositionTs, replyId, dispositionTs, "conditional-offer", "if you want", response);
+}
 d.exec(dispositionSql);
 const classified = d.prepare("SELECT id, disposition_phrases FROM false_stop_hits_dispositioned ORDER BY id").all();
-ok(classified.map((r) => r.id).join() === "16,21,22", "the two verification refusals and D1 DELETE response are reclassified with their hits", classified);
-ok(classified[1].disposition_phrases.includes("waiting to be verified") && classified[1].disposition_phrases.includes("wasn't accepted") &&
-  classified[1].disposition_phrases.includes("has to be emailed first") && classified[0].disposition_phrases.includes("requires a d1 delete"),
+ok(classified.map((r) => r.id).join() === "16,17,18,21,22", "all five refusal-with-reason hits are reclassified", classified);
+const matchedDispositions = classified.map((r) => r.disposition_phrases).join(", ");
+ok(["waiting to be verified", "wasn't accepted", "has to be emailed first", "requires a d1 delete"].every((phrase) => matchedDispositions.includes(phrase)),
   "the new refusal-with-reason phrases are recorded as the reason for reclassification", classified);
 ok(d.prepare("SELECT COUNT(*) AS n FROM false_stop_phrases WHERE scope = 'disposition' AND phrase IN ('waiting to be verified', 'wasn''t accepted', 'has to be emailed first', 'requires a d1 delete')").get().n === 4,
   "all four refusal-with-reason phrases are seeded as dispositions");
@@ -145,7 +153,8 @@ ok(d.prepare("SELECT id FROM false_stop_hits ORDER BY id").all().map((r) => r.id
   "disposition-bearing hits leave the active ledger while the bare offer stays");
 const remaining = d.prepare("SELECT DISTINCT reply_id FROM v_false_stop_candidates ORDER BY reply_id").all().map((r) => r.reply_id);
 ok(remaining.includes("ops-2ec01565c60188") && !remaining.includes("ops-1a418c26da88ce") &&
-  !remaining.includes("ops-cbe5974fdaf051") && !remaining.includes("ops-row-16"),
+  !remaining.includes("ops-cbe5974fdaf051") && !remaining.includes("ops-row-16") &&
+  !remaining.includes("ops-row-17") && !remaining.includes("ops-row-18"),
   "the candidate view excludes offers attached to dispositions but preserves the independent bare offer", remaining);
 const beforeDispositionReapply = JSON.stringify([
   d.prepare("SELECT id FROM false_stop_hits ORDER BY id").all(),
@@ -167,7 +176,7 @@ const before2 = snap();
 d.exec(sql);
 ok(snap() === before2, "a second apply changes nothing");
 const cand2 = d.prepare("SELECT COUNT(DISTINCT reply_id) AS n FROM v_false_stop_candidates").get().n;
-ok(cand2 === 8, "the views still work after the second apply (three disposition replies are excluded and eight unrelated candidates remain)", cand2);
+ok(cand2 === 8, "the views still work after the second apply (five disposition hits are excluded and eight unrelated candidates remain)", cand2);
 
 // the Rollback line puts the moved rows back
 const rb = sql.split("\n").filter((l) => /^-- Rollback:|^--\s{8,}\S/.test(l)).join("\n");
