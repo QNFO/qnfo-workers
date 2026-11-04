@@ -6,12 +6,16 @@
 -- Cause: code_tasks.ctx holds the working blobs of the code loop and nothing removes them when a task is finished. 1,428 tasks hold 325 MB of ctx: merged 133.9 MB (425), superseded 93.7 MB (550),
 -- failed 73.3 MB (314), closed 19.2 MB (105). On a sample of 40 finished tasks, ctx.base (the repository file as read when the task started, average 281 KB, up to 801 KB) is 85 % of the bytes,
 -- ctx.patch 11 %, ctx.win_text 2.5 %, ctx.x 1.5 %; the keys the readers use (claim, anchor, superseded_pr, sigs, lastError, edits, suite_rebase_reason) total under 3 KB.
--- Change: an incremental retention trigger on fleet_tick_heavy (every ~10 minutes) removes the four blob keys with json_remove from at most 40 finished tasks per tick: status merged, closed or
--- superseded and not updated for 2 days, or failed and not updated for 7 days (an ISO updated_at; a few rows hold an epoch number and are left alone), ctx larger than 20,000 characters. Every other key is kept, so claim sweeps, anchors and superseded_pr
+-- Resumability (read before widening this): the trigger code_task_rearm_on_blocker_close sets a SUPERSEDED task back to queued, at the step it stopped at (34 superseded tasks sit at propose, 5 at verify),
+-- when an issue named in its merge_note closes; propose then builds on ctx.base, which a compacted task no longer has. A superseded task whose merge_note is empty cannot match that trigger's
+-- LIKE '%#<id>%' (515 of 550), so only those are compacted; the 35 with a note keep their ctx (about 6 MB). A merged task still deploying or reverting (merge_state deploying, deployed, reverting, revert-failed)
+-- keeps its ctx for the canary revert path. Every other requeue path in the code (qnfo-code-orchestrator 2392, 3814) sets step = 'read', which rebuilds ctx.base from the repository.
+-- Change: an incremental retention trigger on fleet_tick_heavy (every ~10 minutes) removes the four blob keys with json_remove from at most 40 finished tasks per tick: status merged (not deploying or reverting), closed or
+-- superseded (empty merge_note) and not updated for 2 days, or failed and not updated for 7 days (an ISO updated_at; a few rows hold an epoch number and are left alone), ctx larger than 20,000 characters. Every other key is kept, so claim sweeps, anchors and superseded_pr
 -- still work; nothing else on the row changes (updated_at and status are not touched, no other trigger fires: the only UPDATE OF ctx trigger is the JSON-validity guard). The ledger
 -- code_task_ctx_compacted records task, status, bytes before and after, keys removed and batch. The removed content is derived and recoverable: base is the repository file at the task's start
 -- (git history of path, branch and merged_sha), patch is the pull request diff (pr_url).
--- Prediction: about 246 MB of the 325 MB (merged, superseded and closed older than 2 days, failed older than 7: about 1,000 tasks, at 40 a tick, about 6 hours) -> under 5 MB; total code_tasks ctx 325 MB -> about 80 MB
+-- Prediction: about 240 MB of the 325 MB (merged, closed, superseded without a merge_note older than 2 days, failed older than 7: about 1,100 tasks, at 40 a tick, about 5 hours) -> under 5 MB; total code_tasks ctx 325 MB -> about 85 MB
 -- (younger finished tasks and active ones stay until they age); the three statements above fall from about 82 s per 12 minutes of D1 time to about 20 s. Verify: SELECT SUM(length(ctx)) FROM code_tasks, the ledger, and the same GraphQL by D1 time.
 -- Off switch: ops_config code_tasks_ctx_compact = off.
 -- APPLY-BY: ci
@@ -32,7 +36,10 @@ BEGIN
   SELECT t.id, t.status, length(t.ctx), length(json_remove(t.ctx, '$.base', '$.patch', '$.win_text', '$.x')), 'base,patch,win_text,x', NEW.id
   FROM code_tasks t
   WHERE substr(t.updated_at, 1, 2) = '20'
-    AND ((t.status IN ('merged', 'closed', 'superseded') AND t.updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days'))
+    AND ((t.status = 'merged' AND t.updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days')
+          AND COALESCE(t.merge_state, '') NOT IN ('deploying', 'deployed', 'reverting', 'revert-failed'))
+      OR (t.status = 'closed' AND t.updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days'))
+      OR (t.status = 'superseded' AND t.updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days') AND COALESCE(t.merge_note, '') = '')
       OR (t.status = 'failed' AND t.updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')))
     AND json_valid(t.ctx) AND length(t.ctx) > 20000
     AND NOT EXISTS (SELECT 1 FROM code_task_ctx_compacted c WHERE c.task_id = t.id)

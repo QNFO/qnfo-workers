@@ -15,7 +15,7 @@ const db = new DatabaseSync(":memory:");
 db.exec(`
   CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT);
   CREATE TABLE fleet_tick_heavy (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), source TEXT);
-  CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, ctx TEXT, updated_at TEXT);
+  CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, ctx TEXT, updated_at TEXT, merge_state TEXT, merge_note TEXT, step TEXT);
   CREATE INDEX idx_code_tasks_status ON code_tasks (status);
   -- the validity guard that exists on the live table
   CREATE TRIGGER code_tasks_ctx_json_upd BEFORE UPDATE OF ctx ON code_tasks FOR EACH ROW WHEN NEW.ctx IS NOT NULL AND json_valid(NEW.ctx) = 0
@@ -26,6 +26,7 @@ db.exec(`
 const blob = (n) => "x".repeat(n);
 const ctxOf = (extra = {}) => JSON.stringify({ base: blob(120000), patch: blob(15000), win_text: blob(5000), x: blob(2000), claim: { token: "t1", released_at: "2026-10-30T00:00:00Z" }, anchor: "async function f() {", superseded_pr: 77, sigs: ["a"], lastError: "e", edits: [1, 2], ...extra });
 const add = db.prepare("INSERT INTO code_tasks (id, status, ctx, updated_at) VALUES (?, ?, ?, ?)");
+const addX = db.prepare("INSERT INTO code_tasks (id, status, ctx, updated_at, merge_state, merge_note, step) VALUES (?, ?, ?, ?, ?, ?, ?)");
 db.exec("BEGIN");
 for (let i = 0; i < 100; i++) add.run("m" + i, "merged", ctxOf(), isoDaysAgo(3));          // due: merged, 3 days
 for (let i = 0; i < 5; i++) add.run("s" + i, "superseded", ctxOf(), isoDaysAgo(5));        // due
@@ -35,6 +36,12 @@ add.run("fy", "failed", ctxOf(), isoDaysAgo(3));                                
 add.run("my", "merged", ctxOf(), isoDaysAgo(1));                                           // kept: merged yesterday
 add.run("q", "queued", ctxOf(), isoDaysAgo(30));                                           // kept: active
 add.run("pr", "pr_open", ctxOf(), isoDaysAgo(30));                                         // kept: active
+addX.run("sn", "superseded", ctxOf(), isoDaysAgo(9), null, "REARM-able: waits on blocker #123", "propose");     // kept: REARM-1 can set it back to queued at propose, which needs ctx.base
+addX.run("sd", "merged", ctxOf(), isoDaysAgo(9), "deploying", null, "done");                           // kept: the canary revert path may still read it
+addX.run("sr", "merged", ctxOf(), isoDaysAgo(9), "revert-failed", null, "done");                      // kept
+addX.run("sv", "merged", ctxOf(), isoDaysAgo(9), "verified", null, "done");                           // due: deployment verified
+addX.run("sp", "superseded", ctxOf(), isoDaysAgo(9), null, "", "propose");                             // due: empty merge_note cannot match REARM-1
+addX.run("cr", "closed", ctxOf(), isoDaysAgo(9), "closed-by-review", null, "read");                   // due
 add.run("small", "merged", JSON.stringify({ base: "tiny", claim: { token: "t" } }), isoDaysAgo(9)); // kept: ctx under 20,000 characters
 add.run("epoch", "superseded", ctxOf(), "1793000277");                                     // kept: epoch updated_at is not an ISO date
 add.run("bad", "merged", "not json at all " + blob(30000), isoDaysAgo(9));                 // kept: not valid JSON
@@ -58,12 +65,12 @@ for (const id of done) {
 const led = db.prepare("SELECT bytes_before, bytes_after FROM code_task_ctx_compacted LIMIT 1").get();
 assert.ok(led.bytes_before > 140000 && led.bytes_after < 400, "the ledger holds the bytes before and after: " + JSON.stringify(led));
 
-// Three more ticks finish the 113 due tasks (100 + 5 + 5 + 3); nothing else is touched.
+// Three more ticks finish the 116 due tasks (100 + 5 + 5 + 3 + 3 from the resumability cases); nothing else is touched.
 heavy(); heavy(); heavy();
-assert.equal(db.prepare("SELECT COUNT(*) AS n FROM code_task_ctx_compacted").get().n, 113, "all due tasks, once each");
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM code_task_ctx_compacted").get().n, 116, "all due tasks, once each");
 heavy();
-assert.equal(db.prepare("SELECT COUNT(*) AS n FROM code_task_ctx_compacted").get().n, 113, "a further tick finds nothing and repeats nothing");
-for (const id of ["fy", "my", "q", "pr", "small", "epoch", "bad"]) {
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM code_task_ctx_compacted").get().n, 116, "a further tick finds nothing and repeats nothing");
+for (const id of ["fy", "my", "q", "pr", "small", "epoch", "bad", "sn", "sd", "sr"]) {
   assert.ok(!db.prepare("SELECT 1 FROM code_task_ctx_compacted WHERE task_id = ?").get(id), id + " is not compacted");
   assert.ok(db.prepare("SELECT length(ctx) AS n FROM code_tasks WHERE id = ?").get(id).n > 100 || id === "small", id + " keeps its ctx");
 }
