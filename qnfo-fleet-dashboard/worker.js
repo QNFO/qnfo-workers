@@ -4393,13 +4393,12 @@ __name(fullDashboardRefreshDue, "fullDashboardRefreshDue");
 // governs the trigger statements it fires (SQLite lang_createtrigger); only the violating statement is skipped. The first error is logged as
 // before and the degraded tick carries its own source. Returns 1 when a guarded insert executed (FALLBACK-HEARTBEAT-PROOF-1 records it),
 // 0 only when both attempts threw.
-// D1-OVERLOAD-1e: standby window 9 -> 20 minutes. The primary ticks about every 10 minutes, so a 9-minute guard let this standby fire the 52-trigger insert 303 times a day (345.6M rows read, 8.3 s each); at 20 it writes only when the primary has been silent for two cycles.
 async function feedFallbackTick(env) {
   // STANDBY-PROOF-1 (issue 100136): this producer is a standby, so with the primary healthy the 9-minute guard let it write nothing for
   // days and the 6-hourly chaos drill (spof_alternate_probes: a cron:qnfo-fleet-dashboard row in 24 h) failed with no real fault. It now
   // also ticks when it has no row of its own in the last 6 hours, so the alternate shows evidence while the primary is fine (at most 4
   // extra fixer passes a day; the 10-minute fixers are idempotent).
-  const guard = " WHERE NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-20 minutes'))"
+  const guard = " WHERE NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))"
     + " OR NOT EXISTS (SELECT 1 FROM fleet_tick WHERE source LIKE 'cron:qnfo-fleet-dashboard%' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-360 minutes'))";
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_tick (source) SELECT 'cron:qnfo-fleet-dashboard'" + guard).run();
