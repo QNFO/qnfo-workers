@@ -400,6 +400,30 @@ CREATE TRIGGER tk2_new AFTER INSERT ON tk2 BEGIN INSERT INTO ticks (s) VALUES ('
 rc = M.apply_file("migrations/cc_pre.sql", cc_pre, "a", "t", "cc2", emit)
 ok(rc == 0 and "pre-existing compile error" in out[-1] and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'tk2_new'").fetchone() is not None,
    "a compile fault that predates the trigger is an advisory, and the trigger stays", out[-1])
+
+# TRIGGER-COMPILE-CANARY-1, second route: no trigger is created, a VIEW that an existing fleet_tick trigger reads is replaced with one that does not compile.
+db.execute("CREATE TABLE IF NOT EXISTS fleet_tick (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT)")
+db.execute("CREATE VIEW v_late AS SELECT s AS v FROM ticks")
+db.execute("CREATE TRIGGER ft_user AFTER INSERT ON fleet_tick BEGIN INSERT INTO ticks (s) SELECT v FROM v_late; END")
+db.commit()
+cc_view = """-- view breaks the tick
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- BACKUP: ops_config
+-- Rollback: DROP VIEW IF EXISTS v_late
+DROP VIEW IF EXISTS v_late;
+CREATE VIEW v_late AS SELECT missing_col AS v FROM ticks;
+INSERT OR REPLACE INTO ops_config (key, value) VALUES ('after_cc_view', '1');
+"""
+rc = M.apply_file("migrations/cc_view.sql", cc_view, "a", "t", "cc3", emit)
+view_sql = db.execute("SELECT sql FROM sqlite_master WHERE name = 'v_late'").fetchone()
+try:
+    db.execute("INSERT INTO fleet_tick (source) VALUES ('after the view refusal')")
+    tick_ok = True
+except Exception as e:  # noqa: BLE001
+    tick_ok = False
+ok(rc == 1 and "TRIGGER-COMPILE-1" in out[-1] and "fleet_tick" in out[-1] and "v_late" in out[-1] and view_sql is not None and "s AS v" in view_sql[0] and tick_ok,
+   "a file that breaks the tick insert through a view is failed and the view is put back", (out[-1], view_sql, tick_ok))
 addcol = """-- add column twice
 -- APPLY-BY: ci
 -- DB: qnfo-audit

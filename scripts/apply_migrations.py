@@ -944,6 +944,21 @@ def depth_canary(acct, token, db_id, table, advisory=None):
     return None
 
 
+def tick_compile_error(acct, token, db_id):
+    """TRIGGER-COMPILE-CANARY-1 (2026-11-04): None when a zero-row INSERT into fleet_tick compiles, else the compile-class error text.
+
+    SQLite compiles every AFTER INSERT trigger body, and the views they read, when the INSERT is prepared, so one missing column in a view the tick
+    triggers read fails every tick insert even though no trigger was created or changed (a CREATE OR REPLACE of the view is enough). A table that
+    does not exist (another database) or an error of another class is not a verdict."""
+    try:
+        d1(acct, token, db_id, "INSERT INTO fleet_tick (source) SELECT 'migration-canary' WHERE 0")
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        if TRIGGER_COMPILE_ERR.search(msg) and "no such table: main.fleet_tick" not in msg and "no such table: fleet_tick" not in msg:
+            return msg[:200]
+    return None
+
+
 # MIGRATION-CONCURRENT-APPLY-1 (2026-10-19, agent_issues 99991): the push-triggered runner (apply-migrations.yml) and the hourly
 # consumer sweep (MIGRATION-UNAPPLIED-1) can apply the same merged file at the same moment, because the sweep lists a file as
 # unapplied until the first runner records its ok row at the END of the file. The second runner then meets an object the first
@@ -1044,6 +1059,16 @@ def apply_file(path, text, acct, token, commit, emit=print):
             trigger_snapshot[(r.get("name") or "").lower()] = r.get("sql")
     except Exception:  # noqa: BLE001
         trigger_snapshot = {}
+    # TRIGGER-COMPILE-CANARY-1: a file that creates, drops or alters anything could break the fleet_tick insert through a view its triggers read, so
+    # the insert is probed before and after; only a fault the file brought makes it fail, and the views it created or changed are put back.
+    tick_baseline_ok, view_snapshot = None, {}
+    if info["db"] == "qnfo-audit" and re.search(r"(?im)^\s*(?:CREATE|DROP|ALTER)\s", text):
+        try:
+            tick_baseline_ok = tick_compile_error(acct, token, db_id) is None
+            for r in d1(acct, token, db_id, "SELECT name, sql FROM sqlite_master WHERE type = 'view'"):
+                view_snapshot[(r.get("name") or "").lower()] = (r.get("name"), r.get("sql"))
+        except Exception:  # noqa: BLE001
+            tick_baseline_ok, view_snapshot = None, {}
     for s in statements(text):
         if not checked and DESTRUCTIVE.match(body(s)):
             why = backup_missing()
@@ -1103,6 +1128,25 @@ def apply_file(path, text, acct, token, commit, emit=print):
                                           + refused + restored, emit, done_n)
                 return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
                                       "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
+    if tick_baseline_ok:
+        tick_err = tick_compile_error(acct, token, db_id)
+        if tick_err:
+            restored_views = []
+            try:
+                for r in d1(acct, token, db_id, "SELECT name, sql FROM sqlite_master WHERE type = 'view'"):
+                    key = (r.get("name") or "").lower()
+                    before = view_snapshot.get(key)
+                    if before is None or before[1] != r.get("sql"):
+                        d1(acct, token, db_id, 'DROP VIEW IF EXISTS "%s"' % r.get("name"))
+                        if before is not None:
+                            d1(acct, token, db_id, before[1])
+                        restored_views.append(r.get("name"))
+            except Exception as e:  # noqa: BLE001
+                restored_views.append("RESTORE FAILED: " + str(e)[:100])
+            fixed = tick_compile_error(acct, token, db_id) is None
+            return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + ": TRIGGER-COMPILE-1, INSERT INTO fleet_tick compiled before this "
+                                  "file and fails after it (" + tick_err + "): every tick insert would fail. Views created or changed by the file were put back (" + ", ".join(restored_views or ["none"])
+                                  + "); the insert compiles again: " + ("yes" if fixed else "NO, repair at once"), emit, done_n)
     try:
         d1(acct, token, ledger_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by, bookmark, bookmark_source) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations', ?6, ?7)",
            [path, sha, commit or "", info["db"], str(done_n), bookmark, "apply-time" if bookmark else ""])
