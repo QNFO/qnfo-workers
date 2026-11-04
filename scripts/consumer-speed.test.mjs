@@ -54,6 +54,12 @@ for (const script of forbidden) {
   ok(stepRuns("sweeps", "scripts/" + script).length === 1, script + " still runs every cycle (sweeps job)");
   ok(stepRuns("consume", "scripts/" + script).length === 0, script + " is not in the contract path");
 }
+// The consumer's tail (242 serial view EXPLAINs, 4-6 of the 9-11 minutes of its step) runs beside the contract run, every cycle.
+ok(/REMEDIATION_VIEW_HEALTH: sweeps/.test(jobs.consume) && !/REMEDIATION_VIEW_HEALTH/.test(jobs.sweeps + jobs.heavy), "only the consume job tells the consumer to leave the view-health pass to the sweeps job");
+ok(stepRuns("sweeps", "scripts/view_health.py").length === 1 && /view_health\.py --run/.test(jobs.sweeps), "the sweeps job runs the view-health pass every cycle");
+const rc = readFileSync(join(here, "remediation_consumer.py"), "utf8");
+ok(/os\.environ\.get\("REMEDIATION_VIEW_HEALTH", "inline"\) == "inline"/.test(rc) && /import view_health/.test(rc), "the consumer still runs the pass itself unless the environment hands it to the sweeps job");
+ok(/def live\(\)/.test(readFileSync(join(here, "view_health.py"), "utf8")) && /"--run" in sys\.argv/.test(readFileSync(join(here, "view_health.py"), "utf8")), "view_health.py has the --run entry the sweeps job calls");
 ok(/needs\.cadence-gate\.outputs\.run == 'true'/.test(jobs.consume) && /needs\.cadence-gate\.outputs\.run == 'true'/.test(jobs.sweeps), "consume and sweeps run on every gated trigger");
 ok(!/outputs\.heavy/.test(jobs.consume + jobs.sweeps), "neither of them depends on the heavy decision");
 ok(/needs\.cadence-gate\.outputs\.run == 'true' && needs\.cadence-gate\.outputs\.heavy == 'true'/.test(jobs.heavy), "the heavy job needs the gate's heavy output (and a run)");
