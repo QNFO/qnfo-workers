@@ -5,6 +5,7 @@
 -- reach_signals repeats each total under every entity_type (site, host, referrer for CF; channel, country, device ... for GA4), so a plain
 -- SUM counted a pageview 4 times. One entity_type per source is used. Live read: cf-rum-human site pageviews 3782 (7d) vs 5190 (prior 7d), -27%;
 -- ga4 sessions 1181 vs 652 looks +81% but GA4 collection began 2026-10-25, so the prior window holds 3 days (217 a day vs 169 a day now, -22%).
+-- fleet.qnfo.org (the owner dashboard, 1207 of 3782 pageviews, 32%) is excluded so the metric counts outside readers; q08.org and its personal hosts stay in until they are split out.
 -- Both sources agree traffic is falling since 2026-10-26. Trusted source: cf-rum-human site (history since 2026-10-06, all hosts, bot-filtered); GA4 is the cross-check.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
@@ -24,12 +25,12 @@ SELECT 'outreach_human_clicks_7d', COALESCE(SUM(human_clicks_7d),0) FROM v_chann
 UNION ALL
 SELECT 'reader_signal_7d', (SELECT count(*) FROM reader_reports WHERE created_at>=datetime('now','-7 day'))+(SELECT count(*) FROM ask_feedback WHERE ts>=datetime('now','-7 day'))
 UNION ALL
-SELECT 'human_pageviews_7d', COALESCE(SUM(value),0) FROM reach_signals WHERE source='cf-rum-human' AND entity_type='site' AND metric='pageviews' AND date>=date('now','-7 day')
+SELECT 'human_pageviews_7d', COALESCE(SUM(value),0) FROM reach_signals WHERE source='cf-rum-human' AND entity_type='host' AND entity_id NOT IN ('fleet.qnfo.org') AND metric='pageviews' AND date>=date('now','-7 day')
 UNION ALL
 SELECT 'ga4_sessions_7d', COALESCE(SUM(value),0) FROM reach_signals WHERE source='ga4' AND entity_type='channel' AND metric='sessions' AND date>=date('now','-7 day');
 
 INSERT OR IGNORE INTO metric_registry(metric,layer,kind,formula,source_of_truth,target,owner,disposition_actor,refresh_cadence,state) VALUES
-('human_pageviews_7d','outcome','target','sum of cf-rum-human pageviews at entity_type site over 7 days (the trusted visitor north star: longest history, all hosts, bots filtered)','reach_signals','non-decreasing','qnfo-social','managers','hourly','MEASURED'),
+('human_pageviews_7d','outcome','target','sum of cf-rum-human pageviews per host over 7 days, excluding the internal host fleet.qnfo.org (the trusted outside-visitor north star: longest history, all hosts, bots filtered)','reach_signals','non-decreasing','qnfo-social','managers','hourly','MEASURED'),
 ('ga4_sessions_7d','outcome','target','sum of ga4 sessions at entity_type channel over 7 days (cross-check; collection began 2026-10-25)','reach_signals','non-decreasing','qnfo-social','managers','hourly','MEASURED');
 
 INSERT OR IGNORE INTO metric_breach_cause(metric_key,cause_key,note) VALUES
