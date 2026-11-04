@@ -20,11 +20,9 @@ const root = join(here, "..");
 const yml = readFileSync(join(root, ".github", "workflows", "migration-guard.yml"), "utf8");
 
 // ---- the workflow itself ----
-// THREE-PR-WORKFLOWS-1, then PR-CHECK-CAP-5-1: the pull_request trigger and its paths filter left this file (a path filter on a required check would skip it); pr-checks.yml no longer
-// calls it either (a `uses:` job is one check entry), and holds these steps in its `suites` job behind the `migration_guard` filter output. This file is `workflow_call`.
-const checks = readFileSync(join(root, ".github", "workflows", "pr-checks.yml"), "utf8").replace(/\r\n/g, "\n");
-const suitesJob = (checks.match(/\n  suites:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
-ok(/^on:\n  workflow_call:\n/m.test(yml) && !/^  pull_request:/m.test(yml) && /^on:\n  pull_request:\n    branches: \[main\]/m.test(checks) && /\^migrations\/\|\^scripts\/apply_migrations\\\.py\$\|\^\\\.github\/workflows\/migration-guard\\\.yml\$' files\.txt; then echo 'migration_guard=true'/.test(suitesJob) && /if: \$\{\{ !cancelled\(\) && steps\.f\.outputs\.migration_guard == 'true' \}\}/.test(suitesJob) && /apply_migrations\.py --check --base "origin\/\$BASE_REF"/.test(suitesJob) && !/continue-on-error/.test(suitesJob), "pr-checks runs the check in its suites job on pull requests that touch migrations, and a refusal fails it");
+// PR-CHECK-CAP-5-1: the guard's steps run on a pull request as steps of the `suites` job in pr-checks.yml, gated by the migrations path flag; this file keeps the step source.
+const prChecks = readFileSync(join(root, ".github", "workflows", "pr-checks.yml"), "utf8");
+ok(/migration_guard=true/.test(prChecks) && /\^migrations\//.test(prChecks) && /steps\.f\.outputs\.migration_guard == 'true'/.test(prChecks) && /apply_migrations\.py --check/.test(prChecks) && /view_premerge\.py/.test(prChecks), "it runs on pull requests that touch migrations");
 ok(/^  migration-guard:$/m.test(yml), "the job is named migration-guard (the lane reads checks by name; `guard` is version-bump-guard's)");
 ok(!/continue-on-error/.test(yml), "no step is advisory: a refusal fails the check");
 ok(/permissions:\n  contents: read\n/.test(yml) && !/(pull-requests|issues|actions|id-token): write/.test(yml), "the token is read-only");
