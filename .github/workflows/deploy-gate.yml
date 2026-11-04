@@ -44,9 +44,10 @@ on:
 permissions:
   contents: read
 
+# PUSH-COALESCE-1 (2026-11-04, pillar autonomy): a burst of merges queued one run of this workflow per pushed sha (66 of 100 queued runs at 15:54Z were push runs, 38 merges in the last hour). Only the newest main matters, so a newer push cancels the older run; ci-watchdog reads only conclusion failure, so a cancelled run files nothing. Revert: group by github.sha and cancel only on pull_request.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   gate:
@@ -1100,6 +1101,10 @@ jobs:
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         if: ${{ !cancelled() }}
         run: python3 scripts/continuity_snapshot.py --selftest
+      - name: d1_restore_drill selftest (scripts/d1_restore_drill.py)
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        if: ${{ !cancelled() }}
+        run: python3 scripts/d1_restore_drill.py --selftest
       # GENERATED-BUNDLE-AUDIT-1 (agent_issues 2758): the fleet best-practices audit judges a generated bundle by its src/ files; its offline selftest ran in no gate before.
       - name: fleet_best_practices_audit selftest (scripts/fleet_best_practices_audit.py)
         continue-on-error: ${{ github.event_name == 'pull_request' }}

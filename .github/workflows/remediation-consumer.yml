@@ -40,9 +40,10 @@ on:
       # did not start a run, so a fix to the consumer waited for an unrelated workflow_run.
       - 'scripts/remediation_consumer.py'
       - '.github/workflows/remediation-consumer.yml'
-  workflow_run:
-    workflows: ["apply-pending-patches", "fleet-autodeploy"]
-    types: [completed]
+  # CONSUMER-NO-WORKFLOW-RUN-1 (2026-11-04, STOP-WASTE-1): workflow_run off every fleet-autodeploy completion spawned a run per merge
+  # (2026-11-04 15:32-15:49Z: 12 queued, 6 pending, 12 cancelled, 0 completed). The qnfo-cloud-ops PROBE-CADENCE-1 repository_dispatch below
+  # starts the consumer when the last run is 60 minutes old, so probes arrive on a steady cadence instead of in bursts.
+  # Revert: restore the workflow_run block (workflows ["apply-pending-patches", "fleet-autodeploy"], types [completed]).
   schedule:
     - cron: '17 10 * * *'
   workflow_dispatch:
@@ -200,6 +201,16 @@ jobs:
           SNAPSHOT_DIR: ${{ github.workspace }}/continuity-snapshot
         run: |
           python3 scripts/continuity_snapshot.py --selftest && python3 scripts/continuity_snapshot.py
+
+      # RESTORE-DRILL-1 (2026-11-04): weekly, restores the newest R2 exports into a scratch D1 database and compares counts
+      # (scripts/d1_restore_drill.py, table d1_restore_drills). Never fails the job; the failure mode detectors read the table.
+      - name: Restore drill from R2 into a scratch D1
+        id: restore-drill
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          python3 scripts/d1_restore_drill.py --selftest && python3 scripts/d1_restore_drill.py
 
       - name: Upload the public-safe continuity snapshot
         if: always() && hashFiles('continuity-snapshot/*.jsonl.gz') != ''
