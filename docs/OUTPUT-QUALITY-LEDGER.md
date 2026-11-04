@@ -40,7 +40,7 @@ ask product. Clearing breaches, closing issues and passing gates measure the fle
 |---|---|---|
 | papers | `papers_with_open_high_errata_pct` (lower), `errata_high_net_inflow_7d` (lower), `engaged_reader_sessions_7d` (higher), `research_neurons_per_engaged_session_7d` (lower) | `paper_same_paper_score_delta_7d`, `paper_new_score_saturation_14d`, `golden_run_complement_share_30d` |
 | essays (q08) | `q08_human_reads_7d`; `q08_retraction_rate_30d` (written by q08-signal-engine 0.36.0) | `q08_panel_effective_votes_30d` |
-| promotion | `outreach_human_clicks_7d`, `outreach_clicks_per_post_7d`, `social_engagement_rate_30d` | `outreach_engaged_per_100_clicks_7d` (validity: about 2 of 100 counted clicks became an engaged session on 2026-11-03) |
+| promotion | `social_engaged_sessions_7d` (GA4 engaged sessions from social), `social_engagement_rate_30d`; `outreach_human_clicks_7d` and `outreach_clicks_per_post_7d` are outcomes until PROBE-UA-BOT-1 (migration `2026-11-04-probe-ua-bot-1.sql`) makes them proxies: the fleet's own link probes were counted in them | `outreach_engaged_per_100_clicks_7d` (validity: about 2 of 100 counted clicks became an engaged session on 2026-11-03) |
 | site | `engaged_human_sessions_28d` | |
 | code | `code_task_success_rate_30d`, `remediation_latest_pass_pct_7d` | |
 | ask | `ask_helpful_rate_30d` (visitor ratings; unmeasured below 10 ratings in 30 days) | `ask_citation_validity_7d`; `ask_plain_share_7d` |

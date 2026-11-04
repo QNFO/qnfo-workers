@@ -136,12 +136,14 @@ const mv = Object.fromEntries(rows("SELECT metric, last_value, state FROM metric
 ok(mv.engaged_reader_sessions_7d.last_value === "119" && mv.engaged_reader_sessions_7d.state === "MEASURED", "engaged_reader_sessions_7d is the 7 day sum of externally sourced engaged sessions (7 x 17, not the 189 from all sources)", mv.engaged_reader_sessions_7d);
 ok(mv.outreach_engaged_per_100_clicks_7d.last_value === "1.67", "engaged social sessions per 100 counted clicks (14 / 840)", mv.outreach_engaged_per_100_clicks_7d);
 ok(mv.research_neurons_per_engaged_session_7d.last_value === "35294", "research neurons per externally sourced engaged session (4,200,000 / 119)", mv.research_neurons_per_engaged_session_7d);
-ok(n("SELECT COUNT(*) c FROM metric_history WHERE metric = 'engaged_reader_sessions_7d'").c === 4, "history is backfilled for the 4 days that have a full 7 day GA4 window");
-ok(n("SELECT COUNT(*) c FROM metric_breach_cause WHERE metric_key IN ('engaged_reader_sessions_7d','outreach_engaged_per_100_clicks_7d','research_neurons_per_engaged_session_7d')").c === 3, "the three causes are mapped");
+ok(mv.social_engaged_sessions_7d.last_value === "14" && mv.social_engaged_sessions_7d.state === "MEASURED", "social_engaged_sessions_7d is the 7 day Organic Social engaged sum (7 x 2)", mv.social_engaged_sessions_7d);
+ok(n("SELECT COUNT(*) c FROM metric_history WHERE metric = 'engaged_reader_sessions_7d'").c === 4 && n("SELECT COUNT(*) c FROM metric_history WHERE metric = 'social_engaged_sessions_7d'").c === 4, "history is backfilled for the 4 days that have a full 7 day GA4 window");
+ok(n("SELECT COUNT(*) c FROM metric_breach_cause WHERE metric_key IN ('engaged_reader_sessions_7d','outreach_engaged_per_100_clicks_7d','research_neurons_per_engaged_session_7d','social_engaged_sessions_7d')").c === 4, "the four causes are mapped");
 const oq = Object.fromEntries(rows("SELECT metric, surface, role, polarity FROM output_quality_measures").map((r) => [r.metric, r]));
 ok(oq.engaged_reader_sessions_7d.role === "outcome" && oq.engaged_reader_sessions_7d.surface === "papers" && oq.engaged_reader_sessions_7d.polarity === 1, "readers are an outcome of the papers surface");
 ok(oq.research_neurons_per_engaged_session_7d.role === "outcome" && oq.research_neurons_per_engaged_session_7d.polarity === -1, "cost per reader is an outcome, lower is better");
 ok(oq.outreach_engaged_per_100_clicks_7d.role === "validity" && oq.outreach_engaged_per_100_clicks_7d.surface === "promotion", "the click-to-reader share is a validity measure, not an outcome");
+ok(oq.social_engaged_sessions_7d.role === "outcome" && oq.social_engaged_sessions_7d.surface === "promotion" && oq.social_engaged_sessions_7d.polarity === 1, "engaged sessions from social are the promotion outcome");
 
 // the trigger text: a short sentence after the Pillar header, the original levers intact inside the 300 characters a filed issue keeps
 const trig = n("SELECT action FROM analytics_metric_triggers WHERE metric_key = 'outreach_human_clicks_7d'").action;

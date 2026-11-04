@@ -23,7 +23,7 @@
 -- WHAT THIS ADDS (no worker is edited and no cron is added, because fleet_budget caps are breached: the steps join the existing hourly fleet_tasks event-metric-recompute):
 -- (1) reader_yield_daily, a ledger of GA4 engaged sessions, counted UTM clicks, external referrals, papers published and research neurons; (2) paper_readership, one row per paper
 -- (30 day and 7 day windows, the week before, GA4 sessions, external-referrer loads) joined to research_queue (idea source, score, first publish time), with v_reader_yield_by_source
--- and v_paper_readers_top; (3) three metrics and their output_quality_measures rows: engaged_reader_sessions_7d and research_neurons_per_engaged_session_7d are outcomes of the
+-- and v_paper_readers_top; (3) four metrics and their output_quality_measures rows (social_engaged_sessions_7d is the promotion outcome that replaces counted clicks): engaged_reader_sessions_7d and research_neurons_per_engaged_session_7d are outcomes of the
 -- papers surface (an engaged session counts only when its GA4 source is outside the fleet: '(direct)', '(not set)' and the hosts in ops_config reader_internal_sources are excluded, because they hold the owner's and the fleet's own browsing), outreach_engaged_per_100_clicks_7d is a validity measure of the promotion surface (it says how much of outreach_human_clicks_7d is reading); (4)
 -- v_research_volume_target, the research budget as a function of engaged readers: engaged readers a day x research_yield_neurons_per_engaged_day, inside [research_yield_floor,
 -- research_yield_ceiling], at most research_yield_step_pct a day, once a UTC day, averaged over up to 28 days, neutral under 28 days of data (the signal is 5.6 a day and spiky). DORMANT: research_yield_governor is off because ops_config
@@ -35,11 +35,11 @@
 -- unchanged, which would mean readers do depend on research volume: keep the budget at 360000 and say so.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE ops_config SET value = 'off', updated_at = datetime('now') WHERE key = 'research_yield_governor'; UPDATE ops_config SET value = (SELECT value FROM bak_20261104_research_neurons_cfg), note = (SELECT note FROM bak_20261104_research_neurons_cfg), updated_at = datetime('now') WHERE key = 'research_daily_neurons' AND EXISTS (SELECT 1 FROM bak_20261104_research_neurons_cfg) AND note LIKE 'READER-YIELD-1 governor%'; UPDATE analytics_metric_triggers SET action = (SELECT action FROM bak_20261104_outreach_trigger_action WHERE metric_key = 'outreach_human_clicks_7d') WHERE metric_key = 'outreach_human_clicks_7d' AND EXISTS (SELECT 1 FROM bak_20261104_outreach_trigger_action); UPDATE fleet_tasks SET definition = (SELECT definition FROM bak_20261104_recompute_task WHERE id = 'event-metric-recompute'), version = version + 1, updated_at = datetime('now') WHERE id = 'event-metric-recompute' AND EXISTS (SELECT 1 FROM bak_20261104_recompute_task); UPDATE output_quality_measures SET role = 'proxy' WHERE metric IN ('engaged_reader_sessions_7d', 'research_neurons_per_engaged_session_7d', 'outreach_engaged_per_100_clicks_7d');
+-- Rollback: UPDATE ops_config SET value = 'off', updated_at = datetime('now') WHERE key = 'research_yield_governor'; UPDATE ops_config SET value = (SELECT value FROM bak_20261104_research_neurons_cfg), note = (SELECT note FROM bak_20261104_research_neurons_cfg), updated_at = datetime('now') WHERE key = 'research_daily_neurons' AND EXISTS (SELECT 1 FROM bak_20261104_research_neurons_cfg) AND note LIKE 'READER-YIELD-1 governor%'; UPDATE analytics_metric_triggers SET action = (SELECT action FROM bak_20261104_outreach_trigger_action WHERE metric_key = 'outreach_human_clicks_7d') WHERE metric_key = 'outreach_human_clicks_7d' AND EXISTS (SELECT 1 FROM bak_20261104_outreach_trigger_action); UPDATE fleet_tasks SET definition = (SELECT definition FROM bak_20261104_recompute_task WHERE id = 'event-metric-recompute'), version = version + 1, updated_at = datetime('now') WHERE id = 'event-metric-recompute' AND EXISTS (SELECT 1 FROM bak_20261104_recompute_task); UPDATE output_quality_measures SET role = 'proxy' WHERE metric IN ('engaged_reader_sessions_7d', 'research_neurons_per_engaged_session_7d', 'outreach_engaged_per_100_clicks_7d', 'social_engaged_sessions_7d');
 -- Rollback note: the tables, views, metric rows, decision_log and issue rows stay as evidence; the rollback stops every writer (governor, refresh steps, trigger text) and takes the three measures out of the verdict.
 -- spof-review: the refresh steps run inside event-metric-recompute (one producer, hourly :55); a missed run leaves the 7 day windows one hour older, and the governor, when on, holds its value.
 -- runtime-probe (D1): SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric = 'engaged_reader_sessions_7d' -- expected a number and a refresh within 30 h
--- CAUSE-MAPPED: INSERT INTO metric_breach_cause below maps the three metrics (publishing, measurement, spend) in this same file.
+-- CAUSE-MAPPED: INSERT INTO metric_breach_cause below maps the four metrics (publishing, measurement, spend, publishing) in this same file.
 
 -- ---- backups of the three live rows this change edits -------------------------------------------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bak_20261104_research_neurons_cfg AS
@@ -167,7 +167,7 @@ FROM paper_readership
 WHERE (ext_30d > 0 OR ga4_sessions_30d >= 3) AND refreshed_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days')
 ORDER BY reader_score DESC;
 
--- The three metrics, from the last 7 days that have GA4 source rows. engaged_reader_sessions_7d and the cost per engaged session use the externally sourced count. NULL (never a zero) until 7 such days exist.
+-- The four metrics, from the last 7 days that have GA4 source rows. engaged_reader_sessions_7d and the cost per engaged session use the externally sourced count. NULL (never a zero) until 7 such days exist.
 CREATE VIEW IF NOT EXISTS v_reader_yield_metrics AS
 WITH w AS (SELECT * FROM reader_yield_daily WHERE ga4_engaged_external IS NOT NULL ORDER BY day DESC LIMIT 7)
 SELECT 'engaged_reader_sessions_7d' AS metric,
@@ -180,6 +180,10 @@ FROM w
 UNION ALL
 SELECT 'research_neurons_per_engaged_session_7d',
   CASE WHEN COUNT(*) >= 7 AND SUM(ga4_engaged_external) > 0 AND SUM(research_neurons) IS NOT NULL THEN ROUND(SUM(research_neurons) / SUM(ga4_engaged_external)) END
+FROM w
+UNION ALL
+SELECT 'social_engaged_sessions_7d',
+  CASE WHEN COUNT(*) >= 7 THEN SUM(ga4_engaged_social) END
 FROM w;
 
 -- ---- the research volume governor -------------------------------------------------------------------------------------------------------------------------------------------
@@ -286,7 +290,14 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
    '104210 (2026-10-28..11-03: 4,585,257 neurons, 44 externally sourced engaged sessions; 37583 over all 122)',
    'falling; the research governor and ops_config research_daily_neurons are the levers',
    'qnfo-fleet-control', 'exempt from a threshold trigger: fleet_cost_bound_month_usd and the ai_spend caps judge cost; this reads cost per reader (READER-YIELD-1)',
-   'daily', '> 150000', NULL, 'UNMEASURED', 'computed');
+   'daily', '> 150000', NULL, 'UNMEASURED', 'computed'),
+  ('social_engaged_sessions_7d', 'fleet', 'leading',
+   'sum of GA4 engagedSessions (10 seconds or more, two page views or a conversion) of the Organic Social channel group over the last 7 days that have GA4 rows (READER-YIELD-1); the people outreach posts bring who stay',
+   'qnfo-audit.reader_yield_daily <- reach_signals source ga4 entity_type channel entity_id organic social',
+   '21 (2026-10-28..11-03; 25 in the 10 days to 11-03 from 1260 counted clicks)',
+   'rising; no absolute gate: the promotion surface outcome that replaces counted clicks (PROBE-UA-BOT-1 makes outreach_human_clicks_7d a proxy)',
+   'qnfo-social', 'exempt from a threshold trigger: judged by v_output_quality_verdict as an outcome; a threshold on 21 a week would file an issue for noise (READER-YIELD-1)',
+   'daily', '< 5', NULL, 'UNMEASURED', 'computed');
 
 UPDATE metric_registry
 SET last_value = (SELECT CASE WHEN m.value = CAST(m.value AS INTEGER) THEN CAST(CAST(m.value AS INTEGER) AS TEXT) ELSE CAST(m.value AS TEXT) END FROM v_reader_yield_metrics m WHERE m.metric = metric_registry.metric),
@@ -297,7 +308,8 @@ WHERE metric IN (SELECT metric FROM v_reader_yield_metrics WHERE value IS NOT NU
 INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
   ('engaged_reader_sessions_7d', 'publishing', 'READER-YIELD-1 2026-11-04: engaged readers move with distribution (search, referrals, X), not with the number of papers; the lever is where outreach goes and what search can find.'),
   ('outreach_engaged_per_100_clicks_7d', 'measurement', 'READER-YIELD-1 2026-11-04: a low value says the counted clicks are fetchers, not readers; the repair is the gateway classifier, not more posts.'),
-  ('research_neurons_per_engaged_session_7d', 'spend', 'READER-YIELD-1 2026-11-04: neurons spent per engaged reader; the lever is the research budget (research_daily_neurons, the governor), not a model change.');
+  ('research_neurons_per_engaged_session_7d', 'spend', 'READER-YIELD-1 2026-11-04: neurons spent per engaged reader; the lever is the research budget (research_daily_neurons, the governor), not a model change.'),
+  ('social_engaged_sessions_7d', 'publishing', 'READER-YIELD-1 2026-11-04: engaged sessions from social posts move with where and how outreach posts (X and Mastodon carry engaged sessions, the Substack and Bluesky roll-ups carry almost none), not with the number of papers.');
 
 INSERT OR IGNORE INTO metric_history (metric, day, value, meets, target, ts)
 SELECT 'engaged_reader_sessions_7d', r.day,
@@ -323,6 +335,14 @@ FROM reader_yield_daily r
 WHERE r.ga4_engaged_external IS NOT NULL
   AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged_external IS NOT NULL) = 7;
 
+INSERT OR IGNORE INTO metric_history (metric, day, value, meets, target, ts)
+SELECT 'social_engaged_sessions_7d', r.day,
+  (SELECT SUM(x.ga4_engaged_social) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days')),
+  NULL, 'rising', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+FROM reader_yield_daily r
+WHERE r.ga4_engaged_external IS NOT NULL
+  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged_external IS NOT NULL) = 7;
+
 INSERT OR IGNORE INTO output_quality_measures (metric, surface, role, polarity, tol_rel, tol_abs, judged_by, caveat) VALUES
   ('engaged_reader_sessions_7d', 'papers', 'outcome', 1, 0.2, 10,
    'people: GA4 engaged sessions on the public sites (10 seconds or more, two page views or a conversion), the one reader count the generators cannot satisfy',
@@ -330,6 +350,9 @@ INSERT OR IGNORE INTO output_quality_measures (metric, surface, role, polarity, 
   ('research_neurons_per_engaged_session_7d', 'papers', 'outcome', -1, 0.2, 2000,
    'cost of one engaged reader: Workers AI neurons of the research workers over GA4 engaged sessions, same 7 days',
    'cutting spend alone improves it: read it with engaged_reader_sessions_7d, which must not fall. The neuron count includes revisions and errata work, whose readers it cannot tell apart.'),
+  ('social_engaged_sessions_7d', 'promotion', 'outcome', 1, 0.3, 5,
+   'people: GA4 engaged sessions from the Organic Social channel group (10 seconds or more, two page views or a conversion): the readers outreach posts bring who stay, which a probe or a link preview cannot fake',
+   '21 in 7 days, spiky: read weeks. It still counts the owner clicking their own posts (X is 17 of 19 sessions engaged, which reads like it) and ad blockers undercount it. It replaces outreach_human_clicks_7d and outreach_clicks_per_post_7d as the promotion outcome once PROBE-UA-BOT-1 classes them as proxies; until that migration lands both exist.'),
   ('outreach_engaged_per_100_clicks_7d', 'promotion', 'validity', 1, 0.2, 0.5,
    'share of counted UTM human clicks that became GA4 engaged sessions from organic social, per 100',
    'about 2 per 100 on 2026-11-03: outreach_human_clicks_7d and outreach_clicks_per_post_7d count fetchers and previews as people; read them only with this measure. GA4 undercounts readers who block scripts.');
