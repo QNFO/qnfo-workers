@@ -199,6 +199,7 @@ jobs:
           if grep -qE '^[^/]+/(worker\.js|deployed-current\.worker\.js)$|^scripts/adversarial-workers-guard\.py$|^\.github/workflows/adversarial-workers-guard\.yml$' files.txt; then echo 'adversarial_workers_guard=true' >> "$GITHUB_OUTPUT"; else echo 'adversarial_workers_guard=false' >> "$GITHUB_OUTPUT"; fi
           if grep -qE '^[^/]+/(worker\.js|deployed-current\.worker\.js)$|^scripts/model-floor-guard\.mjs$|^\.github/workflows/model-floor-guard\.yml$' files.txt; then echo 'model_floor_guard=true' >> "$GITHUB_OUTPUT"; else echo 'model_floor_guard=false' >> "$GITHUB_OUTPUT"; fi
           if grep -qE '^\.github/workflows/|^scripts/[^/]*\.py$|^scripts/secret-mutation-allowlist\.txt$' files.txt; then echo 'workflow_lint=true' >> "$GITHUB_OUTPUT"; else echo 'workflow_lint=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^docs/|^CLAUDE\.md$|^AGENTS\.md$|^llms\.txt$|^\.github/(copilot-instructions\.md|agents/)|^[^/]+/README\.md$|^scripts/build-agent-catalog\.mjs$' files.txt; then echo 'docs_catalog=true' >> "$GITHUB_OUTPUT"; else echo 'docs_catalog=false' >> "$GITHUB_OUTPUT"; fi
 
       # ---- identity-guard: steps of .github/workflows/identity-guard.yml ----
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -286,6 +287,12 @@ jobs:
       - name: CANONICAL-DEPLOY-SKIP-1 offline tests (a refused creation of an absent worker is a skip, any other failure still fails)
         if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
         run: python3 scripts/canonical_deploy_skip_test.py
+
+      # FLEET-SHARED-LIBRARY-1 catalog: docs/INDEX.md and docs/agent-catalog.json hash every tracked system document, so a pull request that adds or edits one must regenerate them
+      # (docs/agent-library.test.mjs was red on main 2026-11-04 after four doc additions and a CLAUDE.md edit, because only the post-merge sweep checked it).
+      - name: Agent documentation catalog is current (run node scripts/build-agent-catalog.mjs when this fails)
+        if: ${{ !cancelled() && steps.f.outputs.docs_catalog == 'true' }}
+        run: node scripts/build-agent-catalog.mjs --check
 
   # migration, charter and the small offline suites, each only when its paths change
   suites:
