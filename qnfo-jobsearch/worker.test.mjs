@@ -436,6 +436,7 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   const st1 = (await call("/api/cv", { headers: H }, E))[1];
   const nf = st1.facts.find((f) => f.source === "interview:phys_renorm");
   ok(a1[0] === 200 && nf && nf.role === "" && nf.tags.includes("physics_theory") && st1.questions.find((q) => q.id === "phys_renorm").answer === "y", "a yes answer stores the owner's own sentence under the question's tags; an unknown role becomes none", nf);
+  ok(!JSON.stringify((await call("/api/ledger", {}, E))[1]).includes("dimensional regularization"), "the public ledger never shows what the owner adds in the interview");
   const qft = { ...JOB, title: "Research Scientist, Theoretical Physics", location: "Amsterdam", desc: "Theoretical physics: quantum field theory, renormalization, effective field theory, statistical mechanics. Research scientist." };
   const qm = T.evaluate(qft), qres = T.buildResume(qft, qm), qbad = T.verify(qres, qft);
   ok(qres.includes("dimensional regularization") && qbad.length === 0, "the owner's new achievement reaches the resume and the resume still verifies", qbad);

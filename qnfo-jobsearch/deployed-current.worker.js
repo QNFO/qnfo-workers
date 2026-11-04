@@ -765,7 +765,8 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (!famOn.length && cl.size < 2) drop("generic title and thin evidence in the posting");
   if (famOn.length && !cl.size) pen += 15;
   const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : 12;
-  const eScore = Math.min(45, [...cl].reduce((sum, c) => sum + (!ctx.owned || ctx.owned.has(c) ? 9 : 4), 0));   // evidence the CV can back up counts in full, evidence it lacks counts less
+  const eScore = Math.min(45, 9 * cl.size);
+  const eOwned = ctx.owned ? Math.min(45, [...cl].reduce((sum, c) => sum + (ctx.owned.has(c) ? 9 : 4), 0)) : eScore;   // evidence the CV can back up counts in full, evidence it lacks counts less
   const uniqA = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => FRONTIER.has(c));
   const uniqB = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => DATA_SIDE.has(c));
   if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else why.push("generic title: " + medium.slice(0, 2).join(", "));
@@ -774,7 +775,7 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (lacking.length) why.push("not in your CV yet: " + lacking.sort().join(", "));
   if (uniqA) why.push("uncommon intersection: research-program or policy-research management + AI or research-integrity systems");
   else if (uniqB) why.push("uncommon intersection: public-policy or planning expertise + data and analytics");
-  let score = tScore + eScore + (uniqA || uniqB ? 15 : 0);
+  let score = tScore + eOwned + (uniqA || uniqB ? 15 : 0);
   const outcomeDelta = Math.max(-12, Math.min(12, scoreFeatures(famOn, cl).reduce((sum, feature) => {
     const weight = Number(ctx.outcomeWeights && ctx.outcomeWeights[feature]);
     return sum + (Number.isFinite(weight) ? weight : 0);
@@ -1557,7 +1558,7 @@ const handler = {
     if (p === "/health") return J({ ok: true, worker: WORKER, version: VERSION, ledger_verified_on: LEDGER_VERIFIED_ON });
     if (p === "/" && m === "GET") return new Response(UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api" && m === "GET") return J(INDEX);
-    if (p === "/api/ledger" && m === "GET") { await loadBank(env); return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines }); }
+    if (p === "/api/ledger" && m === "GET") { await loadBank(env); return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.filter((f) => ((BANK.facts.find((x) => x.id === f.id) || {}).source === "verified_cv")).map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines }); }   // public: only the verified CV record; what the owner adds in the interview stays private
     if (p === "/api/ops" && m === "GET") { const rep = await opsReport(env); return J(rep, rep.status === "ok" ? 200 : 503); }
     if (p === "/api/outcomes" && m === "GET") return J(await outcomes(env));
     if (p === "/api/prefs" && m === "GET") {
