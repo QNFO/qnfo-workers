@@ -8,8 +8,7 @@ name: mirror-guard
 
 on:
   workflow_call:
-  push:
-    branches: [main]
+  # CI-VELOCITY-1 (2026-11-04): no push trigger. mirror-sync runs on every worker push and its completion starts this guard on the repaired tip, so the push run was a duplicate.
   # MIRROR-GUARD-RACE-1 (2026-10-17): a push-to-main run races mirror-sync.yml, which
   # regenerates AND COMMITS the lagging mirror on that same push. The push run therefore
   # reports lag as a warning; this post-repair run is the authoritative gate, and it fails
@@ -21,15 +20,22 @@ on:
   workflow_dispatch:
 
 # GHA-AUDIT-1 (2026-10-13): read-only token; a superseded PR head is cancelled, a push run never is (group per sha).
+# CI-QUEUE-1 (2026-11-04): the workflow_run lane on main shares ONE group and a newer run replaces the older one. Every
+# workflow_run reads the tip of main (ref: main below), so two of them check the same tree, and the lane is advisory (exit 0,
+# see the step). Measured 2026-11-04 16:51-16:52Z: 7 such runs created within 45 s, each waited 12-20 minutes for a runner
+# (run_started_at to updated_at 726-1237 s for a 15-50 s check), holding runner slots that pull-request checks and deploys
+# queue for. With one group the burst costs one run. A dispatch keeps its own per-sha group and is never cancelled.
 permissions:
   contents: read
 
 concurrency:
-  group: mirror-guard-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: mirror-guard-${{ github.event_name == 'pull_request' && github.event.pull_request.number || (github.event_name == 'workflow_run' && 'main-advisory') || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_run' }}
 
 jobs:
   mirror-guard:
+    # CI-VELOCITY-1: a workflow_run fires for a cancelled upstream run too (a superseded pending run); skip it before it takes a runner slot.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
     # RUNNER-PIN-1 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest migrates to Ubuntu 26 from 2026-10-19 (the notice is on every run); pinned until a trial run on ubuntu-26.04 is green.
     runs-on: ubuntu-24.04
     timeout-minutes: 10

@@ -40,12 +40,15 @@
 //        * Red main first: an issue labelled ci-watchdog is dispatched before every other issue (the one that fired the run still goes first).
 //        * Read budget: a run stops examining issues after --max-calls (170) reads of the PAT the whole fleet shares.
 //        * Kill switch: the repository variable ASSIGN_COPILOT_SWEEP = off stops the sweep, new-only stops the re-drive.
+//        * Yield filter (COPILOT-YIELD-1): familyDenied() skips records another loop owns and any issue whose body carries a `code-task:` line (the code
+//          loop holds it), with no extra read; ASSIGN_COPILOT_FAMILY_FILTER = off restores the unfiltered sweep. See docs/COPILOT-YIELD-2026-11.md.
 //        * Throttle: workflow_run fires about once a minute while the fleet merges, so only the first run of each --window-minutes (10) window
 //          sweeps; issues and manual runs always do. A throttled run costs one read.
 // USAGE  GH_PAT_TOKEN=... node scripts/assign-copilot-sweep.mjs [--hours 720] [--max 10] [--max-open 12] [--redrive-max 5] [--stalled-hours 2]
 //        [--mode live|dry] [--no-agent-sync]; ISSUE_REPO=QNFO/x ISSUE_NUMBER=7 (set by the `issues` trigger) puts that one issue first in the run.
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { checkBudget, resolveFloor, yieldLine } from "./gh-budget-floor.mjs";
 import { CODE_DELIVERY_DOD, withCodeDeliveryDoD } from "./code-delivery.mjs";
 
 const API = "https://api.github.com";
@@ -117,8 +120,32 @@ export function normalize(it) {
     owner: m ? m[1] : "", repo: m ? m[2] : "", number: it.number, title: it.title || "", state: it.state, pr: !!it.pull_request,
     login: (it.user && it.user.login) || "", assoc: it.author_association || "NONE",
     assignees: (it.assignees || []).map((a) => a.login), created_at: it.created_at || "",
-    labels: (it.labels || []).map((l) => (typeof l === "string" ? l : (l && l.name) || ""))
+    labels: (it.labels || []).map((l) => (typeof l === "string" ? l : (l && l.name) || "")),
+    body: String(it.body || "")
   };
+}
+
+// COPILOT-YIELD-1 (docs/COPILOT-YIELD-2026-11.md): where a Copilot session buys nothing. Measured over the 563 Copilot pull requests of 2026-10-30..11-04:
+// 72% merged overall, so no family is excluded for a low rate alone; a family is excluded when (a) it is a record another loop owns and closes
+// (it produced 0 merged pull requests, or none at all, in the window) or (b) its body already carries a `code-task:` line, so the code loop
+// (qnfo-code-orchestrator) holds the work and a Copilot session would be a second writer on the same file. Failure mirrors of the code loop itself
+// (it gave up or its merge was refused) stay assignable: they are the second path. A ci-watchdog issue and the issue that fired the run are never filtered.
+export const DENY_FAMILIES = [/^OWNER-TASK/i, /^INTENT-TASK/i, /^CLOSEOUT-HANDOFF/i, /^content_items_over_stage_sla/i, /^CITE-FULLTEXT-1/i, /^BP26-/i, /^RESEARCH-TERMINAL/i, /^STALE-PR-/i];
+export const CODE_LOOP_FAILURE_FAMILIES = [/^CODE-LOOP-EXHAUSTED-1/i, /^CODE-MERGE-REFUSED-1/i, /^CODE-TASK-NEEDS-SESSION-1/i];
+export const CODE_TASK_LINE_RE = /^[ \t>*-]*code-task:\s*repo=\S+/im;
+export function familyOf(title) {
+  const t = String(title || "").replace(/^\[#\d+\]\s*/, "").trim();
+  if (/^METRIC-TRIGGER-/i.test(t)) return "METRIC-TRIGGER-*";
+  const colon = t.indexOf(":");
+  if (colon > 0 && colon < 40) return t.slice(0, colon);
+  return t.split(/\s/)[0].slice(0, 30);
+}
+export function familyDenied(n) {
+  if (n.priority || (n.labels || []).includes(PRIORITY_LABEL)) return null;
+  const fam = familyOf(n.title);
+  if (DENY_FAMILIES.some((re) => re.test(fam))) return "family-record-owned";
+  if (CODE_TASK_LINE_RE.test(n.body || "") && !CODE_LOOP_FAILURE_FAMILIES.some((re) => re.test(fam))) return "code-loop-owns";
+  return null;
 }
 
 export const trusted = (n) => TRUSTED_ASSOCIATIONS.includes(n.assoc) || TRUSTED_BOTS.includes(n.login);
@@ -343,6 +370,7 @@ export async function run(opts, deps) {
     if (hasCopilot && !redriveOn) { skip("already-assigned", n); continue; }
     if (!trusted(n)) { skip("untrusted-author", n); continue; }
     if (refused.has(slug)) { skip("repo-refused", n); continue; }
+    if (o.familyFilter !== false) { const why = familyDenied(n); if (why) { skip(why, n); continue; } }
     const mid = mirrorId(n.title);
     if (mid && doers.ids.has(mid)) { skip("has-doer", n); continue; }
     if (hasCopilot && redrives >= o.redriveMax) { sum.deferred++; continue; }
@@ -434,6 +462,16 @@ function summaryMarkdown(s) {
   return "### Assign Copilot to new issues (" + s.mode + ", agent " + s.agent + ", status " + s.status + ")\n\n" + rows.map((r) => "- " + r[0] + ": " + r[1]).join("\n") + (skipped ? "\n\nSkipped\n" + skipped : "") + (s.agent_sync ? "\n\nOrganization agent: " + s.agent_sync.status : "") + "\n";
 }
 
+// GH-BUDGET-FLOOR-1 (issue 7071): the sweep is a convenience; the merge lane keeps the last of the shared token's budget. Reads /rate_limit (free) with the
+// token the sweep would spend; under the floor (GH_BUDGET_FLOOR, default 600, 0 disables) returns a summary and the sweep makes no other call.
+export async function budgetGate(opts, deps) {
+  const d = Object.assign({ fetchImpl: fetch, env: process.env }, deps || {});
+  if (!opts || !opts.token) return null;
+  const r = await checkBudget({ token: opts.token, cls: "sweep", floor: resolveFloor("sweep", undefined, d.env.GH_BUDGET_FLOOR), fetchImpl: d.fetchImpl });
+  if (!r.yield) return null;
+  return { action: "assign-copilot-sweep", status: "budget-floor", considered: 0, assigned: 0, redriven: 0, skipped: {}, deferred: 0, errors: [], mode: opts.mode, agent: AGENT, note: "budget-floor: remaining=" + r.remaining + " floor=" + r.floor + " reset=" + r.reset + "; skipped", budget: r };
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const arg = (k, dflt) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : dflt; };
@@ -443,14 +481,15 @@ async function main() {
     token: env.GH_PAT_TOKEN || "", sweep: env.ASSIGN_COPILOT_SWEEP || "on",
     hours: num(arg("--hours"), DEFAULTS.hours), max: num(arg("--max"), DEFAULTS.max), maxOpen: num(arg("--max-open"), DEFAULTS.maxOpen),
     redriveMax: num(arg("--redrive-max"), DEFAULTS.redriveMax), stalledHours: num(arg("--stalled-hours"), DEFAULTS.stalledHours),
-    mode: arg("--mode", "live") === "dry" ? "dry" : "live", agentSync: !argv.includes("--no-agent-sync"),
+    mode: arg("--mode", "live") === "dry" ? "dry" : "live", agentSync: !argv.includes("--no-agent-sync"), familyFilter: String(env.ASSIGN_COPILOT_FAMILY_FILTER || "on").toLowerCase() !== "off",
     gate: { event: env.GITHUB_EVENT_NAME || "", runId: env.GITHUB_RUN_ID || "", repo: env.GITHUB_REPOSITORY || "", minutes: num(arg("--window-minutes"), DEFAULTS.windowMinutes) }
   };
   if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(env.ISSUE_REPO || "") && /^\d+$/.test(env.ISSUE_NUMBER || "")) opts.priority = { repo: env.ISSUE_REPO, number: Number(env.ISSUE_NUMBER) };
   let s;
-  try { s = await run(opts); }
+  try { s = (await budgetGate(opts)) || (await run(opts)); }
   catch (e) { s = { action: "assign-copilot-sweep", status: "crashed", considered: 0, assigned: 0, redriven: 0, skipped: {}, deferred: 0, errors: [{ where: "run", message: String((e && e.message) || e).slice(0, 200) }], mode: opts.mode, agent: AGENT }; }
   console.log("RESULT_JSON=" + JSON.stringify(s));
+  if (s.status === "budget-floor") console.log(yieldLine(s.budget, "assign-copilot-sweep") + "\n" + s.note);
   if (s.status === "no-credential") console.log("::warning::assign-copilot-sweep: " + s.note);
   if (s.credits_exhausted) console.log("::warning::assign-copilot-sweep: Copilot cannot start sessions because the account is out of AI credits (" + s.credits_exhausted + "); issues are assigned again once it can");
   for (const e of s.errors || []) console.log("::warning::assign-copilot-sweep " + e.where + ": " + (e.http !== undefined ? "http " + e.http + " " : "") + (e.message || ""));

@@ -34,8 +34,11 @@ on:
       - 'scripts/remediation_probe_map.json'
       - '.github/workflows/remediation-bridge.yml'
   workflow_run:
-    workflows: ["apply-pending-patches", "fleet-autodeploy"]
+    workflows: ["apply-pending-patches"]
     types: [completed]
+  # AUTODEPLOY-FANOUT-1 (2026-11-04): no workflow_run on fleet-autodeploy. fleet-autodeploy calls this file as a job after its audit, so one run replaces
+  # a separate run per deploy event (418 of 600 sampled runs in 3 hours were cancelled fan-out). Revert: restore the workflow_run block and delete the job in fleet-autodeploy.yml.
+  workflow_call:
   schedule:
     - cron: '41 9 * * *'
   workflow_dispatch:
@@ -49,6 +52,8 @@ concurrency:
 
 jobs:
   bridge:
+    # CI-VELOCITY-1: a workflow_run fires for a cancelled upstream run too (a superseded pending run); skip it before it takes a runner slot.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
     # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
