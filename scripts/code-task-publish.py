@@ -45,6 +45,7 @@ import urllib.error
 import urllib.request
 from code_delivery import implementation_path, numstat_has_code_changes
 
+D1_OVERLOAD_DELAYS = (3, 8, 20, 45)  # seconds between retries of a D1 429 overload
 AUDIT_DB = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
 REPO_NAME = "qnfo-workers"
 REPO_NAME_FULL = "QNFO/qnfo-workers"
@@ -122,17 +123,29 @@ class D1Store:
         # next run succeeds, so a SELECT is retried with backoff. Writes are not: a timed-out UPDATE may have landed,
         # and the claim is a compare-and-set whose retry would misread "already claimed" as "lost the race".
         attempts = D1_READ_ATTEMPTS if sql.lstrip().upper().startswith("SELECT") else 1
+        # D1-OVERLOAD-RETRY-1 (#6942): HTTP 429 "D1 DB is overloaded" rejects the statement without running it, so unlike a
+        # timeout it is safe to retry for a write as well; backoff D1_OVERLOAD_DELAYS, then the error surfaces as before.
+        overload_waits = iter(D1_OVERLOAD_DELAYS)
         try:
-            for i in range(attempts):
+            i = 0
+            while i < attempts:
                 try:
                     with urllib.request.urlopen(req, timeout=D1_TIMEOUT_S) as r:
                         d = json.load(r)
                     break
+                except urllib.error.HTTPError as e:
+                    wait = next(overload_waits, None) if e.code == 429 else None
+                    if wait is None:
+                        raise
+                    print(f"[publish] D1 overloaded (429); retrying in {wait}s", flush=True)
+                    time.sleep(wait)
+                    continue
                 except (TimeoutError, urllib.error.URLError) as e:
                     if isinstance(e, urllib.error.HTTPError) or i + 1 >= attempts:
                         raise
                     print(f"[publish] D1 read attempt {i + 1}/{attempts} failed ({type(e).__name__}); retrying", flush=True)
                     time.sleep(2 ** i)
+                i += 1
         except urllib.error.HTTPError as e:
             msg = ""
             try:  # Cloudflare error bodies carry {"errors":[{"message":...}]}; no secrets in them
