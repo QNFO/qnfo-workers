@@ -32,7 +32,9 @@ db.prepare("INSERT INTO v_fleet_metrics VALUES ('m1',1),('m2',0),('m3',0)").run(
 let queries = [];
 const wrap = (sql) => {
   queries.push(sql);
-  const st = db.prepare(sql);
+  // node:sqlite compiles at prepare time (D1 does not), so a failing statement must reject later, like D1
+  let st;
+  try { st = db.prepare(sql); } catch (e) { const rej = async () => { throw e; }; const o = { all: rej, first: rej, run: rej, bind: () => o }; return o; }
   const mk = (args) => ({
     all: async () => ({ results: st.all(...args) }), first: async () => st.get(...args) || null,
     run: async () => { const r = st.run(...args); return { meta: { changes: Number(r.changes) } }; }, bind: (...a) => mk(a)
@@ -138,6 +140,13 @@ const filedRow = db.prepare("SELECT prompt, mode FROM owner_prompts WHERE prompt
 ok(filedRow && filedRow.mode === "task" && /do it yourself/.test(filedRow.prompt) && /IDENTITY-BOUND/.test(filedRow.prompt), "V9b a fleet task carries the hand-back instructions", filedRow);
 r = await post("/api/v3/handback", { key: "ha:pay" }, { "x-loop-token": env.LOOP_TOKEN });
 ok(r.status === 404, "V9b a second tap finds no open card", r.status);
+
+// V9c "I did it" asks the fleet to verify, with no fresh email code
+r = await post("/api/v3/handback", { key: "ha:tag", mode: "verify" }, { "x-loop-token": env.LOOP_TOKEN });
+ok(r.status === 200 && (await r.json()).ok === true, "V9c verify-mode hand-back succeeds");
+const vrow = db.prepare("SELECT prompt FROM owner_prompts WHERE prompt LIKE 'OWNER-HANDBACK ha:tag%'").get();
+ok(vrow && /already done/.test(vrow.prompt) && /Verify it live/.test(vrow.prompt), "V9c the task says the owner reports it done and asks for live verification", vrow);
+ok(html.includes("data-h=\"verify\">I did it") && html.includes("snooze90"), "V9c the buttons use verify and a 90 day park");
 
 // V5
 r = await get("/classic");
