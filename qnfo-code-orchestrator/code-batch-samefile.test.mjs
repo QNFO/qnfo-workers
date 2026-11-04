@@ -1,4 +1,4 @@
-// CODE-BATCH-SAMEFILE-1 (0.43.0): a lead task absorbs up to 2 never-attempted queued tasks on the same file into one propose prompt;
+// CODE-BATCH-SAMEFILE-1 (0.44.0): a lead task absorbs up to 2 never-attempted queued tasks on the same file into one propose prompt;
 // a merged lead supersedes them with its PR, a failed lead releases them untouched.
 // Run: node qnfo-code-orchestrator/code-batch-samefile.test.mjs
 import fs from "node:fs";
