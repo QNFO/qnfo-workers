@@ -36,7 +36,7 @@
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
 // 0.2.7 CAPABILITY-CONTRACT-REFRESH-1 (#2852, pillar autonomy; patch: re-publish the declared /health lists for a fresh live capability audit).
-var VERSION = "0.2.9-revert-49ce59b"; // 0.2.6 WIP-RECOVERY-PLANNER-ALIGNMENT-1: recoverWip counts the planner's active-task set and reads its shared code_plan_wip ceiling; the run ledger records queued work and oldest age.
+var VERSION = "0.2.11-revert-a339688"; // 0.2.6 WIP-RECOVERY-PLANNER-ALIGNMENT-1: recoverWip counts the planner's active-task set and reads its shared code_plan_wip ceiling; the run ledger records queued work and oldest age.
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
