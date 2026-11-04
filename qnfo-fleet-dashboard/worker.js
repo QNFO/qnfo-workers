@@ -11,7 +11,14 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.83.4";
+var VERSION = "1.85.0";
+// 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
+// 1.85.0 (cont.) NOW-ONETAP-1: "I did it" asks the fleet to verify and close the card, and "Not needed" parks it for 90 days, so no one-tap option asks for a fresh email code (done and dismiss on /api/owner/respond are step-up actions).
+// 1.85.0 NOW-HANDBACK-1 (owner request 2026-11-04, pillar autonomy; minor, new route): each owner card has four one-tap options (Fleet: you do it, Snooze 7 days, I did it, Not needed); POST /api/v3/handback files the card as fleet work (OWNER-HANDBACK ticket, card set rerouted) so the owner never has to do reversible work; the Now screen also shows the last 24 hours of deploys, merges and issue churn.
+// 1.83.5 (cont.) NOW-PRIVATE-1: the Now screen shows card titles only to the signed-in owner; a stranger sees a placeholder (one title named the owner's work-authorization and permit status).
+// 1.83.5 (cont.) NOW-CMD-PROOF-1: the Is-it-running card shows when the command line last ran and how it ended (cmd_log kind agent), or that it never ran.
+// 1.83.5 NOW-FRESH-1 (pillar core; patch): the Money card shows how old its data is (the cost ledger row it reads) and turns amber after 3 hours, so the owner can see that it is updating.
+// 1.84.0 UX-AUDITOR-1 (pillar reach; minor: new role): uxAudit fetches each active product host hourly and writes a deterministic layout, accessibility, typography and speed score to site_ux_checks (no model call); the staff-roster workflow files one deduped agent request per product per day for a low score.
 // 1.83.4 NOW-SPLIT-1 (pillar cost; patch): the Money card splits the monthly pace into what the fleet controls and the owner-stated subscription figure.
 // 1.83.3 (merge of PR 6935 onto main 1.83.0): keeps the 1.82.3 dashboard changes of this branch.
 // 1.83.1 (cont.) NOW-URGENT-1: the Now screen turns red only for cards that carry an IDENTITY-BOUND: line; owner-lane cards matched by a keyword alone are listed as optional.
@@ -464,6 +471,67 @@ __name2(probeTargets, "probeTargets");
 __name22(probeTargets, "probeTargets");
 __name222(probeTargets, "probeTargets");
 __name2222(probeTargets, "probeTargets");
+// UX-AUDITOR-1 (1.84.0, pillar reach; minor: a role that looks at each product the way a person meets it). Deterministic, no model call:
+// fetches each active product_registry host once an hour, reads the HTML it returns and scores layout (viewport), accessibility
+// (lang, title, h1, image alt, form labels, unnamed links and buttons, zoom lock), typography (tiny font sizes) and speed (ms, bytes).
+// Rows go to site_ux_checks; the staff-roster workflow turns a low score into one deduped agent request per product per day.
+function uxAnalyzeHtml(html, ms, status) {
+  const h = String(html || "");
+  const f = [];
+  const add = function(k, d, n) { f.push({ k: k, d: d, n: n }); };
+  if (status >= 400 || status === 0) add("unreachable", 40, 1);
+  if (!/<meta[^>]+name=["']viewport["']/i.test(h)) add("no-viewport", 15, 1);
+  else if (/user-scalable\s*=\s*(no|0)|maximum-scale\s*=\s*1(\.0)?\b/i.test(h)) add("zoom-locked", 8, 1);
+  if (!/<html[^>]+\blang=/i.test(h)) add("no-lang", 8, 1);
+  const t = /<title[^>]*>([^<]*)<\/title>/i.exec(h);
+  if (!t || !t[1].trim()) add("no-title", 8, 1);
+  const h1 = (h.match(/<h1[\s>]/gi) || []).length;
+  if (h1 === 0) add("no-h1", 5, 1); else if (h1 > 1) add("multiple-h1", 2, h1);
+  const noAlt = (h.match(/<img\b(?![^>]*\balt=)[^>]*>/gi) || []).length;
+  if (noAlt) add("img-no-alt", Math.min(12, 3 + noAlt), noAlt);
+  const unlabeled = (h.match(/<(input|select|textarea)\b(?![^>]*(type=["']?(hidden|submit|button)|aria-label|aria-labelledby|\bid=))[^>]*>/gi) || []).length;
+  if (unlabeled) add("form-no-label", Math.min(10, 3 + unlabeled), unlabeled);
+  const emptyLinks = (h.match(/<a\b[^>]*>\s*<\/a>/gi) || []).length;
+  if (emptyLinks) add("empty-link", Math.min(8, 2 + emptyLinks), emptyLinks);
+  const emptyBtn = (h.match(/<button\b(?![^>]*aria-label)[^>]*>\s*<\/button>/gi) || []).length;
+  if (emptyBtn) add("empty-button", Math.min(8, 2 + emptyBtn), emptyBtn);
+  const tiny = (h.match(/font-size\s*:\s*(\d(\.\d+)?|1[01](\.\d+)?)px/gi) || []).length;
+  if (tiny) add("tiny-text", Math.min(8, 2 + tiny), tiny);
+  if (ms > 3000) add("slow", 12, ms); else if (ms > 1500) add("slowish", 5, ms);
+  if (h.length > 600000) add("heavy-page", 8, h.length);
+  let score = 100;
+  for (const x of f) score -= x.d;
+  return { score: Math.max(0, score), findings: f };
+}
+async function uxAudit(env) {
+  try {
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS site_ux_checks (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), product TEXT NOT NULL, host TEXT, status INTEGER, ms INTEGER, bytes INTEGER, score INTEGER, findings TEXT)").run();
+    const last = await env.AUDIT.prepare("SELECT MAX(ts) AS t FROM site_ux_checks").first();
+    if (last && last.t && Date.parse(last.t) > Date.now() - 50 * 60 * 1e3) return { skipped: "ran within 50 minutes" };
+    const rows = (await env.AUDIT.prepare("SELECT product, host FROM product_registry WHERE state = 'active' AND host LIKE '%.%'").all()).results || [];
+    let n = 0;
+    for (const r of rows) {
+      const t0 = Date.now();
+      let status = 0, html = "";
+      try {
+        const resp = await fetch("https://" + r.host + "/", { headers: { "user-agent": "qnfo-ux-auditor/1", accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(8e3) });
+        status = resp.status;
+        html = (await resp.text()).slice(0, 700000);
+      } catch (e) {
+        status = 0;
+      }
+      const ms = Date.now() - t0;
+      const a = uxAnalyzeHtml(html, ms, status);
+      await env.AUDIT.prepare("INSERT INTO site_ux_checks (product, host, status, ms, bytes, score, findings) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(r.product, r.host, status, ms, html.length, a.score, JSON.stringify(a.findings)).run();
+      n++;
+    }
+    await env.AUDIT.prepare("DELETE FROM site_ux_checks WHERE ts < strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')").run();
+    return { checked: n };
+  } catch (e) {
+    console.log(JSON.stringify({ worker: "qnfo-fleet-dashboard", where: "uxAudit", note: String(e && e.message || e) }));
+    return { error: String(e && e.message || e) };
+  }
+}
 async function healthProbes(env, liveNames) {
   const items = await probeTargets(env);
   const settled = await Promise.allSettled(items.map(async function(hp) {
@@ -3441,16 +3509,22 @@ async function v3Section(name, fn) {
 }
 // Owner queue: only what is irreversible and identity-bound is shown (humanLaneFor); the fleet handles the rest.
 async function v3Needs(env, authed) {
-  const rows = await d1all(env.AUDIT, "SELECT slug, title, why, action, created_at FROM human_actions WHERE status='open' ORDER BY id LIMIT 200");
+  const [all, tot, sn] = await Promise.all([
+    d1all(env.AUDIT, "SELECT slug, title, why, action, created_at FROM human_actions WHERE status='open' ORDER BY CASE WHEN why LIKE '%IDENTITY-BOUND:%' THEN 0 ELSE 1 END, id DESC LIMIT 200"),
+    d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM human_actions WHERE status='open'"),
+    activeSnoozes(env)
+  ]);
+  const rows = all.filter(function(r) { return !sn["ha:" + r.slug]; });
+  const parked = all.length - rows.length;
   const mine = rows.filter(function(r) { return humanLaneFor({ title: r.title, why: r.why, action: r.action }) === "owner"; });
   // Only a card that carries an IDENTITY-BOUND: line is urgent (AUTONOMY-FIRST-1); an owner-lane card matched by a keyword alone is optional and shown quietly.
   const bound = function(r) { return String(r.why || "").indexOf("IDENTITY-BOUND:") >= 0; };
   mine.sort(function(x, y) { return (bound(y) ? 1 : 0) - (bound(x) ? 1 : 0); });
   const urgent = mine.filter(bound).length;
   return {
-    open_total: rows.length, fleet_handles: rows.length - mine.length, count: urgent, optional: mine.length - urgent,
+    open_total: tot[0] ? Number(tot[0].n) : rows.length, parked: parked, fleet_handles: Math.max(0, rows.length - mine.length), count: urgent, optional: mine.length - urgent,
     items: mine.slice(0, 8).map(function(r) {
-      return { bound: bound(r), key: "ha:" + r.slug, title: String(r.title || "").slice(0, 140), why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
+      return { bound: bound(r), key: authed ? "ha:" + r.slug : null, title: authed ? String(r.title || "").slice(0, 140) : "Private item for the owner (sign in to read it)", why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
     })
   };
 }
@@ -3463,13 +3537,16 @@ async function v3Spend(env) {
     budget_month_usd: c.fleet_budget_month_usd, month_to_date_usd: c.fleet_month_to_date_usd,
     forecast_month_usd: c.fleet_forecast_bounded_month_usd, pace_month_usd: c.fleet_pace_30d_usd,
     daily_usd: daily, workers_ai_daily_usd: row("workers_ai"), external_daily_usd: row("direct_providers_external:daily"), plan_daily_usd: row("cloudflare_plan:daily"),
-    pace_vs_budget: daily != null && c.fleet_budget_month_usd ? Math.round(daily * 30 / c.fleet_budget_month_usd * 100) / 100 : null
+    pace_vs_budget: daily != null && c.fleet_budget_month_usd ? Math.round(daily * 30 / c.fleet_budget_month_usd * 100) / 100 : null,
+    data_age_s: v3Age(((c.budgets || []).filter(function(x) { return x.node_class === "cost:fleet_all_in_month"; })[0] || {}).updated_at)
   };
 }
 async function v3Health(env) {
-  const [m, hb] = await Promise.all([
+  const [m, hb, cl] = await Promise.all([
     d1all(env.AUDIT, "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN breach = 1 THEN 1 ELSE 0 END), 0) AS breach FROM v_fleet_metrics"),
-    d1all(env.AUDIT, "SELECT worker, ts FROM fleet_heartbeat")
+    d1all(env.AUDIT, "SELECT worker, ts FROM fleet_heartbeat"),
+    // The command line proves itself: its newest run (an owner-only action, so a row means a signed-in run happened) and how it ended.
+    d1all(env.AUDIT, "SELECT status, ts FROM cmd_log WHERE kind = 'agent' ORDER BY ts DESC LIMIT 1").catch(function() { return []; })
   ]);
   const cut = Date.now() - 130 * 6e4;
   const stale = hb.filter(function(r) { const t = Date.parse(r.ts); return !isFinite(t) || t < cut; });
@@ -3477,13 +3554,51 @@ async function v3Health(env) {
   return {
     metrics_total: m[0] ? Number(m[0].total) : null, metrics_off_target: m[0] ? Number(m[0].breach) : null,
     workers_reporting: hb.length - stale.length, workers_total: hb.length, stale_workers: stale.slice(0, 6).map(function(r) { return r.worker; }),
-    newest_heartbeat_age_s: newest ? Math.round((Date.now() - newest) / 1000) : null
+    newest_heartbeat_age_s: newest ? Math.round((Date.now() - newest) / 1000) : null,
+    cmd_last_status: cl[0] ? String(cl[0].status) : null, cmd_last_age_s: cl[0] ? v3Age(String(cl[0].ts).replace(" ", "T") + "Z") : null
   };
+}
+// One tap: hand an owner card back to the fleet. The fleet does it, red-teams a blocker, and keeps the card only with an IDENTITY-BOUND: line and a closing probe.
+async function v3Handback(env, ctx, b) {
+  const key = String(b && b.key || "");
+  if (!/^ha:[A-Za-z0-9._-]{1,120}$/.test(key)) return v3Json({ ok: false, error: "bad key" }, 400);
+  const slug = key.slice(3);
+  const rows = await d1all(env.AUDIT, "SELECT slug, title, why, action FROM human_actions WHERE slug = ?1 AND status = 'open'", [slug]);
+  if (!rows.length) return v3Json({ ok: false, error: "no open card " + slug + " (it may have cleared already)" }, 404);
+  const r = rows[0];
+  const verify = String(b && b.mode || "") === "verify";
+  const text = "OWNER-HANDBACK " + key + ": " + String(r.title || "").slice(0, 200) + "\n" +
+    (verify ? "The owner says this is already done (one tap on the dashboard). Verify it live with a real check; if it is done, close it with that evidence; if it is not, do it yourself (AUTONOMY-FIRST-1, HUMAN-ITEMS-AUTOMATIC-1).\n" : "The owner handed this back to the fleet from the dashboard with one tap (AUTONOMY-FIRST-1, HUMAN-ITEMS-AUTOMATIC-1): do it yourself.\n") +
+    "Card why: " + String(r.why || "").slice(0, 900) + "\nCard action: " + String(r.action || "").slice(0, 600) + "\n" +
+    "Definition of done: do the work with every surface that exists (tools, existing credentials, the repository token, the executor), verify it live, and close with evidence in issue_triage.close_evidence. " +
+    "Only a step that is irreversible and identity-bound (money, a signing act, the owner's own account, an emailed one-time code) may stay with the owner: then write the exact blocker, what you tried on each surface and a closing probe, and reopen the card with an IDENTITY-BOUND: line. Never return it to the owner without that.";
+  const claim = await env.AUDIT.prepare("UPDATE human_actions SET status = 'rerouted', resolution = ?1, updated_at = datetime('now') WHERE slug = ?2 AND status = 'open'").bind("handed back to the fleet by the owner (dashboard), filing, " + new Date().toISOString(), slug).run();
+  if (!(claim.meta && claim.meta.changes)) return v3Json({ ok: false, error: "no open card " + slug + " (already handled)" }, 404);
+  let filed;
+  try {
+    filed = await ownerTaskFile(env, text, { handoff: true, reuse: true });
+  } catch (e) {
+    await env.AUDIT.prepare("UPDATE human_actions SET status = 'open', resolution = NULL WHERE slug = ?1 AND status = 'rerouted'").bind(slug).run().catch(function() {});
+    return v3Json({ ok: false, error: "could not file the task, the card is back in your list: " + String(e && e.message || e).slice(0, 120) }, 502);
+  }
+  await env.AUDIT.prepare("UPDATE human_actions SET resolution = ?1 WHERE slug = ?2").bind("handed back to the fleet by the owner (dashboard), issue " + (filed.issue_id || "pending") + ", " + new Date().toISOString(), slug).run().catch(function() {});
+  return v3Json({ ok: true, key: key, issue_id: filed.issue_id || null, duplicate: !!filed.duplicate, changed: true });
+}
+// What the fleet did in the last 24 hours, so the page answers "what is happening" without a tab.
+async function v3Work(env) {
+  const [a, b] = await Promise.all([
+    d1all(env.AUDIT, "SELECT (SELECT COUNT(*) FROM deployment_history WHERE deployed_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS deploys, (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS merged"),
+    d1all(env.AUDIT, "SELECT event, COUNT(*) AS n FROM issue_lifecycle WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours') GROUP BY event")
+  ]);
+  const ev = {};
+  b.forEach(function(x) { ev[x.event] = Number(x.n) || 0; });
+  const open = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric = 'open_agent_issues'").catch(function() { return []; });
+  return { deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] && open[0].last_value != null && isFinite(Number(open[0].last_value)) ? Number(open[0].last_value) : null };
 }
 async function v3Reach(env) {
   const [r, reg] = await Promise.all([reachScorecardData(env), d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric IN ('pageviews_30d','referral_30d','publications_30d','subscribers_growth_monthly')").catch(function() { return []; })]);
   const rg = {};
-  reg.forEach(function(x) { const n = Number(x.last_value); rg[x.metric] = isFinite(n) ? n : null; });
+  reg.forEach(function(x) { const n = x.last_value == null ? NaN : Number(x.last_value); rg[x.metric] = isFinite(n) ? n : null; });
   const w7 = r.windows && r.windows.d7 || {}, w28 = r.windows && r.windows.d28 || {};
   const pv7 = w7.pageviews ? Number(w7.pageviews.value) : null, pv28 = w28.pageviews ? Number(w28.pageviews.value) : null;
   if (pv7 == null) throw new Error("no pageview window readable (reach scorecard empty)");
@@ -3518,24 +3633,33 @@ async function v3Content(env) {
   if (t.published_7d == null) throw new Error("content pipeline totals unreadable");
   return { published_7d: t.published_7d != null ? Number(t.published_7d) : null, in_flight: t.in_flight != null ? Number(t.in_flight) : null, as_of: c.as_of || null };
 }
-async function v3Build(env, kind, authed) {
+var V3_FLIGHT = {};
+async function v3Build(env, kind, authed, fresh) {
   const key = kind + (authed ? ":o" : ":p");
   const hit = V3_CACHE[key];
+  if (!fresh && hit && hit.env === env && Date.now() - hit.at < V3_TTL_MS) return hit.v;
+  const fl = V3_FLIGHT[key];
+  if (fl && fl.env === env) return fl.p;
+  const p = v3BuildInner(env, kind, authed, key, hit).then(function(r) { delete V3_FLIGHT[key]; return r; }, function(e) { delete V3_FLIGHT[key]; throw e; });
+  V3_FLIGHT[key] = { env: env, p: p };
+  return p;
+}
+async function v3BuildInner(env, kind, authed, key, hit) {
   const now = Date.now();
-  if (hit && hit.env === env && now - hit.at < V3_TTL_MS) return hit.v;
   let v;
   if (kind === "now") {
-    const [needs, spend, health] = await Promise.all([v3Section("needs", function() { return v3Needs(env, authed); }), v3Section("spend", function() { return v3Spend(env); }), v3Section("health", function() { return v3Health(env); })]);
-    v = { screen: "now", needs: needs, spend: spend, health: health };
+    const [needs, spend, health, work] = await Promise.all([v3Section("needs", function() { return v3Needs(env, authed); }), v3Section("spend", function() { return v3Spend(env); }), v3Section("health", function() { return v3Health(env); }), v3Section("work", function() { return v3Work(env); })]);
+    v = { screen: "now", needs: needs, spend: spend, health: health, work: work };
   } else {
     const [reach, content] = await Promise.all([v3Section("reach", function() { return v3Reach(env); }), v3Section("content", function() { return v3Content(env); })]);
     v = { screen: "readers", reach: reach, content: content };
   }
   v.generated_at = new Date().toISOString();
   v.version = VERSION;
+  if (!authed) ["needs", "spend", "health", "work", "reach", "content"].forEach(function(k) { if (v[k] && v[k].ok === false) v[k].error = "temporarily unreadable"; });
   // A screen whose every section failed does not replace a good cached copy: the stale one is served and marked.
-  const allBad = ["needs", "spend", "health", "reach", "content"].every(function(k) { return !v[k] || v[k].ok === false; });
-  if (allBad && hit && hit.env === env) return Object.assign({}, hit.v, { stale: true, stale_since: hit.v.generated_at });
+  const allBad = ["needs", "spend", "health", "work", "reach", "content"].every(function(k) { return !v[k] || v[k].ok === false; });
+  if (allBad && hit && hit.env === env) { hit.at = now - V3_TTL_MS + 1e4; return Object.assign({}, hit.v, { stale: true, stale_since: hit.v.generated_at }); }
   V3_CACHE[key] = { at: now, env: env, v: v };
   return v;
 }
@@ -3555,7 +3679,7 @@ async function v3CodeStart(env, b) {
 async function v3CodeStatus(env, id) {
   const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "result", id: id }) });
   const run = r.json && r.json.run;
-  if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], error: r.http === 404 ? "the executor no longer has this run" : null });
+  if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], miss: r.http !== 404, note: r.http !== 404 ? String(r.error || "executor http " + r.http).slice(0, 120) : null, error: r.http === 404 ? "the executor no longer has this run" : null });
   const steps = (run.steps || []).map(function(s) { return { tool: String(s.tool || ""), args: String(s.args || "").replace(/\s+/g, " ").slice(0, 160), ms: Number(s.ms) || 0 }; });
   // Any status other than queued/running is final, as in cmdAgentPoll: an unknown one ("timeout", "cancelled") must end the poll, not spin it for 25 minutes.
   const done = run.status === "done", failed = !done && run.status !== "queued" && run.status !== "running";
@@ -3564,23 +3688,30 @@ async function v3CodeStatus(env, id) {
 }
 async function v3Routes(request, env, ctx, path, url, owner) {
   const holder = !!(owner && (owner.authed || owner.loop));
+  const actor = !!(owner && owner.authed);
   const m = request.method;
   if ((path === "/" || path === "") && (m === "GET" || m === "HEAD") && url.searchParams.get("frag") !== "1") {
     return new Response(m === "HEAD" ? null : v3Html(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
   }
   if (path.indexOf("/api/v3/") !== 0) return null;
   if ((path === "/api/v3/now" || path === "/api/v3/readers") && (m === "GET" || m === "HEAD")) {
-    return v3Json(await v3Build(env, path === "/api/v3/now" ? "now" : "readers", holder));
+    return v3Json(await v3Build(env, path === "/api/v3/now" ? "now" : "readers", holder, holder && url.searchParams.get("fresh") === "1"));
   }
   const codeHit = /^\/api\/v3\/code\/(cmd-[0-9a-f]{20})$/.exec(path);
   if (codeHit && m === "GET") {
-    if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
+    if (!actor) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
     return await v3CodeStatus(env, codeHit[1]);
   }
   if (m !== "POST") return v3Json({ error: "not found" }, 404);
   if (request.headers.get("x-fleet-ui") !== "1") return v3Json({ error: "missing x-fleet-ui header" }, 400);
+  if (path === "/api/v3/handback") {
+    if (!actor) return v3Json({ ok: false, need: "code", error: "Sign in with your emailed code to hand work back to the fleet." }, 401);
+    let hb = null;
+    try { hb = await request.json(); } catch (e) { return v3Json({ error: "invalid JSON" }, 400); }
+    return await v3Handback(env, ctx, hb);
+  }
   if (path === "/api/v3/code" || path === "/api/v3/warm") {
-    if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
+    if (!actor) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
     if (path === "/api/v3/warm") {
       const w = await cmdToolCall(env, "container_status", {}, ctx, "cmd-" + cmdRandHex(10));
       return v3Json({ ok: !!w.ok, ms: w.ms, error: w.ok ? null : String(w.error || "container did not answer").slice(0, 160) });
@@ -3628,8 +3759,8 @@ function cls(age,limit){return age==null?'bad':age>limit*3?'bad':age>limit?'warn
 var H={'Content-Type':'application/json','x-fleet-ui':'1'},holder=false,last={now:0,readers:0},cur='now',data={};
 function api(u,b){return fetch(u,{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(j){j.http=r.status;return j})})}
 function pill(){if(cur==='code'){var q=$('pill');q.className=holder?'ok':'warn';q.lastChild.textContent=holder?'signed in':'sign in to start';return}var a=last[cur]?Math.round((Date.now()-last[cur])/1000):null,p=$('pill');if(a==null){p.className='';p.lastChild.textContent='loading';return}p.className=a>300?'bad':a>120?'warn':'ok';p.lastChild.textContent=a>120?'not updating, last '+ago(a):'live, '+ago(a)}
-function load(k,force){if(document.hidden&&!force)return;var c=new AbortController(),t=setTimeout(function(){c.abort()},12000);
-fetch('/api/v3/'+k,{cache:'no-store',signal:c.signal,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){clearTimeout(t);data[k]=d;last[k]=Date.now();$('off').textContent='';(k==='now'?renderNow:renderReaders)(d);pill()})
+function load(k,force,fresh){if(document.hidden&&!force)return;var c=new AbortController(),t=setTimeout(function(){c.abort()},12000);
+fetch('/api/v3/'+k+(fresh?'?fresh=1':''),{cache:'no-store',signal:c.signal,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){clearTimeout(t);data[k]=d;last[k]=Date.now();$('off').textContent='';(k==='now'?renderNow:renderReaders)(d);pill()})
 .catch(function(e){clearTimeout(t);$('off').textContent="Couldn't refresh ("+(e&&e.name==='AbortError'?'timed out':'offline')+'). Showing the last good data.';pill()})}
 function sec(s,name){return s&&s.ok===false?'<p class="err">Could not read '+name+': '+esc(s.error)+'</p>':''}
 function renderNow(d){var n=d.needs||{},sp=d.spend||{},h=d.health||{},bad=[],tone='ok',title='All clear',sub='';
@@ -3639,13 +3770,14 @@ else if(bad.length){tone='warn';title="Can't read "+bad.join(', ');sub='Not conf
 else if(sp.ok&&sp.pace_vs_budget>1.1){tone='warn';title='Spending ahead of budget';sub='At this pace the month lands at '+usd(sp.pace_month_usd)+' against '+usd(sp.budget_month_usd)+'.'}
 else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
-if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
-o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace':'')+'</span></h2>'+sec(sp,'spend');
+if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+(!it.key?'<small>Sign in on the Code tab to act on this.</small><div hidden>':'')+'<button data-k="'+esc(it.key)+'" data-h="1" class="pri">Fleet: you do it</button> <button data-k="'+esc(it.key)+'" data-a="snooze">Snooze 7 days</button> <button data-k="'+esc(it.key)+'" data-h="verify">I did it</button> <button data-k="'+esc(it.key)+'" data-a="snooze90">Not needed</button>'+(!it.key?'</div>':'')+'</div>'});o+='</div>'}
+o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':sp.ok?cls(sp.data_age_s,10800):'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace, ':'')+(sp.ok?'updated '+ago(sp.data_age_s):'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
 var own=sp.external_daily_usd!=null?sp.external_daily_usd*30:null,fleetOwn=own!=null&&sp.pace_month_usd!=null?sp.pace_month_usd-own:null;o+='<div class="row"><span>Pace at the current rate, per month</span><span>'+usd(sp.pace_month_usd)+'</span></div><div class="row"><span>of which the fleet itself (AI + Cloudflare)</span><span>'+usd(fleetOwn)+'</span></div><div class="row"><span>of which your own subscriptions (unverified figure)</span><span>'+usd(own)+'</span></div><p class="note">Only the fleet part can be cut by the system. The subscriptions part falls when you cancel plans the Code tab replaces.</p>'}
 o+='</div><div class="card"><h2>Is it running?<span class="'+cls(h.newest_heartbeat_age_s,900)+'">'+(h.ok?'last heartbeat '+ago(h.newest_heartbeat_age_s):'')+'</span></h2>'+sec(h,'health');
-if(h.ok){o+='<div class="row"><span>Workers reporting in the last 2 h</span><span>'+h.workers_reporting+' of '+h.workers_total+'</span></div>'+(h.stale_workers.length?'<div class="row"><span>Silent</span><span>'+esc(h.stale_workers.join(', '))+'</span></div>':'')+'<div class="row"><span>Metrics off target</span><span>'+h.metrics_off_target+' of '+h.metrics_total+'</span></div>'}
+if(h.ok){o+='<div class="row"><span>Workers reporting in the last 2 h</span><span>'+h.workers_reporting+' of '+h.workers_total+'</span></div>'+(h.stale_workers.length?'<div class="row"><span>Silent</span><span>'+esc(h.stale_workers.join(', '))+'</span></div>':'')+'<div class="row"><span>Metrics off target</span><span>'+h.metrics_off_target+' of '+h.metrics_total+'</span></div><div class="row"><span>Command line, last run</span><span>'+(h.cmd_last_status?esc(h.cmd_last_status)+', '+ago(h.cmd_last_age_s):'never run: sign in on the Code tab')+'</span></div>'}
+var w=d.work||{};if(w.ok){o+='</div><div class="card"><h2>Last 24 hours</h2><div class="row"><span>Deploys / code changes merged</span><span>'+num(w.deploys_24h)+' / '+num(w.code_merged_24h)+'</span></div><div class="row"><span>Issues opened / closed / reopened</span><span>'+num(w.issues_opened_24h)+' / '+num(w.issues_closed_24h)+' / '+num(w.issues_reopened_24h)+'</span></div><div class="row"><span>Issues open now</span><span>'+num(w.open_issues)+'</span></div><p class="note">Closed and reopened show whether fixes hold: many reopened means closes are not sticking.</p>'}
 $('s-now').innerHTML=o+'</div><p class="note">Updated '+ago(Math.round((Date.now()-Date.parse(d.generated_at))/1000))+' (server). Version '+esc(d.version)+(d.stale?' - showing a cached copy: every source failed on the last read.':'')+'</p>'}
 function renderReaders(d){var r=d.reach||{},c=d.content||{},o='';
 if(r.ok){var few=(r.referred_7d||0)<100,tone=few?'warn':'ok',t=few?'Few verifiable readers':'People are reading';
@@ -3666,16 +3798,16 @@ function msg(cl,t){var d=document.createElement('div');d.className='msg '+cl;d.t
 function sid(){var s=localStorage.getItem('v3sid');if(!s){s='web-'+Math.random().toString(36).slice(2,12);localStorage.setItem('v3sid',s)}return s}
 function run(text){msg('you',text);var box=msg('agent','Starting...');$('ci').value='';
 api('/api/v3/code',{text:text,sid:sid()}).then(function(j){if(j.need){box.textContent=j.error;$('si').style.display='block';return}if(!j.ok){box.textContent='Could not start: '+(j.error||'http '+j.http);return}poll(j.id,box,Date.now())}).catch(function(e){box.textContent='Could not reach the server: '+e})}
-function poll(id,box,t0){fetch('/api/v3/code/'+id,{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
+function poll(id,box,t0,mm){mm=mm||0;fetch('/api/v3/code/'+id,{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){if(j.miss){if(mm>=20){box.textContent='The executor is not answering ('+(j.note||'no reply')+'). The run may still be going (id '+id+').';return}setTimeout(function(){poll(id,box,t0,mm+1)},1500);return}
 var st=(j.steps||[]).map(function(s){return '> '+s.tool+(s.args?' '+s.args:'')+' ('+s.ms+'ms)'}).join('\n');
-if(j.status==='running'){box.innerHTML='<div class="steps">'+esc(st||'thinking...')+'</div>Working... '+Math.round((Date.now()-t0)/1000)+'s';if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},1500);else box.textContent='Still running after 25 minutes; the run continues on the server (id '+id+').';return}
-box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},3000);else box.textContent='Lost contact with the server; the run may still be going (id '+id+').'})}
+if(j.status==='running'){box.innerHTML='<div class="steps">'+esc(st||'thinking...')+'</div>Working... '+Math.round((Date.now()-t0)/1000)+'s';if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0,0)},1500);else box.textContent='Still running after 25 minutes; the run continues on the server (id '+id+').';return}
+box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0,mm)},3000);else box.textContent='Lost contact with the server; the run may still be going (id '+id+').'})}
 $('cf').addEventListener('submit',function(e){e.preventDefault();var t=$('ci').value.trim();if(t)run(t)});
 $('ci').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('cf').dispatchEvent(new Event('submit',{cancelable:true}))}});
 document.querySelectorAll('[data-q]').forEach(function(b){b.onclick=function(){if(!holder){codeInit();return}run(b.getAttribute('data-q'))}});
 $('send').onclick=function(){var tk=document.querySelector('[name=cf-turnstile-response]');$('send').disabled=true;api('/api/cmd/code',{cf_turnstile:tk?tk.value:''}).then(function(j){$('send').disabled=false;$('sim').textContent=j.ok?'Code sent to '+(j.to||'your email')+'.':(j.error||'Could not send the code.');if(j.ok)$('vc').focus()})};
 $('vb').onclick=function(){api('/api/cmd/verify',{code:$('vc').value.trim()}).then(function(j){if(j.ok){$('sim').textContent='Signed in.';codeInit();load('now',true)}else $('sim').textContent=j.error||'That code did not work.'})};
-document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a]');if(!b)return;b.disabled=true;api('/api/owner/respond',{key:b.getAttribute('data-k'),kind:b.getAttribute('data-a')}).then(function(j){if(j.ok)load('now',true);else{b.disabled=false;if(j.http===401||j.http===403){show('code');$('sim').textContent='Sign in first (this action needs a recent code).'}else alert(j.error||'failed')}})});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a],[data-h]');if(!b)return;b.disabled=true;var hm=b.getAttribute('data-h'),ac=b.getAttribute('data-a'),kk=b.getAttribute('data-k');(hm?api('/api/v3/handback',{key:kk,mode:hm==='verify'?'verify':'do'}):api('/api/owner/respond',{key:kk,kind:'snooze',days:ac==='snooze90'?90:7,note:ac==='snooze90'?'owner: not needed (parked 90 days from the dashboard)':''})).then(function(j){if(j.ok){var nd=b.closest('.need');if(nd&&nd.parentNode)nd.parentNode.removeChild(nd);load('now',true,true)}else{b.disabled=false;if(j.http===401||j.http===403){show('code');$('sim').textContent='Sign in first (this action needs a recent code).'}else alert(j.error||'failed')}}).catch(function(){b.disabled=false;alert('Could not reach the server. Try again.')})});
 document.querySelectorAll('nav a').forEach(function(a){a.onclick=function(e){e.preventDefault();show(a.id.slice(2))}});
 setInterval(function(){pill();if(cur!=='code')load(cur)},30000);setInterval(pill,5000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&cur!=='code')load(cur,true)});
@@ -4492,6 +4624,7 @@ var worker_default = {
     } catch (e) {
       console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_heartbeat", note: String(e && e.message || e) }));
     }
+    ctx.waitUntil(uxAudit(env));
     if (!fullDashboardRefreshDue(controller)) {
       const saved = await loadState(env).catch(function() {
         return null;
