@@ -1,0 +1,13 @@
+import fs from "node:fs"; import assert from "node:assert";
+const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const m = src.match(/const D1_REPLICA_SESSIONS[\s\S]*?\nasync function d1all[\s\S]*?\n\}\n/);
+assert(m, "d1all block");
+const { d1all } = new Function(m[0] + "; return { d1all };")();
+const mk = (tag, fail) => ({ prepare: () => ({ bind() { return this; }, all: async () => { if (fail) throw new Error("x"); return { results: [tag] }; } }) });
+const primary = mk("p"); primary.withSession = () => mk("r");
+assert.deepEqual(await d1all(primary, "SELECT 1"), ["r"]);
+assert.deepEqual(await d1all(primary, "INSERT INTO t VALUES (1)"), ["p"]);
+const bad = mk("p"); bad.withSession = () => mk("r", true);
+assert.deepEqual(await d1all(bad, "select 1"), ["p"]);
+assert.deepEqual(await d1all(mk("p"), "SELECT 1"), ["p"]);
+console.log("ok");
