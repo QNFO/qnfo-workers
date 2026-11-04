@@ -114,5 +114,10 @@ ok(/try \{ await this\.startRun\(\{ text: payload\.text[^\n]*catch \(e\) \{ logE
 ok(/addEventListener\("unhandledrejection"/.test(ts) && /where: "unhandledrejection".{0,200}stack:/.test(ts) && /ev\.preventDefault\(\)/.test(ts), "an unhandled rejection is logged with its stack and prevented from failing the invocation");
 ok(/try \{\s*\(globalThis as any\)\.addEventListener\("unhandledrejection"[\s\S]*?\} catch \(e\) \{ \/\* the event is not supported here \*\/ \}/.test(ts), "registering the listener cannot throw at load");
 
+// SPEND-METER-1: every turn is metered into ai_spend_ledger so the fleet_budget caps see this worker's Workers AI use, fail-soft.
+ok(/async function meterSpend\(/.test(ts) && /INSERT INTO ai_spend_ledger \(day, provider, caller, model, calls, in_tok, out_tok, usd, downgraded, refused\) VALUES \(\?1, 'workers-ai'/.test(ts), "meterSpend writes the shared ai_spend_ledger");
+ok((ts.match(/await meterSpend\(this\.env,/g) || []).length === 2, "both the loop turn and the code session are metered");
+ok(/catch \(e\) \{ logErr\("meter-spend", e\); \}/.test(ts), "a metering failure is logged, never thrown");
+
 console.log("qnfo-agents worker.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

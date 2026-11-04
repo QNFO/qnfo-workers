@@ -323,6 +323,21 @@ async function ledger(env: Env, row: Record<string, unknown>) {
   } catch (e) { logErr("ledger", e); }
 }
 
+// SPEND-METER-1: this worker reaches Workers AI through AI Gateway directly, so qnfo-ai never sees its tokens (about 95% of the
+// account's input tokens on 2026-11-04, docs/INFRA-AUDIT-2026-11-04.md). Every turn adds its token use to ai_spend_ledger
+// (provider "workers-ai", the table the fleet_budget caps read), fail-soft: a metering error never fails a turn.
+async function meterSpend(env: Env, caller: string, model: string, inTok: number, outTok: number) {
+  try {
+    const i = Math.max(0, Math.round(Number(inTok) || 0)), o = Math.max(0, Math.round(Number(outTok) || 0));
+    if (!i && !o) return;
+    const neurons = codeSessionNeurons(model, i, o) || codeSessionNeurons(CODE_SESSION_NEURON_BASELINE, i, o);
+    const usd = codeSessionCost(neurons);
+    const day = new Date().toISOString().slice(0, 10);
+    await env.AUDIT_DB.prepare("INSERT INTO ai_spend_ledger (day, provider, caller, model, calls, in_tok, out_tok, usd, downgraded, refused) VALUES (?1, 'workers-ai', ?2, ?3, 1, ?4, ?5, ?6, 0, 0) ON CONFLICT(day, provider, caller, model) DO UPDATE SET calls = calls + 1, in_tok = in_tok + excluded.in_tok, out_tok = out_tok + excluded.out_tok, usd = usd + excluded.usd")
+      .bind(day, clip(String(caller || "qnfo-agents"), 80), clip(String(model || "unknown"), 120), i, o, usd).run();
+  } catch (e) { logErr("meter-spend", e); }
+}
+
 export class FleetCodeAgent extends Agent<Env, State> {
   initialState: State = { runs: 0, last_run: null, last_status: null, version: VERSION };
   private approvalWorkspace: Workspace | null = null;
@@ -378,13 +393,14 @@ export class FleetCodeAgent extends Agent<Env, State> {
     if (!r) return;
     this.sql`UPDATE runs SET status = 'running', attempts = attempts + 1 WHERE id = ${id}`;
     const proposals: any[] = [];
-    let status = "done", result = "", error: string | null = null, steps = 0, used: string[] = [], modelId = DEFAULT_MODEL;
+    let status = "done", result = "", error: string | null = null, steps = 0, used: string[] = [], modelId = DEFAULT_MODEL, meterIn = 0, meterOut = 0;
     try {
       const m = await modelFor(this.env);
       modelId = m.id;
       const tools = await allTools({ env: this.env, scope: r.scope, caller: r.caller, agent: this, runId: id, proposals });
       const out: any = await generateText({ model: m.model, system: SYSTEM + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, stopWhen: stepCountIs(/^issue-probe-agent/.test(String(r.caller)) ? PROBE_MAX_STEPS : MAX_STEPS), timeout: { totalMs: TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS } } as any);
       result = String(out.text || "").trim() || lastStepText(out.steps);
+      meterIn += Number(out.totalUsage && out.totalUsage.inputTokens) || 0; meterOut += Number(out.totalUsage && out.totalUsage.outputTokens) || 0;
       await meter(this.env, modelId, usageOf(out));
       steps = Array.isArray(out.steps) ? out.steps.length : 0;
       for (const s of out.steps || []) for (const tc of s.toolCalls || []) if (used.indexOf(tc.toolName) < 0) used.push(tc.toolName);
@@ -393,6 +409,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
         try {
           const fin: any = await generateText({ model: m.model, system: SYSTEM + "\nScope of this turn: " + r.scope + ".", prompt: "Request:\n" + clip(r.prompt, 6000) + "\n\nTool results so far:\n" + (toolTranscript(out.steps, 24000) || "(none)") + "\n\n" + FINAL_ANSWER_ASK, abortSignal: AbortSignal.timeout(FINAL_ANSWER_TIMEOUT_MS) } as any);
           result = String(fin.text || "").trim();
+          meterIn += Number(fin.totalUsage && fin.totalUsage.inputTokens) || 0; meterOut += Number(fin.totalUsage && fin.totalUsage.outputTokens) || 0;
           await meter(this.env, modelId, usageOf(fin));
           if (result) used.push("final-answer");
         } catch (eF) { logErr("final-answer", eF); }
@@ -402,6 +419,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
       status = "failed";
       error = errText(e);
     }
+    await meterSpend(this.env, r.caller, modelId, meterIn, meterOut);
     const fin = Date.now();
     this.sql`UPDATE runs SET status = ${status}, model = ${modelId}, steps = ${steps}, tools_used = ${used.join(",")}, result = ${result}, proposals = ${JSON.stringify(proposals)}, error = ${error}, finished_ms = ${fin} WHERE id = ${id}`;
     this.setState({ runs: (this.state.runs || 0) + 1, last_run: id, last_status: status, version: VERSION });
@@ -692,6 +710,7 @@ export class CodeSession extends Agent<Env, State> {
         await this.env.AUDIT_DB.prepare("INSERT OR REPLACE INTO cf_agent_session_usage (session_id, turn, caller, model, input_tokens, output_tokens, neurons, cost_usd, status, created_ms, finished_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'done', ?9, ?10)")
           .bind(this.name, turn, session.caller, modelId, inputTokens, outputTokens, neurons, costUsd, now, finish).run();
       } catch (e) { logErr("code-session-usage", e); }
+      await meterSpend(this.env, session.caller, modelId, inputTokens, outputTokens);
       this.event("complete", { turn, answer: answer.slice(0, 16000), model: modelId, input_tokens: inputTokens, output_tokens: outputTokens, neurons, cost_usd: costUsd, neuron_budget: session.neuron_budget, neurons_remaining: Math.max(0, Number(session.neuron_budget) - Number(session.neurons_used || 0) - neurons), steps });
       this.setState({ runs: (this.state.runs || 0) + 1, last_run: this.name + ":" + turn, last_status: "done", version: VERSION });
     } catch (e) {
