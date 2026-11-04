@@ -107,6 +107,9 @@ ok(r.status === 200, "V4 warm-up route answers");
 // V6 (1.83.0) the Readers screen compares output with readership and reads the registry figures
 ok(html.includes("Output vs readers") && /visits_per_publication/.test(src) && src.includes("FROM metric_registry WHERE metric IN ('pageviews_30d','referral_30d','publications_30d'"), "V6 Readers card compares papers published with referred visits");
 
+// V7 (1.83.5) the Money card says how old its data is
+ok(/data_age_s: v3Age/.test(src) && html.includes("updated '+ago(sp.data_age_s)"), "V7 spend carries its data age and the page shows it");
+
 // V5
 r = await get("/classic");
 ok(r.status === 200 && !(await r.text()).includes('id="n-code"'), "V5 /classic is still the old overview");

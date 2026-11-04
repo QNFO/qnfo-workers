@@ -11,7 +11,8 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.83.4";
+var VERSION = "1.83.5";
+// 1.83.5 NOW-FRESH-1 (pillar core; patch): the Money card shows how old its data is (the cost ledger row it reads) and turns amber after 3 hours, so the owner can see that it is updating.
 // 1.83.4 NOW-SPLIT-1 (pillar cost; patch): the Money card splits the monthly pace into what the fleet controls and the owner-stated subscription figure.
 // 1.83.3 (merge of PR 6935 onto main 1.83.0): keeps the 1.82.3 dashboard changes of this branch.
 // 1.83.1 (cont.) NOW-URGENT-1: the Now screen turns red only for cards that carry an IDENTITY-BOUND: line; owner-lane cards matched by a keyword alone are listed as optional.
@@ -3463,7 +3464,8 @@ async function v3Spend(env) {
     budget_month_usd: c.fleet_budget_month_usd, month_to_date_usd: c.fleet_month_to_date_usd,
     forecast_month_usd: c.fleet_forecast_bounded_month_usd, pace_month_usd: c.fleet_pace_30d_usd,
     daily_usd: daily, workers_ai_daily_usd: row("workers_ai"), external_daily_usd: row("direct_providers_external:daily"), plan_daily_usd: row("cloudflare_plan:daily"),
-    pace_vs_budget: daily != null && c.fleet_budget_month_usd ? Math.round(daily * 30 / c.fleet_budget_month_usd * 100) / 100 : null
+    pace_vs_budget: daily != null && c.fleet_budget_month_usd ? Math.round(daily * 30 / c.fleet_budget_month_usd * 100) / 100 : null,
+    data_age_s: v3Age(((c.budgets || []).filter(function(x) { return x.node_class === "cost:fleet_all_in_month"; })[0] || {}).updated_at)
   };
 }
 async function v3Health(env) {
@@ -3640,7 +3642,7 @@ else if(sp.ok&&sp.pace_vs_budget>1.1){tone='warn';title='Spending ahead of budge
 else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
 if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
-o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace':'')+'</span></h2>'+sec(sp,'spend');
+o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':sp.ok?cls(sp.data_age_s,10800):'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace, ':'')+(sp.ok?'updated '+ago(sp.data_age_s):'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
 var own=sp.external_daily_usd!=null?sp.external_daily_usd*30:null,fleetOwn=own!=null&&sp.pace_month_usd!=null?sp.pace_month_usd-own:null;o+='<div class="row"><span>Pace at the current rate, per month</span><span>'+usd(sp.pace_month_usd)+'</span></div><div class="row"><span>of which the fleet itself (AI + Cloudflare)</span><span>'+usd(fleetOwn)+'</span></div><div class="row"><span>of which your own subscriptions (unverified figure)</span><span>'+usd(own)+'</span></div><p class="note">Only the fleet part can be cut by the system. The subscriptions part falls when you cancel plans the Code tab replaces.</p>'}
