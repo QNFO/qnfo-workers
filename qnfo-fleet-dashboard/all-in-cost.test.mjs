@@ -55,6 +55,7 @@ ok(sp.all_in.room.reachable === true && near(sp.all_in.room.ai_daily_room_usd, M
 feed.c.all_in_lines = [{ vendor: "owner", product: "direct_providers", evidence: "owner-stated", mtd_usd: 40, forecast_month_usd: 450, rate_daily_usd: 15 }];
 sp = await v3Spend({});
 ok(sp.all_in.room === null && sp.all_in.forecast_month_usd === 400, "without a Workers AI line there is no room figure (null), the rest of the card still renders", sp.all_in);
+ok(src.includes("var ai0=sp.all_in&&sp.all_in.budget_month_usd?sp.all_in:null") && src.includes("Cost: '+(ai0?'all-vendor forecast':'fleet pace')"), "the hero, the four numbers and the card header use the all-in forecast when the ledger has one, so they agree with the card body");
 ok(src.includes("above the budget even with AI at zero") && src.includes("AI would have to average, per day, for the rest of the month"), "the Money card words both outcomes");
 
 // the two feed statements on the real views
