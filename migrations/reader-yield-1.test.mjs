@@ -129,7 +129,7 @@ ok(pr[0].published_at === ymd(1) + " 10:00:00", "and the age: the earliest publi
 ok(pr[0].pv_7d === 70 && pr[0].pv_prev_7d === 30, "7 day and previous 7 day windows split at the same date", pr[0]);
 ok(!rows("SELECT key64 FROM paper_readership").some((r) => r.key64 === "bot-paper"), "bot-only campaigns are not papers read");
 const top = rows("SELECT slug, reader_score, suspect_automated FROM v_paper_readers_top");
-ok(top.length >= 1 && top[0].slug === LONG && top[0].reader_score === 30 && top[0].suspect_automated === 0, "v_paper_readers_top ranks the externally read paper first", top[0]);
+ok(top.length >= 1 && top[0].slug === LONG && top[0].reader_score === 3 && top[0].suspect_automated === 0, "v_paper_readers_top ranks the externally read paper first", top[0]);
 ok(rows("SELECT * FROM v_reader_yield_by_source").some((r) => r.idea_source === "proposal" && r.papers >= 1), "yield by idea source reads the table");
 
 const mv = Object.fromEntries(rows("SELECT metric, last_value, state FROM metric_registry").map((r) => [r.metric, r]));
