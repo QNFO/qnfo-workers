@@ -27,6 +27,11 @@ class T(unittest.TestCase):
     def test_jsonld(self):
         self.assertEqual(self.pack["json_ld"]["@type"], "Person")
 
+    def test_json_resume(self):
+        r = pp.json_resume(self.pack, self.led)
+        self.assertEqual(len(r["work"]), len(self.pack["experience"]))
+        self.assertEqual(r["basics"]["label"], self.pack["headline"])
+
 
 if __name__ == "__main__":
     unittest.main()

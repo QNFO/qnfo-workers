@@ -70,6 +70,19 @@ def drift(pack, live_text):
     return miss
 
 
+def json_resume(pack, led):
+    """JSON Resume (jsonresume.org) document: imports into many job boards and resume sites."""
+    p = led["person"]
+    return {
+        "basics": {"name": pack["name"], "label": pack["headline"], "email": p["email"], "url": p["links"]["site"],
+                   "summary": pack["about"], "location": {"city": p["location"].split(",")[0]},
+                   "profiles": [{"network": k, "url": v} for k, v in p["links"].items() if k != "site"]},
+        "work": [{"name": j["employer"], "startDate": j["period"].split("-")[0], "highlights": j["bullets"]}
+                 for j in pack["experience"]],
+        "skills": [{"name": s} for s in pack["skills"]],
+    }
+
+
 def render_md(pack):
     out = [f"# {pack['name']}: profile pack", "", "## Headline", pack["headline"], "", "## About", pack["about"], "",
            "## Experience"]
@@ -94,7 +107,9 @@ def main():
         f.write(render_md(pack))
     with open(os.path.join(a.out, "person.jsonld"), "w", encoding="utf-8") as f:
         json.dump(pack["json_ld"], f, indent=2, ensure_ascii=False)
-    print(f"wrote {a.out}/profile.md and person.jsonld ({len(pack['experience'])} roles, {len(pack['skills'])} skills)")
+    with open(os.path.join(a.out, "resume.json"), "w", encoding="utf-8") as f:
+        json.dump(json_resume(pack, led), f, indent=2, ensure_ascii=False)
+    print(f"wrote {a.out}/profile.md, person.jsonld and resume.json ({len(pack['experience'])} roles, {len(pack['skills'])} skills)")
     if a.live:
         with open(a.live, encoding="utf-8") as f:
             miss = drift(pack, f.read())
