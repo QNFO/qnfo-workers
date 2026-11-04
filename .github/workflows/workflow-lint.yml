@@ -15,6 +15,7 @@ name: workflow-lint
 on:
   workflow_call:
   push:
+    branches: [main]
     paths:
       - '.github/workflows/**'
       - 'scripts/workflow-lint.py'
