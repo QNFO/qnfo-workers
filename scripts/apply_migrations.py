@@ -841,9 +841,27 @@ def ensure_bookmark_column(acct, token, ledger_id):
     return True
 
 
-def d1(acct, token, db_id, sql, params=None):
+D1_OVERLOAD_DELAYS = (3, 8, 20, 45)  # seconds; D1-OVERLOAD-RETRY-1 (issue 6922)
+
+
+def d1_overloaded(st, j):
+    """D1 answered 'overloaded' (HTTP 429 / code 7429): it rejected the statement without running it, so a retry is safe."""
+    errs = (j or {}).get("errors") or []
+    return st == 429 or any(isinstance(e, dict) and e.get("code") == 7429 for e in errs)
+
+
+def d1(acct, token, db_id, sql, params=None, sleep=time.sleep, call=None):
     import cf_ops_actions as C
-    st, j = C.call("POST", f"/accounts/{acct}/d1/database/{db_id}/query", token, {"sql": sql, "params": params or []}, timeout=90)
+    call = call or C.call
+    delays = iter(D1_OVERLOAD_DELAYS)
+    while True:
+        st, j = call("POST", f"/accounts/{acct}/d1/database/{db_id}/query", token, {"sql": sql, "params": params or []}, timeout=90)
+        if (st != 200 or not j.get("success", False)) and d1_overloaded(st, j):
+            wait = next(delays, None)
+            if wait is not None:
+                sleep(wait)
+                continue
+        break
     if st != 200 or not j.get("success", False):
         raise RuntimeError("D1 HTTP " + str(st) + ": " + json.dumps(j.get("errors") or j)[:300])
     res = j.get("result") or []
