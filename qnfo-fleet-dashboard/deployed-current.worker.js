@@ -3652,7 +3652,7 @@ api('/api/v3/code',{text:text,sid:sid()}).then(function(j){if(j.need){box.textCo
 function poll(id,box,t0){fetch('/api/v3/code/'+id,{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
 var st=(j.steps||[]).map(function(s){return '> '+s.tool+(s.args?' '+s.args:'')+' ('+s.ms+'ms)'}).join('\n');
 if(j.status==='running'){box.innerHTML='<div class="steps">'+esc(st||'thinking...')+'</div>Working... '+Math.round((Date.now()-t0)/1000)+'s';if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},1500);else box.textContent='Still running after 25 minutes; the run continues on the server (id '+id+').';return}
-box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){setTimeout(function(){poll(id,box,t0)},3000)})}
+box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},3000);else box.textContent='Lost contact with the server; the run may still be going (id '+id+').'})}
 $('cf').addEventListener('submit',function(e){e.preventDefault();var t=$('ci').value.trim();if(t)run(t)});
 $('ci').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('cf').dispatchEvent(new Event('submit',{cancelable:true}))}});
 document.querySelectorAll('[data-q]').forEach(function(b){b.onclick=function(){if(!holder){codeInit();return}run(b.getAttribute('data-q'))}});
