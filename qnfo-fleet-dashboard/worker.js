@@ -11,13 +11,14 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.86.0";
+var VERSION = "1.87.0";
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
 // 1.85.0 (cont.) NOW-ONETAP-1: "I did it" asks the fleet to verify and close the card, and "Not needed" parks it for 90 days, so no one-tap option asks for a fresh email code (done and dismiss on /api/owner/respond are step-up actions).
 // 1.85.0 NOW-HANDBACK-1 (owner request 2026-11-04, pillar autonomy; minor, new route): each owner card has four one-tap options (Fleet: you do it, Snooze 7 days, I did it, Not needed); POST /api/v3/handback files the card as fleet work (OWNER-HANDBACK ticket, card set rerouted) so the owner never has to do reversible work; the Now screen also shows the last 24 hours of deploys, merges and issue churn.
 // 1.83.5 (cont.) NOW-PRIVATE-1: the Now screen shows card titles only to the signed-in owner; a stranger sees a placeholder (one title named the owner's work-authorization and permit status).
 // 1.83.5 (cont.) NOW-CMD-PROOF-1: the Is-it-running card shows when the command line last ran and how it ended (cmd_log kind agent), or that it never ran.
 // 1.83.5 NOW-FRESH-1 (pillar core; patch): the Money card shows how old its data is (the cost ledger row it reads) and turns amber after 3 hours, so the owner can see that it is updating.
+// 1.87.0 UX-AUDITOR-3 (pillar reach; minor: crawler 404 paths are audited): the auditor also fetches the top 5 paths crawlers got a 404 on (papers.qnfo.org /api/seo/crawl notFound, 7 days) and records them as crawl:<host>, kept out of every product score.
 // 1.86.0 UX-AUDITOR-2 (pillar reach; minor: the auditor follows real readers): targets now include the pages and papers people viewed most in 7 days (reach_signals cf-rum-human) next to every product host, a slow result is re-fetched once so a cold start is not scored as a defect, and a 401 or 403 sign-in wall is recorded as auth-gated, not unreachable.
 // 1.84.0 UX-AUDITOR-1 (pillar reach; minor: new role): uxAudit fetches each active product host hourly and writes a deterministic layout, accessibility, typography and speed score to site_ux_checks (no model call); the staff-roster workflow files one deduped agent request per product per day for a low score.
 // 1.83.4 NOW-SPLIT-1 (pillar cost; patch): the Money card splits the monthly pace into what the fleet controls and the owner-stated subscription figure.
@@ -543,6 +544,20 @@ async function uxTargets(env) {
     const papers = (await env.AUDIT.prepare("SELECT entity_id, SUM(value) v FROM reach_signals WHERE source = 'cf-rum-human' AND metric = 'pageviews' AND entity_type = 'paper' AND date >= date('now','-7 days') GROUP BY entity_id ORDER BY v DESC LIMIT 3").all()).results || [];
     for (const g of papers) {
       if (/^[a-z0-9-]+$/i.test(g.entity_id)) add(byHost["papers.qnfo.org"] || "site:papers.qnfo.org", "papers.qnfo.org", "/papers/" + g.entity_id);
+    }
+  } catch (e) {
+  }
+  // UX-AUDITOR-3: the paths crawlers (Google first) asked for and got a 404 on, from the gateway's own crawl log (seo_404_paths).
+  // Recorded under product crawl:<host> so they never move a product's score or the site_ux_score_min metric.
+  try {
+    const resp = await fetch("https://papers.qnfo.org/api/seo/crawl?days=7", { headers: { "user-agent": "qnfo-ux-auditor/1" }, signal: AbortSignal.timeout(6e3) });
+    const j = resp.ok ? await resp.json() : null;
+    const nf = (j && Array.isArray(j.notFound) ? j.notFound : []).slice(0, 5);
+    for (const g of nf) {
+      const host = String(g.host || "");
+      const path = String(g.path || "");
+      if (!/^[a-z0-9.-]+\.[a-z]+$/i.test(host) || path.charAt(0) !== "/" || /[\s?#]/.test(path)) continue;
+      add("crawl:" + host, host, path);
     }
   } catch (e) {
   }
