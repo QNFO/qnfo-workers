@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.62.20-tool-arg-alias"
+var VERSION = "2.62.20-tool-arg-alias";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -4337,8 +4337,8 @@ __name2222(githubCreateBranch, "githubCreateBranch");
 __name22222(githubCreateBranch, "githubCreateBranch");
 async function cfWorkerRead(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
-  const worker = opsArgPick(args, ["worker", "name", "worker_name", "workerName", "script", "script_name", "scriptName"]);
-  if (!worker) return opsArgError("worker name required", "Send {worker:'<script name>'}; name, worker_name and script are accepted as aliases.");
+  const worker = String(args && (args.worker || args.name || args.worker_name || args.workerName || args.script || args.script_name || args.scriptName) || "").trim();
+  if (!worker) return { ok: false, arg_error: true, error: "worker name required", hint: "Send {worker:'<script name>'}; name, worker_name and script are accepted as aliases." };
   const maxChars = Math.min(Math.max(parseInt(args && args.maxChars, 10) || 8e3, 500), 4e4);
   try {
     const metaR = await fetch(
@@ -5299,10 +5299,10 @@ async function cfFetchRetry(url, init, opts) {
 __name(cfFetchRetry, "cfFetchRetry");
 async function cfWorkerDeploy(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
-  const worker = opsArgPick(args, ["worker", "name", "worker_name", "workerName", "script", "script_name", "scriptName"]);
+  const worker = String(args && (args.worker || args.name || args.worker_name || args.workerName || args.script || args.script_name || args.scriptName) || "").trim();
   const content = String(args && args.content || "").trim();
   const versionNote = String(args && args.version || "").trim();
-  if (!worker) return opsArgError("worker name required", "Send {worker:'<script name>'}; name, worker_name and script are accepted as aliases.");
+  if (!worker) return { ok: false, arg_error: true, error: "worker name required", hint: "Send {worker:'<script name>'}; name, worker_name and script are accepted as aliases." };
   if (!content) return { ok: false, error: "content (JS source) required" };
   // CONTAINER-CONFIG-DROPPED-1 (2026-09-29, issue #1485): refuse to deploy a worker
   // that declares [[containers]]. Cloudflare stores that block as script-level config,
@@ -5659,8 +5659,8 @@ __name2222(cfWorkerDeploy, "cfWorkerDeploy");
 __name22222(cfWorkerDeploy, "cfWorkerDeploy");
 async function cfWorkerBindings(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
-  const worker = opsArgPick(args, ["worker", "name", "worker_name", "workerName", "script", "script_name", "scriptName"]);
-  if (!worker) return opsArgError("worker name required", "Send {worker:'<script name>'}; name, worker_name and script are accepted as aliases.");
+  const worker = String(args && (args.worker || args.name || args.worker_name || args.workerName || args.script || args.script_name || args.scriptName) || "").trim();
+  if (!worker) return { ok: false, arg_error: true, error: "worker name required", hint: "Send {worker:'<script name>'}; name, worker_name and script are accepted as aliases." };
   try {
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/bindings",
@@ -5855,11 +5855,11 @@ __name222(workspaceEdit, "workspaceEdit");
 __name2222(workspaceEdit, "workspaceEdit");
 __name22222(workspaceEdit, "workspaceEdit");
 async function workspaceGrep(env, args) {
-  const pattern = opsArgPick(args, ["pattern", "query", "regex", "q", "search", "text", "term"]);
-  const prefix = String(opsArgPick(args, ["prefix", "path", "dir", "directory"])).replace(/^\/+/, "").replace(/\.\./g, "");
+  const pattern = String(args && (args.pattern || args.query || args.regex || args.q || args.search || args.text || args.term) || "").trim();
+  const prefix = String(args && (args.prefix || args.path || args.dir || args.directory) || "").replace(/^\/+/, "").replace(/\.\./g, "");
   const maxResults = Math.min(Math.max(parseInt(args && args.maxResults, 10) || 50, 1), 200);
   const ctxN = Math.min(Math.max(parseInt(args && args.contextLines, 10) || 0, 0), 5);
-  if (!pattern) return opsArgError("pattern required", "Send {pattern:'<regex>', prefix:'<dir>'}; query, regex and search are accepted as aliases of pattern.");
+  if (!pattern) return { ok: false, arg_error: true, error: "pattern required", hint: "Send {pattern:'<regex>', prefix:'<dir>'}; query, regex and search are accepted as aliases of pattern." };
   if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
   let re;
   try {
