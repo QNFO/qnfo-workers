@@ -153,6 +153,15 @@ credential (so the lane's workflows run on it), the lane merges it and the push 
 its push had failed (`{"error": ..., "sha": ...}`): an error is now a `...-CANARY-FAILED-1` issue that says nothing was reverted. Issue 1001819 (filed by the drill) carries the
 `runtime-probe:` line and closes itself now that the route answers its marker again.
 
+## Second live drill, 2026-11-04 (#7232): a bad deploy reverted with no human step
+
+Same deliberate change on `qnfo-evolve` (0.2.10, `/health` reports `"worker":"qnfo-evolve-drill"`), now with the revert-through-a-pull-request path of #7215. canonical-deploy run
+41915959542 (merge a3396887): baseline `{"f87f94d66cce": "ok", "__live_version__": "0.2.9-revert-49ce59b"}`; deploy `OK` 21:25:50Z; VERSION 0.2.10 arrived; the route failed its marker over
+4 tries; the direct push of the revert was refused and the canary opened **pull request #7234** by itself (21:26:43Z, `revert: a339688 failed the functional canary on qnfo-evolve`, VERSION
+`0.2.11-revert-a339688`, opened with `QNFO_GH_PAT` so the lane's workflows ran on it); the lane merged it at 21:27:42Z; the push it made deployed the reverted code, whose own canary
+(run 41916304809) read `functional qnfo-evolve ok (every probe passed)` at 21:28:19Z. `/health` answers `"worker":"qnfo-evolve"` again. **Bad version live: about 2.5 minutes, human steps: none**
+(drill 1: ~7 minutes and a hand-made revert). The old canary would have passed this deploy: the VERSION arrived.
+
 ## Follow-up owed (CLOSED-LOOPS-1)
 
 * After 7 days: counts of `canary-functional` rows (ok / fail / inconclusive), `DEPLOY-PROBE-*` issues, reverts, and `review-gate` rows (cost, High findings, how many a human overruled) against the
