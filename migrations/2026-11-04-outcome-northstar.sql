@@ -26,8 +26,7 @@ INSERT OR IGNORE INTO metric_breach_cause(metric_key,cause_key,note) VALUES
 ('outreach_human_clicks_7d','code-loop','outcome north star'),
 ('reader_signal_7d','code-loop','outcome north star');
 
-DROP TRIGGER IF EXISTS outcome_northstar_tick;
-CREATE TRIGGER outcome_northstar_tick AFTER INSERT ON fleet_tick WHEN strftime('%M','now')<'10'
+CREATE TRIGGER IF NOT EXISTS outcome_northstar_tick AFTER INSERT ON fleet_tick WHEN strftime('%M','now')<'10'
 BEGIN
   UPDATE metric_registry SET last_refreshed=strftime('%Y-%m-%dT%H:%M:%SZ','now'), state='MEASURED',
     last_value=CAST((SELECT value FROM v_outcome_northstar v WHERE v.metric=metric_registry.metric) AS TEXT)
