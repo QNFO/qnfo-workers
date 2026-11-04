@@ -282,7 +282,7 @@ ok(!/CREATE (OR REPLACE )?TRIGGER[^\n]*\bON agent_issues\b/i.test(sqlNew.replace
   ok(one(db, "SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-relapse-hold-present'").p.includes("v_issue_close_hold") && !one(db, "SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-relapse-hold-present'").p.includes(";"), "the failure-mode detector reads the triggers and holds no semicolon");
   ok(one(db, "SELECT observed o FROM (SELECT CAST((SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name IN ('remediation_verification_autoclose_ins', 'remediation_verification_autoclose_upd') AND instr(sql, 'v_issue_close_hold') > 0) AS TEXT) AS observed)").o === "2", "the detector's condition holds on the migrated world");
   const issues = all(db, "SELECT title, description FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.OPS #relapse-%'");
-  ok(issues.length === 2 && issues.every((i) => /^code-task: repo=qnfo-workers path=\S+$/m.test(i.description) && /^code-anchor: .+$/m.test(i.description) && /^code-probe: \{.+\}$/m.test(i.description)), "two journey-closer doers are filed with code-task, anchor and probe lines", issues.map((i) => i.title));
+  ok(issues.length === 3 && issues.every((i) => /^code-task: repo=qnfo-workers path=\S+$/m.test(i.description) && /^code-anchor: .+$/m.test(i.description) && /^code-probe: \{.+\}$/m.test(i.description)), "three closer doers are filed with code-task, anchor and probe lines", issues.map((i) => i.title));
   ok(one(db, "SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'RELAPSE-HOLD-1:%'").n === 1 && /closure_branching_ratio_24h/.test(one(db, "SELECT predicted_outcome p FROM decision_log WHERE action LIKE 'RELAPSE-HOLD-1:%'").p), "the prediction is logged once, naming its metric");
 
   // re-apply is idempotent and keeps the original rollback snapshot
@@ -290,7 +290,7 @@ ok(!/CREATE (OR REPLACE )?TRIGGER[^\n]*\bON agent_issues\b/i.test(sqlNew.replace
   db.exec(sqlNew);
   ok(one(db, "SELECT COUNT(*) n FROM bak_20261104_relapse_hold").n === before, "re-applying keeps the backup rows");
   ok(!one(db, "SELECT old_value v FROM bak_20261104_relapse_hold WHERE kind = 'trigger' AND record_key = 'remediation_verification_autoclose_ins'").v.includes("v_issue_close_hold"), "the backup still holds the pre-change trigger text");
-  ok(one(db, "SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'RELAPSE-HOLD-1:%'").n === 1 && one(db, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.OPS #relapse-%'").n === 2 && one(db, "SELECT COUNT(*) n FROM metric_registry WHERE metric = 'issue_relapse_families_7d'").n === 1, "re-applying duplicates no decision, issue or metric");
+  ok(one(db, "SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'RELAPSE-HOLD-1:%'").n === 1 && one(db, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.OPS #relapse-%'").n === 3 && one(db, "SELECT COUNT(*) n FROM metric_registry WHERE metric = 'issue_relapse_families_7d'").n === 1, "re-applying duplicates no decision, issue or metric");
 }
 
 console.log(pass + " passed, " + fail + " failed");

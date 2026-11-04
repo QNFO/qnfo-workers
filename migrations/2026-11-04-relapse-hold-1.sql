@@ -15,7 +15,7 @@
 --   issue-is-open check that the body already applied). (c) The CF-OBS birth triggers and the contracts of OPEN CF-OBS issues (and of closed ones whose group has been quiet for six hours) drop the
 --   resolved-status shortcut: a group passes when it has no usable observation time (resolved) or has been quiet for six hours. The 24 closed issues whose group was seen within six hours keep
 --   the old probe for now, so nothing reopens by this migration (live 2026-11-04: of 77 closed contracts 53 quiet and 24 seen within six hours, of 53 open contracts 52 seen within six hours); a follow-up retunes them after the 24 h reading. (d) v_issue_relapse_7d and the metric
---   issue_relapse_families_7d (families with 5 or more closes and a relapse rate above 0.5) with its trigger and cause. (e) Two follow-up code tasks for the two journey closers, which close on the first passing run.
+--   issue_relapse_families_7d (families with 5 or more closes and a relapse rate above 0.5) with its trigger and cause. (e) Three follow-up code tasks for the closers outside these triggers (two journey closers, the improvement loop), which close on the first passing reading.
 -- Prediction (decision_log): closure_branching_ratio_24h 0.509 falls to 0.35 or lower within 7 days, reopens per 24 h 149 to 105 or fewer, CF-OBS reopens per 24 h 67 to 35 or fewer.
 --   Guards: issue_wontfix_share_7d stays at most 1, remediation_latest_pass_pct_7d does not fall below 60. Cost, disclosed: held issues stay open up to 120 minutes longer after their first pass,
 --   so issues_open_over_120m and open_agent_issues can rise by the number of relapsing issues closed in that window (tolerance +40 and +60); a rise beyond that reverts the hold with the kill switch.
@@ -321,7 +321,7 @@ VALUES ('relapse-close-hold',
   'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM ops_config WHERE key = ''relapse_close_hold'') OR EXISTS (SELECT 1 FROM ops_config WHERE key = ''relapse_close_hold'' AND value IN (''on'', ''off'')) THEN ''ok'' ELSE ''ops_config relapse_close_hold holds a value v_issue_close_hold does not read (use on or off), so the kill switch cannot be trusted'' END AS observed',
   '60', 1);
 
--- (e) The two journey closers close on the first passing run and have no hold; a doer is named for each (code loop).
+-- (e) The two journey closers and the improvement loop close on the first passing reading and have no hold; a doer is named for each (code loop).
 INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
 SELECT 'ROADMAP-1: QNFO.OPS #relapse-2: qnfo-fleet-control closes a journey issue only after two passing runs apart in time',
        'Charter pillar: autonomy. Program QNFO.OPS. Metric to move: closure_branching_ratio_24h (0.509 on 2026-11-04) and issue_relapse_families_7d. FLEET-JOURNEY-FAILED-1 reopened 88 times against 109 closes in 7 days; 36 % of those reopens came within 1 h of the close. The close path jrnIssue in qnfo-fleet-control/worker.js closes the issue on the first run that passes (close_channel auto-recovery) and the GitHub runner in scripts/fleet_journeys.py does the same, so a flapping journey is closed and reopened every few runs.' || char(10) ||
@@ -341,6 +341,16 @@ SELECT 'ROADMAP-1: QNFO.OPS #relapse-3: the GitHub journey runner closes a journ
        'code-probe: {"paths": ["scripts/fleet_journeys.py"], "contains": "RELAPSE-HOLD-1"}',
        'claude-session', 'reliability', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.OPS #relapse-3:%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'ROADMAP-1: QNFO.OPS #relapse-4: the improvement loop closes a METRIC-REGRESSION-1 issue only after the metric stayed inside its target for two loop runs',
+       'Charter pillar: autonomy. Program QNFO.OPS. Metric to move: closure_branching_ratio_24h and issue_relapse_families_7d. METRIC-REGRESSION-1 reopened 38 times against 61 closes in 7 days (8 issues; 1000756 beliefs_unverified_60m 21 times, 1000240 5 times), 35 of them on issues closed by improvementLoopTick (close_channel auto:fleet-control/improvement-loop), which closes on the first hourly reading that is back inside the target (evidence "metric back inside its target; no longer a finding").' || char(10) ||
+       'Change: in improvementLoopTick close an open METRIC-REGRESSION-1 issue only when the previous improvement_loop_runs row also read the metric inside its target, and when the issue has been reopened before require the last two readings, at least 50 minutes apart and after the issue''s last reopen (issue_lifecycle event reopened); otherwise count it in close_deferred and keep it open. Tag the change RELAPSE-HOLD-1 in a comment. Definition of done: a regression test next to the existing improvement-loop suite, VERSION bumped with the mirror, and v_issue_relapse_7d reads METRIC-REGRESSION-1 relapse_rate_7d at or below 0.5 seven days after the deploy.' || char(10) ||
+       'code-task: repo=qnfo-workers path=qnfo-fleet-control/worker.js' || char(10) ||
+       'code-anchor: // IL-CLOSE-VS-PROBE-1: the contract for this issue still fails its probe; a close now would abort on' || char(10) ||
+       'code-probe: {"paths": ["qnfo-fleet-control/worker.js"], "contains": "RELAPSE-HOLD-1"}',
+       'claude-session', 'reliability', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.OPS #relapse-4:%');
 
 -- Failure mode and its detector: a later migration that recreates the autoclose triggers from older text would silently drop the hold.
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, symptom, blast_radius)
@@ -363,7 +373,7 @@ INSERT INTO decision_log
   (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session:issue-relapse-hold',
   'A close that does not hold is worse than an open issue: the reopen costs a second triage, hides the defect for hours and halves the drain ratio. A hold of at most 120 minutes on issues that already relapsed is cheaper than the churn.',
-  'RELAPSE-HOLD-1: autoclose triggers require continuous passes since the last reopen for the hold in v_issue_close_hold; CF-OBS probe measures six quiet hours instead of Cloudflare''s resolved status; v_issue_relapse_7d, metric issue_relapse_families_7d, control relapse-close-hold, detector fm-relapse-hold-present, two journey-closer code tasks.',
+  'RELAPSE-HOLD-1: autoclose triggers require continuous passes since the last reopen for the hold in v_issue_close_hold; CF-OBS probe measures six quiet hours instead of Cloudflare''s resolved status; v_issue_relapse_7d, metric issue_relapse_families_7d, control relapse-close-hold, detector fm-relapse-hold-present, three closer code tasks (two journey closers, the improvement loop).',
   'qnfo-audit 2026-11-04: 7 days 989 opened, 1,334 dispositioned, 661 reopened (236 first reopens); 24 h 304 closes, 150 reopens; closure_branching_ratio_24h 0.509; 583 reopens with a prior close: 28 % within 1 h, 44 % within 2 h, 70 % within 6 h; 352 had no verification row between close and reopen, 137 only passes; issue 1001278 closed on the 10:53Z pass using the 10:23Z pass from before its 10:42Z reopen; Cloudflare resolved status set 12 to 120 s after lastObserved.',
   'pending canonical migration; measured after deploy by closure_branching_ratio_24h, v_issue_relapse_7d and the guards',
   'issue closing on qnfo-audit (two triggers, one view), open CF-OBS contracts, no code path and no spend; closed issues are not touched',
