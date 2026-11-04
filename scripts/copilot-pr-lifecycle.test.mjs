@@ -398,12 +398,16 @@ ok(/pull-requests:\s*write/.test(wf) && /issues:\s*write/.test(wf) && /actions:\
 ok((wf.match(/secrets\.[A-Za-z0-9_]+/g) || []).sort().join() === "secrets.GITHUB_TOKEN,secrets.QNFO_GH_PAT", "the workflow reads GITHUB_TOKEN and the fleet user credential and nothing else", wf.match(/secrets\.[A-Za-z0-9_]+/g));
 ok(/ORG_TOKEN: \$\{\{ github\.event_name != 'pull_request_target' && secrets\.QNFO_GH_PAT \|\| '' \}\}/.test(wf), "the fleet user credential is handed over only off a pull_request_target run");
 ok((wf.match(/uses:\s*\S+/g) || []).every((u) => /@[0-9a-f]{40}$/.test(u)), "every action is pinned to a commit", wf.match(/uses:\s*\S+/g));
-ok(/pull_request_target:/.test(wf) && /github\.event\.pull_request\.user\.login == 'Copilot'/.test(wf), "the pull_request_target job runs only for a pull request written by Copilot");
+// THREE-PR-WORKFLOWS-1: pr-lane.yml (started by pull_request_target and workflow_run) calls this file; github.event_name inside it is the caller's, so the Copilot-author guard still binds.
+const prLane = readFileSync(join(root, ".github/workflows/pr-lane.yml"), "utf8").replace(/^\s*#.*$/gm, "");
+const laneLifecycle = (prLane.match(/\n  lifecycle:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
+ok(/uses: \.\/\.github\/workflows\/copilot-pr-lifecycle\.yml/.test(laneLifecycle) && /github\.event_name == 'pull_request_target'/.test(laneLifecycle) && /^on:\s*\n\s+pull_request_target:/m.test(prLane) && /github\.event_name != 'pull_request_target' \|\| github\.event\.pull_request\.user\.login == 'Copilot'/.test(wf), "the pull_request_target job (pr-lane lifecycle) runs only for a pull request written by Copilot");
 ok(!/ref:\s*\$\{\{/.test(wf) && !/head\.(sha|ref)/.test(wf.replace(/^#.*$/gm, "")), "the job never checks out or names the pull request head");
 const runLines = wf.split("\n").filter((l) => /^\s*run:/.test(l));
 ok(runLines.length === 1 && !/\$\{\{/.test(runLines[0]), "the one run line carries no expression", runLines);
 ok(/workflows:\s*\["remediation-consumer"\]/.test(wf) && /push:\s*\n\s*branches:\s*\[main\]/.test(wf) && /workflow_dispatch:/.test(wf), "the sweep also runs after remediation-consumer, on a push to main and by dispatch");
-ok(/branches-ignore:\s*\n\s*-\s*"copilot\/\*\*"/.test(lane) && lane.indexOf("branches-ignore") < lane.indexOf("workflows:\n      - deploy-gate"), "lane-poke ignores check runs of copilot/** branches");
+const lanePoke = (prLane.match(/\n  poke:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
+ok(/uses: \.\/\.github\/workflows\/lane-poke\.yml/.test(lanePoke) && /github\.event\.workflow_run\.event == 'pull_request' && !startsWith\(github\.event\.workflow_run\.head_branch, 'copilot\/'\)/.test(lanePoke) && /^on:[\s\S]*?\n  workflow_run:\s*\n\s+workflows: \[pr-checks\]/m.test(prLane) && /workflow_call:/.test(lane), "pr-lane pokes the lane on finished pr-checks runs of pull requests and ignores copilot/** branches");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

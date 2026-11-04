@@ -33,8 +33,13 @@ const runBlock = (s) => {
 
 // --- shape
 ok(steps.length === 3 && !!primary && !!fallback && !!warn, "three steps: the request with GITHUB_TOKEN, the request with the fleet user credential, the warning", steps.length);
-ok(/pull_request_target:\s*\n\s+types: \[opened, reopened, ready_for_review\]\s*\n\s+branches: \[main\]/.test(code), "it runs on pull_request_target when a pull request into main opens, reopens or becomes ready");
-ok(!/^\s{2}(pull_request|push|workflow_run|workflow_dispatch|schedule):/m.test(code.slice(0, code.indexOf("\njobs:"))), "no other trigger can hand the fleet user credential to the job");
+// THREE-PR-WORKFLOWS-1: the trigger moved to pr-lane.yml. This file is a called workflow and the caller's `review` job decides when it runs.
+const lane = readFileSync(join(root, ".github/workflows/pr-lane.yml"), "utf8").replace(/^\s*#.*$/gm, "");
+const laneTriggers = lane.slice(0, lane.indexOf("\njobs:"));
+const laneReview = (lane.match(/\n  review:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
+ok(/^on:\s*\n\s+workflow_call:\s*$/m.test(code.slice(0, code.indexOf("\njobs:"))), "the file is a called workflow (workflow_call)");
+ok(/uses: \.\/\.github\/workflows\/request-copilot-review\.yml/.test(laneReview) && /github\.event_name == 'pull_request_target'/.test(laneReview) && /github\.event\.pull_request\.base\.ref == 'main'/.test(laneReview) && /\["opened","reopened","ready_for_review"\]/.test(laneReview) && /pull_request_target:\s*\n\s+types: \[[^\]]*\bopened\b[^\]]*\breopened\b[^\]]*\bready_for_review\b[^\]]*\]/.test(laneTriggers), "pr-lane runs it on pull_request_target when a pull request into main opens, reopens or becomes ready");
+ok(!/^\s{2}(pull_request|pull_request_target|push|workflow_run|workflow_dispatch|schedule):/m.test(code.slice(0, code.indexOf("\njobs:"))) && !/^\s{2}(pull_request|push|workflow_dispatch|schedule):/m.test(laneTriggers) && /secrets: inherit/.test(laneReview), "no other trigger can hand the fleet user credential to the job: the called file has none and pr-lane starts only on pull_request_target and workflow_run");
 ok(/^permissions:\s*\n\s+pull-requests: write\s*\n/m.test(code) && !/contents:\s*write|actions:\s*write|issues:\s*write|id-token/.test(code), "the token may write pull requests and nothing else");
 ok(/runs-on: ubuntu-24\.04/.test(code) && /timeout-minutes: 5\b/.test(code) && !/ubuntu-latest/.test(code), "the job has the runner pin and a timeout");
 ok(/if: \$\{\{ github\.event\.pull_request\.draft == false \}\}/.test(code), "a draft is not reviewed: the request is made when the pull request is ready");
