@@ -636,6 +636,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/RADAR-TITLE-CLEANUP-2026-10-05.md"
     },
     {
+      "path": "docs/REACH-PLAYBOOK.md",
+      "title": "Reach playbook (REACH-FOCUS-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/REACH-PLAYBOOK.md"
+    },
+    {
       "path": "docs/READER-YIELD.md",
       "title": "Reader yield (READER-YIELD-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/READER-YIELD.md"
@@ -707,6 +712,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/STRATEGY.md"
     },
     {
+      "path": "docs/SYSTEM-MAP.md",
+      "title": "SYSTEM-MAP: the whole Quniverse on one page",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SYSTEM-MAP.md"
+    },
+    {
       "path": "docs/TEMPO-POLICY-120M-5M-1.md",
       "title": "TEMPO-POLICY-120M-5M-1 — the 120-minute cap and the 5-minute tick",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/TEMPO-POLICY-120M-5M-1.md"
@@ -755,7 +765,7 @@
       "path": "docs/agent-library/README.md",
       "title": "Shared fleet operating library",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/agent-library/README.md",
-      "sha256": "a2940f7377e6429e5fcfd493e59254962c81caff5ffeb28f95b7aa65a82fd41e"
+      "sha256": "a13b332abc78483eb121e9be673526fc9c400eea754029344a9e96d3e9ff38f2"
     },
     {
       "path": "docs/breach-doctor/ENGINE-DESIGN.md",
@@ -1551,7 +1561,7 @@
       "path": "llms.txt",
       "title": "Quniverse",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/llms.txt",
-      "sha256": "7228e6e4ccc46c4fdbe5897b02af9574417e0b088f01a869476d7d5f76944199"
+      "sha256": "298349dec848f34c3034219030fc026b49dc88260bd07cc2055fff2400f0a514"
     },
     {
       "path": "machine-readability/README.md",
@@ -1832,6 +1842,11 @@
       "path": "qnfo-gateway/README.md",
       "title": "qnfo-gateway — QNFO site router (papers.qnfo.org, ideas, archive, ipatent, graph-api, legal)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/README.md"
+    },
+    {
+      "path": "qnfo-gateway/releases/3.55.0-codeagent.md",
+      "title": "qnfo-gateway 3.55.0-codeagent (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.55.0-codeagent.md"
     },
     {
       "path": "qnfo-github-steward/README.md",
