@@ -3415,7 +3415,8 @@ async function aiText(env, model, prompt, maxTokens, effort) {
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
   if (/^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort || 'low';
-  if (/gpt-oss/.test(model) && _gptossEffort) _opts.reasoning = { effort: effort === 'high' || effort === 'max' ? 'high' : _gptossEffort };
+  const _gEff = typeof _gptossEffort === 'string' ? _gptossEffort : 'low';
+  if (/gpt-oss/.test(model) && _gEff) _opts.reasoning = { effort: effort === 'high' || effort === 'max' ? 'high' : _gEff };
   let _runOpts;
   try { _runOpts = await aiRunOpts(env, model, prompt); } catch (e) { _runOpts = undefined; }
   // RESEARCH-TICK-ALLOWANCE-1: each retry of a transient failure resends the whole prompt (17-30k input tokens on a revise or review
