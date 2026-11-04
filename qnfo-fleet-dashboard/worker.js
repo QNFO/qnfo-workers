@@ -12,6 +12,7 @@ var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.definePrope
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.83.1";
+// 1.83.1 (cont.) NOW-URGENT-1: the Now screen turns red only for cards that carry an IDENTITY-BOUND: line; owner-lane cards matched by a keyword alone are listed as optional.
 // 1.83.1 V3-CODE-STATUS-1 (pillar core; patch): the Code screen poll treats every status other than queued/running as final, so an executor status such as timeout or cancelled ends the run instead of polling for 25 minutes.
 // 1.83.0 V3-READERS-1 (owner request 2026-11-04, pillar reach; minor, new Readers card): the Readers screen compares output with readership (papers published, referred visits, visits per paper, new subscribers from metric_registry) and says plainly when output outruns readers.
 // 1.82.1 V3-DASH-1 follow-up (pillar core; patch): the Code screen header said "loading" forever; it now says signed in or sign in to start.
@@ -3430,10 +3431,14 @@ async function v3Section(name, fn) {
 async function v3Needs(env, authed) {
   const rows = await d1all(env.AUDIT, "SELECT slug, title, why, action, created_at FROM human_actions WHERE status='open' ORDER BY id LIMIT 200");
   const mine = rows.filter(function(r) { return humanLaneFor({ title: r.title, why: r.why, action: r.action }) === "owner"; });
+  // Only a card that carries an IDENTITY-BOUND: line is urgent (AUTONOMY-FIRST-1); an owner-lane card matched by a keyword alone is optional and shown quietly.
+  const bound = function(r) { return String(r.why || "").indexOf("IDENTITY-BOUND:") >= 0; };
+  mine.sort(function(x, y) { return (bound(y) ? 1 : 0) - (bound(x) ? 1 : 0); });
+  const urgent = mine.filter(bound).length;
   return {
-    open_total: rows.length, fleet_handles: rows.length - mine.length, count: mine.length,
+    open_total: rows.length, fleet_handles: rows.length - mine.length, count: urgent, optional: mine.length - urgent,
     items: mine.slice(0, 8).map(function(r) {
-      return { key: "ha:" + r.slug, title: String(r.title || "").slice(0, 140), why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
+      return { bound: bound(r), key: "ha:" + r.slug, title: String(r.title || "").slice(0, 140), why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
     })
   };
 }
@@ -3617,12 +3622,12 @@ fetch('/api/v3/'+k,{cache:'no-store',signal:c.signal,credentials:'same-origin'})
 function sec(s,name){return s&&s.ok===false?'<p class="err">Could not read '+name+': '+esc(s.error)+'</p>':''}
 function renderNow(d){var n=d.needs||{},sp=d.spend||{},h=d.health||{},bad=[],tone='ok',title='All clear',sub='';
 ['needs','spend','health'].forEach(function(k){if(d[k]&&d[k].ok===false)bad.push(k)});
-if(n.ok&&n.count>0){tone='bad';title=n.count+(n.count===1?' thing needs you':' things need you');sub='Only decisions that are irreversible and yours alone are shown.'}
+if(n.ok&&n.count>0){tone='bad';title=n.count+(n.count===1?' thing needs you':' things need you');sub='Only decisions that are irreversible and yours alone are urgent.'}
 else if(bad.length){tone='warn';title="Can't read "+bad.join(', ');sub='Not confirmed clear.'}
 else if(sp.ok&&sp.pace_vs_budget>1.1){tone='warn';title='Spending ahead of budget';sub='At this pace the month lands at '+usd(sp.pace_month_usd)+' against '+usd(sp.budget_month_usd)+'.'}
-else sub='Nothing needs you.'+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
+else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
-if(n.ok&&n.count>0){o+='<div class="card"><h2>Needs you</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
+if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
 o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace':'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
