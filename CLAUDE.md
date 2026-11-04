@@ -506,8 +506,9 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Measured 2026-11-04 (`docs/READER-YIELD.md`): `utm_clicks_human` and human-classed RUM page loads carry a floor of automated visits on every paper (p10 3, p50 6, p90 11 clicks;
   about 2 of 100 counted clicks become a GA4 engaged session), and neither moved when output swung 2 to 89 papers a day. Do not read `outreach_human_clicks_7d`,
   `outreach_clicks_per_post_7d` or per-paper UTM/RUM counts as readers, and do not shift outreach volume toward the channel with the most clicks. Readers are
-  `engaged_reader_sessions_7d` (GA4 engagedSessions) and external-referrer loads (`paper_readership.ext_30d`); validity is `outreach_engaged_per_100_clicks_7d`.
-- `v_research_volume_target` publishes the research budget a reader-linked rule would set (engaged readers a day x 20000, floor 180000, ceiling 450000, 10 percent a day); the hourly
+  `engaged_reader_sessions_7d` (GA4 engagedSessions from sources outside the fleet: direct and the fleet's own hosts hold the owner's browsing, the Netherlands alone is 116 of 307 engaged
+  sessions in 28 days) and external-referrer loads (`paper_readership.ext_30d`); validity is `outreach_engaged_per_100_clicks_7d`.
+- `v_research_volume_target` publishes the research budget a reader-linked rule would set (externally sourced engaged readers a day x 64000, floor 180000, ceiling 450000, 10 percent a day, 28 days of data); the hourly
   steps appended to `event-metric-recompute` refresh it. The governor that would write `ops_config research_daily_neurons` ships `off` (qnfo-ops is that key's single writer; issue
   READER-YIELD-1.5 asks for the switch). When on it pauses on any other writer (`research_yield_last_written`); the reason is in `v_research_volume_target`.
 

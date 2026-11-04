@@ -2,7 +2,7 @@
 -- people actually reading the research, cost under USD 200-300 a month, a fast simple dashboard.
 -- WHAT WAS MEASURED (qnfo-audit reach_signals, research_queue, ai_call_counters and the live Cloudflare RUM GraphQL, 2026-11-04 15:00-17:00Z):
 --  * Output is far ahead of readers, and readers do not follow output. research_queue.published_at: 2 to 89 papers a day (71, 89, 56 on 10-19..10-21, then 1 to 16 a day). GA4
---    engaged sessions on the public sites (reach_signals source ga4, entity_type channel, 10-25..11-03): 12 to 41 a day, 122 in the last 7 days. Site-level external referred
+--    engaged sessions on the public sites (reach_signals source ga4, entity_type channel, 10-25..11-03): 12 to 41 a day, 122 in the last 7 days. Only 44 of those 122 came from sources outside the fleet (google 21, x 17, six others); 54 are direct and 24 are the fleet's own hosts (ask.qwav.tech, github.com): in 28 days the Netherlands alone is 116 of 307 engaged sessions from 25 users (5.6 sessions and 10.5 page views a session), so the all-sources figure counts the owner's and the fleet's own browsing, and the externally sourced count is spiky (0 to 15 a day, 5.6 on average). Site-level external referred
 --    page loads fell from 26..58 a day (10-06..10-15) to 1..9 (late October) through the 10x output surge. No per-paper or per-topic signal separates papers.
 --  * The measure that is called human clicks is not readers. utm_clicks_human (qnfo-gateway utm_clicks, ua_class by a user-agent regex) was 1260 in the 10 days to 11-03; GA4
 --    counted 180 sessions from organic social in the same days and 25 of them engaged: about 2 engaged sessions per 100 counted clicks. By source: bluesky 22 sessions and 1
@@ -14,7 +14,7 @@
 --  * The Bluesky queue is empty (1 queued item; 460 paper-posts in 34 days), so choosing which papers take its slots changes nothing; 87 percent of Bluesky paper-posts get no
 --    human-classed click in 72 hours.
 --  * Research cost does not follow readers: qnfo-research-exec spent 988k and 997k neurons on 11-02 and 11-03 against ops_config research_daily_neurons 360000, for 9 and 16 papers.
---    Seven days to 11-03: 4,585,257 neurons (research-exec, paper-reviser, errata-hub), 39 papers, 122 engaged sessions: 37,583 neurons per engaged session. fleet_budget
+--    Seven days to 11-03: 4,585,257 neurons (research-exec, paper-reviser, errata-hub), 39 papers, 122 engaged sessions (44 from outside the fleet): 37,583 neurons per engaged session, 104,210 per externally sourced one. fleet_budget
 --    cost:fleet_all_in_month reads 1151 against its cap of 300 and ai_spend:workers-ai 793 against 95 (list estimates).
 --  * Not a cap: pageviews_30d is not limited by the GraphQL row limit. The live bot-filtered 30 day total is 19,660 to 20,500 (31 days of rows sum to the same figure). The stored
 --    value flaps between 19.6k, 0, 10000, 25000 and 26000 (metric_write_audit_log, five times in 12 hours); a code task below removes the cause.
@@ -22,14 +22,14 @@
 -- (1) reader_yield_daily, a ledger of GA4 engaged sessions, counted UTM clicks, external referrals, papers published and research neurons; (2) paper_readership, one row per paper
 -- (30 day and 7 day windows, the week before, GA4 sessions, external-referrer loads) joined to research_queue (idea source, score, first publish time), with v_reader_yield_by_source
 -- and v_paper_readers_top; (3) three metrics and their output_quality_measures rows: engaged_reader_sessions_7d and research_neurons_per_engaged_session_7d are outcomes of the
--- papers surface, outreach_engaged_per_100_clicks_7d is a validity measure of the promotion surface (it says how much of outreach_human_clicks_7d is reading); (4)
+-- papers surface (an engaged session counts only when its GA4 source is outside the fleet: '(direct)', '(not set)' and the hosts in ops_config reader_internal_sources are excluded, because they hold the owner's and the fleet's own browsing), outreach_engaged_per_100_clicks_7d is a validity measure of the promotion surface (it says how much of outreach_human_clicks_7d is reading); (4)
 -- v_research_volume_target, the research budget as a function of engaged readers: engaged readers a day x research_yield_neurons_per_engaged_day, inside [research_yield_floor,
--- research_yield_ceiling], at most research_yield_step_pct a day, once a UTC day, neutral under 7 days of data. DORMANT: research_yield_governor is off because ops_config
+-- research_yield_ceiling], at most research_yield_step_pct a day, once a UTC day, averaged over up to 28 days, neutral under 28 days of data (the signal is 5.6 a day and spiky). DORMANT: research_yield_governor is off because ops_config
 -- research_policy_harmonized names qnfo-ops the single writer of research_daily_neurons ("other sessions must file an issue instead of overwriting these keys") and the spend-cap work
 -- is changing how that key is enforced. The view and the daily ledger event publish the target; set research_yield_governor to on and the same task writes the key (and pauses on any
 -- foreign write); (5) four ROADMAP-1 rows for the next items and one issue to switch the governor on, each with an owner and a closing condition.
--- PREDICTIONS (decision_log, below): engaged_reader_sessions_7d stays at or above 98 (80 percent of the 122 baseline) for 14 days whatever the research volume does; with the governor
--- on and the key enforced, research neurons per engaged session fall below 30000 in 14 days. Falsifier: engaged readers down more than 20 percent in 14 days with outreach cadence
+-- PREDICTIONS (decision_log, below): engaged_reader_sessions_7d (externally sourced engaged sessions, baseline 44 in 7 days) stays at or above 35 (80 percent) for 14 days whatever the research volume does; with the governor
+-- on and the key enforced, research neurons per engaged session fall below 75000 in 14 days (104k now). Falsifier: engaged readers down more than 20 percent in 14 days with outreach cadence
 -- unchanged, which would mean readers do depend on research volume: keep the budget at 360000 and say so.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS reader_yield_daily (
   ga4_engaged REAL,
   ga4_sessions_social REAL,
   ga4_engaged_social REAL,
+  ga4_sessions_external REAL,
+  ga4_engaged_external REAL,
+  ga4_engaged_direct REAL,
   utm_clicks_human REAL,
   ext_referred_pv REAL,
   papers_published INTEGER,
@@ -82,6 +85,7 @@ CREATE TABLE IF NOT EXISTS paper_readership (
 );
 
 -- One row a day for the last 14 complete UTC days. A column is NULL where its source has no row for that day (GA4 starts 2026-10-25), never a zero.
+-- ga4_engaged is every source; ga4_engaged_external leaves out '(direct)', '(not set)', '(none)' and the hosts in ops_config reader_internal_sources (the owner's and the fleet's own browsing).
 CREATE VIEW IF NOT EXISTS v_reader_yield_source AS
 WITH RECURSIVE d(day, n) AS (
   SELECT date('now', '-1 day'), 1
@@ -93,6 +97,9 @@ SELECT d.day AS day,
   (SELECT SUM(value) FROM reach_signals WHERE source = 'ga4' AND entity_type = 'channel' AND metric = 'engagedSessions' AND date = d.day) AS ga4_engaged,
   (SELECT SUM(value) FROM reach_signals WHERE source = 'ga4' AND entity_type = 'channel' AND metric = 'sessions' AND entity_id = 'organic social' AND date = d.day) AS ga4_sessions_social,
   (SELECT SUM(value) FROM reach_signals WHERE source = 'ga4' AND entity_type = 'channel' AND metric = 'engagedSessions' AND entity_id = 'organic social' AND date = d.day) AS ga4_engaged_social,
+  CASE WHEN EXISTS (SELECT 1 FROM reach_signals WHERE source = 'ga4' AND entity_type = 'source' AND metric = 'sessions' AND date = d.day) THEN COALESCE((SELECT SUM(value) FROM reach_signals WHERE source = 'ga4' AND entity_type = 'source' AND metric = 'sessions' AND date = d.day AND entity_id NOT IN ('(direct)', '(not set)', '(none)') AND instr(',' || COALESCE((SELECT value FROM ops_config WHERE key = 'reader_internal_sources'), '') || ',', ',' || entity_id || ',') = 0), 0) END AS ga4_sessions_external,
+  CASE WHEN EXISTS (SELECT 1 FROM reach_signals WHERE source = 'ga4' AND entity_type = 'source' AND metric = 'engagedSessions' AND date = d.day) THEN COALESCE((SELECT SUM(value) FROM reach_signals WHERE source = 'ga4' AND entity_type = 'source' AND metric = 'engagedSessions' AND date = d.day AND entity_id NOT IN ('(direct)', '(not set)', '(none)') AND instr(',' || COALESCE((SELECT value FROM ops_config WHERE key = 'reader_internal_sources'), '') || ',', ',' || entity_id || ',') = 0), 0) END AS ga4_engaged_external,
+  (SELECT SUM(value) FROM reach_signals WHERE source = 'ga4' AND entity_type = 'source' AND metric = 'engagedSessions' AND entity_id = '(direct)' AND date = d.day) AS ga4_engaged_direct,
   (SELECT SUM(value) FROM reach_signals WHERE source = 'utm' AND entity_type = 'campaign' AND metric = 'clicks_human' AND date = d.day) AS utm_clicks_human,
   (SELECT SUM(value) FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type IN ('page', 'paper') AND metric = 'external_pageviews' AND date = d.day) AS ext_referred_pv,
   (SELECT COUNT(*) FROM research_queue WHERE published_at >= d.day AND published_at < date(d.day, '+1 day')) AS papers_published,
@@ -158,11 +165,11 @@ FROM paper_readership
 WHERE (ext_30d > 0 OR ga4_sessions_30d >= 3) AND refreshed_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days')
 ORDER BY reader_score DESC;
 
--- The three metrics, from the last 7 days that have GA4 rows. NULL (never a zero) until 7 such days exist.
+-- The three metrics, from the last 7 days that have GA4 source rows. engaged_reader_sessions_7d and the cost per engaged session use the externally sourced count. NULL (never a zero) until 7 such days exist.
 CREATE VIEW IF NOT EXISTS v_reader_yield_metrics AS
-WITH w AS (SELECT * FROM reader_yield_daily WHERE ga4_engaged IS NOT NULL ORDER BY day DESC LIMIT 7)
+WITH w AS (SELECT * FROM reader_yield_daily WHERE ga4_engaged_external IS NOT NULL ORDER BY day DESC LIMIT 7)
 SELECT 'engaged_reader_sessions_7d' AS metric,
-  CASE WHEN COUNT(*) >= 7 THEN SUM(ga4_engaged) END AS value
+  CASE WHEN COUNT(*) >= 7 THEN SUM(ga4_engaged_external) END AS value
 FROM w
 UNION ALL
 SELECT 'outreach_engaged_per_100_clicks_7d',
@@ -170,17 +177,18 @@ SELECT 'outreach_engaged_per_100_clicks_7d',
 FROM w
 UNION ALL
 SELECT 'research_neurons_per_engaged_session_7d',
-  CASE WHEN COUNT(*) >= 7 AND SUM(ga4_engaged) > 0 AND SUM(research_neurons) IS NOT NULL THEN ROUND(SUM(research_neurons) / SUM(ga4_engaged)) END
+  CASE WHEN COUNT(*) >= 7 AND SUM(ga4_engaged_external) > 0 AND SUM(research_neurons) IS NOT NULL THEN ROUND(SUM(research_neurons) / SUM(ga4_engaged_external)) END
 FROM w;
 
 -- ---- the research volume governor -------------------------------------------------------------------------------------------------------------------------------------------
 INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES
   ('research_yield_governor', 'off', 'READER-YIELD-1 2026-11-04: off = the refresh publishes the target (v_research_volume_target, the daily reader-yield event) and never writes research_daily_neurons. on = once a UTC day it moves the key toward engaged readers a day x research_yield_neurons_per_engaged_day, inside the floor and ceiling, at most research_yield_step_pct a day, and pauses on any foreign write. Off because ops_config research_policy_harmonized names qnfo-ops the single writer of the key; the owner of that key switches it on (issue READER-YIELD-1.5). Revert: set off and restore research_daily_neurons from bak_20261104_research_neurons_cfg.', datetime('now')),
-  ('research_yield_neurons_per_engaged_day', '20000', 'READER-YIELD-1 2026-11-04: calibration, not a law. 17.4 engaged GA4 sessions a day (7 days to 11-03) x 20000 = 348k, so the first step from 360000 is 3 percent; USD 0.22 of Workers AI per engaged-session-day.', datetime('now')),
+  ('research_yield_neurons_per_engaged_day', '64000', 'READER-YIELD-1 2026-11-04: calibration, not a law. 5.6 externally sourced engaged GA4 sessions a day (10 days to 11-03) x 64000 = 358k, so the key stays near 360000 today; USD 0.70 of Workers AI per engaged-session-day.', datetime('now')),
+  ('reader_internal_sources', 'ask.qwav.tech,github.com,q08.org,q08,qwav.org,qwav.tech,deep.qwav.tech,qnfo.org,papers.qnfo.org,ideas.qnfo.org,legal.qnfo.org,archive.qnfo.org,reading.q08.org,tauri.localhost,localhost', 'READER-YIELD-1 2026-11-04: GA4 sources that are the owner and the fleet reading their own pages (comma list, no spaces). Together with (direct), (not set) and (none) they are left out of engaged_reader_sessions_7d. Edit the list without a deploy.', datetime('now')),
   ('research_yield_floor', '180000', 'READER-YIELD-1 2026-11-04: half of the 2026-10-21 budget; research never stops, it runs at 50 percent when readers fall.', datetime('now')),
   ('research_yield_ceiling', '450000', 'READER-YIELD-1 2026-11-04: the most the governor sets, about USD 5 a day; a higher key is the owner or ops session writing it, and pauses the governor.', datetime('now')),
   ('research_yield_step_pct', '10', 'READER-YIELD-1 2026-11-04: largest move per day, percent of the current value.', datetime('now')),
-  ('research_yield_min_days', '7', 'READER-YIELD-1 2026-11-04: days of GA4 engaged-session rows needed before the governor moves; fewer is neutral.', datetime('now'));
+  ('research_yield_min_days', '28', 'READER-YIELD-1 2026-11-04: days of externally sourced GA4 engaged-session rows needed before the governor moves (the signal is 5.6 a day and spiky, 0 to 15); fewer is neutral. GA4 rows start 2026-10-25, so 28 days exist from 2026-11-21.', datetime('now'));
 
 INSERT OR IGNORE INTO ops_config (key, value, note, updated_at)
 SELECT 'research_yield_last_written', value, 'READER-YIELD-1 2026-11-04: the value the governor last wrote to research_daily_neurons (seeded with the value found at install). If the key differs, another writer changed it and the governor pauses until this key is set to an empty string or to the current value.', datetime('now')
@@ -190,16 +198,16 @@ CREATE VIEW IF NOT EXISTS v_research_volume_target AS
 WITH cfg AS (
   SELECT
     COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_governor'), 'off') AS gov,
-    CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_neurons_per_engaged_day'), '20000') AS REAL) AS per_eng,
+    CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_neurons_per_engaged_day'), '64000') AS REAL) AS per_eng,
     CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_floor'), '180000') AS REAL) AS fl,
     CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_ceiling'), '450000') AS REAL) AS ceil,
     CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_step_pct'), '10') AS REAL) / 100.0 AS step,
-    CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_min_days'), '7') AS INTEGER) AS min_days,
+    CAST(COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_min_days'), '28') AS INTEGER) AS min_days,
     CAST(NULLIF(COALESCE((SELECT value FROM ops_config WHERE key = 'research_daily_neurons'), ''), '') AS REAL) AS cur,
     COALESCE((SELECT value FROM ops_config WHERE key = 'research_yield_last_written'), '') AS lw
 ), w AS (
-  SELECT COUNT(*) AS days, SUM(ga4_engaged) AS eng
-  FROM (SELECT ga4_engaged FROM reader_yield_daily WHERE ga4_engaged IS NOT NULL ORDER BY day DESC LIMIT 7)
+  SELECT COUNT(*) AS days, SUM(ga4_engaged_external) AS eng
+  FROM (SELECT ga4_engaged_external FROM reader_yield_daily WHERE ga4_engaged_external IS NOT NULL ORDER BY day DESC LIMIT 28)
 ), t AS (
   SELECT cfg.*, w.days AS days, w.eng / NULLIF(w.days, 0) AS per_day,
     MIN(cfg.ceil, MAX(cfg.fl, w.eng / NULLIF(w.days, 0) * cfg.per_eng)) AS clamped
@@ -209,7 +217,7 @@ WITH cfg AS (
     CASE
       WHEN gov <> 'on' THEN 'governor off'
       WHEN cur IS NULL THEN 'research_daily_neurons unreadable'
-      WHEN days < min_days THEN 'needs ' || min_days || ' days of GA4 engaged sessions, has ' || days
+      WHEN days < min_days THEN 'needs ' || min_days || ' days of externally sourced GA4 engaged sessions, has ' || days
       WHEN lw <> '' AND CAST(lw AS REAL) <> cur THEN 'paused: research_daily_neurons was changed by another writer'
       WHEN cur < fl OR cur > ceil THEN 'paused: current value is outside the governor band'
       WHEN clamped IS NULL THEN 'no engaged-session rows'
@@ -232,7 +240,7 @@ SET definition = json_object('steps', json((
         SELECT value AS step FROM json_each(fleet_tasks.definition, '$.steps')
         UNION ALL
         SELECT value AS step FROM json_each('[
-    {"type":"sql","db":"AUDIT","name":"daily-ledger","sql":"INSERT OR REPLACE INTO reader_yield_daily (day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at) SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source"},
+    {"type":"sql","db":"AUDIT","name":"daily-ledger","sql":"INSERT OR REPLACE INTO reader_yield_daily (day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, ga4_sessions_external, ga4_engaged_external, ga4_engaged_direct, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at) SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, ga4_sessions_external, ga4_engaged_external, ga4_engaged_direct, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source"},
     {"type":"sql","db":"AUDIT","name":"paper-readership","sql":"INSERT OR REPLACE INTO paper_readership (key64, slug, pv_30d, ext_30d, cont_30d, utm_30d, ga4_sessions_30d, pv_7d, pv_prev_7d, utm_7d, utm_prev_7d, published_at, idea_source, idea_score, refreshed_at) SELECT key64, slug, pv_30d, ext_30d, cont_30d, utm_30d, ga4_sessions_30d, pv_7d, pv_prev_7d, utm_7d, utm_prev_7d, published_at, idea_source, idea_score, refreshed_at FROM v_paper_readership_source"},
     {"type":"sql","db":"AUDIT","name":"paper-readership-prune","sql":"DELETE FROM paper_readership WHERE refreshed_at < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'')"},
     {"type":"sql","db":"AUDIT","name":"metrics","sql":"UPDATE metric_registry SET last_value = (SELECT CASE WHEN m.value = CAST(m.value AS INTEGER) THEN CAST(CAST(m.value AS INTEGER) AS TEXT) ELSE CAST(m.value AS TEXT) END FROM v_reader_yield_metrics m WHERE m.metric = metric_registry.metric), last_refreshed = strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now''), state = ''MEASURED'' WHERE metric IN (SELECT metric FROM v_reader_yield_metrics WHERE value IS NOT NULL)"},
@@ -248,8 +256,8 @@ SET definition = json_object('steps', json((
 WHERE id = 'event-metric-recompute' AND definition NOT LIKE '%daily-ledger%';
 
 -- ---- first fill (the same statements the steps run), so the baseline exists the moment this merges -----------------------------------------------------------------------------
-INSERT OR REPLACE INTO reader_yield_daily (day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at)
-SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source;
+INSERT OR REPLACE INTO reader_yield_daily (day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, ga4_sessions_external, ga4_engaged_external, ga4_engaged_direct, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at)
+SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, ga4_sessions_external, ga4_engaged_external, ga4_engaged_direct, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source;
 
 INSERT OR REPLACE INTO paper_readership (key64, slug, pv_30d, ext_30d, cont_30d, utm_30d, ga4_sessions_30d, pv_7d, pv_prev_7d, utm_7d, utm_prev_7d, published_at, idea_source, idea_score, refreshed_at)
 SELECT key64, slug, pv_30d, ext_30d, cont_30d, utm_30d, ga4_sessions_30d, pv_7d, pv_prev_7d, utm_7d, utm_prev_7d, published_at, idea_source, idea_score, refreshed_at FROM v_paper_readership_source;
@@ -257,12 +265,12 @@ SELECT key64, slug, pv_30d, ext_30d, cont_30d, utm_30d, ga4_sessions_30d, pv_7d,
 -- ---- the three metrics, their classification, cause mapping and history backfill ------------------------------------------------------------------------------------------------
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES
   ('engaged_reader_sessions_7d', 'fleet', 'leading',
-   'sum of GA4 engagedSessions (a session of 10 seconds or more, two page views or a conversion) over the last 7 days that have GA4 rows, all channels of the public sites; steps appended to fleet_tasks event-metric-recompute (READER-YIELD-1) from reach_signals source ga4',
-   'qnfo-audit.reader_yield_daily <- reach_signals source ga4 entity_type channel metric engagedSessions (qnfo-fleet-dashboard reach ingest)',
-   '122 (2026-10-28..11-03, 17.4 a day; GA4 rows start 2026-10-25)',
+   'sum of GA4 engagedSessions (a session of 10 seconds or more, two page views or a conversion) whose source is outside the fleet (not (direct), (not set), (none) or a host in ops_config reader_internal_sources) over the last 7 days that have GA4 source rows; steps appended to fleet_tasks event-metric-recompute (READER-YIELD-1) from reach_signals source ga4',
+   'qnfo-audit.reader_yield_daily <- reach_signals source ga4 entity_type source metric engagedSessions (qnfo-fleet-dashboard reach ingest)',
+   '44 (2026-10-28..11-03: externally sourced engaged sessions; 122 from all sources incl. direct and the fleet''s own hosts; GA4 rows start 2026-10-25)',
    'rising; no absolute gate. The research budget follows it (v_research_volume_target)',
    'qnfo-fleet-control', 'IMPROVEMENT-LOOP-1 files METRIC-REGRESSION-1 on a decline (exempt from a threshold trigger: a threshold would file an issue for a number that outreach and search move, not research; READER-YIELD-1)',
-   'daily', '< 70', NULL, 'UNMEASURED', 'computed'),
+   'daily', '< 25', NULL, 'UNMEASURED', 'computed'),
   ('outreach_engaged_per_100_clicks_7d', 'fleet', 'leading',
    '100 x GA4 engaged sessions from the organic social channel / utm_clicks_human over the last 7 days that have GA4 rows (READER-YIELD-1); a validity measure of outreach_human_clicks_7d',
    'qnfo-audit.reader_yield_daily <- reach_signals sources ga4 and utm',
@@ -271,12 +279,12 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
    'qnfo-social', 'exempt from a threshold trigger: validity information with no lever of its own until the gateway classifier changes (READER-YIELD-1 ROADMAP-1 row)',
    'daily', '< 1', NULL, 'UNMEASURED', 'computed'),
   ('research_neurons_per_engaged_session_7d', 'fleet', 'leading',
-   'Workers AI neurons of qnfo-research-exec, qnfo-paper-reviser and errata-hub in the last 7 days that have GA4 rows / GA4 engaged sessions in the same days (READER-YIELD-1); cost of one engaged reader',
-   'qnfo-audit.reader_yield_daily <- ai_call_counters and reach_signals source ga4',
-   '37583 (2026-10-28..11-03: 4,585,257 neurons, 122 engaged sessions)',
+   'Workers AI neurons of qnfo-research-exec, qnfo-paper-reviser and errata-hub in the last 7 days that have GA4 source rows / externally sourced GA4 engaged sessions in the same days (READER-YIELD-1); cost of one engaged reader',
+   'qnfo-audit.reader_yield_daily <- ai_call_counters and reach_signals source ga4 (entity_type source)',
+   '104210 (2026-10-28..11-03: 4,585,257 neurons, 44 externally sourced engaged sessions; 37583 over all 122)',
    'falling; the research governor and ops_config research_daily_neurons are the levers',
    'qnfo-fleet-control', 'exempt from a threshold trigger: fleet_cost_bound_month_usd and the ai_spend caps judge cost; this reads cost per reader (READER-YIELD-1)',
-   'daily', '> 60000', NULL, 'UNMEASURED', 'computed');
+   'daily', '> 150000', NULL, 'UNMEASURED', 'computed');
 
 UPDATE metric_registry
 SET last_value = (SELECT CASE WHEN m.value = CAST(m.value AS INTEGER) THEN CAST(CAST(m.value AS INTEGER) AS TEXT) ELSE CAST(m.value AS TEXT) END FROM v_reader_yield_metrics m WHERE m.metric = metric_registry.metric),
@@ -291,32 +299,32 @@ INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
 
 INSERT OR IGNORE INTO metric_history (metric, day, value, meets, target, ts)
 SELECT 'engaged_reader_sessions_7d', r.day,
-  (SELECT SUM(x.ga4_engaged) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days')),
+  (SELECT SUM(x.ga4_engaged_external) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days')),
   NULL, 'rising', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 FROM reader_yield_daily r
-WHERE r.ga4_engaged IS NOT NULL
-  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged IS NOT NULL) = 7;
+WHERE r.ga4_engaged_external IS NOT NULL
+  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged_external IS NOT NULL) = 7;
 
 INSERT OR IGNORE INTO metric_history (metric, day, value, meets, target, ts)
 SELECT 'outreach_engaged_per_100_clicks_7d', r.day,
   (SELECT ROUND(100.0 * SUM(x.ga4_engaged_social) / NULLIF(SUM(x.utm_clicks_human), 0), 2) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days')),
   NULL, 'rising', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 FROM reader_yield_daily r
-WHERE r.ga4_engaged IS NOT NULL
-  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged IS NOT NULL) = 7;
+WHERE r.ga4_engaged_external IS NOT NULL
+  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged_external IS NOT NULL) = 7;
 
 INSERT OR IGNORE INTO metric_history (metric, day, value, meets, target, ts)
 SELECT 'research_neurons_per_engaged_session_7d', r.day,
-  (SELECT ROUND(SUM(x.research_neurons) / NULLIF(SUM(x.ga4_engaged), 0)) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days')),
+  (SELECT ROUND(SUM(x.research_neurons) / NULLIF(SUM(x.ga4_engaged_external), 0)) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days')),
   NULL, 'falling', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 FROM reader_yield_daily r
-WHERE r.ga4_engaged IS NOT NULL
-  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged IS NOT NULL) = 7;
+WHERE r.ga4_engaged_external IS NOT NULL
+  AND (SELECT COUNT(*) FROM reader_yield_daily x WHERE x.day <= r.day AND x.day > date(r.day, '-7 days') AND x.ga4_engaged_external IS NOT NULL) = 7;
 
 INSERT OR IGNORE INTO output_quality_measures (metric, surface, role, polarity, tol_rel, tol_abs, judged_by, caveat) VALUES
   ('engaged_reader_sessions_7d', 'papers', 'outcome', 1, 0.2, 10,
    'people: GA4 engaged sessions on the public sites (10 seconds or more, two page views or a conversion), the one reader count the generators cannot satisfy',
-   'GA4 runs in the browser, so ad blockers undercount it; the direct channel (83 percent of sessions) holds headless renders that never engage, so the total is a floor on readers, not a count of people. GA4 rows start 2026-10-25: no verdict before 2026-11-07.'),
+   'Counts engaged sessions whose GA4 source is outside the fleet: direct (83 percent of sessions, 7.5 percent engaged) and the fleet''s own hosts are left out because they hold the owner''s and the fleet''s own browsing (the Netherlands is 116 of 307 engaged sessions in 28 days from 25 users). It still counts the owner clicking their own posts (an internal-traffic rule in GA4 is an owner card) and the owner''s typed visits are lost to direct. Ad blockers undercount it; 44 in 7 days, 0 to 15 a day: read weeks, not days. GA4 rows start 2026-10-25: no verdict before 2026-11-07.'),
   ('research_neurons_per_engaged_session_7d', 'papers', 'outcome', -1, 0.2, 2000,
    'cost of one engaged reader: Workers AI neurons of the research workers over GA4 engaged sessions, same 7 days',
    'cutting spend alone improves it: read it with engaged_reader_sessions_7d, which must not fall. The neuron count includes revisions and errata work, whose readers it cannot tell apart.'),
@@ -334,13 +342,13 @@ INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_ra
 SELECT
   'session:reader-yield (claude, QNFO.REACH / QNFO.RSCH)',
   'Research output is not what moves readers: engaged readers come from search, X and referrals and were flat through a 10x swing in papers a day, while each paper carries the same floor of automated visits. Tying the research budget to engaged readers with a floor is safer than a flat cut and than a flat cap that spend ignores.',
-  'READER-YIELD-1 migration 2026-11-04-reader-yield-1.sql: reader ledger and per-paper readership tables, three measures (two outcomes, one validity), the research budget as a function of engaged readers (v_research_volume_target: floor 180000, ceiling 450000, 10 percent a day) with the governor that would write ops_config research_daily_neurons left OFF (qnfo-ops is the single writer of that key), outreach trigger text amended, four ROADMAP-1 rows and one issue to switch the governor on. Prediction: engaged readers stay inside 20 percent of the 122 baseline whatever research volume does (readers do not follow research volume); the budget function reads 349k at today 17.4 engaged readers a day. Falsifier: engaged_reader_sessions_7d down more than 20 percent in 14 days with outreach cadence unchanged.',
-  'GA4 engaged sessions 12..41 a day, 122 in 7 days to 11-03 (reach_signals); utm_clicks_human 1260 vs 25 engaged organic-social sessions in the same 10 days; per paper utm p10 3 / p50 6 / p90 11, external-referrer loads 0.12 per paper (7 percent of papers); publications 2..89 a day; research neurons 988k and 997k on 11-02 and 11-03 against a key of 360000; pageviews_30d live 19,660..20,500, stored 0/10000/25000/26000 five times in 12 hours.',
+  'READER-YIELD-1 migration 2026-11-04-reader-yield-1.sql: reader ledger and per-paper readership tables, three measures (two outcomes, one validity), the research budget as a function of engaged readers (v_research_volume_target: floor 180000, ceiling 450000, 10 percent a day) with the governor that would write ops_config research_daily_neurons left OFF (qnfo-ops is the single writer of that key), outreach trigger text amended, four ROADMAP-1 rows and one issue to switch the governor on. Prediction: externally sourced engaged readers stay inside 20 percent of the 44 a week baseline (122 from all sources, 78 of them direct or the fleet''s own hosts) whatever research volume does (readers do not follow research volume); the budget function reads about 358k at today''s 5.6 a day. Falsifier: engaged_reader_sessions_7d down more than 20 percent in 14 days with outreach cadence unchanged.',
+  'GA4 engaged sessions 12..41 a day, 122 in 7 days to 11-03 from all sources, 44 from sources outside the fleet (reach_signals; the live overview shows the Netherlands, 25 users, as 116 of 307 engaged sessions in 28 days); utm_clicks_human 1260 vs 25 engaged organic-social sessions in the same 10 days; per paper utm p10 3 / p50 6 / p90 11, external-referrer loads 0.12 per paper (7 percent of papers); publications 2..89 a day; research neurons 988k and 997k on 11-02 and 11-03 against a key of 360000; pageviews_30d live 19,660..20,500, stored 0/10000/25000/26000 five times in 12 hours.',
   'applied by migration; the refresh steps run at the next :55 run of event-metric-recompute; the governor is off',
   'three new metric rows, new ledger tables, one trigger text and eight steps appended to fleet_tasks event-metric-recompute; research_daily_neurons is not written while the governor is off; no worker code changes',
   'ops_config research_yield_governor = off (it is off), and restore research_daily_neurons from bak_20261104_research_neurons_cfg if it was ever switched on; the migration header Rollback line lists the rest',
   'a reader-grade ledger the fleet can learn from: engaged readers per day and per paper, cost per engaged reader, the share of counted clicks that are readers',
-  'engaged_reader_sessions_7d >= 98 within 14 d',
+  'engaged_reader_sessions_7d >= 35 within 14 d',
   'no direct reach gain expected from this change; it makes reader growth measurable and stops spend that readers do not reward. Reach levers filed: gateway fetcher classification, verified-reader amplification in qnfo-social.',
   'live qnfo-audit D1 reads and the Cloudflare RUM GraphQL read on 2026-11-04; node:sqlite apply-and-run test migrations/reader-yield-1.test.mjs'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'READER-YIELD-1 migration%');
@@ -348,14 +356,14 @@ WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'READER-YIELD-1 m
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT
   'session:reader-yield (claude, QNFO.REACH / QNFO.RSCH)',
-  'If the governor is switched on and research_daily_neurons is enforced (the spend-cap work of another session), the key sits at about 349k and research neurons per engaged reader fall from 37.6k to about 20k; if it is not enforced the metric stays near 37k and the cap is the next thing to fix.',
-  'READER-YIELD-1 cost prediction for the cap that spend does not yet respect (7 days to 11-03: 4,585,257 neurons, 39 papers, 122 engaged sessions)',
+  'If the governor is switched on and research_daily_neurons is enforced (the spend-cap work of another session), the key sits near 358k and research neurons per externally sourced engaged reader fall from 104k to about 70k; if it is not enforced the metric stays near 104k and the cap is the next thing to fix.',
+  'READER-YIELD-1 cost prediction for the cap that spend does not yet respect (7 days to 11-03: 4,585,257 neurons, 39 papers, 44 externally sourced engaged sessions)',
   'ai_call_counters: research-exec 988,203 and 996,539 neurons on 11-02 and 11-03 against the key 360000; paper-reviser about 85k and errata-hub 18k..39k a day.',
   'recorded; scored by decision_predictions at the due date',
   'cost only',
   'none needed: a prediction row',
   'cost per engaged reader on record',
-  'research_neurons_per_engaged_session_7d <= 30000 within 14 d',
+  'research_neurons_per_engaged_session_7d <= 75000 within 14 d',
   'none',
   'ai_call_counters and reader_yield_daily'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'READER-YIELD-1 cost prediction%');
@@ -390,7 +398,7 @@ SELECT 'ROADMAP-1: QNFO.REACH READER-YIELD-1.3: give the papers an outsider reac
  'code-task: repo=qnfo-workers path=qnfo-social/worker.js' || char(10) ||
  'code-anchor: async function drainRollup(env, opts) {' || char(10) ||
  'code-probe: {"paths": ["qnfo-social/worker.js"], "contains": "v_paper_readers_top"}' || char(10) || char(10) ||
- 'Charter pillar reach (program QNFO.REACH). Metric it should move: engaged_reader_sessions_7d (122 baseline) and ext_30d per paper for the amplified papers against matched papers that were not (paper_readership, same slugs a week apart).' || char(10) ||
+ 'Charter pillar reach (program QNFO.REACH). Metric it should move: engaged_reader_sessions_7d (44 a week baseline) and ext_30d per paper for the amplified papers against matched papers that were not (paper_readership, same slugs a week apart).' || char(10) ||
  'Evidence (READER-YIELD-1): the Bluesky queue is empty, so selecting among new papers changes nothing; the only unspent lever is repeat exposure of papers that an outsider already read. paper_readership lists them: 7 percent of papers (about 35 of 506) have an external-referrer visit in 30 days; v_paper_readers_top ranks them (ext_30d x 5 + GA4 sessions capped at 20) and marks suspect_automated rows (50 or more sessions, no external referrer: one page had 110 sessions on 11-03). GA4 engaged sessions come from google (28 of 34), x (17 of 19) and referrals (40 of 44), so the second post goes to X and Mastodon, not the Substack and Bluesky roll-ups that produce 0 and 1 engaged sessions.' || char(10) ||
  'EDIT: when drainRollup has spare gate capacity (queue empty), pick at most one paper a day from v_paper_readers_top where suspect_automated = 0 and the paper was not announced in the last 14 days, post it once to the channels that carried an engaged session (X, LinkedIn, Mastodon) with a new first line (LEDE-SOCIAL-1) and the paper utm tags; record the pick in dissemination_tracker (mode amplify) so paper_readership can compare it with matched papers; never exceed the weekly caps and spacing already in the gate, never post a retracted paper.' || char(10) ||
  'Definition of done: merged and verified live; after 14 days compare ext_30d and GA4 sessions of the amplified papers with matched non-amplified papers of the same age (v_reader_yield_by_source and paper_readership), keep the lane only if the amplified papers gained engaged sessions, otherwise replace the lever. Take the work claim on qnfo-social/worker.js before editing.',
@@ -403,18 +411,26 @@ SELECT 'ROADMAP-1: QNFO.REACH READER-YIELD-1.4: GA4 ingest by campaign and count
  'code-anchor: async function ga4Ingest(env, opts) {' || char(10) ||
  'code-probe: {"paths": ["qnfo-fleet-dashboard/worker.js"], "contains": "sessionCampaignName"}' || char(10) || char(10) ||
  'Charter pillar reach (program QNFO.REACH). Metric it should move: it moves none by itself; it makes yield per paper and per post measurable. Done when paper_readership can carry ga4_engaged_30d per paper and outreach_engaged_per_100_clicks_7d can be split by channel.' || char(10) ||
- 'Evidence (READER-YIELD-1): the GA4 ingest writes sessions and engagedSessions by channel group, source and host, and sessions (not engaged) by page and country, so an engaged session cannot be tied to the paper or post that earned it. The tagged links already carry utm_campaign = paper slug and utm_source = channel, which GA4 exposes as sessionCampaignName and sessionSource. X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so which papers take those slots is a real choice there (the Bluesky and Substack roll-ups carry every paper); GA4 shows X at 17 engaged of 19 sessions and Bluesky at 1 of 22, but nothing says which X post earned them. Singapore is 55 percent of GA4 sessions (1002 of 1833) and no row says how many of them engage.' || char(10) ||
- 'EDIT: in ga4Ingest add two runReports for the complete day: dimensions sessionCampaignName and sessionSource with metrics sessions and engagedSessions (limit 1000, rows with an empty or (not set) campaign skipped), written as reach_signals rows source ga4, channel = the source, entity_type campaign, entity_id = the campaign lower-cased to 64 characters (the UTM ledger key); and dimensions country and sessionDefaultChannelGroup with metrics sessions and engagedSessions as entity_type country_channel, entity_id country || chr(124) || channel. Keep quality human; do not change any existing row shape; name the change GA4-CAMPAIGN-1 in a comment.' || char(10) ||
+ 'Evidence (READER-YIELD-1): the GA4 ingest writes sessions and engagedSessions by channel group, source and host, and sessions (not engaged) by page and country, so an engaged session cannot be tied to the paper or post that earned it. The tagged links already carry utm_campaign = paper slug and utm_source = channel, which GA4 exposes as sessionCampaignName and sessionSource. X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so which papers take those slots is a real choice there (the Bluesky and Substack roll-ups carry every paper); GA4 shows X at 17 engaged of 19 sessions and Bluesky at 1 of 22, but nothing says which X post earned them. Singapore is 55 percent of GA4 sessions (1002 of 1833) and no stored row says how many of them engage or how many sessions the Netherlands (the owner''s region) contributes to the engaged count.' || char(10) ||
+ 'EDIT: in ga4Ingest add two runReports for the complete day: dimensions sessionCampaignName and sessionSource with metrics sessions and engagedSessions (limit 1000, rows with an empty or (not set) campaign skipped), written as reach_signals rows source ga4, channel = the source, entity_type campaign, entity_id = the campaign lower-cased to 64 characters (the UTM ledger key); and dimension country with metrics sessions, engagedSessions and activeUsers as entity_type country_engaged (the live /api/ga4/overview has it; reach_signals stores sessions and users but not engaged by country: 28 days to 11-03 the Netherlands is 25 users, 139 sessions and 116 engaged, Singapore 1629 users and 55 engaged), so sessions per user can separate the owner and the fleet from one-time visitors. Keep quality human; do not change any existing row shape; name the change GA4-CAMPAIGN-1 in a comment.' || char(10) ||
  'Definition of done: merged and verified live by the canonical deploy; SELECT COUNT(*) FROM reach_signals WHERE source = ''ga4'' AND entity_type = ''campaign'' AND metric = ''engagedSessions'' is above 0 for the previous day; record the before and after in issue_triage.close_evidence. The file is claimed by another session at the time of filing: take the work claim first. Follow-up once rows exist: add ga4_engaged_30d to paper_readership and rank v_paper_readers_top by it.',
  'session:reader-yield', 'feature', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'ROADMAP-1: QNFO.REACH READER-YIELD-1.4: GA4 ingest by campaign and country, so engaged sessions are attributable to papers, posts and origin');
 
+INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, sev, status, source)
+VALUES ('ga4-internal-traffic-1',
+  'Define internal traffic in Google Analytics so readers can be told from your own visits',
+  'IDENTITY-BOUND: the GA4 property belongs to the owner''s Google account and its Admin settings are not open to any session or loop. Evidence (live /api/ga4/overview, 28 days to 2026-11-03): the Netherlands is 25 users with 139 sessions and 116 engaged of the property''s 307 engaged sessions, 5.6 sessions and 10.5 page views per user, while Singapore is 1629 users with one session each and 55 engaged. The engaged-session count the fleet uses as its reader measure (engaged_reader_sessions_7d) therefore includes your own browsing and the fleet''s own browser checks unless GA4 can tell them apart.',
+  'engaged_reader_sessions_7d counts only engaged sessions whose source is outside the fleet (direct, not set and the hosts in ops_config reader_internal_sources are left out), 44 in the 7 days to 2026-11-03. Your own typed visits fall into direct and drop out; your clicks on your own posts still count. The research budget governor stays off.',
+  'In GA4 Admin choose Data streams, open the stream, Configure tag settings, Show all, Define internal traffic: add a rule for your IP address or addresses (and the fleet egress range if you know it), then open Data settings, Data filters, and set the Internal Traffic filter from Testing to Active. Nothing else changes; the fleet reads the filtered numbers from the next daily ingest.',
+  'normal', 'open', 'session:reader-yield');
+
 INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
 SELECT 'READER-YIELD-1.5: switch research_yield_governor on once research-exec enforces research_daily_neurons',
  'Charter pillar cost and reach (programs QNFO.OPS and QNFO.REACH). Owner of the key: qnfo-ops (ops_config research_policy_harmonized: single writer; other sessions file an issue). Doer: the spend-cap work that makes qnfo-research-exec respect research_daily_neurons, or the ops session.' || char(10) ||
- 'Evidence (READER-YIELD-1): research-exec spent 988,203 and 996,539 neurons on 11-02 and 11-03 against research_daily_neurons 360000; fleet_budget cost:fleet_all_in_month 1151 against a cap of 300. v_research_volume_target publishes the budget a reader-linked rule would set (engaged readers a day x 20000, floor 180000, ceiling 450000, 10 percent a day): 349k at 17.4 engaged readers a day. The migration leaves research_yield_governor off so nothing writes the key until its owner agrees.' || char(10) ||
+ 'Evidence (READER-YIELD-1): research-exec spent 988,203 and 996,539 neurons on 11-02 and 11-03 against research_daily_neurons 360000; fleet_budget cost:fleet_all_in_month 1151 against a cap of 300. v_research_volume_target publishes the budget a reader-linked rule would set (externally sourced engaged readers a day x 64000, floor 180000, ceiling 450000, 10 percent a day, averaged over up to 28 days): about 358k at today''s 5.6 externally sourced engaged readers a day. The migration leaves research_yield_governor off so nothing writes the key until its owner agrees, and the governor needs 28 days of externally sourced rows (from 2026-11-21) and the GA4 internal-traffic rule (owner card ga4-internal-traffic-1) before it is a signal rather than noise plus the owner.' || char(10) ||
  'EDIT (executable configuration): a migration that runs UPDATE ops_config SET value = ''on'' WHERE key = ''research_yield_governor'' and records the decision with its revert path in decision_log; before it, read SELECT * FROM v_research_volume_target and SELECT reason FROM v_research_volume_target (not paused, not outside the band).' || char(10) ||
- 'Definition of done: research_yield_governor is on, ops_config research_daily_neurons carries a READER-YIELD-1 governor note, and ai_call_counters shows qnfo-research-exec at or below that value on two consecutive UTC days; record the before and after in issue_triage.close_evidence. Not before 7 days of GA4 rows exist (they do from 2026-11-01) and not while research-exec ignores the key (then the switch changes a number nothing reads).',
+ 'Definition of done: research_yield_governor is on, ops_config research_daily_neurons carries a READER-YIELD-1 governor note, and ai_call_counters shows qnfo-research-exec at or below that value on two consecutive UTC days; record the before and after in issue_triage.close_evidence. Not before 28 days of externally sourced GA4 rows exist (from 2026-11-21), not before the GA4 internal-traffic rule (owner card ga4-internal-traffic-1) is active, and not while research-exec ignores the key (then the switch changes a number nothing reads).',
  'session:reader-yield', 'optimization', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'READER-YIELD-1.5: switch research_yield_governor on once research-exec enforces research_daily_neurons');
 

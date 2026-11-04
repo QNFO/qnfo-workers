@@ -8,13 +8,14 @@ what the fleet gets per paper and per neuron, and a research budget that follows
 
 | Finding | Evidence |
 |---|---|
-| Readers do not follow output | Papers a day: 2 to 89 (71, 89, 56 on 10-19..10-21, then 1 to 16). GA4 engaged sessions on the public sites: 12 to 41 a day, 122 in the 7 days to 11-03. External-referrer page loads fell from 26..58 a day to 1..9 through the surge. |
+| Readers do not follow output | Papers a day: 2 to 89 (71, 89, 56 on 10-19..10-21, then 1 to 16). GA4 engaged sessions on the public sites: 12 to 41 a day, 122 in the 7 days to 11-03, of which 44 (5.6 a day, 0 to 15) came from sources outside the fleet. External-referrer page loads fell from 26..58 a day to 1..9 through the surge. |
 | Counted clicks are not readers | `utm_clicks_human` 1260 in 10 days; GA4 organic social 180 sessions, 25 engaged: about 2 engaged per 100 counted clicks. Bluesky 22 sessions / 1 engaged, Substack 110 / 0, LinkedIn 20 / 5, Mastodon 9 / 0; X 19 / 17, Google 34 / 28, referral 44 / 40. |
 | Every paper carries the same floor | 506 papers published since 10-01: UTM human clicks p10 3, p50 6, p90 11 (100 percent non-zero), human RUM page loads p10 4, p50 8; flat across idea source, score band and age. A human readership is heavy-tailed; a constant floor is automation (link previews, probes, renders). |
 | Outsiders reach few papers | 868 paper keys with any signal in 30 days; 33 (3.8 percent) have a page load from a referrer outside the fleet, 61 loads in all; the most any paper has is 7. |
 | Choosing papers for outreach slots changes nothing | The Bluesky queue holds 1 item; 460 paper-posts went out in 34 days; 87 percent of Bluesky paper-posts get no human-classed click in 72 hours. |
 | Topic does not separate papers | Visits per credited post by shelf: 2.7 to 3.8 (n about 500). Topic throttling has no evidence behind it. |
 | Where the sessions come from | GA4, 10 days to 11-03: Singapore 1002 of 1833 sessions (55 percent), United States 385, Netherlands 129, China 114, Iran 21. RUM bot-filtered loads, 7 days: Netherlands 52 percent, Singapore 22 percent, United States 17 percent; Chrome 2,230 of 3,400, Android 40 percent. The owner's time zone is W. Europe, so a Singapore share this size reads as datacenter automation (not proven: GA4 has no engaged-by-country row), and the Netherlands share includes the owner's own visits and the Amsterdam colo. |
+| Engaged sessions include you and the fleet | Live `/api/ga4/overview`, 28 days to 11-03: 307 engaged sessions, of which the Netherlands is 116 from 25 users (5.6 sessions and 10.5 page views a user), Poland 26 from 7 users, the United Kingdom 33 from 9. By source in the 7 days to 11-03: 54 direct, 24 from the fleet's own hosts (ask.qwav.tech 12, github.com 11), 44 from outside (google 21, x 17, six others). So the all-sources count is not a reader count: it follows your own browsing. |
 | Spend ignores the key | `qnfo-research-exec` 988,203 and 996,539 neurons on 11-02 and 11-03 against `research_daily_neurons` 360000, for 9 and 16 papers. 7 days to 11-03: 4,585,257 neurons (research-exec, paper-reviser, errata-hub), 39 papers, 122 engaged sessions = 37,583 neurons per engaged session. |
 | `pageviews_30d` is not capped | Live bot-filtered RUM total for 30 days is 19,660 to 20,500 (31 daily rows sum to the same). The stored value flaps 0 / 10000 / 25000 / 26000 / 19.7k (`metric_write_audit_log`); fix filed as a ROADMAP-1 row. |
 
@@ -23,8 +24,10 @@ reader signal that is not noise is GA4 engagement plus the external-referrer loa
 
 ## What a reader is here
 
-- **Engaged reader session**: a GA4 session of 10 seconds or more, two page views or a conversion (`reach_signals` source `ga4`, entity type `channel`, metric `engagedSessions`). It runs in a browser,
-  so it is a floor (ad blockers). The direct channel holds 83 percent of sessions and 7.5 percent of them engage; the total is readers plus a floor of headless visits.
+- **Engaged reader session**: a GA4 session of 10 seconds or more, two page views or a conversion whose source is outside the fleet (`reach_signals` source `ga4`, entity type `source`, metric
+  `engagedSessions`; `(direct)`, `(not set)`, `(none)` and the hosts in `ops_config reader_internal_sources` are left out, an editable list). It runs in a browser, so it undercounts (ad blockers);
+  it still counts you clicking your own posts, and your typed visits fall into direct and drop out. 44 in the 7 days to 11-03, spiky (0 to 15 a day): read weeks, not days. Direct holds 83 percent of
+  sessions and 7.5 percent of them engage.
 - **External visit**: a page load whose referrer is a host the fleet does not own (`external_pageviews`). The only per-paper count that is not a floor.
 - **Counted click**: a tagged page load whose user agent does not match `UTM_BOT_RE` (qnfo-gateway). It includes fetchers and previews. Never a reader count; ROADMAP-1 READER-YIELD-1.1 fixes the class.
 
@@ -44,16 +47,16 @@ Read the same papers a week apart: `SELECT slug, pv_7d, pv_prev_7d, utm_7d, utm_
 ## The research volume governor (dormant: off)
 
 `v_research_volume_target` is the research budget as a function of readers: `research_daily_neurons` = clamp(engaged readers a day x `research_yield_neurons_per_engaged_day`,
-`research_yield_floor`, `research_yield_ceiling`), reached by at most `research_yield_step_pct` a day, with a 2 percent dead band. Defaults 20000, 180000, 450000, 10. At 17.4 engaged
-readers a day the target is 349k, 3 percent under today's key. The floor is half of the 2026-10-21 budget; research never stops. The constant is a calibration, not a law.
+`research_yield_floor`, `research_yield_ceiling`), reached by at most `research_yield_step_pct` a day, with a 2 percent dead band. Defaults 64000, 180000, 450000, 10, averaged over up to 28 days. At 5.6 externally sourced engaged
+readers a day the target is 358k, about today's key. The floor is half of the 2026-10-21 budget; research never stops. The constant is a calibration, not a law.
 
 **It ships off.** `ops_config research_policy_harmonized` names qnfo-ops the single writer of `research_daily_neurons` ("other sessions must file an issue instead of overwriting these
 keys") and the spend-cap work is changing how research-exec enforces it, so `research_yield_governor` is `off`: the hourly steps and the daily `reader-yield` event publish the target
-and the reason, and nothing writes the key. Issue READER-YIELD-1.5 asks the key's owner to switch it on once research-exec respects the key (research-exec spent 988k and 997k neurons
+and the reason, and nothing writes the key. Issue READER-YIELD-1.5 asks the key's owner to switch it on once research-exec respects the key (the spend-cap session's 0.49.0 adds a per-tick allowance), 28 days of externally sourced rows exist and the GA4 internal-traffic rule (owner card `ga4-internal-traffic-1`) is active (research-exec spent 988k and 997k neurons
 on 11-02 and 11-03 against 360000, so today the key moves a number nothing reads).
 
 When `on`, the governor moves the key once a UTC day (the `reader-yield-<yyyymmdd>` event is the guard, so an hourly or retried run cannot move it twice) and only while: at least
-`research_yield_min_days` (7) days of GA4 engaged rows exist; the key is inside the band; and nobody else wrote the key since the governor did (`research_yield_last_written` equals the
+`research_yield_min_days` (28) days of externally sourced GA4 engaged rows exist (from 2026-11-21); the key is inside the band; and nobody else wrote the key since the governor did (`research_yield_last_written` equals the
 key). Any other writer pauses it with a reason in `v_research_volume_target.reason` and the daily event; set `research_yield_last_written` to an empty string to resume. Revert:
 `research_yield_governor` = `off` and restore the key from `bak_20261104_research_neurons_cfg`.
 
@@ -65,8 +68,8 @@ loop's task row: a later migration that rewrites `event-metric-recompute` in ful
 
 ## Prediction and what falsifies it
 
-Logged in `decision_log` (parsed by `decision_predictions`): `engaged_reader_sessions_7d >= 98 within 14 d` (80 percent of the 122 baseline; the hypothesis is that readers do not follow
-research volume, tested by the natural swings of output) and `research_neurons_per_engaged_session_7d <= 30000 within 14 d` (true only if the governor is on and the key binds). Falsified if engaged readers fall more than 20 percent in 14 days
+Logged in `decision_log` (parsed by `decision_predictions`): `engaged_reader_sessions_7d >= 35 within 14 d` (80 percent of the 44 baseline; the hypothesis is that readers do not follow
+research volume, tested by the natural swings of output) and `research_neurons_per_engaged_session_7d <= 75000 within 14 d` (true only if the governor is on and the key binds). Falsified if engaged readers fall more than 20 percent in 14 days
 with outreach cadence unchanged: readers do depend on research volume; keep the budget at 360000 and say so.
 
 ## Next items (four ROADMAP-1 rows with code-tasks and one enabling issue, filed by the migration)
@@ -77,3 +80,4 @@ with outreach cadence unchanged: readers do depend on research volume; keep the 
    sessions), measured against matched papers a week apart.
 4. READER-YIELD-1.4 `qnfo-fleet-dashboard`: GA4 ingest by campaign and country so an engaged session can be tied to the paper, post and origin that earned it. X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so slot choice is real there (the roll-ups carry every paper) and has no signal until this lands.
 5. READER-YIELD-1.5 (config, owner qnfo-ops / the spend-cap work): switch `research_yield_governor` on once research-exec enforces `research_daily_neurons`.
+6. Owner card `ga4-internal-traffic-1` (IDENTITY-BOUND, GA4 Admin is the owner's Google account): define internal traffic and activate the Internal Traffic data filter so your own visits stop counting. Until then the list in `reader_internal_sources` is the approximation.

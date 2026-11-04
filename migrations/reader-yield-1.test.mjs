@@ -1,7 +1,7 @@
 // READER-YIELD-1 (2026-11-04, pillar reach): the reader ledger, the per-paper readership table, the three measures and the research volume governor.
 // Replays migrations/2026-11-04-reader-yield-1.sql on SQLite against a fixture with the live layout (including the existing hourly fleet_tasks event-metric-recompute the steps are
 // appended to), then runs the task's steps the way the runner does (one statement a step, in order).
-// Proves: the header opts in to the runner; no new cron or task is created (fleet_budget caps are breached); the steps are appended after the original three, once; the ledger reads GA4
+// Proves: the header opts in to the runner; engaged readers are counted from GA4 sources outside the fleet only ('(direct)', '(not set)' and the hosts in ops_config reader_internal_sources are left out); no new cron or task is created (fleet_budget caps are breached); the steps are appended after the original three, once; the ledger reads GA4
 // channel rows and leaves a day with no GA4 rows NULL (never a zero); the 64 character campaign key joins a longer paper slug, a /quickread path is not a paper, and the first
 // publication (not a later revision) names the idea source; stale paper rows are pruned and never read as current; the three metrics are NULL until 7 GA4 days exist; the governor is
 // OFF by default (qnfo-ops owns the key) and when switched on moves the key toward engaged readers a day x 20000 inside the floor and ceiling by at most 10 percent a day, once a UTC day,
@@ -47,6 +47,7 @@ db.exec(`
   CREATE TABLE fleet_tasks (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, definition TEXT NOT NULL, timeout_ms INTEGER NOT NULL DEFAULT 30000, retries INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT);
   CREATE TABLE fleet_crons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, cron_expr TEXT NOT NULL, task_id TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, timezone TEXT NOT NULL DEFAULT 'UTC', last_fired TEXT, next_fire TEXT, updated_at TEXT);
   CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+  CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT);
 `);
 const ymd = (back) => new Date(Date.now() - back * 864e5).toISOString().slice(0, 10);
 const rs = db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, ?, ?, ?, ?, ?, ?, 'human')");
@@ -55,9 +56,13 @@ const KEY = LONG.toLowerCase().slice(0, 64);
 // GA4 channel rows for the 10 complete days before today (engaged 10 + 2 + 3 + 2 = 17 a day); the 4 days before that have none.
 for (let b = 1; b <= 10; b++) {
   const d = ymd(b);
-  for (const [ch, ses, eng] of [["direct", 150, 10], ["organic social", 18, 2], ["referral", 4, 3], ["organic search", 6, 2], ["unassigned", 2, 0]]) {
+  for (const [ch, ses, eng] of [["direct", 150, 20], ["organic social", 18, 2], ["referral", 4, 3], ["organic search", 6, 2], ["unassigned", 2, 0]]) {
     rs.run(d, "ga4", "web", "channel", ch, "sessions", ses);
     rs.run(d, "ga4", "web", "channel", ch, "engagedSessions", eng);
+  }
+  for (const [src, ses, eng] of [["google", 14, 12], ["x", 6, 5], ["(direct)", 150, 20], ["ask.qwav.tech", 3, 3], ["github.com", 2, 2], ["(not set)", 1, 0]]) {
+    rs.run(d, "ga4", "web", "source", src, "sessions", ses);
+    rs.run(d, "ga4", "web", "source", src, "engagedSessions", eng);
   }
   rs.run(d, "utm", "bluesky", "campaign", KEY, "clicks_human", 100);
   rs.run(d, "utm", "bluesky", "campaign", "other-paper", "clicks_human", 20);
@@ -70,6 +75,10 @@ for (let b = 1; b <= 10; b++) {
   rs.run(d, "ga4", "web", "page", "/papers/" + LONG + "/quickread", "sessions", 9);
   rs.run(d, "ga4", "web", "page", "/papers", "sessions", 7);
 }
+rs.run(ymd(12), "ga4", "web", "source", "(direct)", "sessions", 40);
+rs.run(ymd(12), "ga4", "web", "source", "(direct)", "engagedSessions", 6);
+rs.run(ymd(12), "ga4", "web", "source", "github.com", "sessions", 2);
+rs.run(ymd(12), "ga4", "web", "source", "github.com", "engagedSessions", 2);
 const ins = db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, neurons) VALUES (?, ?, 'p', 'm', ?)");
 const rq = db.prepare("INSERT INTO research_queue (id, source, source_id, paper_slug, score, published_at) VALUES (?, ?, ?, ?, ?, ?)");
 for (let b = 1; b <= 14; b++) {
@@ -95,13 +104,20 @@ const rows = (sql, ...a) => db.prepare(sql).all(...a);
 
 ok(n("SELECT COUNT(*) c FROM reader_yield_daily").c === 14, "the ledger holds the last 14 complete days");
 const d1 = n("SELECT * FROM reader_yield_daily WHERE day = ?", ymd(1));
-ok(d1.ga4_engaged === 17 && d1.ga4_sessions === 180 && d1.ga4_engaged_social === 2 && d1.ga4_sessions_social === 18, "GA4 channel rows sum into engaged, sessions and the organic social share", d1);
+ok(d1.ga4_engaged === 27 && d1.ga4_sessions === 180 && d1.ga4_engaged_social === 2 && d1.ga4_sessions_social === 18, "GA4 channel rows sum into engaged, sessions and the organic social share", d1);
+ok(d1.ga4_engaged_external === 17 && d1.ga4_sessions_external === 20 && d1.ga4_engaged_direct === 20, "externally sourced engaged sessions leave out (direct), (not set) and the fleet's own hosts (ask.qwav.tech, github.com)", d1);
+const only = n("SELECT * FROM reader_yield_daily WHERE day = ?", ymd(12));
+ok(only.ga4_engaged_external === 0 && only.ga4_sessions_external === 0 && only.ga4_engaged_direct === 6, "a day whose GA4 rows are all the fleet's own reads 0 external, not NULL", only);
+db.exec("DELETE FROM reach_signals WHERE date = '" + ymd(12) + "'; DELETE FROM reader_yield_daily WHERE day = '" + ymd(12) + "'");
 ok(d1.utm_clicks_human === 120, "utm_clicks_human counts human rows only (bot rows are not counted)", d1.utm_clicks_human);
 ok(d1.ext_referred_pv === 3, "external referred page loads sum page and paper rows", d1.ext_referred_pv);
 ok(d1.papers_published === 6, "papers published a day come from research_queue.published_at (5 and the revision)", d1.papers_published);
 ok(d1.research_neurons === 600000, "research neurons sum the three research workers and not qnfo-social", d1.research_neurons);
 const old = n("SELECT * FROM reader_yield_daily WHERE day = ?", ymd(14));
-ok(old.ga4_engaged === null && old.ga4_sessions === null && old.utm_clicks_human === null, "a day with no GA4 or UTM rows is NULL, never a zero", old);
+ok(old.ga4_engaged === null && old.ga4_sessions === null && old.ga4_engaged_external === null && old.utm_clicks_human === null, "a day with no GA4 or UTM rows is NULL, never a zero", old);
+db.exec("UPDATE ops_config SET value = replace(value, 'github.com,', '') WHERE key = 'reader_internal_sources'");
+ok(n("SELECT ga4_engaged_external e FROM v_reader_yield_source WHERE day = ?", ymd(1)).e === 19, "the internal source list is editable data: dropping github.com from it counts its 2 engaged sessions", n("SELECT ga4_engaged_external e FROM v_reader_yield_source WHERE day = ?", ymd(1)));
+db.exec("UPDATE ops_config SET value = 'github.com,' || value WHERE key = 'reader_internal_sources'");
 
 const pr = rows("SELECT * FROM paper_readership WHERE key64 = ?", KEY);
 ok(pr.length === 1, "one row for the 64 character key of a longer slug", pr.length);
@@ -117,9 +133,9 @@ ok(top.length >= 1 && top[0].slug === LONG && top[0].reader_score === 30 && top[
 ok(rows("SELECT * FROM v_reader_yield_by_source").some((r) => r.idea_source === "proposal" && r.papers >= 1), "yield by idea source reads the table");
 
 const mv = Object.fromEntries(rows("SELECT metric, last_value, state FROM metric_registry").map((r) => [r.metric, r]));
-ok(mv.engaged_reader_sessions_7d.last_value === "119" && mv.engaged_reader_sessions_7d.state === "MEASURED", "engaged_reader_sessions_7d is the 7 day GA4 sum", mv.engaged_reader_sessions_7d);
+ok(mv.engaged_reader_sessions_7d.last_value === "119" && mv.engaged_reader_sessions_7d.state === "MEASURED", "engaged_reader_sessions_7d is the 7 day sum of externally sourced engaged sessions (7 x 17, not the 189 from all sources)", mv.engaged_reader_sessions_7d);
 ok(mv.outreach_engaged_per_100_clicks_7d.last_value === "1.67", "engaged social sessions per 100 counted clicks (14 / 840)", mv.outreach_engaged_per_100_clicks_7d);
-ok(mv.research_neurons_per_engaged_session_7d.last_value === "35294", "research neurons per engaged session (4,200,000 / 119)", mv.research_neurons_per_engaged_session_7d);
+ok(mv.research_neurons_per_engaged_session_7d.last_value === "35294", "research neurons per externally sourced engaged session (4,200,000 / 119)", mv.research_neurons_per_engaged_session_7d);
 ok(n("SELECT COUNT(*) c FROM metric_history WHERE metric = 'engaged_reader_sessions_7d'").c === 4, "history is backfilled for the 4 days that have a full 7 day GA4 window");
 ok(n("SELECT COUNT(*) c FROM metric_breach_cause WHERE metric_key IN ('engaged_reader_sessions_7d','outreach_engaged_per_100_clicks_7d','research_neurons_per_engaged_session_7d')").c === 3, "the three causes are mapped");
 const oq = Object.fromEntries(rows("SELECT metric, surface, role, polarity FROM output_quality_measures").map((r) => [r.metric, r]));
@@ -151,6 +167,11 @@ const enable = issues.find((i) => i.title.startsWith("READER-YIELD-1.5:"));
 ok(!!enable && /UPDATE ops_config SET value = 'on' WHERE key = 'research_yield_governor'/.test(enable.description) && /Definition of done:/.test(enable.description) && /qnfo-ops/.test(enable.description), "the enabling issue names the owner, the switch and its closing condition");
 ok(rows("SELECT issue_id FROM roadmap_proposals").length === 4 && rows("SELECT issue_id FROM roadmap_proposals").every((r) => r.issue_id > 0), "four proposals link their issues");
 
+const card = n("SELECT * FROM human_actions WHERE slug = 'ga4-internal-traffic-1'");
+ok(!!card && card.status === "open" && /^IDENTITY-BOUND: /.test(card.why) && card.source === "session:reader-yield", "the GA4 internal-traffic card is filed with an IDENTITY-BOUND line", card && card.why.slice(0, 40));
+ok(!!card && !/claude|anthropic/i.test([card.title, card.why, card.default_in_effect, card.action, card.url || ""].join(" ")), "and never routes work to Claude (human_actions_no_claude_ins)");
+ok(!!card && card.default_in_effect.length > 40 && /Internal Traffic filter/.test(card.action), "its default stays in effect and its action names the GA4 setting");
+
 // ---- no new task, no new cron: the steps join event-metric-recompute -----------------------------------------------------------------------------------------------------------
 ok(n("SELECT COUNT(*) c FROM fleet_tasks").c === 1 && n("SELECT COUNT(*) c FROM fleet_crons").c === 1, "no task and no cron were added");
 const task = n("SELECT * FROM fleet_tasks WHERE id = 'event-metric-recompute'");
@@ -165,6 +186,12 @@ const cfg = (k) => n("SELECT value, note, updated_at FROM ops_config WHERE key =
 const evCount = () => n("SELECT COUNT(*) c FROM cloud_ops_events WHERE kind = 'reader-yield'").c;
 const decCount = () => n("SELECT COUNT(*) c FROM decision_log WHERE actor = 'fleet_task reader-yield-refresh'").c;
 
+// shipped defaults, then the fixture calibration (the shipped 64000 x 5.6 a day is the live case; the fixture has 17 a day)
+ok(cfg("research_yield_neurons_per_engaged_day").value === "64000" && cfg("research_yield_min_days").value === "28" && cfg("research_yield_floor").value === "180000" && cfg("research_yield_ceiling").value === "450000", "shipped defaults: 64000 neurons per engaged reader a day, 28 days of data, floor 180000, ceiling 450000");
+ok(/ask\.qwav\.tech/.test(cfg("reader_internal_sources").value) && /github\.com/.test(cfg("reader_internal_sources").value), "the internal source list ships with the fleet's own hosts");
+db.exec("UPDATE ops_config SET value = 'on' WHERE key = 'research_yield_governor'");
+ok(n("SELECT reason FROM v_research_volume_target").reason === "needs 28 days of externally sourced GA4 engaged sessions, has 10", "with the shipped 28 days the governor holds still on 10 days of data", n("SELECT reason FROM v_research_volume_target").reason);
+db.exec("UPDATE ops_config SET value = 'off' WHERE key = 'research_yield_governor'; UPDATE ops_config SET value = '20000' WHERE key = 'research_yield_neurons_per_engaged_day'; UPDATE ops_config SET value = '7' WHERE key = 'research_yield_min_days'");
 // the governor is OFF by default: the key is left alone, the target is published
 ok(cfg("research_yield_governor").value === "off", "the governor ships off (qnfo-ops is the single writer of research_daily_neurons)");
 let g = n("SELECT * FROM v_research_volume_target");
@@ -186,7 +213,7 @@ ok(decCount() === 1 && evCount() === 1, "on: one decision and one daily event fo
 run();
 ok(cfg("research_daily_neurons").value === "340000" && decCount() === 1 && evCount() === 1, "a second run the same day changes nothing, logs nothing, adds no event");
 // force a new legal move the same UTC day: the once-a-day guard (the event) holds it
-db.exec("UPDATE reader_yield_daily SET ga4_engaged = 40 WHERE ga4_engaged IS NOT NULL");
+db.exec("UPDATE reader_yield_daily SET ga4_engaged_external = 40 WHERE ga4_engaged_external IS NOT NULL");
 g = n("SELECT * FROM v_research_volume_target");
 ok(g.eligible === 1 && g.step_target === 374000, "(fixture) readers rise: the view would move again (340000 to 374000)", g);
 for (const s of steps.filter((x) => x.name === "governor")) db.exec(s.sql);
@@ -194,7 +221,7 @@ ok(cfg("research_daily_neurons").value === "340000", "the governor step does not
 db.exec("DELETE FROM cloud_ops_events");
 for (const s of steps.filter((x) => x.name === "governor")) db.exec(s.sql);
 ok(cfg("research_daily_neurons").value === "374000", "the next UTC day's first governor step moves it 10 percent", cfg("research_daily_neurons").value);
-db.exec("UPDATE reader_yield_daily SET ga4_engaged = 17 WHERE ga4_engaged IS NOT NULL; UPDATE ops_config SET value = '340000', note = 'x' WHERE key = 'research_daily_neurons'; UPDATE ops_config SET value = '340000' WHERE key = 'research_yield_last_written'; DELETE FROM cloud_ops_events");
+db.exec("UPDATE reader_yield_daily SET ga4_engaged_external = 17 WHERE ga4_engaged_external IS NOT NULL; UPDATE ops_config SET value = '340000', note = 'x' WHERE key = 'research_daily_neurons'; UPDATE ops_config SET value = '340000' WHERE key = 'research_yield_last_written'; DELETE FROM cloud_ops_events");
 ok(n("SELECT reason FROM v_research_volume_target").reason === "inside the 2 percent dead band", "inside the dead band the view says so");
 
 // a foreign write pauses the governor
@@ -212,20 +239,20 @@ ok(cfg("research_daily_neurons").value === "275000", "the resumed run moves 10 p
 // floor and ceiling
 db.exec("UPDATE ops_config SET value = '360000', note = 'x' WHERE key = 'research_daily_neurons'; UPDATE ops_config SET value = '360000' WHERE key = 'research_yield_last_written'");
 db.exec("DELETE FROM reach_signals WHERE source = 'ga4' AND metric = 'engagedSessions'");
-for (let b = 1; b <= 10; b++) rs.run(ymd(b), "ga4", "web", "channel", "direct", "engagedSessions", 1);
-db.exec("INSERT OR REPLACE INTO reader_yield_daily SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source");
+for (let b = 1; b <= 10; b++) rs.run(ymd(b), "ga4", "web", "source", "google", "engagedSessions", 1);
+db.exec("INSERT OR REPLACE INTO reader_yield_daily SELECT * FROM v_reader_yield_source");
 g = n("SELECT * FROM v_research_volume_target");
 ok(g.target === 180000 && g.step_target === 324000, "one engaged reader a day aims at the floor (180000) but moves 10 percent a day (324000)", g);
 for (let b = 1; b <= 10; b++) db.prepare("UPDATE reach_signals SET value = 100 WHERE source = 'ga4' AND metric = 'engagedSessions' AND date = ?").run(ymd(b));
-db.exec("INSERT OR REPLACE INTO reader_yield_daily SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source");
+db.exec("INSERT OR REPLACE INTO reader_yield_daily SELECT * FROM v_reader_yield_source");
 g = n("SELECT * FROM v_research_volume_target");
 ok(g.target === 450000 && g.step_target === 396000, "100 engaged readers a day aims at the ceiling (450000) in steps of 10 percent (396000)", g);
 
 // neutral with too little data, off, and outside the band
-db.exec("UPDATE reader_yield_daily SET ga4_engaged = NULL WHERE day < '" + ymd(5) + "'");
+db.exec("UPDATE reader_yield_daily SET ga4_engaged_external = NULL WHERE day < '" + ymd(5) + "'");
 g = n("SELECT * FROM v_research_volume_target");
-ok(g.eligible === 0 && /^needs 7 days of GA4 engaged sessions, has 5$/.test(g.reason), "under 7 days of GA4 rows the governor holds still", g.reason);
-db.exec("INSERT OR REPLACE INTO reader_yield_daily SELECT day, ga4_sessions, ga4_engaged, ga4_sessions_social, ga4_engaged_social, utm_clicks_human, ext_referred_pv, papers_published, research_neurons, refreshed_at FROM v_reader_yield_source");
+ok(g.eligible === 0 && /^needs 7 days of externally sourced GA4 engaged sessions, has 5$/.test(g.reason), "under 7 days of GA4 rows the governor holds still", g.reason);
+db.exec("INSERT OR REPLACE INTO reader_yield_daily SELECT * FROM v_reader_yield_source");
 db.exec("UPDATE ops_config SET value = 'off' WHERE key = 'research_yield_governor'");
 ok(n("SELECT reason FROM v_research_volume_target").reason === "governor off", "off means off");
 db.exec("UPDATE ops_config SET value = 'on' WHERE key = 'research_yield_governor'; UPDATE ops_config SET value = '600000', note = 'owner' WHERE key = 'research_daily_neurons'; UPDATE ops_config SET value = '600000' WHERE key = 'research_yield_last_written'");
@@ -240,7 +267,7 @@ run();
 ok(n("SELECT COUNT(*) c FROM paper_readership WHERE key64 = 'stale-3d'").c === 1 && n("SELECT COUNT(*) c FROM paper_readership WHERE key64 = 'stale-20d'").c === 0, "the prune step deletes rows not refreshed for 14 days and keeps the 3 day old row");
 
 // idempotent apply: the guarded inserts and the appended steps do not duplicate
-const snap = () => [n("SELECT COUNT(*) c FROM decision_log").c, n("SELECT COUNT(*) c FROM agent_issues").c, n("SELECT COUNT(*) c FROM roadmap_proposals").c, n("SELECT version FROM fleet_tasks WHERE id = 'event-metric-recompute'").version, n("SELECT definition FROM fleet_tasks WHERE id = 'event-metric-recompute'").definition];
+const snap = () => [n("SELECT COUNT(*) c FROM human_actions").c, n("SELECT COUNT(*) c FROM decision_log").c, n("SELECT COUNT(*) c FROM agent_issues").c, n("SELECT COUNT(*) c FROM roadmap_proposals").c, n("SELECT version FROM fleet_tasks WHERE id = 'event-metric-recompute'").version, n("SELECT definition FROM fleet_tasks WHERE id = 'event-metric-recompute'").definition];
 const before = snap();
 db.exec(text);
 const after = snap();

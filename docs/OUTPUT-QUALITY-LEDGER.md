@@ -78,7 +78,7 @@ The measures are written by `output_quality_heavy_tick`, a trigger on `fleet_tic
 
 ## Readers of papers (READER-YIELD-1, 2026-11-04)
 
-The papers surface had no reader outcome. `engaged_reader_sessions_7d` (GA4 engaged sessions, the one reader count a generator cannot satisfy) and `research_neurons_per_engaged_session_7d` (cost of one engaged reader) now carry it; `outreach_engaged_per_100_clicks_7d` is the validity finding that `outreach_human_clicks_7d` counts fetchers. Definitions, the per-paper table and the research volume governor are in `docs/READER-YIELD.md`; migration `migrations/2026-11-04-reader-yield-1.sql`, suite `migrations/reader-yield-1.test.mjs`. No verdict before 2026-11-07 (history is backfilled from 2026-10-31).
+The papers surface had no reader outcome. `engaged_reader_sessions_7d` (GA4 engaged sessions from sources outside the fleet, the one reader count a generator cannot satisfy; 44 in the 7 days to 11-03 against 122 from all sources) and `research_neurons_per_engaged_session_7d` (cost of one engaged reader) now carry it; `outreach_engaged_per_100_clicks_7d` is the validity finding that `outreach_human_clicks_7d` counts fetchers. Definitions, the per-paper table and the research volume governor are in `docs/READER-YIELD.md`; migration `migrations/2026-11-04-reader-yield-1.sql`, suite `migrations/reader-yield-1.test.mjs`. No verdict before 2026-11-07 (history is backfilled from 2026-10-31).
 
 ## Caveats and what would falsify the ledger
 
