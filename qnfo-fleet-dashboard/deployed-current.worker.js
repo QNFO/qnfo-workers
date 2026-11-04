@@ -11,7 +11,10 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.83.0";
+var VERSION = "1.83.3";
+// 1.83.3 (merge of PR 6935 onto main 1.83.0): keeps the 1.82.3 dashboard changes of this branch.
+// 1.83.1 (cont.) NOW-URGENT-1: the Now screen turns red only for cards that carry an IDENTITY-BOUND: line; owner-lane cards matched by a keyword alone are listed as optional.
+// 1.83.1 V3-CODE-STATUS-1 (pillar core; patch): the Code screen poll treats every status other than queued/running as final, so an executor status such as timeout or cancelled ends the run instead of polling for 25 minutes.
 // 1.83.0 V3-READERS-1 (owner request 2026-11-04, pillar reach; minor, new Readers card): the Readers screen compares output with readership (papers published, referred visits, visits per paper, new subscribers from metric_registry) and says plainly when output outruns readers.
 // 1.82.1 V3-DASH-1 follow-up (pillar core; patch): the Code screen header said "loading" forever; it now says signed in or sign in to start.
 // 1.82.0 V3-DASH-1 (owner request 2026-11-04, pillar core; minor, new home page and routes): "/" is three screens (Now, Readers, Code) on a static shell that paints at once; GET /api/v3/now and /api/v3/readers read small, separately timed sections and carry their own age; POST /api/v3/code starts an ops-exec run and GET /api/v3/code/<id> returns its steps. The old overview stays at /classic and every /area page is unchanged. Cause: "/" took 10-19 s measured on 2026-11-04 (fleetStatusData).
@@ -1539,13 +1542,22 @@ function queueLoopSyncIfStale(env, ctx, st, meta, nowMs) {
 // ==== AREA-MAP reliability: fleet state: buildState, the integration view and report-card data ====
 // OUTREACH-WEEKDAY-1 (#1940): whole hours between raw and nowMs that fall on a weekday (UTC); Saturdays and Sundays do
 // not count. Outreach sends Monday to Friday only, so its queue's freshness is judged in these hours.
+var _wobsMemo = null;
 async function workerObservability(env, nowMs) {
+  /* D1-OVERLOAD-1d: the correlated scans ran on every page build (484 calls, 46M rows read a day); an isolate keeps the answer for 5 minutes */
+  if (_wobsMemo && nowMs - _wobsMemo.at < 3e5) return _wobsMemo.v;
+  const v = await workerObservabilityRead(env, nowMs);
+  _wobsMemo = { at: nowMs, v };
+  return v;
+}
+__name(workerObservability, "workerObservability");
+async function workerObservabilityRead(env, nowMs) {
   const rows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, GROUP_CONCAT(DISTINCT x.svc) AS workers FROM (SELECT l.fingerprint, COALESCE((SELECT CASE WHEN json_valid(d.payload) THEN CAST(json_extract(d.payload, '$.lastObserved') AS REAL) END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint), (CASE WHEN CAST(l.last_seen AS REAL) > 1e12 THEN CAST(l.last_seen AS REAL) ELSE (julianday(l.last_seen) - 2440587.5) * 864e5 END)) AS seen_ms, (SELECT CASE WHEN json_valid(d.payload) THEN json_extract(d.payload, '$.service') END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint) AS svc FROM fleet_issue_loop l WHERE l.category='worker-observability' AND l.closed_at IS NULL) x WHERE x.seen_ms >= ? AND NOT EXISTS (SELECT 1 FROM fleet_deploys f WHERE x.svc IS NOT NULL AND f.worker = x.svc AND f.ok = 1 AND COALESCE(f.note,'') NOT LIKE 'SETTINGS-ONLY%' AND (julianday(f.ts) - 2440587.5) * 864e5 > x.seen_ms)", [nowMs - ERR_ACTIVE_MS]);
   const row = rows && rows.length ? rows[0] : {};
   const workers = String(row.workers || "").split(",").filter((worker) => /^[a-z0-9][a-z0-9_-]{0,62}$/.test(worker));
   return { count: row.n || 0, workers };
 }
-__name(workerObservability, "workerObservability");
+__name(workerObservabilityRead, "workerObservabilityRead");
 
 function weekdayHoursSince(raw, nowMs) {
   if (raw == null) return null;
@@ -3045,7 +3057,8 @@ async function fleetStatusData(env, ctx) {
     state.then(function(st) { return humanView(env, st, ctx); }),
     safe("metrics (v_fleet_metrics)", "SELECT metric, title, operator, threshold, value, breach, priority, kind, measured_at, program_code, good, value_7d_ago FROM v_fleet_metrics"),
     safe("activity ledgers", STATUS_ACTIVITY_SQL),
-    d1all(A, "SELECT * FROM v_output_quality_headline").catch(function() { return null; }),
+    /* D1-OVERLOAD-1b: one-row snapshot (refreshed hourly), the 1.5M-row view only when the snapshot is empty or unreadable */
+    d1all(A, "SELECT verdict, better, worse, flat, unmeasured, gaps FROM output_quality_headline_cache WHERE id = 1").then(function(r) { return r && r.length ? r : d1all(A, "SELECT * FROM v_output_quality_headline"); }).catch(function() { return null; }),
     safe("programs", "SELECT program_code, name FROM programs"),
     d1all(A, "SELECT cause_key, title, plain, lever, doer, needs_owner, breaches, metrics FROM v_breach_by_cause").catch(function() { return null; }),
     statusValueInputs(env, now).catch(function() { return null; })
@@ -3429,10 +3442,14 @@ async function v3Section(name, fn) {
 async function v3Needs(env, authed) {
   const rows = await d1all(env.AUDIT, "SELECT slug, title, why, action, created_at FROM human_actions WHERE status='open' ORDER BY id LIMIT 200");
   const mine = rows.filter(function(r) { return humanLaneFor({ title: r.title, why: r.why, action: r.action }) === "owner"; });
+  // Only a card that carries an IDENTITY-BOUND: line is urgent (AUTONOMY-FIRST-1); an owner-lane card matched by a keyword alone is optional and shown quietly.
+  const bound = function(r) { return String(r.why || "").indexOf("IDENTITY-BOUND:") >= 0; };
+  mine.sort(function(x, y) { return (bound(y) ? 1 : 0) - (bound(x) ? 1 : 0); });
+  const urgent = mine.filter(bound).length;
   return {
-    open_total: rows.length, fleet_handles: rows.length - mine.length, count: mine.length,
+    open_total: rows.length, fleet_handles: rows.length - mine.length, count: urgent, optional: mine.length - urgent,
     items: mine.slice(0, 8).map(function(r) {
-      return { key: "ha:" + r.slug, title: String(r.title || "").slice(0, 140), why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
+      return { bound: bound(r), key: "ha:" + r.slug, title: String(r.title || "").slice(0, 140), why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
     })
   };
 }
@@ -3539,9 +3556,10 @@ async function v3CodeStatus(env, id) {
   const run = r.json && r.json.run;
   if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], error: r.http === 404 ? "the executor no longer has this run" : null });
   const steps = (run.steps || []).map(function(s) { return { tool: String(s.tool || ""), args: String(s.args || "").replace(/\s+/g, " ").slice(0, 160), ms: Number(s.ms) || 0 }; });
-  const done = run.status === "done", failed = run.status === "failed" || run.status === "error";
+  // Any status other than queued/running is final, as in cmdAgentPoll: an unknown one ("timeout", "cancelled") must end the poll, not spin it for 25 minutes.
+  const done = run.status === "done", failed = !done && run.status !== "queued" && run.status !== "running";
   if (done || failed) { try { await cmdAgentPoll(env, id); } catch (e) {} }
-  return v3Json({ ok: true, status: done ? "done" : failed ? "failed" : "running", steps: steps, reply: done ? String(run.reply || "(no text)").slice(0, 16e3) : null, error: failed ? String(run.error || "the run failed").slice(0, 300) : null });
+  return v3Json({ ok: true, status: done ? "done" : failed ? "failed" : "running", steps: steps, reply: done ? String(run.reply || "(no text)").slice(0, 16e3) : null, error: failed ? String(run.error || "the run ended with status " + run.status).slice(0, 300) : null });
 }
 async function v3Routes(request, env, ctx, path, url, owner) {
   const holder = !!(owner && (owner.authed || owner.loop));
@@ -3615,12 +3633,12 @@ fetch('/api/v3/'+k,{cache:'no-store',signal:c.signal,credentials:'same-origin'})
 function sec(s,name){return s&&s.ok===false?'<p class="err">Could not read '+name+': '+esc(s.error)+'</p>':''}
 function renderNow(d){var n=d.needs||{},sp=d.spend||{},h=d.health||{},bad=[],tone='ok',title='All clear',sub='';
 ['needs','spend','health'].forEach(function(k){if(d[k]&&d[k].ok===false)bad.push(k)});
-if(n.ok&&n.count>0){tone='bad';title=n.count+(n.count===1?' thing needs you':' things need you');sub='Only decisions that are irreversible and yours alone are shown.'}
+if(n.ok&&n.count>0){tone='bad';title=n.count+(n.count===1?' thing needs you':' things need you');sub='Only decisions that are irreversible and yours alone are urgent.'}
 else if(bad.length){tone='warn';title="Can't read "+bad.join(', ');sub='Not confirmed clear.'}
 else if(sp.ok&&sp.pace_vs_budget>1.1){tone='warn';title='Spending ahead of budget';sub='At this pace the month lands at '+usd(sp.pace_month_usd)+' against '+usd(sp.budget_month_usd)+'.'}
-else sub='Nothing needs you.'+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
+else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
-if(n.ok&&n.count>0){o+='<div class="card"><h2>Needs you</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
+if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
 o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace':'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
@@ -3650,7 +3668,7 @@ api('/api/v3/code',{text:text,sid:sid()}).then(function(j){if(j.need){box.textCo
 function poll(id,box,t0){fetch('/api/v3/code/'+id,{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
 var st=(j.steps||[]).map(function(s){return '> '+s.tool+(s.args?' '+s.args:'')+' ('+s.ms+'ms)'}).join('\n');
 if(j.status==='running'){box.innerHTML='<div class="steps">'+esc(st||'thinking...')+'</div>Working... '+Math.round((Date.now()-t0)/1000)+'s';if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},1500);else box.textContent='Still running after 25 minutes; the run continues on the server (id '+id+').';return}
-box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){setTimeout(function(){poll(id,box,t0)},3000)})}
+box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},3000);else box.textContent='Lost contact with the server; the run may still be going (id '+id+').'})}
 $('cf').addEventListener('submit',function(e){e.preventDefault();var t=$('ci').value.trim();if(t)run(t)});
 $('ci').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('cf').dispatchEvent(new Event('submit',{cancelable:true}))}});
 document.querySelectorAll('[data-q]').forEach(function(b){b.onclick=function(){if(!holder){codeInit();return}run(b.getAttribute('data-q'))}});
