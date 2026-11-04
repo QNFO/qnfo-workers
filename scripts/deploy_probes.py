@@ -573,7 +573,7 @@ def selftest():
     ok(judge_http(200, "Internal Error 1101", {"status": 200, "contains": [], "absent": ["internal error"]}).startswith("forbidden text"), "judge_http: absent text is case-insensitive")
     ok(judge_http(404, "", {"status": 404}) is None, "judge_http: a wanted 404 passes")
     ok(cache_bust("https://qnfo.org/a").startswith("https://qnfo.org/a?_dp=") and cache_bust("https://qnfo.org/a?x=1").startswith("https://qnfo.org/a?x=1&_dp="), "cache_bust gives the edge a fresh key, with or without a query")
-    ok(fetch_text("https://qnfo.org/x\n")[0] == 0 and fetch_text("http://127.0.0.1:1/")[0] == 0, "fetch_text turns any exception (a malformed URL, a refused connection) into status 0 instead of aborting the canary")
+    ok(fetch_text("https://probe.invalid/x\n")[0] == 0 and fetch_text("http://127.0.0.1:1/")[0] == 0, "fetch_text turns any exception (a malformed URL, a refused connection) into status 0 instead of aborting the canary")
 
     class _Rq:
         full_url = "https://qnfo.org/a"
