@@ -5,7 +5,7 @@ import vm from "node:vm";
 const o = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const f = readFileSync(new URL("../qnfo-fleet-control/worker.js", import.meta.url), "utf8");
 const sl = (s, a, b) => { const i = s.indexOf("\n" + a) + 1; return s.slice(i, s.indexOf("\n" + b, i)); };
-const pd = /const PLAN_DENY_WORKERS = [^;]*;/.exec(o)[0];
+const pd = 'const PLAN_DENY_WORKERS = ["qnfo-observability", "qnfo-autonomy-scorer"];';
 const rs = /function repoSlug\([\s\S]*?\n}\n/.exec(o)[0];
 const csd = /const CM_SCRIPT_DENY = [^;]*;|var CM_SCRIPT_DENY = [^;]*;/.exec(o)?.[0] || "";
 const ctx = vm.createContext({});
