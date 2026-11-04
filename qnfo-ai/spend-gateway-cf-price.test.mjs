@@ -6,6 +6,7 @@ const grab = (re) => { const m = re.exec(src); if (!m) throw new Error("not foun
 const code = [
   grab(/var __AI_ATTR_RATES = \{[^\n]*\};/),
   grab(/var SPEND_WA_FALLBACK_RATE = [^\n]*;/),
+  grab(/var SPEND_GATEWAY_CF_RATES = [^\n]*;/),
   grab(/var SPEND_NEURON_USD = [^\n]*;/),
   grab(/var SPEND_PRICES = \{[\s\S]*?\n\};/),
   grab(/function spendUsd\(provider, model, inTok, outTok\) \{[\s\S]*?\n\}/),
