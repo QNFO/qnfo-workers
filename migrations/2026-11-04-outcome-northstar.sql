@@ -2,10 +2,10 @@
 -- Live read 2026-11-04: of 708 code tasks in 7 days, 681 (96%) touched fleet self-maintenance paths and 27 product/research
 -- (8 merged, 17 failed). analytics_events is empty and analytics_daily holds one schema row, so no reader/visit outcome exists;
 -- the only outcome data is v_channel_impact_7d (human clicks), reader_reports (52) and ask_feedback (7).
--- This adds one view and three metrics so managers can rank work by outcome and the product share has a target.
+-- This adds one view and three metrics so managers can rank work by outcome. No issue-filing trigger: the share is acted on directly by qnfo-code-orchestrator PRODUCT-FIRST-CLAIM-1 (claim order), since filing issues adds self-work.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS outcome_northstar_tick; DROP VIEW IF EXISTS v_outcome_northstar; DELETE FROM analytics_metric_triggers WHERE metric_key='product_task_share_7d'; DELETE FROM metric_breach_cause WHERE metric_key IN ('product_task_share_7d','outreach_human_clicks_7d','reader_signal_7d'); DELETE FROM metric_registry WHERE metric IN ('product_task_share_7d','outreach_human_clicks_7d','reader_signal_7d');
+-- Rollback: DROP TRIGGER IF EXISTS outcome_northstar_tick; DROP VIEW IF EXISTS v_outcome_northstar; DELETE FROM metric_breach_cause WHERE metric_key IN ('product_task_share_7d','outreach_human_clicks_7d','reader_signal_7d'); DELETE FROM metric_registry WHERE metric IN ('product_task_share_7d','outreach_human_clicks_7d','reader_signal_7d');
 
 CREATE VIEW IF NOT EXISTS v_outcome_northstar AS
 SELECT 'product_task_share_7d' AS metric,
@@ -25,9 +25,6 @@ INSERT OR IGNORE INTO metric_breach_cause(metric_key,cause_key,note) VALUES
 ('product_task_share_7d','code-loop','outcome north star: share of code work that reaches products and research'),
 ('outreach_human_clicks_7d','code-loop','outcome north star'),
 ('reader_signal_7d','code-loop','outcome north star');
-
-INSERT OR IGNORE INTO analytics_metric_triggers(metric_key,title,source_table,operator,threshold,priority,action,owner,cooldown_hours,notes) VALUES
-('product_task_share_7d','Product share of code work below 25%','metric_registry','<',0.25,2,'Raise the weight of product and research code tasks in the plan queue so product work is pulled before fleet self-repair tasks; retire self-generated tasks whose metric did not move.','qnfo-fleet-control',24,'OUTCOME-NORTHSTAR-1');
 
 DROP TRIGGER IF EXISTS outcome_northstar_tick;
 CREATE TRIGGER outcome_northstar_tick AFTER INSERT ON fleet_tick WHEN strftime('%M','now')<'10'
