@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.53.0"; // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
+var VERSION="3.53.1"; // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // 3.49.0 PLAIN-ARTICLE-COVERAGE-1 (2026-11-03, pillar reach, qnfo-workers#6437): retry an empty Kimi article reply once with the independent Google writer; raise the bounded hourly backfill cap to 30.
 // 3.48.0 PLAIN-STANDARD-1 (2026-10-28, pillar reach, agent_issues 1000476; minor: the plain-language summary now has a hard readability gate): plainPrompt asks for at most two figures, one everyday comparison, terms defined inline and sentences under 20 words; plainBuild regenerates once and flags a result above Flesch-Kincaid grade 9 as gated, which is never stored or shown (a gated build keeps the old row and waits 6 hours); plainFill queues stored summaries above grade 9 for regeneration, hardest first. qnfo-gateway/plain-standard.test.mjs. // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
@@ -3157,7 +3157,20 @@ function renderPaperWithCitations(paper) {
   return html;
 }
 __name(renderPaperWithCitations, "renderPaperWithCitations");
-async function handlePaperDetail(request, env, path) {
+// PAPER-TTFB-1: start the single-paper plain fill after the response, at most once per PLAIN_RETRY_MS per paper in this colo.
+function plainFillAfter(env, ctx, paper) {
+  const run = async function() {
+    try {
+      const cache = typeof caches !== "undefined" ? caches.default : null;
+      const key = cache ? new Request("https://qnfo.org/__plain-try/" + encodeURIComponent(paper.slug)) : null;
+      if (cache && await cache.match(key)) return;
+      if (cache) await cache.put(key, new Response("1", { headers: { "Cache-Control": "public, max-age=" + Math.floor(PLAIN_RETRY_MS / 1000) } }));
+      await plainFill(env, [paper]);
+    } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "plainFillAfter", error: String(e && e.message || e) })); }
+  };
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(run());
+}
+async function handlePaperDetail(request, env, path, ctx) {
   // PAPER-TAGS-1: /papers/tags is a catalogue, not a paper slug; the detail handler is the single place every
   // paper URL funnels through, so the reservation lives here and applies to every host that serves papers.
   if (/^\/papers\/tags\/?$/.test(new URL(request.url).pathname)) return handleTags(request, env);
@@ -3188,10 +3201,11 @@ async function handlePaperDetail(request, env, path) {
     // so nearly every paper had no "In plain language" text in its quick read. On every request that
     // reaches a paper whose summary is missing or stale, run the fill for this paper first (newest
     // papers have no summary, so they are filled first), guarded so a fill failure never breaks the page.
-    if (!paper._plain && typeof plainFill === "function") {
-      try { await plainFill(env, [paper]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperDetail", error: String(e && e.message || e) })); }
-      try { paper._plain = await plainGet(env, paper); } catch (e) { paper._plain = null; }
-    }
+    // PAPER-TTFB-1 (3.53.1, 2026-11-04, pillar reach): that fill ran inside the request, once per request, with no retry wait. A paper whose
+    // build kept failing the readability gate (nothing is stored then) paid two model generations on every visit: a paper page took 17 to 44
+    // seconds to first byte against 1.2 s for its neighbours, and the model spend repeated per visitor. The fill now runs after the response
+    // (waitUntil) and at most once per PLAIN_RETRY_MS per paper per colo, the same wait a gated build gets in the hourly fill.
+    if (!paper._plain && typeof plainFill === "function") plainFillAfter(env, ctx, paper);
     const accept = request.headers.get("Accept") || "";
     if (accept.includes("text/html") || !accept.includes("application/json")) {
       if (!paper._pdf && paper.pdf_path && env.RELEASES) {
@@ -7835,7 +7849,7 @@ var gateway_worker_default = {
       if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
       if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.indexOf("/papers/") === 0 && /\.md$/i.test(p)) return handlePaperMarkdown(env, p.slice(8), host);
-      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
+      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p, ctx);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/reading" || p === "/reading/") return renderReadingHTML();
       if (p === "/papers" || p === "/") return handlePapers(request, env);
@@ -7881,7 +7895,7 @@ var gateway_worker_default = {
       if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
       if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.indexOf("/papers/") === 0 && /\.md$/i.test(p)) return handlePaperMarkdown(env, p.slice(8), host);
-      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
+      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p, ctx);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
       if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\nContent-Signal: ai-train=yes, search=yes, ai-input=yes\nSitemap: https://qnfo.org/sitemap.xml\nSitemap: https://papers.qnfo.org/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: qnfo.org lists its own sitemap; AGENT-READINESS-1 3.32.1: NO Content-Signal until the owner names the three values (a durable public declaration is never inferred from llms.txt)
@@ -7916,7 +7930,7 @@ var gateway_worker_default = {
       if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
     if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.indexOf("/papers/") === 0 && /\.md$/i.test(p)) return handlePaperMarkdown(env, p.slice(8), host);
-      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
+      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p, ctx);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
     if (p === "/sitemap.xml") return handleSitemap(env, host);
     if (p === "/robots.txt") return handlePapersRobots();
