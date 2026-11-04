@@ -126,3 +126,6 @@ assert.ok(page.includes("var CMP={focusOptions:function focusOptions("), "Focus 
 // Today does not show the next action twice (Next action card and To do list).
 assert.ok(page.includes("return !(t.one_thing&&x.id===t.one_thing.id)"));
 console.log("ok   Focus loads on the phone; Today lists the next action once");
+assert.ok(page.includes("#toast.hide{display:none}"), "the empty toast bar is hidden");
+assert.ok(page.includes("MOOD-HASH-1") && page.includes("c=moodCard(t);v.insertBefore("), "a check-in tap shows the mood scale even with prompts off");
+console.log("ok   no empty toast bar; a check-in tap always has something to answer");
