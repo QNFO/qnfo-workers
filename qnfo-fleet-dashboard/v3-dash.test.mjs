@@ -94,6 +94,12 @@ ok(calls.some((c) => c.b.op === "start" && c.b.run_id === d.id && c.b.sid === "w
 r = await get("/api/v3/code/" + d.id, { "x-loop-token": env.LOOP_TOKEN });
 const st = await r.json();
 ok(st.status === "done" && st.reply === "listed" && st.steps[0].tool === "shell_exec", "V4 polling returns the steps and the reply", st);
+const origFetch = env.SVC_QNFO_OPS.fetch;
+env.SVC_QNFO_OPS.fetch = async (u, init) => { const b = init && init.body ? JSON.parse(init.body) : {}; return b.op === "result" ? new Response(JSON.stringify({ run: { status: "timeout", steps: [] } }), { status: 200 }) : origFetch(u, init); };
+r = await get("/api/v3/code/" + d.id, { "x-loop-token": env.LOOP_TOKEN });
+const st2 = await r.json();
+ok(st2.status === "failed" && /timeout/.test(st2.error), "V4 an unknown executor status ends the poll as failed", st2);
+env.SVC_QNFO_OPS.fetch = origFetch;
 r = await post("/api/v3/warm", {}, { "x-loop-token": env.LOOP_TOKEN });
 ok(r.status === 200, "V4 warm-up route answers");
 

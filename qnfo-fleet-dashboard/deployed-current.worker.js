@@ -11,7 +11,8 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.83.0";
+var VERSION = "1.83.1";
+// 1.83.1 V3-CODE-STATUS-1 (pillar core; patch): the Code screen poll treats every status other than queued/running as final, so an executor status such as timeout or cancelled ends the run instead of polling for 25 minutes.
 // 1.83.0 V3-READERS-1 (owner request 2026-11-04, pillar reach; minor, new Readers card): the Readers screen compares output with readership (papers published, referred visits, visits per paper, new subscribers from metric_registry) and says plainly when output outruns readers.
 // 1.82.1 V3-DASH-1 follow-up (pillar core; patch): the Code screen header said "loading" forever; it now says signed in or sign in to start.
 // 1.82.0 V3-DASH-1 (owner request 2026-11-04, pillar core; minor, new home page and routes): "/" is three screens (Now, Readers, Code) on a static shell that paints at once; GET /api/v3/now and /api/v3/readers read small, separately timed sections and carry their own age; POST /api/v3/code starts an ops-exec run and GET /api/v3/code/<id> returns its steps. The old overview stays at /classic and every /area page is unchanged. Cause: "/" took 10-19 s measured on 2026-11-04 (fleetStatusData).
@@ -3539,9 +3540,10 @@ async function v3CodeStatus(env, id) {
   const run = r.json && r.json.run;
   if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], error: r.http === 404 ? "the executor no longer has this run" : null });
   const steps = (run.steps || []).map(function(s) { return { tool: String(s.tool || ""), args: String(s.args || "").replace(/\s+/g, " ").slice(0, 160), ms: Number(s.ms) || 0 }; });
-  const done = run.status === "done", failed = run.status === "failed" || run.status === "error";
+  // Any status other than queued/running is final, as in cmdAgentPoll: an unknown one ("timeout", "cancelled") must end the poll, not spin it for 25 minutes.
+  const done = run.status === "done", failed = !done && run.status !== "queued" && run.status !== "running";
   if (done || failed) { try { await cmdAgentPoll(env, id); } catch (e) {} }
-  return v3Json({ ok: true, status: done ? "done" : failed ? "failed" : "running", steps: steps, reply: done ? String(run.reply || "(no text)").slice(0, 16e3) : null, error: failed ? String(run.error || "the run failed").slice(0, 300) : null });
+  return v3Json({ ok: true, status: done ? "done" : failed ? "failed" : "running", steps: steps, reply: done ? String(run.reply || "(no text)").slice(0, 16e3) : null, error: failed ? String(run.error || "the run ended with status " + run.status).slice(0, 300) : null });
 }
 async function v3Routes(request, env, ctx, path, url, owner) {
   const holder = !!(owner && (owner.authed || owner.loop));
