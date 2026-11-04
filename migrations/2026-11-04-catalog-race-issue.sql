@@ -2,7 +2,8 @@
 -- one evening (ci-watchdog issues 7219, 7246; the `scans` check of PRs 7229 and 7239): every PR that adds a doc passes alone, because its `scans` step runs
 -- `node scripts/build-agent-catalog.mjs --check` against the state of main at that moment; two such PRs merged close together leave main stale, the full sweep
 -- (docs/agent-library.test.mjs) goes red, and every open PR then fails `scans` until someone regenerates by hand (PRs 7221, 7229, 7248 were exactly that).
--- Filed with a doer so the cause is fixed once. APPLY-BY: ci
+-- Filed with a doer so the cause is fixed once.
+-- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM agent_issues WHERE title = 'CATALOG-RACE-1: a stale docs inventory on main must not fail unrelated pull requests' AND status = 'open';
 
