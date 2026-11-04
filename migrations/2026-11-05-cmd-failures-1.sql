@@ -39,7 +39,7 @@ VALUES ('cmd-mic-zone-header-1',
 
 UPDATE roadmap_implementation
 SET status = 'built',
-    evidence = 'qnfo-fleet-dashboard 1.92.0 (PR PR_NUMBER): GET /api/cmd/failures by stage, CodeSession stream turns rendered and settled, hand-off failures logged; inventory in docs/CODE-AGENT-CONSOLE.md; closes on the probe of issue-1000804 (command-line defects in 24h = 0)'
+    evidence = 'qnfo-fleet-dashboard 1.92.0 (PR 7356): GET /api/cmd/failures by stage, CodeSession stream turns rendered and settled, hand-off failures logged; inventory in docs/CODE-AGENT-CONSOLE.md; closes on the probe of issue-1000804 (command-line defects in 24h = 0)'
 WHERE id = 1805 AND status = 'planned';
 
 INSERT INTO decision_log
