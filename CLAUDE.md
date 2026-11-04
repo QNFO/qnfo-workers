@@ -502,6 +502,15 @@ because each one was broken at least once; the linked issue holds the evidence.
   tolerance) in the PR that adds it, or is listed as a gap in the doc. A worse outcome is fixed at its producer; no measure is added to the outcome list to dilute it.
 - Do not close or reject findings (errata, retractions, reader reports) to lower a quality count; closure needs the reason or the fix.
 
+## Readers are engaged sessions, not clicks (READER-YIELD-1)
+- Measured 2026-11-04 (`docs/READER-YIELD.md`): `utm_clicks_human` and human-classed RUM page loads carry a floor of automated visits on every paper (p10 3, p50 6, p90 11 clicks;
+  about 2 of 100 counted clicks become a GA4 engaged session), and neither moved when output swung 2 to 89 papers a day. Do not read `outreach_human_clicks_7d`,
+  `outreach_clicks_per_post_7d` or per-paper UTM/RUM counts as readers, and do not shift outreach volume toward the channel with the most clicks. Readers are
+  `engaged_reader_sessions_7d` (GA4 engagedSessions) and external-referrer loads (`paper_readership.ext_30d`); validity is `outreach_engaged_per_100_clicks_7d`.
+- `ops_config research_daily_neurons` is moved daily by the `reader-yield-refresh` fleet_task inside `research_yield_floor`..`research_yield_ceiling`, at most 10 percent a day, only
+  while `research_yield_last_written` equals the key. Writing the key yourself pauses the governor (the reason is in `v_research_volume_target`); `research_yield_governor` = `off`
+  stops it. Record a deliberate change in `decision_log` with its revert path, as for any cap.
+
 ## Writing that outsiders read (ENSEMBLE-POLICY-1)
 - Read `docs/ENSEMBLE-POLICY.md` before adding or changing a worker that writes prose for readers outside the fleet. LLM errors are
   correlated (a 9-judge, 7-family panel is worth about 2.2 votes), so layers must come from disjoint model families, stay few and
