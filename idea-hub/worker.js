@@ -696,15 +696,14 @@ function mixShare(mix) {
 }
 // RESEARCH-INTAKE-RIGID-1 (1.17.0, owner directive 2026-11-04: "triage needs to be much more rigid"): D1 read 2026-11-04 found the deferred research pool full of
 // rows that were never ideas to write about: bare arXiv titles from the daily scan ("Auto-candidate from daily research scan; triage for QNFO research fit"),
-// one-line "Re-entry from <doi>:" fragments (a section header or a question), and JSON-wrapped idea lists. A machine-produced accept now enters research_queue only
-// as a real conjecture (at least 400 characters, not one of those shapes). The rest stay in idea_proposals as triaged_hold with the reason in rationale, so no text
+// one-line "Re-entry from <doi>:" fragments (a section header or a question), and JSON-wrapped idea lists. A machine-produced accept no longer enters research_queue
+// in one of those shapes (the synthesis step also leaves anything under 400 characters unmerged). The rest stay in idea_proposals as triaged_hold with the reason in rationale, so no text
 // is lost and the reading-list path (must_read) still sees the arXiv hits. The owner's own ideas (direct) are never held. ops_config research_intake_rigid = off restores the old intake.
 function intakeNoiseReason(idea) {
   var t = String(idea || "").trim();
   if (/auto-candidate from daily research scan/i.test(t)) return "scan auto-candidate (a title, not a conjecture)";
   if (/^\s*[\[{]/.test(t)) return "JSON-wrapped idea list";
   if (/^re-entry from /i.test(t) && t.length < 400) return "re-entry fragment";
-  if (t.length < 400) return "under 400 characters";
   return null;
 }
 async function enqueueAccepted(env, id, idea, score, now, direct) {
