@@ -120,3 +120,9 @@ console.log("ok   short notes and bare replies cost no AI call");
   assert.ok(page.includes("Send to the Quniverse") && page.includes("For the Quniverse"));
   console.log("ok   hourly self-check files and closes its own issues; one tap sends a dictated ask to the fleet");
 }
+
+// FOCUS-CMP-1: the page carries its own focusOptions (CMP is server-side only; Focus showed "CMP is not defined").
+assert.ok(page.includes("var CMP={focusOptions:function focusOptions("), "Focus has focusOptions on the phone");
+// Today does not show the next action twice (Next action card and To do list).
+assert.ok(page.includes("return !(t.one_thing&&x.id===t.one_thing.id)"));
+console.log("ok   Focus loads on the phone; Today lists the next action once");

@@ -2845,6 +2845,8 @@ nav .sec{display:none}nav.open{flex-wrap:wrap}nav.open .sec{display:block;flex:1
 <script>
 var VERSION='__VERSION__';
 ${OFFLINE_JS}
+// FOCUS-CMP-1: the Focus screen ranks options with the same pure focusOptions the server uses; CMP exists only server-side otherwise.
+var CMP={focusOptions:${focusOptions.toString()}};
 var qstore=null,flushing=false;try{qstore=CMPQ.idb(window.indexedDB)}catch(e){console.warn('companion: no offline queue',e)}
 function $(i){return document.getElementById(i)}
 function warn(e){try{console.warn('companion:',e&&e.message||e)}catch(x){console.log(x)}}
@@ -2907,7 +2909,7 @@ function renderAgenda(v,t){var a=t.agenda;if(!a)return;
  else dc.appendChild(el('div',{text:a.calendar.state==='none'||a.calendar.state==='no-client'||a.calendar.state==='unknown'?'Nothing on your calendar that I can see. Your Google Calendar is not connected yet, so this only shows what you have told me.':'Nothing planned today. That leaves room.'}));
  if(a.calendar.feeds&&a.calendar.feeds.length)dc.appendChild(el('div',{cls:'mute',style:'margin-top:8px',text:'Calendars: '+a.calendar.feeds.map(function(f){return f.label+(f.ok?'':' (not answering)')}).join(', ')}));
  v.appendChild(dc);
- if((t.next_actions||[]).length){var nc=el('div',{cls:'card'},[el('h2',{text:'To do'})]);t.next_actions.slice(0,5).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.title+(x.minutes?' ('+x.minutes+' min)':'')}),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:x.id}}).then(function(){row.remove()}).catch(warn)}}),thumbs('todo',x.title,row,x.id)]);nc.appendChild(row)});nc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'All next actions',onclick:function(){go('do')}})]));v.appendChild(nc)}
+ var todoList=(t.next_actions||[]).filter(function(x){return !(t.one_thing&&x.id===t.one_thing.id)});if(todoList.length){var nc=el('div',{cls:'card'},[el('h2',{text:'To do'})]);todoList.slice(0,5).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.title+(x.minutes?' ('+x.minutes+' min)':'')}),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:x.id}}).then(function(){row.remove()}).catch(warn)}}),thumbs('todo',x.title,row,x.id)]);nc.appendChild(row)});nc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'All next actions',onclick:function(){go('do')}})]));v.appendChild(nc)}
  if(a.soon.length){var sc=el('div',{cls:'card'},[el('h2',{text:'Coming up this week'})]);a.soon.forEach(function(e){sc.appendChild(evRow(e,true))});v.appendChild(sc)}
  if(a.radar.length){var rc=el('div',{cls:'card'},[el('h2',{text:'Worth a look'}),el('div',{cls:'mute',text:'Ideas only. None of these are booked.'})]);a.radar.forEach(function(e){rc.appendChild(evRow(e,true,'radar'));if(e.why)rc.appendChild(el('div',{cls:'mute',text:e.why}));if(e.url&&/^https?:\\/\\//i.test(e.url))rc.appendChild(el('a',{href:e.url,text:'Event details',rel:'noreferrer'}))});v.appendChild(rc)}
  var mc=el('div',{cls:'card'},[el('h2',{text:'In your inbox'})]);
