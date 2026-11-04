@@ -101,6 +101,16 @@ for (const [task, name] of [["management-personas-c", "rm-research"], ["manageme
   ok(err === null, "step prepares: " + name, err);
 }
 
+// rm-file robustness: with the count-clause anchor gone the select-list edit is not applied either
+{
+  const d2 = build({ withMigration: false });
+  d2.prepare("UPDATE fleet_tasks SET definition = replace(definition, 'AND i.title LIKE', 'AND i.title GLOB') WHERE id = 'management-personas-c'").run();
+  d2.exec(sql);
+  const f = stepSql(d2, "management-personas-c", "rm-file");
+  let err = null; try { d2.prepare(f.replace(/p\.title/g, "p.title")); } catch (e) { err = String(e.message); }
+  ok(!/m\.north_star/.test(f) || /LEFT JOIN roadmap_proposal_meta m/.test(f), "rm-file never reads m.north_star without the join", err);
+}
+
 // ---- 3. metric refresh (ns-refresh) -------------------------------------------------------------------------------------------------------------------------------------------
 const day = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 for (let n = 1; n <= 7; n++) db.prepare("INSERT INTO cost_daily (date, source, scope, usd) VALUES (?, 'workers_ai', 'fleet', 10)").run(day(n));
@@ -119,9 +129,16 @@ ok(mv("ns_ext_visits_per_paper_30d") === "0.5", "visits per paper", mv("ns_ext_v
 ok(mv("ns_fleet_cost_usd_month") === "300.0", "cost = fleet scope only, 7 day rate x 30", mv("ns_fleet_cost_usd_month"));
 ok(mv("ns_owner_urgent_cards") === "2", "urgent = identity-bound, open, above low", mv("ns_owner_urgent_cards"));
 ok(mv("ns_dashboard_load_ms_p75_24h") === "3000", "p75 of the runner journey only", mv("ns_dashboard_load_ms_p75_24h"));
-ok(mv("programs_without_strategic_proposal_7d") === "3", "no program has a strategic proposal yet", mv("programs_without_strategic_proposal_7d"));
+ok(mv("programs_without_strategic_proposal_7d") === "2", "OPS and REACH have no strategic proposal yet and PERSONAL is not counted", mv("programs_without_strategic_proposal_7d"));
 const st = Object.fromEntries(all(db, "SELECT key, breached FROM v_north_star_state").map((r) => [r.key, r.breached]));
 ok(st.readers === 1 && st.cost === 0 && st.owner_load === 0 && st.reliability === 0, "breached flags follow direction and target", st);
+db.prepare("INSERT INTO journey_runs (ts, runner, journey, ok, ms) VALUES (?, 'gha', 'dashboard-load', 0, 50)").run(new Date(now - 36e5).toISOString().replace(/\.\d+Z/, "Z"));
+db.exec(stepSql(db, "management-personas", "ns-refresh"));
+ok(mv("ns_dashboard_load_ms_p75_24h") === "3000", "a failed (fast) run does not lower the p75", mv("ns_dashboard_load_ms_p75_24h"));
+db.exec("UPDATE metric_registry SET last_value = 'n/a' WHERE metric = 'engaged_reader_sessions_7d'");
+db.exec(stepSql(db, "management-personas", "ns-refresh"));
+ok(mv("ns_readers_engaged_per_day") === null, "a non-numeric readers source is unmeasured, not zero", mv("ns_readers_engaged_per_day"));
+db.exec("UPDATE metric_registry SET last_value = '70' WHERE metric = 'engaged_reader_sessions_7d'");
 db.exec("DELETE FROM journey_runs");
 db.exec(stepSql(db, "management-personas", "ns-refresh"));
 ok(mv("ns_dashboard_load_ms_p75_24h") === null, "no journey rows leaves the load time unmeasured, not zero");
@@ -146,6 +163,10 @@ ok(one(db, "SELECT COUNT(*) c FROM cf_agent_requests").c === 6, "at most 3 asks 
 db.exec("DELETE FROM cf_agent_requests");
 db.exec("INSERT INTO cf_agent_requests (requester, instance, status, result) VALUES ('program-manager:QNFO.OPS', 'roadmap-QNFO.OPS-' || strftime('%Y%m%d', 'now'), 'done', 'TITLE: x' || char(10) || 'code-anchor: y')");
 db.exec(research);
+ok(one(db, "SELECT COUNT(*) c FROM cf_agent_requests WHERE requester LIKE '%OPS'").c === 2, "a reply the parser would ignore (no code-task) is asked again");
+db.exec("DELETE FROM cf_agent_requests");
+db.exec("INSERT INTO cf_agent_requests (requester, instance, status, result) VALUES ('program-manager:QNFO.OPS', 'roadmap-QNFO.OPS-' || strftime('%Y%m%d', 'now'), 'done', 'TITLE: x' || char(10) || 'code-task: repo=qnfo-workers path=a/worker.js' || char(10) || 'code-anchor: y')");
+db.exec(research);
 ok(one(db, "SELECT COUNT(*) c FROM cf_agent_requests WHERE requester LIKE '%OPS'").c === 1, "a valid reply ends the day for that program");
 db.exec("DELETE FROM cf_agent_requests");
 db.exec("INSERT INTO agent_issues (title, status, source) VALUES ('ROADMAP-1: QNFO.OPS #1: a', 'open', 'session'), ('ROADMAP-1: QNFO.OPS #2: b', 'open', 'session'), ('ROADMAP-1: QNFO.OPS #3: c', 'open', 'session')");
@@ -168,13 +189,13 @@ ins.run("QNFO.RSCH", "i4", "old", body("NORTHSTAR: readers\nPREDICT: something l
 db.exec(stepSql(db, "management-personas-c", "rm-meta"));
 const meta = all(db, "SELECT p.title, m.kind, m.north_star, m.prediction FROM roadmap_proposal_meta m JOIN roadmap_proposals p ON p.id = m.proposal_id ORDER BY p.id");
 ok(meta.length === 1 && meta[0].kind === "strategic" && meta[0].north_star === "readers" && meta[0].prediction.startsWith("ns_readers_engaged_per_day up 2"), "only a proposal with NORTHSTAR and PREDICT is strategic", meta);
-ok(one(db, "SELECT last_value v FROM metric_registry WHERE metric = 'programs_without_strategic_proposal_7d'").v === "3", "metric not refreshed until the step runs");
+ok(one(db, "SELECT last_value v FROM metric_registry WHERE metric = 'programs_without_strategic_proposal_7d'").v === "2", "metric not refreshed until the step runs");
 db.exec("UPDATE roadmap_proposals SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-10 days')");
 db.exec(stepSql(db, "management-personas", "ns-refresh"));
 ok(mv("roadmap_strategic_proposals_7d") === "0" && mv("roadmap_proposals_7d") === "0", "a proposal older than 7 days is not counted", mv("roadmap_strategic_proposals_7d"));
 db.exec("UPDATE roadmap_proposals SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')");
 db.exec(stepSql(db, "management-personas", "ns-refresh"));
-ok(mv("roadmap_strategic_proposals_7d") === "1" && mv("roadmap_proposals_7d") === "4" && mv("programs_without_strategic_proposal_7d") === "2", "weekly proposal metrics", [mv("roadmap_strategic_proposals_7d"), mv("roadmap_proposals_7d"), mv("programs_without_strategic_proposal_7d")]);
+ok(mv("roadmap_strategic_proposals_7d") === "1" && mv("roadmap_proposals_7d") === "4" && mv("programs_without_strategic_proposal_7d") === "1", "weekly proposal metrics", [mv("roadmap_strategic_proposals_7d"), mv("roadmap_proposals_7d"), mv("programs_without_strategic_proposal_7d")]);
 db.exec(stepSql(db, "management-personas-c", "rm-file"));
 const issues = all(db, "SELECT title, description FROM agent_issues ORDER BY id");
 const strategic = issues.find((i) => i.title.includes("strategic one"));
@@ -208,10 +229,14 @@ db.exec(lever);
 ok(one(db, "SELECT COUNT(*) c FROM cf_agent_requests").c === 2, "the daily cap stops all asks");
 db.exec("UPDATE ops_config SET value = '24' WHERE key = 'lever_daily_cap'");
 seedLever();
+for (let i = 0; i < 22; i++) db.exec(`INSERT INTO cf_agent_requests (requester, instance, status, result) VALUES ('program-manager:QNFO.REACH', 'lever-${900 + i}-1', 'done', 'x')`);
+db.exec(lever);
+ok(one(db, "SELECT COUNT(*) c FROM cf_agent_requests").c === 24 && instances().slice(22).join() === "4,3", "22 asks used of 24: at most 2 more, the North Star ones", instances().slice(22));
+seedLever();
 db.exec("UPDATE ops_config SET value = 'off' WHERE key = 'north_star_lever_gate'");
 db.exec("INSERT INTO cf_agent_requests (requester, instance, status, result) VALUES ('program-manager:QNFO.OPS', 'lever-2-202611041200', 'done', 'preface only'), ('program-manager:QNFO.OPS', 'lever-2-202611041300', 'done', 'preface only')");
 db.exec(lever);
-ok(instances().slice(2).sort().join() === "1,2,3,4", "gate off asks as before: hygiene and capped metrics included", instances());
+ok(instances().slice(2).join() === "1,2,3,4", "gate off asks as before, in the old order: hygiene and capped metrics included", instances());
 db.exec("UPDATE ops_config SET value = 'on' WHERE key = 'north_star_lever_gate'");
 
 // ---- 6. pin ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -241,7 +266,7 @@ setM("metrics_in_breach", 90); setM("open_agent_issues", 600); setM("issue_wontf
 ok(verdictRun().verdict === null, "no verdict before the check date");
 db.exec("UPDATE north_star_experiments SET check_at = '2000-01-01T00:00:00Z'");
 db.exec("DELETE FROM cf_agent_requests; DELETE FROM program_focus");
-setM("roadmap_strategic_proposals_7d", 5);
+setM("roadmap_strategic_proposals_7d", 5); setM("programs_without_strategic_proposal_7d", 1);
 db.exec("INSERT INTO program_focus (program_code, issue_id, has_doer) VALUES ('QNFO.OPS', 501, 1), ('QNFO.OPS', 502, 1), ('QNFO.OPS', 503, 1), ('QNFO.OPS', 504, 1)");
 let v = verdictRun();
 ok(v.verdict === "keep" && JSON.parse(v.evidence).focus_ns_share === 0.5, "keep when proposals, lever asks and focus share are met and no guard worsens", v);
@@ -252,10 +277,29 @@ setM("open_agent_issues", 800);
 v = verdictRun();
 ok(v.verdict === "revert" && one(db, "SELECT COUNT(*) c FROM ops_config WHERE key IN ('north_star_focus','north_star_lever_gate') AND value = 'off'").c === 2, "a worse guard reverts both switches", v);
 db.exec("UPDATE ops_config SET value = 'on' WHERE key LIKE 'north_star_%' AND value = 'off'; UPDATE north_star_experiments SET verdict = NULL, verdict_at = NULL, evidence = NULL; DELETE FROM decision_log WHERE assumption LIKE 'north-star-verdict:%'");
-setM("open_agent_issues", 600); setM("roadmap_strategic_proposals_7d", 1);
+setM("open_agent_issues", 600); setM("roadmap_strategic_proposals_7d", 1); setM("programs_without_strategic_proposal_7d", 3);
 v = verdictRun();
 ok(v.verdict === "partial" && one(db, "SELECT id FROM north_star_experiments WHERE id = 'north-star-managers-2'"), "a missed prediction is partial and opens a second window", v);
 ok(one(db, "SELECT value FROM ops_config WHERE key = 'north_star_focus'").value === "on", "partial keeps the switches on");
+// percent units: 9.7 -> 9.8 is not a revert
+db.exec("UPDATE north_star_experiments SET verdict = NULL, verdict_at = NULL, evidence = NULL, baseline = json_set(baseline, '$.issue_wontfix_share_7d', 9.7) WHERE id = 'north-star-managers-1'; DELETE FROM decision_log WHERE assumption LIKE 'north-star-verdict:%'; DELETE FROM north_star_experiments WHERE id = 'north-star-managers-2'");
+setM("issue_wontfix_share_7d", 9.8); setM("roadmap_strategic_proposals_7d", 5); setM("programs_without_strategic_proposal_7d", 1);
+ok(verdictRun().verdict === "keep", "a 0.1 point rise of the wontfix percent is not a revert");
+setM("issue_wontfix_share_7d", 16);
+db.exec("UPDATE north_star_experiments SET verdict = NULL, verdict_at = NULL, evidence = NULL; DELETE FROM decision_log WHERE assumption LIKE 'north-star-verdict:%'");
+ok(verdictRun().verdict === "revert", "a 6 point rise is");
+// one-shot: re-enable the switches, the next hours must not switch them off again
+db.exec("UPDATE ops_config SET value = 'on' WHERE key IN ('north_star_focus', 'north_star_lever_gate')");
+for (const n of ["ns-verdict", "ns-verdict-apply", "ns-verdict-log", "ns-verdict-next"]) db.exec(stepSql(db, "management-personas", n));
+ok(one(db, "SELECT COUNT(*) c FROM ops_config WHERE key IN ('north_star_focus','north_star_lever_gate') AND value = 'on'").c === 2, "the revert is one-shot: a re-enabled switch stays on");
+// the nine metrics born in breach are not counted against metrics_in_breach
+setM("issue_wontfix_share_7d", 9.7);
+db.exec("UPDATE north_star_experiments SET verdict = NULL, verdict_at = NULL, evidence = NULL; DELETE FROM decision_log WHERE assumption LIKE 'north-star-verdict:%'");
+setM("metrics_in_breach", 99);
+ok(verdictRun().verdict === "revert", "99 against a baseline of 90 reverts");
+db.exec("UPDATE north_star_experiments SET verdict = NULL, verdict_at = NULL, evidence = NULL; DELETE FROM decision_log WHERE assumption LIKE 'north-star-verdict:%'; UPDATE ops_config SET value = 'on' WHERE key LIKE 'north_star_%' AND value = 'off'");
+db.exec("INSERT INTO v_metric_trigger_state (id, metric_key, hit) VALUES (801, 'ns_fleet_cost_usd_month', 1), (802, 'ns_owner_urgent_cards', 1), (803, 'ns_readers_engaged_per_day', 1), (804, 'manager_agent_requests_24h', 1), (805, 'programs_without_strategic_proposal_7d', 1), (806, 'ns_ext_visits_per_paper_30d', 1)");
+ok(verdictRun().verdict === "keep", "the same 99 is a keep once the six new metrics in breach are not counted");
 
 // ---- 8. views: identical to the old ones with the switch off; North Star first with it on --------------------------------------------------------------------------------------
 function seedViews(d) {
