@@ -9,9 +9,9 @@ db.exec(`
 CREATE TABLE management_personas (persona_key TEXT PRIMARY KEY, level TEXT NOT NULL, scope TEXT NOT NULL, charter TEXT, kpis TEXT, decision_authority TEXT, sla_min INTEGER, path_a TEXT, path_b TEXT, status TEXT DEFAULT 'active', updated_at TEXT);
 CREATE TABLE persona_briefs (tick TEXT, persona_key TEXT, level TEXT, scope TEXT, verdict TEXT, decision TEXT, summary TEXT, computed_at TEXT, PRIMARY KEY (tick, persona_key));
 CREATE TABLE persona_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT CURRENT_TIMESTAMP, persona_key TEXT, kind TEXT, issue_id INTEGER, from_value TEXT, to_value TEXT, evidence TEXT, reverted_at TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, status TEXT);
-CREATE TABLE issue_project_map (issue_id INTEGER, project_code TEXT);
-CREATE TABLE projects (project_code TEXT, status TEXT, updated_at TEXT);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE issue_project_map (issue_id INTEGER PRIMARY KEY, project_code TEXT, program_code TEXT, kind TEXT, updated_at TEXT);
+CREATE TABLE projects (project_code TEXT, program_code TEXT, name TEXT, status TEXT, updated_at TEXT, completed_at TEXT);
 CREATE TABLE metric_registry (metric TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);
 CREATE TABLE product_registry (product TEXT, host TEXT, worker TEXT, program_code TEXT, state TEXT);
 CREATE TABLE site_ux_checks (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), product TEXT, host TEXT, status INTEGER, ms INTEGER, bytes INTEGER, score INTEGER, findings TEXT);
@@ -20,7 +20,9 @@ CREATE TABLE roadmap_proposals (id INTEGER PRIMARY KEY, request_instance TEXT, s
 INSERT INTO metric_registry VALUES ('site_ux_score_min',NULL,NULL,'UNMEASURED'),('staff_roles_acting_24h',NULL,NULL,'UNMEASURED');
 INSERT INTO product_registry VALUES ('papers','papers.qnfo.org','qnfo-gateway','QNFO.RSCH','active'),('companion','me.q08.org','personal-api','QNFO.PERSONAL','active'),('good','g.q08.org','w1','QNFO.REACH','active');
 INSERT INTO site_ux_checks (product, host, status, ms, bytes, score, findings) VALUES ('papers','papers.qnfo.org',200,900,5000,60,'[{"k":"no-viewport","d":15,"n":1}]'),('companion','me.q08.org',200,900,5000,50,'[]'),('good','g.q08.org',200,300,5000,98,'[]');
-INSERT INTO projects VALUES ('P1','active',datetime('now')),('P2','active',datetime('now','-30 days'));
+INSERT INTO projects VALUES ('W.QNFO.OPS','QNFO.OPS','ops work','active',datetime('now'),NULL),('P2','QNFO.OPS','old finished','active',datetime('now','-40 days'),NULL),('P3','QNFO.OPS','idle','active',datetime('now','-20 days'),NULL);
+INSERT INTO agent_issues (id,title,status,updated_at) VALUES (1,'orphan open','open',datetime('now')),(2,'old closed','closed',datetime('now','-40 days'));
+INSERT INTO issue_project_map VALUES (2,'P2','QNFO.OPS','fix',datetime('now','-40 days'));
 `);
 const run = () => { for (const s of steps) db.exec(s.sql); };
 run(); run();
@@ -31,5 +33,10 @@ assert.equal(db.prepare("SELECT COUNT(*) c FROM persona_actions WHERE persona_ke
 const b = db.prepare("SELECT persona_key, verdict FROM persona_briefs ORDER BY persona_key").all();
 assert.deepEqual(b.map((x) => x.persona_key), ["project-manager:fleet", "ux:auditor"]);
 assert.equal(db.prepare("SELECT last_value v FROM metric_registry WHERE metric='site_ux_score_min'").get().v, "50");
-assert.equal(db.prepare("SELECT last_value v FROM metric_registry WHERE metric='staff_roles_acting_24h'").get().v, "1");
+assert.equal(db.prepare("SELECT last_value v FROM metric_registry WHERE metric='staff_roles_acting_24h'").get().v, "2");
+assert.equal(db.prepare("SELECT project_code c FROM issue_project_map WHERE issue_id=1").get().c, "W.QNFO.OPS", "orphan relinked");
+assert.equal(db.prepare("SELECT status s FROM projects WHERE project_code='P2'").get().s, "completed", "finished project completed");
+assert.equal(db.prepare("SELECT status s FROM projects WHERE project_code='P3'").get().s, "active", "idle project not completed");
+assert.equal(db.prepare("SELECT COUNT(*) c FROM agent_issues WHERE title LIKE 'PROJECT-IDLE-1: P3 %'").get().c, 1, "one deduped idle issue");
+assert.equal(db.prepare("SELECT COUNT(*) c FROM persona_actions WHERE persona_key='project-manager:fleet'").get().c, 3, "relink, complete logged once each");
 console.log("staff-roster: ok");
