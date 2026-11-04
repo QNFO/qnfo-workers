@@ -866,6 +866,12 @@ def d1(acct, token, db_id, sql, params=None):
 # trigger chain can reach the new trigger's table, and drops the trigger at once if any of them is refused.
 TRIGGER_ON = re.compile(r'(?is)^\s*CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?\s+(?:BEFORE|AFTER|INSTEAD\s+OF)?\s*(?:INSERT|UPDATE|DELETE)\b.*?\bON\s+"?(\w+)"?')
 WRITE_TARGET = re.compile(r'(?is)\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM)\s+"?(\w+)"?')
+# TRIGGER-COMPILE-CANARY-1 (2026-11-04): a trigger body or a view it reads that no longer compiles fails EVERY write to the table at prepare time,
+# whatever the trigger's WHEN says. outcome_northstar_tick (migrations/2026-11-04-outcome-northstar.sql) read ask_feedback.created_at, a column that
+# does not exist, so every INSERT INTO fleet_tick failed with "no such column: created_at" from 16:43:47Z to 16:58:44Z: no 10-minute fixer ran for 24
+# minutes. The canary compiled the zero-row INSERT probe on fleet_tick and saw the error, but only "nested too deep" was acted on. A compile-class
+# error now refuses the trigger too, unless it is already there without this trigger (a latent fault elsewhere, reported as an advisory).
+TRIGGER_COMPILE_ERR = re.compile(r"no such (?:column|table|function|collation sequence)|ambiguous column name|syntax error|misuse of aggregate", re.I)
 ADD_COLUMN = re.compile(r"(?is)^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+(?:COLUMN\s+)?")
 
 
@@ -922,6 +928,8 @@ def depth_canary(acct, token, db_id, table, advisory=None):
             except Exception as e:  # noqa: BLE001
                 if "nested too deep" in str(e) or "too many levels of trigger" in str(e):
                     return q[:120] + " -> " + str(e)[:200]
+                if TRIGGER_COMPILE_ERR.search(str(e)):
+                    return "TRIGGER-COMPILE-1: " + q[:120] + " -> " + str(e)[:200]
         if cols:
             ins = 'INSERT INTO "%s" (%s) SELECT %s FROM "%s" WHERE 0' % (
                 name, ", ".join('"%s"' % c for c in cols), ", ".join('"%s"' % c for c in cols), name)
@@ -931,6 +939,8 @@ def depth_canary(acct, token, db_id, table, advisory=None):
                 msg = str(e)
                 if ("nested too deep" in msg or "too many levels of trigger" in msg) and advisory is not None:
                     advisory.append(ins[:120] + " -> " + msg[:120])
+                elif TRIGGER_COMPILE_ERR.search(msg):
+                    return "TRIGGER-COMPILE-1: " + ins[:120] + " -> " + msg[:200]
     return None
 
 
@@ -999,7 +1009,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
     # 225, 227 and 228 (one sha256, 21:56-22:02Z) were this: three short insert outages on cloud_ops_events. Such a file
     # runs again only when its content changes (a new sha256).
     depth = d1(acct, token, ledger_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'error' "
-               "AND instr(COALESCE(error, ''), 'D1-TRIGGER-DEPTH-1') > 0 ORDER BY id DESC LIMIT 1", [path, sha])
+               "AND (instr(COALESCE(error, ''), 'D1-TRIGGER-DEPTH-1') > 0 OR instr(COALESCE(error, ''), 'TRIGGER-COMPILE-1') > 0) ORDER BY id DESC LIMIT 1", [path, sha])
     if depth:
         emit(json.dumps({"file": path, "ok": False, "refused": "D1-TRIGGER-DEPTH-RETRY-1: this content was refused by the depth "
                          "canary in migration_runs " + str(depth[0].get("id")) + "; change the file to run it again", "sha256": sha[:12]}))
@@ -1071,6 +1081,26 @@ def apply_file(path, text, acct, token, commit, emit=print):
                         restored = " The definition this file replaced was restored, so the table is as it was."
                     except Exception as e:  # noqa: BLE001
                         restored = " RESTORE FAILED, the table is without this trigger: " + str(e)[:120]
+                compile_class = refused.startswith("TRIGGER-COMPILE-1")
+                if compile_class:
+                    # TRIGGER-COMPILE-CANARY-1: with this trigger gone (and the prior one back), does the same probe still fail? Then the fault was already
+                    # there: put the trigger back, say so, and carry on; only a fault this trigger brought is a refusal.
+                    still = None
+                    try:
+                        still = depth_canary(acct, token, db_id, tm.group(2), None)
+                    except Exception:  # noqa: BLE001
+                        still = None
+                    if still and still.startswith("TRIGGER-COMPILE-1"):
+                        try:
+                            d1(acct, token, db_id, body(s))
+                            advisories.append("pre-existing compile error on " + tm.group(2) + " (not caused by trigger " + tm.group(1) + "): " + still[:160])
+                            continue
+                        except Exception as e:  # noqa: BLE001
+                            restored += " RE-CREATE FAILED: " + str(e)[:120]
+                    return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
+                                          "): TRIGGER-COMPILE-1, an insert, update or delete on " + tm.group(2) + " no longer compiles with this trigger (a column, table or "
+                                          "function its body or a view it reads does not have), so every write to the table would fail; the trigger was dropped at once: "
+                                          + refused + restored, emit, done_n)
                 return record_failure(path, sha, commit, info, acct, token, ledger_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
                                       "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
     try:

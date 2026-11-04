@@ -358,6 +358,48 @@ ok(rc == 0 and '"advisory"' in out[-1] and db.execute("SELECT 1 FROM sqlite_mast
 ok(db.execute("SELECT status FROM migration_runs WHERE file = 'migrations/ins.sql'").fetchone() == ("ok",),
    "and the run is recorded ok", db.execute("SELECT status FROM migration_runs WHERE file = 'migrations/ins.sql'").fetchone())
 C.call = real_call
+
+# TRIGGER-COMPILE-CANARY-1 (2026-11-04): a trigger whose body reads a column that does not exist fails every insert into its table at prepare time (the
+# fleet_tick outage 16:43-16:58Z: outcome_northstar_tick read ask_feedback.created_at). The canary's zero-row INSERT probe sees it; it now refuses the trigger.
+db.execute("CREATE TABLE tk (src TEXT)")
+db.execute("CREATE TABLE ask_fb (event_id TEXT, ts TEXT)")
+db.commit()
+cc_bad = """-- compile canary
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP TRIGGER IF EXISTS tk_bad; DROP VIEW IF EXISTS v_bad_cc
+CREATE VIEW IF NOT EXISTS v_bad_cc AS SELECT count(*) AS value FROM ask_fb WHERE created_at >= datetime('now', '-7 day');
+CREATE TRIGGER IF NOT EXISTS tk_bad AFTER INSERT ON tk WHEN strftime('%M', 'now') < '10' BEGIN INSERT INTO ticks (s) SELECT value FROM v_bad_cc; END;
+INSERT OR REPLACE INTO ops_config (key, value) VALUES ('after_cc', '1');
+"""
+rc = M.apply_file("migrations/cc_bad.sql", cc_bad, "a", "t", "cc1", emit)
+ok(rc == 1 and "TRIGGER-COMPILE-1" in out[-1] and "no such column" in out[-1] and not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'tk_bad'").fetchone()
+   and not db.execute("SELECT 1 FROM ops_config WHERE key = 'after_cc'").fetchone(),
+   "a trigger whose body no longer compiles is dropped at once and the file stops", out[-1])
+try:
+    db.execute("INSERT INTO tk (src) VALUES ('after the refusal')")
+    insert_ok = True
+except Exception as e:  # noqa: BLE001
+    insert_ok = False
+ok(insert_ok, "and inserts into its table work again")
+n_cc = len(calls)
+rc = M.apply_file("migrations/cc_bad.sql", cc_bad, "a", "t", "cc1b", emit)
+created_cc = [q for q in calls[n_cc:] if q.lstrip().upper().startswith("CREATE TRIGGER")]
+ok(rc == 1 and "D1-TRIGGER-DEPTH-RETRY-1" in out[-1] and not created_cc, "the same content is not re-run after a compile refusal", (out[-1], created_cc))
+
+# A fault that was already there (a broken trigger written by someone else) is not blamed on the new trigger: it is reported and the file applies.
+db.execute("CREATE TABLE tk2 (src TEXT)")
+db.execute("CREATE TRIGGER tk2_old AFTER INSERT ON tk2 BEGIN INSERT INTO ticks (s) SELECT missing_col FROM tk2; END")
+db.commit()
+cc_pre = """-- pre-existing compile fault
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP TRIGGER IF EXISTS tk2_new
+CREATE TRIGGER tk2_new AFTER INSERT ON tk2 BEGIN INSERT INTO ticks (s) VALUES ('new'); END;
+"""
+rc = M.apply_file("migrations/cc_pre.sql", cc_pre, "a", "t", "cc2", emit)
+ok(rc == 0 and "pre-existing compile error" in out[-1] and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'tk2_new'").fetchone() is not None,
+   "a compile fault that predates the trigger is an advisory, and the trigger stays", out[-1])
 addcol = """-- add column twice
 -- APPLY-BY: ci
 -- DB: qnfo-audit
