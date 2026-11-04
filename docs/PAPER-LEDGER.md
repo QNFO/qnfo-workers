@@ -59,3 +59,19 @@ Detector `fm-paper-ledger-bodies-unbounded` fails above 330 MB.
 ## Stored shape (PAPER-CANONICAL-1)
 
 Owner directive 2026-11-04: a revised paper looks like a new release, and the earlier text stays verbatim. `papers.body_md` holds only `# Title`, an optional italic subtitle, `## Abstract` and the paper: no YAML front matter, byline or metadata block, repeated or wrapped title, in-body Version History, Changelog, correction notice or revision banner (`_shared/paper-canonical.js`, inlined into qnfo-research-exec between the `PAPER-CANONICAL-1` markers by `node _shared/inline-paper-canonical.mjs`). Every writer stores that shape (`canonicalBody`), and `paperFormatTick` rewrites the stored corpus 100 papers a tick: it sets `change_actor` and a per-paper `change_reason`, so the ledger keeps the previous body in `paper_change_bodies`; it leaves `updated_at`, `version` and `last_revised_at` alone and puts the new text in the R2 mirror (the git copy follows through `repoSyncTick`). A body that would lose more than 35 percent of its words, a reference list or unexplained headings is refused and listed in `ops_config paper_format_state` (`refusedList`, `lastSweep.refused`). Owner-written `qnfo-2025-*` papers keep a history section that is their own text. Who changed what, and when, is read from `v_paper_revisions`, `paper_revision_log` and the Versions tab.
+
+## Reading the record (PAPER-HISTORY-1, qnfo-gateway 3.56.0)
+
+Owner directive 2026-11-04: every edit of a paper keeps its full version information, earlier versions stay verbatim, the Versions tab shows what changed (not only raw text), and each paper links to the
+files kept about it. The gateway reads the ledger above; nothing new is stored.
+
+| URL (papers.qnfo.org/papers/<slug>/...) | What it shows |
+|---|---|
+| `history` | every version (date, size, SHA-256, verbatim text, "what changed" link) and every ledger change (when, version, fields, why, by, size) |
+| `diff?from=v1.0.0&to=current` | paragraph + word diff of the Markdown; refs are `current`, `v<semver>`, `c<seq>` (the text before ledger change seq) or `s<id>` (a `paper_version_history` snapshot) |
+| `diff?change=<seq>` | what one ledger change did (raw source view; `&view=clean` ignores front matter, byline, repeated title, in-body version history) |
+| `files`, `files.json`, `ro-crate-metadata.json` | the record as a repository keeps it: files with size and SHA-256, earlier versions, the `QNFO/qnfo-research` directory (`papers/<slug>`, read from its `provenance.json`), the research runs pinned to their commit (`research_run_ledger`), other QNFO papers linked, as an RO-Crate 1.1 |
+| `history.json` | the same versions and changes as JSON |
+
+Limits: the ledger starts 2026-10-26, so older versions come from `paper_version_history` (one body per version); a ledger body archived off-database (`paper_change_body_archive`) is read from `RELEASES paper-ledger/<seq>.md`, and
+shown as not held when neither is readable; at most 80 recent changes are listed. Suite: `node qnfo-gateway/paper-history.test.mjs`. Rollback: remove the `paperHistoryRoutes` hook in `serve`; the Versions tab links then 404 and nothing else changes.

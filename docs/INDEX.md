@@ -37,6 +37,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [BP26 security cluster](BP26-SECURITY-CLUSTER.md) - `docs/BP26-SECURITY-CLUSTER.md`
 - [QNFO / QUNIVERSE — BUSINESS PLAN v1.1 (2026-09-26, aligned 2026-10-01)](BUSINESS-PLAN.md) - `docs/BUSINESS-PLAN.md`
 - [CAPABILITY-ADVERTISING-CONTRACT-1 (v1.0, 2026-09-19)](CAPABILITY-ADVERTISING-CONTRACT.md) - `docs/CAPABILITY-ADVERTISING-CONTRACT.md`
+- [Career visibility: being found and taken seriously by employers (REACH-FOCUS-3)](CAREER-VISIBILITY.md) - `docs/CAREER-VISIBILITY.md`
 - [CF-ACCESS-ROLLOUT-1277: putting Cloudflare Access in front of the admin surface](CF-ACCESS-ROLLOUT-1277.md) - `docs/CF-ACCESS-ROLLOUT-1277.md`
 - [CI velocity, 2026-11 (CI-VELOCITY-1)](CI-VELOCITY-2026-11.md) - `docs/CI-VELOCITY-2026-11.md`
 - [Claude Code cloud execution vs the Quniverse (2026-10-01)](CLAUDE-CODE-CLOUD-VS-QUNIVERSE.md) - `docs/CLAUDE-CODE-CLOUD-VS-QUNIVERSE.md`
@@ -62,6 +63,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [cloud_ops_events insert cost (CLOUD-OPS-EVENTS-TRIGGER-COST-1, 2026-11-04)](D1-CLOUD-OPS-EVENTS-2026-11.md) - `docs/D1-CLOUD-OPS-EVENTS-2026-11.md`
 - [D1 restore runbook (D1-RESTORE-RUNBOOK-1)](D1-RESTORE-RUNBOOK.md) - `docs/D1-RESTORE-RUNBOOK.md`
 - [D1 split design: hot write paths off qnfo-audit (D1-SPLIT-1, pillar core)](D1-SPLIT-DESIGN-2026-11.md) - `docs/D1-SPLIT-DESIGN-2026-11.md`
+- [D1 tiering and slimming, 2026-11-04 (COLD-TIER-1 and D1-HOTSPOTS-3, pillar cost)](D1-TIERING-2026-11.md) - `docs/D1-TIERING-2026-11.md`
 - [Data plane dispositions (2026-10-01)](DATA-PLANE-DISPOSITIONS-2026-10-01.md) - `docs/DATA-PLANE-DISPOSITIONS-2026-10-01.md`
 - [DEGENERATE-TEXT-1: a model loop never stays on a paper page](DEGENERATE-TEXT.md) - `docs/DEGENERATE-TEXT.md`
 - [Every deploy proves itself (DEPLOY-PROBES-1, REVIEW-GATE-1; 2026-11-04)](DEPLOY-PROOF-2026-11.md) - `docs/DEPLOY-PROOF-2026-11.md`
@@ -104,6 +106,8 @@ and [the machine-readable catalog](agent-catalog.json).
 - [QNFO Quniverse — Autonomous Use Cases & Best Practices](OPS-EXEC-MULTI-CLIENT-GUIDE.md) - `docs/OPS-EXEC-MULTI-CLIENT-GUIDE.md`
 - [Output quality ledger (OUTPUT-QUALITY-LEDGER-1)](OUTPUT-QUALITY-LEDGER.md) - `docs/OUTPUT-QUALITY-LEDGER.md`
 - [Paper authoring guidelines: the plain-language standard (PLAIN-STANDARD-1)](PAPER-AUTHORING-GUIDELINES.md) - `docs/PAPER-AUTHORING-GUIDELINES.md`
+- [Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)](PAPER-LEDGER.md) - `docs/PAPER-LEDGER.md`
+- [Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)](PAPER-LEDGER.md) - `docs/PAPER-LEDGER.md`
 - [Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)](PAPER-LEDGER.md) - `docs/PAPER-LEDGER.md`
 - [PATCH artifact dispositions (PATCH-ARTIFACTS-RECONCILED-1)](PATCH-ARTIFACT-DISPOSITIONS-2026-10-01.md) - `docs/PATCH-ARTIFACT-DISPOSITIONS-2026-10-01.md`
 - [Pi integration](PI-INTEGRATION.md) - `docs/PI-INTEGRATION.md`
@@ -158,6 +162,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [docs/breach-doctor/LOOP-MAP.md](breach-doctor/LOOP-MAP.md) - `docs/breach-doctor/LOOP-MAP.md`
 - [docs/breach-doctor/PROBE-AUTHOR-HARDENING.md](breach-doctor/PROBE-AUTHOR-HARDENING.md) - `docs/breach-doctor/PROBE-AUTHOR-HARDENING.md`
 - [BREACH-DOCTOR-1: the fleet diagnoses and remediates its own breaches](breach-doctor/README.md) - `docs/breach-doctor/README.md`
+- [Case study 1 (draft for owner approval): a research system that asks the right questions and maintains itself](case-studies/2026-11-research-system-that-maintains-itself.md) - `docs/case-studies/2026-11-research-system-that-maintains-itself.md`
 - [docs/client-instructions/PROACTIVE-PROGRAMS-1.md](client-instructions/PROACTIVE-PROGRAMS-1.md) - `docs/client-instructions/PROACTIVE-PROGRAMS-1.md`
 - [Client instruction suite (2026-10-28)](client-instructions/README.md) - `docs/client-instructions/README.md`
 - [PROMPT — Resume: unblock research publication (QNFO fleet)](closeouts/2026-10-17-RESUME-publication.md) - `docs/closeouts/2026-10-17-RESUME-publication.md`
@@ -343,6 +348,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-agents](../qnfo-agents/README.md) - `qnfo-agents/README.md`
 - [qnfo-agents/releases/0.7.2.md](../qnfo-agents/releases/0.7.2.md) - `qnfo-agents/releases/0.7.2.md`
 - [qnfo-ai-calibration](../qnfo-ai-calibration/README.md) - `qnfo-ai-calibration/README.md`
+- [qnfo-ai-calibration 1.6.12 (2026-11-04)](../qnfo-ai-calibration/releases/1.6.12.md) - `qnfo-ai-calibration/releases/1.6.12.md`
 - [qnfo-ai-search (ask.qwav.tech)](../qnfo-ai-search/README.md) - `qnfo-ai-search/README.md`
 - [Chatbox (Windows) — Full QNFO Setup](../qnfo-ai/CHATBOX-SETUP.md) - `qnfo-ai/CHATBOX-SETUP.md`
 - [QNFO Notes API — Quickstart (2026-08-28)](../qnfo-ai/QUICKSTART.md) - `qnfo-ai/QUICKSTART.md`
@@ -359,6 +365,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-citation-watch](../qnfo-citation-watch/README.md) - `qnfo-citation-watch/README.md`
 - [qnfo-cloud-ops — scheduled cloud operations (2026-08-28)](../qnfo-cloud-ops/README.md) - `qnfo-cloud-ops/README.md`
 - [qnfo-code-orchestrator v0.3.0](../qnfo-code-orchestrator/README.md) - `qnfo-code-orchestrator/README.md`
+- [qnfo-code-orchestrator 0.46.0-codeagent (2026-11-04)](../qnfo-code-orchestrator/releases/0.46.0-codeagent.md) - `qnfo-code-orchestrator/releases/0.46.0-codeagent.md`
 - [CONTAINER-RESTORE-1 — qnfo-containers-pilot \[\[containers\]\] restore (issue #1485)](../qnfo-containers-pilot/CONTAINER-RESTORE-1.md) - `qnfo-containers-pilot/CONTAINER-RESTORE-1.md`
 - [qnfo-containers-pilot v0.2.0](../qnfo-containers-pilot/README.md) - `qnfo-containers-pilot/README.md`
 - [RESTORE-1485 — deploy trigger + endpoint-side blocker record](../qnfo-containers-pilot/RESTORE-1485.md) - `qnfo-containers-pilot/RESTORE-1485.md`
@@ -380,6 +387,9 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-fleet-deploy — fleet self-heal control plane](../qnfo-fleet-deploy/README.md) - `qnfo-fleet-deploy/README.md`
 - [qnfo-gateway — QNFO site router (papers.qnfo.org, ideas, archive, ipatent, graph-api, legal)](../qnfo-gateway/README.md) - `qnfo-gateway/README.md`
 - [qnfo-gateway 3.55.0-codeagent (2026-11-04)](../qnfo-gateway/releases/3.55.0-codeagent.md) - `qnfo-gateway/releases/3.55.0-codeagent.md`
+- [qnfo-gateway 3.56.1-codeagent (2026-11-04)](../qnfo-gateway/releases/3.56.1-codeagent.md) - `qnfo-gateway/releases/3.56.1-codeagent.md`
+- [qnfo-gateway 3.57.0-codeagent (2026-11-04)](../qnfo-gateway/releases/3.57.0-codeagent.md) - `qnfo-gateway/releases/3.57.0-codeagent.md`
+- [qnfo-gateway 3.57.1-codeagent (2026-11-04)](../qnfo-gateway/releases/3.57.1-codeagent.md) - `qnfo-gateway/releases/3.57.1-codeagent.md`
 - [qnfo-github-steward](../qnfo-github-steward/README.md) - `qnfo-github-steward/README.md`
 - [qnfo-idea-factory — QNFO Ideas (ideas.qnfo.org)](../qnfo-idea-factory/README.md) - `qnfo-idea-factory/README.md`
 - [qnfo-intent-orchestrator](../qnfo-intent-orchestrator/README.md) - `qnfo-intent-orchestrator/README.md`
@@ -417,9 +427,11 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-proof - adversarial proof verification ledger](../qnfo-proof/README.md) - `qnfo-proof/README.md`
 - [CLOSEOUT — 2026-10-17 · publication pipeline (qnfo-research-exec)](../qnfo-research-exec/CLOSEOUT-2026-10-17.md) - `qnfo-research-exec/CLOSEOUT-2026-10-17.md`
 - [qnfo-research-exec](../qnfo-research-exec/README.md) - `qnfo-research-exec/README.md`
+- [qnfo-research-exec 0.50.0 (2026-11-04)](../qnfo-research-exec/releases/0.50.0.md) - `qnfo-research-exec/releases/0.50.0.md`
 - [qnfo-research-radar](../qnfo-research-radar/README.md) - `qnfo-research-radar/README.md`
 - [qnfo-scorecard](../qnfo-scorecard/README.md) - `qnfo-scorecard/README.md`
 - [qnfo-social](../qnfo-social/README.md) - `qnfo-social/README.md`
+- [qnfo-social 0.22.0 (2026-11-04)](../qnfo-social/releases/0.22.0.md) - `qnfo-social/releases/0.22.0.md`
 - [qnfo-subscribers](../qnfo-subscribers/README.md) - `qnfo-subscribers/README.md`
 - [qnfo-thread-ingest](../qnfo-thread-ingest/README.md) - `qnfo-thread-ingest/README.md`
 - [qnfo-tools-mcp](../qnfo-tools-mcp/README.md) - `qnfo-tools-mcp/README.md`
@@ -427,6 +439,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-venue-radar](../qnfo-venue-radar/README.md) - `qnfo-venue-radar/README.md`
 - [qnfo-web-unified — the QNFO design system (QDS-1, 2026-10-02)](../qnfo-web-unified/README.md) - `qnfo-web-unified/README.md`
 - [qnfo-youtube-shorts 0.5.0-oauth (2026-11-04)](../qnfo-youtube-shorts/releases/0.5.0-oauth.md) - `qnfo-youtube-shorts/releases/0.5.0-oauth.md`
+- [qnfo-youtube-shorts 0.5.1-oauth (2026-11-04)](../qnfo-youtube-shorts/releases/0.5.1-oauth.md) - `qnfo-youtube-shorts/releases/0.5.1-oauth.md`
 - [research-code](../research-code/README.md) - `research-code/README.md`
 - [agentic-collapse](../research-code/agentic-collapse/README.md) - `research-code/agentic-collapse/README.md`
 - [ignorance-audit](../research-code/ignorance-audit/README.md) - `research-code/ignorance-audit/README.md`
