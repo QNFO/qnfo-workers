@@ -343,6 +343,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-agents](../qnfo-agents/README.md) - `qnfo-agents/README.md`
 - [qnfo-agents/releases/0.7.2.md](../qnfo-agents/releases/0.7.2.md) - `qnfo-agents/releases/0.7.2.md`
 - [qnfo-ai-calibration](../qnfo-ai-calibration/README.md) - `qnfo-ai-calibration/README.md`
+- [qnfo-ai-calibration 1.6.12 (2026-11-04)](../qnfo-ai-calibration/releases/1.6.12.md) - `qnfo-ai-calibration/releases/1.6.12.md`
 - [qnfo-ai-search (ask.qwav.tech)](../qnfo-ai-search/README.md) - `qnfo-ai-search/README.md`
 - [Chatbox (Windows) — Full QNFO Setup](../qnfo-ai/CHATBOX-SETUP.md) - `qnfo-ai/CHATBOX-SETUP.md`
 - [QNFO Notes API — Quickstart (2026-08-28)](../qnfo-ai/QUICKSTART.md) - `qnfo-ai/QUICKSTART.md`
@@ -417,6 +418,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-proof - adversarial proof verification ledger](../qnfo-proof/README.md) - `qnfo-proof/README.md`
 - [CLOSEOUT — 2026-10-17 · publication pipeline (qnfo-research-exec)](../qnfo-research-exec/CLOSEOUT-2026-10-17.md) - `qnfo-research-exec/CLOSEOUT-2026-10-17.md`
 - [qnfo-research-exec](../qnfo-research-exec/README.md) - `qnfo-research-exec/README.md`
+- [qnfo-research-exec 0.50.0 (2026-11-04)](../qnfo-research-exec/releases/0.50.0.md) - `qnfo-research-exec/releases/0.50.0.md`
 - [qnfo-research-radar](../qnfo-research-radar/README.md) - `qnfo-research-radar/README.md`
 - [qnfo-scorecard](../qnfo-scorecard/README.md) - `qnfo-scorecard/README.md`
 - [qnfo-social](../qnfo-social/README.md) - `qnfo-social/README.md`

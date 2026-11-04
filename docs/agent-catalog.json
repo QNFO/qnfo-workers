@@ -1664,6 +1664,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai-calibration/README.md"
     },
     {
+      "path": "qnfo-ai-calibration/releases/1.6.12.md",
+      "title": "qnfo-ai-calibration 1.6.12 (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai-calibration/releases/1.6.12.md"
+    },
+    {
       "path": "qnfo-ai-search/README.md",
       "title": "qnfo-ai-search (ask.qwav.tech)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ai-search/README.md"
@@ -2032,6 +2037,11 @@
       "path": "qnfo-research-exec/README.md",
       "title": "qnfo-research-exec",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-research-exec/README.md"
+    },
+    {
+      "path": "qnfo-research-exec/releases/0.50.0.md",
+      "title": "qnfo-research-exec 0.50.0 (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-research-exec/releases/0.50.0.md"
     },
     {
       "path": "qnfo-research-radar/README.md",
