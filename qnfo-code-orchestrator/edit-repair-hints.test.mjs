@@ -29,8 +29,8 @@ const fns = ["countOf", "indentMatch", "reindent", "fzLine", "fuzzyMatch", "near
 const ctx = {};
 vm.createContext(ctx);
 vm.runInContext(["MAX_EDITS", "NEAREST_MAX_CHARS", "ELISION_RE"].map(grabConst).join("\n") + "\n" + fns.map(grab).join("\n") +
-  "\nthis.applyEdits=applyEdits;this.elidedLine=elidedLine;this.syntaxHint=syntaxHint;this.dropEdits=dropEdits;", ctx);
-const { applyEdits, elidedLine, syntaxHint, dropEdits } = ctx;
+  "\nthis.applyEdits=applyEdits;this.elidedLine=elidedLine;this.syntaxHint=syntaxHint;this.dropEdits=dropEdits;this.nearestLines=nearestLines;", ctx);
+const { applyEdits, elidedLine, syntaxHint, dropEdits, nearestLines } = ctx;
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 600) : "")); } };
@@ -96,6 +96,25 @@ ok(elidedLine(spreadFile, "  return g(...") === null, "an elision-shaped line th
 const r7 = applyEdits(social, whole(social), [{ search: "  if (!dec) return null;", replace: "x" }]);
 ok(!r7.ok && !/abbreviates/.test(r7.error) && /occurs 0 times/.test(r7.error), "a SEARCH with no elision keeps the usual message", r7.error);
 
+// ct_im1000598 copied a concatenated string instead of the array entry; the retry needs literal source, not a trimmed preview.
+const help = [
+  '  "  ipatent                iPatent views, searches and drafts (counts by topic)",',
+  "",
+  '  "  suggest                ' + "what the fleet proposes ".repeat(5) + '",',
+].join("\n");
+const wrongHelp = '  "  ipatent                iPatent views, searches and drafts (counts by topic)\\n" +';
+const missedHelp = applyEdits(help, whole(help), [{ search: wrongHelp, replace: "" }]);
+ok(!missedHelp.ok && missedHelp.error.includes("\n" + help), "failed string SEARCH returns complete source with indentation, blank lines, quotes and punctuation", missedHelp);
+const copiedHelp = missedHelp.error.slice(missedHelp.error.indexOf("complete lines):\n") + "complete lines):\n".length);
+const repairedHelp = applyEdits(help, whole(help), [{ search: copiedHelp, replace: "" }]);
+ok(repairedHelp.ok && repairedHelp.text === "", "copying the suggested lines passes the unchanged exact-match verifier", repairedHelp);
+const longHelp = '  "ipatent ' + "x".repeat(900) + '",';
+ok(nearestLines(longHelp, whole(longHelp), "ipatent missing") === "", "a line over the hint budget is omitted, never truncated");
+const partialHelp = "prefix ipatent partial\n" + help + "\n  ipatent trailing suffix";
+const bounded = { ws: "prefix ".length, we: partialHelp.length - " suffix".length };
+const boundedHint = nearestLines(partialHelp, bounded, "ipatent missing");
+ok(boundedHint.includes("\n" + help) && !boundedHint.includes("ipatent partial") && !boundedHint.includes("ipatent trailing"), "cut window boundaries are never presented as complete source", boundedHint);
+
 // --- SYNTAX-HINT-1 ---
 const loopBase = "function scan(rows) {\n  for (const r of rows) {\n    if (!r) continue;\n    use(r);\n  }\n}\n";
 const brk = [{ search: "    if (!r) continue;", replace: "    if (!r) continue;\n  }\n    if (r.x) continue;" }];
@@ -113,7 +132,7 @@ ok(syntaxHint("SyntaxError: Unexpected token ')'", [{ search: "a(1);", replace: 
 ok(/SyntaxError/.test(src.slice(src.indexOf("SYNTAX-HINT-1: a parse error"), src.indexOf("SYNTAX-HINT-1: a parse error") + 400)), "verify feeds the hint only for a SyntaxError");
 
 // --- CODE-LOOP-2X-1 (agent_issues 2506): the cron tick, its caps, intake and plan WIP are at least doubled ---
-ok(src.indexOf("tick(env, { budgetMs: 40000, maxSteps: 48 })") > 0, "the cron tick runs 48 steps in 40 s, across 8 lanes");
+ok(src.indexOf("tick(env, { budgetMs: 40000, maxSteps: 48, scheduled: true })") > 0, "the cron tick runs 48 steps in 40 s, across 8 lanes");
 ok(/opts\.budgetMs\) \|\| 20000, 50000\)/.test(src) && /opts\.maxSteps\) \|\| 8, gate\.capped \? 1 : 64\)/.test(src), "tick caps 50 s / 64 steps below threshold, POST default stays 8; capped batch is one step");
 ok(/intakeIssues\(env, 8\)/.test(src) && /^const PLAN_WIP = 12;/m.test(src), "intake takes 8 issues per tick and PLAN_WIP is 12 (LANES-8-1)");
 

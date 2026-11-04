@@ -3,6 +3,13 @@
 Several agent sessions work this fleet concurrently with shared credentials. These rules exist
 because each one was broken at least once; the linked issue holds the evidence.
 
+## Never stop, always improve (NEVER-STOP-1, owner directive 2026-11-04)
+- You are never done and always missing something. Before closing any turn ask: what am I not thinking about, what am I missing, what else can I do? Answer with work, not a question to the owner (owner directive 2026-11-04, every repo).
+- Owner directive 2026-11-04: "Let's keep making the system better. Managers that think in terms of strategy and features and functionality and making things better, I'm not going to keep telling you this." It binds every session and loop and sits with the proactive programs (ROADMAP-ORIGINATE-1).
+- Bug fixes are the floor. When the requested work is done, or a stop hook reprompts, the next move is the next improvement, started in the same turn: pick the highest-value change for readers, cost, speed or the command line, build it, deploy it, measure it. A status echo ("nothing changed, waiting") is a failure, never a deliverable.
+- Anticipate the owner's next question and answer it first. Do every chore a tool can do; hand the owner only what no tool can do (a sign-in code, their own accounts), once, in one line, and keep working on the rest.
+- Run independent work in parallel sessions or subagents and keep going on your own piece. Waiting on a session is not a reason to idle. This moves no limit: the interrupt gate, harness permission checks, the secret lock and live work claims keep their precedence.
+
 ## Shared operating library and documentation discovery (FLEET-SHARED-LIBRARY-1)
 - Every agent loads `docs/agent-library/README.md` for cost-aware Cloudflare,
   included GitHub and authorized external-service selection, research/publication
@@ -581,3 +588,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   issue 5515): the workflow token first, the fleet user credential second. A request never blocks a merge: the lane refuses a pull request while a check that is not required has
   failed, so both request steps are `continue-on-error`. A draft is not reviewed. Still open on the issue: hold the merge when the reviewer's review of the head lists a High severity
   item, never wait more than 8 minutes for a review that has not arrived, feed the findings to the code loop.
+
+## Closed loops (CLOSED-LOOPS-1, owner rule 2026-11-04)
+- Every problem found gets its solution implemented, deployed and verified in the same piece of work. Every item, bullet, issue and PR is a closed loop: owner, fix, live evidence, closure.
+  Never report a problem without its implemented fix, and never lose a loop. If a fix is truly blocked, say exactly what blocks it, give it an owner and a closing probe, and keep working on everything else.
+- In the fleet this is live code: `fm-open-loops-unclosed` (migrations/2026-11-04-closed-loops.sql) reads open issues with no doer and closes without `close_evidence`, hourly. It adds no owner card and no gate.
