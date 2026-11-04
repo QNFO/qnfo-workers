@@ -363,6 +363,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-citation-watch](../qnfo-citation-watch/README.md) - `qnfo-citation-watch/README.md`
 - [qnfo-cloud-ops — scheduled cloud operations (2026-08-28)](../qnfo-cloud-ops/README.md) - `qnfo-cloud-ops/README.md`
 - [qnfo-code-orchestrator v0.3.0](../qnfo-code-orchestrator/README.md) - `qnfo-code-orchestrator/README.md`
+- [qnfo-code-orchestrator 0.46.0-codeagent (2026-11-04)](../qnfo-code-orchestrator/releases/0.46.0-codeagent.md) - `qnfo-code-orchestrator/releases/0.46.0-codeagent.md`
 - [CONTAINER-RESTORE-1 — qnfo-containers-pilot \[\[containers\]\] restore (issue #1485)](../qnfo-containers-pilot/CONTAINER-RESTORE-1.md) - `qnfo-containers-pilot/CONTAINER-RESTORE-1.md`
 - [qnfo-containers-pilot v0.2.0](../qnfo-containers-pilot/README.md) - `qnfo-containers-pilot/README.md`
 - [RESTORE-1485 — deploy trigger + endpoint-side blocker record](../qnfo-containers-pilot/RESTORE-1485.md) - `qnfo-containers-pilot/RESTORE-1485.md`
