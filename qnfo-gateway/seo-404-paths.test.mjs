@@ -4,3 +4,6 @@ assert.match(src, /CREATE TABLE IF NOT EXISTS seo_404_paths/);
 assert.match(src, /row\.status === 404 && row\.path/);
 assert.match(src, /path: u\.pathname\.slice\(0, 160\)/);
 console.log("ok");
+assert.match(src, /INDEXNOW-BACKOFF-1/);
+assert.match(src, /if \(!got && st === 429\) break;/);
+console.log("ok backoff");

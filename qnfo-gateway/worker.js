@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.53.0"; /* 3.53.0 SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
+var VERSION="3.53.1"; /* 3.53.1 INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* 3.53.0 SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // 3.49.0 PLAIN-ARTICLE-COVERAGE-1 (2026-11-03, pillar reach, qnfo-workers#6437): retry an empty Kimi article reply once with the independent Google writer; raise the bounded hourly backfill cap to 30.
 // 3.48.0 PLAIN-STANDARD-1 (2026-10-28, pillar reach, agent_issues 1000476; minor: the plain-language summary now has a hard readability gate): plainPrompt asks for at most two figures, one everyday comparison, terms defined inline and sentences under 20 words; plainBuild regenerates once and flags a result above Flesch-Kincaid grade 9 as gated, which is never stored or shown (a gated build keeps the old row and waits 6 hours); plainFill queues stored summaries above grade 9 for regeneration, hardest first. qnfo-gateway/plain-standard.test.mjs. // 3.47.0 BP26-AI-ACT-ART50-1 + BP26-PROVENANCE-MARKING-1 (2026-10-28, pillars research and security, agent_issues 1000341 and 1000335): every paper page carries a visible AI label (AI-generated, or AI-assisted only where paper_provenance names a reviewer), JSON-LD creditText / digitalSourceType / isAIGenerated and, when the secret PROVENANCE_SIGNING_KEY is set, a signed Ed25519 sidecar at /papers/<slug>/provenance.json linked by <link rel="c2pa-manifest">, the public key at /.well-known/provenance-key.json, an hourly sweep that signs 40 unsigned papers and files each in qnfo-audit asset_provenance; the footer and the JSON-LD of qnfo.org pages say papers are written by AI. Absent secret = no sidecar, no link. qnfo-gateway/provenance.test.mjs. // 3.45.0 PAPER-PIDS-1 slice (2026-10-28, pillar research): per-paper CITATION.cff, CSL-JSON and BibTeX at /api/papers/<slug>.cff|.csl.json|.bib, built from the same open record as the JSON API and OAI-PMH (BP26-PAPER-PIDS-1, agent_issues 1000338).
 /* 3.46.0 PAPER-PIDS-HASH-1 (2026-10-28, pillar research, agent_issues 1000338; minor): GET /papers/<slug>/v/<version> (alias /api/papers/<slug>/v/<version>) serves that version's Markdown with X-Content-SHA256 and an immutable cache header for a superseded version; /api/papers/<slug> returns sha256 and version_url. 3.45.0 note: */
@@ -3552,7 +3552,7 @@ async function collectPaperUrls(env, recentDays, recentMinutes) {
   return delta ? paperUrls : [base + "/", base + "/papers"].concat(paperUrls);
 }
 __name(collectPaperUrls, "collectPaperUrls");
-async function indexNowSubmit(urls, host) {
+async function indexNowSubmit(urls, host, env) {
   host = host || "papers.qnfo.org";
   const out = [];
   const CHUNK = 100;
@@ -3565,6 +3565,26 @@ async function indexNowSubmit(urls, host) {
   // proven-accepting endpoint (202) and goes FIRST; the shared relay + Bing 429 the CF egress IP;
   // Seznam + Naver are additional IndexNow participants kept as further redundancy.
   const _EPS = ["https://yandex.com/indexnow", "https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow", "https://search.seznam.cz/indexnow", "https://searchadvisor.naver.com/indexnow"];
+  // INDEXNOW-BACKOFF-1 (3.53.1, 2026-11-04): api.indexnow.org answered 429 to every request for days (two attempts on every
+  // run, a few runs an hour). An endpoint whose last 6 logged runs all failed is tried once in a 15-minute window every
+  // third hour (a deterministic probe, no state) and is otherwise skipped; a 429 is never retried inside a run.
+  const _skip = {};
+  try {
+    if (env && env.LIVING_PAPER) {
+      const nowD = new Date();
+      const probeWindow = nowD.getUTCHours() % 3 === 0 && nowD.getUTCMinutes() < 15;
+      if (!probeWindow) {
+        const rows = await env.LIVING_PAPER.prepare("SELECT detail FROM indexnow_log ORDER BY ts DESC LIMIT 6").all();
+        const logs = (rows.results || []).map(function (r) { try { return JSON.parse(r.detail); } catch (e) { return null; } });
+        if (logs.length >= 6 && logs.every(Boolean)) {
+          for (let k = 0; k < _EPS.length; k++) {
+            const allFailed = logs.every(function (l) { return (l || []).every(function (c) { return (c.eps || []).some(function (x) { return x.ep === _EPS[k] && x.status === "unreachable"; }); }); });
+            if (allFailed) _skip[_EPS[k]] = true;
+          }
+        }
+      }
+    }
+  } catch (e) { /* backoff is best effort; submit to every endpoint */ }
   for (let i = 0; i < urls.length; i += CHUNK) {
     const chunk = urls.slice(i, i + CHUNK);
     const body = JSON.stringify({ host: host, key: INDEXNOW_KEY, keyLocation: "https://" + host + "/" + INDEXNOW_KEY + ".txt", urlList: chunk });
@@ -3576,17 +3596,19 @@ async function indexNowSubmit(urls, host) {
     const eps = [];
     let hit = null, last = null, errText = null;
     for (let e = 0; e < _EPS.length; e++) {
-      let got = null;
+      let got = null, st = 0;
+      if (_skip[_EPS[e]]) { eps.push({ ep: _EPS[e], status: "unreachable", error: "backoff" }); continue; }
       for (let attempt = 0; attempt < 2 && !got; attempt++) {
         try {
           const r = await fetch(_EPS[e], { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body });
-          last = _EPS[e] + ":" + r.status;
+          last = _EPS[e] + ":" + r.status; st = r.status;
           if (r.status < 400) got = { ep: _EPS[e], status: r.status };
           else errText = "http " + r.status;
         } catch (err) {
           last = _EPS[e] + ":throw";
           errText = String((err && err.message) || err).slice(0, 120);
         }
+        if (!got && st === 429) break;
         if (!got && attempt === 0) await new Promise((res) => setTimeout(res, 900));
       }
       eps.push(got ? { ep: _EPS[e], status: got.status } : { ep: _EPS[e], status: "unreachable", error: errText || last });
@@ -3620,7 +3642,7 @@ async function handleIndexNowUrls(env, full) {
 }
 async function handleIndexNow(env, full) {
   const urls = await collectPaperUrls(env, full ? null : 7);
-  const res = await indexNowSubmit(urls);
+  const res = await indexNowSubmit(urls, void 0, env);
   return new Response(JSON.stringify({ ok: true, submitted: urls.length, indexnow: res }), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 __name(handleIndexNow, "handleIndexNow");
@@ -7968,22 +7990,22 @@ async function gatewayDaily(event, env, ctx) {
         // Fresh papers are pinged within the hour; with none in the window nothing is submitted and no log row is written.
         const du = await collectPaperUrls(env, null, GATEWAY_DELTA_MINUTES);
         if (du.length) {
-          const dr = await indexNowSubmit(du, "papers.qnfo.org");
+          const dr = await indexNowSubmit(du, "papers.qnfo.org", env);
           await indexNowLog(env, "papers.qnfo.org", dr);
         }
       } else {
       // DISCOVERY-1 (2026-10-06): every submission is logged (living-paper indexnow_log) so search reach is measurable,
       // and on Mondays the qnfo.org core pages are submitted on their own host (key file now served there too).
-      const pr = await indexNowSubmit(await collectPaperUrls(env, 7), "papers.qnfo.org");
+      const pr = await indexNowSubmit(await collectPaperUrls(env, 7), "papers.qnfo.org", env);
       await indexNowLog(env, "papers.qnfo.org", pr);
       if (new Date().getUTCDay() === 1) {
-        const qr = await indexNowSubmit(QNFO_CORE_URLS, "qnfo.org");
+        const qr = await indexNowSubmit(QNFO_CORE_URLS, "qnfo.org", env);
         await indexNowLog(env, "qnfo.org", qr);
         // SEO-INDEX-1: the hourly window is 7 days, so a paper published eight days ago was NEVER submitted again after
         // its first week - the corpus could not be re-crawled by an engine that had dropped it. Monday submits the whole
         // public corpus; the endpoints' own rate budgets absorb a weekly full pass.
         try {
-          const fr = await indexNowSubmit(await collectPaperUrls(env, null), "papers.qnfo.org");
+          const fr = await indexNowSubmit(await collectPaperUrls(env, null), "papers.qnfo.org", env);
           await indexNowLog(env, "papers.qnfo.org", fr);
           console.log("SEO-INDEX-1 weekly full submit: " + JSON.stringify(fr.map(function (x) { return { chunk: x.chunk, ep: x.ep, status: x.status }; })));
         } catch (e) { console.log("SEO-INDEX-1 weekly full submit failed: " + String(e && e.message || e).slice(0, 200)); }
