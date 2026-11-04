@@ -9,7 +9,7 @@
 -- Kill switch without a deploy: ops_config verification_dedupe = off.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS remediation_verification_dedupe_ins; DELETE FROM control_registry WHERE control = 'verification-dedupe';
+-- Rollback: DROP TRIGGER IF EXISTS remediation_verification_dedupe_ins; DELETE FROM control_alternate_probes WHERE control = 'verification-dedupe'; DELETE FROM control_registry WHERE control = 'verification-dedupe';
 -- CAUSE-MAPPED: registers no metric_registry row.
 
 CREATE TRIGGER IF NOT EXISTS remediation_verification_dedupe_ins BEFORE INSERT ON remediation_verifications
@@ -30,3 +30,8 @@ VALUES ('verification-dedupe', 'trigger remediation_verification_dedupe_ins on r
   'row growth and index write cost from identical repeat verifications (13,626 rows a day, 79% of them repeats of the previous row of their class)',
   0, 'keep', 'applied', 'ops_config verification_dedupe = off stores every row again without a deploy (offline suite migrations/verification-dedupe.test.mjs, case H1)',
   '24 h to 2026-11-04T16Z: 6,575 repeat failures on open issues and 4,180 repeat passes on closed issues; a closed issue keeps every failing row (relapse counting) and an open issue keeps every pass (autoclose)');
+
+INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled)
+VALUES ('verification-dedupe',
+  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM ops_config WHERE key = ''verification_dedupe'') OR EXISTS (SELECT 1 FROM ops_config WHERE key = ''verification_dedupe'' AND value IN (''on'', ''off'')) THEN ''ok'' ELSE ''ops_config verification_dedupe holds a value the trigger does not read (use on or off), so the kill switch cannot be trusted'' END AS observed',
+  '60', 1);

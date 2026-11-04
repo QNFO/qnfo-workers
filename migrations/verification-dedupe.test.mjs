@@ -14,7 +14,7 @@ function fresh() {
     CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT,
       expected TEXT, observed TEXT, pass INTEGER, verified_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), verifier TEXT, action_ref TEXT);`);
-  db.exec(sql.split("\n").filter((l) => !l.startsWith("--")).join("\n"));
+  db.exec(sql.split("INSERT OR IGNORE INTO control_registry")[0].split("\n").filter((l) => !l.startsWith("--")).join("\n")); // the trigger only: the registry rows need tables this suite does not build
   return db;
 }
 const ins = (db, issue, cls, pass, observed, verifier = "v1", at = null) =>
