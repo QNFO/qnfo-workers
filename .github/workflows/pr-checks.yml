@@ -2,8 +2,9 @@ name: pr-checks
 
 # PR-CHECK-CAP-5-1 (2026-11-04, owner directive: "A PR MAY HAVE A MAXIMUM OF 5 ACTIONS/CHECKS/WORKFLOWS, NEVER 23 ... DELETE ALL CHECKS/WORKFLOWS THAT TAKE LONGER THAN 1 MINUTE AND/OR
 # REPEATEDLY FAIL"). Measured on PR 7130 (head 94df39fb): 22 check entries, because every `uses:` job of a reusable workflow is one entry, a path-skipped one included.
-# A pull request now shows exactly five entries: "Workers Builds: qnfo-workers" (Cloudflare, the one required check in the live ruleset) and the jobs `versions`, `scans`,
-# `suites` (this file) and `lane` (pr-lane.yml). No job here calls a reusable workflow: workflow-lint.py (PR-CHECK-CAP-5-1) fails a file that does.
+# A pull request now shows five entries: "Workers Builds: qnfo-workers" (Cloudflare, the one required check in the live ruleset), the jobs `versions` and `scans` (this file) and
+# `lane` twice (pr-lane.yml: one run for the pull_request_target event, one for pr-checks completing; measured 2026-11-04 on PR 7178, six entries with a third job here).
+# The migration, charter and small offline suites are steps of `versions`, behind their path flags. No job here calls a reusable workflow: workflow-lint.py (PR-CHECK-CAP-5-1) fails a file that does.
 # Each job holds the steps of the guards it replaced, copied from the guard's own workflow file (those files keep their push-to-main and dispatch triggers and stay the
 # post-merge net). Measured over the last 40 pr-checks runs: every guard below took 10 to 51 s; only deploy-gate (p50 279 s, max 376 s, advisory on a PR since MERGE-STREAMLINE-1)
 # and fleet-graph (63 s) were over a minute, and ux-journeys (Playwright, base and head app builds) and research-code (Lean build, 60 minute timeout) cannot fit one. Those four
@@ -25,7 +26,7 @@ concurrency:
 
 jobs:
 
-  # VERSION bump, VERSION-pair mirror and comparator guards: every pull request, about 45 s
+  # VERSION bump, VERSION-pair mirror and comparator guards on every pull request; migration, charter, the small offline suites and the workflow-pin suites when their paths change
   versions:
     # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
     runs-on: ubuntu-24.04
@@ -47,10 +48,13 @@ jobs:
 
       - name: Lint the workflow YAML class repo-wide
         if: ${{ !cancelled() }}
+        env:
+          REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
         run: |
           set -euo pipefail
+          # REGRESSION-GATE-1: fails only for a workflow defect this pull request adds (7 unrelated PRs sat 92-107 minutes on 2026-11-04 for one transient defect of main)
           if [ -f scripts/workflow-lint.py ]; then
-            python3 scripts/workflow-lint.py
+            python3 scripts/regression_gate.py --name workflow-lint -- python3 scripts/workflow-lint.py
           else
             echo "no workflow-lint.py in this revision; skipping"
           fi
@@ -180,143 +184,7 @@ jobs:
           fi
           python scripts/mirror-guard.py $SCOPE
 
-  # identity lexicon always; worker prompt, model floor and workflow lint when their paths change
-  scans:
-    # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Match changed files to guards
-        id: f
-        run: |
-          set -eu
-          git diff --name-only HEAD^1 HEAD > files.txt
-          wc -l < files.txt
-          if grep -qE '^[^/]+/(worker\.js|deployed-current\.worker\.js)$|^scripts/adversarial-workers-guard\.py$|^\.github/workflows/adversarial-workers-guard\.yml$' files.txt; then echo 'adversarial_workers_guard=true' >> "$GITHUB_OUTPUT"; else echo 'adversarial_workers_guard=false' >> "$GITHUB_OUTPUT"; fi
-          if grep -qE '^[^/]+/(worker\.js|deployed-current\.worker\.js)$|^scripts/model-floor-guard\.mjs$|^\.github/workflows/model-floor-guard\.yml$' files.txt; then echo 'model_floor_guard=true' >> "$GITHUB_OUTPUT"; else echo 'model_floor_guard=false' >> "$GITHUB_OUTPUT"; fi
-          if grep -qE '^\.github/workflows/|^scripts/[^/]*\.py$|^scripts/secret-mutation-allowlist\.txt$' files.txt; then echo 'workflow_lint=true' >> "$GITHUB_OUTPUT"; else echo 'workflow_lint=false' >> "$GITHUB_OUTPUT"; fi
-          if grep -qE '^scripts/(canary_revert|canary_revert_test|deploy_probes|review_gate)\.py$|^scripts/review-gate/|^[^/]+/probes\.json$|^\.github/workflows/(canonical-deploy|pr-lane|review-gate)\.yml$' files.txt; then echo 'deploy_proof_tests=true' >> "$GITHUB_OUTPUT"; else echo 'deploy_proof_tests=false' >> "$GITHUB_OUTPUT"; fi
-
-      # ---- identity-guard: steps of .github/workflows/identity-guard.yml ----
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: ${{ !cancelled() }}
-        with:
-          python-version: "3.11"
-
-      - name: Identity lexicon guard
-        if: ${{ !cancelled() }}
-        run: python3 scripts/identity-guard.py .
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: ${{ !cancelled() }}
-        with:
-          node-version: "22"
-
-      - name: Bluesky profile sync offline suite (qnfo-social)
-        if: ${{ !cancelled() }}
-        run: node qnfo-social/profile-sync.test.mjs
-
-      # ---- DEPLOY-PROBES-1 and REVIEW-GATE-1 machinery: the scripts that can revert main or hold a pull request are tested before they merge (about 15 s) ----
-      - name: Deploy probe and review gate offline suites (the code that can revert main)
-        if: ${{ !cancelled() && steps.f.outputs.deploy_proof_tests == 'true' }}
-        run: |
-          set -e
-          python3 scripts/deploy_probes.py --selftest > /dev/null
-          python3 scripts/review_gate.py --selftest > /dev/null
-          python3 scripts/canary_revert.py --selftest > /dev/null
-          python3 scripts/canary_revert_test.py
-
-      # ---- DEPLOY-PROBES-1 (scripts/deploy_probes.py): every <worker>/probes.json is valid and a changed worker declares what must keep working (about 2 s) ----
-      - name: Deploy probe declarations (a changed worker declares its probes or says none)
-        if: ${{ !cancelled() }}
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          printf '%s' "$PR_BODY" > pr-body.txt
-          python3 scripts/deploy_probes.py --check-pr --changed files.txt --body pr-body.txt --base-ref HEAD^1
-
-      # ---- adversarial-workers-guard: steps of .github/workflows/adversarial-workers-guard.yml ----
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: ${{ !cancelled() && steps.f.outputs.adversarial_workers_guard == 'true' }}
-        with:
-          python-version: "3.11"
-
-      - name: ADVERSARIAL-REASONING-1 on core worker prompt surfaces (fail-closed)
-        if: ${{ !cancelled() && steps.f.outputs.adversarial_workers_guard == 'true' }}
-        run: python3 scripts/adversarial-workers-guard.py
-
-      # ---- model-floor-guard: steps of .github/workflows/model-floor-guard.yml ----
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: ${{ !cancelled() && steps.f.outputs.model_floor_guard == 'true' }}
-        with:
-          node-version: "20"
-
-      - name: Scan repo sources and live bundles
-        if: ${{ !cancelled() && steps.f.outputs.model_floor_guard == 'true' }}
-        env:
-          QNFO_WORKERS: ${{ github.workspace }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set +e
-          LIVE=""
-          BASE=""
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}" > /dev/null 2>&1
-            git worktree add --detach "$RUNNER_TEMP/floor-base" "${{ github.event.pull_request.base.sha }}" > /dev/null 2>&1
-            BASE="--base $RUNNER_TEMP/floor-base"
-          elif [ "${{ github.event_name }}" != "push" ]; then
-            LIVE="--live"
-          fi
-          node scripts/model-floor-guard.mjs $LIVE $BASE > floor-report.txt 2>&1
-          rc=$?
-          { echo '### model-floor-guard'; echo "exit code: $rc"; echo '```'; head -c 60000 floor-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          head -40 floor-report.txt
-          exit $rc
-
-      # ---- workflow-lint: steps of .github/workflows/workflow-lint.yml ----
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-        with:
-          python-version: "3.11"
-
-      - run: pip install --quiet pyyaml
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-
-      - name: Lint every workflow file (fail closed)
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-        run: python3 scripts/workflow-lint.py
-
-      - name: STATUS-NOOP-SKIP-1 self-test (skip stamp-only status commits, never an outcome change)
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-        run: python3 scripts/status_unchanged_test.py
-
-      - name: SECRET-LOCK-ENFORCE-1 guard (fail CI when a secrets or bindings mutation skips the secret-lock)
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-        run: python3 scripts/secret-mutation-guard.py
-
-      - name: SECRET-LOCK-ENFORCE-1 offline tests
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-        run: bash scripts/stop-commands.sh python3 scripts/secret-mutation-guard_test.py
-
-      - name: CANONICAL-DEPLOY-SKIP-1 offline tests (a refused creation of an absent worker is a skip, any other failure still fails)
-        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
-        run: python3 scripts/canonical_deploy_skip_test.py
-
-  # migration, charter and the small offline suites, each only when its paths change
-  suites:
-    # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
+      # ---- the former `suites` job, folded in so a pull request shows one check fewer (PR-CHECK-CAP-5-1: the lane shows twice, once per event) ----
       - name: Match changed files to guards
         id: f
         run: |
@@ -328,6 +196,7 @@ jobs:
           if grep -qE '^qnfo-code-orchestrator/|^\.github/workflows/code-loop-test\.yml$' files.txt; then echo 'code_loop_test=true' >> "$GITHUB_OUTPUT"; else echo 'code_loop_test=false' >> "$GITHUB_OUTPUT"; fi
           if grep -qE '^migrations/|^scripts/apply_migrations\.py$|^\.github/workflows/migration-guard\.yml$' files.txt; then echo 'migration_guard=true' >> "$GITHUB_OUTPUT"; else echo 'migration_guard=false' >> "$GITHUB_OUTPUT"; fi
           if grep -qE '^qnfo-github-steward/|^migrations/2026-10-18-(tracker|portfolio)-sync\.sql$|^\.github/workflows/steward-test\.yml$' files.txt; then echo 'steward_test=true' >> "$GITHUB_OUTPUT"; else echo 'steward_test=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^\.github/workflows/|^scripts/(merge-when-ready-advisory|request-copilot-review|copilot-pr-lifecycle|github-settings-actions|workflow-lint)[^/]*$|^scripts/github-main-ruleset\.json$|^migrations/(pr-guard-fixes|2026-11-04-push-guard)|^qnfo-fleet-dashboard/worker\.js$' files.txt; then echo 'workflow_pins=true' >> "$GITHUB_OUTPUT"; else echo 'workflow_pins=false' >> "$GITHUB_OUTPUT"; fi
 
       # ---- migration-guard: steps of .github/workflows/migration-guard.yml ----
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -511,7 +380,7 @@ jobs:
 
       - name: Resolve the diff range
         if: ${{ !cancelled() && steps.f.outputs.charter_guard == 'true' }}
-        id: range
+        id: charter_range
         run: |
           set -euo pipefail
           HEAD_SHA='${{ github.sha }}'
@@ -530,7 +399,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/charter-guard.py
-          python3 scripts/charter-guard.py "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"
+          python3 scripts/charter-guard.py "${{ steps.charter_range.outputs.base }}" "${{ steps.charter_range.outputs.head }}"
 
       # ---- code-loop-test: steps of .github/workflows/code-loop-test.yml ----
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -610,3 +479,177 @@ jobs:
       - name: Exception-class closes need a measured recurrence and a passing probe
         if: ${{ !cancelled() && steps.f.outputs.backlog_exec_test == 'true' }}
         run: node --no-warnings qnfo-backlog-exec/exception-close.test.mjs
+
+      # PR-CHECK-CAP-5-1 follow-up: the suites that pin the workflow files, the ruleset config and the guard detectors ran only in the post-merge sweep (deploy-gate left the pull request
+      # path), so a workflow change turned main red (ten suites on 2026-11-04, issue 7070). They take about 20 s together; the slow ones (version-bump-guard 48 s, migration-guard 19 s)
+      # stay in the sweep. The dashboard worker.js is in the filter because worker-observability.test.mjs extracts functions from it by name.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ !cancelled() && steps.f.outputs.workflow_pins == 'true' }}
+        with:
+          node-version: "22"
+
+      - name: Suites that pin the workflow files and the guard detectors
+        if: ${{ !cancelled() && steps.f.outputs.workflow_pins == 'true' }}
+        run: |
+          fail=0
+          for s in scripts/workflow-lint.test.mjs scripts/merge-when-ready-advisory.test.mjs scripts/request-copilot-review.test.mjs scripts/copilot-pr-lifecycle.test.mjs scripts/github-settings-actions.test.mjs migrations/pr-guard-fixes.test.mjs migrations/domain-plane-inventory-issues.test.mjs qnfo-fleet-dashboard/worker-observability.test.mjs; do
+            node --no-warnings "$s" || fail=1
+          done
+          exit "$fail"
+
+
+  # identity lexicon always; worker prompt, model floor and workflow lint when their paths change
+  scans:
+    # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Match changed files to guards
+        id: f
+        run: |
+          set -eu
+          git diff --name-only HEAD^1 HEAD > files.txt
+          wc -l < files.txt
+          if grep -qE '^[^/]+/(worker\.js|deployed-current\.worker\.js)$|^scripts/adversarial-workers-guard\.py$|^\.github/workflows/adversarial-workers-guard\.yml$' files.txt; then echo 'adversarial_workers_guard=true' >> "$GITHUB_OUTPUT"; else echo 'adversarial_workers_guard=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^[^/]+/(worker\.js|deployed-current\.worker\.js)$|^scripts/model-floor-guard\.mjs$|^\.github/workflows/model-floor-guard\.yml$' files.txt; then echo 'model_floor_guard=true' >> "$GITHUB_OUTPUT"; else echo 'model_floor_guard=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^\.github/workflows/|^scripts/[^/]*\.py$|^scripts/secret-mutation-allowlist\.txt$' files.txt; then echo 'workflow_lint=true' >> "$GITHUB_OUTPUT"; else echo 'workflow_lint=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^scripts/(canary_revert|canary_revert_test|deploy_probes|review_gate)\.py$|^scripts/review-gate/|^[^/]+/probes\.json$|^\.github/workflows/(canonical-deploy|pr-lane|review-gate)\.yml$' files.txt; then echo 'deploy_proof_tests=true' >> "$GITHUB_OUTPUT"; else echo 'deploy_proof_tests=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^docs/|^CLAUDE\.md$|^AGENTS\.md$|^llms\.txt$|^\.github/(copilot-instructions\.md|agents/)|^[^/]+/README\.md$|^scripts/build-agent-catalog\.mjs$' files.txt; then echo 'docs_catalog=true' >> "$GITHUB_OUTPUT"; else echo 'docs_catalog=false' >> "$GITHUB_OUTPUT"; fi
+
+      # ---- identity-guard: steps of .github/workflows/identity-guard.yml ----
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: ${{ !cancelled() }}
+        with:
+          python-version: "3.11"
+
+      - name: Identity lexicon guard
+        if: ${{ !cancelled() }}
+        run: python3 scripts/identity-guard.py .
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ !cancelled() }}
+        with:
+          node-version: "22"
+
+      - name: Bluesky profile sync offline suite (qnfo-social)
+        if: ${{ !cancelled() }}
+        run: node qnfo-social/profile-sync.test.mjs
+
+      # ---- adversarial-workers-guard: steps of .github/workflows/adversarial-workers-guard.yml ----
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: ${{ !cancelled() && steps.f.outputs.adversarial_workers_guard == 'true' }}
+        with:
+          python-version: "3.11"
+
+      - name: ADVERSARIAL-REASONING-1 on core worker prompt surfaces (fail-closed)
+        if: ${{ !cancelled() && steps.f.outputs.adversarial_workers_guard == 'true' }}
+        run: python3 scripts/adversarial-workers-guard.py
+
+      # ---- model-floor-guard: steps of .github/workflows/model-floor-guard.yml ----
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ !cancelled() && steps.f.outputs.model_floor_guard == 'true' }}
+        with:
+          node-version: "20"
+
+      - name: Scan repo sources and live bundles
+        if: ${{ !cancelled() && steps.f.outputs.model_floor_guard == 'true' }}
+        env:
+          QNFO_WORKERS: ${{ github.workspace }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +e
+          LIVE=""
+          BASE=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}" > /dev/null 2>&1
+            git worktree add --detach "$RUNNER_TEMP/floor-base" "${{ github.event.pull_request.base.sha }}" > /dev/null 2>&1
+            BASE="--base $RUNNER_TEMP/floor-base"
+          elif [ "${{ github.event_name }}" != "push" ]; then
+            LIVE="--live"
+          fi
+          node scripts/model-floor-guard.mjs $LIVE $BASE > floor-report.txt 2>&1
+          rc=$?
+          { echo '### model-floor-guard'; echo "exit code: $rc"; echo '```'; head -c 60000 floor-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          head -40 floor-report.txt
+          exit $rc
+
+      # ---- workflow-lint: steps of .github/workflows/workflow-lint.yml ----
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+        with:
+          python-version: "3.11"
+
+      - run: pip install --quiet pyyaml
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+
+      - name: "Lint every workflow file (fail closed, regression-only for a pull request)"
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+        env:
+          REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
+        run: python3 scripts/regression_gate.py --name workflow-lint -- python3 scripts/workflow-lint.py
+
+      - name: STATUS-NOOP-SKIP-1 self-test (skip stamp-only status commits, never an outcome change)
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+        run: python3 scripts/status_unchanged_test.py
+
+      - name: SECRET-LOCK-ENFORCE-1 guard (fail CI when a secrets or bindings mutation skips the secret-lock)
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+        run: python3 scripts/secret-mutation-guard.py
+
+      - name: SECRET-LOCK-ENFORCE-1 offline tests
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+        run: bash scripts/stop-commands.sh python3 scripts/secret-mutation-guard_test.py
+
+      - name: CANONICAL-DEPLOY-SKIP-1 offline tests (a refused creation of an absent worker is a skip, any other failure still fails)
+        if: ${{ !cancelled() && steps.f.outputs.workflow_lint == 'true' }}
+        run: python3 scripts/canonical_deploy_skip_test.py
+
+      # FLEET-SHARED-LIBRARY-1 catalog: docs/INDEX.md and docs/agent-catalog.json hash every tracked system document, so a pull request that adds or edits one must regenerate them
+      # (docs/agent-library.test.mjs was red on main 2026-11-04 after four doc additions and a CLAUDE.md edit, because only the post-merge sweep checked it).
+      - name: Agent documentation catalog is current (run node scripts/build-agent-catalog.mjs when this fails)
+        if: ${{ !cancelled() && steps.f.outputs.docs_catalog == 'true' }}
+        run: node scripts/build-agent-catalog.mjs --check
+
+      # ---- DEPLOY-PROBES-1 and REVIEW-GATE-1 (2026-11-04): the scripts that can revert main or hold a pull request are tested before they merge (about 15 s) ----
+      - name: Deploy probe and review gate offline suites (the code that can revert main)
+        if: ${{ !cancelled() && steps.f.outputs.deploy_proof_tests == 'true' }}
+        run: |
+          set -e
+          python3 scripts/deploy_probes.py --selftest > /dev/null
+          python3 scripts/review_gate.py --selftest > /dev/null
+          python3 scripts/canary_revert.py --selftest > /dev/null
+          python3 scripts/canary_revert_test.py
+
+      # ---- DEPLOY-PROBES-1 (scripts/deploy_probes.py): every <worker>/probes.json is valid and a changed worker declares what must keep working (about 2 s) ----
+      - name: Deploy probe declarations (a changed worker declares its probes or says none)
+        if: ${{ !cancelled() }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > pr-body.txt
+          python3 scripts/deploy_probes.py --check-pr --changed files.txt --body pr-body.txt --base-ref HEAD^1
+
+      # ---- PR-FAST-GUARDS-1 (2026-11-04): the cheap checks that turned main red after a merge, run before it ----
+      # deploy-gate left the PR path (PR-CHECK-CAP-5-1) and its push run is cancelled by the next merge, so a narrative-prompt-guard phrase, a worker entry that no longer loads, a metric without a
+      # cause mapping or an anchor that stopped occurring once was seen only after the merge. scripts/pr_fast_guards.py runs the guards the change selects (about 45 s together), each through
+      # scripts/regression_gate.py: a failure fails the pull request only if the base tree does not have it too. A step of this job, not a check of its own (owner cap: 5 entries).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ !cancelled() }}
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: ${{ !cancelled() }}
+        with:
+          python-version: "3.11"
+
+      - name: Run the fast guards the change selects (regression-only)
+        if: ${{ !cancelled() }}
+        env:
+          REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
+        run: python3 scripts/pr_fast_guards.py

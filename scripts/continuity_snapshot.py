@@ -33,6 +33,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -411,12 +412,141 @@ def export_step(d1, plane, call=cf, deadline=None):
     return out
 
 
+# BAK-TABLE-SWEEP-1 (2026-11-04, pillar core): every migration that deletes or drops leaves a bak_<yyyymmdd>_<name> copy behind, and nothing ever removed one:
+# 300 of the 941 tables of qnfo-audit on 2026-11-04 (all created 10-24 to 11-04, 258 of them holding 10 rows or fewer). The weekly export above already writes
+# each table to R2 with a per-table progress record (done, live, exported, sha). A bak_ table whose name date is at least ops_config bak_table_keep_days old
+# (default 7; 'off' stops the sweep), that the latest export holds completely (done, no error, exported rows >= the rows now), that no view or trigger
+# mentions, is dropped and written to dropped_bak_tables_ledger with its R2 key and sha. At most BAK_SWEEP_PER_RUN a run. A table without a date in its name, or one
+# the export does not hold, is never dropped. Never raises.
+BAK_SWEEP_PER_RUN = 40
+BAK_KEEP_DAYS_DEFAULT = 7
+BAK_PROGRESS_KEY = "export/qnfo-audit/_progress.json"
+
+
+def bak_name_date(name):
+    m = re.search(r"(20\d{2})(\d{2})(\d{2})", name)
+    if not m:
+        return None
+    try:
+        return calendar.timegm((int(m.group(1)), int(m.group(2)), int(m.group(3)), 0, 0, 0)) / 86400.0
+    except (ValueError, OverflowError):
+        return None
+
+
+def bak_sweep(d1, call=cf, now=None):
+    out = {"dropped": 0, "skipped": {}}
+    try:
+        cfg = d1("SELECT value FROM ops_config WHERE key = 'bak_table_keep_days'")
+        raw = str((cfg[0]["value"] if cfg else BAK_KEEP_DAYS_DEFAULT)).strip().lower()
+        if raw == "off":
+            out["status"] = "off"
+            return out
+        keep = int(raw) if raw.isdigit() else BAK_KEEP_DAYS_DEFAULT
+        prog = r2_get_json(BAK_PROGRESS_KEY, call)
+        if not prog or not isinstance(prog.get("tables"), dict):
+            out["status"] = "no-export-progress"
+            return out
+        d1("SELECT 1 FROM dropped_bak_tables_ledger LIMIT 1")   # raises when the ledger table is missing: nothing is dropped without a record
+        tabs, errs, stamp = prog["tables"], prog.get("errors") or {}, str(prog.get("stamp") or "")
+        names = [r["name"] for r in d1("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'bak\\_%' ESCAPE '\\' ORDER BY name")]
+        refs = " ".join(str(r.get("sql") or "") for r in d1("SELECT sql FROM sqlite_master WHERE type IN ('view', 'trigger') AND sql LIKE '%bak\\_%' ESCAPE '\\'"))
+        today = (now if now is not None else time.time()) / 86400.0
+
+        def skip(why):
+            out["skipped"][why] = out["skipped"].get(why, 0) + 1
+
+        for n in names:
+            if out["dropped"] >= BAK_SWEEP_PER_RUN:
+                skip("per-run-cap")
+                continue
+            if not re.fullmatch(r"bak_[A-Za-z0-9_]+", n):
+                skip("odd-name")
+                continue
+            day = bak_name_date(n)
+            if day is None:
+                skip("undated")
+                continue
+            if today - day < keep:
+                skip("young")
+                continue
+            st = tabs.get(n)
+            if not isinstance(st, dict) or not st.get("done") or n in errs:
+                skip("not-exported")
+                continue
+            if n in refs:
+                skip("referenced")
+                continue
+            live_now = int((d1('SELECT COUNT(*) AS n FROM "%s"' % n) or [{"n": 0}])[0]["n"] or 0)
+            if live_now > int(st.get("exported") or 0):
+                skip("grew-since-export")
+                continue
+            sha = ",".join(st.get("shas") or [])[:200]
+            d1("INSERT INTO dropped_bak_tables_ledger (name, rows, bytes, r2_key, sha) VALUES (?1, ?2, ?3, ?4, ?5)",
+               [n, live_now, int(st.get("bytes") or 0), "%s/export/qnfo-audit/%s/%s.jsonl.gz" % (BUCKET, stamp, n), sha])
+            d1('DROP TABLE IF EXISTS "%s"' % n)
+            out["dropped"] += 1
+        if out["dropped"]:
+            d1("INSERT INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'bak-table-sweep', 'ok', ?2, 'continuity-snapshot')",
+               ["bak-sweep-%d" % int(time.time()), "BAK-TABLE-SWEEP-1: dropped %d expired bak_ table(s) held by the R2 export %s; skipped %s" % (out["dropped"], stamp, json.dumps(out["skipped"]))[:400]])
+    except Exception as e:  # noqa: BLE001
+        out["error"] = str(e)[:160]
+    print(json.dumps({"bak-table-sweep": out}))
+    return out
+
+
+# BLOB-TRIM-1 (2026-11-04, pillar core): chatbox_conversations.messages_json holds the last 100 messages of the thread on every row, so a thread of n turns stores
+# about n squared / 2 messages: 144 MB (2,930 + 560 rows, 82 + 61 MB) of the table's 165 MB, and nothing reads it (qnfo-ai writes it at the log record and the history
+# browse reads prompt and response only; each row's prompt and response are the turn). A listed blob column is set to NULL on rows the latest R2 export holds
+# (rowid at most the export's last exported rowid, table done, mode rowid), 150 rows a run (about 6 MB of writes), so the export object keeps the original and a row added after the export
+# is never touched. ops_config blob_trim = off stops it. Never raises.
+BLOB_TRIMS = [("chatbox_conversations", "messages_json", 150)]
+
+
+def blob_trim(d1, call=cf):
+    out = {"nulled": 0, "skipped": {}}
+    try:
+        cfg = d1("SELECT value FROM ops_config WHERE key = 'blob_trim'")
+        if cfg and str(cfg[0]["value"]).strip().lower() == "off":
+            out["status"] = "off"
+            return out
+        prog = r2_get_json(BAK_PROGRESS_KEY, call)
+        if not prog or not isinstance(prog.get("tables"), dict):
+            out["status"] = "no-export-progress"
+            return out
+        for table, col, per in BLOB_TRIMS:
+            st = prog["tables"].get(table)
+            if not isinstance(st, dict) or not st.get("done") or table in (prog.get("errors") or {}) or st.get("mode") != "rowid" or not isinstance(st.get("last"), int):
+                out["skipped"][table] = "not-exported"
+                continue
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", col):
+                out["skipped"][table] = "odd-name"
+                continue
+            cnt = 'SELECT COUNT(*) AS n FROM "%s" WHERE "%s" IS NOT NULL AND rowid <= ?1' % (table, col)
+            before = int((d1(cnt, [st["last"]]) or [{"n": 0}])[0]["n"] or 0)
+            if not before:
+                out["skipped"][table] = "nothing-to-trim"
+                continue
+            d1('UPDATE "%s" SET "%s" = NULL WHERE rowid IN (SELECT rowid FROM "%s" WHERE "%s" IS NOT NULL AND rowid <= ?1 LIMIT %d)' % (table, col, table, col, int(per)), [st["last"]])
+            after = int((d1(cnt, [st["last"]]) or [{"n": 0}])[0]["n"] or 0)
+            out["nulled"] += max(0, before - after)
+            out["left_" + table] = after
+        if out["nulled"]:
+            d1("INSERT INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'blob-trim', 'ok', ?2, 'continuity-snapshot')",
+               ["blob-trim-%d" % int(time.time()), "BLOB-TRIM-1: set %d blob value(s) to NULL on rows the R2 export %s holds; %s" % (out["nulled"], prog.get("stamp"), json.dumps(out))[:400]])
+    except Exception as e:  # noqa: BLE001
+        out["error"] = str(e)[:160]
+    print(json.dumps({"blob-trim": out}))
+    return out
+
+
 def main(argv=None, d1=None, plane=None, call=cf, out_dir=None, deadline=None):
     argv = argv if argv is not None else sys.argv[1:]
     d1, plane = retrying(d1 or RC.d1), retrying(plane or RC.d1_plane)
     daily(argv, d1, plane, call, out_dir)
     if "--no-export" not in argv:
         export_step(d1, plane, call, deadline)
+        bak_sweep(d1, call)
+        blob_trim(d1, call)
     return 0
 
 
@@ -465,7 +595,122 @@ INSERT INTO human_actions VALUES (1, 'owner card');
     assert d1("SELECT last_value FROM metric_registry")[0]["last_value"] == "0.9"
     assert main(["--no-export"], d1, lambda t, s: [{"n": 0, "f": 0}], call, d) == 0 and len(d1("SELECT id FROM continuity_snapshots")) == 1  # fresh: skipped
     export_selftest(c, d1)
+    bak_selftest()
+    blob_selftest()
     print("continuity_snapshot selftest ok")
+
+
+def blob_selftest():
+    import sqlite3
+    saved = list(BLOB_TRIMS)
+    BLOB_TRIMS[:] = [("chatbox_conversations", "messages_json", 50)]
+    c = sqlite3.connect(":memory:")
+    c.executescript("""
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, status TEXT, text TEXT, job TEXT);
+CREATE TABLE chatbox_conversations (id TEXT PRIMARY KEY, thread_id TEXT, messages_json TEXT, prompt TEXT, response TEXT);
+""")
+    for i in range(1, 121):
+        c.execute("INSERT INTO chatbox_conversations VALUES (?, 't', ?, 'p', 'r')", ["id%d" % i, "[big %d]" % i])
+
+    def d1(sql, params=None):
+        cur = c.execute(sql, params or [])
+        cols = [x[0] for x in cur.description] if cur.description else []
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    prog = {"stamp": "20261103", "errors": {}, "tables": {"chatbox_conversations": {"done": True, "mode": "rowid", "last": 100, "exported": 100, "live": 100}}}
+    call = lambda method, path, body=None, ctype=None, timeout=60: (200, prog)  # noqa: E731
+    left = lambda: d1("SELECT COUNT(*) AS n FROM chatbox_conversations WHERE messages_json IS NOT NULL")[0]["n"]  # noqa: E731
+    r = blob_trim(d1, call)
+    assert r["nulled"] == 50 and left() == 70, (r, left())          # 50 a run, only rows the export holds
+    assert d1("SELECT prompt, response FROM chatbox_conversations WHERE id = 'id1'") == [{"prompt": "p", "response": "r"}]   # the turn itself is untouched
+    assert blob_trim(d1, call)["nulled"] == 50 and left() == 20      # rows 101..120 were added after the export: never touched
+    r3 = blob_trim(d1, call)
+    assert r3["nulled"] == 0 and r3["skipped"] == {"chatbox_conversations": "nothing-to-trim"} and left() == 20, r3
+    assert d1("SELECT COUNT(*) AS n FROM chatbox_conversations WHERE messages_json IS NULL AND CAST(substr(id, 3) AS INTEGER) > 100")[0]["n"] == 0
+    assert d1("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'blob-trim'")[0]["n"] == 2
+    d1("INSERT INTO ops_config VALUES ('blob_trim', 'off')")
+    prog["tables"]["chatbox_conversations"]["last"] = 120
+    assert blob_trim(d1, call)["status"] == "off" and left() == 20
+    d1("DELETE FROM ops_config")
+    prog["tables"]["chatbox_conversations"]["done"] = False          # an export that has not finished the table: nothing is nulled
+    assert blob_trim(d1, call)["skipped"] == {"chatbox_conversations": "not-exported"} and left() == 20
+    prog["tables"]["chatbox_conversations"]["done"] = True
+    prog["errors"] = {"chatbox_conversations": "429"}
+    assert blob_trim(d1, call)["skipped"] == {"chatbox_conversations": "not-exported"} and left() == 20
+    prog["errors"] = {}
+    prog["tables"]["chatbox_conversations"]["mode"] = "offset"      # a WITHOUT ROWID style export has no rowid cursor: skipped
+    assert blob_trim(d1, call)["skipped"] == {"chatbox_conversations": "not-exported"} and left() == 20
+    prog["tables"]["chatbox_conversations"]["mode"] = "rowid"
+    assert blob_trim(d1, call)["nulled"] == 20 and left() == 0       # the export now holds all 120: the rest goes
+    assert blob_trim(d1, lambda *a, **k: (404, {})).get("status") == "no-export-progress"
+    BLOB_TRIMS[:] = saved
+
+
+def bak_selftest():
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    c.executescript("""
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, status TEXT, text TEXT, job TEXT);
+CREATE TABLE dropped_bak_tables_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, rows INTEGER, bytes INTEGER, r2_key TEXT, sha TEXT, dropped_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
+CREATE TABLE bak_20261001_old (a); INSERT INTO bak_20261001_old VALUES (1), (2), (3);
+CREATE TABLE bak_20261001_empty (a);
+CREATE TABLE bak_20261002_notexported (a); INSERT INTO bak_20261002_notexported VALUES (1);
+CREATE TABLE bak_20261003_err (a); INSERT INTO bak_20261003_err VALUES (1);
+CREATE TABLE bak_20261004_grew (a); INSERT INTO bak_20261004_grew VALUES (1), (2), (3);
+CREATE TABLE bak_20261005_ref (a); INSERT INTO bak_20261005_ref VALUES (1);
+CREATE VIEW v_uses_bak AS SELECT a FROM bak_20261005_ref;
+CREATE TABLE bak_undated_x (a); INSERT INTO bak_undated_x VALUES (1);
+CREATE TABLE bak_20261030_young (a); INSERT INTO bak_20261030_young VALUES (1);
+""")
+
+    def d1(sql, params=None):
+        cur = c.execute(sql, params or [])
+        cols = [x[0] for x in cur.description] if cur.description else []
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    done = {"done": True, "exported": 3, "live": 3, "bytes": 99, "shas": ["abc123"]}
+    prog = {"stamp": "20261103", "errors": {"bak_20261003_err": "429"}, "tables": {
+        "bak_20261001_old": dict(done), "bak_20261001_empty": {"done": True, "exported": 0, "live": 0, "bytes": 0, "shas": []},
+        "bak_20261003_err": dict(done), "bak_20261004_grew": dict(done, exported=1, live=1), "bak_20261005_ref": dict(done),
+        "bak_undated_x": dict(done), "bak_20261030_young": dict(done)}}
+    calls = []
+
+    def call(method, path, body=None, ctype=None, timeout=60):
+        calls.append(path)
+        return 200, prog
+
+    now = calendar.timegm((2026, 11, 4, 12, 0, 0))
+    r = bak_sweep(d1, call, now)
+    left = {x["name"] for x in d1("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'bak\\_%' ESCAPE '\\'")}
+    assert r["dropped"] == 2 and left == {"bak_20261002_notexported", "bak_20261003_err", "bak_20261004_grew", "bak_20261005_ref", "bak_undated_x", "bak_20261030_young"}, (r, left)
+    assert r["skipped"] == {"not-exported": 2, "grew-since-export": 1, "referenced": 1, "undated": 1, "young": 1}, r
+    led = {x["name"]: x for x in d1("SELECT * FROM dropped_bak_tables_ledger")}
+    assert set(led) == {"bak_20261001_old", "bak_20261001_empty"} and led["bak_20261001_old"]["rows"] == 3 and led["bak_20261001_old"]["sha"] == "abc123", led
+    assert led["bak_20261001_old"]["r2_key"] == "qnfo-backups/export/qnfo-audit/20261103/bak_20261001_old.jsonl.gz", led
+    assert d1("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'bak-table-sweep'")[0]["n"] == 1
+    assert bak_sweep(d1, call, now)["dropped"] == 0                      # idempotent
+    d1("INSERT INTO ops_config VALUES ('bak_table_keep_days', 'off')")
+    d1("CREATE TABLE bak_20260901_x (a)")
+    prog["tables"]["bak_20260901_x"] = dict(done, exported=0, live=0)
+    assert bak_sweep(d1, call, now) == {"dropped": 0, "skipped": {}, "status": "off"}
+    d1("UPDATE ops_config SET value = '30' WHERE key = 'bak_table_keep_days'")
+    assert bak_sweep(d1, call, now)["dropped"] == 1                      # 30 days: 09-01 goes, 10-xx stays
+    d1("DELETE FROM ops_config")
+    for i in range(45):
+        d1("CREATE TABLE bak_202610%02d_t%d (a)" % (i % 20 + 1, i))
+        prog["tables"]["bak_202610%02d_t%d" % (i % 20 + 1, i)] = dict(done, exported=0, live=0)
+    assert bak_sweep(d1, call, now)["dropped"] == BAK_SWEEP_PER_RUN       # the per-run cap
+    prog["tables"].clear()
+    assert bak_sweep(d1, call, now)["dropped"] == 0                      # nothing exported: nothing dropped
+    c.execute("DROP TABLE dropped_bak_tables_ledger")
+    d1("CREATE TABLE bak_20260801_y (a)")
+    prog["tables"]["bak_20260801_y"] = dict(done, exported=0, live=0)
+    r2 = bak_sweep(d1, call, now)
+    assert r2["dropped"] == 0 and "error" in r2 and d1("SELECT name FROM sqlite_master WHERE name = 'bak_20260801_y'"), r2   # no ledger: no drop
+    call2 = lambda method, path, body=None, ctype=None, timeout=60: (404, {})  # noqa: E731
+    assert bak_sweep(d1, call2, now).get("status") == "no-export-progress"
 
 
 def export_selftest(c, d1):
