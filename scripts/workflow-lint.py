@@ -479,6 +479,10 @@ def main() -> int:
         jobs = (d.get("jobs") or {}) if isinstance(d, dict) else {}
         pr_jobs += len(jobs) * (2 if os.path.basename(p) == "pr-lane.yml" else 1)
         for jn, jv in jobs.items():
+            ids = [s.get("id") for s in (jv.get("steps") or []) if isinstance(s, dict) and s.get("id")] if isinstance(jv, dict) else []
+            for dup in sorted({i for i in ids if ids.count(i) > 1}):
+                bad.append(f"{p}: PR-CHECK-CAP-5-1 -- job `{jn}` has two steps with id `{dup}`; GitHub refuses the whole file (PR 7185: no pull_request run started), rename one")
+        for jn, jv in jobs.items():
             if isinstance(jv, dict) and "uses" in jv:
                 bad.append(f"{p}: PR-CHECK-CAP-5-1 -- job `{jn}` calls a reusable workflow, which adds one pull request check per called job (and per skipped one); inline its steps")
     if pr_jobs > 4:

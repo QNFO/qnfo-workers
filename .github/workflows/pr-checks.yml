@@ -377,7 +377,7 @@ jobs:
 
       - name: Resolve the diff range
         if: ${{ !cancelled() && steps.f.outputs.charter_guard == 'true' }}
-        id: range
+        id: charter_range
         run: |
           set -euo pipefail
           HEAD_SHA='${{ github.sha }}'
@@ -396,7 +396,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/charter-guard.py
-          python3 scripts/charter-guard.py "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"
+          python3 scripts/charter-guard.py "${{ steps.charter_range.outputs.base }}" "${{ steps.charter_range.outputs.head }}"
 
       # ---- code-loop-test: steps of .github/workflows/code-loop-test.yml ----
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
