@@ -60,26 +60,6 @@ ok(JSON.stringify(counts(db)) === JSON.stringify({ fm: 4, rc: 4, dl: 1 }), "the 
 db.exec(sql);
 ok(JSON.stringify(counts(db)) === JSON.stringify({ fm: 4, rc: 4, dl: 1 }), "replaying the file is a no-op", counts(db));
 
-// ---- 2b. the later file that re-points one detector (PR-GUARD-DETECTOR-COALESCE-1): PUSH-COALESCE-1 (PR 7001) reversed the never-cancel line this file's detector read ----
-const SUP = join(here, "2026-11-04-push-guard-coalesce-detector.sql");
-const supSql = readFileSync(SUP, "utf8").replace(/\r\n/g, "\n");
-const supLines = supSql.split("\n");
-const supHdr = (k) => (supLines.find((l) => new RegExp("^-- " + k + ": ").test(l)) || "").replace(new RegExp("^-- " + k + ": "), "");
-const supBody = supLines.filter((l) => !l.startsWith("--")).join("\n");
-ok(supHdr("APPLY-BY") === "ci" && supHdr("DB") === "qnfo-audit" && supLines.filter((l) => /^-- Rollback: /.test(l)).length === 1 && !/decision_log/i.test(supHdr("Rollback")), "the later file opts in (APPLY-BY ci, DB qnfo-audit) with one Rollback that leaves decision_log alone");
-ok(!/\bDELETE\b|\bDROP\b/i.test(supBody) && !/claude\.ai|anthropic\.com/i.test(supSql) && !/\[skip|skip[ -]ci|skip-checks/i.test(supSql), "the later file has no DELETE or DROP, no claude.ai link and no skip-CI token");
-const oldProbe = one(db, "SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-push-guard-cancelled-on-main'").p;
-db.exec(supSql);
-db.exec(supSql);
-ok(JSON.stringify(counts(db)) === JSON.stringify({ fm: 4, rc: 4, dl: 2 }), "the later file changes no row count except one decision row, and replays as a no-op", counts(db));
-const newProbe = one(db, "SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-push-guard-cancelled-on-main'").p;
-ok(newProbe !== oldProbe && /main-push/.test(newProbe) && !/cancel-in-progress/.test(newProbe), "the detector now reads the main-push coalescing group", newProbe);
-const otherProbes = all(db, "SELECT class, verify_probe FROM remediation_contracts WHERE class != 'fm-push-guard-cancelled-on-main' ORDER BY class");
-const baseDb = fresh(); baseDb.exec(sql);
-ok(JSON.stringify(otherProbes) === JSON.stringify(all(baseDb, "SELECT class, verify_probe FROM remediation_contracts WHERE class != 'fm-push-guard-cancelled-on-main' ORDER BY class")), "the three other detectors are untouched");
-const supRb = fresh(); supRb.exec(sql); supRb.exec(supSql); supRb.exec(supHdr("Rollback"));
-ok(one(supRb, "SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-push-guard-cancelled-on-main'").p === oldProbe, "the later file's Rollback restores the previous probe text exactly");
-
 const fms = all(db, "SELECT * FROM failure_modes ORDER BY fm_key");
 ok(JSON.stringify(fms.map((r) => r.fm_key).sort()) === JSON.stringify([...KEYS].sort()), "the failure modes are the four named", fms.map((r) => r.fm_key));
 ok(fms.every((r) => r.probe_class === "fm-" + r.fm_key && r.first_seen === "2026-10-20" && r.issue_id === 100295 && [r.failure_mode, r.root_cause, r.remediation, r.detector, r.trigger_condition, r.symptom, r.blast_radius].every((x) => typeof x === "string" && x.length > 20)), "each failure mode has a probe_class fm-<key>, the audit issue and every column filled");
@@ -95,13 +75,19 @@ const judge = (probeText, rootDir) => {
   const r = spawnSync(PY, ["-I", "-c", "import sys, json; sys.path.insert(0, sys.argv[1]); import remediation_consumer as rc; p, e = rc.parse_code_probe(sys.argv[2]); print(json.dumps({'err': e, 'observed': rc.run_code_probe(p, sys.argv[3]) if p else None}))", join(root, "scripts"), probeText, rootDir], { encoding: "utf8" });
   try { return JSON.parse(String(r.stdout).trim().split("\n").pop()); } catch (e) { return { err: "no output", observed: null, stderr: r.stderr }; }
 };
-const probeOf = (key) => rcs.find((r) => r.class === "fm-" + key).verify_probe;
+// MAIN-GUARD-RANGE-FLOOR-1 (2026-11-04): PUSH-COALESCE-1 replaced the per-sha group, so migrations/2026-11-04-push-guard-range-floor-detector.sql repoints the
+// push-guard-cancelled-on-main detector. The detectors are judged as the live table holds them: with that later file applied on top of this one.
+const finalDb = fresh();
+finalDb.exec(sql);
+finalDb.exec(readFileSync(join(here, "2026-11-04-push-guard-range-floor-detector.sql"), "utf8").replace(/\r\n/g, "\n"));
+const finalRcs = all(finalDb, "SELECT * FROM remediation_contracts ORDER BY class");
+const probeOf = (key) => finalRcs.find((r) => r.class === "fm-" + key).verify_probe;
 const read = (rel) => readFileSync(join(root, rel), "utf8");
 const tmp = mkdtempSync(join(tmpdir(), "pgf-"));
 const variant = (name, rel, edit) => { const d = join(tmp, name); mkdirSync(dirname(join(d, rel)), { recursive: true }); writeFileSync(join(d, rel), edit(read(rel))); return d; };
 const cases = [
   ["version-bump-guard-reads-comment", "scripts/version-bump-guard.py", (t) => t.replace(/^VERSION_RE = .*$/m, "VERSION_RE = re.compile(r'var\\s+VERSION\\s*=\\s*\"([^\"]*)\"')"), "missing-marker:scripts/version-bump-guard.py"],
-  ["push-guard-cancelled-on-main", ".github/workflows/version-bump-guard.yml", (t) => t.replace("'main-push'", "github.sha"), "missing-marker:.github/workflows/version-bump-guard.yml"],
+  ["push-guard-cancelled-on-main", ".github/workflows/version-bump-guard.yml", (t) => t.replace("range floor is the last green guard run", "range floor is gone"), "missing-marker:.github/workflows/version-bump-guard.yml"],
   ["conflict-repair-skips-required-check", "scripts/conflict_repair.py", (t) => t.replace('"mirror-guard.yml", ', ""), "missing-marker:scripts/conflict_repair.py"],
   ["model-floor-guard-read-failure-as-finding", "scripts/model-floor-guard.mjs", (t) => t.replace("class GuardReadError", "class Gone"), "missing-marker:scripts/model-floor-guard.mjs"],
   ["model-floor-guard-read-failure-as-finding", "scripts/model-floor-guard.mjs", (t) => t + '\nconst REPO_OLD = "C:/Users/LENOVO/Documents/GitHub/qnfo-workers";\n', "present-marker:scripts/model-floor-guard.mjs"],

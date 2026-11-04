@@ -4,29 +4,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-// D1-OVERLOAD-1d (PR 6935) split the helper in two: workerObservability keeps a 5 minute per-isolate memo (`_wobsMemo`) and workerObservabilityRead holds the scans. The
-// query test below runs the read half; the memo test runs the wrapper over a counting stand-in, so neither half is extracted without the names it needs.
-const start = source.indexOf("async function workerObservabilityRead(env, nowMs) {");
+const start = source.indexOf("var _wobsMemo = null;\nasync function workerObservability(env, nowMs) {");
 const end = source.indexOf('\n__name(workerObservabilityRead, "workerObservabilityRead");', start);
-assert.ok(start >= 0 && end > start, "workerObservabilityRead helper is present");
-const memoStart = source.indexOf("var _wobsMemo = null;");
-const memoEnd = source.indexOf('\n__name(workerObservability, "workerObservability");', memoStart);
-assert.ok(memoStart >= 0 && memoEnd > memoStart && memoEnd < start, "the memo wrapper precedes the read helper");
+assert.ok(start >= 0 && end > start, "workerObservability, its 5-minute memo and the read are present");
 
-const activeIssues = new Function("d1all", "ERR_ACTIVE_MS", `${source.slice(start, end)}\nreturn workerObservabilityRead;`)(
+const activeIssues = new Function("d1all", "ERR_ACTIVE_MS", "__name", `${source.slice(start, end)}\nreturn workerObservability;`)(
   async (env, sql, params) => env.db.prepare(sql).all(...params),
-  3 * 36e5
+  3 * 36e5,
+  (fn) => fn
 );
-
-test("the observability answer is memoized for five minutes per isolate", async () => {
-  let reads = 0;
-  const wrapped = new Function("workerObservabilityRead", `${source.slice(memoStart, memoEnd)}\nreturn workerObservability;`)(async () => ({ count: ++reads }));
-  const t0 = Date.parse("2026-11-04T10:00:00Z");
-  assert.equal((await wrapped({}, t0)).count, 1);
-  assert.equal((await wrapped({}, t0 + 299_000)).count, 1, "inside five minutes the scans do not run again");
-  assert.equal((await wrapped({}, t0 + 301_000)).count, 2, "after five minutes they run once more");
-  assert.equal(reads, 2);
-});
 
 test("reports only fresh unresolved issues not followed by a successful deployment", async () => {
   const db = new DatabaseSync(":memory:");
@@ -58,6 +44,11 @@ test("reports only fresh unresolved issues not followed by a successful deployme
     const result = await activeIssues({ AUDIT: { db } }, now);
     assert.equal(result.count, 3);
     assert.deepEqual(new Set(result.workers), new Set(["qnfo-ai", "qnfo-ai-search"]));
+
+    // D1-OVERLOAD-1d: a second call inside 5 minutes answers from the isolate memo, not from D1
+    db.exec("DELETE FROM fleet_issue_loop");
+    assert.equal((await activeIssues({ AUDIT: { db } }, now + 60_000)).count, 3);
+    assert.equal((await activeIssues({ AUDIT: { db } }, now + 6 * 60_000)).count, 0);
   } finally {
     db.close();
   }
