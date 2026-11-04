@@ -55,3 +55,9 @@ node scripts/ux-journeys.test.mjs                                               
 Four of seven everyday companion journeys worked. Broken: "Give me one thing" opened a Focus screen that said "Could not load Focus.
 CMP is not defined" (the page called a server-only function); a check-in notification opened Today with no mood buttons; and an
 empty black bar floated over every screen. All three were fixed in PR 7009, where all seven journeys pass.
+
+First live run (same day, from the GitHub runner, PR 7028): 11 of 13 public hosts open on a phone and follow their first link. Broken:
+ai.qnfo.org's chat page threw "Invalid regular expression" on load, so nothing on it worked (fixed in the same PR, qnfo-ai 5.46.1;
+`scripts/inline-page-scripts.test.mjs` now parses every inline script of every page served from a template literal), and
+papers.qnfo.org throws "Unexpected token '<'" (a script URL answered with an HTML page; filed as `UX-JOURNEY-1: public / papers-qnfo-org`
+by the first run on main, with the URL). Most qnfo.org pages have header links 20px tall (filed as `UX-SCREENS-1: public (live)`).

@@ -123,13 +123,18 @@ for (const f of appFiles) {
     const env = await start();
     const ctx = await browser.newContext({ ...PHONE, bypassCSP: true, permissions: [] });
     if (MODE === "local") await ctx.grantPermissions(["microphone"], { origin: env.base }).catch(() => {});
-    // Live journeys stay on the fleet's own hosts; the local harness reaches nothing outside itself.
-    await ctx.route("**/*", (route) => { const h = new URL(route.request().url()).hostname; const own = MODE === "local" ? h === "127.0.0.1" : /(^|\.)(q08\.org|qnfo\.org|qwav\.org|qwav\.tech)$/.test(h) || h === "static.cloudflareinsights.com"; return own ? route.continue() : route.abort(); });
+    // The local harness reaches nothing outside itself. Live pages load as a visitor's phone would load them (fonts, analytics),
+    // so a blocked request never shows up as a false console error.
+    if (MODE === "local") await ctx.route("**/*", (route) => (new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort()));
     const page = await ctx.newPage();
     const run = { app: app.name, id: j.id, title: j.title, taps: 0, typing: 0, steps: [], screens: [], consoleErrors: [], pageErrors: [], badResponses: [], ok: false, error: null };
     page.on("console", (m) => { if (m.type() === "error" && !/status of 401/.test(m.text())) run.consoleErrors.push(m.text().slice(0, 200)); });
     page.on("pageerror", (e) => run.pageErrors.push(String(e.message || e).slice(0, 200)));
-    page.on("response", (r) => { if (r.status() >= 500 || r.status() === 404) run.badResponses.push(r.status() + " " + r.url().slice(0, 160)); });
+    page.on("response", (r) => {
+      if (r.status() >= 500 || r.status() === 404) run.badResponses.push(r.status() + " " + r.url().slice(0, 160));
+      // A script URL answered with an HTML page (a catch-all route) makes the browser throw "Unexpected token '<'".
+      else if (r.request().resourceType() === "script" && /text\/html/i.test(r.headers()["content-type"] || "")) run.badResponses.push("script answered with an HTML page: " + r.url().slice(0, 160));
+    });
     const t0 = Date.now();
     try { await j.run(driver(page, env.base, run, args.shots), env); run.ok = true; }
     catch (e) { run.error = String(e.message || e).split("\n")[0].slice(0, 300); if (args.shots) await page.screenshot({ path: path.join(args.shots, (app.name + "-" + j.id + "-FAILED").replace(/[^\w.-]+/g, "_") + ".png") }).catch(() => {}); }
