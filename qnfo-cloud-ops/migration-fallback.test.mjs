@@ -51,7 +51,7 @@ else {
   const doFetch = async (url, init) => {
     const u = new URL(url), p = decodeURIComponent(u.pathname);
     const json = (o) => ({ ok: true, status: 200, json: async () => o, text: async () => "" });
-    if (p.endsWith("/contents/migrations")) return json(Object.keys(files).map((name) => ({ name, type: "file" })));
+    if (p.endsWith("/git/trees/main:migrations")) return json({ truncated: false, tree: Object.keys(files).map((path) => ({ path, type: "blob" })) });
     const m = /\/contents\/migrations\/(.+)$/.exec(p);
     if (m) return { ok: true, status: 200, text: async () => files[m[1]] };
     if (p.endsWith("/commits")) { const f = u.searchParams.get("path").split("/").pop(); return json([{ sha: "abc" + f.length, commit: { committer: { date: age[f] } } }]); }
