@@ -11,19 +11,18 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
 const read = (p) => readFileSync(join(here, "..", p), "utf8").replace(/\r\n/g, "\n");
 
-const mwr = read(".github/workflows/merge-when-ready.yml");
 const lane = read(".github/workflows/pr-lane.yml");
+const mwr = lane.slice(lane.indexOf("name: Merge the pull request when every fast check is green")); // the merge step
 
 // wiring
 ok(/READ_TOKEN: \$\{\{ github\.token \}\}/.test(mwr), "READ_TOKEN is the workflow token");
 ok(/GH_TOKEN: \$\{\{ secrets\.QNFO_GH_PAT \}\}/.test(mwr), "GH_TOKEN stays the PAT (the merge needs it to start the push workflows)");
 const reads = mwr.match(/\brd "repos\//g) || [];
 ok(reads.length === 3, "the pull request, the comments and the check runs are read through rd", reads.length);
-ok(!/(^|[^\w])gh api "repos\//m.test(mwr.split("steps:")[1] || ""), "no bare PAT read remains in the step");
+ok(!/(^|[^\w])gh api "repos\//m.test(mwr.split("run: |")[1] || ""), "no bare PAT read remains in the merge step");
 ok(/gh pr merge "\$PR_NUMBER" --repo "\$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "\$sha"/.test(mwr) && !/rd "?pr merge/.test(mwr), "the merge itself runs on the PAT");
-ok(/issues: read\n  checks: read/.test(mwr.split("jobs:")[0]), "the called workflow asks for issues and checks read");
-const laneMerge = lane.slice(lane.indexOf("\n  merge:"), lane.indexOf("\n  retry:"));
-ok(/issues: read/.test(laneMerge) && /checks: read/.test(laneMerge), "pr-lane grants the merge job what the called workflow asks for (a nested job cannot exceed its caller)", laneMerge);
+
+ok(/\n  checks: read\n/.test(lane.split("jobs:")[0]), "pr-lane grants checks read (the check-run list needs it)");
 
 // the helper, extracted from the workflow and run with a stub gh
 const m = /\n(\s*rd\(\) \{[^\n]*\})\n/.exec(mwr);
@@ -48,3 +47,4 @@ if (m) {
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
+

@@ -18,7 +18,7 @@ const selected = (files) => {
     "sys.path.insert(0, " + JSON.stringify(here) + ")",
     "import pr_fast_guards as g",
     "files = json.loads(sys.argv[1])",
-    "print(json.dumps([n for n, when, c, p in g.GUARDS if when(files)]))",
+    "print(json.dumps([n for n, when, c, p in g.GUARDS if when(files) and n != 'suite-regressions']))",
   ].join("\n");
   const r = spawnSync(PY, ["-c", code, JSON.stringify(files)], { encoding: "utf8" });
   if (r.status !== 0) throw new Error(r.stderr);
@@ -27,11 +27,11 @@ const selected = (files) => {
 const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 ok(same(selected(["docs/X.md", "ci-status/a.json"]), []), "a docs-only change selects no guard", selected(["docs/X.md"]));
-ok(same(selected(["qnfo-ai/worker.js", "qnfo-ai/deployed-current.worker.js"]), ["narrative-prompt-guard", "worker-load-gate", "code-anchor-once", "suite-regressions"]), "a worker change selects the prose, load and anchor guards and its suites", selected(["qnfo-ai/worker.js"]));
-ok(same(selected(["migrations/2026-11-04-x.sql"]), ["metric-cause", "code-anchor-once", "suite-regressions"]), "a migration selects the metric-cause and anchor guards and the suites", selected(["migrations/2026-11-04-x.sql"]));
-ok(same(selected([".github/workflows/pr-checks.yml"]), ["suite-regressions"]), "a workflow change selects the suites only", selected([".github/workflows/pr-checks.yml"]));
-ok(same(selected(["scripts/narrative-prompt-guard.py"]), ["narrative-prompt-guard", "suite-regressions"]), "the guard's own file selects it", selected(["scripts/narrative-prompt-guard.py"]));
-ok(same(selected(["_shared/x.js"]), ["worker-load-gate", "suite-regressions"]), "a shared helper selects the load gate", selected(["_shared/x.js"]));
+ok(same(selected(["qnfo-ai/worker.js", "qnfo-ai/deployed-current.worker.js"]), ["narrative-prompt-guard", "worker-load-gate", "code-anchor-once"] ), "a worker change selects the prose, load and anchor guards and its suites", selected(["qnfo-ai/worker.js"]));
+ok(same(selected(["migrations/2026-11-04-x.sql"]), ["metric-cause", "code-anchor-once"] ), "a migration selects the metric-cause and anchor guards and the suites", selected(["migrations/2026-11-04-x.sql"]));
+ok(same(selected([".github/workflows/pr-checks.yml"]), []), "a workflow change selects the suites only", selected([".github/workflows/pr-checks.yml"]));
+ok(same(selected(["scripts/narrative-prompt-guard.py"]), ["narrative-prompt-guard"] ), "the guard's own file selects it", selected(["scripts/narrative-prompt-guard.py"]));
+ok(same(selected(["_shared/x.js"]), ["worker-load-gate"] ), "a shared helper selects the load gate", selected(["_shared/x.js"]));
 
 // the suites command writes the changed directories, "." for a root file that is not prose
 const r = spawnSync(PY, ["-c", [
@@ -43,13 +43,17 @@ const r = spawnSync(PY, ["-c", [
 ].join("\n")], { encoding: "utf8" });
 ok(r.status === 0 && JSON.stringify(JSON.parse(r.stdout.trim())) === JSON.stringify([["node", "scripts/run-suites.mjs", "--changed-file"], ["qnfo-ai", "scripts", "."]]), "the suites command lists the changed directories and a root marker, prose excluded", { s: r.status, o: r.stdout, e: r.stderr });
 
-// the wiring in pr-checks.yml
+// suite-regressions is opt-in (--with-suites): a PR check stays near a minute
+const lst = (args) => spawnSync(PY, [join(here, "pr_fast_guards.py"), "--list", "--all", ...args], { encoding: "utf8" }).stdout.trim().split(/\r?\n/);
+ok(!lst([]).includes("suite-regressions") && lst(["--with-suites"]).includes("suite-regressions"), "the suites guard runs only with --with-suites", lst([]));
+
+// the wiring in pr-checks.yml: a step of the suites job, not a check of its own (owner cap of 5 entries)
 const wf = readFileSync(join(here, "..", ".github", "workflows", "pr-checks.yml"), "utf8");
-const job = wf.slice(wf.indexOf("\n  fast-guards:"), wf.indexOf("\n  version-bump-guard:"));
-ok(/python3 scripts\/pr_fast_guards\.py/.test(job), "pr-checks runs scripts/pr_fast_guards.py in the fast-guards job");
-ok(!/continue-on-error/.test(job), "the fast-guards job is strict (no continue-on-error)");
-ok(/node-version: "22"/.test(job) && /fetch-depth: 0/.test(job), "the job has Node 22 and the full history the suites read");
-ok(wf.indexOf("\n  fast-guards:") < wf.indexOf("\n  workflow-lint:"), "the job sits before the last job of the file (additive, away from the append point)");
+const suitesJob = wf.slice(wf.indexOf("\n  suites:"));
+ok(/python3 scripts\/pr_fast_guards\.py/.test(suitesJob), "the suites job runs scripts/pr_fast_guards.py");
+const step = suitesJob.slice(suitesJob.indexOf("Run the fast guards"));
+ok(!/continue-on-error/.test(step), "the step is strict (no continue-on-error)");
+ok(/node-version: "22"/.test(suitesJob) && /fetch-depth: 0/.test(suitesJob), "the job has Node 22 and the full history");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

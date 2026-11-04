@@ -14,7 +14,7 @@ APPLIES  narrative-prompt-guard   a worker.js, a mirror, or the guard itself    
          metric-cause             migrations/                                      code-anchor-once   migrations/ or a worker.js (it reads the anchored files)
          suite-regressions        the suites the change selects (scripts/run-suites.mjs); any change outside docs, ci-status and audits.
                                   The post-merge full-set run of deploy-gate was red in the 6 of 6 failed push runs sampled on 2026-11-04 (9 failing suites each).
-USAGE  python3 scripts/pr_fast_guards.py [--base REF] [--all] [--jobs N] [--list]
+USAGE  python3 scripts/pr_fast_guards.py [--base REF] [--all] [--with-suites] [--jobs N] [--list]
 EXIT   0 every applicable guard passed or failed only as the base already does; 1 when any guard is blocked.
 """
 import os
@@ -85,7 +85,8 @@ def main(argv):
     if files is None and "--all" not in argv:
         print("::error title=fast-guards::cannot compute the changed files against %r; running every guard" % base)
     run_all = "--all" in argv or files is None
-    chosen = [(n, c, pat) for n, when, c, pat in GUARDS if run_all or when(files)]
+    # suite-regressions takes minutes (the owner caps a PR check at about a minute, PR-CHECK-CAP-5-1), so it runs only with --with-suites (a session before a large change, or a future queue run)
+    chosen = [(n, c, pat) for n, when, c, pat in GUARDS if (n != "suite-regressions" or "--with-suites" in argv) and (run_all or when(files))]
     if "--list" in argv:
         for n, _, _ in chosen:
             print(n)

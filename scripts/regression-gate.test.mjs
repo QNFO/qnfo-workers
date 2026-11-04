@@ -107,14 +107,11 @@ commit("suites head: c turns red");
 r = sg();
 ok(r.status === 1 && verdictOf(r) === "block" && /new: FAIL\s+<t>\s+c\.test\.mjs/.test(r.stdout) && !/new: .*a\.test\.mjs/.test(r.stdout), "a newly red suite blocks and names only it", { s: r.status, o: r.stdout });
 
-// the wiring: the three callers use the gate and keep a strict run on main
-const read = (p) => readFileSync(join(here, "..", p), "utf8");
-const vbg = read(".github/workflows/version-bump-guard.yml");
-ok(/regression_gate\.py --name workflow-lint -- python3 scripts\/workflow-lint\.py/.test(vbg), "version-bump-guard lints through the regression gate");
-const lintStep = vbg.slice(vbg.indexOf("name: Lint the workflow YAML class repo-wide"), vbg.indexOf("CF-IMPORT-GUARD-1: a worker bundle"));
-ok(/github\.event_name \}\}' = 'pull_request'/.test(lintStep) && /else\s+python3 scripts\/workflow-lint\.py/.test(lintStep),"version-bump-guard keeps the plain lint outside pull requests", lintStep.slice(-400));
-const wl = read(".github/workflows/workflow-lint.yml");
-ok(/regression_gate\.py --name workflow-lint -- python3 scripts\/workflow-lint\.py/.test(wl), "workflow-lint lints through the regression gate on a pull request");
+// the wiring: both lint steps of pr-checks.yml go through the gate (a pull request only; the guard files keep the plain lint for push)
+const read = (p) => readFileSync(join(here, "..", p), "utf8").replace(/\r\n/g, "\n");
+const pc = read(".github/workflows/pr-checks.yml");
+ok((pc.match(/regression_gate\.py --name workflow-lint -- python3 scripts\/workflow-lint\.py/g) || []).length === 2, "both workflow-lint steps of pr-checks.yml run through the regression gate");
+ok(!/\n\s+run: python3 scripts\/workflow-lint\.py/.test(pc), "no plain workflow-lint step remains in pr-checks.yml");
 
 rmSync(dir, { recursive: true, force: true });
 console.log(pass + " passed, " + fail + " failed");

@@ -243,11 +243,11 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A worker's `*.test.mjs` suites run on every PR that touches the worker (scripts/run-suites.mjs). The full set runs for
   control-plane, `scripts/`, `.github/` and `migrations/` changes. A new suite needs no deploy-gate line. A suite that
   pins an exact VERSION breaks on the next bump; assert a minimum instead.
-- PR-FAST-GUARDS-1 (2026-11-04): the `fast-guards` job of pr-checks now runs, strictly, the guards that turned main red after a merge (narrative-prompt-guard, the load of every worker entry,
-  the metric-cause rule, code-anchor-once, and the suites the change selects), each through `scripts/regression_gate.py` (REGRESSION-GATE-1): a guard fails a pull request only for a failure
+- PR-FAST-GUARDS-1 (2026-11-04): a last step of the `suites` job in pr-checks (not a check of its own: the owner caps a PR at 5 entries) now runs, strictly, the guards that turned main red after a merge (narrative-prompt-guard, the load of every worker entry,
+  the metric-cause rule, code-anchor-once; about 45 s), each through `scripts/regression_gate.py` (REGRESSION-GATE-1): a guard fails a pull request only for a failure
   line the base tree does not have, so a defect already on main never holds an unrelated PR (7 PRs sat 92-107 minutes on 2026-11-04 for one transient main defect in the workflow lint),
   and a new defect is stopped before the merge. Run it yourself with `python scripts/pr_fast_guards.py` (vs origin/main). `REGRESSION_GATE=strict` (repository variable) turns the
-  relaxation off; deleting the job reverts the PR-time run. The two rules below remain the ones to know when you write the file:
+  relaxation off; deleting the step reverts the PR-time run. The workflow lint steps of `versions` and `scans` use the same gate. The two rules below remain the ones to know when you write the file:
 - Two migration rules fail only in the full set after the merge (deploy-gate is advisory on a pull request, MERGE-STREAMLINE-1), so read them before you write the file;
   each broke main more than once in the week of 2026-10-29 (RED-MAIN-RECURRENCE-1):
   - A migration that registers a metric (`INSERT ... INTO metric_registry`) maps its breach cause in the same file (`INSERT ... INTO metric_breach_cause`, with a cause key
@@ -619,7 +619,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   no file is closed 30 minutes after its session ended (EMPTY-FINISHED-DRAFT-1; the lane's BH-EMPTY-DRAFT-1 waits 6 hours), which frees one of the 12 open-pull-request slots of the
   assignment sweep. Do not edit the title or body of a Copilot pull request by hand: the `edited` run of `lane-poke` is held at `action_required` and the pull request reads
   `unstable` (the lane refuses it) until its next push; `PUT /pulls/{n}/update-branch` pinned to the head clears it. Do not add per-repository copies of the workflow or of the secret.
-- Every ready pull request into main gets the Copilot reviewer requested by `.github/workflows/request-copilot-review.yml` (REQUEST-COPILOT-REVIEW-1, lever 1 of LANE-WAITS-FOR-REVIEW-1,
+- A pull request shows at most five checks (PR-CHECK-CAP-5-1, owner directive 2026-11-04: "MAX 5 CHECKS PER PR", none over a minute, none that repeatedly fail): "Workers Builds: qnfo-workers"
+  plus the jobs `versions`, `scans`, `suites` (pr-checks.yml) and `lane` (pr-lane.yml). A new guard is a step in one of those jobs, never a job or a reusable-workflow call (workflow-lint.py
+  fails it); a guard that needs more than a minute runs on push to main instead (deploy-gate, fleet-graph, ux-journeys, research-code do).
+- Every ready pull request into main gets the Copilot reviewer requested by the `Request the automated review` steps of `lane` in `.github/workflows/pr-lane.yml` (REQUEST-COPILOT-REVIEW-1, lever 1 of LANE-WAITS-FOR-REVIEW-1,
   issue 5515): the workflow token first, the fleet user credential second. A request never blocks a merge: the lane refuses a pull request while a check that is not required has
   failed, so both request steps are `continue-on-error`. A draft is not reviewed. Still open on the issue: hold the merge when the reviewer's review of the head lists a High severity
   item, never wait more than 8 minutes for a review that has not arrived, feed the findings to the code loop.
