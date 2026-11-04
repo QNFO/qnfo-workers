@@ -102,9 +102,11 @@ if (m) {
   const ctx = (event, ref, sha) => ({ event_name: event, ref, sha });
   const gr = (c) => evaluate(m[1], c), cancel = (c) => evaluate(m[2], c).trim() === "true";
   const push1 = ctx("push", "refs/heads/main", "a".repeat(40)), push2 = ctx("push", "refs/heads/main", "b".repeat(40));
-  ok(gr(push1) !== gr(push2), "two pushes to main fall in different groups, so one never waits behind or cancels the other", [gr(push1), gr(push2)]);
-  ok(cancel(push1) === false && cancel(push2) === false, "a push to main is never cancelled", [m[2]]);
-  ok(gr(ctx("workflow_dispatch", "refs/heads/main", "c".repeat(40))).includes("c".repeat(40)), "a dispatch on main has its own sha group too");
+  // PUSH-COALESCE-1 (PR 7001, 2026-11-04) replaced the per-sha group of VERSION-BUMP-PUSH-SHA-1: a burst of merges queued one run per pushed sha (66 of 100 queued runs at 15:54Z), and
+  // only the newest main matters because the same guard ran on the pull request before the merge. Every push to main is one `main-push` group and the newer run cancels the older.
+  ok(gr(push1) === gr(push2) && /main-push/.test(gr(push1)), "two pushes to main share the main-push group, so a burst runs the newest only (PUSH-COALESCE-1)", [gr(push1), gr(push2)]);
+  ok(cancel(push1) === true && cancel(push2) === true, "a newer push to main cancels the older run", [m[2]]);
+  ok(gr(ctx("workflow_dispatch", "refs/heads/main", "c".repeat(40))) === gr(push1), "a dispatch on main joins the same main-push group");
   const b1 = ctx("push", "refs/heads/codeagent-x", "d".repeat(40)), b2 = ctx("push", "refs/heads/codeagent-x", "e".repeat(40));
   ok(gr(b1) === gr(b2) && cancel(b1) === true, "two pushes to one branch share a group and the newer cancels the older (CONCURRENCY-PER-REF-1 kept)", [gr(b1), gr(b2), m[2]]);
   const p1 = ctx("pull_request", "refs/pull/7/merge", "f".repeat(40)), p2 = ctx("pull_request", "refs/pull/7/merge", "0".repeat(40));
@@ -112,7 +114,9 @@ if (m) {
   const other = ctx("pull_request", "refs/pull/8/merge", "f".repeat(40));
   ok(new Set([gr(p1), gr(other), gr(b1), gr(push1)]).size === 4, "a pull request, another pull request, a branch and main are four groups, so none cancels another", [gr(p1), gr(other), gr(b1), gr(push1)]);
 }
-ok(/^ {2}pull_request:\s*$/m.test(wf) && !/^ {2}pull_request:\n[ \t]+paths:/m.test(wf), "the pull_request trigger still has no paths filter (INTEG-GITHUB-HARDEN-1: the guard job is a required check)");
+// THREE-PR-WORKFLOWS-1 / PR-CHECK-CAP-5-1: a pull request no longer triggers this file; its steps run on every pull request as steps of the `versions` job in pr-checks.yml (no path filter).
+const prc = readFileSync(join(dirname(WF_PATH), "pr-checks.yml"), "utf8").replace(/\r\n/g, "\n");
+ok(/^ {2}workflow_call:\s*$/m.test(wf) && !/^ {2}pull_request:/m.test(wf) && /^ {2}pull_request:\n[ \t]+branches: \[main\]\n\n/m.test(prc) && !/^ {2}pull_request:\n(?:[ \t]+.*\n)*?[ \t]+paths:/m.test(prc.split("\njobs:")[0]) && /version-bump-guard\.py/.test(prc.split("  versions:")[1].split("  scans:")[0]), "the guard runs on every pull request, with no paths filter, as a step of the versions job (INTEG-GITHUB-HARDEN-1)");
 
 for (const d of dirs) rmSync(d, { recursive: true, force: true });
 console.log(fail ? fail + " failed, " + pass + " passed" : pass + " passed, 0 failed");
