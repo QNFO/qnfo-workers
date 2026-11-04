@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.82.1";
+var VERSION = "1.82.2";
 // 1.82.1 V3-DASH-1 follow-up (pillar core; patch): the Code screen header said "loading" forever; it now says signed in or sign in to start.
 // 1.82.0 V3-DASH-1 (owner request 2026-11-04, pillar core; minor, new home page and routes): "/" is three screens (Now, Readers, Code) on a static shell that paints at once; GET /api/v3/now and /api/v3/readers read small, separately timed sections and carry their own age; POST /api/v3/code starts an ops-exec run and GET /api/v3/code/<id> returns its steps. The old overview stays at /classic and every /area page is unchanged. Cause: "/" took 10-19 s measured on 2026-11-04 (fleetStatusData).
 // 1.81.4 AREA-FEED-LATENCY-1 (#6717, agent_issues 1001453, pillar core): area reads use cached probe counts without building the human queue or awaiting a cold fleet refresh.
@@ -4383,12 +4383,13 @@ __name(fullDashboardRefreshDue, "fullDashboardRefreshDue");
 // governs the trigger statements it fires (SQLite lang_createtrigger); only the violating statement is skipped. The first error is logged as
 // before and the degraded tick carries its own source. Returns 1 when a guarded insert executed (FALLBACK-HEARTBEAT-PROOF-1 records it),
 // 0 only when both attempts threw.
+// D1-OVERLOAD-1e: standby window 9 -> 20 minutes. The primary ticks about every 10 minutes, so a 9-minute guard let this standby fire the 52-trigger insert 303 times a day (345.6M rows read, 8.3 s each); at 20 it writes only when the primary has been silent for two cycles.
 async function feedFallbackTick(env) {
   // STANDBY-PROOF-1 (issue 100136): this producer is a standby, so with the primary healthy the 9-minute guard let it write nothing for
   // days and the 6-hourly chaos drill (spof_alternate_probes: a cron:qnfo-fleet-dashboard row in 24 h) failed with no real fault. It now
   // also ticks when it has no row of its own in the last 6 hours, so the alternate shows evidence while the primary is fine (at most 4
   // extra fixer passes a day; the 10-minute fixers are idempotent).
-  const guard = " WHERE NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))"
+  const guard = " WHERE NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-20 minutes'))"
     + " OR NOT EXISTS (SELECT 1 FROM fleet_tick WHERE source LIKE 'cron:qnfo-fleet-dashboard%' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-360 minutes'))";
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_tick (source) SELECT 'cron:qnfo-fleet-dashboard'" + guard).run();

@@ -2,7 +2,7 @@
 // investment verdict no longer becomes an owner queue card (KILL and a due gate still do) and /api/human says
 // spend_decision "fleet"; a research, pipeline, paper or queue question reads research_queue facts (status counts, active
 // stages, newest published, oldest queued) and the no-model fallback prints them; the 15-minute cron feeds fleet_tick
-// directly with the 9-minute dedupe (D1-TRIGGER-DEPTH-1). Run: node qnfo-fleet-dashboard/autonomy-first-queue.test.mjs
+// directly with the 20-minute dedupe (D1-TRIGGER-DEPTH-1). Run: node qnfo-fleet-dashboard/autonomy-first-queue.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -41,7 +41,7 @@ ok(/if \(c && c\.research\) lines\.push\("", researchFactsText\(c\.research\)\);
 
 // 3. The cron's fleet_tick producer (D1-TRIGGER-DEPTH-1).
 // FLEET-TICK-ISOLATE-1 (1.49.2): the insert lives in feedFallbackTick (guard string + plain insert + OR IGNORE retry); scheduled() calls it first.
-ok(/"INSERT INTO fleet_tick \(source\) SELECT 'cron:qnfo-fleet-dashboard'" \+ guard/.test(src) && /const guard = " WHERE NOT EXISTS \(SELECT 1 FROM fleet_tick WHERE ts > strftime\('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'\)\)"\s*\+ " OR NOT EXISTS \(SELECT 1 FROM fleet_tick WHERE source LIKE 'cron:qnfo-fleet-dashboard%' AND ts > strftime\('%Y-%m-%dT%H:%M:%SZ', 'now', '-360 minutes'\)\)";/.test(src) && /const tickOk = await feedFallbackTick\(env\);/.test(src), "the 15-minute cron feeds fleet_tick with the 9-minute dedupe");
+ok(/"INSERT INTO fleet_tick \(source\) SELECT 'cron:qnfo-fleet-dashboard'" \+ guard/.test(src) && /const guard = " WHERE NOT EXISTS \(SELECT 1 FROM fleet_tick WHERE ts > strftime\('%Y-%m-%dT%H:%M:%SZ', 'now', '-20 minutes'\)\)"\s*\+ " OR NOT EXISTS \(SELECT 1 FROM fleet_tick WHERE source LIKE 'cron:qnfo-fleet-dashboard%' AND ts > strftime\('%Y-%m-%dT%H:%M:%SZ', 'now', '-360 minutes'\)\)";/.test(src) && /const tickOk = await feedFallbackTick\(env\);/.test(src), "the 15-minute cron feeds fleet_tick with the 20-minute dedupe");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
