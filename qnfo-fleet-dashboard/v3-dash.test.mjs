@@ -110,6 +110,9 @@ ok(html.includes("Output vs readers") && /visits_per_publication/.test(src) && s
 // V7 (1.83.5) the Money card says how old its data is
 ok(/data_age_s: v3Age/.test(src) && html.includes("updated '+ago(sp.data_age_s)"), "V7 spend carries its data age and the page shows it");
 
+// V8 (1.83.5) the Now screen shows whether the command line has ever run and how it ended
+ok(/cmd_last_status/.test(src) && /FROM cmd_log WHERE kind = 'agent' ORDER BY ts DESC LIMIT 1/.test(src) && html.includes("Command line, last run") && html.includes("never run: sign in on the Code tab"), "V8 command-line proof row is on the Now screen");
+
 // V5
 r = await get("/classic");
 ok(r.status === 200 && !(await r.text()).includes('id="n-code"'), "V5 /classic is still the old overview");

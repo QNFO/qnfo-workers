@@ -12,6 +12,7 @@ var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.definePrope
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.83.5";
+// 1.83.5 (cont.) NOW-CMD-PROOF-1: the Is-it-running card shows when the command line last ran and how it ended (cmd_log kind agent), or that it never ran.
 // 1.83.5 NOW-FRESH-1 (pillar core; patch): the Money card shows how old its data is (the cost ledger row it reads) and turns amber after 3 hours, so the owner can see that it is updating.
 // 1.83.4 NOW-SPLIT-1 (pillar cost; patch): the Money card splits the monthly pace into what the fleet controls and the owner-stated subscription figure.
 // 1.83.3 (merge of PR 6935 onto main 1.83.0): keeps the 1.82.3 dashboard changes of this branch.
@@ -3469,9 +3470,11 @@ async function v3Spend(env) {
   };
 }
 async function v3Health(env) {
-  const [m, hb] = await Promise.all([
+  const [m, hb, cl] = await Promise.all([
     d1all(env.AUDIT, "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN breach = 1 THEN 1 ELSE 0 END), 0) AS breach FROM v_fleet_metrics"),
-    d1all(env.AUDIT, "SELECT worker, ts FROM fleet_heartbeat")
+    d1all(env.AUDIT, "SELECT worker, ts FROM fleet_heartbeat"),
+    // The command line proves itself: its newest run (an owner-only action, so a row means a signed-in run happened) and how it ended.
+    d1all(env.AUDIT, "SELECT status, ts FROM cmd_log WHERE kind = 'agent' ORDER BY ts DESC LIMIT 1").catch(function() { return []; })
   ]);
   const cut = Date.now() - 130 * 6e4;
   const stale = hb.filter(function(r) { const t = Date.parse(r.ts); return !isFinite(t) || t < cut; });
@@ -3479,7 +3482,8 @@ async function v3Health(env) {
   return {
     metrics_total: m[0] ? Number(m[0].total) : null, metrics_off_target: m[0] ? Number(m[0].breach) : null,
     workers_reporting: hb.length - stale.length, workers_total: hb.length, stale_workers: stale.slice(0, 6).map(function(r) { return r.worker; }),
-    newest_heartbeat_age_s: newest ? Math.round((Date.now() - newest) / 1000) : null
+    newest_heartbeat_age_s: newest ? Math.round((Date.now() - newest) / 1000) : null,
+    cmd_last_status: cl[0] ? String(cl[0].status) : null, cmd_last_age_s: cl[0] ? v3Age(String(cl[0].ts).replace(" ", "T") + "Z") : null
   };
 }
 async function v3Reach(env) {
@@ -3647,7 +3651,7 @@ if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_u
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
 var own=sp.external_daily_usd!=null?sp.external_daily_usd*30:null,fleetOwn=own!=null&&sp.pace_month_usd!=null?sp.pace_month_usd-own:null;o+='<div class="row"><span>Pace at the current rate, per month</span><span>'+usd(sp.pace_month_usd)+'</span></div><div class="row"><span>of which the fleet itself (AI + Cloudflare)</span><span>'+usd(fleetOwn)+'</span></div><div class="row"><span>of which your own subscriptions (unverified figure)</span><span>'+usd(own)+'</span></div><p class="note">Only the fleet part can be cut by the system. The subscriptions part falls when you cancel plans the Code tab replaces.</p>'}
 o+='</div><div class="card"><h2>Is it running?<span class="'+cls(h.newest_heartbeat_age_s,900)+'">'+(h.ok?'last heartbeat '+ago(h.newest_heartbeat_age_s):'')+'</span></h2>'+sec(h,'health');
-if(h.ok){o+='<div class="row"><span>Workers reporting in the last 2 h</span><span>'+h.workers_reporting+' of '+h.workers_total+'</span></div>'+(h.stale_workers.length?'<div class="row"><span>Silent</span><span>'+esc(h.stale_workers.join(', '))+'</span></div>':'')+'<div class="row"><span>Metrics off target</span><span>'+h.metrics_off_target+' of '+h.metrics_total+'</span></div>'}
+if(h.ok){o+='<div class="row"><span>Workers reporting in the last 2 h</span><span>'+h.workers_reporting+' of '+h.workers_total+'</span></div>'+(h.stale_workers.length?'<div class="row"><span>Silent</span><span>'+esc(h.stale_workers.join(', '))+'</span></div>':'')+'<div class="row"><span>Metrics off target</span><span>'+h.metrics_off_target+' of '+h.metrics_total+'</span></div><div class="row"><span>Command line, last run</span><span>'+(h.cmd_last_status?esc(h.cmd_last_status)+', '+ago(h.cmd_last_age_s):'never run: sign in on the Code tab')+'</span></div>'}
 $('s-now').innerHTML=o+'</div><p class="note">Updated '+ago(Math.round((Date.now()-Date.parse(d.generated_at))/1000))+' (server). Version '+esc(d.version)+(d.stale?' - showing a cached copy: every source failed on the last read.':'')+'</p>'}
 function renderReaders(d){var r=d.reach||{},c=d.content||{},o='';
 if(r.ok){var few=(r.referred_7d||0)<100,tone=few?'warn':'ok',t=few?'Few verifiable readers':'People are reading';
