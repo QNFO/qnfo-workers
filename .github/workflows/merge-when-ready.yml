@@ -9,6 +9,7 @@ name: merge-when-ready
 # QNFO_GH_PAT does the merge because a push made with the workflow token starts no workflow, and canonical-deploy.yml listens to pushes on main.
 # PULL_REQUEST_TARGET AND WORKFLOW_RUN WITH A SECRET ARE SAFE HERE: both run the definition from main, nothing is checked out, and the only value used from the event is the pull
 # request number, an integer, handed over through env. Style: step names colon-free, no heredocs, no inline python, inputs travel through env (workflow-lint.py).
+# GH-QUOTA-1 (2026-11-04 16:06Z): QNFO_GH_PAT is the rwnq8 account that every session's gh and the fleet lane also use; its 5000-an-hour REST budget read 0/5000 until 16:21Z (HTTP 403 rate limit exceeded), which stalls merges for everyone. The three reads here (pull, comments, check runs) now use the workflow's own token (a separate per-repository budget); the PAT is spent only on the merge itself.
 # Revert: delete this file. The lane keeps merging as before.
 
 on:
@@ -18,6 +19,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  checks: read
 
 jobs:
   merge:
@@ -29,12 +31,13 @@ jobs:
       cancel-in-progress: false
     env:
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.pull_requests[0].number }}
-      GH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      READ_TOKEN: ${{ github.token }}
+      MERGE_TOKEN: ${{ secrets.QNFO_GH_PAT }}
     steps:
       - name: Merge the pull request when every fast check is green
         run: |
           set -u
-          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          pr="$(GH_TOKEN="$READ_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           state="$(printf '%s' "$pr" | jq -r '.state')"
           draft="$(printf '%s' "$pr" | jq -r '.draft')"
           base="$(printf '%s' "$pr" | jq -r '.base.ref')"
@@ -44,12 +47,12 @@ jobs:
             echo "not ready: state=$state draft=$draft base=$base held=$held"
             exit 0
           fi
-          holds="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate --jq '[.[] | select(.body | startswith("HOLD:"))] | length')"
+          holds="$(GH_TOKEN="$READ_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate --jq '[.[] | select(.body | startswith("HOLD:"))] | length')"
           if [ "$holds" != "0" ]; then
             echo "a HOLD comment is on the pull request"
             exit 0
           fi
-          runs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select((.name | test("^(gate|analyze|Workers Builds|sweep)")) | not) | {name, status, conclusion}]')"
+          runs="$(GH_TOKEN="$READ_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select((.name | test("^(gate|analyze|Workers Builds|sweep)")) | not) | {name, status, conclusion}]')"
           total="$(printf '%s' "$runs" | jq 'length')"
           pending="$(printf '%s' "$runs" | jq '[.[] | select(.status != "completed")] | length')"
           bad="$(printf '%s' "$runs" | jq '[.[] | select(.status == "completed" and (.conclusion | IN("success", "skipped", "neutral") | not))] | length')"
@@ -58,4 +61,4 @@ jobs:
             echo "waiting for a later guard to conclude, or a check failed"
             exit 0
           fi
-          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$sha" || echo "::notice::merge refused, the lane keeps the pull request"
+          GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$sha" || echo "::notice::merge refused, the lane keeps the pull request"

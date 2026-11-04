@@ -43,5 +43,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      checks: read
     uses: ./.github/workflows/merge-when-ready.yml
     secrets: inherit
