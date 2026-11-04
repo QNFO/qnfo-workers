@@ -12,6 +12,7 @@ var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.definePrope
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.83.5";
+// 1.83.5 (cont.) NOW-PRIVATE-1: the Now screen shows card titles only to the signed-in owner; a stranger sees a placeholder (one title named the owner's work-authorization and permit status).
 // 1.83.5 (cont.) NOW-CMD-PROOF-1: the Is-it-running card shows when the command line last ran and how it ended (cmd_log kind agent), or that it never ran.
 // 1.83.5 NOW-FRESH-1 (pillar core; patch): the Money card shows how old its data is (the cost ledger row it reads) and turns amber after 3 hours, so the owner can see that it is updating.
 // 1.83.4 NOW-SPLIT-1 (pillar cost; patch): the Money card splits the monthly pace into what the fleet controls and the owner-stated subscription figure.
@@ -3452,7 +3453,7 @@ async function v3Needs(env, authed) {
   return {
     open_total: rows.length, fleet_handles: rows.length - mine.length, count: urgent, optional: mine.length - urgent,
     items: mine.slice(0, 8).map(function(r) {
-      return { bound: bound(r), key: "ha:" + r.slug, title: String(r.title || "").slice(0, 140), why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
+      return { bound: bound(r), key: "ha:" + r.slug, title: authed ? String(r.title || "").slice(0, 140) : "Private item for the owner (sign in to read it)", why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
     })
   };
 }

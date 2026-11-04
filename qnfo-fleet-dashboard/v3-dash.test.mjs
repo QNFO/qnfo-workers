@@ -74,6 +74,7 @@ let d = await r.json();
 ok(r.status === 200 && d.screen === "now" && d.version, "V2 /api/v3/now answers", d);
 ok(d.needs.ok && d.needs.count === 1 && d.needs.optional === 1 && d.needs.items[0].key === "ha:pay" && d.needs.items[0].bound === true && d.needs.items[1].bound === false && d.needs.fleet_handles === 1, "V2 only the identity-bound card is the owner's", d.needs);
 ok(d.needs.items[0].why === "", "V2 a stranger gets no detail text");
+ok(!/Approve the annual domain renewal/.test(JSON.stringify(d.needs)), "V2 a stranger gets no card titles", d.needs);
 ok(d.health.ok && d.health.workers_total === 2 && d.health.workers_reporting === 1 && d.health.stale_workers[0] === "qnfo-b" && d.health.metrics_off_target === 1, "V2 heartbeats and metric breaches", d.health);
 ok(d.spend && d.spend.ok === false && typeof d.spend.error === "string", "V3 an unreadable source is named in its own section", d.spend);
 r = await get("/api/v3/readers");
