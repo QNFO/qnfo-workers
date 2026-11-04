@@ -64,7 +64,7 @@ Flow (`canonical-deploy.yml`, `scripts/canary_revert.py`, `scripts/deploy_probes
    already the pushed one: a later push installed main's tip first), a new D1 probe in a push that also changes `migrations/` (the migration may not have applied yet), an inconclusive answer.
 4. Evidence: one `cloud_ops_events` row (kind `canary-functional`, per-probe states) per run; a revert files `DEPLOY-PROBE-REVERTED-1` (`CONTROL-PLANE-REVERTED-1` when a control-plane worker
    failed), a failure that reverted nothing files `DEPLOY-PROBE-FAILED-1` (the title carries no sha, so repeated runs dedupe on the open title). Both carry the failing probe, and for an HTTP
-   probe a `runtime-probe:` line, which D1 turns into a runner-https contract: the hourly remediation tick closes the issue when the route answers its marker again. Every probe-derived
+   probe a `runtime-probe:` line, which D1 turns into a runner-https contract: the hourly remediation tick closes the issue when the route answers its marker again. The consumer's probe is exact bytes while ours ignores whitespace, so the line carries the longest quoted piece of the marker (`"qnfo-evolve"` for `"worker":"qnfo-evolve"`, at least 8 characters, none rather than a weak one); the first two drills' issues stayed open until this was found. Every probe-derived
    string is collapsed to one line before it reaches the issue text, which agents read (a `contains` marker with a newline and `code-task:` could otherwise inject a task).
 5. PR time (`scans` job of pr-checks.yml, no new check): `deploy_probes.py --check-pr` (about 2 s) validates every declaration against its wrangler.toml and requires one for a changed
    `worker.js` unless the worker is on `scripts/probes-allowlist.txt` (which may only shrink against the base commit) or the description carries `probes: none (<reason>)`; when the
@@ -180,3 +180,19 @@ false High: the gate is a useful second reader and a poor judge, which is what t
 
 `SELECT * FROM v_deploy_proof_7d` (migration 2026-11-05-deploy-proof-7d-view.sql) is the seven-day read-out the owner brief asked for: probe runs and failures, reverts, failures filed, canary
 failures, review-gate runs and cost, and `WORKFLOW-FAILED-1` issues as the red-main proxy. Read it again on 2026-11-11 against the baseline in section (a).
+
+### Replay and false-positive run, v2 (2026-11-04 21:50Z, dispatch run 41919876632, $0.0509 for 15 gate runs)
+
+| Measure | v1 | v2 | Reading |
+|---|---|---|---|
+| Recall on the 9 known dashboard defects | 1 of 9 | **7 of 9** (D3 claim-first, D4 keys to strangers, D5 error text to strangers, D6 loop token as owner, D7 ORDER BY LIMIT, D8 single flight, D9 null as 0; missed D1 snooze, D2 fresh reload) | glm found all 7 (llama 2: D4, D9). Keyword matching and a brief written from that review make this an upper bound; every finding is printed in the run artifact for a human to read. One glm chunk call timed out in this run. |
+| High findings on the dashboard block | 0 | 4 (1 confirmed by both families: "SQL injection in cmd_log table", which is not among the 9; 3 single-family) | the block would be held, partly for a reason that is probably wrong |
+| Commits among 14 no fix followed with a High from one family | 4 | 4 (2 glm, 2 llama) | the single-family Highs are unchanged, and under the agreement rule none of them holds |
+| Commits among 14 that would be **held** (a High both families reported) | 4 (v1 held on any High) | **0 of 14** | the false-positive rate of the hold rule on this sample |
+| Cost | $0.0449 / 15 runs | $0.0509 / 15 runs | about $0.0034 a run with up to 8 calls each |
+
+Reading: v2 reads the diff well enough to name 7 of the 9 defects that an independent human review found and 8 minutes of subagent time cost, and its hold rule held none of 14 clean pull
+requests. It is **not** flipped to `hold` yet, on purpose: 14 commits is a small sample, the only confirmed High on the known-defect diff is itself doubtful (agreement between families is not
+truth), and live observe-mode data after v2 is one day old. The flip is one repository variable (`REVIEW_GATE_MODE=hold`, `gh variable set`); the criterion the fleet applies is: at least 50 live
+heads reviewed under the v2 rules in observe mode (`SELECT COUNT(*) FROM cloud_ops_events WHERE kind = 'review-gate' AND ts > '2026-11-04T21:50'`), and every `observe` verdict among them (a High both
+families flagged) read by a person or the code loop and judged right.
