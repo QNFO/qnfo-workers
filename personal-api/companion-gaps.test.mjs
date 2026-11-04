@@ -69,3 +69,54 @@ console.log("ok   Do tab, Learn cards and the safety plan need no typing");
 assert.ok(C.MANIFEST.shortcuts.some((x) => x.url === "/companion#focus"));
 assert.ok(page.includes("if(h==='focus'){history.replaceState(null,'','/companion');go('focus');return}"));
 console.log("ok   a home-screen shortcut opens Focus");
+
+// COMPANION-CLARIFY-SHORT-1: short verb-first notes and bare replies are sorted without a model.
+let llmCalls = 0;
+const deps = { llm: async () => { llmCalls++; return '{"type":"reference","title":"x"}'; } };
+assert.equal((await C.clarify({}, deps, "Go to Foam today")).type, "action");
+assert.equal((await C.clarify({}, deps, "Thank you.")).type, "trash");
+assert.equal((await C.clarify({}, deps, "Yes.")).by, "rules");
+assert.equal(llmCalls, 0, "no model call for short notes");
+await C.clarify({}, deps, "So I want a command line for my personal companion that captures everything");
+assert.equal(llmCalls, 1, "longer notes still go to the sorter");
+console.log("ok   short notes and bare replies cost no AI call");
+
+// COMPANION-SELFCHECK-1 and COMPANION-TO-FLEET-1 on a real SQLite database.
+{
+  const { DatabaseSync } = await import("node:sqlite");
+  const mk = (raw) => ({ prepare: (sql) => { const st = raw.prepare(sql); const w = (b) => ({ first: async () => st.get(...b) || null, all: async () => ({ results: st.all(...b) }), run: async () => { const r = st.run(...b); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: r.changes } }; } }); return Object.assign(w([]), { bind: (...b) => w(b) }); } });
+  const p = new DatabaseSync(":memory:"), a = new DatabaseSync(":memory:");
+  p.exec(`CREATE TABLE cmp_push_subs (endpoint TEXT, failures INTEGER, last_ok TEXT, last_error TEXT);
+    CREATE TABLE tasks (id TEXT, status TEXT, gtd TEXT);
+    CREATE TABLE companion_nudges (id INTEGER PRIMARY KEY, kind TEXT, ask TEXT, sent_at TEXT, outcome TEXT);
+    CREATE TABLE cmp_inbox (id TEXT, ts TEXT, kind TEXT, raw_text TEXT, status TEXT, result_json TEXT);
+    CREATE TABLE wellbeing_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
+    INSERT INTO cmp_push_subs VALUES ('e', 0, '2026-11-02T07:15:00Z', NULL);
+    INSERT INTO tasks VALUES ('t1', 'open', 'next');
+    INSERT INTO companion_nudges (kind, ask, sent_at, outcome) VALUES ('cmp-presence', 'here', '2026-11-02T06:30:00Z', '{"via":"push","subs":1,"ok":1}');
+    INSERT INTO cmp_inbox VALUES ('inb-1', '2026-11-04T13:36:59Z', 'voice', 'input tokens are the cost driver for worker AI on Cloudflare', 'processed', '{"type":"project","title":"Reduce input token costs"}');`);
+  a.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE issue_triage (issue_id INTEGER, triage_state TEXT, close_evidence TEXT);`);
+  const env = { PERSONAL: mk(p), AUDIT: mk(a) };
+  const r1 = await C.selfCheck(env, "2026-11-05T15:00:00Z");
+  assert.ok(r1.filed.includes("push-silence"), "two days of silence files an issue");
+  assert.ok(r1.filed.includes("fleet-asks-waiting"));
+  assert.ok(!r1.filed.includes("inbox-stuck") && !r1.filed.includes("feelings-ask"));
+  const r2 = await C.selfCheck(env, "2026-11-05T16:00:00Z");
+  assert.equal(r2.filed.length, 0, "one issue per problem, not one per hour");
+  const sent = await C.sendToFleet(env, "inb-1");
+  assert.ok(sent.ok && sent.issue_id);
+  const iss = a.prepare("SELECT title, description, category FROM agent_issues WHERE id = ?").get(sent.issue_id);
+  assert.match(iss.title, /^OWNER-VOICE-2026-11-04:reduce-input-token-costs/);
+  assert.match(iss.description, /input tokens are the cost driver/);
+  assert.equal((await C.sendToFleet(env, "inb-1")).already, true, "sent once");
+  p.exec("INSERT INTO companion_nudges (kind, ask, sent_at, outcome) VALUES ('cmp-next', 'One thing for now: x', '2026-11-05T16:30:00Z', '{\"via\":\"push\",\"subs\":1,\"ok\":1}')");
+  for (const id of a.prepare("SELECT id FROM agent_issues").all().map((x) => x.id)) a.prepare("INSERT INTO issue_triage VALUES (?, 'triaged', NULL)").run(id);
+  const r3 = await C.selfCheck(env, "2026-11-05T17:00:00Z");
+  assert.ok(r3.closed.includes("push-silence") && r3.closed.includes("fleet-asks-waiting"), "recovered checks close their issues with the measurement");
+  assert.match(a.prepare("SELECT close_evidence FROM issue_triage t JOIN agent_issues i ON i.id = t.issue_id WHERE i.title = 'COMPANION-SELFCHECK-1:push-silence'").get().close_evidence, /COMPANION-SELFCHECK-1 measured/);
+  const src = fs.readFileSync(new URL("./companion.js", import.meta.url), "utf8");
+  assert.ok(/res\.selfcheck = await selfCheck\(agent\.env\)/.test(src), "runs from the companion's own tick, hourly");
+  assert.ok(page.includes("Send to the Quniverse") && page.includes("For the Quniverse"));
+  console.log("ok   hourly self-check files and closes its own issues; one tap sends a dictated ask to the fleet");
+}

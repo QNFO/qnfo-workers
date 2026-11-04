@@ -1807,7 +1807,19 @@ export async function capture(env, deps, input) {
   }
   return { ok: true, id, kind, text, media_key: mediaKey, note, processed };
 }
+// COMPANION-CLARIFY-SHORT-1 (2026-11-04, agent_issues 1001688): a sorting call averaged about 6,300 input tokens. A note of six
+// words or fewer that starts with a verb is a next action, and a bare yes / thanks / ok is nothing to keep: both are sorted by rules.
+const FILLER = /^(yes|yeah|yep|no|nope|ok|okay|thanks|thank you|thank you very much|cheers|hi|hello|test|testing)[.!? ]*$/i;
+export function shortClarify(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  if (FILLER.test(t)) return { type: "trash", title: t.slice(0, 60), why: "a bare reply with nothing to keep" };
+  if (t.split(/\s+/).length <= 6 && VERB_START.test(t)) { const h = heuristicClarify(t); if (h.type === "action") return h; }
+  return null;
+}
 export async function clarify(env, deps, text) {
+  const quick = shortClarify(text);
+  if (quick) return Object.assign(quick, { by: "rules" });
   if (deps && deps.llm) {
     try { const out = await deps.llm(env, CLARIFY_SYSTEM, "Captured item:\n" + String(text).slice(0, 3000), 400); if (out) return Object.assign(parseClarify(out, text), { by: "model" }); } catch (e) { /* fall through */ }
   }
@@ -2306,10 +2318,91 @@ export async function doEnsure(agent) {
 export async function doTick(agent, deps, opts) {
   const keys = await doKeys(agent);
   const res = await companionTick(agent.env, Object.assign({}, deps, { keys, pushed: pushedStore(agent) }), opts);
+  try {
+    const lastCheck = await agent.storage.get("cmp_selfcheck_at");
+    if (!lastCheck || Date.now() - Number(lastCheck) >= 55 * 60000) { await agent.storage.put("cmp_selfcheck_at", Date.now()); res.selfcheck = await selfCheck(agent.env); }
+  } catch (e) { console.error(JSON.stringify({ evt: "companion:selfcheck", error: String(e && e.message || e).slice(0, 200) })); }
   await agent.storage.put("cmp_last_tick", { at: nowIso(), plan: res.plan, sent: res.sent ? res.sent.kind : null });
   // RED-TEAM-1: the heartbeat also lands in D1, so /today can say when reach-outs have stalled instead of going quiet.
   try { await agent.env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('cmp_last_tick', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(nowIso()), nowIso()).run(); } catch (e) { console.error(JSON.stringify({ evt: "companion:heartbeat", error: String(e && e.message || e).slice(0, 200) })); }
   return res;
+}
+// COMPANION-SELFCHECK-1 (2026-11-04, owner: "What are you missing? ... ALWAYS AND AUTOMATICALLY"): once an hour the companion
+// checks itself with plain D1 reads (no model) and keeps one fleet issue per problem: filed when a check goes bad, closed with the
+// measurement when it recovers. The phone was silent for two days on 2-4 Nov and nothing noticed; this is what notices next time.
+export const SELF_CHECKS = ["push-silence", "push-failing", "inbox-stuck", "feelings-ask", "duplicate-captures", "fleet-asks-waiting"];
+export async function selfCheckState(env, nowIso0) {
+  const now = nowIso0 || nowIso(), ms = Date.parse(now), ago = (h) => new Date(ms - h * 3600e3).toISOString();
+  const db = env.PERSONAL, cfg = await loadCfg(env), out = {};
+  const subs = await one(db, "SELECT COUNT(*) AS n, MAX(failures) AS f, MAX(last_ok) AS last_ok, MAX(last_error) AS err FROM cmp_push_subs");
+  const nSubs = Number(subs && subs.n) || 0;
+  const openNext = Number((await one(db, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'open' AND COALESCE(gtd, 'next') = 'next'") || {}).n) || 0;
+  const lastPush = await one(db, "SELECT MAX(sent_at) AS at FROM companion_nudges WHERE outcome LIKE '%\"via\":\"push\"%' AND outcome NOT LIKE '%\"ok\":0%'");
+  const lastAt = lastPush && lastPush.at ? lastPush.at : null;
+  const silentH = lastAt ? Math.round((ms - Date.parse(lastAt)) / 3600e3) : null;
+  out["push-silence"] = { bad: nSubs > 0 && openNext > 0 && !isPaused(cfg, ms) && (silentH === null || silentH > 48), detail: "phone push subscriptions " + nSubs + ", open next actions " + openNext + ", last push that reached the phone " + (lastAt || "never") + (silentH !== null ? " (" + silentH + " h ago)" : "") };
+  out["push-failing"] = { bad: nSubs > 0 && (Number(subs.f) || 0) >= 3, detail: "highest failure count " + (Number(subs && subs.f) || 0) + ", last ok " + (subs && subs.last_ok || "never") + (subs && subs.err ? ", last error " + String(subs.err).slice(0, 120) : "") };
+  const stuck = await one(db, "SELECT COUNT(*) AS n, MIN(ts) AS oldest FROM cmp_inbox WHERE status = 'unprocessed' AND ts < ?", ago(1));
+  out["inbox-stuck"] = { bad: (Number(stuck && stuck.n) || 0) > 0, detail: (Number(stuck && stuck.n) || 0) + " notes unsorted for over an hour, oldest " + (stuck && stuck.oldest || "none") };
+  const feel = cfg.wellbeing_prompts === true ? [] : await all(db, "SELECT id, kind, ask FROM companion_nudges WHERE sent_at >= ? AND kind NOT IN ('cmp-care', 'care') AND (lower(ask) LIKE '%how are you%' OR lower(ask) LIKE '%how''s it landing%' OR lower(ask) LIKE '%feel%' OR lower(ask) LIKE '%mood%')", ago(24));
+  out["feelings-ask"] = { bad: feel.length > 0, detail: feel.length + " feelings questions sent in 24 h while check-ins are off" + (feel[0] ? " (first: " + feel[0].kind + " #" + feel[0].id + ")" : "") };
+  const dup = await one(db, "SELECT COUNT(*) AS n FROM cmp_inbox a JOIN cmp_inbox b ON a.id < b.id AND a.kind = 'text' AND b.kind = 'text' AND lower(trim(a.raw_text)) = lower(trim(b.raw_text)) AND abs(julianday(a.ts) - julianday(b.ts)) * 1440 <= 30 WHERE a.ts >= ? AND b.ts >= ?", ago(24), ago(24));
+  out["duplicate-captures"] = { bad: (Number(dup && dup.n) || 0) > 0, detail: (Number(dup && dup.n) || 0) + " notes saved twice within 30 minutes in the last 24 h" };
+  const asks = await one(db, "SELECT COUNT(*) AS n FROM cmp_inbox WHERE status = 'processed' AND ts < ? AND ts >= ? AND json_extract(result_json, '$.type') = 'project' AND json_extract(result_json, '$.to_fleet') IS NULL AND (lower(raw_text) LIKE '%quniverse%' OR lower(raw_text) LIKE '%cuniverse%' OR lower(raw_text) LIKE '%fleet%' OR lower(raw_text) LIKE '%cloudflare%' OR lower(raw_text) LIKE '%worker%')", ago(24), ago(24 * 7));
+  out["fleet-asks-waiting"] = { bad: (Number(asks && asks.n) || 0) > 0, detail: (Number(asks && asks.n) || 0) + " dictated notes about the Quniverse kept only as personal projects for over a day (Send to the Quniverse not tapped)" };
+  return out;
+}
+const SELF_FIX = {
+  "push-silence": "Read planNudge in personal-api/companion.js: find why every tick returns a skip while open next actions exist (companion_nudges, wellbeing_config cmp_last_tick), and make one useful push reach the phone.",
+  "push-failing": "The phone subscription keeps failing: check sendPush (VAPID, payload encryption) and cmp_push_subs.last_error; a 404 or 410 subscription is dropped and the Today card asks for notifications again.",
+  "inbox-stuck": "processInbox leaves notes unsorted: check the sorter call (clarify) and cmp_inbox.attempts; a note that fails three times is sorted by heuristicClarify.",
+  "feelings-ask": "A feelings question went out with check-ins off (owner rule, PR 6436): find the planNudge or ladder path that sent it and gate it on cfg.wellbeing_prompts === true.",
+  "duplicate-captures": "COMPANION-CAPTURE-DEDUPE-1 in capture() did not catch a repeat: check the 30-minute lookup.",
+  "fleet-asks-waiting": "The owner dictated asks about the Quniverse that only exist as personal projects. Keep the Send to the Quniverse button visible on Today until each is sent or hidden."
+};
+export async function selfCheck(env, nowIso0) {
+  const state = await selfCheckState(env, nowIso0), res = { filed: [], closed: [], bad: [] };
+  if (!env.AUDIT) return Object.assign(res, { state, error: "no AUDIT binding" });
+  const now = nowIso0 || nowIso(), stamp = now.replace("T", " ").slice(0, 19);
+  for (const key of SELF_CHECKS) {
+    const c = state[key], title = "COMPANION-SELFCHECK-1:" + key;
+    const open = await one(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? AND status != 'closed' ORDER BY id DESC LIMIT 1", title).catch(() => null);
+    if (c.bad) {
+      res.bad.push(key);
+      if (!open) {
+        try {
+          await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, 'personal-api:companion-selfcheck', 'personal', ?, 'open', ?, ?)")
+            .bind(title, "Found by the companion's hourly self-check (COMPANION-SELFCHECK-1, personal-api " + COMPANION_VERSION + "): " + c.detail + ". " + SELF_FIX[key] + " The self-check closes this issue on its own when the check recovers. Pillar personal.\ncode-task: repo=qnfo-workers path=personal-api/companion.js", key === "push-silence" || key === "feelings-ask" ? "high" : "medium", stamp, stamp).run();
+          res.filed.push(key);
+        } catch (e) { console.error(JSON.stringify({ evt: "companion:selfcheck-file", key, error: String(e && e.message || e).slice(0, 200) })); }
+      }
+    } else if (open) {
+      try {
+        await env.AUDIT.prepare("UPDATE issue_triage SET triage_state = 'closed', close_evidence = ? WHERE issue_id = ?").bind("COMPANION-SELFCHECK-1 measured " + now + ": " + c.detail + ".", open.id).run();
+        res.closed.push(key);
+      } catch (e) { console.error(JSON.stringify({ evt: "companion:selfcheck-close", key, error: String(e && e.message || e).slice(0, 200) })); }
+    }
+  }
+  try { await env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('cmp_selfcheck', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify({ at: now, bad: res.bad }), now).run(); } catch (e) { /* the issue rows are the record */ }
+  return Object.assign(res, { state });
+}
+// COMPANION-TO-FLEET-1 (2026-11-04, agent_issues 1001687): the owner dictates asks about the Quniverse into the companion. One tap on a
+// sorted project sends that note, in the owner's own words, to the fleet's issue list. Only on that tap: personal notes stay personal.
+export async function sendToFleet(env, id) {
+  const row = await one(env.PERSONAL, "SELECT id, ts, raw_text, result_json FROM cmp_inbox WHERE id = ?", s(id, 80));
+  if (!row || !row.raw_text) return { ok: false, error: "note not found" };
+  let res = {}; try { res = JSON.parse(row.result_json || "{}") || {}; } catch (e) { res = {}; }
+  if (res.to_fleet) return { ok: true, issue_id: res.to_fleet, already: true };
+  if (!env.AUDIT) return { ok: false, error: "the fleet is not reachable from here" };
+  const stamp = nowIso().replace("T", " ").slice(0, 19);
+  const slug = String(res.title || row.raw_text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "ask";
+  const title = "OWNER-VOICE-" + String(row.ts).slice(0, 10) + ":" + slug;
+  const r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, 'personal-api:owner-voice', 'owner-ask', 'high', 'open', ?, ?)")
+    .bind(title, "The owner dictated this to the companion on " + String(row.ts).slice(0, 16).replace("T", " ") + " UTC and sent it to the Quniverse with one tap (COMPANION-TO-FLEET-1). Their words: \"" + s(row.raw_text, 3000) + "\"", stamp, stamp).run();
+  const issueId = r && r.meta ? r.meta.last_row_id : null;
+  res.to_fleet = issueId || true;
+  await env.PERSONAL.prepare("UPDATE cmp_inbox SET result_json = ? WHERE id = ?").bind(JSON.stringify(res), row.id).run();
+  return { ok: true, issue_id: issueId };
 }
 // Called from PersonalTwinAgent.alarm(); returns the next alarm time for the companion role, or null.
 export async function doAlarm(agent, deps) {
@@ -2413,6 +2506,8 @@ export async function handleCompanion(request, env, ctx, deps) {
       if (out.ok && out.text && !out.duplicate && ctx && ctx.waitUntil) { out.sorting = true; ctx.waitUntil(processInbox(env, deps, 5).catch((e) => console.error(JSON.stringify({ evt: "companion:sort", error: String(e && e.message || e).slice(0, 200) })))); }
       return J(out, out.ok ? 200 : 400);
     }
+    if (r === "to-fleet" && m === "POST") { const b = await body(); const out = await sendToFleet(env, b.id); return J(out, out.ok ? 200 : 400); }
+    if (r === "selfcheck" && m === "GET") { await ensureSchema(env.PERSONAL); return J(Object.assign({ ok: true }, await selfCheckState(env))); }
     if (r === "feedback" && m === "POST") { const out = await recordFeedback(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "feedback" && m === "GET") { await ensureSchema(env.PERSONAL); return J(await tasteSummary(env)); }
     if (r === "inbox" && m === "GET") return J({ ok: true, items: await all(env.PERSONAL, "SELECT id, ts, kind, raw_text, media_key, status, result_json FROM cmp_inbox ORDER BY ts DESC LIMIT 50") });
@@ -2830,7 +2925,9 @@ function who5Form(box){api('/companion/api/who5').then(function(q){box.innerHTML
  q.items.forEach(function(it,i){box.appendChild(el('div',{text:it,style:'margin-top:10px'}));var r=el('div',{cls:'row scale'});q.scale.forEach(function(w,j){r.appendChild(el('button',{onclick:function(){ans[i]=j;Array.prototype.forEach.call(r.children,function(c,k){c.classList.toggle('sel',k===j)})}},[String(j),el('small',{text:w})]))});box.appendChild(r)});
  var out=el('div');box.appendChild(el('div',{cls:'row',style:'margin-top:10px'},[el('button',{cls:'p',text:'Save',onclick:function(){if(ans.indexOf(null)>=0){say(out,'One answer per line, please.');return}api('/companion/api/who5',{json:{items:ans}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error)})}})]));box.appendChild(out)})}
 function renderOffline(){var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:'No signal, still here.'}));v.appendChild(el('div',{cls:'card'},[el('div',{text:'I cannot reach the server right now. You can still tap your mood, capture a thought or write a journal line: I keep it on this phone and send it when you are online.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Try again',onclick:load})])]));v.appendChild(moodCard({mood:null}));showPending()}
-function load(){api('/companion/api/today').then(function(t){renderToday(t);flushQueue()}).catch(function(e){warn(e);if(CMPQ.isNetworkError(e))renderOffline()})}
+// COMPANION-TO-FLEET-1: dictated asks about the Quniverse wait on Today with one Send button each, until sent.
+function fleetAsks(){api('/companion/api/inbox').then(function(r){var v=$('v-today'),old=$('fleet-asks');if(old)old.remove();var items=(r.items||[]).filter(function(i){var res={};try{res=JSON.parse(i.result_json||'{}')}catch(e){}return res.type==='project'&&!res.to_fleet&&/quniverse|cuniverse|fleet|cloudflare|worker/i.test(i.raw_text||'')}).slice(0,3);if(!items.length||!v)return;var c=el('div',{cls:'card',id:'fleet-asks'},[el('h2',{text:'For the Quniverse'}),el('div',{cls:'mute',text:'You said these about the Quniverse. One tap sends each to the fleet to build.'})]);items.forEach(function(i){var res={};try{res=JSON.parse(i.result_json||'{}')}catch(e){}c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('div',{cls:'grow',text:res.title||(i.raw_text||'').slice(0,120)}),el('button',{cls:'p',text:'Send',onclick:function(){var bt=this;bt.disabled=true;api('/companion/api/to-fleet',{json:{id:i.id}}).then(function(x){bt.textContent=x.ok?'Sent':'Not sent'})}})]))});v.appendChild(c)}).catch(warn)}
+function load(){api('/companion/api/today').then(function(t){renderToday(t);flushQueue();fleetAsks()}).catch(function(e){warn(e);if(CMPQ.isNetworkError(e))renderOffline()})}
 function outEl(){return $('v-capture').classList.contains('hide')?$('qc-out'):$('cap-out')}
 function textEl(){return $('v-capture').classList.contains('hide')?$('qc-text'):$('cap-text')}
 function capText(){var te=textEl(),t=te.value.trim();if(!t)return;var o=outEl();o.innerHTML='';say(o,'Saving...');api('/companion/api/capture',{json:{text:t}}).then(function(r){te.value='';showCap(r)}).catch(function(e){o.innerHTML='';say(o,e.message,true)})}
@@ -2865,7 +2962,7 @@ function readOnDevice(bmp){var jobs=[];try{if(window.TextDetector)jobs.push(new 
 function prepImage(file){if(!window.createImageBitmap)return Promise.resolve({blob:file,text:''});return createImageBitmap(file).then(function(bmp){var k=Math.min(1,1280/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);return Promise.all([readOnDevice(bmp),new Promise(function(res){c.toBlob(res,'image/jpeg',0.8)})]).then(function(r){return {blob:r[1]||file,text:r[0]}})}).catch(function(e){warn(e);return {blob:file,text:''}})}
 function capImg(inp){var f=inp.files&&inp.files[0];inp.value='';if(!f)return;var o=outEl();o.innerHTML='';say(o,'Reading the photo...');prepImage(f).then(function(p){upload(p.blob,'photo.jpg',p.text)})}
 function upload(blob,name,extra){var te=textEl(),o=outEl();var f=new FormData();f.append('file',blob,name);f.append('text',[te.value.trim(),extra||''].filter(Boolean).join('\\n'));o.innerHTML='';say(o,'Listening/looking...');api('/companion/api/capture',{method:'POST',body:f}).then(function(r){te.value='';showCap(r)}).catch(function(e){say(o,e.message)})}
-function inbox(){api('/companion/api/inbox').then(function(r){var b=$('inbox');b.innerHTML='';(r.items||[]).slice(0,15).forEach(function(i){var res={};try{res=JSON.parse(i.result_json||'{}')}catch(e){warn(e)}b.appendChild(el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:(i.raw_text||'(no text)').slice(0,160)}),el('div',{cls:'mute',text:i.ts.slice(0,16).replace('T',' ')+' · '+i.kind+' · '+(res.type||i.status)})])]))})})}
+function inbox(){api('/companion/api/inbox').then(function(r){var b=$('inbox');b.innerHTML='';(r.items||[]).slice(0,15).forEach(function(i){var res={};try{res=JSON.parse(i.result_json||'{}')}catch(e){warn(e)}b.appendChild(el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:(i.raw_text||'(no text)').slice(0,160)}),el('div',{cls:'mute',text:i.ts.slice(0,16).replace('T',' ')+' · '+i.kind+' · '+(res.type||i.status)+(res.to_fleet?' · sent to the Quniverse':'')})]),res.type==='project'&&!res.to_fleet?el('button',{text:'Send to the Quniverse',onclick:function(){var bt=this;bt.disabled=true;api('/companion/api/to-fleet',{json:{id:i.id}}).then(function(x){bt.textContent=x.ok?'Sent':'Not sent';if(x.ok)setTimeout(inbox,800)}).catch(function(){bt.disabled=false})}}):null]))})})}
 var hist=[];try{hist=JSON.parse(sessionStorage.getItem('cmp-hist')||'[]')}catch(e){warn(e)}
 function drawChat(){var b=$('msgs');b.innerHTML='';hist.forEach(function(m){b.appendChild(el('div',{cls:'msg '+(m.role==='user'?'me':'it'),text:m.content}))});window.scrollTo(0,document.body.scrollHeight)}
 function sendChat(){var t=$('chat-in').value.trim();if(!t)return;hist.push({role:'user',content:t});$('chat-in').value='';drawChat();$('chat-send').disabled=true;

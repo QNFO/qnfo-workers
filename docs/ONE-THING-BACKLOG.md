@@ -94,12 +94,24 @@ of them on 4 Nov. What the record showed, and what 4.36.0 did about it:
 
 Still open (`agent_issues`, family `COMPANION-GAPS-1:*`, the fleet is the doer):
 
-1. [ ] **Dictated asks for the Quniverse stay in the personal inbox** (`:fleet-asks`). On 4 Nov the owner dictated four requests
+1. [x] **Dictated asks for the Quniverse stay in the personal inbox** (`:fleet-asks`). On 4 Nov the owner dictated four requests
        about the fleet (own assistant and vector store, APK, more virtual-agent roles, Workers AI input-token cost); the sorter
        made each a personal project and nothing else read them. A project-type capture gets a one-tap "Send to the Quniverse"
        button that files an `agent_issues` row with the owner's words (only on that tap: the personal/research separation holds).
-2. [ ] **Sorting call is large** (`:clarify-cost`). flash calls average about 6,300 input tokens. Short notes (six words or fewer,
+2. [x] **Sorting call is large** (`:clarify-cost`). flash calls average about 6,300 input tokens. Short notes (six words or fewer,
        or a verb first) are sorted by `heuristicClarify` without a model; the sorter prompt is trimmed; measured in
        `ai_call_counters` against 4 Nov.
-3. [ ] **Silence watchdog** (`:silence-watch`). A failure-mode detector reads `personal-life.companion_nudges`: a signed-in phone
+3. [x] **Silence watchdog** (`:silence-watch`). A failure-mode detector reads `personal-life.companion_nudges`: a signed-in phone
        with a live push subscription and open next actions that has had no push for 48 hours files an issue on its own.
+
+All three shipped in personal-api 4.36.0 (PR 7009): Send to the Quniverse (COMPANION-TO-FLEET-1, a card on Today and a button in
+the inbox), short-note sorting by rules (COMPANION-CLARIFY-SHORT-1), and the hourly self-check (COMPANION-SELFCHECK-1).
+
+## The companion checks itself (COMPANION-SELFCHECK-1)
+
+Gap-hunting no longer depends on a session. Once an hour the companion's own tick runs `selfCheck` (plain D1 reads, no model)
+and keeps one `agent_issues` row titled `COMPANION-SELFCHECK-1:<check>` per problem, filed when the check goes bad and closed
+through `issue_triage` with the measurement when it recovers. Checks: `push-silence` (signed-in phone, open next actions, no
+push for 48 h), `push-failing`, `inbox-stuck` (unsorted over an hour), `feelings-ask` (a feelings question while check-ins are
+off), `duplicate-captures`, `fleet-asks-waiting`. `GET /companion/api/selfcheck` shows the current state. A new rule the owner
+sets gets its check added to `SELF_CHECKS` in the PR that implements the rule.
