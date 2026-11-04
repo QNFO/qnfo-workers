@@ -973,6 +973,7 @@ async function logEvent(env, kind, text, status) {
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind(id, nowIso(), kind, String(text).slice(0, 800), "{}", WORKER, status || "ok").run();
   } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "logEvent", kind: kind, error: String(e && e.message || e).slice(0, 160) }));
   }
   return id;
 }
@@ -33360,12 +33361,31 @@ function sweepInternalAppendices(body) {
   if (next.length < 20000 || next.length < src.length * 0.65) return { body: src, removed: 0, refused: true };
   return { body: next, removed: 1 };
 }
+// D1 refuses a query for a few seconds when the database used too many resources in a 10 second window (every cron tick fires at
+// the same second, and qnfo-audit is shared). The tick waits the window out and tries again instead of ending in a log line
+// that the overload also eats; a first attempt that fails is kept in the result (retried).
+async function fmtD1(out, fn, tries, waitMs) {
+  tries = tries || 4;
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (e) {
+      last = e;
+      const msg = String(e && e.message || e);
+      if (!/overload|too many resources|D1_ERROR|network connection lost|database is locked|busy/i.test(msg) || i === tries - 1) throw e;
+      if (out) out.retried = (out.retried || 0) + 1;
+      await sleep((waitMs === undefined ? 3000 : waitMs) * (i + 1));
+    }
+  }
+  throw last;
+}
 async function paperFormatTick(env, opts) {
   const o = opts || {};
-  const stateRow = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key='paper_format_state'").first();
-  const state = stateRow ? JSON.parse(stateRow.value) : { cursor: "", checked: 0, repaired: 0, errors: 0 };
-  const rows = (await env.LIVING_PAPER.prepare("SELECT slug FROM papers WHERE slug > ?1 AND status IN ('published','distributed','external_preprint') ORDER BY slug LIMIT ?2").bind(state.cursor || "", o.batch || 100).all()).results || [];
   const out = { checked: 0, repaired: 0, errors: [], conflicts: 0, complete: false };
+  // The scheduled call passes a start delay so the sweep does not open at the same second as the other ticks.
+  if (o.startDelayMs > 0) await sleep(o.startDelayMs);
+  const stateRow = await fmtD1(out, () => env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key='paper_format_state'").first(), 4, o.retryWaitMs);
+  const state = stateRow ? JSON.parse(stateRow.value) : { cursor: "", checked: 0, repaired: 0, errors: 0 };
+  const rows = (await fmtD1(out, () => env.LIVING_PAPER.prepare("SELECT slug FROM papers WHERE slug > ?1 AND status IN ('published','distributed','external_preprint') ORDER BY slug LIMIT ?2").bind(state.cursor || "", o.batch || 100).all(), 4, o.retryWaitMs)).results || [];
   const started = Date.now();
   if (env.MIRROR && state.mirrorRetry && state.mirrorRetry.length) {
     // A mirror write that failed after the row was rewritten: D1 holds the canonical text, so the sweep would never come back to it.
@@ -33382,7 +33402,7 @@ async function paperFormatTick(env, opts) {
   for (const candidate of rows) {
     if (Date.now() - started > (o.budgetMs || 20000)) break;
     try {
-      const p = await env.LIVING_PAPER.prepare("SELECT slug,identifier,title,subtitle,abstract,body_md,version,keywords,doi FROM papers WHERE slug=?1 AND status IN ('published','distributed','external_preprint')").bind(candidate.slug).first();
+      const p = await fmtD1(out, () => env.LIVING_PAPER.prepare("SELECT slug,identifier,title,subtitle,abstract,body_md,version,keywords,doi FROM papers WHERE slug=?1 AND status IN ('published','distributed','external_preprint')").bind(candidate.slug).first(), 3, o.retryWaitMs);
       if (p) {
         const _sx = String(p.identifier || p.slug || "").indexOf("qnfo-2025-") === 0 ? { body: p.body_md, removed: 0 } : sweepInternalAppendices(p.body_md);
         // PAPER-CANONICAL-1: the stored body is the canonical text (no front matter, byline, repeated title or in-body history).
@@ -33406,7 +33426,7 @@ async function paperFormatTick(env, opts) {
             const lift = c.body !== p.body_md ? canonicalLift(c.fields, p) : {};
             const lifted = Object.keys(lift).join(" and ");
             const writer = paperWriter("paper-format", p.slug, "PAPER-CANONICAL-1 stored in the new-release shape" + (gone ? " (removed: " + gone + ")" : "") + (lifted ? "; " + lifted + " moved from the header to the column" : "") + "; ORCID, ISNI, contact and dates stay in the ledger copy of the previous body; text, version and revision date unchanged");
-            const r = await env.LIVING_PAPER.prepare("UPDATE papers SET body_md=?2, abstract=?3, subtitle=COALESCE(NULLIF(?4,''),subtitle), keywords=COALESCE(NULLIF(keywords,''),?12), doi=COALESCE(NULLIF(doi,''),?13), change_actor=?5, change_reason=?6, updated_at=updated_at WHERE slug=?1 AND body_md IS ?7 AND title IS ?8 AND version IS ?9 AND abstract IS ?10 AND subtitle IS ?11 AND status IN ('published','distributed','external_preprint')").bind(p.slug, c.body, abstract, c.subtitle, writer.actor, writer.reason, p.body_md, p.title, p.version, p.abstract, p.subtitle, lift.keywords || null, lift.doi || null).run();
+            const r = await fmtD1(out, () => env.LIVING_PAPER.prepare("UPDATE papers SET body_md=?2, abstract=?3, subtitle=COALESCE(NULLIF(?4,''),subtitle), keywords=COALESCE(NULLIF(keywords,''),?12), doi=COALESCE(NULLIF(doi,''),?13), change_actor=?5, change_reason=?6, updated_at=updated_at WHERE slug=?1 AND body_md IS ?7 AND title IS ?8 AND version IS ?9 AND abstract IS ?10 AND subtitle IS ?11 AND status IN ('published','distributed','external_preprint')").bind(p.slug, c.body, abstract, c.subtitle, writer.actor, writer.reason, p.body_md, p.title, p.version, p.abstract, p.subtitle, lift.keywords || null, lift.doi || null).run(), 3, o.retryWaitMs);
             if (r.meta && r.meta.changes) {
               out.repaired++;
               if (lifted) out.lifted = (out.lifted || 0) + 1;
@@ -33439,7 +33459,7 @@ async function paperFormatTick(env, opts) {
     state.checked = state.repaired = state.errors = state.refused = 0;
   }
   state.at = nowIso();
-  await env.QNFO_AUDIT.prepare("INSERT INTO ops_config (key,value) VALUES ('paper_format_state',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(state)).run();
+  await fmtD1(out, () => env.QNFO_AUDIT.prepare("INSERT INTO ops_config (key,value) VALUES ('paper_format_state',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(state)).run(), 4, o.retryWaitMs);
   return out;
 }
 var NR_BATCH = 8;
@@ -33865,9 +33885,10 @@ var worker_default = {
     ctx.waitUntil((async function() {
       if (env.RESEARCH_HALT === "1") return;
       try {
-        const formatted = await paperFormatTick(env);
+        const formatted = await paperFormatTick(env, { startDelayMs: 9000 });
         await logEvent(env, "paper-format", JSON.stringify(formatted).slice(0, 790), formatted.errors.length ? "error" : "ok");
       } catch (eFormat) {
+        console.error(JSON.stringify({ worker: WORKER, where: "paper-format-tick", error: String(eFormat && eFormat.message || eFormat).slice(0, 200) }));
         await logEvent(env, "paper-format", "tick threw: " + String(eFormat && eFormat.message || eFormat).slice(0, 200), "error");
       }
       try {
