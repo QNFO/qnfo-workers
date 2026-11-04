@@ -33,3 +33,12 @@ SELECT 'claude-code-session-2026-11-04', 'Correction: the ISSUE-PROBE-CAP-1 and 
   'issue-probe-agent request step only', 'migration Rollback line; or set ops_config issue_probe_max_attempts to 100000',
   'the probe loop is bounded in spend and strands no issue', 'asks per hour fall; capped issues asked at most weekly', 'migrations/issue-birth-doer-probe.test.mjs'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'ISSUE-PROBE-CAP-3:%');
+-- A change that "works after the deploy" carries its own closing probe (METRIC-CLOSED-LOOP-1): CAP-1 and CAP-2 had none, which is how they
+-- stayed uninstalled unnoticed. The remediation tick runs this and closes the issue only when the cap text is live and the agent's asks have fallen.
+INSERT INTO agent_issues (title, description, source, priority, status)
+SELECT 'ISSUE-PROBE-CAP-3: the issue-probe-agent attempt cap must be live in fleet_tasks',
+ 'Charter pillar: cost. migrations/2026-11-04-issue-probe-cap-3.sql puts the per-issue attempt cap (2, expiring after 7 days) on the live probe-request step; CAP-1 and CAP-2 matched superseded text and changed nothing.
+Closing probe (d1-query): SELECT ''yes'' AS expected, CASE WHEN (SELECT instr(definition, ''probe-attempt-cap-3'') FROM fleet_tasks WHERE id = ''issue-probe-agent'') > 0 THEN ''yes'' ELSE ''no'' END AS observed
+code-probe: {"paths":["migrations/2026-11-04-issue-probe-cap-3.sql"],"contains":"probe-attempt-cap-3"}',
+ 'session:probe-cap-3', 'high', 'open'
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'ISSUE-PROBE-CAP-3: the issue-probe-agent attempt cap must be live in fleet_tasks');
