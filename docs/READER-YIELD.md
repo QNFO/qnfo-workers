@@ -64,9 +64,10 @@ Logged in `decision_log` (parsed by `decision_predictions`): `engaged_reader_ses
 research volume) and `research_neurons_per_engaged_session_7d <= 30000 within 14 d` (true only if the key binds). Falsified if engaged readers fall more than 20 percent in 14 days
 with outreach cadence unchanged: turn the governor off and put the floor back to 360000.
 
-## Next items (ROADMAP-1 rows filed by the migration, each with a code-task)
+## Next items (four ROADMAP-1 rows filed by the migration, each with a code-task)
 
 1. READER-YIELD-1.1 `qnfo-gateway`: class automated fetchers as bots so `outreach_human_clicks_7d` falls to what is real; done when `outreach_engaged_per_100_clicks_7d` is 8 or more.
 2. READER-YIELD-1.2 `qnfo-fleet-dashboard`: derive `pageviews_30d` from the stored daily series so the Readers screen reads 19.7k, not 0 or 10000.
 3. READER-YIELD-1.3 `qnfo-social`: when the queue is empty, give one paper a day that an outsider already read a second post on X, LinkedIn and Mastodon (the channels that produce engaged
    sessions), measured against matched papers a week apart.
+4. READER-YIELD-1.4 `qnfo-fleet-dashboard`: GA4 ingest by campaign and country so an engaged session can be tied to the paper, post and origin that earned it. X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so slot choice is real there (the roll-ups carry every paper) and has no signal until this lands.

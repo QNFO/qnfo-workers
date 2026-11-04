@@ -22,7 +22,7 @@
 -- research_neurons_per_engaged_session_7d are outcomes of the papers surface, outreach_engaged_per_100_clicks_7d is a validity measure of the promotion surface (it says how much of
 -- outreach_human_clicks_7d is reading); (4) v_research_volume_target and a daily fleet_task that moves ops_config research_daily_neurons toward engaged readers a day x
 -- research_yield_neurons_per_engaged_day, inside [research_yield_floor, research_yield_ceiling], at most research_yield_step_pct a day, and only when nobody else has written the key
--- (research_yield_last_written); (5) three ROADMAP-1 rows for the next items, each with a code-task.
+-- (research_yield_last_written); (5) four ROADMAP-1 rows for the next items, each with a code-task.
 -- PREDICTION (decision_log, written below): the first governor step moves research_daily_neurons from 360000 to about 349000 (engaged 17.4 a day x 20000), a dead-band size change, not a
 -- cut; engaged_reader_sessions_7d stays within 20 percent of its 122 baseline for 14 days whatever the research volume does; if the cap binds (the enforcement is another session's
 -- work) papers a day fall and research_neurons_per_engaged_session_7d falls below 30000 within 14 days. Falsifier: engaged_reader_sessions_7d down more than 20 percent in 14 days
@@ -322,7 +322,7 @@ INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_ra
 SELECT
   'session:reader-yield (claude, QNFO.REACH / QNFO.RSCH)',
   'Research output is not what moves readers: engaged readers come from search, X and referrals and were flat through a 10x swing in papers a day, while each paper carries the same floor of automated visits. Tying the research budget to engaged readers with a floor is safer than a flat cut and than a flat cap that spend ignores.',
-  'READER-YIELD-1 migration 2026-11-04-reader-yield-1.sql: reader ledger and per-paper readership tables, three measures (two outcomes, one validity), research volume governor on ops_config research_daily_neurons (floor 180000, ceiling 450000, 10 percent a day, pauses on a foreign write), outreach trigger text amended, three ROADMAP-1 rows. Prediction: the first governor step is 360000 to about 349000 (engaged 17.4 a day x 20000), then at most 10 percent a day; engaged readers stay inside 20 percent of the 122 baseline whatever research volume does (readers do not follow research volume). Falsifier: engaged_reader_sessions_7d down more than 20 percent in 14 days with outreach cadence unchanged.',
+  'READER-YIELD-1 migration 2026-11-04-reader-yield-1.sql: reader ledger and per-paper readership tables, three measures (two outcomes, one validity), research volume governor on ops_config research_daily_neurons (floor 180000, ceiling 450000, 10 percent a day, pauses on a foreign write), outreach trigger text amended, four ROADMAP-1 rows. Prediction: the first governor step is 360000 to about 349000 (engaged 17.4 a day x 20000), then at most 10 percent a day; engaged readers stay inside 20 percent of the 122 baseline whatever research volume does (readers do not follow research volume). Falsifier: engaged_reader_sessions_7d down more than 20 percent in 14 days with outreach cadence unchanged.',
   'GA4 engaged sessions 12..41 a day, 122 in 7 days to 11-03 (reach_signals); utm_clicks_human 1260 vs 25 engaged organic-social sessions in the same 10 days; per paper utm p10 3 / p50 6 / p90 11, external-referrer loads 0.12 per paper (7 percent of papers); publications 2..89 a day; research neurons 988k and 997k on 11-02 and 11-03 against a key of 360000; pageviews_30d live 19,660..20,500, stored 0/10000/25000/26000 five times in 12 hours.',
   'applied by migration; the governor takes its first step at the next 05:40Z run',
   'qnfo-research-exec daily neuron budget (ops_config research_daily_neurons) and three new metric rows; no worker code changes',
@@ -385,6 +385,18 @@ SELECT 'ROADMAP-1: QNFO.REACH READER-YIELD-1.3: give the papers an outsider reac
  'session:reader-yield', 'feature', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'ROADMAP-1: QNFO.REACH READER-YIELD-1.3: give the papers an outsider reached a second post, from v_paper_readers_top');
 
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'ROADMAP-1: QNFO.REACH READER-YIELD-1.4: GA4 ingest by campaign and country, so engaged sessions are attributable to papers, posts and origin',
+ 'code-task: repo=qnfo-workers path=qnfo-fleet-dashboard/worker.js' || char(10) ||
+ 'code-anchor: async function ga4Ingest(env, opts) {' || char(10) ||
+ 'code-probe: {"paths": ["qnfo-fleet-dashboard/worker.js"], "contains": "sessionCampaignName"}' || char(10) || char(10) ||
+ 'Charter pillar reach (program QNFO.REACH). Metric it should move: it moves none by itself; it makes yield per paper and per post measurable. Done when paper_readership can carry ga4_engaged_30d per paper and outreach_engaged_per_100_clicks_7d can be split by channel.' || char(10) ||
+ 'Evidence (READER-YIELD-1): the GA4 ingest writes sessions and engagedSessions by channel group, source and host, and sessions (not engaged) by page and country, so an engaged session cannot be tied to the paper or post that earned it. The tagged links already carry utm_campaign = paper slug and utm_source = channel, which GA4 exposes as sessionCampaignName and sessionSource. X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so which papers take those slots is a real choice there (the Bluesky and Substack roll-ups carry every paper); GA4 shows X at 17 engaged of 19 sessions and Bluesky at 1 of 22, but nothing says which X post earned them. Singapore is 55 percent of GA4 sessions (1002 of 1833) and no row says how many of them engage.' || char(10) ||
+ 'EDIT: in ga4Ingest add two runReports for the complete day: dimensions sessionCampaignName and sessionSource with metrics sessions and engagedSessions (limit 1000, rows with an empty or (not set) campaign skipped), written as reach_signals rows source ga4, channel = the source, entity_type campaign, entity_id = the campaign lower-cased to 64 characters (the UTM ledger key); and dimensions country and sessionDefaultChannelGroup with metrics sessions and engagedSessions as entity_type country_channel, entity_id country || chr(124) || channel. Keep quality human; do not change any existing row shape; name the change GA4-CAMPAIGN-1 in a comment.' || char(10) ||
+ 'Definition of done: merged and verified live by the canonical deploy; SELECT COUNT(*) FROM reach_signals WHERE source = ''ga4'' AND entity_type = ''campaign'' AND metric = ''engagedSessions'' is above 0 for the previous day; record the before and after in issue_triage.close_evidence. The file is claimed by another session at the time of filing: take the work claim first. Follow-up once rows exist: add ga4_engaged_30d to paper_readership and rank v_paper_readers_top by it.',
+ 'session:reader-yield', 'feature', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'ROADMAP-1: QNFO.REACH READER-YIELD-1.4: GA4 ingest by campaign and country, so engaged sessions are attributable to papers, posts and origin');
+
 INSERT OR IGNORE INTO roadmap_proposals (program_code, request_instance, title, rationale, path, anchor_line, status, issue_id, created_at, updated_at)
 SELECT 'QNFO.REACH', 'session-reader-yield-20261104-1', 'Classify automated fetchers as bots in the UTM ledger so outreach clicks mean readers',
   'READER-YIELD-1: counted human clicks 1260 vs 25 engaged organic-social sessions in 10 days; metric outreach_engaged_per_100_clicks_7d.', 'qnfo-gateway/worker.js',
@@ -402,3 +414,9 @@ SELECT 'QNFO.REACH', 'session-reader-yield-20261104-3', 'Give the papers an outs
   'READER-YIELD-1: the Bluesky queue is empty; repeat exposure of papers with an external-referrer visit is the unspent lever; measured against matched papers.', 'qnfo-social/worker.js',
   'code-anchor: async function drainRollup(env, opts) {', 'proposed',
   (SELECT MAX(id) FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.REACH READER-YIELD-1.3:%'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now');
+
+INSERT OR IGNORE INTO roadmap_proposals (program_code, request_instance, title, rationale, path, anchor_line, status, issue_id, created_at, updated_at)
+SELECT 'QNFO.REACH', 'session-reader-yield-20261104-4', 'GA4 ingest by campaign and country, so engaged sessions are attributable to papers, posts and origin',
+  'READER-YIELD-1: engaged sessions cannot be tied to the paper or post that earned them; X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so slot choice matters there.', 'qnfo-fleet-dashboard/worker.js',
+  'code-anchor: async function ga4Ingest(env, opts) {', 'proposed',
+  (SELECT MAX(id) FROM agent_issues WHERE title LIKE 'ROADMAP-1: QNFO.REACH READER-YIELD-1.4:%'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now');

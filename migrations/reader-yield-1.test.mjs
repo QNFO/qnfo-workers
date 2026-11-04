@@ -125,9 +125,9 @@ for (const p of preds) {
   ok(!!m && !!n("SELECT 1 x FROM metric_registry WHERE metric = ?", m && m[1]), "prediction is parseable and names a registered metric: " + p);
 }
 const issues = rows("SELECT id, title, description FROM agent_issues ORDER BY id");
-ok(issues.length === 3 && issues.every((i) => i.title.startsWith("ROADMAP-1: QNFO.REACH READER-YIELD-1.")), "three ROADMAP-1 rows", issues.map((i) => i.title));
+ok(issues.length === 4 && issues.every((i) => i.title.startsWith("ROADMAP-1: QNFO.REACH READER-YIELD-1.")), "four ROADMAP-1 rows", issues.map((i) => i.title));
 ok(issues.every((i) => /^code-task: repo=qnfo-workers path=[a-z0-9-]+\/worker\.js$/m.test(i.description) && /^code-anchor: .{10,}$/m.test(i.description) && /^code-probe: \{"paths": \["[^"]+"\], "contains": "[^"]+"\}$/m.test(i.description)), "each carries code-task, code-anchor and code-probe lines");
-ok(rows("SELECT issue_id FROM roadmap_proposals").length === 3 && rows("SELECT issue_id FROM roadmap_proposals").every((r) => r.issue_id > 0), "three proposals link their issues");
+ok(rows("SELECT issue_id FROM roadmap_proposals").length === 4 && rows("SELECT issue_id FROM roadmap_proposals").every((r) => r.issue_id > 0), "four proposals link their issues");
 
 // the anchors name text that exists exactly once in the checked-out workers
 for (const i of issues) {
