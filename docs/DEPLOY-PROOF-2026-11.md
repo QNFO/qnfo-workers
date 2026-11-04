@@ -89,14 +89,17 @@ mirror identical, restores the previous page and dispatches the redeploy of both
 For a pull request whose diff touches a workflow or migration file (whatever its name), or adds or deletes lines about auth, a route condition, the Cache API or a trigger/view, or has a
 file GitHub withheld, the diff (mirror files dropped, 60 000 characters, each file first gets an equal share so padding cannot starve the vulnerable one, per-category score cap) goes to two
 Workers AI models of disjoint families with an adversarial brief (auth bypass, injection, cache audience, double submit, null handling, ORDER BY/LIMIT, retry storms, trigger or migration
-depth, workflow permissions): **glm-5.3-flash** (`reasoning_effort: low`) and **llama-3.3-70b**. Measured on a 1.3k-token excerpt before choosing: glm with the default effort,
+depth, workflow permissions): **glm-5.3-flash** (`reasoning_effort: low`) and **llama-3.3-70b**, each reading the diff in chunks of about 14 KB (at most four, every chunk repeats its
+file header). Measured on a 1.3k-token excerpt before choosing: glm with the default effort,
 gemma-4-26b-a4b with thinking on, qwen3-30b-a3b and kimi-k2.7-code spent 3 000 to 4 000 tokens reasoning and returned no content; gemma with thinking off found one dubious item.
 Cost about $0.012 a run (15k tokens in, 1.5k out at the ladder prices), at most 80 heads a day (a ledger row is claimed before the models are called, so a repeated lane event for the same head,
 a clean result and a no-model result all cost nothing the second time), recorded in `cloud_ops_events` kind `review-gate`. The models run in daemon threads with a hard join.
 
 * Every finding needs a file in the diff, a trigger of 40+ characters and a fix; a High finding also needs an `evidence` line that is, whole or as a 24+ character fragment, an **added**
   line of the diff (a deleted or unchanged context line demotes it to Medium). The HOLD decision is made by code from the verified findings, not by the model.
-* A surviving High item posts a comment that starts `HOLD:` (the merge step of pr-lane.yml counts every such comment; the stale-PR lane honours it). A new push releases it: the gate edits its own
+* **Only a High that both model families reported holds** (v2, after the first live replay below). Agreement means the same file and the same line, or title and trigger sharing a fifth
+  of their words; a High from one family is shown in the comment, labelled `(llama only)`, and counted in the header as "from one family only".
+* A surviving confirmed High item posts a comment that starts `HOLD:` (the merge step of pr-lane.yml counts every such comment; the stale-PR lane honours it). A new push releases it: the gate edits its own
   earlier HOLD comments so they no longer start with `HOLD:`; a collaborator's comment `override review-gate: <reason>` (or `hold released`) does the same. Only comments by the gate's bot
   login (`github-actions[bot]`) count as the gate's, so a marker or a HOLD typed by anyone else neither skips the review nor gets edited. Model text is defused before it is posted: the stale-PR
   lane's own hold and release phrases (`hold:`, `resolved`, `hold released`, ...) get a zero-width space, long token-like strings are redacted, @mentions are defused.
@@ -109,6 +112,19 @@ Replay (workflow `review-gate`, dispatch only): `scripts/review-gate/v3-dash-pre
 (`git diff b2e0ed0b^ cc90bf553`, 339 added lines); `v3-dash-pre-review.json` lists the 9 defects fixed afterwards in d921ce3a0 with keyword rules. Honest limits of that number: the brief
 names several of the same defect classes (it is the brief of that review), the regexes are keywords, so the recall printed is an upper bound and the findings are printed for a human to
 read; it is not the criterion for `hold`. The `commits` input runs the gate on merged commits no fix followed (false positives). Results are appended below once run.
+
+### Replay and false-positive run, v1 (2026-11-04, dispatch run 41911181555, $0.045 for 15 gate runs)
+
+| Measure | Result | Reading |
+|---|---|---|
+| Recall on the 9 known dashboard defects (47 KB in one call) | **1 of 9** (D4, keys to strangers; llama) | poor: glm returned "no parseable answer" (it spent its 4000 output tokens and was cut off), llama gave 3 generic findings |
+| False positives: High findings on 14 merged commits no fix followed | **4 of 14 commits** | all four from llama, all generic ("Unauthenticated access to internal data", "Unrestricted SQL query", "Unauthorized retry", "Deterministic D1 error retry"); glm gave no High on any of the 14 |
+| glm Medium/Low findings on those 14 | 28 | read by hand, several are real classes: a migration that is a silent no-op when rows pre-exist, a retried ledger INSERT that can duplicate rows, a paginated HOLD-comment count that is per page |
+| Cost | $0.0449 for 15 runs | about $0.003 a run, below the $0.012 planned |
+
+So v1 would have held 4 of 14 clean pull requests on one family's generic claim and found 1 of 9 real defects: **not fit for `hold`**, and `REVIEW_GATE_MODE` stays `observe`. v2 (this section's
+changes: a cut-off answer keeps its complete findings, glm gets 8000 output tokens, chunks of 14 KB instead of one 47 KB call, a sharper brief that forbids category-only findings, and the
+agreement rule above) is measured by dispatching the same workflow again; the numbers go below before any flip.
 
 ## What this does not cover
 
@@ -137,8 +153,30 @@ credential (so the lane's workflows run on it), the lane merges it and the push 
 its push had failed (`{"error": ..., "sha": ...}`): an error is now a `...-CANARY-FAILED-1` issue that says nothing was reverted. Issue 1001819 (filed by the drill) carries the
 `runtime-probe:` line and closes itself now that the route answers its marker again.
 
+## Second live drill, 2026-11-04 (#7232): a bad deploy reverted with no human step
+
+Same deliberate change on `qnfo-evolve` (0.2.10, `/health` reports `"worker":"qnfo-evolve-drill"`), now with the revert-through-a-pull-request path of #7215. canonical-deploy run
+41915959542 (merge a3396887): baseline `{"f87f94d66cce": "ok", "__live_version__": "0.2.9-revert-49ce59b"}`; deploy `OK` 21:25:50Z; VERSION 0.2.10 arrived; the route failed its marker over
+4 tries; the direct push of the revert was refused and the canary opened **pull request #7234** by itself (21:26:43Z, `revert: a339688 failed the functional canary on qnfo-evolve`, VERSION
+`0.2.11-revert-a339688`, opened with `QNFO_GH_PAT` so the lane's workflows ran on it); the lane merged it at 21:27:42Z; the push it made deployed the reverted code, whose own canary
+(run 41916304809) read `functional qnfo-evolve ok (every probe passed)` at 21:28:19Z. `/health` answers `"worker":"qnfo-evolve"` again. **Bad version live: about 2.5 minutes, human steps: none**
+(drill 1: ~7 minutes and a hand-made revert). The old canary would have passed this deploy: the VERSION arrived.
+
 ## Follow-up owed (CLOSED-LOOPS-1)
 
 * After 7 days: counts of `canary-functional` rows (ok / fail / inconclusive), `DEPLOY-PROBE-*` issues, reverts, and `review-gate` rows (cost, High findings, how many a human overruled) against the
   7-day baseline above; flip `REVIEW_GATE_MODE` to `hold` when the false-positive run and the week agree.
 * Workers on `scripts/probes-allowlist.txt` shrink by one line each time a PR declares probes for them.
+
+### Live observe-mode data, first 45 minutes after #7207 merged (cloud_ops_events kind review-gate)
+
+12 pull request heads reviewed by the gate in the `lane` job (PR 7210 to 7242): 4 got a High (7213, 7215, 7216, 7233; v1 rules, observe mode, nothing held), 8 none; 1 run had a model fail
+(glm unparseable, PR 7211, `status partial`); cost $0.0497 in all (mean $0.004, range $0.002 to $0.010); wall time 9 to 95 s per head, inside the lane's 4-minute step cap; no merge was delayed.
+The review of this work's own #7215 is the one verdict checked end to end: its High (glm) said the ruleset's `Workers Builds` check never reports on a revert pull request, so it could never merge
+- **refuted** by the next drill (#7234 merged in 59 s); a Medium said GitHub queues every push run when `cancel-in-progress` is false - **wrong**, GitHub keeps one pending run and replaces older
+pending ones; a Medium said the merge push would not deploy if GITHUB_TOKEN merged - **moot**, the lane merges with the PAT (drill 2 deployed it); a Medium said `create_pr` silently falls back
+to GITHUB_TOKEN when `QNFO_GH_PAT` is unset - **right**, fixed in the follow-up (the outcome now says no workflow runs on such a pull request and to merge it by hand). One real finding in four, one
+false High: the gate is a useful second reader and a poor judge, which is what the agreement rule and observe mode encode.
+
+`SELECT * FROM v_deploy_proof_7d` (migration 2026-11-05-deploy-proof-7d-view.sql) is the seven-day read-out the owner brief asked for: probe runs and failures, reverts, failures filed, canary
+failures, review-gate runs and cost, and `WORKFLOW-FAILED-1` issues as the red-main proxy. Read it again on 2026-11-11 against the baseline in section (a).
