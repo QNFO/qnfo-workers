@@ -305,7 +305,7 @@ jobs:
       # the qnfo-audit state tables to R2 (all tables, private) and, as a second provider, the public-safe subset (registers
       # and the issue ledger without personal issues, owner cards, ops_config or claims; this repository is public) as an
       # Actions artifact. Runs when the newest snapshot is older than 20 hours; never fails the job.
-      # CONSUMER-SPEED-1: the daily snapshot and the two table sweeps that follow it (BAK-TABLE-SWEEP-1, BLOB-TRIM-1) stay in this job so they run every cycle
+      # CONSUMER-SPEED-1: the daily snapshot and the table sweeps that follow it (BAK-TABLE-SWEEP-1, BLOB-TRIM-1, COLD-TIER-1) stay in this job so they run every cycle
       # and the 1260-minute cadence_sla of `continuity-snapshot` keeps its slack (a snapshot that failed on a D1 overload retries 40 minutes later, not 3 hours).
       # The weekly export is the heavy part and moved to the heavy job.
       - name: Snapshot qnfo-audit state for resurrection
@@ -315,7 +315,7 @@ jobs:
         env:
           SNAPSHOT_DIR: ${{ github.workspace }}/continuity-snapshot
         run: |
-          python3 scripts/continuity_snapshot.py --selftest && python3 scripts/continuity_snapshot.py --only=daily,bak,blob
+          python3 scripts/continuity_snapshot.py --selftest && python3 scripts/continuity_snapshot.py --only=daily,bak,blob,cold
 
       - name: Upload the public-safe continuity snapshot
         if: always() && hashFiles('continuity-snapshot/*.jsonl.gz') != ''
