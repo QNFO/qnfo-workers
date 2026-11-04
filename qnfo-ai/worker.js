@@ -4547,7 +4547,7 @@ var worker_default = {
           const q = (url.searchParams.get("q") || "").trim().slice(0, 200);
           const esc = q.replace(/[\\%_]/g, (c) => "\\" + c);
           const rows = await db.prepare(
-            "SELECT c.thread_id AS thread_id, COUNT(*) AS turns, MIN(c.ts) AS first_ts, MAX(c.ts) AS last_ts, MAX(c.source) AS source, group_concat(DISTINCT c.model) AS models, substr((SELECT p.prompt FROM chatbox_conversations p WHERE p.thread_id = c.thread_id ORDER BY p.ts LIMIT 1), 1, 160) AS title FROM chatbox_conversations c WHERE c.worker = 'qnfo-ai' AND c.thread_id IS NOT NULL AND (?1 = '' OR c.prompt LIKE '%' || ?1 || '%' ESCAPE '\\' OR c.response LIKE '%' || ?1 || '%' ESCAPE '\\') GROUP BY c.thread_id ORDER BY last_ts DESC LIMIT ?2"
+            "WITH f AS (SELECT thread_id, substr(prompt, 1, 160) AS title, ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY ts) AS rn FROM chatbox_conversations WHERE worker = 'qnfo-ai') SELECT c.thread_id AS thread_id, COUNT(*) AS turns, MIN(c.ts) AS first_ts, MAX(c.ts) AS last_ts, MAX(c.source) AS source, group_concat(DISTINCT c.model) AS models, f.title AS title FROM chatbox_conversations c JOIN f ON f.thread_id = c.thread_id AND f.rn = 1 WHERE c.worker = 'qnfo-ai' AND c.thread_id IS NOT NULL AND (?1 = '' OR c.prompt LIKE '%' || ?1 || '%' ESCAPE '\\' OR c.response LIKE '%' || ?1 || '%' ESCAPE '\\') GROUP BY c.thread_id ORDER BY last_ts DESC LIMIT ?2"
           ).bind(esc, limit).all();
           return json({ count: rows.results.length, threads: rows.results });
         }
