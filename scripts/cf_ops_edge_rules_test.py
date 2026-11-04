@@ -12,8 +12,10 @@ Run: python3 scripts/cf_ops_edge_rules_test.py   -> prints "N passed, 0 failed"
 """
 import importlib.util
 import json
+import os
 import pathlib
 import sys
+import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("cf_ops_actions", HERE / "cf_ops_actions.py")
@@ -172,16 +174,26 @@ class Inv:
         return 500, {}
 
 
+TMP = tempfile.mkdtemp()
+for d, body in (("alpha", 'name = "alpha"\n[[secrets_store_secrets]]\nbinding = "CF_TOKEN_STORE"\nstore_id = "x"\nsecret_name = "CF_TOKEN"\n'),
+                ("beta", 'name = "beta"\n[[secrets_store_secrets]]\nbinding = "NEVER_ARRIVED"\nstore_id = "x"\nsecret_name = "OTHER"\n\n[[d1_databases]]\nbinding = "AUDIT"\n'),
+                ("gone", 'name = "gone"\n[[secrets_store_secrets]]\nbinding = "RETIRED_ONE"\nstore_id = "x"\nsecret_name = "OTHER"\n')):
+    os.makedirs(os.path.join(TMP, d))
+    open(os.path.join(TMP, d, "wrangler.toml"), "w", encoding="utf-8").write(body)
+open(os.path.join(TMP, "gone", "RETIRED"), "w").write("x")
+ok(m.declared_store_bindings(TMP) == [("alpha", "CF_TOKEN_STORE", "CF_TOKEN"), ("beta", "NEVER_ARRIVED", "OTHER")], "declared store bindings are read from wrangler.toml, a RETIRED directory is skipped", m.declared_store_bindings(TMP))
+
 inv = Inv()
 m.call = inv.call
 m.emit = lambda obj: inv.emitted.append(obj)
-rc = m.secrets_inventory("acct", "tok", now=NOW)
+rc = m.secrets_inventory("acct", "tok", now=NOW, root=TMP)
 out = inv.emitted[-1]
 blob = json.dumps(out)
 ok(rc == 0 and out["workers"] == 4 and out["workers_with_secrets"] == 3 and out["secret_bindings_total"] == 4 and out["distinct_names"] == 2, "counts workers, workers with secrets, bindings and distinct names", out)
 ok(out["shared_names_3plus_workers"] == {"ROUTER_AUTH_KEY": ["alpha", "beta", "gamma"]}, "a name on three workers is flagged as a rotation fan-out", out["shared_names_3plus_workers"])
 ok(out["workers_stale"] == ["alpha"] and [w for w in out["per_worker"] if w["worker"] == "alpha"][0]["secret_age_days"] == 123, "only the worker whose newest secret change is over 90 days old is stale", out["per_worker"])
 ok(out["store_bindings_live"] == ["CF_TOKEN_STORE"] and out["names_in_worker_and_store"] == ["CF_TOKEN"], "store bindings and names present in both places are listed", out)
+ok(out["declared_store_bindings"] == 2 and out["declared_not_live"] == ["beta:NEVER_ARRIVED->OTHER"], "a declared store binding the live worker lacks is reported", out["declared_not_live"])
 ok(out["store_entries_over_stale_days"] == ["CF_TOKEN"], "a store entry older than 90 days is listed", out["store_entries_over_stale_days"])
 ok("STORE-ID-1" not in blob and "SECRET-ID-1" not in blob and "FULL-ACCESS" not in blob and "comment" not in blob, "no store or secret id and no comment reaches the public log")
 

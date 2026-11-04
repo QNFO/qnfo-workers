@@ -42,7 +42,8 @@ ACTIONS
                          live backs up the ruleset in the log, writes, GETs the hosts that must keep answering and restores the backup when one
                          turns 403 or 429, revert removes the marked rules. Rules not carrying the marker are kept.
   secrets-inventory      SECRETS-INVENTORY-1 (RM-SECRETS-STORE-1): read-only. Per worker the secret NAMES, the age of the newest secret change and the
-                         Secrets Store bindings; every Secrets Store entry with scope and age; the names present in both. No value is readable.
+                         Secrets Store bindings; every Secrets Store entry with scope and age; the names present in both; the store bindings a wrangler.toml
+                         declares that the live worker does not carry. No value is readable.
   obs-sampling WORKER    OBS-SAMPLING-1 (RM-TAIL-WORKERS-1): raise Workers Logs sampling of an allowlisted worker (q08-mind) to 1 so every exception
                          reaches worker_logs through ERROR-DETAIL-CAPTURE-1. Reads the live setting first and sends the traces block back unchanged.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
@@ -1077,7 +1078,25 @@ def _days_since(iso_ts: str, now: float | None = None) -> int | None:
     return int(((now if now is not None else time.time()) - t) // 86400)
 
 
-def secrets_inventory(acct: str, token: str, now: float | None = None) -> int:
+def declared_store_bindings(root: str = ".") -> list:
+    """(worker, binding, secret_name) for every [[secrets_store_secrets]] block in a live repo directory's wrangler.toml."""
+    out = []
+    for d in sorted(os.listdir(root)):
+        w = os.path.join(root, d, "wrangler.toml")
+        if not os.path.isfile(w) or any(os.path.isfile(os.path.join(root, d, m)) for m in ("RETIRED", "FOLDED")):
+            continue
+        text = open(w, encoding="utf-8").read()
+        name = (re.search(r'^\s*name\s*=\s*"([^"]+)"', text, re.M) or [None, d])[1]
+        for block in re.split(r"^\s*\[\[secrets_store_secrets\]\]", text, flags=re.M)[1:]:
+            body = re.split(r"^\s*\[", block, maxsplit=1, flags=re.M)[0]
+            b = re.search(r'^\s*binding\s*=\s*"([^"]+)"', body, re.M)
+            sn = re.search(r'^\s*secret_name\s*=\s*"([^"]+)"', body, re.M)
+            if b and sn:
+                out.append((name, b.group(1), sn.group(1)))
+    return out
+
+
+def secrets_inventory(acct: str, token: str, now: float | None = None, root: str = ".") -> int:
     st, j = call("GET", "/accounts/%s/workers/scripts" % acct, token)
     scripts = sorted(str(s.get("id")) for s in (j.get("result") or []) if s.get("id")) if st == 200 else []
     if not scripts:
@@ -1117,9 +1136,15 @@ def secrets_inventory(acct: str, token: str, now: float | None = None) -> int:
     both = sorted(n for n in by_name if n in store_names)
     shared = {n: ws for n, ws in sorted(by_name.items()) if len(ws) >= 3}
     stale = [w["worker"] for w in workers if (w["secret_age_days"] or 0) > STALE_SECRET_DAYS]
+    # A binding a wrangler.toml declares and the live worker does not carry: the canonical deploy installs only the binding
+    # types installDeclaredBindings knows, and a declared binding that never arrives leaves the worker on its legacy secret.
+    live_pairs = {(w["worker"], b) for w in workers for b in w["store_bindings"]}
+    declared = declared_store_bindings(root)
+    declared_not_live = sorted("%s:%s->%s" % (wn, bn, sn) for wn, bn, sn in declared if (wn, bn) not in live_pairs)
     emit({"action": "secrets-inventory", "ok": st_t == 200, "workers": len(workers), "workers_with_secrets": sum(1 for w in workers if w["secrets"]),
           "secret_bindings_total": sum(w["secrets"] for w in workers), "distinct_names": len(by_name), "stores_http": st_t,
           "store_entries": sum(len(s["entries"]) for s in stores), "store_bindings_live": bound,
+          "declared_store_bindings": len(declared), "declared_not_live": declared_not_live,
           "names_in_worker_and_store": both, "shared_names_3plus_workers": shared, "stale_over_days": STALE_SECRET_DAYS, "workers_stale": stale,
           "store_entries_over_stale_days": sorted(e["name"] for s in stores for e in s["entries"] if (e["age_days"] or 0) > STALE_SECRET_DAYS),
           "per_worker": [{k: w[k] for k in ("worker", "secrets", "store_bindings", "last_secret_change", "secret_age_days")} for w in workers if w["secrets"] or w["store_bindings"]],
