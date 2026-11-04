@@ -15,11 +15,9 @@
       "binding": "AUDIT",
       "explain": [
         "SELECT 1 FROM v_issue_queue LIMIT 1",
-        "SELECT 1 FROM v_metric_trigger_state LIMIT 1"
-      ],
-      "noop_write": [
-        "INSERT INTO fleet_tick (source) SELECT 'probe' WHERE 0",
-        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'reliability', 'low', 'open', 0, 0 WHERE 0"
+        "SELECT 1 FROM v_metric_trigger_state LIMIT 1",
+        "INSERT INTO fleet_tick (source) SELECT 'probe'",
+        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'reliability', 'low', 'open', 0, 0"
       ]
     }
   ]

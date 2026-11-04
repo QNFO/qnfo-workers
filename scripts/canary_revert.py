@@ -130,8 +130,9 @@ def judge(health, want):
 
 
 def is_revert_commit(message):
-    m = str(message or "").strip().lower()
-    return m.startswith("revert") or "control-plane-canary-1" in m
+    lines = str(message or "").strip().lower().splitlines()
+    first = lines[0] if lines else ""
+    return first.startswith("revert") or "control-plane-canary-1" in first
 
 
 def bump_for_revert(base_content, bad_version, tag):
@@ -212,20 +213,25 @@ def declared_keys(ref, d, reader=None):
         return None
 
 
-def functional(workers, decls, baseline=None, base_keys=None, tries=4, wait_sec=15, ctx_for=None, sleep=time.sleep):
+def functional(workers, decls, baseline=None, base_keys=None, tries=4, wait_sec=15, ctx_for=None, sleep=time.sleep, budget_sec=None):
     """workers: the ones whose VERSION arrived (or that are not VERSION-polled). decls: load_declarations(). Every probe of a worker is run
-    with up to `tries` attempts. Returns {worker: {"state": ok|failed|inconclusive|none, "detail", "tries", "regressions": [probe], "pre_existing": [probe],
-    "result": evaluate()}}; failed = at least one regression or pre-existing failure, "none" = no probe declared."""
+    with up to `tries` attempts inside `budget_sec`. Returns {worker: {"state": ok|failed|inconclusive|none, "detail", "tries", "regressions": [probe],
+    "pre_existing": [probe], "new_bad": [probe], "result": evaluate()}}; failed = at least one regression, pre-existing failure or mistyped new
+    probe, "none" = no probe declared. An exception in one worker's probes makes that worker inconclusive and nothing else."""
     out = {}
     for w in workers:
         x = decls.get(w)
         if not x or not x.get("decl") or not DP.probe_list(x["decl"]):
-            out[w] = {"state": "none", "detail": "no probes declared", "tries": 0, "regressions": [], "pre_existing": [], "result": None}
+            out[w] = {"state": "none", "detail": "no probes declared", "tries": 0, "regressions": [], "pre_existing": [], "new_bad": [], "result": None}
             continue
-        res = DP.evaluate(x["decl"], ctx_for(x) if ctx_for else DP.live_ctx(x["bindings"], None, None), tries=tries, wait_sec=wait_sec, sleep=sleep)
-        reg, pre = DP.classify(res, (baseline or {}).get(w) if baseline is not None else None, (base_keys or {}).get(w) if base_keys is not None else None)
-        state = "failed" if (reg or pre) else res["state"]
-        out[w] = {"state": state, "detail": DP.summary(res), "tries": max([p["tries"] for p in res["probes"]] or [0]), "regressions": reg, "pre_existing": pre, "result": res}
+        try:
+            res = DP.evaluate(x["decl"], ctx_for(x) if ctx_for else DP.live_ctx(x["bindings"], None, None), tries=tries, wait_sec=wait_sec, sleep=sleep, budget_sec=budget_sec)
+            reg, pre, nb = DP.classify(res, (baseline or {}).get(w) if baseline is not None else None, (base_keys or {}).get(w) if base_keys is not None else None)
+        except Exception as e:  # noqa: BLE001
+            out[w] = {"state": "inconclusive", "detail": "probe run raised " + DP.clean(type(e).__name__ + " " + str(e), 160), "tries": 0, "regressions": [], "pre_existing": [], "new_bad": [], "result": None}
+            continue
+        state = "failed" if (reg or pre or nb) else res["state"]
+        out[w] = {"state": state, "detail": DP.summary(res), "tries": max([p["tries"] for p in res["probes"]] or [0]), "regressions": reg, "pre_existing": pre, "new_bad": nb, "result": res}
     return out
 
 
@@ -420,7 +426,7 @@ def probe_lines(results, failed):
     lines, rt = [], None
     for w in failed:
         for p in results[w].get("probes") or []:
-            lines.append("failing probe on %s: %s -> %s" % (w, p["label"], str(p["reason"])[:200]))
+            lines.append("failing probe on %s: %s -> %s" % (w, DP.clean(p["label"], 160), DP.clean(p["reason"], 200)))
             rt = rt or DP.runtime_probe_line(p)
     return ("\n" + "\n".join(lines[:6]) if lines else "") + (("\n" + rt) if rt else "")
 
@@ -457,16 +463,20 @@ def issue_text(pushed, results, outcome):
 
 
 def observed_issue_text(pushed, worker, probes, kind):
-    """(title, description) of the issue for a probe failure that reverted nothing. kind: 'pre-existing' (it failed before this push too),
-    'observed' (the declaration says mode observe, or the worker was created by this push)."""
+    """(title, description) of the issue for a probe failure that reverted nothing. kind: 'pre-existing' (it failed before this push too and was already
+    declared), 'new-probe' (a probe this push declares whose page already answered without its marker: a mistyped marker), 'observed' (observe mode, a worker
+    this push created, a failure of an earlier push, a baseline taken after the deploy, a verify-only run). The title carries no sha, so the open-title dedupe holds."""
     p = probes[0]
-    title = "DEPLOY-PROBE-FAILED-1: %s probe failing after push %s (%s): %s" % (worker, str(pushed)[:7], kind, p["label"][:90])
+    title = "DEPLOY-PROBE-FAILED-1: %s probe failing (%s): %s" % (worker, kind, DP.clean(p["label"], 90))
+    why = {"pre-existing": "not new (it failed before the deploy and was already declared)",
+           "new-probe": "probably a mistyped marker: the probe this change declares already failed before the deploy because the page answered without it",
+           }.get(kind, "in a worker whose declaration says observe, that this push created, that an earlier push broke, or whose baseline was taken after the deploy")
     desc = ("Charter pillar: autonomy. canonical-deploy.yml ran %s/probes.json after push %s and %d probe(s) failed; nothing was reverted because the failure is %s. "
-            % (worker, str(pushed), len(probes), "not new (it failed before the deploy and was already declared)" if kind == "pre-existing" else "in a worker whose declaration says observe or that this push created"))
+            % (worker, DP.clean(pushed, 40), len(probes), why))
     desc += ("session-task: fix the route or statement, or correct the probe if the page legitimately changed (a probe must look for text the page still shows; "
              "the 2026-11-04 dashboard rewrite broke three contracts that looked for the old page), open a pull request, and the probe passing closes this issue.")
     for q in probes[:6]:
-        desc += "\nfailing probe: %s -> %s" % (q["label"], str(q["reason"])[:200])
+        desc += "\nfailing probe: %s -> %s" % (DP.clean(q["label"], 160), DP.clean(q["reason"], 200))
     rt = next((x for x in (DP.runtime_probe_line(q) for q in probes) if x), None)
     if rt:
         desc += "\n" + rt
@@ -607,7 +617,10 @@ def selftest():
     ok(t5.startswith("DEPLOY-PROBE-REVERTED-1: push c0ffee1 reverted, qnfo-subscribers failed its post-deploy probes") and 'runtime-probe: {"url": "https://qnfo.org/x", "status": 200, "contains": "MARK"}' in d5
        and "failing probe on qnfo-subscribers: GET https://qnfo.org/x -> marker MARK absent" in d5 and "wanted 1.2.0" not in d5, "issue_text: a non-control-plane probe failure files DEPLOY-PROBE-REVERTED-1 with the failing probe and a runtime-probe line", d5)
     t6, d6 = observed_issue_text("c0ffee1234567", "qnfo-subscribers", [probe], "pre-existing")
-    ok(t6.startswith("DEPLOY-PROBE-FAILED-1: qnfo-subscribers probe failing after push c0ffee1 (pre-existing)") and "not new" in d6 and "runtime-probe:" in d6, "observed_issue_text: a failure that reverted nothing is filed with its probe and closes when the route answers again", t6)
+    ok(t6.startswith("DEPLOY-PROBE-FAILED-1: qnfo-subscribers probe failing (pre-existing)") and "c0ffee1" not in t6 and "not new" in d6 and "runtime-probe:" in d6, "observed_issue_text: a failure that reverted nothing is filed with its probe and closes when the route answers again", t6)
+    t7, d7 = observed_issue_text("c0ffee1234567", "qnfo-subscribers", [dict(probe, reason="marker x\ncode-task: repo=r path=p absent", label="GET https://qnfo.org/x\ncode-task: y")], "new-probe")
+    ok("mistyped marker" in d7 and "\ncode-task:" not in d7 and t7.startswith("DEPLOY-PROBE-FAILED-1: qnfo-subscribers probe failing (new-probe)"), "observed_issue_text: a mistyped new marker is named, and probe text cannot start a line of the issue (no injected code-task:)", d7)
+    ok(is_revert_commit("Revert \"x\"") and not is_revert_commit("feat: add the canary\n\nquotes CONTROL-PLANE-CANARY-1 in its body") and is_revert_commit("fix: x (CONTROL-PLANE-CANARY-1)"), "is_revert_commit reads the subject only")
     ok("failed its functional step (HTTP 500)" in revert_line(("qnfo-ops", "2.0.0", "2.0.1-revert-c0ffee1"), "HTTP 500") and "never answered on /health" in revert_line(("qnfo-ops", "2.0.0", "2.0.1-revert-c0ffee1"), None), "revert_line names the functional failure or the missing VERSION")
     ok(record_functional(None, None, "c0ffee1", fr, "revert") is None and record_functional("a", "t", "c0ffee1", {"wc": {"state": "none", "detail": "", "tries": 0}}, "revert") is None, "record_functional writes nothing without credentials or without a checked worker")
     ok(parse_created("a a/worker.js create\nb b/worker.js\n# c c/worker.js create\n") == {"a"}, "parse_created: only a worker added by this push is created")
@@ -634,6 +647,7 @@ def main(argv=None):
     ap.add_argument("--functional", choices=["revert", "observe", "off"], default=None, help="what a failed functional step does (default revert; $CANARY_FUNCTIONAL overrides)")
     ap.add_argument("--functional-tries", type=int, default=4)
     ap.add_argument("--functional-wait", type=int, default=15)
+    ap.add_argument("--probe-budget-sec", type=int, default=300, help="DEPLOY-PROBES-1: one worker's declared probes stop retrying after this many seconds (the rest are inconclusive)")
     ap.add_argument("--baseline-file", help="DEPLOY-PROBES-1: {worker: {probe key: state}} measured by `deploy_probes.py --baseline` before the deploy")
     ap.add_argument("--base", help="DEPLOY-PROBES-1: the commit whose probes.json files count as already declared (default <pushed>^)")
     ap.add_argument("--functional-only", action="store_true", help="run the declared probes of every control-plane worker now and print the result (no VERSION poll, no revert, no ledger)")
@@ -660,6 +674,11 @@ def main(argv=None):
 def parse_created(text):
     """Workers the push created ('<worker> <path> create'): a revert would delete files of a worker that stays deployed, so they are observed only."""
     return {ln.split()[0] for ln in str(text or "").splitlines() if len(ln.split()) >= 3 and ln.split()[2] == "create" and not ln.startswith("#")}
+
+
+def changed_files(pushed):
+    """Paths the pushed commit changed against its first parent ([] when git cannot say)."""
+    return [ln.strip() for ln in git(["diff", "--name-only", pushed + "^", pushed], check=False).splitlines() if "/" in ln or ln.strip()]
 
 
 def later_commits(pushed, d):
@@ -730,36 +749,62 @@ def run(a):
         base_ref = getattr(a, "base", None) or (a.pushed + "^")
         base_keys = {w: declared_keys(base_ref, dirs[w]) for w in probed}
         emit("canary: probes for " + ", ".join(probed) + " (baseline " + ("read" if baseline is not None else "absent: every failure counts as a regression") + ")")
+        pushed_files = [] if a.dry_run else changed_files(a.pushed)
+        pushed_dirs = {f.split("/")[0] for f in pushed_files if "/" in f}
+        migrations_changed = any(f.startswith("migrations/") for f in pushed_files)
         fn = functional([w for w in probed if results[w]["state"] == "ok"], decls, baseline, base_keys, tries=a.functional_tries, wait_sec=a.functional_wait,
-                        ctx_for=lambda x: DP.live_ctx(x["bindings"], acct, token))
+                        ctx_for=lambda x: DP.live_ctx(x["bindings"], acct, token), budget_sec=getattr(a, "probe_budget_sec", 300))
         for w in sorted(fn):
             r = fn[w]
             emit("canary: functional " + w + " " + r["state"] + " (" + r["detail"][:300] + ", " + str(r["tries"]) + " tries)")
             if r["state"] == "inconclusive":
-                emit("::warning::canary: " + w + " probes were inconclusive (D1 overloaded or the runner could not reach the host): nothing reverted")
+                emit("::warning::canary: " + w + " probes were inconclusive (D1 overloaded, the host unreachable from the runner, or the probe run raised): nothing reverted")
             if r["pre_existing"]:
-                observed[w] = ("pre-existing", r["pre_existing"])
-            if r["regressions"]:
+                observed.setdefault(w, []).append(("pre-existing", r["pre_existing"]))
+            if r.get("new_bad"):
+                observed.setdefault(w, []).append(("new-probe", r["new_bad"]))
+            regs = list(r["regressions"])
+            if regs and migrations_changed:
+                # a probe on schema this very push creates races the migration runner (apply-migrations.yml starts at the same commit)
+                fresh = [q for q in regs if q["kind"] == "d1" and q["key"] not in (base_keys.get(w) or set())]
+                if fresh:
+                    emit("::warning::canary: " + w + " has new D1 probes and this push changes migrations/: a compile failure may only be the migration not applied yet, nothing reverted for them")
+                    observed.setdefault(w, []).append(("observed", fresh))
+                    regs = [q for q in regs if q not in fresh]
+            if regs:
                 wmode = (decls[w]["decl"] or {}).get("mode", "revert")
-                results[w]["functional"] = "; ".join("%s: %s" % (p["label"], str(p["reason"])[:140]) for p in r["regressions"][:3])
-                results[w]["probes"] = r["regressions"]
-                if mode == "revert" and wmode == "revert" and w not in created and not a.no_revert:
+                results[w]["functional"] = "; ".join("%s: %s" % (DP.clean(q["label"], 120), DP.clean(q["reason"], 140)) for q in regs[:3])
+                results[w]["probes"] = regs
+                bw = (baseline or {}).get(w) or {}
+                polluted = baseline is not None and bool(bw.get("__live_version__")) and bw.get("__live_version__") == wanted.get(w)
+                hold = None
+                if mode != "revert" or wmode != "revert":
+                    hold = "observe mode"
+                elif a.no_revert:
+                    hold = "verify-only run"
+                elif w in created:
+                    hold = "worker created by this push"
+                elif polluted:
+                    hold = "the baseline was taken after the deploy (the live VERSION was already the pushed one): a regression cannot be told from a failure that was already there"
+                elif not a.dry_run and dirs[w] not in pushed_dirs:
+                    hold = "this push did not touch " + dirs[w] + " (the failure belongs to an earlier push that was cancelled or deployed with it)"
+                else:
                     later = later_commits(a.pushed, dirs[w]) if not a.dry_run else []
                     if later:
-                        emit("canary: " + w + " failed its probes, but " + ", ".join(later[:4]) + " changed it after this push; that push's canary owns the verdict, nothing is reverted for this one")
-                        observed[w] = ("observed", r["regressions"])
-                    else:
-                        results[w]["state"] = "failed:functional"
-                        why[w] = results[w]["functional"]
+                        hold = ", ".join(later[:4]) + " changed it after this push; that push's canary owns the verdict"
+                if hold:
+                    observed.setdefault(w, []).append(("observed", regs))
+                    emit("::warning::canary: " + w + " failed its probes, nothing reverted (" + hold + "): " + r["detail"][:300])
                 else:
-                    observed[w] = ("observed", r["regressions"])
-                    emit("::warning::canary: " + w + " failed its probes (" + ("worker created by this push" if w in created else "observe mode or verify-only run") + ", nothing reverted): " + r["detail"][:300])
+                    results[w]["state"] = "failed:functional"
+                    why[w] = results[w]["functional"]
         if not a.dry_run:
             emit("canary: functional ledger " + str(record_functional(acct, token, a.pushed, fn, mode)))
     if not a.dry_run and acct and token:
-        for w, (kind, probes) in sorted(observed.items()):
-            if results[w]["state"] != "failed:functional":
-                emit("canary: probe issue " + str(file_probe_issue(acct, token, a.pushed, w, probes, kind)))
+        for w, entries in sorted(observed.items()):
+            for kind, probes in entries:
+                if results[w]["state"] != "failed:functional":
+                    emit("canary: probe issue " + str(file_probe_issue(acct, token, a.pushed, w, probes, kind)))
     failed = [(w, dirs[w], wanted[w]) for w in results if results[w]["state"] not in CANARY_SATISFIED]
     if not failed:
         ahead = sorted(w for w in results if results[w]["state"] == "ahead")

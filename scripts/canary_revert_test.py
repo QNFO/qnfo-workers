@@ -206,16 +206,19 @@ DECL = {"mode": "revert", "health": "https://qnfo-evolve.q08.workers.dev/health"
 
 
 class ProbeFlow(unittest.TestCase):
-    def _run(self, answer, decl=DECL, base_decl=DECL, baseline=None, created=False, later=None, no_revert=False, health_version="1.0.1"):
+    def _run(self, answer, decl=DECL, base_decl=DECL, baseline=None, created=False, later=None, no_revert=False, health_version="1.0.1", files=None, wrangler='name = "qnfo-evolve"\n', d1=None):
         calls = {"revert": [], "issue": [], "probe_issue": []}
-        names = ["git", "git_show", "fetch_health", "revert_push", "file_issue", "file_probe_issue", "record_functional", "record_ahead", "later_commits", "emit", "poll"]
+        names = ["git", "git_show", "fetch_health", "revert_push", "file_issue", "file_probe_issue", "record_functional", "record_ahead", "later_commits", "changed_files", "emit", "poll"]
         saved = {n: getattr(cr, n) for n in names}
-        saved_fetch = dp.fetch_text
+        saved_fetch, saved_d1 = dp.fetch_text, dp.d1_explain
         cr.git = lambda args, check=True: 'var VERSION = "1.0.1";\n'
+        cr.changed_files = lambda pushed: list(files if files is not None else [WORKER + "/worker.js"])
+        if d1 is not None:
+            dp.d1_explain = lambda acct_, token_, db_id, sql: d1
 
         def show(ref, path):
             if path == WORKER + "/wrangler.toml":
-                return 'name = "qnfo-evolve"\n'
+                return wrangler
             if path == WORKER + "/probes.json":
                 d = decl if ref == PUSHED else base_decl
                 return None if d is None else json.dumps(d)
@@ -259,7 +262,7 @@ class ProbeFlow(unittest.TestCase):
         finally:
             for n, f in saved.items():
                 setattr(cr, n, f)
-            dp.fetch_text = saved_fetch
+            dp.fetch_text, dp.d1_explain = saved_fetch, saved_d1
             for k, v in old_env.items():
                 if v is None:
                     os.environ.pop(k, None)
@@ -323,6 +326,35 @@ class ProbeFlow(unittest.TestCase):
     def test_the_version_poll_of_a_declared_health_url_still_gates_the_probes(self):
         rc, calls, out = self._run((200, "all good MARKER"), health_version="0.9.0")
         self.assertEqual(len(calls["revert"]), 1, "the VERSION never arrived: reverted exactly like a control-plane worker")
+
+    def test_a_failure_belonging_to_an_earlier_cancelled_push_is_not_blamed_on_this_one(self):
+        rc, calls, out = self._run((200, "nope"), files=["qnfo-other/worker.js", "docs/a.md"])
+        self.assertEqual((calls["revert"], calls["issue"]), ([], []), "this push did not touch the failing worker: reverting it would hit the innocent commit and keep the bad code")
+        self.assertIn("did not touch " + WORKER, "\n".join(out))
+        self.assertEqual([k for _, k, _ in calls["probe_issue"]], ["observed"])
+
+    def test_a_baseline_taken_after_the_deploy_cannot_tell_a_regression_from_old_debt(self):
+        rc, calls, out = self._run((200, "nope"), baseline={"__live_version__": "1.0.1"})
+        self.assertEqual(calls["revert"], [], "the live VERSION before the deploy already was the pushed one")
+        self.assertIn("baseline was taken after the deploy", "\n".join(out))
+        rc, calls, out = self._run((200, "nope"), baseline={"__live_version__": "1.0.0"})
+        self.assertEqual(len(calls["revert"]), 1, "a baseline of the previous VERSION is trusted")
+
+    def test_a_mistyped_marker_in_a_new_probe_is_filed_not_reverted(self):
+        rc, calls, out = self._run((200, "nope"), base_decl=None, baseline={self.key(): "fail-marker"})
+        self.assertEqual(calls["revert"], [])
+        self.assertEqual([k for _, k, _ in calls["probe_issue"]], ["new-probe"])
+        rc, calls, out = self._run((404, "not found"), base_decl=None, baseline={self.key(): "fail"})
+        self.assertEqual(len(calls["revert"]), 1, "a route that did not exist before the push and is broken after it is the push's own")
+
+    def test_a_new_d1_probe_on_schema_the_same_push_migrates_waits_for_the_migration(self):
+        decl = {"mode": "revert", "health": DECL["health"], "d1": [{"binding": "DB", "explain": ["SELECT 1 FROM foo"]}]}
+        wr = 'name = "qnfo-evolve"\n[[d1_databases]]\nbinding = "DB"\ndatabase_name = "qnfo-audit"\ndatabase_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"\n'
+        err = (False, "D1 HTTP 400: no such table: foo: SQLITE_ERROR")
+        rc, calls, out = self._run((200, "ok"), decl=decl, base_decl=None, wrangler=wr, d1=err, files=[WORKER + "/worker.js", "migrations/2026-11-05-foo.sql"])
+        self.assertEqual(calls["revert"], [], "apply-migrations.yml starts at the same commit and may not have created foo yet")
+        rc, calls, out = self._run((200, "ok"), decl=decl, base_decl=None, wrangler=wr, d1=err, files=[WORKER + "/worker.js"])
+        self.assertEqual(len(calls["revert"]), 1, "without a migration in the push a missing table is the push's own")
 
     def test_every_repository_declaration_is_valid_and_its_workers_are_deployable(self):
         self.assertEqual(dp.validate_repo(), [])

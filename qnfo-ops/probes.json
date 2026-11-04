@@ -13,10 +13,10 @@
   "d1": [
     {
       "binding": "QNFO_AUDIT",
-      "noop_write": [
-        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'reliability', 'low', 'open', 0, 0 WHERE 0",
-        "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) SELECT 'probe', 't', 'probe', 'probe', '{}', 'probe', 'ok' WHERE 0",
-        "INSERT INTO fleet_deploys (worker, actor, ok, note, ts) SELECT 'probe', 'probe', 1, 'probe', 't' WHERE 0"
+      "explain": [
+        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'reliability', 'low', 'open', 0, 0",
+        "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) SELECT 'probe', 't', 'probe', 'probe', '{}', 'probe', 'ok'",
+        "INSERT INTO fleet_deploys (worker, actor, ok, note, ts) SELECT 'probe', 'probe', 1, 'probe', 't'"
       ]
     }
   ]

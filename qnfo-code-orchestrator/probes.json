@@ -13,8 +13,8 @@
   "d1": [
     {
       "binding": "AUDIT_DB",
-      "noop_write": [
-        "INSERT INTO code_tasks (repo, path, goal, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'queued', 0, 0 WHERE 0"
+      "explain": [
+        "INSERT INTO code_tasks (repo, path, goal, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'queued', 0, 0"
       ]
     }
   ]

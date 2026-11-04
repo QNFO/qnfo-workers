@@ -12,8 +12,8 @@
   "d1": [
     {
       "binding": "AUDIT",
-      "noop_write": [
-        "INSERT INTO work_claims (path, intent, holder, claimed_at, expires_at) SELECT 'probe', 'probe', 'probe', 0, 0 WHERE 0"
+      "explain": [
+        "INSERT INTO work_claims (path, intent, holder, claimed_at, expires_at) SELECT 'probe', 'probe', 'probe', 0, 0"
       ]
     }
   ]

@@ -54,6 +54,7 @@ MAX_RUNS_24H = 80
 MAX_OUT_TOKENS = 4000
 MODEL_TIMEOUT_S = 100
 MARK = "<!-- review-gate:"
+GATE_BOT = os.environ.get("REVIEW_GATE_BOT") or "github-actions[bot]"  # the login that posts the gate's comments (GITHUB_TOKEN); anyone else's comment is not the gate's
 MIN_TRIGGER_CHARS = 40
 
 BRIEF = """You are a hostile, independent code reviewer for a fleet of Cloudflare Workers (JavaScript, D1 SQLite, Cache API, GitHub Actions).
@@ -127,45 +128,61 @@ def added_lines(text):
     return [ln[1:] for ln in text.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
 
 
+def removed_lines(text):
+    return [ln[1:] for ln in text.splitlines() if ln.startswith("-") and not ln.startswith("---")]
+
+
 def classify(diff):
-    """-> {"risky": bool, "reasons": [str], "scores": {path: int}}. Risky when a workflow or migration file changes, or an added line of
-    reviewable code touches auth, a route, the cache or a trigger/view."""
+    """-> {"risky": bool, "reasons": [str], "scores": {path: int}}. Risky when a workflow or migration file changes (whatever its name: a `.test.yml`
+    workflow still runs), when an added OR removed line of reviewable code touches auth, a route, the cache or a trigger/view (deleting an auth check is
+    the riskiest edit there is), or when GitHub withheld a file's patch (too large to show: it cannot be judged, so it is reviewed as far as it is visible).
+    A file's score is capped per category so a padded file cannot crowd the vulnerable one out of the model's window."""
     reasons, scores = [], {}
     for path, text in split_diff(diff):
-        if NOT_REVIEWED.search(path):
-            continue
         for rx, why in RISK_PATH:
             if rx.search(path):
                 reasons.append(why + ":" + path)
                 scores[path] = scores.get(path, 0) + 5
-        if CODE_FILE.search(path):
-            hits = {}
-            for ln in added_lines(text):
+        if "@@ patch withheld" in text:
+            reasons.append("withheld:" + path)
+            scores[path] = scores.get(path, 0) + 3
+        if NOT_REVIEWED.search(path) or not CODE_FILE.search(path):
+            continue
+        hits = {}
+        for sign, lines in (("", added_lines(text)), ("removed-", removed_lines(text))):
+            for ln in lines:
                 for cat, rx in RISK_LINE:
                     if rx.search(ln):
-                        hits[cat] = hits.get(cat, 0) + 1
-            for cat, n in hits.items():
-                reasons.append("%s:%s(%d)" % (cat, path, n))
-                scores[path] = scores.get(path, 0) + n
+                        hits[sign + cat] = hits.get(sign + cat, 0) + 1
+        for cat, n in hits.items():
+            reasons.append("%s:%s(%d)" % (cat, path, n))
+            scores[path] = scores.get(path, 0) + min(n, 5)
     return {"risky": bool(reasons), "reasons": reasons[:12], "scores": scores}
 
 
 def fit_diff(diff, scores, limit=MAX_DIFF_CHARS):
-    """The diff trimmed to `limit` characters: reviewable files first, highest risk score first; whole files while they fit, then the head of
-    the next one; tests, docs and the rest last. Returns (text, omitted_chars)."""
+    """The diff trimmed to `limit` characters. Reviewable files first, highest risk score first; each file first gets an equal share of the window (at least
+    6000 characters), so a long padded file cannot starve a short one, then what is left of the window goes to the files that were cut, in the same order.
+    Tests, docs and the rest come last. Returns (text, omitted_chars)."""
     files = split_diff(diff)
     files.sort(key=lambda pt: (NOT_REVIEWED.search(pt[0]) is not None, -scores.get(pt[0], 0)))
-    out, used = [], 0
+    if not files:
+        return "", 0
+    share = max(6000, limit // len(files))
+    taken, used = {}, 0
     for path, text in files:
-        room = limit - used
-        if room <= 200:
-            break
-        if len(text) <= room:
-            out.append(text)
-            used += len(text)
-        else:
-            out.append(text[:room] + "\n@@ truncated @@\n")
-            used = limit
+        n = min(len(text), share, max(0, limit - used))
+        taken[path] = n
+        used += n
+    for path, text in files:
+        extra = min(len(text) - taken[path], max(0, limit - used))
+        taken[path] += extra
+        used += extra
+    out = []
+    for path, text in files:
+        if taken[path] <= 0:
+            continue
+        out.append(text if taken[path] >= len(text) else text[:taken[path]] + "\n@@ truncated @@\n")
     return "".join(out), max(0, len(diff) - used)
 
 
@@ -194,8 +211,8 @@ def vet(findings, diff, model):
     fix; a High one also needs an evidence line that occurs verbatim (whitespace-insensitive) among the diff's lines, else it is demoted to Medium
     with `unverified` set. Severity is clamped to High/Medium/Low."""
     paths = [p for p, _ in split_diff(diff)]
-    diff_lines = {norm(ln) for ln in diff.splitlines()}
-    diff_lines |= {norm(ln[1:]) for ln in diff.splitlines() if ln[:1] in "+- "}
+    # only ADDED lines are evidence: a deleted line or an unchanged context line says nothing about what this change introduces
+    diff_lines = {norm(ln[1:]) for ln in diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")}
     out = []
     for f in findings:
         sev = str(f.get("severity", "")).strip().capitalize()
@@ -206,7 +223,7 @@ def vet(findings, diff, model):
         title = norm(f.get("title"))[:140]
         if not match or len(trigger) < MIN_TRIGGER_CHARS or len(fix) < 8 or not title:
             continue
-        verified = bool(ev) and (ev in diff_lines or any(ev in dl for dl in diff_lines if len(ev) >= 12))
+        verified = bool(ev) and (ev in diff_lines or (len(ev) >= 24 and any(ev in dl for dl in diff_lines)))
         unverified = False
         if sev == "High" and not verified:
             sev, unverified = "Medium", True
@@ -253,11 +270,28 @@ def match_expected(findings, expected):
 
 
 # ------------------------------------------------------------------------------------------------------------------------- comments
+# The phrases the stale-PR lane of qnfo-fleet-control reads as a hold or as its release (BH_HOLD_COMMENT_RE, BH_HOLD_RELEASE_RE). Model text is data: it must
+# neither start a hold nor lift one, so each match gets a zero-width space after its first letter (it reads the same and no longer matches).
+STALE_LANE_PHRASES = re.compile(r"(?i)(\bdo[\s-]*not[\s-]*merge\b|\bhold\s*:|\bchanges requested\b|\bfix (?:this |it )?before (?:this|it) merges\b|\bbefore this merges\b|"
+                                r"\bresolved\b|\bhold released\b|\bunhold\b|\brelease the hold\b|\bhold lifted\b)")
+TOKEN_LIKE = re.compile(r"(?:ghp_|github_pat_|cfat_|sk-ant-|AKIA|AIza)[A-Za-z0-9_\-]{8,}|[A-Za-z0-9_\-]{32,}")
+
+
+def safe(text, limit):
+    """Model- or diff-derived text for a comment: long token-like strings redacted (a High finding about a leaked secret must not republish it), the stale
+    lane's phrases defused, @mentions defused, one line."""
+    t = re.sub(r"\s+", " ", str(text or ""))
+    t = TOKEN_LIKE.sub("[redacted]", t)
+    t = STALE_LANE_PHRASES.sub(lambda m: m.group(0)[0] + "\u200b" + m.group(0)[1:], t)
+    t = re.sub(r"@(\w)", "@\u200b\\1", t)
+    return t[:limit]
+
+
 def hold_text(findings, sha, mode, models, cost):
     highs = [f for f in findings if f["severity"] == "High"]
     lines = []
     if highs and mode == "hold":
-        lines.append("HOLD: review-gate found %d High item(s) in %s. A new push releases this hold; reply `hold released: <reason>` (collaborators) if a finding is wrong." % (len(highs), sha[:7]))
+        lines.append("HOLD: review-gate found %d High item(s) in %s. A new push releases this hold. If a finding is wrong, a collaborator comments `override review-gate: <reason>`." % (len(highs), sha[:7]))
     elif highs:
         lines.append("review-gate (observe): %d High item(s) in %s. Nothing is held in observe mode." % (len(highs), sha[:7]))
     else:
@@ -265,11 +299,11 @@ def hold_text(findings, sha, mode, models, cost):
     lines.append("")
     for i, f in enumerate(findings[:MAX_FINDINGS_SHOWN], 1):
         who = "+".join(f["models"]) if f.get("models") else f.get("model", "")
-        lines.append("%d. **[%s]** %s (`%s`; %s%s)" % (i, f["severity"], f["title"], f["file"], who, "; evidence not found in the diff" if f.get("unverified") else ""))
+        lines.append("%d. **[%s]** %s (`%s`; %s%s)" % (i, f["severity"], safe(f["title"], 140), safe(f["file"], 120).replace("`", "'"), who, "; evidence not found in the diff" if f.get("unverified") else ""))
         if f.get("evidence"):
-            lines.append("   - evidence: `%s`" % f["evidence"].replace("`", "'"))
-        lines.append("   - trigger: %s" % f["trigger"])
-        lines.append("   - fix: %s" % f["fix"])
+            lines.append("   - evidence: `%s`" % safe(f["evidence"], 220).replace("`", "'"))
+        lines.append("   - trigger: %s" % safe(f["trigger"], 700))
+        lines.append("   - fix: %s" % safe(f["fix"], 400))
     if len(findings) > MAX_FINDINGS_SHOWN:
         lines.append("")
         lines.append("(%d more not shown)" % (len(findings) - MAX_FINDINGS_SHOWN))
@@ -285,26 +319,31 @@ def released_text(old_body, why):
     return "review-gate (released, %s): earlier result kept below for the record.\n\n%s" % (why, body)
 
 
+def is_gate_comment(c):
+    return str((c.get("user") or {}).get("login") or "") == GATE_BOT
+
+
 def plan_releases(comments, sha):
     """-> [(comment id, why)] gate comments to edit. A gate HOLD (body starts with HOLD: and carries MARK) is released when its head differs from
-    `sha` (a new push) or when a collaborator commented `hold released` after it."""
+    `sha` (a new push) or when a collaborator commented `override review-gate` (or `hold released`) after it."""
     out = []
     for i, c in enumerate(comments):
         body = str(c.get("body") or "")
-        if not body.startswith("HOLD:") or MARK not in body:
+        if not is_gate_comment(c) or not body.startswith("HOLD:") or MARK not in body:
             continue
         m = re.search(re.escape(MARK) + r"([0-9a-f]{7,40})", body)
         if m and not sha.startswith(m.group(1)[:7]) and not m.group(1).startswith(sha[:7]):
             out.append((c["id"], "superseded by a new push"))
             continue
-        later = [x for x in comments[i + 1:] if re.search(r"(?i)\bhold released\b", str(x.get("body") or "")) and x.get("author_association") in ("OWNER", "MEMBER", "COLLABORATOR")]
+        later = [x for x in comments[i + 1:] if re.search(r"(?i)\b(hold released|override review-gate)\b", str(x.get("body") or "")) and x.get("author_association") in ("OWNER", "MEMBER", "COLLABORATOR")]
         if later:
             out.append((c["id"], "released by a collaborator"))
     return out
 
 
 def already_reviewed(comments, sha):
-    return any(MARK + sha in str(c.get("body") or "") for c in comments)
+    """True when the gate's own bot already commented on this head; a marker typed into anyone else's comment (a pull request author skipping the review) does not count."""
+    return any(is_gate_comment(c) and MARK + sha in str(c.get("body") or "") for c in comments)
 
 
 # ------------------------------------------------------------------------------------------------------------------------ transports
@@ -358,14 +397,31 @@ def review(diff, title, caller, scores):
             return short, None, 0.0, "%s: %s" % (short, type(e).__name__ + " " + str(e)[:120]), time.time() - t0
         fs = parse_findings(ans)
         return short, vet(fs, text, short), usd(usage, pin, pout), (None if fs or "findings" in str(ans) else "%s: no parseable answer" % short), time.time() - t0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(MODELS)) as ex:
-        for short, fs, c, err, secs in ex.map(one, MODELS):
-            if err:
-                errors.append(err)
-            if fs is not None:
-                per.append((short, fs))
-                used.append(short)
-            cost += c
+    import threading
+    slots = {}
+
+    def runner(m):
+        try:
+            slots[m[0]] = one(m)
+        except Exception as e:  # noqa: BLE001  one() already catches; this keeps a thread from dying silently
+            slots[m[0]] = (m[0], None, 0.0, "%s: %s" % (m[0], type(e).__name__), 0.0)
+    threads = [threading.Thread(target=runner, args=(m,), daemon=True) for m in MODELS]
+    for t in threads:
+        t.start()
+    deadline = time.time() + MODEL_TIMEOUT_S + 20
+    for t in threads:
+        t.join(max(0.0, deadline - time.time()))
+    for m in MODELS:
+        if m[0] not in slots:
+            errors.append("%s: no answer within %ds" % (m[0], MODEL_TIMEOUT_S + 20))
+            continue
+        short, fs, c, err, secs = slots[m[0]]
+        if err:
+            errors.append(err)
+        if fs is not None:
+            per.append((short, fs))
+            used.append(short)
+        cost += c
     return {"findings": merge_findings(per), "per_model": per, "cost": cost, "models": used, "errors": errors, "omitted": omitted}
 
 
@@ -390,6 +446,22 @@ def record(acct, token, sha, pr, mode, cls, result, verdict, ms):
     except Exception as e:  # noqa: BLE001
         emit("::warning::review-gate: ledger row not written: " + str(e)[:160])
         return None
+
+
+def claim_head(acct, token, sha, pr):
+    """True when this run owns the review of `sha`: a ledger row (INSERT OR IGNORE, status running) is written BEFORE the models are called, so a lane
+    event that repeats for the same head, a clean result and a no-model result are all remembered, and the daily cap counts claims. True when the ledger
+    cannot be written (D1 overloaded): the review then runs, which at worst repeats a cheap call."""
+    if not (acct and token):
+        return True
+    try:
+        from apply_migrations import d1
+        meta = {}
+        d1(acct, token, "35e2e573-92f3-46ac-83c6-22f6429fc5e5", "INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, status, text, job, meta) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'review-gate', 'running', ?2, 'pr-lane', '{}')",
+           ["review-gate-" + sha[:12], "REVIEW-GATE-1 PR %s %s: running" % (pr, sha[:7])], meta)
+        return int(meta.get("changes", 1)) > 0
+    except Exception:  # noqa: BLE001
+        return True
 
 
 def runs_today(acct, token):
@@ -430,6 +502,8 @@ def run_pr(pr, repo, mode, dry, gh_token, acct, cf_token, api="https://api.githu
         return "skip: no Cloudflare credential"
     if caller is None and runs_today(acct, cf_token) >= MAX_RUNS_24H:
         return "skip: %d review runs in 24 h (cap), backpressure" % MAX_RUNS_24H
+    if not dry and caller is None and not claim_head(acct, cf_token, sha, pr):
+        return "skip: head %s is being or was reviewed (ledger row review-gate-%s)" % (sha[:7], sha[:12])
     caller = caller or (lambda mid, user, extra: call_model(acct, cf_token, mid, user, extra=extra))
     t0 = time.time()
     res = review(diff, meta.get("title", ""), caller, cls["scores"])
@@ -561,12 +635,14 @@ def selftest():
     ok(t_obs.startswith("review-gate (observe): 1 High") and not t_obs.startswith("HOLD:") and not t_clean.startswith("HOLD:"), "observe mode and a clean result never start with HOLD:")
     ok(decide({"findings": mg}, "hold") == "hold" and decide({"findings": mg}, "observe") == "observe" and decide({"findings": []}, "hold") == "clean", "decide: hold only in hold mode with a High item")
 
-    old = {"id": 1, "body": t_hold, "author_association": "NONE"}
+    old = {"id": 1, "body": t_hold, "author_association": "NONE", "user": {"login": GATE_BOT}}
     cm = [old]
     ok(plan_releases(cm, "c0ffee1234567") == [] and plan_releases(cm, "deadbee1234567") == [(1, "superseded by a new push")], "plan_releases: the hold of another head is superseded, the current head's stays")
     ok(plan_releases([old, {"id": 2, "body": "hold released: false positive", "author_association": "COLLABORATOR"}], "c0ffee1234567") == [(1, "released by a collaborator")]
        and plan_releases([old, {"id": 2, "body": "hold released", "author_association": "NONE"}], "c0ffee1234567") == [], "plan_releases: a collaborator's `hold released` releases it, a stranger's does not")
     ok(not released_text(t_hold, "x").startswith("HOLD:") and already_reviewed(cm, "c0ffee1234567") and not already_reviewed(cm, "deadbee1234567"), "released_text no longer starts with HOLD:; already_reviewed reads the marker")
+    spoof = {"id": 5, "body": "x " + MARK + "c0ffee1234567 -->", "author_association": "NONE", "user": {"login": "someone"}}
+    ok(not already_reviewed([spoof], "c0ffee1234567") and plan_releases([dict(spoof, body="HOLD: fake " + MARK + "0badf00")], "c0ffee1234567") == [], "a marker or a HOLD: typed by anyone but the gate bot neither skips the review nor gets edited")
 
     # run_pr end to end with fake transports
     state = {"posted": [], "patched": []}
@@ -582,7 +658,7 @@ def selftest():
         if url.endswith("/pulls/7"):
             return {"state": "open", "draft": False, "title": "t", "head": {"sha": "c0ffee1234567c0ffee1234567c0ffee1234567"}}
         if url.endswith("/comments"):
-            return [{"id": 9, "body": "HOLD: review-gate found 1 High item(s) in 0badf00.\n" + MARK + "0badf00" + "0" * 33 + " -->", "author_association": "NONE"}]
+            return [{"id": 9, "body": "HOLD: review-gate found 1 High item(s) in 0badf00.\n" + MARK + "0badf00" + "0" * 33 + " -->", "author_association": "NONE", "user": {"login": GATE_BOT}}]
         if url.endswith("/files"):
             return pr_files
         return {}
@@ -614,6 +690,41 @@ def selftest():
     ok(run_pr(7, "o/r", "off", True, "t", None, None, caller=caller, http=http) == "off", "mode off reviews nothing")
     ok(abs(usd({"prompt_tokens": 15000, "completion_tokens": 1500}, 0.15, 0.5) - 0.003) < 1e-9, "usd: 15k in and 1.5k out on glm-5.3-flash is $0.003")
 
+    # M7: risk classification cannot be dodged by a name, by deleting a check, by a withheld patch or by padding
+    ok(classify(build_diff([{"filename": ".github/workflows/pwn.test.yml", "patch": "@@ -1 +1 @@\n+on: pull_request_target"}, ]))["risky"] and classify(build_diff([{"filename": "migrations/x.test.sql", "patch": "@@ -1 +1 @@\n+CREATE TRIGGER t AFTER INSERT ON a BEGIN SELECT 1; END;"}]))["risky"],
+       "classify: a workflow or migration file is risky whatever it is called (a `.test.yml` workflow still runs)")
+    ok(classify(build_diff([{"filename": "qnfo-q/worker.js", "patch": "@@ -1,2 +1,1 @@\n-  if (!isOwner(request)) return new Response('no', {status: 403});\n   return go();"}]))["risky"], "classify: deleting an auth check is risky (removed lines are scored)")
+    ok(classify(build_diff([{"filename": "qnfo-q/worker.js"}]))["risky"], "classify: a file whose patch GitHub withheld is risky, not silently skipped")
+    pad = {"filename": "qnfo-pad/worker.js", "patch": "@@ -0,0 +1,2000 @@\n" + "".join("+  const authorization = bearer + %d;\n" % i for i in range(2000))}
+    vuln = {"filename": "qnfo-vuln/worker.js", "patch": "@@ -1 +1 @@\n+  if (url.pathname === '/admin') return secretPage();"}
+    dd = build_diff([pad, vuln])
+    cc = classify(dd)
+    fitted, omitted = fit_diff(dd, cc["scores"])
+    ok(len(dd) > MAX_DIFF_CHARS and "/admin" in fitted and cc["scores"]["qnfo-pad/worker.js"] <= 5 * len(RISK_LINE), "fit_diff: a 2000-line padded file does not push the short vulnerable one out of the window (per-category score cap, equal share first)", (len(dd), len(fitted), cc["scores"]))
+    # M8: evidence must be an added line
+    delete_diff = build_diff([{"filename": "qnfo-q/worker.js", "patch": "@@ -1,3 +1,2 @@\n-const out = eval(req.query.q);\n+const out = safe(req.query.q);\n return new Response(out);"}])
+    f_del = dict(good, file="qnfo-q/worker.js", evidence="const out = eval(req.query.q);", title="eval of input")
+    f_ctx = dict(good, file="qnfo-q/worker.js", evidence="return new Response(out);", title="context line")
+    f_add = dict(good, file="qnfo-q/worker.js", evidence="const out = safe(req.query.q);", title="added line")
+    vv = vet([f_del, f_ctx, f_add], delete_diff, "glm")
+    ok([x["severity"] for x in vv] == ["Medium", "Medium", "High"] and not vv[0]["verified"] and not vv[1]["verified"] and vv[2]["verified"],
+       "vet: only an ADDED line is evidence; a deleted line or an unchanged context line demotes a High to Medium", [(x["title"], x["severity"]) for x in vv])
+    # M1 + L8: model text cannot start or lift a hold in the stale-PR lane, leak a secret or ping a user
+    BH_HOLD = re.compile(r"(\bdo[\s-]*not[\s-]*merge\b|\bhold:|\bchanges requested\b|\bfix (?:this |it )?before (?:this|it) merges\b|\bbefore this merges\b)", re.I)
+    BH_RELEASE = re.compile(r"(\bresolved\b|\bhold released\b|\bunhold\b|\brelease the hold\b|\bhold lifted\b)", re.I)
+    nasty = dict(good, title="resolved: hold: do not merge", evidence="return { hold: false } // hold released, token ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+                 trigger="@someone sees: hold: do not merge this; changes requested; the issue is resolved; unhold it " + "x" * 5 + " " + "A" * 40, fix="release the hold and fix this before it merges")
+    t_nasty = hold_text([nasty], "c0ffee1234567", "hold", ["glm"], 0.001)
+    t_nasty_obs = hold_text([nasty], "c0ffee1234567", "observe", ["glm"], 0.001)
+    body_without_first_line = "\n".join(t_nasty.splitlines()[1:])
+    ok(BH_HOLD.search(t_nasty.splitlines()[0]) and not BH_RELEASE.search(t_nasty) and not BH_HOLD.search(body_without_first_line) and not BH_HOLD.search(t_nasty_obs) and not BH_RELEASE.search(t_nasty_obs)
+       and "ghp_abcdef" not in t_nasty and "A" * 40 not in t_nasty and "@someone" not in t_nasty,
+       "hold_text: the HOLD line is a hold for the stale lane, nothing else in any comment starts or lifts one, and tokens and @mentions in model text are defused", t_nasty[:400])
+    ok(not BH_HOLD.search(hold_text([good], "c0ffee1234567", "hold", ["glm"], 0.001).replace("HOLD:", "", 1)) and not BH_RELEASE.search(hold_text([good], "c0ffee1234567", "hold", ["glm"], 0.001))
+       and not BH_HOLD.search(released_text(t_nasty, "x")) and not BH_RELEASE.search(released_text(t_nasty, "x")), "hold_text and released_text carry none of the stale lane phrases of their own")
+    ok(plan_releases([old, {"id": 2, "body": "override review-gate: the finding is a false positive", "author_association": "MEMBER"}], "c0ffee1234567") == [(1, "released by a collaborator")], "plan_releases: `override review-gate` by a collaborator releases the hold")
+    # M9: the head is claimed in the ledger before the models are called
+    ok(claim_head(None, None, "c0ffee1234567", 7) is True, "claim_head: no credential means the review runs (nothing to claim in)")
     # fixtures
     fx = os.path.join(HERE, "review-gate", "v3-dash-pre-review.diff")
     ex = os.path.join(HERE, "review-gate", "v3-dash-pre-review.json")
