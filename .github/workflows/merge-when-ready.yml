@@ -12,6 +12,10 @@ name: merge-when-ready
 # LANE-ADVISORY-JOBS-1 (2026-11-04, pillar autonomy): the lane's own jobs (poke, review, lifecycle: "poke / poke", "review / request", "lifecycle / sweep") are advisory and no longer count as
 # checks here. lane-poke runs in one repository-wide concurrency group (cancel-in-progress false: one running, one waiting), and GitHub marks every waiting run that a newer one replaces as
 # cancelled; that cancelled check sat on the pull request head for ever and counted as failed below, so a green pull request (PR 7053, 7057, 2026-11-04) could not merge until another push.
+# LANE-READ-TOKEN-1 (2026-11-04, pillar autonomy; REST budget): the shared QNFO_GH_PAT is one user's 5000 calls an hour, spent by every session and sweep, and it read 0 twice on 2026-11-04 (about
+# 16:20Z and 17:20Z), which stalls this job ("API rate limit exceeded", run 41861967009). This job spent 4 to 6 of those calls per run on reads (the pull request, its comments, its check runs).
+# The reads now use the workflow token (the repository's own bucket, 1000 an hour), and the PAT is spent once, on the merge, which needs it to start the push workflows. A read the workflow token
+# is refused falls back to the PAT, so the lane never waits on the smaller bucket. Revert: put GH_TOKEN back on the three read commands.
 # Revert: delete this file. The lane keeps merging as before.
 
 on:
@@ -21,6 +25,8 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  issues: read
+  checks: read
 
 jobs:
   merge:
@@ -34,11 +40,14 @@ jobs:
     env:
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.pull_requests[0].number }}
       GH_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      READ_TOKEN: ${{ github.token }}
     steps:
       - name: Merge the pull request when every fast check is green
         run: |
           set -u
-          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          # LANE-READ-TOKEN-1: reads on the workflow token, the PAT only when that read is refused
+          rd() { GH_TOKEN="$READ_TOKEN" gh api "$@" 2>/dev/null || gh api "$@"; }
+          pr="$(rd "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           state="$(printf '%s' "$pr" | jq -r '.state')"
           draft="$(printf '%s' "$pr" | jq -r '.draft')"
           base="$(printf '%s' "$pr" | jq -r '.base.ref')"
@@ -48,12 +57,12 @@ jobs:
             echo "not ready: state=$state draft=$draft base=$base held=$held"
             exit 0
           fi
-          holds="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate --jq '[.[] | select(.body | startswith("HOLD:"))] | length')"
+          holds="$(rd "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate --jq '[.[] | select(.body | startswith("HOLD:"))] | length')"
           if [ "$holds" != "0" ]; then
             echo "a HOLD comment is on the pull request"
             exit 0
           fi
-          runs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select((.name | test("^(gate|analyze|Workers Builds|sweep|(poke|review|lifecycle) / )")) | not) | {name, status, conclusion}]')"
+          runs="$(rd "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select((.name | test("^(gate|analyze|Workers Builds|sweep|(poke|review|lifecycle) / )")) | not) | {name, status, conclusion}]')"
           total="$(printf '%s' "$runs" | jq 'length')"
           pending="$(printf '%s' "$runs" | jq '[.[] | select(.status != "completed")] | length')"
           bad="$(printf '%s' "$runs" | jq '[.[] | select(.status == "completed" and (.conclusion | IN("success", "skipped", "neutral") | not))] | length')"

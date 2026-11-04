@@ -65,6 +65,33 @@ jobs:
     uses: ./.github/workflows/deploy-gate.yml
     secrets: inherit
 
+  # PR-FAST-GUARDS-1 (2026-11-04, pillar autonomy; PR velocity and a green main): the cheap checks that turned main red after a merge, run before it. deploy-gate is advisory on a
+  # pull request (MERGE-STREAMLINE-1) and its push-to-main run is cancelled by the next merge (35 of 37 sampled), so a failing suite, a narrative-prompt-guard phrase, a metric
+  # without a cause mapping or an anchor that stopped occurring once was seen only after the merge: 6 of 6 red push runs on 2026-11-04 failed SUITE-RUNNER-1 (9 suites each).
+  # scripts/pr_fast_guards.py runs the guards the change selects, each through scripts/regression_gate.py, so a pull request fails only for a failure line the base tree does not
+  # have (a defect already on main never holds an unrelated pull request, REGRESSION-GATE-1). The job is a plain check run named fast-guards: merge-when-ready and the stale-PR
+  # lane both read every non-slow check. Revert: delete this job; set the repository variable REGRESSION_GATE to strict to make every guard fail on any failure.
+  fast-guards:
+    # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # full history like deploy-gate (some suites read git history); the pull_request checkout is a merge commit and its first parent is the base tip the guards compare with
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # Node 22: several suites import node:sqlite (GATE-NODE-22-1)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Run the guards the change selects
+        env:
+          REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
+        run: python3 scripts/pr_fast_guards.py
+
   version-bump-guard:
     needs: changes
     uses: ./.github/workflows/version-bump-guard.yml

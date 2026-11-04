@@ -44,15 +44,19 @@ jobs:
 
   merge:
     if: ${{ (github.event_name == 'pull_request_target' && github.event.action == 'ready_for_review' && github.event.pull_request.base.ref == 'main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'cancelled') }}
+    # LANE-READ-TOKEN-1: merge-when-ready reads the pull request, its comments and its check runs with the workflow token (the PAT only merges); a called workflow cannot ask for more than its caller grants
     permissions:
       contents: read
       pull-requests: read
+      issues: read
+      checks: read
     uses: ./.github/workflows/merge-when-ready.yml
     secrets: inherit
 
   retry:
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.run_attempt == 1 && github.event.workflow_run.pull_requests[0].number != null && !startsWith(github.event.workflow_run.head_branch, 'copilot/') }}
     permissions: {}
+    # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:

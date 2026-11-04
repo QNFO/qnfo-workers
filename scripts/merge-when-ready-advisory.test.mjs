@@ -12,7 +12,7 @@ const yml = readFileSync(join(root, ".github/workflows/merge-when-ready.yml"), "
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
-const line = yml.split("\n").find((l) => /runs="\$\(gh api .*check-runs/.test(l));
+const line = yml.split("\n").find((l) => /runs="\$\((?:gh api|rd) .*check-runs/.test(l));
 ok(!!line, "the check-run query is present");
 const m = line && /select\(\(\.name \| test\("([^"]+)"\)\) \| not\)/.exec(line);
 ok(!!m, "the readiness filter excludes names by one anchored pattern");

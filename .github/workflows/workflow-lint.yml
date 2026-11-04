@@ -42,7 +42,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      # depth 2: on a pull request the checkout is a merge commit and the regression gate compares with its first parent (the base tip)
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -50,8 +53,17 @@ jobs:
 
       - run: pip install --quiet pyyaml
 
+      # REGRESSION-GATE-1 (2026-11-04): a pull request fails here only for a workflow defect it adds (see version-bump-guard.yml); main, dispatch and push stay strict.
       - name: Lint every workflow file (fail closed)
-        run: python3 scripts/workflow-lint.py
+        env:
+          REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event_name }}' = 'pull_request' ] && [ -f scripts/regression_gate.py ]; then
+            python3 scripts/regression_gate.py --name workflow-lint -- python3 scripts/workflow-lint.py
+          else
+            python3 scripts/workflow-lint.py
+          fi
 
       - name: STATUS-NOOP-SKIP-1 self-test (skip stamp-only status commits, never an outcome change)
         run: python3 scripts/status_unchanged_test.py

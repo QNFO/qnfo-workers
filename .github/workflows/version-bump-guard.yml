@@ -82,11 +82,21 @@ jobs:
       - name: Install lint dependency (PyYAML)
         run: python -m pip install --quiet pyyaml
 
+      # REGRESSION-GATE-1 (2026-11-04, pillar autonomy): on a pull request this repository-wide lint fails only for a workflow defect the pull request adds.
+      # Seven unrelated pull requests (7055, 7056, 7059, 7062, 7063, 7064, 7075) went red here at 17:09Z-17:14Z on a transient defect of main and sat 92-107
+      # minutes. scripts/regression_gate.py runs the same lint on the base tree and blocks only a failure line the base does not have. A push to main,
+      # a dispatch and a missing gate script keep the plain lint. Revert: set the repository variable REGRESSION_GATE to strict, or restore the plain command.
       - name: Lint the workflow YAML class repo-wide
+        env:
+          REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
         run: |
           set -euo pipefail
           if [ -f scripts/workflow-lint.py ]; then
-            python3 scripts/workflow-lint.py
+            if [ '${{ github.event_name }}' = 'pull_request' ] && [ -f scripts/regression_gate.py ]; then
+              python3 scripts/regression_gate.py --name workflow-lint -- python3 scripts/workflow-lint.py
+            else
+              python3 scripts/workflow-lint.py
+            fi
           else
             echo "no workflow-lint.py in this revision; skipping"
           fi
