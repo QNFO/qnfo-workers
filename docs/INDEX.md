@@ -123,6 +123,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qwav demo cross-check (RM-QWAV-CROSS-SIMULATOR-1)](QWAV-CROSS-SIMULATOR.md) - `docs/QWAV-CROSS-SIMULATOR.md`
 - [RADAR-TITLE-NOISE-1 one-off cleanup (2026-10-04)](RADAR-TITLE-CLEANUP-2026-10-04.md) - `docs/RADAR-TITLE-CLEANUP-2026-10-04.md`
 - [Radar title cleanup 2026-10-05 (RADAR-TITLE-NOISE-2, #1885, pillar: personal)](RADAR-TITLE-CLEANUP-2026-10-05.md) - `docs/RADAR-TITLE-CLEANUP-2026-10-05.md`
+- [Reach playbook (REACH-FOCUS-1)](REACH-PLAYBOOK.md) - `docs/REACH-PLAYBOOK.md`
 - [Reader yield (READER-YIELD-1)](READER-YIELD.md) - `docs/READER-YIELD.md`
 - [Quniverse documentation directory](README.md) - `docs/README.md`
 - [Register Execution Architecture (remediated 2026-09-09)](REGISTER-EXECUTION-ARCHITECTURE.md) - `docs/REGISTER-EXECUTION-ARCHITECTURE.md`
@@ -379,6 +380,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-fleet-deploy — fleet self-heal control plane](../qnfo-fleet-deploy/README.md) - `qnfo-fleet-deploy/README.md`
 - [qnfo-gateway — QNFO site router (papers.qnfo.org, ideas, archive, ipatent, graph-api, legal)](../qnfo-gateway/README.md) - `qnfo-gateway/README.md`
 - [qnfo-gateway 3.55.0-codeagent (2026-11-04)](../qnfo-gateway/releases/3.55.0-codeagent.md) - `qnfo-gateway/releases/3.55.0-codeagent.md`
+- [qnfo-gateway 3.56.0-codeagent (2026-11-04)](../qnfo-gateway/releases/3.56.0-codeagent.md) - `qnfo-gateway/releases/3.56.0-codeagent.md`
 - [qnfo-github-steward](../qnfo-github-steward/README.md) - `qnfo-github-steward/README.md`
 - [qnfo-idea-factory — QNFO Ideas (ideas.qnfo.org)](../qnfo-idea-factory/README.md) - `qnfo-idea-factory/README.md`
 - [qnfo-intent-orchestrator](../qnfo-intent-orchestrator/README.md) - `qnfo-intent-orchestrator/README.md`
