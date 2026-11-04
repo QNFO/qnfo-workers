@@ -2815,6 +2815,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 .tbtn{border:0;background:none;padding:6px 9px;font-size:1.05rem;line-height:1;opacity:.5;border-radius:8px;min-width:40px;min-height:40px}.tbtn.sel{opacity:1;background:var(--acc2)}
 #toast{position:fixed;left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;z-index:5}
 #toast.hide{display:none}
+a{display:inline-block;padding:4px 0;min-height:24px}
 #toast button{background:none;border:0;color:var(--bg);font-weight:700;text-decoration:underline}
 #composer{position:sticky;top:0;z-index:3;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}#composer input#qc-text{flex:1;min-width:0}
 #composer .mic.sel{background:var(--warn2);border-color:var(--warn)}

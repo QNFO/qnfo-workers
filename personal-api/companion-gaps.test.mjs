@@ -129,3 +129,4 @@ console.log("ok   Focus loads on the phone; Today lists the next action once");
 assert.ok(page.includes("#toast.hide{display:none}"), "the empty toast bar is hidden");
 assert.ok(page.includes("MOOD-HASH-1") && page.includes("c=moodCard(t);v.insertBefore("), "a check-in tap shows the mood scale even with prompts off");
 console.log("ok   no empty toast bar; a check-in tap always has something to answer");
+assert.ok(page.includes("a{display:inline-block;padding:4px 0;min-height:24px}"), "links are at least 24px tall (WCAG 2.5.8)");
