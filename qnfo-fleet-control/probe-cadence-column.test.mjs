@@ -16,7 +16,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const line = (k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); };
 
 // 1. probe-error cadence
-ok(/if \(out\.probe_error\) cadH = Math\.max\(cadH, 1\);/.test(src), "a probe error floors the cadence at 1 hour");
+ok(/if \((?:out\.probe_error|verdict === "probe-error")\) cadH = Math\.max\(cadH, 1\);/.test(src), "a probe error floors the cadence at 1 hour");
 ok(!/Math\.max\(cadH, 60\)/.test(src), "no 60-hour floor on a probe error");
 const sb = { Math, Number, __out: null };
 vm.createContext(sb);
