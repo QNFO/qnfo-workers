@@ -339,6 +339,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [q08-signal-engine](../q08-signal-engine/README.md) - `q08-signal-engine/README.md`
 - [qnfo-agent-ws](../qnfo-agent-ws/README.md) - `qnfo-agent-ws/README.md`
 - [qnfo-agents](../qnfo-agents/README.md) - `qnfo-agents/README.md`
+- [qnfo-agents/releases/0.7.2.md](../qnfo-agents/releases/0.7.2.md) - `qnfo-agents/releases/0.7.2.md`
 - [qnfo-ai-calibration](../qnfo-ai-calibration/README.md) - `qnfo-ai-calibration/README.md`
 - [qnfo-ai-search (ask.qwav.tech)](../qnfo-ai-search/README.md) - `qnfo-ai-search/README.md`
 - [Chatbox (Windows) — Full QNFO Setup](../qnfo-ai/CHATBOX-SETUP.md) - `qnfo-ai/CHATBOX-SETUP.md`
