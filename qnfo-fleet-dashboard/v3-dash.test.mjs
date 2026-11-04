@@ -167,6 +167,9 @@ r = await get("/api/v3/now?fresh=1", OWNER);
 const ownerFresh = await r.json();
 ok(!ownerFresh.needs.items.some((i) => i.key === "ha:snoozed") && ownerFresh.needs.parked >= 1, "V12 a snoozed card is hidden and counted as parked", ownerFresh.needs);
 
+// V13 (1.85.1) the Money card no longer subtracts the subscription figure from a pace that never included it
+ok(html.includes("Both together") && html.includes("Fleet (AI + Cloudflare) at the current rate") && !html.includes("of which the fleet itself"), "V13 Money card shows fleet, subscriptions and both together");
+
 // V5
 r = await get("/classic");
 ok(r.status === 200 && !(await r.text()).includes('id="n-code"'), "V5 /classic is still the old overview");
