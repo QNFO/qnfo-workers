@@ -301,6 +301,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/COST-AND-D1-ANALYSIS-2026-11-04.md"
     },
     {
+      "path": "docs/COST-LEDGER-ALLVENDOR.md",
+      "title": "All-vendor monthly cost ledger (COST-LEDGER-ALLVENDOR-1, pillar cost)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/COST-LEDGER-ALLVENDOR.md"
+    },
+    {
       "path": "docs/COST-OPTIMIZED-MODEL-CALLS.md",
       "title": "COST-OPTIMIZED MODEL-CALL STACK (fleet v2 — IMPLEMENTED)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/COST-OPTIMIZED-MODEL-CALLS.md"
@@ -489,6 +494,11 @@
       "path": "docs/LEASES-FENCING.md",
       "title": "Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/LEASES-FENCING.md"
+    },
+    {
+      "path": "docs/MAIN-PUSH-POLICY.md",
+      "title": "Main push policy (MAIN-PUSH-POLICY-1, 2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MAIN-PUSH-POLICY.md"
     },
     {
       "path": "docs/MODEL-MATRIX.md",

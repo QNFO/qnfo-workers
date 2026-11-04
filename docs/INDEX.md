@@ -56,6 +56,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [The content pipeline (CONTENT-PIPELINE-1)](CONTENT-PIPELINE.md) - `docs/CONTENT-PIPELINE.md`
 - [Copilot assignment yield, 2026-11-04 (COPILOT-YIELD-1)](COPILOT-YIELD-2026-11.md) - `docs/COPILOT-YIELD-2026-11.md`
 - [Cost and D1 analysis, 2026-11-04 (COST-D1-DRILL-1, pillar cost)](COST-AND-D1-ANALYSIS-2026-11-04.md) - `docs/COST-AND-D1-ANALYSIS-2026-11-04.md`
+- [All-vendor monthly cost ledger (COST-LEDGER-ALLVENDOR-1, pillar cost)](COST-LEDGER-ALLVENDOR.md) - `docs/COST-LEDGER-ALLVENDOR.md`
 - [COST-OPTIMIZED MODEL-CALL STACK (fleet v2 — IMPLEMENTED)](COST-OPTIMIZED-MODEL-CALLS.md) - `docs/COST-OPTIMIZED-MODEL-CALLS.md`
 - [CRON-RATE-CEILING-1 — Worker cron rate ceiling](CRON-RATE-CEILING-1.md) - `docs/CRON-RATE-CEILING-1.md`
 - [cloud_ops_events insert cost (CLOUD-OPS-EVENTS-TRIGGER-COST-1, 2026-11-04)](D1-CLOUD-OPS-EVENTS-2026-11.md) - `docs/D1-CLOUD-OPS-EVENTS-2026-11.md`
@@ -94,6 +95,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Infrastructure and AI-spend audit, 2026-11-04 (pillar: cost)](INFRA-AUDIT-2026-11-04.md) - `docs/INFRA-AUDIT-2026-11-04.md`
 - [Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)](KILL-SWITCH-DRILL.md) - `docs/KILL-SWITCH-DRILL.md`
 - [Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)](LEASES-FENCING.md) - `docs/LEASES-FENCING.md`
+- [Main push policy (MAIN-PUSH-POLICY-1, 2026-11-04)](MAIN-PUSH-POLICY.md) - `docs/MAIN-PUSH-POLICY.md`
 - [MODEL-MATRIX-1: which Cloudflare model for which job](MODEL-MATRIX.md) - `docs/MODEL-MATRIX.md`
 - [MONOREPO-DECISION-1: keep qnfo-workers as one repository](MONOREPO-DECISION.md) - `docs/MONOREPO-DECISION.md`
 - [One Thing / Focus backlog and roadmap](ONE-THING-BACKLOG.md) - `docs/ONE-THING-BACKLOG.md`
