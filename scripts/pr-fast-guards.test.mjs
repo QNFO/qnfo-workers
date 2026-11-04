@@ -47,13 +47,13 @@ ok(r.status === 0 && JSON.stringify(JSON.parse(r.stdout.trim())) === JSON.string
 const lst = (args) => spawnSync(PY, [join(here, "pr_fast_guards.py"), "--list", "--all", ...args], { encoding: "utf8" }).stdout.trim().split(/\r?\n/);
 ok(!lst([]).includes("suite-regressions") && lst(["--with-suites"]).includes("suite-regressions"), "the suites guard runs only with --with-suites", lst([]));
 
-// the wiring in pr-checks.yml: a step of the suites job, not a check of its own (owner cap of 5 entries)
+// the wiring in pr-checks.yml: a step of the scans job, not a check of its own (owner cap of 5 entries)
 const wf = readFileSync(join(here, "..", ".github", "workflows", "pr-checks.yml"), "utf8");
-const suitesJob = wf.slice(wf.indexOf("\n  suites:"));
-ok(/python3 scripts\/pr_fast_guards\.py/.test(suitesJob), "the suites job runs scripts/pr_fast_guards.py");
-const step = suitesJob.slice(suitesJob.indexOf("Run the fast guards"));
+const scansJob = wf.slice(wf.indexOf("\n  scans:"));
+ok(/python3 scripts\/pr_fast_guards\.py/.test(scansJob), "the scans job runs scripts/pr_fast_guards.py");
+const step = scansJob.slice(scansJob.indexOf("Run the fast guards"));
 ok(!/continue-on-error/.test(step), "the step is strict (no continue-on-error)");
-ok(/node-version: "22"/.test(suitesJob) && /fetch-depth: 0/.test(suitesJob), "the job has Node 22 and the full history");
+ok(/node-version: "22"/.test(scansJob) && /fetch-depth: 0/.test(scansJob), "the job has Node 22 and the full history");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

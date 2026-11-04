@@ -243,7 +243,7 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A worker's `*.test.mjs` suites run on every PR that touches the worker (scripts/run-suites.mjs). The full set runs for
   control-plane, `scripts/`, `.github/` and `migrations/` changes. A new suite needs no deploy-gate line. A suite that
   pins an exact VERSION breaks on the next bump; assert a minimum instead.
-- PR-FAST-GUARDS-1 (2026-11-04): a last step of the `suites` job in pr-checks (not a check of its own: the owner caps a PR at 5 entries) now runs, strictly, the guards that turned main red after a merge (narrative-prompt-guard, the load of every worker entry,
+- PR-FAST-GUARDS-1 (2026-11-04): a last step of the `scans` job in pr-checks (not a check of its own: the owner caps a PR at 5 entries) now runs, strictly, the guards that turned main red after a merge (narrative-prompt-guard, the load of every worker entry,
   the metric-cause rule, code-anchor-once; about 45 s), each through `scripts/regression_gate.py` (REGRESSION-GATE-1): a guard fails a pull request only for a failure
   line the base tree does not have, so a defect already on main never holds an unrelated PR (7 PRs sat 92-107 minutes on 2026-11-04 for one transient main defect in the workflow lint),
   and a new defect is stopped before the merge. Run it yourself with `python scripts/pr_fast_guards.py` (vs origin/main). `REGRESSION_GATE=strict` (repository variable) turns the
@@ -620,7 +620,7 @@ because each one was broken at least once; the linked issue holds the evidence.
   assignment sweep. Do not edit the title or body of a Copilot pull request by hand: the `edited` run of `lane-poke` is held at `action_required` and the pull request reads
   `unstable` (the lane refuses it) until its next push; `PUT /pulls/{n}/update-branch` pinned to the head clears it. Do not add per-repository copies of the workflow or of the secret.
 - A pull request shows at most five checks (PR-CHECK-CAP-5-1, owner directive 2026-11-04: "MAX 5 CHECKS PER PR", none over a minute, none that repeatedly fail): "Workers Builds: qnfo-workers"
-  plus the jobs `versions`, `scans`, `suites` (pr-checks.yml) and `lane` (pr-lane.yml). A new guard is a step in one of those jobs, never a job or a reusable-workflow call (workflow-lint.py
+  plus the jobs `versions` and `scans` (pr-checks.yml) and `lane` (pr-lane.yml, which shows twice: the pull_request_target run and the pr-checks completion). A new guard is a step in `versions` or `scans`, never a job or a reusable-workflow call (workflow-lint.py
   fails it); a guard that needs more than a minute runs on push to main instead (deploy-gate, fleet-graph, ux-journeys, research-code do).
 - Every ready pull request into main gets the Copilot reviewer requested by the `Request the automated review` steps of `lane` in `.github/workflows/pr-lane.yml` (REQUEST-COPILOT-REVIEW-1, lever 1 of LANE-WAITS-FOR-REVIEW-1,
   issue 5515): the workflow token first, the fleet user credential second. A request never blocks a merge: the lane refuses a pull request while a check that is not required has
