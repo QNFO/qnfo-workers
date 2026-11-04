@@ -62,6 +62,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [cloud_ops_events insert cost (CLOUD-OPS-EVENTS-TRIGGER-COST-1, 2026-11-04)](D1-CLOUD-OPS-EVENTS-2026-11.md) - `docs/D1-CLOUD-OPS-EVENTS-2026-11.md`
 - [D1 restore runbook (D1-RESTORE-RUNBOOK-1)](D1-RESTORE-RUNBOOK.md) - `docs/D1-RESTORE-RUNBOOK.md`
 - [D1 split design: hot write paths off qnfo-audit (D1-SPLIT-1, pillar core)](D1-SPLIT-DESIGN-2026-11.md) - `docs/D1-SPLIT-DESIGN-2026-11.md`
+- [D1 tiering and slimming, 2026-11-04 (COLD-TIER-1 and D1-HOTSPOTS-3, pillar cost)](D1-TIERING-2026-11.md) - `docs/D1-TIERING-2026-11.md`
 - [Data plane dispositions (2026-10-01)](DATA-PLANE-DISPOSITIONS-2026-10-01.md) - `docs/DATA-PLANE-DISPOSITIONS-2026-10-01.md`
 - [DEGENERATE-TEXT-1: a model loop never stays on a paper page](DEGENERATE-TEXT.md) - `docs/DEGENERATE-TEXT.md`
 - [Every deploy proves itself (DEPLOY-PROBES-1, REVIEW-GATE-1; 2026-11-04)](DEPLOY-PROOF-2026-11.md) - `docs/DEPLOY-PROOF-2026-11.md`
@@ -343,6 +344,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-agents](../qnfo-agents/README.md) - `qnfo-agents/README.md`
 - [qnfo-agents/releases/0.7.2.md](../qnfo-agents/releases/0.7.2.md) - `qnfo-agents/releases/0.7.2.md`
 - [qnfo-ai-calibration](../qnfo-ai-calibration/README.md) - `qnfo-ai-calibration/README.md`
+- [qnfo-ai-calibration 1.6.12 (2026-11-04)](../qnfo-ai-calibration/releases/1.6.12.md) - `qnfo-ai-calibration/releases/1.6.12.md`
 - [qnfo-ai-search (ask.qwav.tech)](../qnfo-ai-search/README.md) - `qnfo-ai-search/README.md`
 - [Chatbox (Windows) — Full QNFO Setup](../qnfo-ai/CHATBOX-SETUP.md) - `qnfo-ai/CHATBOX-SETUP.md`
 - [QNFO Notes API — Quickstart (2026-08-28)](../qnfo-ai/QUICKSTART.md) - `qnfo-ai/QUICKSTART.md`
@@ -380,6 +382,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-fleet-deploy — fleet self-heal control plane](../qnfo-fleet-deploy/README.md) - `qnfo-fleet-deploy/README.md`
 - [qnfo-gateway — QNFO site router (papers.qnfo.org, ideas, archive, ipatent, graph-api, legal)](../qnfo-gateway/README.md) - `qnfo-gateway/README.md`
 - [qnfo-gateway 3.55.0-codeagent (2026-11-04)](../qnfo-gateway/releases/3.55.0-codeagent.md) - `qnfo-gateway/releases/3.55.0-codeagent.md`
+- [qnfo-gateway 3.56.1-codeagent (2026-11-04)](../qnfo-gateway/releases/3.56.1-codeagent.md) - `qnfo-gateway/releases/3.56.1-codeagent.md`
 - [qnfo-github-steward](../qnfo-github-steward/README.md) - `qnfo-github-steward/README.md`
 - [qnfo-idea-factory — QNFO Ideas (ideas.qnfo.org)](../qnfo-idea-factory/README.md) - `qnfo-idea-factory/README.md`
 - [qnfo-intent-orchestrator](../qnfo-intent-orchestrator/README.md) - `qnfo-intent-orchestrator/README.md`
