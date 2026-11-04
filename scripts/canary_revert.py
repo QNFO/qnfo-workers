@@ -770,7 +770,7 @@ def run(a):
     if a.no_revert:
         outcome = {"refused": "verify-only run (workflow_dispatch): the canary files what it saw and reverts nothing"}
     else:
-        outcome = revert_push(a.pushed, failed, a.dry_run, why, {w: dirs[w] for w, _ in targets if w in dirs and w not in [f[0] for f in failed]})
+        outcome = revert_push(a.pushed, failed, a.dry_run, why, {w: p.split("/")[0] for w, p in targets if w not in [f[0] for f in failed]})
     emit("::warning::canary: " + ", ".join(w for w, _, _ in failed) + " did not arrive or failed the functional step; revert outcome " + json.dumps(outcome)[:300])
     if a.dry_run:
         return 0

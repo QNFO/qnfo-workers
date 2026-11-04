@@ -336,5 +336,112 @@ class ProbeFlow(unittest.TestCase):
                 self.assertRegex(read(d + "/worker.js"), r'(?m)^var\s+VERSION\s*=\s*"', d + " declares health but has no line-start var VERSION: the canary could not read the pushed VERSION")
 
 
+class DrillEndToEnd(unittest.TestCase):
+    """DEPLOY-PROBES-1 drill: a deliberately bad deploy of a canary worker, replayed against a scratch git origin and a local HTTP server.
+    The worker /health answers the pushed VERSION (so the old canary would have passed it) while its declared route no longer shows its
+    marker. run() must revert the push on origin/main, bump the VERSION above the bad one, keep the mirror identical and redeploy the bystander."""
+
+    def _git(self, cwd, *args):
+        import subprocess
+        return subprocess.run(["git"] + list(args), cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+    def test_a_bad_deploy_is_reverted_on_origin_main_and_both_workers_are_redeployed(self):
+        import http.server
+        import shutil
+        import threading
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = (json.dumps({"ok": True, "version": "1.0.1"}) if self.path == "/health" else "BAD PAGE").encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base_url = "http://127.0.0.1:%d" % srv.server_address[1]
+        tmp = tempfile.mkdtemp(prefix="drill-")
+        old_cwd = os.getcwd()
+        saved = {n: getattr(cr, n) for n in ("dispatch_redeploy", "file_issue", "record_functional", "record_ahead", "poll")}
+        real_poll = cr.poll
+        real_validate = dp.validate
+        try:
+            origin, work = os.path.join(tmp, "origin.git"), os.path.join(tmp, "work")
+            self._git(tmp, "init", "--bare", "-b", "main", origin)
+            self._git(tmp, "clone", origin, work)
+            self._git(work, "config", "user.name", "drill")
+            self._git(work, "config", "user.email", "drill@example.com")
+            self._git(work, "checkout", "-b", "main")
+            for d, v in (("w", "1.0.0"), ("o", "2.0.0")):
+                os.makedirs(os.path.join(work, d))
+                for f in ("worker.js", "deployed-current.worker.js"):
+                    with open(os.path.join(work, d, f), "w", newline="\n") as fh:
+                        fh.write('var VERSION = "%s";\nexport default { fetch() { return new Response("GOOD PAGE"); } };\n' % v)
+                with open(os.path.join(work, d, "wrangler.toml"), "w", newline="\n") as fh:
+                    fh.write('name = "%s"\n' % d)
+            decl = {"mode": "revert", "health": base_url + "/health", "http": [{"url": base_url + "/page", "contains": ["GOOD PAGE"]}]}
+            with open(os.path.join(work, "w", "probes.json"), "w", newline="\n") as fh:
+                json.dump(decl, fh)
+            self._git(work, "add", "-A")
+            self._git(work, "commit", "-m", "base")
+            self._git(work, "push", "origin", "main")
+            for d, v in (("w", "1.0.1"), ("o", "2.0.1")):
+                for f in ("worker.js", "deployed-current.worker.js"):
+                    with open(os.path.join(work, d, f), "w", newline="\n") as fh:
+                        fh.write('var VERSION = "%s";\nexport default { fetch() { return new Response("BAD PAGE"); } };\n' % v)
+            self._git(work, "add", "-A")
+            self._git(work, "commit", "-m", "the bad deploy")
+            self._git(work, "push", "origin", "main")
+            pushed = self._git(work, "rev-parse", "HEAD").strip()
+            targets = os.path.join(tmp, "targets.txt")
+            with open(targets, "w") as fh:
+                fh.write("w w/worker.js\no o/worker.js\n")
+            dispatched, issues = [], []
+            cr.dispatch_redeploy = lambda workers: dispatched.append(list(workers)) or {"redeploy": ["canonical-deploy.yml"]}
+            cr.file_issue = lambda acct, token, pushed_, results, outcome: issues.append((results, outcome)) or "filed"
+            cr.record_functional = lambda *a, **k: None
+            cr.record_ahead = lambda *a, **k: None
+            cr.poll = lambda wanted, minutes, poll_sec, **k: real_poll(wanted, minutes, poll_sec, fetch=lambda w: {"version": "1.0.1"}, clock=lambda: 0.0, sleep=lambda s_: None)
+            dp.validate = lambda decl, bindings=None: []  # the scratch server is http://127.0.0.1, which the fleet-host rule rightly refuses
+            os.environ["CLOUDFLARE_ACCOUNT_ID"], os.environ["CLOUDFLARE_API_TOKEN"] = "acct", "tok"
+            os.chdir(work)
+            a = types.SimpleNamespace(targets=targets, pushed=pushed, canary_min=1, poll_sec=1, dry_run=False, no_revert=False, functional=None,
+                                      functional_tries=1, functional_wait=0, baseline_file=None, base=None)
+            out = []
+            real_emit = cr.emit
+            cr.emit = out.append
+            try:
+                rc = cr.run(a)
+            finally:
+                cr.emit = real_emit
+            self.assertEqual(rc, 0, "\n".join(out))
+            self._git(work, "fetch", "origin", "main")
+            origin_log = self._git(work, "log", "--format=%s", "origin/main", "-3").splitlines()
+            self.assertTrue(origin_log[0].startswith("revert: " + pushed[:7] + " failed the functional canary on w"), (origin_log, out))
+            w_js = self._git(work, "show", "origin/main:w/worker.js")
+            w_mirror = self._git(work, "show", "origin/main:w/deployed-current.worker.js")
+            o_js = self._git(work, "show", "origin/main:o/worker.js")
+            self.assertIn('var VERSION = "1.0.2-revert-' + pushed[:7] + '"', w_js, "the reverted worker is re-bumped above the bad 1.0.1")
+            self.assertEqual(w_js, w_mirror, "the mirror stays identical to worker.js")
+            self.assertIn("GOOD PAGE", w_js, "the previous content is back")
+            self.assertIn('var VERSION = "2.0.0"', o_js, "the bystander of the same push is reverted too")
+            self.assertEqual(dispatched, [["w", "o"]], "the failed worker and the bystander the revert changed are both redeployed")
+            self.assertEqual(len(issues), 1)
+            self.assertTrue(cr.issue_text(pushed, issues[0][0], issues[0][1])[0].startswith("DEPLOY-PROBE-REVERTED-1"))
+            self.assertIn("marker GOOD PAGE absent", issues[0][0]["w"]["functional"])
+        finally:
+            os.chdir(old_cwd)
+            for n, f in saved.items():
+                setattr(cr, n, f)
+            dp.validate = real_validate
+            srv.shutdown()
+            shutil.rmtree(tmp, ignore_errors=True)
+            for k in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"):
+                os.environ.pop(k, None)
+
+
 if __name__ == "__main__":
     unittest.main()

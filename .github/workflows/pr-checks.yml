@@ -219,6 +219,15 @@ jobs:
         if: ${{ !cancelled() }}
         run: node qnfo-social/profile-sync.test.mjs
 
+      # ---- DEPLOY-PROBES-1 (scripts/deploy_probes.py): every <worker>/probes.json is valid and a changed worker declares what must keep working (about 2 s) ----
+      - name: Deploy probe declarations (a changed worker declares its probes or says none)
+        if: ${{ !cancelled() }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > pr-body.txt
+          python3 scripts/deploy_probes.py --check-pr --changed files.txt --body pr-body.txt
+
       # ---- adversarial-workers-guard: steps of .github/workflows/adversarial-workers-guard.yml ----
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         if: ${{ !cancelled() && steps.f.outputs.adversarial_workers_guard == 'true' }}
