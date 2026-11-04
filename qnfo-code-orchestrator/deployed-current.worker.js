@@ -2073,18 +2073,32 @@ async function modelOpts(env, model) {
   } catch (e) { /* no ops_config: the option stays on */ }
   return o;
 }
+// PROMPT-CACHE-CODE-1 (0.37.3, pillar cost): same model + same first 4 KB of the first message -> same instance, so Workers AI prefix
+// caching bills the repeated task context of retries and later rungs at the cached-input rate (same scheme as q08-signal-engine PROMPT-CACHE-1).
+function cacheRunOpts(model, messages) {
+  try {
+    const c = messages && messages.length ? messages[0].content : "";
+    let s = typeof c === "string" ? c : JSON.stringify(c || "");
+    if (s.length < 1024) return undefined;
+    s = String(model) + "|" + s.slice(0, 4096);
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return { extraHeaders: { "x-session-affinity": "cc-" + (h >>> 0).toString(36) } };
+  } catch (e) { return undefined; }
+}
 async function ai(env, model, messages) {
   const t0 = Date.now();
   const opts = await modelOpts(env, model), req0 = { messages: messages, max_tokens: REASONING_OUT[model] || 8192 };
+  const ro = cacheRunOpts(model, messages);
   let out;
-  if (!opts) out = await env.AI.run(model, req0);
+  if (!opts) out = await env.AI.run(model, req0, ro);
   else {
-    try { out = await env.AI.run(model, Object.assign({}, req0, opts)); }
+    try { out = await env.AI.run(model, Object.assign({}, req0, opts), ro); }
     catch (eO) {
       const em = String((eO && eO.message) || eO);
       if (!MODEL_OPT_REJECTED.test(em) || /3046|timeout|timed out/i.test(em)) throw eO;
       await audit(env, "code-task.model-opt-refused", model + " refused " + Object.keys(opts).join(",") + ": " + em.slice(0, 160) + "; called again without it", { model: model, opts: Object.keys(opts) }, "retry");
-      out = await env.AI.run(model, req0);
+      out = await env.AI.run(model, req0, ro);
     }
   }
   const pick = function (o) { const t = o && (o.response || (o.choices && o.choices[0] && o.choices[0].message && o.choices[0].message.content)); return String(t || "").replace(/<think>[\s\S]*?<\/think>/g, ""); };
