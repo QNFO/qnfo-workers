@@ -3500,11 +3500,23 @@ __name(cmIssueId, "cmIssueId");
 // secrets). Matched against the file name under scripts/. CODE-LOOP-CONTROL-PLANE-1 (0.36.0): code-task-* (the loop's own publish
 // script) left this list with the loop's workers; qnfo-code-orchestrator/worker.js keeps a character-for-character copy.
 var CM_SCRIPT_DENY = /(guard|gate|lint|deploy|raw_put|run-suites|apply_migrations|canary_revert|remediation|secret|selftest|_test\.py$|[-.]test\.mjs$)/i;
+var CM_MODULE_RESERVED = ["docs", "scripts", "migrations", "mind", "workers", "node_modules", "dist", "build"];
 function cmScope(path) {
   var m = /^([a-z0-9][a-z0-9-]*)\/worker\.js$/.exec(path);
   if (m) {
     if (CM_DENY.indexOf(m[1]) >= 0) return { ok: false, why: m[1] + " is a control-plane or code-loop worker, which never auto-merges" };
     return { ok: true, kind: "worker", worker: m[1], mirror: m[1] + "/deployed-current.worker.js" };
+  }
+  // MODULE-SOURCE-SCOPE-1 (2026-11-04, pillar personal): a source module that a worker is built from (personal-api/companion.js is inlined into
+  // personal-api/worker.js; 9 of 10 personal-api code tasks ended failed at the read step because it was outside this scope). The change merges
+  // as that worker's change: the pull request must carry <dir>/worker.js (with the VERSION bump) and its mirror, which the publisher regenerates
+  // and carries in the parked patch, so cmIntegrity still judges every file against the verified patch. Tests, build and inline scripts, config
+  // and the reserved directories stay out; a control-plane worker's directory is refused like its worker.js.
+  var ms = /^([a-z0-9][a-z0-9-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*)\.(?:js|mjs)$/.exec(path);
+  if (ms && ms[2] !== "worker" && ms[2] !== "deployed-current.worker" && path.indexOf("..") < 0 && CM_MODULE_RESERVED.indexOf(ms[1]) < 0) {
+    if (/(^|[-.])test([-.]|$)/.test(ms[2]) || /^(inline-|build|bundle-|prepare-|dev-server|_harness)/.test(ms[2])) return { ok: false, why: path + " is a test, build script or reserved path, outside the auto-merge scope" };
+    if (CM_DENY.indexOf(ms[1]) >= 0) return { ok: false, why: ms[1] + " is a control-plane or code-loop worker, which never auto-merges" };
+    return { ok: true, kind: "worker", worker: ms[1], mirror: ms[1] + "/deployed-current.worker.js", src: ms[1] + "/worker.js", via: path };
   }
   if ((/^docs\/[A-Za-z0-9._\/-]+\.md$/.test(path) || /^[a-z0-9][a-z0-9-]*\/README\.md$/.test(path)) && path.indexOf("..") < 0) return { ok: true, kind: "doc" };
   // SCOPE-SCRIPTS-1 (0.10.0): a fleet script that is not a CI gate, a suite, a deploy primitive or the loop's own runner.
@@ -4298,7 +4310,12 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase, opts) {
     if (patchNames.sort().join(",") !== names.slice().sort().join(",")) return { ok: false, why: "the pull request files (" + names.join(", ") + ") are not the files of the verified patch (" + Object.keys(hunks).join(", ") + ")" };
   } else if (names.length !== 1) return { ok: false, why: "a code-agent pull request may change only " + t.path };
   var out = { ok: true }, headText = null, srcWant = null;
-  var order = names.slice().sort(function(a, b) { return a === t.path ? -1 : b === t.path ? 1 : 0; });
+  // MODULE-SOURCE-SCOPE-1: for a module-source task the worker's own worker.js (with the VERSION bump) is the source the mirror, the
+  // version and the revert follow; it and its mirror must be in the pull request.
+  var srcPath = sc.src || t.path;
+  if (sc.src && (names.indexOf(sc.src) < 0 || names.indexOf(sc.mirror) < 0)) return { ok: false, why: t.path + " is a module of " + sc.worker + ": the pull request must also carry " + sc.src + " (with its VERSION bump) and " + sc.mirror };
+  var rank = function(f) { return f === t.path ? 0 : f === srcPath ? 1 : 2; };
+  var order = names.slice().sort(function(a, b) { return rank(a) - rank(b); });
   for (var i = 0; i < order.length; i++) {
     var f = order[i], h = await cmRead(env, f, head);
     if (h.transient) return { ok: false, transient: true, why: h.why };
@@ -4320,7 +4337,7 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase, opts) {
         want = cmEditsApply(xb.text, xe, false);
         if (want == null) return { ok: false, stale: true, why: "the parked edits do not re-apply to " + f + " at the merge base " + mb.slice(0, 7) + " (REBASE-INTEGRITY-1)" };
       }
-    } else if (rebased) {
+    } else if (rebased && (!sc.src || f === t.path)) {
       var rb = await cmRead(env, f, mb);
       if (rb.transient) return { ok: false, transient: true, why: rb.why };
       if (rb.text == null) return { ok: false, why: f + " cannot be read at the merge base " + mb.slice(0, 7) };
@@ -4339,7 +4356,7 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase, opts) {
       if (want == null) return { ok: false, stale: true, why: "the verified patch does not apply to " + f + " at the merge base " + mb.slice(0, 7) };
     } else want = ctx.proposal;
     if (h.text !== want) return { ok: false, why: f + " at the PR head " + head.slice(0, 7) + " is not the verified patch (other content was pushed)" };
-    if (f === t.path) { headText = h.text; srcWant = want; }
+    if (f === srcPath) { headText = h.text; srcWant = want; }
   }
   out.merge_base = mb;
   if (sc.kind === "worker") {
@@ -4350,13 +4367,13 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase, opts) {
     // bumped 0.34.0 to 0.34.1), merges clean because both sides wrote identical text, and main's version-bump-guard fails with "unchanged VERSION
     // after a byte change" (ci-watchdog #4319); a repeated version also reads as already deployed. The head's VERSION must be ahead of main's NOW;
     // if not, the change is stale and goes the REBASE-REQUEUE-1 way: re-applied on current main with a fresh bump.
-    var mnt = await cmRead(env, t.path, "main");
+    var mnt = await cmRead(env, srcPath, "main");
     if (mnt.transient) return { ok: false, transient: true, why: mnt.why };
     var mvm = mnt.text ? /^(?:var|const|let)\s+VERSION\s*=\s*"([^"\n]*)"/m.exec(mnt.text) : null;
     if (vm && mvm && !cmVerAhead(vm[1], mvm[1])) return { ok: false, stale: true, why: "VERSION-AHEAD-1: the pull request's VERSION " + vm[1] + " is not ahead of main's " + mvm[1] + " (another merge took it)" };
     if (!hunks) { out.revertible = false; out.revert_why = "a code-agent pull request stores no patch to invert"; }
     else if (!vm || !cmBump(headText, "-x")) { out.revertible = false; out.revert_why = "no single `var VERSION = \"x.y.z...\"` line to bump"; }
-    else if (rebased ? !cmRevertEdits(headText, rebased, "-x") : !cmRevertText(headText, hunks[t.path], "-x")) { out.revertible = false; out.revert_why = rebased ? "the parked edits do not invert on the head" : "the patch does not invert on the head"; }
+    else if ((rebased && !sc.src) ? !cmRevertEdits(headText, rebased, "-x") : !cmRevertText(headText, hunks[srcPath], "-x")) { out.revertible = false; out.revert_why = rebased ? "the parked edits do not invert on the head" : "the patch does not invert on the head"; }
     else out.revertible = true;
     var toml = await cmRead(env, sc.worker + "/wrangler.toml", head);
     if (toml.transient) return { ok: false, transient: true, why: toml.why };
