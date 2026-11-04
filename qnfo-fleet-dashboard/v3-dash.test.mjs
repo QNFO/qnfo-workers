@@ -18,9 +18,10 @@ let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 400))); } };
 
 const db = new DatabaseSync(":memory:");
-db.exec(`CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT, due TEXT, status TEXT DEFAULT 'open', created_at TEXT DEFAULT (datetime('now')), source TEXT);
+db.exec(`CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT, due TEXT, status TEXT DEFAULT 'open', created_at TEXT DEFAULT (datetime('now')), source TEXT, resolution TEXT, updated_at TEXT, resolved_at TEXT);
 CREATE TABLE fleet_heartbeat (worker TEXT, version TEXT, ts TEXT, ok INTEGER);
 CREATE TABLE v_fleet_metrics (metric TEXT, breach INTEGER);
+CREATE TABLE intents (id TEXT PRIMARY KEY, desire TEXT, source TEXT, device TEXT, type TEXT, domain TEXT, priority TEXT, summary TEXT, due TEXT, status TEXT, wbs_code TEXT, created_at TEXT, processed_at TEXT, triage_decision TEXT);
 CREATE TABLE cmd_log (id TEXT, text TEXT, kind TEXT, status TEXT, answer TEXT, error TEXT, owner INTEGER, model TEXT, ts TEXT DEFAULT (datetime('now')), done_ms INTEGER, from_url TEXT, visitor TEXT);`);
 db.prepare("INSERT INTO human_actions (slug,title,why) VALUES ('pay','Approve the annual domain renewal','IDENTITY-BOUND: money')").run();
 db.prepare("INSERT INTO human_actions (slug,title,why) VALUES ('tidy','Tidy the label set','reversible cleanup')").run();
@@ -113,6 +114,30 @@ ok(/data_age_s: v3Age/.test(src) && html.includes("updated '+ago(sp.data_age_s)"
 
 // V8 (1.83.5) the Now screen shows whether the command line has ever run and how it ended
 ok(/cmd_last_status/.test(src) && /FROM cmd_log WHERE kind = 'agent' ORDER BY ts DESC LIMIT 1/.test(src) && html.includes("Command line, last run") && html.includes("never run: sign in on the Code tab"), "V8 command-line proof row is on the Now screen");
+
+// V9 (1.84.0) hand an owner card back to the fleet with one tap
+r = await post("/api/v3/handback", { key: "ha:pay" });
+ok(r.status === 401 && (await r.json()).need === "code", "V9 a stranger cannot hand work back");
+r = await post("/api/v3/handback", { key: "nope" }, { "x-loop-token": env.LOOP_TOKEN });
+ok(r.status === 400, "V9 a bad key is refused", r.status);
+r = await post("/api/v3/handback", { key: "ha:gone" }, { "x-loop-token": env.LOOP_TOKEN });
+ok(r.status === 404, "V9 a card that is not open is 404", r.status);
+ok(/OWNER-HANDBACK/.test(src) && /ownerTaskFile\(env, text, \{ handoff: true, reuse: true \}\)/.test(src) && /SET status = 'rerouted'/.test(src), "V9 the hand-back files fleet work and reroutes the card");
+ok(html.includes("Fleet: you do it") && html.includes("Snooze 7 days") && html.includes("Not needed") && html.includes("Last 24 hours"), "V9 four one-tap options and the 24 hour card are on the Now screen");
+r = await get("/api/v3/now", { "x-loop-token": env.LOOP_TOKEN });
+const nowAfter = await r.json();
+ok(nowAfter.work && "ok" in nowAfter.work, "V9 the work section is reported (ok or named unreadable)", nowAfter.work);
+
+// V9b the happy path: the card is filed as a fleet task, rerouted, and a repeat tap is a no-op
+r = await post("/api/v3/handback", { key: "ha:pay" }, { "x-loop-token": env.LOOP_TOKEN });
+const hbj = await r.json();
+ok(r.status === 200 && hbj.ok === true && hbj.changed === true, "V9b hand-back succeeds and changes the card", hbj);
+const card = db.prepare("SELECT status, resolution FROM human_actions WHERE slug = 'pay'").get();
+ok(card.status === "rerouted" && /handed back to the fleet/.test(card.resolution), "V9b the card is rerouted with a resolution", card);
+const filedRow = db.prepare("SELECT prompt, mode FROM owner_prompts WHERE prompt LIKE 'OWNER-HANDBACK ha:pay%'").get();
+ok(filedRow && filedRow.mode === "task" && /do it yourself/.test(filedRow.prompt) && /IDENTITY-BOUND/.test(filedRow.prompt), "V9b a fleet task carries the hand-back instructions", filedRow);
+r = await post("/api/v3/handback", { key: "ha:pay" }, { "x-loop-token": env.LOOP_TOKEN });
+ok(r.status === 404, "V9b a second tap finds no open card", r.status);
 
 // V5
 r = await get("/classic");

@@ -11,7 +11,8 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.83.5";
+var VERSION = "1.84.0";
+// 1.84.0 NOW-HANDBACK-1 (owner request 2026-11-04, pillar autonomy; minor, new route): each owner card has four one-tap options (Fleet: you do it, Snooze 7 days, I did it, Not needed); POST /api/v3/handback files the card as fleet work (OWNER-HANDBACK ticket, card set rerouted) so the owner never has to do reversible work; the Now screen also shows the last 24 hours of deploys, merges and issue churn.
 // 1.83.5 (cont.) NOW-PRIVATE-1: the Now screen shows card titles only to the signed-in owner; a stranger sees a placeholder (one title named the owner's work-authorization and permit status).
 // 1.83.5 (cont.) NOW-CMD-PROOF-1: the Is-it-running card shows when the command line last ran and how it ended (cmd_log kind agent), or that it never ran.
 // 1.83.5 NOW-FRESH-1 (pillar core; patch): the Money card shows how old its data is (the cost ledger row it reads) and turns amber after 3 hours, so the owner can see that it is updating.
@@ -3487,6 +3488,34 @@ async function v3Health(env) {
     cmd_last_status: cl[0] ? String(cl[0].status) : null, cmd_last_age_s: cl[0] ? v3Age(String(cl[0].ts).replace(" ", "T") + "Z") : null
   };
 }
+// One tap: hand an owner card back to the fleet. The fleet does it, red-teams a blocker, and keeps the card only with an IDENTITY-BOUND: line and a closing probe.
+async function v3Handback(env, ctx, b) {
+  const key = String(b && b.key || "");
+  if (!/^ha:[A-Za-z0-9._-]{1,120}$/.test(key)) return v3Json({ ok: false, error: "bad key" }, 400);
+  const slug = key.slice(3);
+  const rows = await d1all(env.AUDIT, "SELECT slug, title, why, action FROM human_actions WHERE slug = ?1 AND status = 'open'", [slug]);
+  if (!rows.length) return v3Json({ ok: false, error: "no open card " + slug + " (it may have cleared already)" }, 404);
+  const r = rows[0];
+  const text = "OWNER-HANDBACK " + key + ": " + String(r.title || "").slice(0, 200) + "\n" +
+    "The owner handed this back to the fleet from the dashboard with one tap (AUTONOMY-FIRST-1, HUMAN-ITEMS-AUTOMATIC-1): do it yourself.\n" +
+    "Card why: " + String(r.why || "").slice(0, 900) + "\nCard action: " + String(r.action || "").slice(0, 600) + "\n" +
+    "Definition of done: do the work with every surface that exists (tools, existing credentials, the repository token, the executor), verify it live, and close with evidence in issue_triage.close_evidence. " +
+    "Only a step that is irreversible and identity-bound (money, a signing act, the owner's own account, an emailed one-time code) may stay with the owner: then write the exact blocker, what you tried on each surface and a closing probe, and reopen the card with an IDENTITY-BOUND: line. Never return it to the owner without that.";
+  const filed = await ownerTaskFile(env, text, { handoff: true, reuse: true });
+  const up = await env.AUDIT.prepare("UPDATE human_actions SET status = 'rerouted', resolution = ?1, updated_at = datetime('now') WHERE slug = ?2 AND status = 'open'").bind("handed back to the fleet by the owner (dashboard), issue " + (filed.issue_id || "pending") + ", " + new Date().toISOString(), slug).run();
+  return v3Json({ ok: true, key: key, issue_id: filed.issue_id || null, duplicate: !!filed.duplicate, changed: !!(up.meta && up.meta.changes) });
+}
+// What the fleet did in the last 24 hours, so the page answers "what is happening" without a tab.
+async function v3Work(env) {
+  const [a, b] = await Promise.all([
+    d1all(env.AUDIT, "SELECT (SELECT COUNT(*) FROM deployment_history WHERE deployed_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS deploys, (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS merged"),
+    d1all(env.AUDIT, "SELECT event, COUNT(*) AS n FROM issue_lifecycle WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours') GROUP BY event")
+  ]);
+  const ev = {};
+  b.forEach(function(x) { ev[x.event] = Number(x.n) || 0; });
+  const open = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric = 'open_agent_issues'").catch(function() { return []; });
+  return { deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] ? Number(open[0].last_value) : null };
+}
 async function v3Reach(env) {
   const [r, reg] = await Promise.all([reachScorecardData(env), d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric IN ('pageviews_30d','referral_30d','publications_30d','subscribers_growth_monthly')").catch(function() { return []; })]);
   const rg = {};
@@ -3532,8 +3561,8 @@ async function v3Build(env, kind, authed) {
   if (hit && hit.env === env && now - hit.at < V3_TTL_MS) return hit.v;
   let v;
   if (kind === "now") {
-    const [needs, spend, health] = await Promise.all([v3Section("needs", function() { return v3Needs(env, authed); }), v3Section("spend", function() { return v3Spend(env); }), v3Section("health", function() { return v3Health(env); })]);
-    v = { screen: "now", needs: needs, spend: spend, health: health };
+    const [needs, spend, health, work] = await Promise.all([v3Section("needs", function() { return v3Needs(env, authed); }), v3Section("spend", function() { return v3Spend(env); }), v3Section("health", function() { return v3Health(env); }), v3Section("work", function() { return v3Work(env); })]);
+    v = { screen: "now", needs: needs, spend: spend, health: health, work: work };
   } else {
     const [reach, content] = await Promise.all([v3Section("reach", function() { return v3Reach(env); }), v3Section("content", function() { return v3Content(env); })]);
     v = { screen: "readers", reach: reach, content: content };
@@ -3541,7 +3570,7 @@ async function v3Build(env, kind, authed) {
   v.generated_at = new Date().toISOString();
   v.version = VERSION;
   // A screen whose every section failed does not replace a good cached copy: the stale one is served and marked.
-  const allBad = ["needs", "spend", "health", "reach", "content"].every(function(k) { return !v[k] || v[k].ok === false; });
+  const allBad = ["needs", "spend", "health", "work", "reach", "content"].every(function(k) { return !v[k] || v[k].ok === false; });
   if (allBad && hit && hit.env === env) return Object.assign({}, hit.v, { stale: true, stale_since: hit.v.generated_at });
   V3_CACHE[key] = { at: now, env: env, v: v };
   return v;
@@ -3586,6 +3615,12 @@ async function v3Routes(request, env, ctx, path, url, owner) {
   }
   if (m !== "POST") return v3Json({ error: "not found" }, 404);
   if (request.headers.get("x-fleet-ui") !== "1") return v3Json({ error: "missing x-fleet-ui header" }, 400);
+  if (path === "/api/v3/handback") {
+    if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your emailed code to hand work back to the fleet." }, 401);
+    let hb = null;
+    try { hb = await request.json(); } catch (e) { return v3Json({ error: "invalid JSON" }, 400); }
+    return await v3Handback(env, ctx, hb);
+  }
   if (path === "/api/v3/code" || path === "/api/v3/warm") {
     if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
     if (path === "/api/v3/warm") {
@@ -3646,13 +3681,14 @@ else if(bad.length){tone='warn';title="Can't read "+bad.join(', ');sub='Not conf
 else if(sp.ok&&sp.pace_vs_budget>1.1){tone='warn';title='Spending ahead of budget';sub='At this pace the month lands at '+usd(sp.pace_month_usd)+' against '+usd(sp.budget_month_usd)+'.'}
 else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
-if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-a="done" class="pri">Done</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Dismiss</button></div>'});o+='</div>'}
+if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-h="1" class="pri">Fleet: you do it</button> <button data-k="'+esc(it.key)+'" data-a="snooze">Snooze 7 days</button> <button data-k="'+esc(it.key)+'" data-a="done">I did it</button> <button data-k="'+esc(it.key)+'" data-a="dismiss">Not needed</button></div>'});o+='</div>'}
 o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':sp.ok?cls(sp.data_age_s,10800):'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace, ':'')+(sp.ok?'updated '+ago(sp.data_age_s):'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
 var own=sp.external_daily_usd!=null?sp.external_daily_usd*30:null,fleetOwn=own!=null&&sp.pace_month_usd!=null?sp.pace_month_usd-own:null;o+='<div class="row"><span>Pace at the current rate, per month</span><span>'+usd(sp.pace_month_usd)+'</span></div><div class="row"><span>of which the fleet itself (AI + Cloudflare)</span><span>'+usd(fleetOwn)+'</span></div><div class="row"><span>of which your own subscriptions (unverified figure)</span><span>'+usd(own)+'</span></div><p class="note">Only the fleet part can be cut by the system. The subscriptions part falls when you cancel plans the Code tab replaces.</p>'}
 o+='</div><div class="card"><h2>Is it running?<span class="'+cls(h.newest_heartbeat_age_s,900)+'">'+(h.ok?'last heartbeat '+ago(h.newest_heartbeat_age_s):'')+'</span></h2>'+sec(h,'health');
 if(h.ok){o+='<div class="row"><span>Workers reporting in the last 2 h</span><span>'+h.workers_reporting+' of '+h.workers_total+'</span></div>'+(h.stale_workers.length?'<div class="row"><span>Silent</span><span>'+esc(h.stale_workers.join(', '))+'</span></div>':'')+'<div class="row"><span>Metrics off target</span><span>'+h.metrics_off_target+' of '+h.metrics_total+'</span></div><div class="row"><span>Command line, last run</span><span>'+(h.cmd_last_status?esc(h.cmd_last_status)+', '+ago(h.cmd_last_age_s):'never run: sign in on the Code tab')+'</span></div>'}
+var w=d.work||{};if(w.ok){o+='</div><div class="card"><h2>Last 24 hours</h2><div class="row"><span>Deploys / code changes merged</span><span>'+num(w.deploys_24h)+' / '+num(w.code_merged_24h)+'</span></div><div class="row"><span>Issues opened / closed / reopened</span><span>'+num(w.issues_opened_24h)+' / '+num(w.issues_closed_24h)+' / '+num(w.issues_reopened_24h)+'</span></div><div class="row"><span>Issues open now</span><span>'+num(w.open_issues)+'</span></div><p class="note">Closed and reopened show whether fixes hold: many reopened means closes are not sticking.</p>'}
 $('s-now').innerHTML=o+'</div><p class="note">Updated '+ago(Math.round((Date.now()-Date.parse(d.generated_at))/1000))+' (server). Version '+esc(d.version)+(d.stale?' - showing a cached copy: every source failed on the last read.':'')+'</p>'}
 function renderReaders(d){var r=d.reach||{},c=d.content||{},o='';
 if(r.ok){var few=(r.referred_7d||0)<100,tone=few?'warn':'ok',t=few?'Few verifiable readers':'People are reading';
@@ -3682,7 +3718,7 @@ $('ci').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){
 document.querySelectorAll('[data-q]').forEach(function(b){b.onclick=function(){if(!holder){codeInit();return}run(b.getAttribute('data-q'))}});
 $('send').onclick=function(){var tk=document.querySelector('[name=cf-turnstile-response]');$('send').disabled=true;api('/api/cmd/code',{cf_turnstile:tk?tk.value:''}).then(function(j){$('send').disabled=false;$('sim').textContent=j.ok?'Code sent to '+(j.to||'your email')+'.':(j.error||'Could not send the code.');if(j.ok)$('vc').focus()})};
 $('vb').onclick=function(){api('/api/cmd/verify',{code:$('vc').value.trim()}).then(function(j){if(j.ok){$('sim').textContent='Signed in.';codeInit();load('now',true)}else $('sim').textContent=j.error||'That code did not work.'})};
-document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a]');if(!b)return;b.disabled=true;api('/api/owner/respond',{key:b.getAttribute('data-k'),kind:b.getAttribute('data-a')}).then(function(j){if(j.ok)load('now',true);else{b.disabled=false;if(j.http===401||j.http===403){show('code');$('sim').textContent='Sign in first (this action needs a recent code).'}else alert(j.error||'failed')}})});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a],[data-h]');if(!b)return;b.disabled=true;var hb=b.getAttribute('data-h')==='1';(hb?api('/api/v3/handback',{key:b.getAttribute('data-k')}):api('/api/owner/respond',b.getAttribute('data-a')==='snooze'?{key:b.getAttribute('data-k'),kind:'snooze',days:7}:{key:b.getAttribute('data-k'),kind:b.getAttribute('data-a')})).then(function(j){if(j.ok)load('now',true);else{b.disabled=false;if(j.http===401||j.http===403){show('code');$('sim').textContent='Sign in first (this action needs a recent code).'}else alert(j.error||'failed')}})});
 document.querySelectorAll('nav a').forEach(function(a){a.onclick=function(e){e.preventDefault();show(a.id.slice(2))}});
 setInterval(function(){pill();if(cur!=='code')load(cur)},30000);setInterval(pill,5000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&cur!=='code')load(cur,true)});
