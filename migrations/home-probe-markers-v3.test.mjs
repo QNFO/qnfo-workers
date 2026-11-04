@@ -1,4 +1,5 @@
-// HOME-PROBE-MARKERS-V3-1 offline suite: the four contract rows are repointed at markers the live pages carry, and nothing else changes.
+// HOME-PROBE-MARKERS-V3-1 offline suite: two non-liveness contract rows are repointed at markers the live pages carry, and nothing else changes
+// (the two PAGE-LIVENESS-1 rows belong to migrations/2026-11-04-17-page-liveness-markers.sql, PR 7030).
 // Run: node migrations/home-probe-markers-v3.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -14,25 +15,23 @@ const db = new DatabaseSync(":memory:");
 db.exec("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, verify_probe TEXT, status TEXT)");
 const ins = db.prepare("INSERT INTO remediation_contracts VALUES (?,?,?)");
 const OLD = {
-  "rt-page-fleet-queue": '{"url": "https://fleet.qnfo.org/", "status": 200, "contains": "<title>QNFO fleet status", "max_ms": 15000}',
   "fm-page-css-never-sent": '{"url": "https://fleet.qnfo.org/", "status": 200, "contains": ".fx-r{"}',
   "issue-1000784": '{"url": "https://fleet.qnfo.org/", "status": 200, "contains": "Fix it"}',
+  "rt-page-fleet-queue": '{"url": "https://fleet.qnfo.org/", "status": 200, "contains": "<title>QNFO fleet status", "max_ms": 15000}',
   "rt-page-qwav-home": '{"url": "https://qwav.org/", "status": 200, "contains": "QWAV Research Papers", "max_ms": 10000}',
   "rt-page-fleet-kpi": '{"url": "https://fleet.qnfo.org/kpi", "status": 200, "contains": "Fleet metrics", "max_ms": 15000}'
 };
 for (const [c, p] of Object.entries(OLD)) ins.run(c, p, "active");
 db.exec(sql);
-const get = (c) => JSON.parse(db.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = ?").get(c).p);
+const raw = (c) => db.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = ?").get(c).p;
+const get = (c) => JSON.parse(raw(c));
 
-ok(get("rt-page-fleet-queue").contains === "Readers</a>" && get("rt-page-fleet-queue").url === "https://fleet.qnfo.org/", "the home probe uses a marker of the three-screen shell");
 ok(get("fm-page-css-never-sent").contains === ".hero{border-radius" && get("fm-page-css-never-sent").url === "https://fleet.qnfo.org/", "the CSS probe uses the shell's inline CSS");
 ok(get("issue-1000784").url === "https://fleet.qnfo.org/overview" && get("issue-1000784").contains === "Fix it", "the Fix it probe moved to the page that has the buttons");
-ok(get("rt-page-qwav-home").contains === "benchmarked in joules per solution", "the qwav home marker is the rebranded text");
-ok(db.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = 'rt-page-fleet-kpi'").get().p === OLD["rt-page-fleet-kpi"], "an unrelated contract is untouched");
+ok(["rt-page-fleet-queue", "rt-page-qwav-home", "rt-page-fleet-kpi"].every((c) => raw(c) === OLD[c]), "the PAGE-LIVENESS-1 rows (PR 7030's) and unrelated rows are untouched");
 ok(db.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE status = 'active'").get().n === 5, "no contract changed status or was removed");
 ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql) && /^-- Rollback: /m.test(sql), "the migration carries the runner header lines");
 ok(!/\b(DELETE|DROP)\b/i.test(sql.split("\n").filter((l) => !l.startsWith("--")).join("\n")), "the migration deletes and drops nothing");
-// every marker is valid JSON text in the probe and short enough to be a substring match
-ok(Object.keys(OLD).every((c) => { try { return typeof get(c).contains === "string"; } catch (e) { return false; } }), "every probe is valid JSON with a string marker");
+ok((sql.match(/^UPDATE /gm) || []).length === 2, "exactly two UPDATE statements");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
