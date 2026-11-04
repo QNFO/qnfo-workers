@@ -1764,6 +1764,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-code-orchestrator/README.md"
     },
     {
+      "path": "qnfo-code-orchestrator/releases/0.46.0-codeagent.md",
+      "title": "qnfo-code-orchestrator 0.46.0-codeagent (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-code-orchestrator/releases/0.46.0-codeagent.md"
+    },
+    {
       "path": "qnfo-containers-pilot/CONTAINER-RESTORE-1.md",
       "title": "CONTAINER-RESTORE-1 — qnfo-containers-pilot [[containers]] restore (issue #1485)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-containers-pilot/CONTAINER-RESTORE-1.md"
@@ -1877,6 +1882,11 @@
       "path": "qnfo-gateway/releases/3.57.0-codeagent.md",
       "title": "qnfo-gateway 3.57.0-codeagent (2026-11-04)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.57.0-codeagent.md"
+    },
+    {
+      "path": "qnfo-gateway/releases/3.57.1-codeagent.md",
+      "title": "qnfo-gateway 3.57.1-codeagent (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.57.1-codeagent.md"
     },
     {
       "path": "qnfo-github-steward/README.md",
@@ -2077,6 +2087,11 @@
       "path": "qnfo-social/README.md",
       "title": "qnfo-social",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-social/README.md"
+    },
+    {
+      "path": "qnfo-social/releases/0.22.0.md",
+      "title": "qnfo-social 0.22.0 (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-social/releases/0.22.0.md"
     },
     {
       "path": "qnfo-subscribers/README.md",
