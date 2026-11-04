@@ -576,6 +576,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/RADAR-TITLE-CLEANUP-2026-10-05.md"
     },
     {
+      "path": "docs/READER-YIELD.md",
+      "title": "Reader yield (READER-YIELD-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/READER-YIELD.md"
+    },
+    {
       "path": "docs/README.md",
       "title": "Quniverse documentation directory",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/README.md",
