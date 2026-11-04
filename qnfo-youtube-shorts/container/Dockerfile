@@ -6,6 +6,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 RUN pip install --no-cache-dir "manim==0.22.0"
 # YT-VOICE-1: Kokoro-82M narrates on CPU (CPU-only torch keeps the layer near 200 MB); the warm-up bakes the model and spaCy data into the image so a render never downloads.
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch  && pip install --no-cache-dir "kokoro>=0.9.4" soundfile  && python -c "from kokoro import KPipeline; p = KPipeline(lang_code='a', device='cpu'); print(sum(len(r.audio) for r in p('Warm up the voice.', voice='af_heart')))"
+ENV HF_HUB_OFFLINE=1
 WORKDIR /app
 COPY short_scene.py render.py server.py /app/
 EXPOSE 8080

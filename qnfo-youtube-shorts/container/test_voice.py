@@ -14,3 +14,7 @@ assert abs(w[2][1] - 10.7) < 1e-9, "an untimed token starts where the previous w
 assert all(x[2] > 0 for x in w)
 assert render.words_from_tokens(None, 0) == []
 print("ok")
+
+assert render.speakable("circle with Lego bricks — you get close.  Never round") == "circle with Lego bricks, you get close. Never round"
+assert render.words_from_tokens([T(text="—", start_ts=None, end_ts=None), T(text="Hi", start_ts=0.0, end_ts=0.2)], 0.0)[0][0] == "Hi"
+print("ok speakable")

@@ -13,7 +13,7 @@ CR, NL = chr(13), chr(10)
 KOKORO_VOICE = os.environ.get("KOKORO_VOICE", "af_heart")
 KOKORO_SPEED = float(os.environ.get("KOKORO_SPEED", "1.05"))     # a little brisker than the default 1.0, for short-form pace
 KOKORO_RATE = 24000
-PUNCT = ".,;:!?\"'()-"
+PUNCT = ".,;:!?\"'()-—–…"
 FONT = os.environ.get("SHORT_FONT", "DejaVu Sans")
 
 
@@ -132,6 +132,11 @@ def words_from_tokens(tokens, offset):
     return out
 
 
+def speakable(text):
+    """Dashes become a spoken comma (a model reads an em dash as nothing or as a glitch) and runs of spaces collapse."""
+    return re.sub(r"\s+", " ", re.sub(r"\s*[—–]\s*", ", ", text)).strip()
+
+
 def kokoro_beat(text, wav_path, t0, voice=None, _p={}):
     """Speak one beat in a single pass; write the mono wav and return (words with absolute times from t0, seconds)."""
     import numpy as np, soundfile as sf
@@ -162,7 +167,7 @@ def render(job, out):
         if all(not s.get("audio_b64") for s in b["sentences"]):      # YT-VOICE-1: spoken here, whole beat at once
             try:
                 src = out / f"b{i}.k.wav"
-                ws, bt = kokoro_beat(" ".join(s["text"] for s in b["sentences"]), src, t, job.get("voice"))
+                ws, bt = kokoro_beat(speakable(" ".join(s["text"] for s in b["sentences"])), src, t, job.get("voice"))
             except Exception as e:      # the Worker reads "kokoro:" and re-voices the job with Aura on its next attempt
                 raise RuntimeError("kokoro: " + repr(e)[:300])
             allw += ws
