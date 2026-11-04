@@ -305,10 +305,12 @@ __name222(expectedFires, "expectedFires");
 __name2222(expectedFires, "expectedFires");
 // ==== AREA-MAP reliability: state store, 24 h analytics and probes (fleet_dashboard_state) ====
 /* D1-REPLICA-READS-1: read-only statements go to a read replica (qnfo-audit replication is auto since 2026-11-04). A replica error falls back to the primary; */
+/* read-after-write guard: claims, locks, leases, dedupe, queues and issue/card state stay on the primary */
+const D1_PRIMARY_ONLY = /claim|lock|lease|dedupe|dedup|human_actions|agent_issues|issue_triage|queue|code_tasks|work_|pending|token|session/i;
 const D1_REPLICA_SESSIONS = new WeakMap();
 function d1readHandle(db, sql) {
   try {
-    if (!db || typeof db.withSession !== "function" || !/^\s*(select|with)\b/i.test(sql) || (db.__replicaOff)) return db;
+    if (!db || typeof db.withSession !== "function" || !/^\s*(select|with)\b/i.test(sql) || D1_PRIMARY_ONLY.test(sql)) return db;
     let s = D1_REPLICA_SESSIONS.get(db);
     if (!s) { s = db.withSession("first-unconstrained"); D1_REPLICA_SESSIONS.set(db, s); }
     return s;
