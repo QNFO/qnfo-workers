@@ -206,6 +206,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CAPABILITY-ADVERTISING-CONTRACT.md"
     },
     {
+      "path": "docs/CAREER-VISIBILITY.md",
+      "title": "Career visibility: being found and taken seriously by employers (REACH-FOCUS-3)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CAREER-VISIBILITY.md"
+    },
+    {
       "path": "docs/CF-ACCESS-ROLLOUT-1277.md",
       "title": "CF-ACCESS-ROLLOUT-1277: putting Cloudflare Access in front of the admin surface",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/CF-ACCESS-ROLLOUT-1277.md"
@@ -329,6 +334,11 @@
       "path": "docs/D1-SPLIT-DESIGN-2026-11.md",
       "title": "D1 split design: hot write paths off qnfo-audit (D1-SPLIT-1, pillar core)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/D1-SPLIT-DESIGN-2026-11.md"
+    },
+    {
+      "path": "docs/D1-TIERING-2026-11.md",
+      "title": "D1 tiering and slimming, 2026-11-04 (COLD-TIER-1 and D1-HOTSPOTS-3, pillar cost)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/D1-TIERING-2026-11.md"
     },
     {
       "path": "docs/DATA-PLANE-DISPOSITIONS-2026-10-01.md",
@@ -539,6 +549,16 @@
       "path": "docs/PAPER-AUTHORING-GUIDELINES.md",
       "title": "Paper authoring guidelines: the plain-language standard (PLAIN-STANDARD-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PAPER-AUTHORING-GUIDELINES.md"
+    },
+    {
+      "path": "docs/PAPER-LEDGER.md",
+      "title": "Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PAPER-LEDGER.md"
+    },
+    {
+      "path": "docs/PAPER-LEDGER.md",
+      "title": "Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PAPER-LEDGER.md"
     },
     {
       "path": "docs/PAPER-LEDGER.md",
@@ -1854,6 +1874,21 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.55.0-codeagent.md"
     },
     {
+      "path": "qnfo-gateway/releases/3.56.1-codeagent.md",
+      "title": "qnfo-gateway 3.56.1-codeagent (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.56.1-codeagent.md"
+    },
+    {
+      "path": "qnfo-gateway/releases/3.57.0-codeagent.md",
+      "title": "qnfo-gateway 3.57.0-codeagent (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.57.0-codeagent.md"
+    },
+    {
+      "path": "qnfo-gateway/releases/3.57.1-codeagent.md",
+      "title": "qnfo-gateway 3.57.1-codeagent (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-gateway/releases/3.57.1-codeagent.md"
+    },
+    {
       "path": "qnfo-github-steward/README.md",
       "title": "qnfo-github-steward",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-github-steward/README.md"
@@ -2059,6 +2094,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-social/README.md"
     },
     {
+      "path": "qnfo-social/releases/0.22.0.md",
+      "title": "qnfo-social 0.22.0 (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-social/releases/0.22.0.md"
+    },
+    {
       "path": "qnfo-subscribers/README.md",
       "title": "qnfo-subscribers",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-subscribers/README.md"
@@ -2092,6 +2132,11 @@
       "path": "qnfo-youtube-shorts/releases/0.5.0-oauth.md",
       "title": "qnfo-youtube-shorts 0.5.0-oauth (2026-11-04)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-youtube-shorts/releases/0.5.0-oauth.md"
+    },
+    {
+      "path": "qnfo-youtube-shorts/releases/0.5.1-oauth.md",
+      "title": "qnfo-youtube-shorts 0.5.1-oauth (2026-11-04)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-youtube-shorts/releases/0.5.1-oauth.md"
     },
     {
       "path": "research-code/README.md",
