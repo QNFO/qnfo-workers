@@ -507,9 +507,9 @@ because each one was broken at least once; the linked issue holds the evidence.
   about 2 of 100 counted clicks become a GA4 engaged session), and neither moved when output swung 2 to 89 papers a day. Do not read `outreach_human_clicks_7d`,
   `outreach_clicks_per_post_7d` or per-paper UTM/RUM counts as readers, and do not shift outreach volume toward the channel with the most clicks. Readers are
   `engaged_reader_sessions_7d` (GA4 engagedSessions) and external-referrer loads (`paper_readership.ext_30d`); validity is `outreach_engaged_per_100_clicks_7d`.
-- `ops_config research_daily_neurons` is moved daily by the `reader-yield-refresh` fleet_task inside `research_yield_floor`..`research_yield_ceiling`, at most 10 percent a day, only
-  while `research_yield_last_written` equals the key. Writing the key yourself pauses the governor (the reason is in `v_research_volume_target`); `research_yield_governor` = `off`
-  stops it. Record a deliberate change in `decision_log` with its revert path, as for any cap.
+- `v_research_volume_target` publishes the research budget a reader-linked rule would set (engaged readers a day x 20000, floor 180000, ceiling 450000, 10 percent a day); the hourly
+  steps appended to `event-metric-recompute` refresh it. The governor that would write `ops_config research_daily_neurons` ships `off` (qnfo-ops is that key's single writer; issue
+  READER-YIELD-1.5 asks for the switch). When on it pauses on any other writer (`research_yield_last_written`); the reason is in `v_research_volume_target`.
 
 ## Writing that outsiders read (ENSEMBLE-POLICY-1)
 - Read `docs/ENSEMBLE-POLICY.md` before adding or changing a worker that writes prose for readers outside the fleet. LLM errors are

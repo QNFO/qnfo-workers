@@ -37,37 +37,43 @@ reader signal that is not noise is GA4 engagement plus the external-referrer loa
 | `v_reader_yield_by_source`, `v_paper_readers_top` | Yield by where the idea came from; papers an outsider reached, ranked, with `suspect_automated` for 50 or more sessions and no external referrer (one page had 110 sessions on 11-03). |
 | Metrics | `engaged_reader_sessions_7d` and `research_neurons_per_engaged_session_7d` (outcomes, papers surface), `outreach_engaged_per_100_clicks_7d` (validity, promotion surface). History backfilled from 2026-10-31; first verdict 2026-11-07. |
 | `v_research_volume_target` and the governor | See below. |
-| `fleet_tasks` `reader-yield-refresh` | Daily 05:40Z: ledger, per-paper table, metrics, governor, decision log, one `cloud_ops_events` row. One statement a step. |
+| Eight steps appended to `fleet_tasks` `event-metric-recompute` | Hourly (:55): ledger, per-paper table, prune of rows not refreshed for 14 days, metrics, governor, decision log, one `cloud_ops_events` row a UTC day (`reader-yield-<yyyymmdd>`). One statement a step. No new cron: `fleet_budget` caps are breached (`cost:fleet_all_in_month` 1151 against 300). |
 
 Read the same papers a week apart: `SELECT slug, pv_7d, pv_prev_7d, utm_7d, utm_prev_7d FROM paper_readership WHERE published_at < date('now','-14 days')`.
 
-## The research volume governor
+## The research volume governor (dormant: off)
 
-`ops_config research_daily_neurons` = clamp(engaged readers a day x `research_yield_neurons_per_engaged_day`, `research_yield_floor`, `research_yield_ceiling`), reached by at most
-`research_yield_step_pct` a day, with a 2 percent dead band. Defaults 20000, 180000, 450000, 10. At 17.4 engaged readers a day the target is 349k: the first step from 360000 is a
-dead-band move, not a cut. The floor is half of the 2026-10-21 budget; research never stops. The constant is a calibration, not a law.
+`v_research_volume_target` is the research budget as a function of readers: `research_daily_neurons` = clamp(engaged readers a day x `research_yield_neurons_per_engaged_day`,
+`research_yield_floor`, `research_yield_ceiling`), reached by at most `research_yield_step_pct` a day, with a 2 percent dead band. Defaults 20000, 180000, 450000, 10. At 17.4 engaged
+readers a day the target is 349k, 3 percent under today's key. The floor is half of the 2026-10-21 budget; research never stops. The constant is a calibration, not a law.
 
-It moves only when: `research_yield_governor` is `on`; at least `research_yield_min_days` (7) days of GA4 engaged rows exist; the key is inside the band; and nobody else wrote the key
-since the governor did (`research_yield_last_written` equals the key). Any other writer, including the ops session that owns the key and the spend-cap work, pauses it with a reason in
-`v_research_volume_target.reason` and the daily event; set `research_yield_last_written` to an empty string to resume. Revert: `research_yield_governor` = `off` and restore the key from
-`bak_20261104_research_neurons_cfg`.
+**It ships off.** `ops_config research_policy_harmonized` names qnfo-ops the single writer of `research_daily_neurons` ("other sessions must file an issue instead of overwriting these
+keys") and the spend-cap work is changing how research-exec enforces it, so `research_yield_governor` is `off`: the hourly steps and the daily `reader-yield` event publish the target
+and the reason, and nothing writes the key. Issue READER-YIELD-1.5 asks the key's owner to switch it on once research-exec respects the key (research-exec spent 988k and 997k neurons
+on 11-02 and 11-03 against 360000, so today the key moves a number nothing reads).
+
+When `on`, the governor moves the key once a UTC day (the `reader-yield-<yyyymmdd>` event is the guard, so an hourly or retried run cannot move it twice) and only while: at least
+`research_yield_min_days` (7) days of GA4 engaged rows exist; the key is inside the band; and nobody else wrote the key since the governor did (`research_yield_last_written` equals the
+key). Any other writer pauses it with a reason in `v_research_volume_target.reason` and the daily event; set `research_yield_last_written` to an empty string to resume. Revert:
+`research_yield_governor` = `off` and restore the key from `bak_20261104_research_neurons_cfg`.
 
 **Strongest argument against it.** Engaged readers depend on distribution (search, X, referrals), not on research volume, so tying the budget to total readers can freeze output at
 today's audience and never invest ahead of it. The ceiling and the floor bound the damage; the real investment lever is outreach and search, which this does not touch. **Failure
 mode.** If readers fall for reasons unrelated to research (a GA4 outage, a site change), the budget falls 10 percent a day to the floor with no cause in research; the 7 day window and
-the pause on a foreign write limit it to a week, and `engaged_reader_sessions_7d` with `outreach_engaged_per_100_clicks_7d` show which. **Not enforced yet.** Research spend ran 2.7x the
-key on 11-02 and 11-03; the key only matters when the spend-cap work makes research-exec respect it.
+the pause on a foreign write limit it to a week, and `engaged_reader_sessions_7d` with `outreach_engaged_per_100_clicks_7d` show which. **Coupling risk.** The steps live inside another
+loop's task row: a later migration that rewrites `event-metric-recompute` in full removes them; the metrics then go stale (daily cadence) and the staleness view says so.
 
 ## Prediction and what falsifies it
 
 Logged in `decision_log` (parsed by `decision_predictions`): `engaged_reader_sessions_7d >= 98 within 14 d` (80 percent of the 122 baseline; the hypothesis is that readers do not follow
-research volume) and `research_neurons_per_engaged_session_7d <= 30000 within 14 d` (true only if the key binds). Falsified if engaged readers fall more than 20 percent in 14 days
-with outreach cadence unchanged: turn the governor off and put the floor back to 360000.
+research volume, tested by the natural swings of output) and `research_neurons_per_engaged_session_7d <= 30000 within 14 d` (true only if the governor is on and the key binds). Falsified if engaged readers fall more than 20 percent in 14 days
+with outreach cadence unchanged: readers do depend on research volume; keep the budget at 360000 and say so.
 
-## Next items (four ROADMAP-1 rows filed by the migration, each with a code-task)
+## Next items (four ROADMAP-1 rows with code-tasks and one enabling issue, filed by the migration)
 
 1. READER-YIELD-1.1 `qnfo-gateway`: class automated fetchers as bots so `outreach_human_clicks_7d` falls to what is real; done when `outreach_engaged_per_100_clicks_7d` is 8 or more.
 2. READER-YIELD-1.2 `qnfo-fleet-dashboard`: derive `pageviews_30d` from the stored daily series so the Readers screen reads 19.7k, not 0 or 10000.
 3. READER-YIELD-1.3 `qnfo-social`: when the queue is empty, give one paper a day that an outsider already read a second post on X, LinkedIn and Mastodon (the channels that produce engaged
    sessions), measured against matched papers a week apart.
 4. READER-YIELD-1.4 `qnfo-fleet-dashboard`: GA4 ingest by campaign and country so an engaged session can be tied to the paper, post and origin that earned it. X, LinkedIn and Mastodon have 14, 7 and 14 slots a week for about 60 new papers a week, so slot choice is real there (the roll-ups carry every paper) and has no signal until this lands.
+5. READER-YIELD-1.5 (config, owner qnfo-ops / the spend-cap work): switch `research_yield_governor` on once research-exec enforces `research_daily_neurons`.

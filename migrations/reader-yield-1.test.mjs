@@ -1,9 +1,12 @@
 // READER-YIELD-1 (2026-11-04, pillar reach): the reader ledger, the per-paper readership table, the three measures and the research volume governor.
-// Replays migrations/2026-11-04-reader-yield-1.sql on SQLite against a fixture with the live layout, then runs the fleet_task steps the way the runner does (one statement a step).
-// Proves: the header opts in to the runner; the ledger reads GA4 channel rows and leaves a day with no GA4 rows NULL (never a zero); the 64 character campaign key joins a longer
-// paper slug and a /quickread path is not a paper; the three metrics are NULL until 7 GA4 days exist; the governor moves the key toward engaged readers a day x 20000 inside the floor
-// and ceiling by at most 10 percent a day, does nothing inside the 2 percent dead band, pauses on a foreign write, with the governor off and with under 7 days of data, and logs one
-// decision per move; the history backfill, the cause mapping, the trigger text and the issue rows are written once; the machine-readable predictions parse.
+// Replays migrations/2026-11-04-reader-yield-1.sql on SQLite against a fixture with the live layout (including the existing hourly fleet_tasks event-metric-recompute the steps are
+// appended to), then runs the task's steps the way the runner does (one statement a step, in order).
+// Proves: the header opts in to the runner; no new cron or task is created (fleet_budget caps are breached); the steps are appended after the original three, once; the ledger reads GA4
+// channel rows and leaves a day with no GA4 rows NULL (never a zero); the 64 character campaign key joins a longer paper slug, a /quickread path is not a paper, and the first
+// publication (not a later revision) names the idea source; stale paper rows are pruned and never read as current; the three metrics are NULL until 7 GA4 days exist; the governor is
+// OFF by default (qnfo-ops owns the key) and when switched on moves the key toward engaged readers a day x 20000 inside the floor and ceiling by at most 10 percent a day, once a UTC day,
+// does nothing inside the 2 percent dead band, pauses on a foreign write, with the governor off and with under 7 days of data, and logs one decision per move; the history backfill,
+// the cause mapping, the trigger text (short, after the Pillar header) and the issue rows are written once; the machine-readable predictions parse.
 // Run: node migrations/reader-yield-1.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -18,9 +21,10 @@ ok(/^-- APPLY-BY: ci\s*$/m.test(text), "opts in with APPLY-BY: ci");
 ok(/^-- DB: qnfo-audit\s*$/m.test(text), "names DB qnfo-audit");
 ok(/^-- Rollback: .{40,}$/m.test(text), "carries a one-line Rollback");
 ok(/^-- CAUSE-MAPPED: .{10,}/m.test(text) && /INTO\s+metric_breach_cause\b/i.test(text), "maps the metric causes in this file (METRIC-CAUSE-AT-REGISTRATION-1)");
-ok(!/^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))\b/im.test(text), "has no destructive statement");
+ok(!/^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))\b/im.test(text), "has no destructive statement of its own");
 ok(!/^\s*(?:UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM|(?:INSERT\s+OR\s+REPLACE|REPLACE)\s+INTO)\s+"?decision_log"?\b/im.test(text), "never updates the append-only decision_log");
 ok(!/^\s*(?:UPDATE(?:\s+OR\s+\w+)?)\s+"?ops_config"?\b/im.test(text), "writes research_daily_neurons only from the task, not from the migration");
+ok(!/INTO\s+fleet_crons\b/i.test(text) && !/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+fleet_tasks\b/i.test(text), "adds no cron and no task row while fleet_budget caps are breached (the steps join event-metric-recompute)");
 
 // ---- fixture with the live layout ------------------------------------------------------------------------------------------------------------------------------------
 const db = new DatabaseSync(":memory:");
@@ -72,10 +76,17 @@ for (let b = 1; b <= 14; b++) {
   ins.run(ymd(b), "qnfo-research-exec", 500000); ins.run(ymd(b), "qnfo-paper-reviser", 80000); ins.run(ymd(b), "errata-hub", 20000); ins.run(ymd(b), "qnfo-social", 99999);
   for (let k = 0; k < 5; k++) rq.run("q" + b + "-" + k, "proposal", "s" + b + k, k === 0 && b === 1 ? LONG : "p-" + b + "-" + k, 0.7, ymd(b) + " 10:0" + k + ":00");
 }
+// the same paper published again later as a remediation (a revision): the first publication still names the idea source and the age
+rq.run("rev-1", "remediation", "rev1", LONG, 0.9, ymd(1) + " 23:00:00");
+rq.run("rev-0", "remediation", "rev0", LONG, 0.9, ymd(0) + " 00:30:00");
+const ORIG_STEPS = [{ type: "sql", db: "AUDIT", name: "recompute-process-path-gaps", sql: "SELECT 1" }, { type: "sql", db: "AUDIT", name: "recompute-probe-review-refused", sql: "SELECT 1" }, { type: "sql", db: "AUDIT", name: "ledger", sql: "SELECT 1" }];
+db.prepare("INSERT INTO fleet_tasks (id, name, type, definition, timeout_ms, retries, version, enabled, updated_at) VALUES ('event-metric-recompute', 'x', 'workflow', ?, 30000, 1, 2, 1, datetime('now'))").run(JSON.stringify({ steps: ORIG_STEPS }));
+db.exec("INSERT INTO fleet_crons (name, cron_expr, task_id, enabled) VALUES ('event-metric-recompute-daily', '55 * * * *', 'event-metric-recompute', 1)");
 db.exec(`
   INSERT INTO ops_config (key, value, note) VALUES ('research_daily_neurons', '360000', 'PIPELINE-FLOW-POLICY-1 history');
-  INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, action) VALUES ('outreach_human_clicks_7d', 't', 'registry', 'lt', 5, 'Pillar reach. lever (2) shift volume to the channel with the most clicks per post');
+  INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, action) VALUES ('outreach_human_clicks_7d', 't', 'registry', 'lt', 5, 'Pillar reach. Read SELECT * FROM v_channel_impact_7d ORDER BY clicks_per_post_7d DESC. Levers in order: (1) a channel with posts and no clicks; (2) shift volume to the channel with the most clicks per post (pipeline_flags.social_channel_caps)');
 `);
+const ORIG_TRIGGER = db.prepare("SELECT action FROM analytics_metric_triggers WHERE metric_key = 'outreach_human_clicks_7d'").get().action;
 
 // ---- apply ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 db.exec(text);
@@ -87,7 +98,7 @@ const d1 = n("SELECT * FROM reader_yield_daily WHERE day = ?", ymd(1));
 ok(d1.ga4_engaged === 17 && d1.ga4_sessions === 180 && d1.ga4_engaged_social === 2 && d1.ga4_sessions_social === 18, "GA4 channel rows sum into engaged, sessions and the organic social share", d1);
 ok(d1.utm_clicks_human === 120, "utm_clicks_human counts human rows only (bot rows are not counted)", d1.utm_clicks_human);
 ok(d1.ext_referred_pv === 3, "external referred page loads sum page and paper rows", d1.ext_referred_pv);
-ok(d1.papers_published === 5, "papers published a day come from research_queue.published_at", d1.papers_published);
+ok(d1.papers_published === 6, "papers published a day come from research_queue.published_at (5 and the revision)", d1.papers_published);
 ok(d1.research_neurons === 600000, "research neurons sum the three research workers and not qnfo-social", d1.research_neurons);
 const old = n("SELECT * FROM reader_yield_daily WHERE day = ?", ymd(14));
 ok(old.ga4_engaged === null && old.ga4_sessions === null && old.utm_clicks_human === null, "a day with no GA4 or UTM rows is NULL, never a zero", old);
@@ -97,7 +108,8 @@ ok(pr.length === 1, "one row for the 64 character key of a longer slug", pr.leng
 ok(pr[0].slug === LONG, "the slug is the full RUM slug", pr[0].slug);
 ok(pr[0].utm_30d === 1000 && pr[0].ext_30d === 2 && pr[0].pv_30d === 100, "UTM clicks join the truncated key; external loads and page views sum from RUM", pr[0]);
 ok(pr[0].ga4_sessions_30d === 30, "GA4 counts /papers/<slug> only (not /quickread, not /papers)", pr[0].ga4_sessions_30d);
-ok(pr[0].idea_source === "proposal" && pr[0].published_at !== null, "the idea source and publish time come from research_queue", pr[0]);
+ok(pr[0].idea_source === "proposal" && pr[0].idea_score === 0.7, "the first publication names the idea source, not the later revision", pr[0]);
+ok(pr[0].published_at === ymd(1) + " 10:00:00", "and the age: the earliest publication", pr[0].published_at);
 ok(pr[0].pv_7d === 70 && pr[0].pv_prev_7d === 30, "7 day and previous 7 day windows split at the same date", pr[0]);
 ok(!rows("SELECT key64 FROM paper_readership").some((r) => r.key64 === "bot-paper"), "bot-only campaigns are not papers read");
 const top = rows("SELECT slug, reader_score, suspect_automated FROM v_paper_readers_top");
@@ -114,8 +126,14 @@ const oq = Object.fromEntries(rows("SELECT metric, surface, role, polarity FROM 
 ok(oq.engaged_reader_sessions_7d.role === "outcome" && oq.engaged_reader_sessions_7d.surface === "papers" && oq.engaged_reader_sessions_7d.polarity === 1, "readers are an outcome of the papers surface");
 ok(oq.research_neurons_per_engaged_session_7d.role === "outcome" && oq.research_neurons_per_engaged_session_7d.polarity === -1, "cost per reader is an outcome, lower is better");
 ok(oq.outreach_engaged_per_100_clicks_7d.role === "validity" && oq.outreach_engaged_per_100_clicks_7d.surface === "promotion", "the click-to-reader share is a validity measure, not an outcome");
-ok(n("SELECT action FROM analytics_metric_triggers WHERE metric_key = 'outreach_human_clicks_7d'").action.startsWith("READER-YIELD-1 (2026-11-04)"), "the outreach trigger text points at the reader-grade measures first");
-ok(n("SELECT COUNT(*) c FROM bak_20261104_research_neurons_cfg").c === 1 && n("SELECT COUNT(*) c FROM bak_20261104_outreach_trigger_action").c === 1, "both edited rows are backed up first");
+
+// the trigger text: a short sentence after the Pillar header, the original levers intact inside the 300 characters a filed issue keeps
+const trig = n("SELECT action FROM analytics_metric_triggers WHERE metric_key = 'outreach_human_clicks_7d'").action;
+ok(trig.startsWith("Pillar reach. READER-YIELD-1: clicks are not readers;"), "the outreach trigger text points at the reader-grade measure right after the Pillar header", trig.slice(0, 80));
+ok(trig.length - ORIG_TRIGGER.length <= 120, "and adds at most 120 characters", trig.length - ORIG_TRIGGER.length);
+ok(trig.replace(/ READER-YIELD-1: [^;]*; read [a-z0-9_]+ before lever \(2\)\./, "") === ORIG_TRIGGER, "the original text is otherwise unchanged", trig);
+ok(trig.slice(0, 300).includes("Levers in order: (1)"), "the first original lever still sits inside the 300 characters a filed issue keeps");
+ok(n("SELECT COUNT(*) c FROM bak_20261104_research_neurons_cfg").c === 1 && n("SELECT COUNT(*) c FROM bak_20261104_outreach_trigger_action").c === 1 && n("SELECT COUNT(*) c FROM bak_20261104_recompute_task").c === 1, "the three edited rows are backed up first");
 
 // predictions parse as "<metric> <op> <value> within <N> d" and name a registered metric
 const preds = rows("SELECT predicted_outcome p FROM decision_log WHERE predicted_outcome LIKE '% within %'").map((r) => r.p);
@@ -125,44 +143,59 @@ for (const p of preds) {
   ok(!!m && !!n("SELECT 1 x FROM metric_registry WHERE metric = ?", m && m[1]), "prediction is parseable and names a registered metric: " + p);
 }
 const issues = rows("SELECT id, title, description FROM agent_issues ORDER BY id");
-ok(issues.length === 4 && issues.every((i) => i.title.startsWith("ROADMAP-1: QNFO.REACH READER-YIELD-1.")), "four ROADMAP-1 rows", issues.map((i) => i.title));
-ok(issues.every((i) => /^code-task: repo=qnfo-workers path=[a-z0-9-]+\/worker\.js$/m.test(i.description) && /^code-anchor: .{10,}$/m.test(i.description) && /^code-probe: \{"paths": \["[^"]+"\], "contains": "[^"]+"\}$/m.test(i.description)), "each carries code-task, code-anchor and code-probe lines");
+const road = issues.filter((i) => i.title.startsWith("ROADMAP-1: QNFO.REACH READER-YIELD-1."));
+ok(issues.length === 5 && road.length === 4, "four ROADMAP-1 rows and the enabling issue", issues.map((i) => i.title));
+ok(road.every((i) => /^code-task: repo=qnfo-workers path=[a-z0-9-]+\/worker\.js$/m.test(i.description) && /^code-anchor: .{10,}$/m.test(i.description) && /^code-probe: \{"paths": \["[^"]+"\], "contains": "[^"]+"\}$/m.test(i.description)), "each ROADMAP row carries code-task, code-anchor and code-probe lines");
+// the anchors are single-use text the doer replaces; this suite does not read the workers (it would go red when each item lands)
+const enable = issues.find((i) => i.title.startsWith("READER-YIELD-1.5:"));
+ok(!!enable && /UPDATE ops_config SET value = 'on' WHERE key = 'research_yield_governor'/.test(enable.description) && /Definition of done:/.test(enable.description) && /qnfo-ops/.test(enable.description), "the enabling issue names the owner, the switch and its closing condition");
 ok(rows("SELECT issue_id FROM roadmap_proposals").length === 4 && rows("SELECT issue_id FROM roadmap_proposals").every((r) => r.issue_id > 0), "four proposals link their issues");
 
-// the anchors name text that exists exactly once in the checked-out workers
-for (const i of issues) {
-  const path = /path=(\S+)/.exec(i.description)[1];
-  const anchor = /^code-anchor: (.+)$/m.exec(i.description)[1];
-  const src = readFileSync(new URL("../" + path, import.meta.url), "utf8");
-  let c = 0, at = 0;
-  while ((at = src.indexOf(anchor, at)) >= 0) { c++; at += anchor.length; }
-  ok(c === 1, "anchor occurs exactly once in " + path, { anchor: anchor.slice(0, 70), count: c });
-}
-
-// ---- the fleet task ------------------------------------------------------------------------------------------------------------------------------------------------------
-const task = n("SELECT * FROM fleet_tasks WHERE id = 'reader-yield-refresh'");
-ok(task && task.type === "workflow" && task.enabled === 1, "the task is installed and enabled");
-const cron = n("SELECT * FROM fleet_crons WHERE name = 'reader-yield-refresh-daily'");
-ok(cron && cron.task_id === "reader-yield-refresh" && cron.cron_expr === "40 5 * * *", "a daily cron runs it", cron);
+// ---- no new task, no new cron: the steps join event-metric-recompute -----------------------------------------------------------------------------------------------------------
+ok(n("SELECT COUNT(*) c FROM fleet_tasks").c === 1 && n("SELECT COUNT(*) c FROM fleet_crons").c === 1, "no task and no cron were added");
+const task = n("SELECT * FROM fleet_tasks WHERE id = 'event-metric-recompute'");
 let steps = [];
 try { steps = JSON.parse(task.definition).steps; } catch (e) { ok(false, "the definition is valid JSON", String(e)); }
-ok(steps.length === 7 && steps.every((s) => s.type === "sql" && s.db === "AUDIT" && typeof s.sql === "string"), "seven sql steps on AUDIT, each with a type", steps.map((s) => s.name));
+ok(task.version === 3 && task.timeout_ms === 60000 && task.type === "workflow" && task.enabled === 1, "version bumped, timeout raised to 60 s", { v: task.version, t: task.timeout_ms });
+ok(steps.length === 11 && steps.every((s) => s.type === "sql" && s.db === "AUDIT" && typeof s.sql === "string"), "11 sql steps on AUDIT, each with a type", steps.map((s) => s.name));
+ok(JSON.stringify(steps.slice(0, 3)) === JSON.stringify(ORIG_STEPS), "the original three steps come first and unchanged");
+ok(steps.slice(3).map((s) => s.name).join(",") === "daily-ledger,paper-readership,paper-readership-prune,metrics,governor,remember-write,decision,reader-yield-event", "the eight new steps follow in order", steps.slice(3).map((s) => s.name));
 const run = () => { for (const s of steps) db.exec(s.sql); };
 const cfg = (k) => n("SELECT value, note, updated_at FROM ops_config WHERE key = ?", k);
+const evCount = () => n("SELECT COUNT(*) c FROM cloud_ops_events WHERE kind = 'reader-yield'").c;
+const decCount = () => n("SELECT COUNT(*) c FROM decision_log WHERE actor = 'fleet_task reader-yield-refresh'").c;
 
-// first look at the governor view: baseline fixture, engaged 17 a day x 20000 = 340000
+// the governor is OFF by default: the key is left alone, the target is published
+ok(cfg("research_yield_governor").value === "off", "the governor ships off (qnfo-ops is the single writer of research_daily_neurons)");
 let g = n("SELECT * FROM v_research_volume_target");
-ok(g.engaged_per_day === 17 && g.target === 340000 && g.step_target === 340000 && g.reason === "moving" && g.eligible === 1, "340000 is a legal single step from 360000 (5.6 percent)", g);
+ok(g.engaged_per_day === 17 && g.target === 340000 && g.reason === "governor off" && g.eligible === 0, "off: the view still publishes the target (340000 at 17 a day) and says why it does not move", g);
 run();
-ok(cfg("research_daily_neurons").value === "340000", "the first run moves the key to 340000", cfg("research_daily_neurons"));
-ok(cfg("research_daily_neurons").note.startsWith("READER-YIELD-1 governor "), "and says so in the note");
-ok(cfg("research_yield_last_written").value === "340000", "it remembers what it wrote");
-ok(n("SELECT COUNT(*) c FROM decision_log WHERE actor = 'fleet_task reader-yield-refresh'").c === 1, "one decision is logged for the move");
-ok(n("SELECT COUNT(*) c FROM cloud_ops_events WHERE kind = 'reader-yield'").c === 1, "one ledger event a day");
+ok(cfg("research_daily_neurons").value === "360000" && cfg("research_daily_neurons").note === "PIPELINE-FLOW-POLICY-1 history", "off: a run leaves the key and its note alone");
+ok(evCount() === 1 && /governor off/.test(n("SELECT text FROM cloud_ops_events WHERE kind = 'reader-yield'").text), "off: one daily event carries the target and the reason");
+ok(decCount() === 0, "off: no decision is logged");
+
+// switched on: engaged 17 a day x 20000 = 340000, a legal single step from 360000 (5.6 percent)
+db.exec("UPDATE ops_config SET value = 'on' WHERE key = 'research_yield_governor'; DELETE FROM cloud_ops_events");
+g = n("SELECT * FROM v_research_volume_target");
+ok(g.target === 340000 && g.step_target === 340000 && g.reason === "moving" && g.eligible === 1, "on: 340000 is a legal single step from 360000", g);
 run();
-ok(cfg("research_daily_neurons").value === "340000" && n("SELECT COUNT(*) c FROM decision_log WHERE actor = 'fleet_task reader-yield-refresh'").c === 1, "a second run inside the dead band changes nothing and logs nothing");
-ok(n("SELECT COUNT(*) c FROM cloud_ops_events WHERE kind = 'reader-yield'").c === 1, "and the daily event is not duplicated");
-ok(n("SELECT reason FROM v_research_volume_target").reason === "inside the 2 percent dead band", "the view says why");
+ok(cfg("research_daily_neurons").value === "340000", "on: the first run moves the key to 340000", cfg("research_daily_neurons"));
+ok(cfg("research_daily_neurons").note.startsWith("READER-YIELD-1 governor "), "on: and says so in the note");
+ok(cfg("research_yield_last_written").value === "340000", "on: it remembers what it wrote");
+ok(decCount() === 1 && evCount() === 1, "on: one decision and one daily event for the move");
+run();
+ok(cfg("research_daily_neurons").value === "340000" && decCount() === 1 && evCount() === 1, "a second run the same day changes nothing, logs nothing, adds no event");
+// force a new legal move the same UTC day: the once-a-day guard (the event) holds it
+db.exec("UPDATE reader_yield_daily SET ga4_engaged = 40 WHERE ga4_engaged IS NOT NULL");
+g = n("SELECT * FROM v_research_volume_target");
+ok(g.eligible === 1 && g.step_target === 374000, "(fixture) readers rise: the view would move again (340000 to 374000)", g);
+for (const s of steps.filter((x) => x.name === "governor")) db.exec(s.sql);
+ok(cfg("research_daily_neurons").value === "340000", "the governor step does not move the key twice in one UTC day (the event exists)");
+db.exec("DELETE FROM cloud_ops_events");
+for (const s of steps.filter((x) => x.name === "governor")) db.exec(s.sql);
+ok(cfg("research_daily_neurons").value === "374000", "the next UTC day's first governor step moves it 10 percent", cfg("research_daily_neurons").value);
+db.exec("UPDATE reader_yield_daily SET ga4_engaged = 17 WHERE ga4_engaged IS NOT NULL; UPDATE ops_config SET value = '340000', note = 'x' WHERE key = 'research_daily_neurons'; UPDATE ops_config SET value = '340000' WHERE key = 'research_yield_last_written'; DELETE FROM cloud_ops_events");
+ok(n("SELECT reason FROM v_research_volume_target").reason === "inside the 2 percent dead band", "inside the dead band the view says so");
 
 // a foreign write pauses the governor
 db.exec("UPDATE ops_config SET value = '250000', note = 'someone else', updated_at = datetime('now') WHERE key = 'research_daily_neurons'");
@@ -170,7 +203,7 @@ g = n("SELECT * FROM v_research_volume_target");
 ok(g.eligible === 0 && /^paused: research_daily_neurons was changed by another writer/.test(g.reason), "another writer's value pauses the governor", g.reason);
 run();
 ok(cfg("research_daily_neurons").value === "250000" && cfg("research_daily_neurons").note === "someone else", "and the run leaves their value and note alone");
-db.exec("UPDATE ops_config SET value = '' WHERE key = 'research_yield_last_written'");
+db.exec("UPDATE ops_config SET value = '' WHERE key = 'research_yield_last_written'; DELETE FROM cloud_ops_events");
 g = n("SELECT * FROM v_research_volume_target");
 ok(g.eligible === 1 && g.step_target === 275000, "setting the memory empty resumes it, limited to 10 percent a day (250000 to 275000)", g);
 run();
@@ -200,12 +233,19 @@ ok(/^paused: current value is outside the governor band/.test(n("SELECT reason F
 db.exec("DELETE FROM ops_config WHERE key = 'research_daily_neurons'");
 ok(n("SELECT reason FROM v_research_volume_target").reason === "research_daily_neurons unreadable", "a missing key is reported, not invented");
 
-// idempotent apply: the guarded inserts do not duplicate
-const before = [n("SELECT COUNT(*) c FROM decision_log").c, n("SELECT COUNT(*) c FROM agent_issues").c, n("SELECT COUNT(*) c FROM roadmap_proposals").c];
+// stale paper rows: never read as current, pruned after 14 days
+db.exec("INSERT INTO paper_readership (key64, slug, ext_30d, ga4_sessions_30d, published_at, idea_source, refreshed_at) VALUES ('stale-3d', 'stale-3d', 9, 9, date('now'), 'proposal', strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-3 days')), ('stale-20d', 'stale-20d', 9, 9, date('now'), 'proposal', strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-20 days'))");
+ok(!rows("SELECT slug FROM v_paper_readers_top").some((r) => /^stale/.test(r.slug)), "a row not refreshed for 2 days is not read as a current top paper");
+run();
+ok(n("SELECT COUNT(*) c FROM paper_readership WHERE key64 = 'stale-3d'").c === 1 && n("SELECT COUNT(*) c FROM paper_readership WHERE key64 = 'stale-20d'").c === 0, "the prune step deletes rows not refreshed for 14 days and keeps the 3 day old row");
+
+// idempotent apply: the guarded inserts and the appended steps do not duplicate
+const snap = () => [n("SELECT COUNT(*) c FROM decision_log").c, n("SELECT COUNT(*) c FROM agent_issues").c, n("SELECT COUNT(*) c FROM roadmap_proposals").c, n("SELECT version FROM fleet_tasks WHERE id = 'event-metric-recompute'").version, n("SELECT definition FROM fleet_tasks WHERE id = 'event-metric-recompute'").definition];
+const before = snap();
 db.exec(text);
-const after = [n("SELECT COUNT(*) c FROM decision_log").c, n("SELECT COUNT(*) c FROM agent_issues").c, n("SELECT COUNT(*) c FROM roadmap_proposals").c];
-ok(JSON.stringify(before) === JSON.stringify(after), "applying the file again adds no decision, issue or proposal", { before, after });
-ok(n("SELECT COUNT(*) c FROM analytics_metric_triggers WHERE action LIKE 'READER-YIELD-1 (2026-11-04)%READER-YIELD-1 (2026-11-04)%'").c === 0, "and does not stack the trigger text twice");
+const after = snap();
+ok(JSON.stringify(before) === JSON.stringify(after), "applying the file again adds no decision, issue, proposal or step and keeps the version", { before: before.slice(0, 4), after: after.slice(0, 4) });
+ok(!/READER-YIELD-1: clicks are not readers;.*READER-YIELD-1: clicks are not readers;/.test(n("SELECT action FROM analytics_metric_triggers WHERE metric_key = 'outreach_human_clicks_7d'").action), "and does not stack the trigger text twice");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
