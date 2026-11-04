@@ -74,7 +74,7 @@ ok(d.status === 200 && /<ins>/.test(d.body) && /<del>/.test(d.body), "version di
 ok(/<ins>strong<\/ins>/.test(d.body) && /<del>weak<\/del>/.test(d.body), "word-level change inside a changed paragraph");
 ok(/brand new paragraph/.test(d.body) && /<p class="d"><del>A paragraph that will be deleted entirely\.<\/del>/.test(d.body) || /<p class="m">/.test(d.body), "removed and added paragraphs are marked");
 ok(/unchanged paragraphs/.test(d.body), "a run of unchanged paragraphs is collapsed");
-ok(!/&lt;script&gt;alert\(1\)&lt;\/script&gt;<\/del>/.test(d.body) || /&lt;script&gt;/.test(d.body), "markup in the text is escaped");
+ok(/&lt;script&gt;alert\(1\)&lt;\/script&gt;/.test(d.body), "markup in the paper text is shown escaped, so it is visible and inert");
 ok(!/<script>alert\(1\)/.test(d.body), "no raw script from the paper text");
 ok(!/ORCID|Version History/.test(d.body.slice(d.body.indexOf('class="df"'), d.body.indexOf("</main>"))), "content view leaves out front matter and the in-body history");
 ok(/noindex/.test(d.body), "diff pages are not indexed");
