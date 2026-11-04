@@ -11,9 +11,9 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.88.0";
-// 1.88.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
-// 1.87.1 MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
+var VERSION = "1.89.0";
+// 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
+// 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
 // 1.85.0 (cont.) NOW-ONETAP-1: "I did it" asks the fleet to verify and close the card, and "Not needed" parks it for 90 days, so no one-tap option asks for a fresh email code (done and dismiss on /api/owner/respond are step-up actions).
 // 1.85.0 NOW-HANDBACK-1 (owner request 2026-11-04, pillar autonomy; minor, new route): each owner card has four one-tap options (Fleet: you do it, Snooze 7 days, I did it, Not needed); POST /api/v3/handback files the card as fleet work (OWNER-HANDBACK ticket, card set rerouted) so the owner never has to do reversible work; the Now screen also shows the last 24 hours of deploys, merges and issue churn.
@@ -306,11 +306,28 @@ __name22(expectedFires, "expectedFires");
 __name222(expectedFires, "expectedFires");
 __name2222(expectedFires, "expectedFires");
 // ==== AREA-MAP reliability: state store, 24 h analytics and probes (fleet_dashboard_state) ====
+/* D1-REPLICA-READS-1: read-only statements go to a read replica (qnfo-audit replication is auto since 2026-11-04). A replica error falls back to the primary; */
+/* read-after-write guard: claims, locks, leases, dedupe, queues and issue/card state stay on the primary */
+const D1_PRIMARY_ONLY = /claim|lock|lease|dedupe|dedup|human_actions|agent_issues|issue_triage|queue|code_tasks|work_|pending|token|session/i;
+const D1_REPLICA_SESSIONS = new WeakMap();
+function d1readHandle(db, sql) {
+  try {
+    if (!db || typeof db.withSession !== "function" || !/^\s*(select|with)\b/i.test(sql) || D1_PRIMARY_ONLY.test(sql)) return db;
+    let s = D1_REPLICA_SESSIONS.get(db);
+    if (!s) { s = db.withSession("first-unconstrained"); D1_REPLICA_SESSIONS.set(db, s); }
+    return s;
+  } catch (e) { return db; }
+}
 async function d1all(db, sql, params) {
-  let ps = db.prepare(sql);
-  if (params && params.length) ps = ps.bind.apply(ps, params);
-  const r = await ps.all();
-  return r.results || [];
+  const run = async function(h) {
+    let ps = h.prepare(sql);
+    if (params && params.length) ps = ps.bind.apply(ps, params);
+    const r = await ps.all();
+    return r.results || [];
+  };
+  const h = d1readHandle(db, sql);
+  if (h === db) return run(db);
+  try { return await run(h); } catch (e) { return run(db); }
 }
 __name(d1all, "d1all");
 __name2(d1all, "d1all");
