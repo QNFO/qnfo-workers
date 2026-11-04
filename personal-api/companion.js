@@ -2505,7 +2505,8 @@ export const MANIFEST = {
   shortcuts: [
     { name: "Voice note", url: "/companion#voice", icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml" }] },
     { name: "Photo note", url: "/companion#photo", icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml" }] },
-    { name: "Quick note", url: "/companion#note", icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml" }] }
+    { name: "Quick note", url: "/companion#note", icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml" }] },
+    { name: "Give me one thing", url: "/companion#focus", icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml" }] }
   ]
 };
 export const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="22" fill="#2f5d50"/><circle cx="48" cy="44" r="20" fill="none" stroke="#f6f4ef" stroke-width="7"/><path d="M30 74c5-6 11-9 18-9s13 3 18 9" fill="none" stroke="#f6f4ef" stroke-width="7" stroke-linecap="round"/></svg>';
@@ -2973,7 +2974,7 @@ var views={today:load,focus:loadFocus,capture:inbox,talk:drawChat,do:loadDo,lear
 function toggleMore(){var n=document.querySelector('nav');var o=n.classList.toggle('open');$('nav-more').setAttribute('aria-expanded',o?'true':'false')}
 function go(v){document.querySelector('nav').classList.remove('open');$('composer').classList.toggle('hide',v!=='today');Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
 Array.prototype.forEach.call(document.querySelectorAll('nav button[data-v]'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
-function fromHash(){var h=location.hash.slice(1);if(!h)return;if(h==='voice'||h==='photo'||h==='note'){history.replaceState(null,'','/companion');go('today');setTimeout(function(){if(h==='voice')qcMic();else if(h==='photo')$('qc-img').click();else $('qc-text').focus()},600);return}var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.mood!==undefined){go('today');setTimeout(function(){var m=$('mood-card');if(m)m.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
+function fromHash(){var h=location.hash.slice(1);if(!h)return;if(h==='focus'){history.replaceState(null,'','/companion');go('focus');return}if(h==='voice'||h==='photo'||h==='note'){history.replaceState(null,'','/companion');go('today');setTimeout(function(){if(h==='voice')qcMic();else if(h==='photo')$('qc-img').click();else $('qc-text').focus()},600);return}var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.mood!==undefined){go('today');setTimeout(function(){var m=$('mood-card');if(m)m.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
 fromHash();go('today')
 window.addEventListener('hashchange',fromHash);

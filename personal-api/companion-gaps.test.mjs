@@ -64,3 +64,8 @@ assert.ok(page.includes("setMin(this,5)") && page.includes("setMin(this,15)") &&
 assert.ok(page.includes("dictate(this,'c-front')") && page.includes("dictate(this,'c-back')"), "Learn card has Dictate");
 assert.ok(page.includes("dictateLine(this,'sp-'+f[0])"), "each safety-plan field has Dictate");
 console.log("ok   Do tab, Learn cards and the safety plan need no typing");
+
+// COMPANION-NO-TYPING-1:shortcut (agent_issues 1001642): a home-screen shortcut opens Focus.
+assert.ok(C.MANIFEST.shortcuts.some((x) => x.url === "/companion#focus"));
+assert.ok(page.includes("if(h==='focus'){history.replaceState(null,'','/companion');go('focus');return}"));
+console.log("ok   a home-screen shortcut opens Focus");
