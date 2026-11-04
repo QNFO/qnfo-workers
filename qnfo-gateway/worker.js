@@ -6192,13 +6192,13 @@ function phLcs(a, b) {
 }
 // Words, with a line break kept only where the next line starts a list item, table row, heading, quote or fence; wrapped prose is one run of words.
 function phTokens(b) {
-  return b.replace(/\n(?=[ \t]*(?:[-*+][ \t]|\d+[.)][ \t]|\||#|>|`{3}|~{3}))/g, " ⏎ ").split(/\s+/).filter(Boolean);
+  return b.replace(/\n(?=[ \t]*(?:[-*+][ \t]|\d+[.)][ \t]|\||#|>|`{3}|~{3}))/g, " \u23ce ").split(/\s+/).filter(Boolean);
 }
 function phJoin(tokens) {
   var out = "";
   tokens.forEach(function(t, i) {
-    if (t === "⏎") { out += "\n"; return; }
-    out += (i > 0 && tokens[i - 1] !== "⏎" ? " " : "") + t;
+    if (t === "\u23ce") { out += "\n"; return; }
+    out += (i > 0 && tokens[i - 1] !== "\u23ce" ? " " : "") + t;
   });
   return out;
 }
@@ -6273,7 +6273,7 @@ function phDiff(aText, bText) {
 }
 function phDiffHtml(diff) {
   var html = "", run = [];
-  var clip = function(t) { return t.length > 240 ? t.slice(0, 237) + "…" : t; };
+  var clip = function(t) { return t.length > 240 ? t.slice(0, 237) + "\u2026" : t; };
   var flush = function() {
     if (!run.length) return;
     if (run.length >= 3) html += '<details class="ph-eq"><summary>' + run.length + " unchanged paragraphs</summary>" + run.map(function(t) { return '<p class="eq">' + esc(t) + "</p>"; }).join("") + "</details>";
@@ -6303,7 +6303,7 @@ var PH_CSS = ".ph-sub{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 22px}.ph
 function phShell(paper, view, title, inner, o) {
   var slug = paper.slug, base = "/papers/" + escAttr(slug);
   var t = displayTitle(paper.title) || "Untitled";
-  var head = "<title>" + esc(title) + " — " + esc(t) + " — QNFO Papers</title>"
+  var head = "<title>" + esc(title) + " \u2014 " + esc(t) + " \u2014 QNFO Papers</title>"
     + '<meta name="description" content="' + escAttr((o && o.desc) || "The versions, edits and files kept for this paper.") + '">'
     + '<meta name="robots" content="' + ((o && o.noindex) ? "noindex,follow" : "index,follow") + '">'
     + '<link rel="canonical" href="https://papers.qnfo.org' + base + (o && o.canon ? o.canon : "/" + view) + '">'
@@ -6370,12 +6370,12 @@ async function handlePaperHistory(env, slug, asJson) {
     });
   }
   var vrows = rec.versions.slice().reverse().map(function(v) {
-    return "<tr" + (v.current ? ' class="cur"' : "") + "><td>v" + esc(v.version) + (v.current ? ' <span class="ph-n">(current)</span>' : "") + "</td><td>" + esc(v.date || "–") + ' <span class="ph-n">' + esc(v.date_kind) + "</span></td><td>" + (v.words != null ? v.words.toLocaleString("en-US") + " words" : "–") + ' <span class="ph-n">' + (v.edits ? v.edits + " edit" + (v.edits === 1 ? "" : "s") : "") + "</span></td><td>"
-      + (v.diff_url ? '<a href="' + escAttr(v.diff_url) + '">What changed</a>' : '<span class="ph-n">first version</span>') + '</td><td><a href="' + escAttr(v.verbatim_url) + '">Verbatim text</a></td><td>' + (v.sha256 ? "<code>" + esc(v.sha256.slice(0, 16)) + "…</code>" : '<span class="ph-n">not held</span>') + "</td></tr>";
+    return "<tr" + (v.current ? ' class="cur"' : "") + "><td>v" + esc(v.version) + (v.current ? ' <span class="ph-n">(current)</span>' : "") + "</td><td>" + esc(v.date || "\u2013") + ' <span class="ph-n">' + esc(v.date_kind) + "</span></td><td>" + (v.words != null ? v.words.toLocaleString("en-US") + " words" : "\u2013") + ' <span class="ph-n">' + (v.edits ? v.edits + " edit" + (v.edits === 1 ? "" : "s") : "") + "</span></td><td>"
+      + (v.diff_url ? '<a href="' + escAttr(v.diff_url) + '">What changed</a>' : '<span class="ph-n">first version</span>') + '</td><td><a href="' + escAttr(v.verbatim_url) + '">Verbatim text</a></td><td>' + (v.sha256 ? "<code>" + esc(v.sha256.slice(0, 16)) + "\u2026</code>" : '<span class="ph-n">not held</span>') + "</td></tr>";
   }).join("");
   var crows = rec.changes.slice().reverse().map(function(c) {
     var delta = c.bytes_before != null && c.bytes_after != null ? (c.bytes_after - c.bytes_before >= 0 ? "+" : "") + (c.bytes_after - c.bytes_before).toLocaleString("en-US") + " chars" : "";
-    var ver = c.version_before && c.version_after && c.version_before !== c.version_after ? "v" + c.version_before + " → v" + c.version_after : c.version_after || c.version_before ? "v" + (c.version_after || c.version_before) : "–";
+    var ver = c.version_before && c.version_after && c.version_before !== c.version_after ? "v" + c.version_before + " \u2192 v" + c.version_after : c.version_after || c.version_before ? "v" + (c.version_after || c.version_before) : "\u2013";
     return "<tr><td>#" + c.seq + "</td><td>" + esc(phWhen(c.at)) + "</td><td>" + esc(ver) + "</td><td>" + (c.kind === "insert" ? "created" : esc(c.fields.join(", ") || c.kind)) + (c.backfilled ? ' <span class="ph-n">(recovered from backup)</span>' : "") + '</td><td class="ph-n">' + esc(String(c.reason || "").slice(0, 160)) + '</td><td class="ph-n">' + esc(phActor(c.actor)) + '</td><td class="ph-n">' + esc(delta) + "</td><td>"
       + (c.diff_url ? '<a href="' + escAttr(c.diff_url) + '">View changes</a>' : "") + "</td></tr>";
   }).join("");
@@ -6399,7 +6399,7 @@ async function handlePaperDiff(env, slug, u) {
     if (idx < 0) return phHtml(phShell(paper, "diff", "Changes", '<p class="ph-lede">That change is not held for this paper.</p>', { noindex: true }), 404);
     fromS = states[idx]; toS = states[idx + 1];
     fromRef = fromS.key; toRef = toS.key;
-    label = "Change #" + change + (fromS.change ? " · " + phWhen(fromS.change.ts) + " UTC" : "");
+    label = "Change #" + change + (fromS.change ? " \u00b7 " + phWhen(fromS.change.ts) + " UTC" : "");
   } else {
     toS = phResolve(toRef, states);
     if (!toS) return phHtml(phShell(paper, "diff", "Changes", '<p class="ph-lede">That version is not held for this paper.</p>', { noindex: true }), 404);
@@ -6410,7 +6410,7 @@ async function handlePaperDiff(env, slug, u) {
       fromRef = fromS ? fromS.key : "";
     }
     if (!fromS) return phHtml(phShell(paper, "diff", "Changes", '<p class="ph-lede">This is the first version held for the paper, so there is nothing earlier to compare it with.</p>', { noindex: true }), 404);
-    label = "v" + (fromS.version || "?") + " → v" + (toS.version || "?");
+    label = "v" + (fromS.version || "?") + " \u2192 v" + (toS.version || "?");
   }
   var aRaw = await phStateBody(env, slug, fromS), bRaw = await phStateBody(env, slug, toS);
   if (aRaw == null || bRaw == null) return phHtml(phShell(paper, "diff", "Changes", '<p class="ph-lede">The text of one side is not held any more (it was archived off-line); its SHA-256 stays in the ledger.</p>', { noindex: true }), 404);
@@ -6421,12 +6421,12 @@ async function handlePaperDiff(env, slug, u) {
   var st = diff.stats, same = !st.changed_blocks;
   var verb = function(s) { return s.snap ? "/papers/" + slug + "/versions/" + s.id : s.current ? "/papers/" + slug + ".md" : s.version ? "/papers/" + slug + "/v/" + s.version : ""; };
   var inner = '<section class="ph-sec"><h2>' + esc(label) + "</h2>"
-    + '<div class="ph-stat"><span class="a">+' + st.added.toLocaleString("en-US") + ' words</span><span class="r">−' + st.removed.toLocaleString("en-US") + ' words</span><span>' + st.changed_blocks + " of " + (st.changed_blocks + st.equal_blocks) + " paragraphs changed</span></div>"
-    + '<div class="ph-pick"><span>Showing</span> ' + (view === "clean" ? "<strong>content</strong> · <a href=\"" + escAttr(sp("raw")) + '">raw Markdown source</a>' : '<a href="' + escAttr(sp("clean")) + '">content</a> · <strong>raw Markdown source</strong>') + " · <a href=\"" + base_(slug) + '/history">All versions</a>'
-    + (fromS && verb(fromS) ? ' · <a href="' + escAttr(verb(fromS)) + '">older text</a>' : "") + (toS && verb(toS) ? ' · <a href="' + escAttr(verb(toS)) + '">newer text</a>' : "") + "</div>"
-    + (view === "clean" ? '<p class="ph-note">Content view ignores the header layout (front matter, byline, repeated title) so that only the paper’s text is compared. The raw view compares the stored source exactly.</p>' : "")
+    + '<div class="ph-stat"><span class="a">+' + st.added.toLocaleString("en-US") + ' words</span><span class="r">\u2212' + st.removed.toLocaleString("en-US") + ' words</span><span>' + st.changed_blocks + " of " + (st.changed_blocks + st.equal_blocks) + " paragraphs changed</span></div>"
+    + '<div class="ph-pick"><span>Showing</span> ' + (view === "clean" ? "<strong>content</strong> \u00b7 <a href=\"" + escAttr(sp("raw")) + '">raw Markdown source</a>' : '<a href="' + escAttr(sp("clean")) + '">content</a> \u00b7 <strong>raw Markdown source</strong>') + " \u00b7 <a href=\"" + base_(slug) + '/history">All versions</a>'
+    + (fromS && verb(fromS) ? ' \u00b7 <a href="' + escAttr(verb(fromS)) + '">older text</a>' : "") + (toS && verb(toS) ? ' \u00b7 <a href="' + escAttr(verb(toS)) + '">newer text</a>' : "") + "</div>"
+    + (view === "clean" ? '<p class="ph-note">Content view ignores the header layout (front matter, byline, repeated title) so that only the paper\u2019s text is compared. The raw view compares the stored source exactly.</p>' : "")
     + (st.aligned ? "" : '<p class="ph-note">The two texts are too different to align paragraph by paragraph; the older text is shown removed and the newer added.</p>') + "</section>"
-    + '<div class="df" role="document" aria-label="Changes">' + (same ? '<p class="eq">No difference in ' + (view === "clean" ? "the paper’s content" : "the stored source") + (view === "clean" ? ". The change was to layout or metadata only: see the raw view." : ".") + "</p>" : phDiffHtml(diff)) + "</div>";
+    + '<div class="df" role="document" aria-label="Changes">' + (same ? '<p class="eq">No difference in ' + (view === "clean" ? "the paper\u2019s content" : "the stored source") + (view === "clean" ? ". The change was to layout or metadata only: see the raw view." : ".") + "</p>" : phDiffHtml(diff)) + "</div>";
   return phHtml(phShell(paper, "diff", "Changes", inner, { noindex: true, canon: "/history" }));
 }
 function base_(slug) { return "/papers/" + escAttr(slug); }
@@ -6499,19 +6499,19 @@ async function handlePaperFiles(env, slug, mode) {
   if (mode === "json") return new Response(JSON.stringify(phCrate(f), null, 2), { headers: { "Content-Type": "application/ld+json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300" } });
   var p = f.paper, repoUrl = "https://github.com/" + PH_REPO + "/tree/main/papers/" + slug, curV = (f.rec.versions.filter(function(v) { return v.current; })[0] || {}).version;
   var frows = f.files.map(function(x) {
-    return '<tr><td><a href="' + escAttr(x.url) + '">' + esc(x.name) + '</a></td><td class="ph-n">' + esc(x.note || "") + "</td><td>" + (x.bytes != null ? esc(phBytes(x.bytes)) : "–") + "</td><td>" + (x.sha256 ? "<code>" + esc(x.sha256.slice(0, 16)) + "…</code>" : "–") + "</td></tr>";
+    return '<tr><td><a href="' + escAttr(x.url) + '">' + esc(x.name) + '</a></td><td class="ph-n">' + esc(x.note || "") + "</td><td>" + (x.bytes != null ? esc(phBytes(x.bytes)) : "\u2013") + "</td><td>" + (x.sha256 ? "<code>" + esc(x.sha256.slice(0, 16)) + "\u2026</code>" : "\u2013") + "</td></tr>";
   }).join("");
   var repoSec = "";
   if (f.repo) {
     var snaps = Array.isArray(f.repo.snapshots) ? f.repo.snapshots.slice().reverse() : [];
-    repoSec = '<section class="ph-sec"><h2>Repository record</h2><p class="ph-note" style="margin-top:0">The paper is also kept in the open research repository <a href="https://github.com/' + PH_REPO + '">' + PH_REPO + '</a>, in <a href="' + escAttr(repoUrl) + '"><code>papers/' + esc(slug) + '</code></a>: the Markdown, a provenance record, and the full commit history of every change. <a href="https://github.com/' + PH_REPO + '/commits/main/papers/' + escAttr(slug) + '">Commit history</a> · <a href="' + escAttr(repoUrl + "/provenance.json") + '">provenance.json</a>.</p>'
+    repoSec = '<section class="ph-sec"><h2>Repository record</h2><p class="ph-note" style="margin-top:0">The paper is also kept in the open research repository <a href="https://github.com/' + PH_REPO + '">' + PH_REPO + '</a>, in <a href="' + escAttr(repoUrl) + '"><code>papers/' + esc(slug) + '</code></a>: the Markdown, a provenance record, and the full commit history of every change. <a href="https://github.com/' + PH_REPO + '/commits/main/papers/' + escAttr(slug) + '">Commit history</a> \u00b7 <a href="' + escAttr(repoUrl + "/provenance.json") + '">provenance.json</a>.</p>'
       + (snaps.length ? '<div class="ph-scroll"><table class="ph-t"><thead><tr><th>Version</th><th>Recorded</th><th>Why</th><th>Bytes</th><th>SHA-256</th></tr></thead><tbody>' + snaps.map(function(s) {
-        return "<tr><td>v" + esc(s.version || "–") + "</td><td>" + esc(s.recorded_at || "") + "</td><td>" + esc(s.basis || "") + "</td><td>" + esc(s.bytes == null ? "" : String(s.bytes)) + "</td><td><code>" + esc(String(s.sha256 || "").slice(0, 16)) + "…</code></td></tr>";
+        return "<tr><td>v" + esc(s.version || "\u2013") + "</td><td>" + esc(s.recorded_at || "") + "</td><td>" + esc(s.basis || "") + "</td><td>" + esc(s.bytes == null ? "" : String(s.bytes)) + "</td><td><code>" + esc(String(s.sha256 || "").slice(0, 16)) + "\u2026</code></td></tr>";
       }).join("") + "</tbody></table></div>" : "") + "</section>";
   } else repoSec = '<section class="ph-sec"><h2>Repository record</h2><p class="ph-note" style="margin-top:0">This paper has not been deposited in the open research repository yet. The files above and the ledger on the <a href="/papers/' + escAttr(slug) + '/history">history page</a> are its complete record until it is.</p></section>';
   var runSec = f.runs.length ? '<section class="ph-sec"><h2>Research runs</h2><p class="ph-note" style="margin-top:0">Each run directory holds what that version was made from: the plan, the grounding notes, the bibliography, the citation audit and any verification script with its output. Links are pinned to the commit that stored them.</p><div class="ph-scroll"><table class="ph-t"><thead><tr><th>Run</th><th>For version</th><th>Stored</th><th>Directory</th></tr></thead><tbody>'
     + f.runs.map(function(r) {
-      return "<tr><td>" + esc(r.run_id) + "</td><td>" + (r.paper_version ? "v" + esc(r.paper_version) : "–") + "</td><td>" + esc(String(r.deposited_at || "").slice(0, 10)) + '</td><td><a href="https://github.com/' + escAttr(r.repo) + "/tree/" + escAttr(r.commit_sha || "main") + "/" + escAttr(r.run_path) + '"><code>' + esc(r.run_path) + "</code></a></td></tr>";
+      return "<tr><td>" + esc(r.run_id) + "</td><td>" + (r.paper_version ? "v" + esc(r.paper_version) : "\u2013") + "</td><td>" + esc(String(r.deposited_at || "").slice(0, 10)) + '</td><td><a href="https://github.com/' + escAttr(r.repo) + "/tree/" + escAttr(r.commit_sha || "main") + "/" + escAttr(r.run_path) + '"><code>' + esc(r.run_path) + "</code></a></td></tr>";
     }).join("") + "</tbody></table></div></section>" : "";
   var linkSec = f.linked.length ? '<section class="ph-sec"><h2>Other QNFO papers this one links to</h2><ul>' + f.linked.map(function(s) { return '<li><a href="/papers/' + escAttr(s) + '">' + esc(s.replace(/-/g, " ")) + "</a></li>"; }).join("") + "</ul></section>" : "";
   var inner = '<p class="ph-lede">Everything kept about this paper, in the way a research repository keeps a record: the files with their sizes and checksums, every earlier version, the repository directory and the runs it was made from. Current version: v' + esc(curV || "?") + ".</p>"
