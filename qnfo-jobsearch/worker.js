@@ -8,7 +8,7 @@
 // JOBSEARCH-PROFILE-1 (1.3.0): yes/no search survey, role families drawn from the whole record (policy, transport and planning, data, product, program, research, consulting, nonprofit, GIS, contracts, social policy), location gates from the owner answers (Netherlands and remote by default, US and other on-site only when selected), likes and dislikes teach the search, rejected matches stay hidden, "check a job" analysis of a pasted link or text.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.4.2";
+var VERSION = "1.4.3-codeagent";
 const WORKER = "qnfo-jobsearch";
 const LEDGER = {
  "ledger_verified_on": "2026-10-01",
@@ -879,8 +879,9 @@ async function llmRerank(env, kept) {
     if (!env.AI || !kept.length) return kept;          // no binding: keep deterministic order
     const top = kept.slice(0, 25), rest = kept.slice(25);
     const items = top.map((j, i) => ({ index: i, id: j.id, title: j.title, company: j.company, location: j.location || "", score: j.match.score, reasons: (j.match.why || []).slice(0, 5) }));
+    const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 10000); // CRON-FAULT-1: an unbounded qnfo-ai call hung every run before it could finish
     const r = await env.AI.fetch("https://qnfo-ai/infer", {
-      method: "POST", headers: { "content-type": "application/json" },
+      method: "POST", headers: { "content-type": "application/json" }, signal: ac.signal,
       body: JSON.stringify({
         caller: "qnfo-jobsearch",
         task: "rerank",
@@ -890,6 +891,7 @@ async function llmRerank(env, kept) {
         items,
       }),
     });
+    clearTimeout(tm);
     if (!r.ok) return kept;                             // binding error: keep deterministic order
     const out = await r.json();
     if (!out || out.skipped_for_budget || !Array.isArray(out.order) || !out.order.length) return kept;
