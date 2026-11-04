@@ -92,7 +92,7 @@
 //  31. AI use is a number he can see: GET /companion/api/ai-use reads today's and this week's personal-api Workers AI calls
 //      from qnfo-audit.ai_call_counters (counts only) and prices them at Workers AI list price; Focus and Data show it.
 
-export const COMPANION_VERSION = "1.18.0";
+export const COMPANION_VERSION = "1.19.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -986,6 +986,14 @@ export function planNudge(st) {
     if (due && !kindsToday.has("cmp-deadline")) return mk("cmp-deadline", "Due " + String(due.due).slice(0, 10) + ": " + due.title + ".", due.minutes || 0, 240, "task-deadline", { action_id: due.id });
     const rec = (st.recommendations || []).find((r) => r.start && String(r.start).slice(0, 10) >= st.day && !recentAsks.some((a) => a.includes(r.title + " — " + r.start)));
     if (rec && h >= 10 && h < 19 && !kindsToday.has("cmp-discovery")) return mk("cmp-discovery", rec.title + " — " + rec.start + (rec.where ? " · " + rec.where : "") + ". " + rec.why + " Not booked.", 0, 240, "personal-event-match");
+    // COMPANION-ONE-THING-PUSH-1 (2026-11-04): with check-ins off the phone went silent from 2 Nov (nothing due, no event match),
+    // while open next actions waited and idle time is the hard part. Once a day, midday, after two quiet hours and nothing done
+    // yet: one concrete thing from the list, with Did it / Not today. A plain offer, never a feelings question.
+    const idle0 = st.lastUserIso ? (nowMs - new Date(st.lastUserIso).getTime()) / 60000 : Infinity;
+    if (h >= 11 && h < 17 && idle0 >= 120 && !(st.actionsDoneToday > 0) && !kindsToday.has("cmp-next") && !retired.has("cmp-next")) {
+      const action = chooseAction((st.nextActions || []).filter((a) => !a.due || String(a.due).slice(0, 10) <= st.day), mood.today === null || mood.today === undefined ? "medium" : energyFor(mood));
+      if (action) return mk("cmp-next", "One thing for now: " + action.title + " (" + (action.minutes || 15) + " min). Did it or Not today, one tap.", action.minutes || 15, 240, "one-thing-practical", { action_id: action.id });
+    }
     return { skip: "nothing-useful" };
   }
   const lightDay = events.length >= LIGHT_DAY_EVENTS;
@@ -1784,6 +1792,13 @@ export async function capture(env, deps, input) {
     }
   }
   if (!text && !mediaKey) return { ok: false, error: "nothing to capture: send text, audio or an image" };
+  // COMPANION-CAPTURE-DEDUPE-1 (2026-11-04): the same words saved twice within 30 minutes (or the title of a photo just sorted,
+  // as happened three times on 4 Nov) are the same note: answer with the earlier item, store nothing, spend no sorting call.
+  if (kind === "text" && text.trim().length >= 3) {
+    const since = new Date(Date.parse(now) - 30 * 60000).toISOString(), norm = text.trim().toLowerCase();
+    const prev = await one(env.PERSONAL, "SELECT id, result_json FROM cmp_inbox WHERE ts >= ? AND (lower(trim(raw_text)) = ? OR lower(json_extract(result_json, '$.title')) = ?) ORDER BY ts DESC LIMIT 1", since, norm, norm).catch(() => null);
+    if (prev) { let r0 = null; try { r0 = JSON.parse(prev.result_json || "null"); } catch (e) { r0 = null; } return { ok: true, duplicate: true, id: prev.id, kind: "text", text: "", media_key: null, note: null, processed: r0 && r0.type ? Object.assign({ ok: true }, r0) : null }; }
+  }
   await env.PERSONAL.prepare("INSERT INTO cmp_inbox (id, ts, kind, raw_text, media_key, mime, status, source, result_json) VALUES (?,?,?,?,?,?, 'unprocessed', ?, ?)")
     .bind(id, now, kind, text || null, mediaKey, mime, s(input && input.source, 40) || "companion", note ? JSON.stringify({ note }) : null).run();
   let processed = null;
@@ -1798,12 +1813,24 @@ export async function clarify(env, deps, text) {
   }
   return Object.assign(heuristicClarify(text), { by: "rules" });
 }
+// COMPANION-DUE-WORDS-1 (2026-11-04): "Go to Foam today" was saved as "Go to Foam" with no date, so it never came up as due.
+// A capture that says today/tonight/tomorrow (or vandaag/vanavond/morgen) gets that date when the sorter left it empty. No model.
+export function dueFromWords(text, today) {
+  const t = String(text || "").toLowerCase();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return "";
+  if (/\b(day after tomorrow|overmorgen)\b/.test(t)) return addDays(today, 2);
+  if (/\b(tomorrow|tmrw|morgen)\b/.test(t) && !/\bmorgen(s|ochtend)?\s+(vroeg)?\b(?=.*\bvandaag\b)/.test(t)) return addDays(today, 1);
+  if (/\b(today|tonight|this (morning|afternoon|evening)|vandaag|vanavond|vanmiddag|vanochtend)\b/.test(t)) return today;
+  return "";
+}
 export async function processItem(env, deps, row) {
   const text = s(row.raw_text, 8000);
   await env.PERSONAL.prepare("UPDATE cmp_inbox SET attempts = COALESCE(attempts, 0) + 1 WHERE id = ?").bind(row.id).run();
   const sig = crisisSignal(text);
   const c = await clarify(env, deps, text);
+  if ((c.type === "action" || c.type === "someday") && !c.due) { const d = dueFromWords(text, await localDay(env, nowIso())); if (d) { c.due = d; if (c.type === "someday") c.type = "action"; } }
   const res = { type: c.type, title: c.title, by: c.by, why: c.why };
+  if (c.due) res.due = c.due;
   if (c.type === "action" || c.type === "someday") {
     const a = await addAction(env, { title: c.title, context: c.context, energy: c.energy, minutes: c.minutes, due: c.due, project: c.project, gtd: c.type === "someday" ? "someday" : "next", inbox_id: row.id, notes: text.length > c.title.length + 20 ? text.slice(0, 1000) : null });
     res.action_id = a.id; res.context = c.context;
@@ -2711,9 +2738,9 @@ nav .sec{display:none}nav.open{flex-wrap:wrap}nav.open .sec{display:block;flex:1
 <section id="v-talk" class="v hide"><h1>Talk</h1><p class="mute">You are talking with an AI, not a person.</p><div id="msgs"></div>
  <div class="card"><textarea id="chat-in" placeholder="Tap Dictate and speak, then Send."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="dictate(this,'chat-in')">Dictate</button><button id="chat-send" onclick="sendChat()">Send</button><button onclick="clearChat()">New conversation</button></div></div></section>
 <section id="v-do" class="v hide"><h1>Next actions</h1><div id="do"></div>
- <div class="card"><h2>Add</h2><input id="a-title" placeholder="Next action, starting with a verb"><div class="row" style="margin-top:8px"><select id="a-ctx" class="grow" aria-label="Context"></select><select id="a-en" class="grow" aria-label="Energy needed"><option value="low">low energy</option><option value="medium">medium</option><option value="high">high</option></select><input id="a-min" aria-label="Minutes" type="number" min="1" value="15" style="width:90px"></div><div class="row" style="margin-top:8px"><button class="p" onclick="addAction()">Add</button></div></div></section>
+ <div class="card"><h2>Add</h2><div class="mute">One tap adds it:</div><div class="row" style="margin-top:6px;flex-wrap:wrap"><button onclick="presetAction('Tidy one surface',10,'low','@home')">Tidy one surface</button><button onclick="presetAction('A ten-minute walk outside',10,'low','@outside')">10-minute walk</button><button onclick="presetAction('Reply to one message',5,'low','@phone')">Reply to one message</button><button onclick="presetAction('One Quniverse task',15,'medium','@computer')">One Quniverse task</button></div><div class="mute" style="margin-top:10px">Or say your own:</div><div class="row" style="margin-top:6px"><input id="a-title" class="grow" placeholder="Next action" aria-label="Next action"><button onclick="dictate(this,'a-title')">Dictate</button></div><div class="row" style="margin-top:8px"><select id="a-ctx" class="grow" aria-label="Context"></select><select id="a-en" class="grow" aria-label="Energy needed"><option value="low">low energy</option><option value="medium">medium</option><option value="high">high</option></select></div><div class="row" style="margin-top:8px" role="group" aria-label="Minutes"><input id="a-min" type="hidden" value="15"><button class="amin" onclick="setMin(this,5)">5 min</button><button class="amin sel" onclick="setMin(this,15)">15 min</button><button class="amin" onclick="setMin(this,30)">30 min</button></div><div class="row" style="margin-top:8px"><button class="p" onclick="addAction()">Add</button></div></div></section>
 <section id="v-learn" class="v hide"><h1>Review</h1><div id="learn"></div>
- <div class="card"><h2>New card</h2><input id="c-front" placeholder="Question"><textarea id="c-back" placeholder="Answer" style="margin-top:8px;min-height:60px"></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addCard()">Add card</button></div></div></section>
+ <div class="card"><h2>New card</h2><div class="row"><input id="c-front" class="grow" placeholder="Question" aria-label="Question"><button onclick="dictate(this,'c-front')">Dictate</button></div><div class="row" style="margin-top:8px"><textarea id="c-back" class="grow" placeholder="Answer" aria-label="Answer" style="min-height:60px"></textarea><button onclick="dictate(this,'c-back')">Dictate</button></div><div class="row" style="margin-top:8px"><button class="p" onclick="addCard()">Add card</button></div></div></section>
 <section id="v-journal" class="v hide"><h1>Journal</h1><div class="card"><h2>One tap</h2><div class="row" id="j-quick"><button class="chip" onclick="quickJournal(this)">Got something done</button><button class="chip" onclick="quickJournal(this)">Went outside</button><button class="chip" onclick="quickJournal(this)">Talked to someone</button><button class="chip" onclick="quickJournal(this)">Learned something</button><button class="chip" onclick="quickJournal(this)">Rested, and that was fine</button><button class="chip" onclick="quickJournal(this)">Hard day</button></div><h2 style="margin-top:12px">Or say it</h2><textarea id="j-text" placeholder="Tap Dictate and speak. One line is enough."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="dictate(this,'j-text')">Dictate</button><button onclick="addJournal()">Keep it</button></div><div id="j-out"></div></div><div class="card"><h2>Recent</h2><div id="journal"></div></div></section>
 <section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="taste"></div><div id="dash"></div><div id="plan" class="card"></div><div id="gp"></div><div id="priv"></div></section>
 </main>
@@ -2813,18 +2840,23 @@ var rec=null,chunks=[];function toggleRec(){if(rec){rec.stop();return}navigator.
 // he talks and are saved the moment he stops: no upload, no server transcription, no waiting. A browser without it records and uploads as before.
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition,sr=null,srBase='',srLocal=true;
 function qcMic(){if(sr){sr.stop();return}
- srRetry=false;
- if(!SR){go('capture');toggleRec();return}
+ srRetry=false;srFail=false;
+ if(dict){dict.r.stop();return}
+ if(!SR){qcRec();return}
  var te=textEl(),mic=$('qc-mic'),o=outEl();srBase=te.value.trim();
- try{sr=new SR();sr.lang=navigator.language||'en-US';sr.interimResults=true;sr.continuous=true;if(srLocal)sr.processLocally=true}catch(e){sr=null;warn(e);go('capture');toggleRec();return}
+ try{sr=new SR();sr.lang=navigator.language||'en-US';sr.interimResults=true;sr.continuous=true;if(srLocal)sr.processLocally=true}catch(e){sr=null;warn(e);qcRec();return}
  sr.onresult=function(e){var s='';for(var i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;te.value=(srBase?srBase+' ':'')+s.trim()};
- sr.onerror=function(e){var retry=srLocal&&(e.error==='language-not-supported'||e.error==='service-not-allowed');if(retry){srLocal=false;srRetry=true;sr=null;mic.classList.remove('sel');setTimeout(qcMic,50);return}if(e.error!=='no-speech'&&e.error!=='aborted'){o.innerHTML='';say(o,'Voice did not work here ('+e.error+'). Type it, or use the photo/Capture view.',true)}};
- sr.onend=function(){sr=null;mic.classList.remove('sel');mic.setAttribute('aria-label','Speak a note');if(textEl().value.trim()&&!srRetry)capText()};
+ sr.onerror=function(e){var retry=srLocal&&(e.error==='language-not-supported'||e.error==='service-not-allowed');if(retry){srLocal=false;srRetry=true;sr=null;mic.classList.remove('sel');setTimeout(qcMic,50);return}if(e.error!=='aborted')srFail=true};
+ sr.onend=function(){sr=null;mic.classList.remove('sel');mic.setAttribute('aria-label','Speak a note');if(srRetry)return;if(textEl().value.trim()&&!srFail){capText();return}
+  // COMPANION-VOICE-FALLBACK-1: the phone heard nothing or refused: record instead and let the server write it down (the path that works everywhere).
+  srFail=false;o.innerHTML='';say(o,'Did not catch that on the phone. Recording now: say it again, then tap the mic to stop.');qcRec()};
  try{sr.start();mic.classList.add('sel');mic.setAttribute('aria-label','Stop and save')}catch(e){sr=null;warn(e)}}
-var srRetry=false;
+var srRetry=false,srFail=false;
+function qcRec(){var mic=$('qc-mic');dictate(mic,'qc-text',capText)}
 document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target&&e.target.id==='qc-text'){e.preventDefault();capText()}});
 // COMPANION-NO-TYPING-1: Dictate records on the phone and the server writes the words; the text lands in the box for one tap to send.
-var dict=null;function dictate(btn,target){if(dict){dict.r.stop();return}if(!navigator.mediaDevices||!window.MediaRecorder){alert('This browser cannot record. Voice note on Capture works on most phones.');return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){var ch=[],r=new MediaRecorder(st),label=btn.textContent;dict={r:r};r.ondataavailable=function(e){ch.push(e.data)};r.onstop=function(){st.getTracks().forEach(function(t){t.stop()});dict=null;btn.classList.remove('sel');btn.textContent='Writing it down...';btn.disabled=true;var b=new Blob(ch,{type:r.mimeType||'audio/webm'});fetch('/companion/api/dictate',{method:'POST',headers:Object.assign(hdrs(),{'Content-Type':b.type}),body:b}).then(function(x){return x.json()}).then(function(j){var box=$(target);if(j.ok){box.value=(box.value.trim()?box.value.trim()+' ':'')+j.text}else alert(j.error||'Could not write that down.')}).catch(function(e){alert('Could not write that down: '+e.message)}).then(function(){btn.disabled=false;btn.textContent=label})};r.start();btn.textContent='Stop';btn.classList.add('sel')}).catch(function(e){alert('Microphone not available: '+e.message)})}
+var dict=null;function dictateLine(btn,target){dictate(btn,target,null,'\\n')}
+function dictate(btn,target,after,sep){if(dict){dict.r.stop();return}if(!navigator.mediaDevices||!window.MediaRecorder){alert('This browser cannot record. Voice note on Capture works on most phones.');return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){var ch=[],r=new MediaRecorder(st),label=btn.textContent;dict={r:r};r.ondataavailable=function(e){ch.push(e.data)};r.onstop=function(){st.getTracks().forEach(function(t){t.stop()});dict=null;btn.classList.remove('sel');btn.textContent='Writing it down...';btn.disabled=true;var b=new Blob(ch,{type:r.mimeType||'audio/webm'});fetch('/companion/api/dictate',{method:'POST',headers:Object.assign(hdrs(),{'Content-Type':b.type}),body:b}).then(function(x){return x.json()}).then(function(j){var box=$(target);if(j.ok){box.value=(box.value.trim()?box.value.trim()+(sep||' '):'')+j.text;if(after&&box.value.trim())after()}else alert(j.error||'Could not write that down.')}).catch(function(e){alert('Could not write that down: '+e.message)}).then(function(){btn.disabled=false;btn.textContent=label})};r.start();btn.textContent='Stop';btn.classList.add('sel')}).catch(function(e){alert('Microphone not available: '+e.message)})}
 function quickJournal(btn){$('j-text').value=btn.textContent;btn.classList.add('sel');addJournal()}
 // COMPANION-PHOTO-1: the photo is shrunk on the phone (about 150 KB instead of several MB) and read there for text and codes where the browser has
 // TextDetector / BarcodeDetector; what it reads travels with the photo and the description follows in the background.
@@ -2868,6 +2900,8 @@ function drawFocus(){var b=$('focus');b.innerHTML='';var time=el('div',{cls:'car
 var CTX=[];function loadDo(){api('/companion/api/actions').then(function(r){CTX=r.contexts||[];var s=$('a-ctx');if(!s.options.length)CTX.forEach(function(c){s.appendChild(el('option',{value:c.name,text:c.name}))});var b=$('do');b.innerHTML='';var groups={};(r.actions||[]).forEach(function(a){var g=a.gtd==='next'?(a.context||'@anywhere'):a.gtd;(groups[g]=groups[g]||[]).push(a)});
  Object.keys(groups).sort(function(x,y){return (x[0]==='@'?0:1)-(y[0]==='@'?0:1)||x.localeCompare(y)}).forEach(function(g){var c=el('div',{cls:'card'},[el('h2',{text:g})]);groups[g].forEach(function(a){var it=el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:a.title}),el('div',{cls:'mute',text:(a.minutes||15)+' min · '+(a.energy||'low')+' energy'+(a.due?' · due '+a.due:'')})]),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:a.id}}).then(function(){it.remove()})}}),a.gtd!=='next'?el('button',{text:'Now',onclick:function(){api('/companion/api/actions/move',{json:{id:a.id,gtd:'next'}}).then(loadDo)}}):el('button',{text:'Later',onclick:function(){api('/companion/api/actions/move',{json:{id:a.id,gtd:'someday'}}).then(loadDo)}})]);c.appendChild(it)});b.appendChild(c)});
  if(!(r.actions||[]).length)b.appendChild(el('div',{cls:'card mute',text:'Nothing here yet. Anything you capture that is a task lands here, sorted by where you can do it.'}))})}
+function setMin(b,n){$('a-min').value=n;document.querySelectorAll('.amin').forEach(function(x){x.classList.toggle('sel',x===b)})}
+function presetAction(t,min,en,ctx){api('/companion/api/actions',{json:{title:t,context:ctx,energy:en,minutes:min}}).then(function(){loadDo()})}
 function addAction(){var t=$('a-title').value.trim();if(!t)return;api('/companion/api/actions',{json:{title:t,context:$('a-ctx').value,energy:$('a-en').value,minutes:Number($('a-min').value)||15}}).then(function(){$('a-title').value='';loadDo()})}
 var due=[],show=false;function loadLearn(){api('/companion/api/cards/due').then(function(r){due=r.cards||[];show=false;drawCard()})}
 function drawCard(){var b=$('learn');b.innerHTML='';if(!due.length){b.appendChild(el('div',{cls:'card mute',text:'Nothing due. Cards come back just before you would forget them.'}));return}var c=due[0];var k=el('div',{cls:'card'},[el('div',{cls:'mute',text:due.length+' due'}),el('div',{cls:'flash',text:c.front})]);
@@ -2918,7 +2952,7 @@ function showGp(r){var p=$('gp-print');p.innerHTML='';
 function discreetRow(){var sel=el('select',{cls:'grow'});[['care','Hide care notes on the lock screen'],['all','Hide every note on the lock screen'],['off','Show full text on the lock screen']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.discreet_push||'care'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{discreet_push:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function emailRow(){var sel=el('select',{cls:'grow'});[['off','No e-mail from the companion (notifications and this page only)'],['daily','One morning e-mail a day'],['all','E-mail every nudge and question too']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.email_mode||'off'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{email_mode:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function loadPlan(){api('/companion/api/safety-plan').then(function(p){var b=$('plan');b.innerHTML='';b.appendChild(el('h2',{text:'My safety plan'}));b.appendChild(el('div',{cls:'mute',text:'For a hard moment, written in a calm one. Your own words, one per line. If you ever write something that worries me, I show you these with the crisis lines.'}));var tas={};
- p.fields.forEach(function(f){b.appendChild(el('div',{text:f[1],style:'margin-top:10px'}));var ta=el('textarea',{style:'min-height:56px'});ta.value=(p[f[0]]||[]).join('\\n');tas[f[0]]=ta;b.appendChild(ta)});
+ p.fields.forEach(function(f){b.appendChild(el('div',{text:f[1],style:'margin-top:10px'}));var ta=el('textarea',{style:'min-height:56px',id:'sp-'+f[0]});ta.value=(p[f[0]]||[]).join('\\n');tas[f[0]]=ta;b.appendChild(ta);b.appendChild(el('button',{text:'Dictate',onclick:function(){dictateLine(this,'sp-'+f[0])}}))});
  var out=el('div');b.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Save my plan',onclick:function(){var o={};Object.keys(tas).forEach(function(k){o[k]=tas[k].value.split(/\\r?\\n/)});api('/companion/api/safety-plan',{json:o}).then(function(r){out.innerHTML='';say(out,r.ok?'Saved. It stays private, in your own account.':r.error)})}})]));b.appendChild(out)})}
 function b64ToU8(s){var p=s.replace(/-/g,'+').replace(/_/g,'/');var b=atob(p+'==='.slice((p.length+3)%4));var o=new Uint8Array(b.length);for(var i=0;i<b.length;i++)o[i]=b.charCodeAt(i);return o}
 function isHome(){try{return window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}}
