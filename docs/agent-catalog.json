@@ -411,6 +411,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-REPORT-CARD.md"
     },
     {
+      "path": "docs/GH-BUDGET-FLOOR.md",
+      "title": "GH-BUDGET-FLOOR-1 (issue 7071, charter pillar core)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/GH-BUDGET-FLOOR.md"
+    },
+    {
       "path": "docs/GITHUB-CLOUD-QUNIVERSE.md",
       "title": "GitHub cloud access to Quniverse",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/GITHUB-CLOUD-QUNIVERSE.md"
@@ -554,6 +559,11 @@
       "path": "docs/PORTFOLIO.md",
       "title": "The QNFO portfolio (QNFO-PORTFOLIO-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PORTFOLIO.md"
+    },
+    {
+      "path": "docs/PR-CYCLE-TIME-2026-11.md",
+      "title": "PR cycle time, 2026-11 (PR-RETRY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PR-CYCLE-TIME-2026-11.md"
     },
     {
       "path": "docs/PROBE-WRITE-DEAD-1.md",

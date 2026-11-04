@@ -116,11 +116,13 @@ if (m) {
   const other = ctx("pull_request", "refs/pull/8/merge", "f".repeat(40));
   ok(new Set([gr(p1), gr(other), gr(b1), gr(push1)]).size === 4, "a pull request, another pull request, a branch and main are four groups, so none cancels another", [gr(p1), gr(other), gr(b1), gr(push1)]);
 }
-// THREE-PR-WORKFLOWS-1: the pull_request trigger moved to pr-checks.yml, which calls this file as the `version-bump-guard` job. The guard is a required check, so the
-// call must stay unconditional and the trigger must keep no `paths:` filter (INTEG-GITHUB-HARDEN-1): a required check that never runs stays "Expected" for ever.
+// THREE-PR-WORKFLOWS-1, then PR-CHECK-CAP-5-1: the pull_request trigger left this file; pr-checks.yml holds the guard's steps in its `versions` job (a `uses:` job is one check
+// entry, so it no longer calls this file). The guard must still run on every pull request: its step is unconditional and the trigger keeps no `paths:` filter
+// (INTEG-GITHUB-HARDEN-1): a check that never runs stays "Expected" for ever.
 const checks = readFileSync(join(root, ".github", "workflows", "pr-checks.yml"), "utf8").replace(/\r\n/g, "\n");
-const checksJob = (checks.match(/\n  version-bump-guard:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
-ok(/^ {2}workflow_call:\s*$/m.test(wf) && !/^ {2}pull_request:/m.test(wf) && /uses: \.\/\.github\/workflows\/version-bump-guard\.yml/.test(checksJob) && !/^\s+if:/m.test(checksJob) && /^on:\n {2}pull_request:\n {4}branches: \[main\]\n(?! {4}paths)/m.test(checks), "pr-checks calls the guard on every pull request into main: the job has no condition and the pull_request trigger has no paths filter (INTEG-GITHUB-HARDEN-1)");
+const versionsJob = (checks.match(/\n  versions:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
+const guardStep = (versionsJob.match(/- name: Version bump guard\n([\s\S]*?)(?=\n      - |$)/) || [])[1] || "";
+ok(/^ {2}workflow_call:\s*$/m.test(wf) && !/^ {2}pull_request:/m.test(wf) && /python3 scripts\/version-bump-guard\.py/.test(guardStep) && /^\s+if: \$\{\{ !cancelled\(\) \}\}\s*$/m.test(guardStep) && /^on:\n {2}pull_request:\n {4}branches: \[main\]\n(?! {4}paths)/m.test(checks), "pr-checks runs the guard on every pull request into main: the step has no condition and the pull_request trigger has no paths filter (INTEG-GITHUB-HARDEN-1)");
 
 // ---- MAIN-GUARD-RANGE-FLOOR-1: a push to main validates from the last green run, so a run PUSH-COALESCE-1 cancelled leaves no unvalidated range ----
 {

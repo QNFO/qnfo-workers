@@ -78,6 +78,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [FLEET-GRAPH-1: the fleet code and topology graph](FLEET-GRAPH.md) - `docs/FLEET-GRAPH.md`
 - [FLEET-NODE-MAP (canonical, 2026-09-26)](FLEET-NODE-MAP.md) - `docs/FLEET-NODE-MAP.md`
 - [FLEET REPORT CARD — Objective Function & Constraints (canonical)](FLEET-REPORT-CARD.md) - `docs/FLEET-REPORT-CARD.md`
+- [GH-BUDGET-FLOOR-1 (issue 7071, charter pillar core)](GH-BUDGET-FLOOR.md) - `docs/GH-BUDGET-FLOOR.md`
 - [GitHub cloud access to Quniverse](GITHUB-CLOUD-QUNIVERSE.md) - `docs/GITHUB-CLOUD-QUNIVERSE.md`
 - [Google, GitHub and Cloudflare as one system (GOOGLE-HUB-1)](GOOGLE-HUB-INTEGRATION.md) - `docs/GOOGLE-HUB-INTEGRATION.md`
 - [Gradual deploys with automatic rollback (BP26-GRADUAL-DEPLOYS-1)](GRADUAL-DEPLOYS.md) - `docs/GRADUAL-DEPLOYS.md`
@@ -107,6 +108,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Plussing: every product gets better without being asked (PLUSSING-1)](PLUSSING.md) - `docs/PLUSSING.md`
 - [Portfolio operations (PORTFOLIO-OPS-1)](PORTFOLIO-OPERATIONS.md) - `docs/PORTFOLIO-OPERATIONS.md`
 - [The QNFO portfolio (QNFO-PORTFOLIO-1)](PORTFOLIO.md) - `docs/PORTFOLIO.md`
+- [PR cycle time, 2026-11 (PR-RETRY-1)](PR-CYCLE-TIME-2026-11.md) - `docs/PR-CYCLE-TIME-2026-11.md`
 - [PROBE-WRITE-DEAD-1 — the remediation verifier cannot write evidence](PROBE-WRITE-DEAD-1.md) - `docs/PROBE-WRITE-DEAD-1.md`
 - [Q08 publication recovery and preflight procedure](Q08-PUBLICATION-RECOVERY-2026-09-26.md) - `docs/Q08-PUBLICATION-RECOVERY-2026-09-26.md`
 - [Q08 root cause + remediation record (2026-09-27)](Q08-ROOT-CAUSE-2026-09-27.md) - `docs/Q08-ROOT-CAUSE-2026-09-27.md`

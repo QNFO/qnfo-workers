@@ -20,10 +20,11 @@ const root = join(here, "..");
 const yml = readFileSync(join(root, ".github", "workflows", "migration-guard.yml"), "utf8");
 
 // ---- the workflow itself ----
-// THREE-PR-WORKFLOWS-1: the pull_request trigger and its paths filter moved to pr-checks.yml (a trigger path filter cannot apply to a called workflow); the file is `workflow_call`.
-const checks = readFileSync(join(root, ".github", "workflows", "pr-checks.yml"), "utf8");
-const checksJob = (checks.match(/\n  migration-guard:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
-ok(/^on:\n  workflow_call:\n/m.test(yml) && !/^  pull_request:/m.test(yml) && /uses: \.\/\.github\/workflows\/migration-guard\.yml/.test(checksJob) && /needs\.changes\.outputs\.migration_guard == 'true'/.test(checksJob) && /\^migrations\/\|\^scripts\/apply_migrations\\\.py\$\|\^\\\.github\/workflows\/migration-guard\\\.yml\$' files\.txt; then echo 'migration_guard=true'/.test(checks) && /^on:\n  pull_request:\n    branches: \[main\]/m.test(checks), "pr-checks runs it on pull requests that touch migrations");
+// THREE-PR-WORKFLOWS-1, then PR-CHECK-CAP-5-1: the pull_request trigger and its paths filter left this file (a path filter on a required check would skip it); pr-checks.yml no longer
+// calls it either (a `uses:` job is one check entry), and holds these steps in its `suites` job behind the `migration_guard` filter output. This file is `workflow_call`.
+const checks = readFileSync(join(root, ".github", "workflows", "pr-checks.yml"), "utf8").replace(/\r\n/g, "\n");
+const suitesJob = (checks.match(/\n  suites:\n([\s\S]*?)(?=\n  [a-z-]+:\n|$)/) || [])[1] || "";
+ok(/^on:\n  workflow_call:\n/m.test(yml) && !/^  pull_request:/m.test(yml) && /^on:\n  pull_request:\n    branches: \[main\]/m.test(checks) && /\^migrations\/\|\^scripts\/apply_migrations\\\.py\$\|\^\\\.github\/workflows\/migration-guard\\\.yml\$' files\.txt; then echo 'migration_guard=true'/.test(suitesJob) && /if: \$\{\{ !cancelled\(\) && steps\.f\.outputs\.migration_guard == 'true' \}\}/.test(suitesJob) && /apply_migrations\.py --check --base "origin\/\$BASE_REF"/.test(suitesJob) && !/continue-on-error/.test(suitesJob), "pr-checks runs the check in its suites job on pull requests that touch migrations, and a refusal fails it");
 ok(/^  migration-guard:$/m.test(yml), "the job is named migration-guard (the lane reads checks by name; `guard` is version-bump-guard's)");
 ok(!/continue-on-error/.test(yml), "no step is advisory: a refusal fails the check");
 ok(/permissions:\n  contents: read\n/.test(yml) && !/(pull-requests|issues|actions|id-token): write/.test(yml), "the token is read-only");
