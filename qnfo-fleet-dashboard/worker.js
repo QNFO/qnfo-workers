@@ -12,6 +12,7 @@ var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.definePrope
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 var VERSION = "1.85.0";
+// 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
 // 1.85.0 (cont.) NOW-ONETAP-1: "I did it" asks the fleet to verify and close the card, and "Not needed" parks it for 90 days, so no one-tap option asks for a fresh email code (done and dismiss on /api/owner/respond are step-up actions).
 // 1.85.0 NOW-HANDBACK-1 (owner request 2026-11-04, pillar autonomy; minor, new route): each owner card has four one-tap options (Fleet: you do it, Snooze 7 days, I did it, Not needed); POST /api/v3/handback files the card as fleet work (OWNER-HANDBACK ticket, card set rerouted) so the owner never has to do reversible work; the Now screen also shows the last 24 hours of deploys, merges and issue churn.
 // 1.83.5 (cont.) NOW-PRIVATE-1: the Now screen shows card titles only to the signed-in owner; a stranger sees a placeholder (one title named the owner's work-authorization and permit status).
@@ -3508,16 +3509,22 @@ async function v3Section(name, fn) {
 }
 // Owner queue: only what is irreversible and identity-bound is shown (humanLaneFor); the fleet handles the rest.
 async function v3Needs(env, authed) {
-  const rows = await d1all(env.AUDIT, "SELECT slug, title, why, action, created_at FROM human_actions WHERE status='open' ORDER BY id LIMIT 200");
+  const [all, tot, sn] = await Promise.all([
+    d1all(env.AUDIT, "SELECT slug, title, why, action, created_at FROM human_actions WHERE status='open' ORDER BY CASE WHEN why LIKE '%IDENTITY-BOUND:%' THEN 0 ELSE 1 END, id DESC LIMIT 200"),
+    d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM human_actions WHERE status='open'"),
+    activeSnoozes(env)
+  ]);
+  const rows = all.filter(function(r) { return !sn["ha:" + r.slug]; });
+  const parked = all.length - rows.length;
   const mine = rows.filter(function(r) { return humanLaneFor({ title: r.title, why: r.why, action: r.action }) === "owner"; });
   // Only a card that carries an IDENTITY-BOUND: line is urgent (AUTONOMY-FIRST-1); an owner-lane card matched by a keyword alone is optional and shown quietly.
   const bound = function(r) { return String(r.why || "").indexOf("IDENTITY-BOUND:") >= 0; };
   mine.sort(function(x, y) { return (bound(y) ? 1 : 0) - (bound(x) ? 1 : 0); });
   const urgent = mine.filter(bound).length;
   return {
-    open_total: rows.length, fleet_handles: rows.length - mine.length, count: urgent, optional: mine.length - urgent,
+    open_total: tot[0] ? Number(tot[0].n) : rows.length, parked: parked, fleet_handles: Math.max(0, rows.length - mine.length), count: urgent, optional: mine.length - urgent,
     items: mine.slice(0, 8).map(function(r) {
-      return { bound: bound(r), key: "ha:" + r.slug, title: authed ? String(r.title || "").slice(0, 140) : "Private item for the owner (sign in to read it)", why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
+      return { bound: bound(r), key: authed ? "ha:" + r.slug : null, title: authed ? String(r.title || "").slice(0, 140) : "Private item for the owner (sign in to read it)", why: authed ? String(r.why || "").replace(/\s+/g, " ").slice(0, 280) : "", age_s: v3Age(String(r.created_at || "").replace(" ", "T") + "Z") };
     })
   };
 }
@@ -3565,9 +3572,17 @@ async function v3Handback(env, ctx, b) {
     "Card why: " + String(r.why || "").slice(0, 900) + "\nCard action: " + String(r.action || "").slice(0, 600) + "\n" +
     "Definition of done: do the work with every surface that exists (tools, existing credentials, the repository token, the executor), verify it live, and close with evidence in issue_triage.close_evidence. " +
     "Only a step that is irreversible and identity-bound (money, a signing act, the owner's own account, an emailed one-time code) may stay with the owner: then write the exact blocker, what you tried on each surface and a closing probe, and reopen the card with an IDENTITY-BOUND: line. Never return it to the owner without that.";
-  const filed = await ownerTaskFile(env, text, { handoff: true, reuse: true });
-  const up = await env.AUDIT.prepare("UPDATE human_actions SET status = 'rerouted', resolution = ?1, updated_at = datetime('now') WHERE slug = ?2 AND status = 'open'").bind("handed back to the fleet by the owner (dashboard), issue " + (filed.issue_id || "pending") + ", " + new Date().toISOString(), slug).run();
-  return v3Json({ ok: true, key: key, issue_id: filed.issue_id || null, duplicate: !!filed.duplicate, changed: !!(up.meta && up.meta.changes) });
+  const claim = await env.AUDIT.prepare("UPDATE human_actions SET status = 'rerouted', resolution = ?1, updated_at = datetime('now') WHERE slug = ?2 AND status = 'open'").bind("handed back to the fleet by the owner (dashboard), filing, " + new Date().toISOString(), slug).run();
+  if (!(claim.meta && claim.meta.changes)) return v3Json({ ok: false, error: "no open card " + slug + " (already handled)" }, 404);
+  let filed;
+  try {
+    filed = await ownerTaskFile(env, text, { handoff: true, reuse: true });
+  } catch (e) {
+    await env.AUDIT.prepare("UPDATE human_actions SET status = 'open', resolution = NULL WHERE slug = ?1 AND status = 'rerouted'").bind(slug).run().catch(function() {});
+    return v3Json({ ok: false, error: "could not file the task, the card is back in your list: " + String(e && e.message || e).slice(0, 120) }, 502);
+  }
+  await env.AUDIT.prepare("UPDATE human_actions SET resolution = ?1 WHERE slug = ?2").bind("handed back to the fleet by the owner (dashboard), issue " + (filed.issue_id || "pending") + ", " + new Date().toISOString(), slug).run().catch(function() {});
+  return v3Json({ ok: true, key: key, issue_id: filed.issue_id || null, duplicate: !!filed.duplicate, changed: true });
 }
 // What the fleet did in the last 24 hours, so the page answers "what is happening" without a tab.
 async function v3Work(env) {
@@ -3578,12 +3593,12 @@ async function v3Work(env) {
   const ev = {};
   b.forEach(function(x) { ev[x.event] = Number(x.n) || 0; });
   const open = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric = 'open_agent_issues'").catch(function() { return []; });
-  return { deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] ? Number(open[0].last_value) : null };
+  return { deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] && open[0].last_value != null && isFinite(Number(open[0].last_value)) ? Number(open[0].last_value) : null };
 }
 async function v3Reach(env) {
   const [r, reg] = await Promise.all([reachScorecardData(env), d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric IN ('pageviews_30d','referral_30d','publications_30d','subscribers_growth_monthly')").catch(function() { return []; })]);
   const rg = {};
-  reg.forEach(function(x) { const n = Number(x.last_value); rg[x.metric] = isFinite(n) ? n : null; });
+  reg.forEach(function(x) { const n = x.last_value == null ? NaN : Number(x.last_value); rg[x.metric] = isFinite(n) ? n : null; });
   const w7 = r.windows && r.windows.d7 || {}, w28 = r.windows && r.windows.d28 || {};
   const pv7 = w7.pageviews ? Number(w7.pageviews.value) : null, pv28 = w28.pageviews ? Number(w28.pageviews.value) : null;
   if (pv7 == null) throw new Error("no pageview window readable (reach scorecard empty)");
@@ -3618,11 +3633,19 @@ async function v3Content(env) {
   if (t.published_7d == null) throw new Error("content pipeline totals unreadable");
   return { published_7d: t.published_7d != null ? Number(t.published_7d) : null, in_flight: t.in_flight != null ? Number(t.in_flight) : null, as_of: c.as_of || null };
 }
-async function v3Build(env, kind, authed) {
+var V3_FLIGHT = {};
+async function v3Build(env, kind, authed, fresh) {
   const key = kind + (authed ? ":o" : ":p");
   const hit = V3_CACHE[key];
+  if (!fresh && hit && hit.env === env && Date.now() - hit.at < V3_TTL_MS) return hit.v;
+  const fl = V3_FLIGHT[key];
+  if (fl && fl.env === env) return fl.p;
+  const p = v3BuildInner(env, kind, authed, key, hit).then(function(r) { delete V3_FLIGHT[key]; return r; }, function(e) { delete V3_FLIGHT[key]; throw e; });
+  V3_FLIGHT[key] = { env: env, p: p };
+  return p;
+}
+async function v3BuildInner(env, kind, authed, key, hit) {
   const now = Date.now();
-  if (hit && hit.env === env && now - hit.at < V3_TTL_MS) return hit.v;
   let v;
   if (kind === "now") {
     const [needs, spend, health, work] = await Promise.all([v3Section("needs", function() { return v3Needs(env, authed); }), v3Section("spend", function() { return v3Spend(env); }), v3Section("health", function() { return v3Health(env); }), v3Section("work", function() { return v3Work(env); })]);
@@ -3633,9 +3656,10 @@ async function v3Build(env, kind, authed) {
   }
   v.generated_at = new Date().toISOString();
   v.version = VERSION;
+  if (!authed) ["needs", "spend", "health", "work", "reach", "content"].forEach(function(k) { if (v[k] && v[k].ok === false) v[k].error = "temporarily unreadable"; });
   // A screen whose every section failed does not replace a good cached copy: the stale one is served and marked.
   const allBad = ["needs", "spend", "health", "work", "reach", "content"].every(function(k) { return !v[k] || v[k].ok === false; });
-  if (allBad && hit && hit.env === env) return Object.assign({}, hit.v, { stale: true, stale_since: hit.v.generated_at });
+  if (allBad && hit && hit.env === env) { hit.at = now - V3_TTL_MS + 1e4; return Object.assign({}, hit.v, { stale: true, stale_since: hit.v.generated_at }); }
   V3_CACHE[key] = { at: now, env: env, v: v };
   return v;
 }
@@ -3655,7 +3679,7 @@ async function v3CodeStart(env, b) {
 async function v3CodeStatus(env, id) {
   const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "result", id: id }) });
   const run = r.json && r.json.run;
-  if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], error: r.http === 404 ? "the executor no longer has this run" : null });
+  if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], miss: r.http !== 404, note: r.http !== 404 ? String(r.error || "executor http " + r.http).slice(0, 120) : null, error: r.http === 404 ? "the executor no longer has this run" : null });
   const steps = (run.steps || []).map(function(s) { return { tool: String(s.tool || ""), args: String(s.args || "").replace(/\s+/g, " ").slice(0, 160), ms: Number(s.ms) || 0 }; });
   // Any status other than queued/running is final, as in cmdAgentPoll: an unknown one ("timeout", "cancelled") must end the poll, not spin it for 25 minutes.
   const done = run.status === "done", failed = !done && run.status !== "queued" && run.status !== "running";
@@ -3664,29 +3688,30 @@ async function v3CodeStatus(env, id) {
 }
 async function v3Routes(request, env, ctx, path, url, owner) {
   const holder = !!(owner && (owner.authed || owner.loop));
+  const actor = !!(owner && owner.authed);
   const m = request.method;
   if ((path === "/" || path === "") && (m === "GET" || m === "HEAD") && url.searchParams.get("frag") !== "1") {
     return new Response(m === "HEAD" ? null : v3Html(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
   }
   if (path.indexOf("/api/v3/") !== 0) return null;
   if ((path === "/api/v3/now" || path === "/api/v3/readers") && (m === "GET" || m === "HEAD")) {
-    return v3Json(await v3Build(env, path === "/api/v3/now" ? "now" : "readers", holder));
+    return v3Json(await v3Build(env, path === "/api/v3/now" ? "now" : "readers", holder, holder && url.searchParams.get("fresh") === "1"));
   }
   const codeHit = /^\/api\/v3\/code\/(cmd-[0-9a-f]{20})$/.exec(path);
   if (codeHit && m === "GET") {
-    if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
+    if (!actor) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
     return await v3CodeStatus(env, codeHit[1]);
   }
   if (m !== "POST") return v3Json({ error: "not found" }, 404);
   if (request.headers.get("x-fleet-ui") !== "1") return v3Json({ error: "missing x-fleet-ui header" }, 400);
   if (path === "/api/v3/handback") {
-    if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your emailed code to hand work back to the fleet." }, 401);
+    if (!actor) return v3Json({ ok: false, need: "code", error: "Sign in with your emailed code to hand work back to the fleet." }, 401);
     let hb = null;
     try { hb = await request.json(); } catch (e) { return v3Json({ error: "invalid JSON" }, 400); }
     return await v3Handback(env, ctx, hb);
   }
   if (path === "/api/v3/code" || path === "/api/v3/warm") {
-    if (!holder) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
+    if (!actor) return v3Json({ ok: false, need: "code", error: "Sign in with your email code to use the command line." }, 401);
     if (path === "/api/v3/warm") {
       const w = await cmdToolCall(env, "container_status", {}, ctx, "cmd-" + cmdRandHex(10));
       return v3Json({ ok: !!w.ok, ms: w.ms, error: w.ok ? null : String(w.error || "container did not answer").slice(0, 160) });
@@ -3734,8 +3759,8 @@ function cls(age,limit){return age==null?'bad':age>limit*3?'bad':age>limit?'warn
 var H={'Content-Type':'application/json','x-fleet-ui':'1'},holder=false,last={now:0,readers:0},cur='now',data={};
 function api(u,b){return fetch(u,{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(j){j.http=r.status;return j})})}
 function pill(){if(cur==='code'){var q=$('pill');q.className=holder?'ok':'warn';q.lastChild.textContent=holder?'signed in':'sign in to start';return}var a=last[cur]?Math.round((Date.now()-last[cur])/1000):null,p=$('pill');if(a==null){p.className='';p.lastChild.textContent='loading';return}p.className=a>300?'bad':a>120?'warn':'ok';p.lastChild.textContent=a>120?'not updating, last '+ago(a):'live, '+ago(a)}
-function load(k,force){if(document.hidden&&!force)return;var c=new AbortController(),t=setTimeout(function(){c.abort()},12000);
-fetch('/api/v3/'+k,{cache:'no-store',signal:c.signal,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){clearTimeout(t);data[k]=d;last[k]=Date.now();$('off').textContent='';(k==='now'?renderNow:renderReaders)(d);pill()})
+function load(k,force,fresh){if(document.hidden&&!force)return;var c=new AbortController(),t=setTimeout(function(){c.abort()},12000);
+fetch('/api/v3/'+k+(fresh?'?fresh=1':''),{cache:'no-store',signal:c.signal,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){clearTimeout(t);data[k]=d;last[k]=Date.now();$('off').textContent='';(k==='now'?renderNow:renderReaders)(d);pill()})
 .catch(function(e){clearTimeout(t);$('off').textContent="Couldn't refresh ("+(e&&e.name==='AbortError'?'timed out':'offline')+'). Showing the last good data.';pill()})}
 function sec(s,name){return s&&s.ok===false?'<p class="err">Could not read '+name+': '+esc(s.error)+'</p>':''}
 function renderNow(d){var n=d.needs||{},sp=d.spend||{},h=d.health||{},bad=[],tone='ok',title='All clear',sub='';
@@ -3745,7 +3770,7 @@ else if(bad.length){tone='warn';title="Can't read "+bad.join(', ');sub='Not conf
 else if(sp.ok&&sp.pace_vs_budget>1.1){tone='warn';title='Spending ahead of budget';sub='At this pace the month lands at '+usd(sp.pace_month_usd)+' against '+usd(sp.budget_month_usd)+'.'}
 else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
-if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+'<button data-k="'+esc(it.key)+'" data-h="1" class="pri">Fleet: you do it</button> <button data-k="'+esc(it.key)+'" data-a="snooze">Snooze 7 days</button> <button data-k="'+esc(it.key)+'" data-h="verify">I did it</button> <button data-k="'+esc(it.key)+'" data-a="snooze90">Not needed</button></div>'});o+='</div>'}
+if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+(!it.key?'<small>Sign in on the Code tab to act on this.</small><div hidden>':'')+'<button data-k="'+esc(it.key)+'" data-h="1" class="pri">Fleet: you do it</button> <button data-k="'+esc(it.key)+'" data-a="snooze">Snooze 7 days</button> <button data-k="'+esc(it.key)+'" data-h="verify">I did it</button> <button data-k="'+esc(it.key)+'" data-a="snooze90">Not needed</button>'+(!it.key?'</div>':'')+'</div>'});o+='</div>'}
 o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&sp.pace_vs_budget>1.1?'bad':sp.ok?cls(sp.data_age_s,10800):'')+'">'+(sp.ok&&sp.pace_vs_budget!=null?Math.round(sp.pace_vs_budget*100)+'% of budget pace, ':'')+(sp.ok?'updated '+ago(sp.data_age_s):'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 o+='<div class="big">'+usd(sp.month_to_date_usd)+' <span style="font-size:18px;color:var(--mut)">of '+usd(sp.budget_month_usd)+'</span></div><div class="bar '+bt+'"><div style="width:'+pct+'%"></div></div>';
@@ -3773,16 +3798,16 @@ function msg(cl,t){var d=document.createElement('div');d.className='msg '+cl;d.t
 function sid(){var s=localStorage.getItem('v3sid');if(!s){s='web-'+Math.random().toString(36).slice(2,12);localStorage.setItem('v3sid',s)}return s}
 function run(text){msg('you',text);var box=msg('agent','Starting...');$('ci').value='';
 api('/api/v3/code',{text:text,sid:sid()}).then(function(j){if(j.need){box.textContent=j.error;$('si').style.display='block';return}if(!j.ok){box.textContent='Could not start: '+(j.error||'http '+j.http);return}poll(j.id,box,Date.now())}).catch(function(e){box.textContent='Could not reach the server: '+e})}
-function poll(id,box,t0){fetch('/api/v3/code/'+id,{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
+function poll(id,box,t0,mm){mm=mm||0;fetch('/api/v3/code/'+id,{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){if(j.miss){if(mm>=20){box.textContent='The executor is not answering ('+(j.note||'no reply')+'). The run may still be going (id '+id+').';return}setTimeout(function(){poll(id,box,t0,mm+1)},1500);return}
 var st=(j.steps||[]).map(function(s){return '> '+s.tool+(s.args?' '+s.args:'')+' ('+s.ms+'ms)'}).join('\n');
-if(j.status==='running'){box.innerHTML='<div class="steps">'+esc(st||'thinking...')+'</div>Working... '+Math.round((Date.now()-t0)/1000)+'s';if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},1500);else box.textContent='Still running after 25 minutes; the run continues on the server (id '+id+').';return}
-box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0)},3000);else box.textContent='Lost contact with the server; the run may still be going (id '+id+').'})}
+if(j.status==='running'){box.innerHTML='<div class="steps">'+esc(st||'thinking...')+'</div>Working... '+Math.round((Date.now()-t0)/1000)+'s';if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0,0)},1500);else box.textContent='Still running after 25 minutes; the run continues on the server (id '+id+').';return}
+box.innerHTML=(st?'<div class="steps">'+esc(st)+'</div>':'')+esc(j.status==='done'?j.reply:('Failed: '+(j.error||j.status)));box.scrollIntoView({block:'end'})}).catch(function(){if(Date.now()-t0<1500000)setTimeout(function(){poll(id,box,t0,mm)},3000);else box.textContent='Lost contact with the server; the run may still be going (id '+id+').'})}
 $('cf').addEventListener('submit',function(e){e.preventDefault();var t=$('ci').value.trim();if(t)run(t)});
 $('ci').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('cf').dispatchEvent(new Event('submit',{cancelable:true}))}});
 document.querySelectorAll('[data-q]').forEach(function(b){b.onclick=function(){if(!holder){codeInit();return}run(b.getAttribute('data-q'))}});
 $('send').onclick=function(){var tk=document.querySelector('[name=cf-turnstile-response]');$('send').disabled=true;api('/api/cmd/code',{cf_turnstile:tk?tk.value:''}).then(function(j){$('send').disabled=false;$('sim').textContent=j.ok?'Code sent to '+(j.to||'your email')+'.':(j.error||'Could not send the code.');if(j.ok)$('vc').focus()})};
 $('vb').onclick=function(){api('/api/cmd/verify',{code:$('vc').value.trim()}).then(function(j){if(j.ok){$('sim').textContent='Signed in.';codeInit();load('now',true)}else $('sim').textContent=j.error||'That code did not work.'})};
-document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a],[data-h]');if(!b)return;b.disabled=true;var hm=b.getAttribute('data-h'),ac=b.getAttribute('data-a'),kk=b.getAttribute('data-k');(hm?api('/api/v3/handback',{key:kk,mode:hm==='verify'?'verify':'do'}):api('/api/owner/respond',{key:kk,kind:'snooze',days:ac==='snooze90'?90:7,note:ac==='snooze90'?'owner: not needed (parked 90 days from the dashboard)':''})).then(function(j){if(j.ok)load('now',true);else{b.disabled=false;if(j.http===401||j.http===403){show('code');$('sim').textContent='Sign in first (this action needs a recent code).'}else alert(j.error||'failed')}})});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a],[data-h]');if(!b)return;b.disabled=true;var hm=b.getAttribute('data-h'),ac=b.getAttribute('data-a'),kk=b.getAttribute('data-k');(hm?api('/api/v3/handback',{key:kk,mode:hm==='verify'?'verify':'do'}):api('/api/owner/respond',{key:kk,kind:'snooze',days:ac==='snooze90'?90:7,note:ac==='snooze90'?'owner: not needed (parked 90 days from the dashboard)':''})).then(function(j){if(j.ok){var nd=b.closest('.need');if(nd&&nd.parentNode)nd.parentNode.removeChild(nd);load('now',true,true)}else{b.disabled=false;if(j.http===401||j.http===403){show('code');$('sim').textContent='Sign in first (this action needs a recent code).'}else alert(j.error||'failed')}}).catch(function(){b.disabled=false;alert('Could not reach the server. Try again.')})});
 document.querySelectorAll('nav a').forEach(function(a){a.onclick=function(e){e.preventDefault();show(a.id.slice(2))}});
 setInterval(function(){pill();if(cur!=='code')load(cur)},30000);setInterval(pill,5000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&cur!=='code')load(cur,true)});
