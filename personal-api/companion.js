@@ -84,8 +84,15 @@
 // COMPANION-FOCUS-1 (2026-10-31, owner: click-first choices, no free text, existing Cloudflare/GitHub only):
 //  29. Focus reuses actions, the activity bank and activity logging. Time/energy chips, Yes/No/Surprise me, a timer and
 //      fixed Qniverse backlog presets need no typing or model call; D1 remains authoritative and the timer is ephemeral.
+// COMPANION-NO-TYPING-1 (2026-11-04, owner 2026-10-29: "I'm not typing ... if you want free text from me ... ask me to dictate";
+//      "if I keep using LLMs, the cost keeps adding up"):
+//  30. Every box that takes words has a Dictate button beside it (Talk, Journal, Capture). It records on the phone and the
+//      server writes the words with Whisper (POST /companion/api/dictate, nothing stored), because browser dictation does
+//      not work for him. Journal has one-tap lines; Today opens with "What can I do right now?" (Focus, today's read, Talk).
+//  31. AI use is a number he can see: GET /companion/api/ai-use reads today's and this week's personal-api Workers AI calls
+//      from qnfo-audit.ai_call_counters (counts only) and prices them at Workers AI list price; Focus and Data show it.
 
-export const COMPANION_VERSION = "1.17.0";
+export const COMPANION_VERSION = "1.18.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -155,6 +162,8 @@ export const DDL = [
      expires_ms INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, used_ms INTEGER, sent_ok INTEGER)`,
   `CREATE TABLE IF NOT EXISTS cmp_sessions (token_hash TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL,
      last_seen_ms INTEGER, revoked INTEGER NOT NULL DEFAULT 0, device TEXT)`,
+  // COMPANION-TASTE-1: one row per thumbs vote. key = the normalised label, so a title he dislikes stays gone wherever it shows.
+  `CREATE TABLE IF NOT EXISTS cmp_feedback (key TEXT PRIMARY KEY, kind TEXT NOT NULL, label TEXT NOT NULL, vote INTEGER NOT NULL, ref TEXT, ts TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS journal (id TEXT PRIMARY KEY, ts TEXT NOT NULL, date TEXT NOT NULL, content TEXT NOT NULL,
      mood TEXT, tags TEXT, source TEXT DEFAULT 'twin')`,
   `CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'task',
@@ -496,6 +505,27 @@ export function pickActivity(bank, scores, energy, recentAsks) {
   const used = (recentAsks || []).join("\n").toLowerCase();
   const val = (a) => (sc[a.id] !== undefined ? sc[a.id] : cs[a.category] !== undefined ? cs[a.category] : 3) - (used.includes(String(a.title).toLowerCase()) ? 1.5 : 0);
   return fits.slice().sort((a, b) => val(b) - val(a) || (Number(a.minutes) || 10) - (Number(b.minutes) || 10) || String(a.id).localeCompare(String(b.id)))[0];
+}
+// COMPANION-NO-TYPING-1 (31): Workers AI list price is $0.011 per 1,000 neurons. Counts only; no text is read.
+export const AI_USD_PER_1K_NEURONS = 0.011;
+export function aiUseSummary(rows, today) {
+  const t = { calls: 0, usd: 0 }, w = { calls: 0, usd: 0 };
+  for (const r of rows || []) {
+    const calls = Number(r.calls) || 0, usd = (Number(r.neurons) || 0) / 1000 * AI_USD_PER_1K_NEURONS;
+    w.calls += calls; w.usd += usd;
+    if (r.day === today) { t.calls += calls; t.usd += usd; }
+  }
+  const money = (x) => "$" + (x < 0.005 ? "0.00" : x.toFixed(2));
+  return { ok: true, today: { calls: t.calls, usd: Math.round(t.usd * 1e4) / 1e4 }, week: { calls: w.calls, usd: Math.round(w.usd * 1e4) / 1e4 },
+    line: "AI used today: " + t.calls + (t.calls === 1 ? " time" : " times") + ", about " + money(t.usd) + ". This week: " + w.calls + ", about " + money(w.usd) + "." };
+}
+export async function aiUse(env, now) {
+  const ms = now || Date.now(), today = new Date(ms).toISOString().slice(0, 10), since = new Date(ms - 6 * 864e5).toISOString().slice(0, 10);
+  if (!env || !env.AUDIT) return { ok: false, line: "AI use is not measured here." };
+  try {
+    const r = await env.AUDIT.prepare("SELECT day, SUM(calls) AS calls, SUM(neurons) AS neurons FROM ai_call_counters WHERE worker = 'personal-api' AND day >= ?1 GROUP BY day").bind(since).all();
+    return aiUseSummary((r && r.results) || [], today);
+  } catch (e) { console.warn("companion ai-use:", e && e.message || e); return { ok: false, line: "AI use could not be read just now." }; }
 }
 // COMPANION-FOCUS-2: a bounded, deterministic menu for the click-first tab. No model call and no new persistence.
 export function focusOptions(actions, activities, minutes, energy) {
@@ -1876,6 +1906,57 @@ export async function agenda(env, deps, st) {
   } catch (e) { out.mail.note = "Mail is not connected yet."; }
   return out;
 }
+
+// COMPANION-TASTE-1 (5.0.0, owner 2026-11-04: "if I don't like a calendar event, a to-do, something it recommends ... a thumbs up, thumbs down ...
+// so it keeps learning"): every line on Today carries thumbs. A thumbs-down hides that line at once and everywhere; the words of what he
+// liked and disliked become a small taste model that ranks and filters what the companion suggests next. On the server, no model call.
+export const FB_KINDS = ["event", "todo", "radar", "mail", "reading", "nudge", "idea"];
+const TASTE_STOP = new Set("the and for with from that this your you are was were will have has had not but all any can new now one two get got out off per via about into over under more most some such than then them they their there here what when where which while who whom why how just like also very much many only own same too its our".split(" "));
+export function fbKey(label) { return String(label == null ? "" : label).toLowerCase().replace(/[^a-z0-9À-￿]+/g, " ").trim().slice(0, 80); }
+export function tasteTokens(label) { const seen = new Set(); for (const w of fbKey(label).split(" ")) if (w.length >= 4 && !TASTE_STOP.has(w) && !/^\d+$/.test(w)) seen.add(w); return Array.from(seen); }
+export function tasteModel(rows) { const m = {}; for (const r of rows || []) for (const w of tasteTokens(r.label)) m[w] = (m[w] || 0) + (Number(r.vote) > 0 ? 1 : Number(r.vote) < 0 ? -1 : 0); return m; }
+export function tasteScore(model, label) { let sc = 0; for (const w of tasteTokens(label)) sc += model[w] || 0; return sc; }
+// Items a thumbs-down named exactly are dropped; a suggestion (radar, reading, idea) whose words score -2 or lower is dropped too, and the
+// rest are ordered liked first. Calendar, to-do and mail lines are only hidden on an exact thumbs-down: a plan he made is never reordered.
+export function applyTaste(items, rows, labelOf, opts) {
+  const down = new Set((rows || []).filter((r) => Number(r.vote) < 0).map((r) => r.key));
+  const up = new Set((rows || []).filter((r) => Number(r.vote) > 0).map((r) => r.key));
+  const model = tasteModel(rows), suggest = !!(opts && opts.suggest);
+  const kept = [];
+  (items || []).forEach((it, i) => {
+    const label = labelOf(it), k = fbKey(label);
+    if (down.has(k)) return;
+    const sc = suggest ? tasteScore(model, label) : 0;
+    if (suggest && sc <= -2) return;
+    kept.push({ it, i, rank: (up.has(k) ? 100 : 0) + sc });
+  });
+  if (suggest) kept.sort((a, b) => b.rank - a.rank || a.i - b.i);
+  return kept.map((x) => x.it);
+}
+export async function loadFeedback(env) { return all(env.PERSONAL, "SELECT key, kind, label, vote, ref, ts FROM cmp_feedback ORDER BY ts DESC LIMIT 2000").catch(() => []); }
+export async function recordFeedback(env, b) {
+  await ensureSchema(env.PERSONAL);
+  b = b || {};
+  const kind = FB_KINDS.includes(b.kind) ? b.kind : null, label = s(b.label, 200), key = fbKey(label);
+  const vote = Number(b.vote);
+  if (!kind || !key) return { ok: false, error: "kind (" + FB_KINDS.join(", ") + ") and label are required" };
+  if (![1, -1, 0].includes(vote)) return { ok: false, error: "vote must be 1, -1 or 0 (take it back)" };
+  const ref = b.id != null ? s(b.id, 80) : null;
+  if (vote === 0) await env.PERSONAL.prepare("DELETE FROM cmp_feedback WHERE key = ?").bind(key).run();
+  else await env.PERSONAL.prepare("INSERT INTO cmp_feedback (key, kind, label, vote, ref, ts) VALUES (?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, label = excluded.label, vote = excluded.vote, ref = COALESCE(excluded.ref, cmp_feedback.ref), ts = excluded.ts").bind(key, kind, label, vote, ref, nowIso()).run();
+  // A to-do he does not want leaves the list for good; taking the vote back puts it back.
+  if (kind === "todo" && ref) {
+    if (vote < 0) await env.PERSONAL.prepare("UPDATE tasks SET status = 'dropped' WHERE id = ? AND status = 'open'").bind(ref).run().catch(() => null);
+    else await env.PERSONAL.prepare("UPDATE tasks SET status = 'open' WHERE id = ? AND status = 'dropped'").bind(ref).run().catch(() => null);
+  }
+  const rows = await loadFeedback(env);
+  return { ok: true, vote, reply: vote > 0 ? "Noted. More like this." : vote < 0 ? "Gone. I will show less like this." : "Taken back.", liked: rows.filter((r) => r.vote > 0).length, disliked: rows.filter((r) => r.vote < 0).length };
+}
+export async function tasteSummary(env) {
+  const rows = await loadFeedback(env), model = tasteModel(rows);
+  const words = Object.entries(model).filter(([, v]) => v !== 0).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  return { ok: true, liked: rows.filter((r) => r.vote > 0).slice(0, 100), disliked: rows.filter((r) => r.vote < 0).slice(0, 100), leaning_to: words.filter(([, v]) => v > 0).slice(0, 12).map(([w]) => w), leaning_away_from: words.filter(([, v]) => v < 0).slice(0, 12).map(([w]) => w) };
+}
 export async function today(env, deps) {
   await ensureSchema(env.PERSONAL);
   const st = await gatherState(env, undefined, deps);
@@ -1894,7 +1975,7 @@ export async function today(env, deps) {
   let week = null;
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (st.cfg.wellbeing_prompts === true && wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
-  return {
+  const res = {
     day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: st.crisisLevel24h >= 2,
     reading: readingLane(st.mood, st.crisisLevel24h >= 1),
@@ -1915,6 +1996,23 @@ export async function today(env, deps) {
     plan_preview: (() => { const p = planNudge(Object.assign({}, st, { pushReady: true })); return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason }; })(),
     agenda: await agenda(env, deps, st)
   };
+  return tasteFilterToday(env, res);
+}
+
+export async function tasteFilterToday(env, t) {
+  const rows = await loadFeedback(env);
+  t.taste = { liked: rows.filter((r) => r.vote > 0).length, disliked: rows.filter((r) => r.vote < 0).length };
+  if (!rows.length) return t;
+  const ev = (e) => e.title;
+  if (t.agenda) {
+    t.agenda.today = applyTaste(t.agenda.today, rows, ev);
+    t.agenda.soon = applyTaste(t.agenda.soon, rows, ev);
+    t.agenda.radar = applyTaste(t.agenda.radar, rows, (e) => e.title || e.name || "", { suggest: true });
+    if (t.agenda.mail) t.agenda.mail.items = applyTaste(t.agenda.mail.items, rows, (m) => m.subject);
+  }
+  t.next_actions = applyTaste(t.next_actions, rows, (a) => a.title);
+  if (t.one_thing && applyTaste([t.one_thing], rows, (a) => a.title).length === 0) t.one_thing = t.next_actions[0] || null;
+  return t;
 }
 export async function dashboard(env) {
   await ensureSchema(env.PERSONAL);
@@ -1950,13 +2048,14 @@ export const PRIVACY_TABLES = [
   { table: "companion_nudges", what: "every nudge sent and how it ended", where: "1=1" },
   { table: "cmp_push_subs", what: "phone/browser push subscriptions", where: "1=1" },
   { table: "cmp_activities", what: "your activity bank (starting ideas and your own)", where: "1=1" },
+  { table: "cmp_feedback", what: "your thumbs up and down on events, to-dos and suggestions", where: "1=1" },
   { table: "cmp_activity_log", what: "activities you did and how they felt", where: "1=1" },
   { table: "cmp_measures", what: "two-weekly WHO-5 well-being answers", where: "1=1" },
   { table: "wellbeing_config", what: "your safety plan and companion settings", where: "key IN ('safety_plan', 'pause_until', 'discreet_push', 'email_mode')" },
   // RED-TEAM-1: the Talk tab's conversations were stored by the twin's chat log and missing from export and delete.
   { table: "chat", what: "conversations on the Talk tab", where: "thread LIKE 'companion-%'" }
 ];
-const DELETABLE = { cmp_inbox: "id", cmp_mood: "id", tasks: "id", cmp_projects: "id", journal: "id", cmp_cards: "id", cmp_push_subs: "endpoint", companion_nudges: "id", cmp_activities: "id", cmp_activity_log: "id", cmp_measures: "id" };
+const DELETABLE = { cmp_inbox: "id", cmp_mood: "id", tasks: "id", cmp_projects: "id", journal: "id", cmp_cards: "id", cmp_push_subs: "endpoint", companion_nudges: "id", cmp_activities: "id", cmp_activity_log: "id", cmp_measures: "id", cmp_feedback: "key" };
 export async function privacy(env) {
   await ensureSchema(env.PERSONAL);
   const rows = [];
@@ -2257,7 +2356,16 @@ export async function handleCompanion(request, env, ctx, deps) {
   try {
     if (r === "today" && m === "GET") { ensure(); return J(await today(env, deps)); }
     if (r === "dashboard" && m === "GET") return J(await dashboard(env));
-    if (r === "capture" && m === "POST") { const out = await capture(env, deps, await readCapture(request)); return J(out, out.ok ? 200 : 400); }
+    if (r === "capture" && m === "POST") {
+      // COMPANION-FAST-CAPTURE-1: the note is stored and answered at once; sorting it (a model call) happens after the reply.
+      const out = await capture(env, deps, Object.assign(await readCapture(request), { defer: true }));
+      // Risk language still gets the fixed lines in this very reply (rule 6), before any sorting.
+      if (out.ok && out.text && crisisSignal(out.text).level >= 2) out.processed = { ok: true, type: "inbox", crisis: crisisText(await loadCfg(env)) };
+      if (out.ok && out.text && !out.duplicate && ctx && ctx.waitUntil) { out.sorting = true; ctx.waitUntil(processInbox(env, deps, 5).catch((e) => console.error(JSON.stringify({ evt: "companion:sort", error: String(e && e.message || e).slice(0, 200) })))); }
+      return J(out, out.ok ? 200 : 400);
+    }
+    if (r === "feedback" && m === "POST") { const out = await recordFeedback(env, await body()); return J(out, out.ok ? 200 : 400); }
+    if (r === "feedback" && m === "GET") { await ensureSchema(env.PERSONAL); return J(await tasteSummary(env)); }
     if (r === "inbox" && m === "GET") return J({ ok: true, items: await all(env.PERSONAL, "SELECT id, ts, kind, raw_text, media_key, status, result_json FROM cmp_inbox ORDER BY ts DESC LIMIT 50") });
     if (r === "inbox/process" && m === "POST") return J({ ok: true, processed: await processInbox(env, deps, 10) });
     if (r === "mood" && m === "POST") { const out = await recordMood(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
@@ -2281,6 +2389,13 @@ export async function handleCompanion(request, env, ctx, deps) {
     if (r === "who5" && m === "GET") return J(Object.assign({ ok: true, items: WHO5_ITEMS, scale: WHO5_SCALE }, await who5Status(env, await loadCfg(env))));
     if (r === "who5" && m === "POST") { const b = await body(); const out = await recordWho5(env, b.items); return J(out, out.ok ? 200 : 400); }
     if (r === "settings" && m === "POST") { const out = await saveSettings(env, await body()); return J(out, out.ok ? 200 : 400); }
+    if (r === "ai-use" && m === "GET") return J(await aiUse(env));
+    if (r === "dictate" && m === "POST") {
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (!bytes.length || bytes.length > 8000000) return J({ ok: false, error: "That recording was empty or too long. Try a shorter one." }, 400);
+      const tr = await transcribe(env, bytes);
+      return tr.ok ? J({ ok: true, text: tr.text }) : J({ ok: false, error: "I could not make out the words. Try once more." }, 502);
+    }
     if (r === "week" && m === "GET") return J(await weekLookback(env, undefined, url.searchParams.get("week")));
     // COMPANION-GP-SUMMARY-1: generated on request, read-only, never stored or sent; the ticks are his choice of what text goes in.
     if (r === "gp-summary" && m === "GET") return J(await gpSummary(env, { journal: url.searchParams.get("journal") === "1", notes: url.searchParams.get("notes") === "1" }));
@@ -2544,28 +2659,38 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 .hide{display:none}
 .sheet p{margin:.5rem 0}.sheet h1{font-size:1.25rem}
 @media print{html,body{background:#fff!important;color:#000!important}nav,#q-note,#login,.v,.noprint{display:none!important}#gp-print:not(.hide){display:block!important}.card{border:0;padding:0}.mute{color:#333}main{max-width:none;padding:0}}
+/* COMPANION-TASTE-1 / COMPANION-HOME-1 */
+.tr{display:flex;gap:8px;align-items:flex-start;margin:6px 0}.tr>.g{flex:1;min-width:0}.tb{display:flex;gap:0;flex:none}
+.tbtn{border:0;background:none;padding:6px 9px;font-size:1.05rem;line-height:1;opacity:.5;border-radius:8px;min-width:40px;min-height:40px}.tbtn.sel{opacity:1;background:var(--acc2)}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;z-index:5}
+#toast button{background:none;border:0;color:var(--bg);font-weight:700;text-decoration:underline}
+#composer{position:sticky;top:0;z-index:3;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}#composer input#qc-text{flex:1;min-width:0}
+#composer .mic.sel{background:var(--warn2);border-color:var(--warn)}
+nav .sec{display:none}nav.open{flex-wrap:wrap}nav.open .sec{display:block;flex:1 0 20%}
 </style></head><body><main>
 <p class="mute" id="ai-note" style="margin:.2rem 0 .6rem;font-size:.9rem">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <div id="q-note"></div>
 <div id="gp-print" class="hide"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
+<div id="composer" class="card"><div class="row" style="flex-wrap:nowrap"><input id="qc-text" placeholder="Note, task or idea. Say it or type it." aria-label="Quick note" enterkeyhint="send" autocomplete="off"><button class="mic" id="qc-mic" aria-label="Speak a note" onclick="qcMic()">&#127908;</button><label class="btn" aria-label="Photo note" style="padding:9px 11px">&#128247;<input id="qc-img" type="file" accept="image/*" capture="environment" class="hide" onchange="capImg(this)"></label><button class="p" onclick="capText()">Add</button></div><div id="qc-out"></div></div>
 <section id="v-today" class="v"></section>
 <section id="v-focus" class="v hide"><h1>Focus</h1><p class="mute">One thing. Buttons only. Nothing here is required.</p><div id="focus"></div></section>
 <section id="v-capture" class="v hide"><h1>Capture</h1>
  <div class="card"><textarea id="cap-text" placeholder="Anything on your mind. A task, an idea, a worry, something to remember."></textarea>
- <div class="row" style="margin-top:8px"><button class="p" onclick="capText()">Save</button><button id="rec" onclick="toggleRec()">Voice note</button><label class="btn">Photo<input id="cap-img" type="file" accept="image/*" capture="environment" class="hide" onchange="capImg(this)"></label></div>
+ <div class="row" style="margin-top:8px"><button class="p" onclick="capText()">Save</button><button id="rec" onclick="toggleRec()">Voice note</button><button onclick="dictate(this,'cap-text')">Dictate</button><label class="btn">Photo<input id="cap-img" type="file" accept="image/*" capture="environment" class="hide" onchange="capImg(this)"></label></div>
  <div id="cap-out"></div></div>
  <div class="card"><h2>Recently captured</h2><div id="inbox"></div></div></section>
 <section id="v-talk" class="v hide"><h1>Talk</h1><p class="mute">You are talking with an AI, not a person.</p><div id="msgs"></div>
- <div class="card"><textarea id="chat-in" placeholder="Say anything. How you are, what's on your mind, what to do next."></textarea><div class="row" style="margin-top:8px"><button class="p" id="chat-send" onclick="sendChat()">Send</button><button onclick="clearChat()">New conversation</button></div></div></section>
+ <div class="card"><textarea id="chat-in" placeholder="Tap Dictate and speak, then Send."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="dictate(this,'chat-in')">Dictate</button><button id="chat-send" onclick="sendChat()">Send</button><button onclick="clearChat()">New conversation</button></div></div></section>
 <section id="v-do" class="v hide"><h1>Next actions</h1><div id="do"></div>
  <div class="card"><h2>Add</h2><input id="a-title" placeholder="Next action, starting with a verb"><div class="row" style="margin-top:8px"><select id="a-ctx" class="grow" aria-label="Context"></select><select id="a-en" class="grow" aria-label="Energy needed"><option value="low">low energy</option><option value="medium">medium</option><option value="high">high</option></select><input id="a-min" aria-label="Minutes" type="number" min="1" value="15" style="width:90px"></div><div class="row" style="margin-top:8px"><button class="p" onclick="addAction()">Add</button></div></div></section>
 <section id="v-learn" class="v hide"><h1>Review</h1><div id="learn"></div>
  <div class="card"><h2>New card</h2><input id="c-front" placeholder="Question"><textarea id="c-back" placeholder="Answer" style="margin-top:8px;min-height:60px"></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addCard()">Add card</button></div></div></section>
-<section id="v-journal" class="v hide"><h1>Journal</h1><div class="card"><textarea id="j-text" placeholder="One line is enough."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addJournal()">Keep it</button></div><div id="j-out"></div></div><div class="card"><h2>Recent</h2><div id="journal"></div></div></section>
-<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="dash"></div><div id="plan" class="card"></div><div id="gp"></div><div id="priv"></div></section>
+<section id="v-journal" class="v hide"><h1>Journal</h1><div class="card"><h2>One tap</h2><div class="row" id="j-quick"><button class="chip" onclick="quickJournal(this)">Got something done</button><button class="chip" onclick="quickJournal(this)">Went outside</button><button class="chip" onclick="quickJournal(this)">Talked to someone</button><button class="chip" onclick="quickJournal(this)">Learned something</button><button class="chip" onclick="quickJournal(this)">Rested, and that was fine</button><button class="chip" onclick="quickJournal(this)">Hard day</button></div><h2 style="margin-top:12px">Or say it</h2><textarea id="j-text" placeholder="Tap Dictate and speak. One line is enough."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="dictate(this,'j-text')">Dictate</button><button onclick="addJournal()">Keep it</button></div><div id="j-out"></div></div><div class="card"><h2>Recent</h2><div id="journal"></div></div></section>
+<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="taste"></div><div id="dash"></div><div id="plan" class="card"></div><div id="gp"></div><div id="priv"></div></section>
 </main>
-<nav><button data-v="today" class="on">Today</button><button data-v="focus">Focus</button><button data-v="capture">Capture</button><button data-v="talk">Talk</button><button data-v="do">Do</button><button data-v="learn">Learn</button><button data-v="journal">Journal</button><button data-v="data">Data</button></nav>
+<div id="toast" class="hide" role="status"></div>
+<nav><button data-v="today" class="on">Today</button><button data-v="talk">Talk</button><button data-v="do">Do</button><button id="nav-more" aria-expanded="false" onclick="toggleMore()">More</button><button data-v="focus" class="sec">Focus</button><button data-v="capture" class="sec">Capture</button><button data-v="learn" class="sec">Learn</button><button data-v="journal" class="sec">Journal</button><button data-v="data" class="sec">Data</button></nav>
 <script>
 var VERSION='__VERSION__';
 ${OFFLINE_JS}
@@ -2575,7 +2700,7 @@ function warn(e){try{console.warn('companion:',e&&e.message||e)}catch(x){console
 function el(t,a,kids){var e=document.createElement(t);if(a)for(var k in a){if(k==='text')e.textContent=a[k];else if(k==='cls')e.className=a[k];else if(k.slice(0,2)==='on')e[k]=a[k];else e.setAttribute(k,a[k])}(kids||[]).forEach(function(c){if(c)e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
 function getKey(){try{var k=localStorage.getItem('cmp-key');if(k)return k;var o=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');return o.key||''}catch(e){return ''}}
 function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='Bearer '+k;return h}
-function showLogin(){closeGp();Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
+function showLogin(){closeGp();$('composer').classList.add('hide');Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
 function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
 function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
 function signOut(){(qstore?qstore.clear().catch(warn):Promise.resolve()).then(function(){showPending();return api('/companion/api/logout',{json:{}})}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
@@ -2596,6 +2721,7 @@ function moodCard(t){var m=el('div',{cls:'card',id:'mood-card'});m.appendChild(e
  var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
  m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);if(!r.queued)setTimeout(load,1800)})}})]));m.appendChild(out);return m}
 function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
+ v.appendChild(el('div',{cls:'card',id:'now'},[el('h2',{text:'What can I do right now?'}),el('div',{cls:'row'},[el('button',{cls:'p',text:'Give me one thing',onclick:function(){go('focus')}}),el('a',{cls:'btn',href:(t.reading&&t.reading.url)||'https://mind.q08.org/now',text:'Read something'}),el('button',{text:'Talk (dictate)',onclick:function(){go('talk')}})])]));
  if(t.travel)v.appendChild(el('div',{cls:'mute',text:'Times follow you: '+t.travel.place+' ('+t.travel.tz.replace('_',' ')+'). Quiet hours and notifications run on local time.',style:'margin:-6px 0 12px'}));
  if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
@@ -2605,10 +2731,10 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.week){var wkc=el('div',{cls:'card',id:'week'},[el('h2',{text:t.week.title})].concat(t.week.lines.map(function(x){return el('div',{text:x,style:'margin:4px 0'})})));wkc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Thanks, hide this',onclick:function(){api('/companion/api/week/seen',{json:{week:t.week.week}}).then(function(r){wkc.innerHTML='';say(wkc,r.reply||r.error)})}})]));v.appendChild(wkc)}
  if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
- (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','cmp-after','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
+ (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','cmp-after','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}}),thumbs('nudge',n.ask,c,null,function(){api('/companion/api/nudge',{json:{id:n.id,state:'declined'}}).catch(warn)})]))}v.appendChild(c)});
  renderAgenda(v,t);
  if(!t.push_ready&&!startShown)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
- if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'Next action'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error)})}})]));v.appendChild(o)}
+ if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'Next action'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error)})}}),thumbs('todo',t.one_thing.title,o,t.one_thing.id,load)]));v.appendChild(o)}
  if(t.reading){v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to read'}),el('div',{cls:'mute',text:t.reading.why}),el('div',{cls:'row',style:'margin-top:8px'},[el('a',{href:t.reading.url,text:'Open today\u2019s pick'}),el('a',{href:'https://mind.q08.org/',text:'The whole list'})])]))}
  var info=[];if(t.sleep)info.push('Quiet overnight '+t.sleep.from+' to '+t.sleep.to+' (about '+t.sleep.hours+' h, from message times).');if(t.weather&&t.weather.weather)info.push('Weather: '+(typeof t.weather.weather==='string'?t.weather.weather:(t.weather.weather.summary||JSON.stringify(t.weather.weather))).slice(0,140));
  if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');if(t.light_day)info.push('A full day ('+t.events_today+' things on). I will keep nudges few and small.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
@@ -2616,18 +2742,25 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(!t.paused_until)v.appendChild(el('div',{cls:'row',style:'margin:0 0 10px'},[el('span',{cls:'mute',text:'Need quiet? Pause reach-outs:'}),el('button',{cls:'chip',text:'4 h',onclick:function(){pause(4)}}),el('button',{cls:'chip',text:'1 day',onclick:function(){pause(24)}}),el('button',{cls:'chip',text:'3 days',onclick:function(){pause(72)}})]));
  v.appendChild(el('div',{cls:'mute',text:'Companion '+VERSION+'. Nudges today: '+t.nudges_today+' of '+t.cap+'.'+(t.tick_age_min!==null&&t.tick_age_min>45?' Reach-outs are delayed: my last check ran '+t.tick_age_min+' minutes ago. Everything here still works.':'')}))}
 function fmtWhen(e){if(!e.start)return '';if(e.all_day||String(e.start).length<=10){var d0=new Date(String(e.start).slice(0,10)+'T00:00:00');return d0.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' (all day)'}var d=new Date(e.start);if(isNaN(d))return '';return d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
-function evRow(e,withDay){var t=e.start&&!e.all_day&&String(e.start).length>10?new Date(e.start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';var bits=[el('div',{text:(withDay?fmtWhen(e)+'  ':(t?t+'  ':''))+e.title})];var sub=[e.where,e.cal].filter(Boolean).join(' · ');if(sub)bits.push(el('div',{cls:'mute',text:sub}));return el('div',{style:'margin:6px 0'},bits)}
+var toastT=null;function toast(msg,undo){var t=$('toast');t.innerHTML='';t.appendChild(el('span',{text:msg}));if(undo)t.appendChild(el('button',{text:'Undo',onclick:function(){t.classList.add('hide');undo()}}));t.classList.remove('hide');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.add('hide')},6000)}
+// COMPANION-TASTE-1: thumbs on a line. Down hides the line at once (and everywhere it would show) and can be undone; up says more like this.
+function thumbs(kind,label,row,id,extra){var w=el('span',{cls:'tb'}),up=el('button',{cls:'tbtn',text:'\uD83D\uDC4D','aria-label':'More like this: '+label}),dn=el('button',{cls:'tbtn',text:'\uD83D\uDC4E','aria-label':'Not for me, hide: '+label});
+ function vote(v){return api('/companion/api/feedback',{json:{kind:kind,label:label,vote:v,id:id}})}
+ up.onclick=function(){var on=!up.classList.contains('sel');vote(on?1:0).then(function(r){up.classList.toggle('sel',on);toast(r.reply||r.error)}).catch(warn)};
+ dn.onclick=function(){vote(-1).then(function(r){row.style.display='none';if(extra)extra();toast(r.reply||'Gone.',function(){vote(0).then(function(){row.style.display='';load()}).catch(warn)})}).catch(warn)};
+ w.appendChild(up);w.appendChild(dn);return w}
+function evRow(e,withDay,kind){var t=e.start&&!e.all_day&&String(e.start).length>10?new Date(e.start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';var bits=[el('div',{text:(withDay?fmtWhen(e)+'  ':(t?t+'  ':''))+e.title})];var sub=[e.where,e.cal].filter(Boolean).join(' · ');if(sub)bits.push(el('div',{cls:'mute',text:sub}));var row=el('div',{cls:'tr'});row.appendChild(el('div',{cls:'g'},bits));row.appendChild(thumbs(kind||'event',e.title,row));return row}
 function renderAgenda(v,t){var a=t.agenda;if(!a)return;
  var dc=el('div',{cls:'card'},[el('h2',{text:'Your day'})]);
  if(a.today.length)a.today.forEach(function(e){dc.appendChild(evRow(e,false))});
  else dc.appendChild(el('div',{text:a.calendar.state==='none'||a.calendar.state==='no-client'||a.calendar.state==='unknown'?'Nothing on your calendar that I can see. Your Google Calendar is not connected yet, so this only shows what you have told me.':'Nothing planned today. That leaves room.'}));
  if(a.calendar.feeds&&a.calendar.feeds.length)dc.appendChild(el('div',{cls:'mute',style:'margin-top:8px',text:'Calendars: '+a.calendar.feeds.map(function(f){return f.label+(f.ok?'':' (not answering)')}).join(', ')}));
  v.appendChild(dc);
- if((t.next_actions||[]).length){var nc=el('div',{cls:'card'},[el('h2',{text:'To do'})]);t.next_actions.slice(0,5).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.title+(x.minutes?' ('+x.minutes+' min)':'')}),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:x.id}}).then(function(){row.remove()}).catch(warn)}})]);nc.appendChild(row)});nc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'All next actions',onclick:function(){go('do')}})]));v.appendChild(nc)}
+ if((t.next_actions||[]).length){var nc=el('div',{cls:'card'},[el('h2',{text:'To do'})]);t.next_actions.slice(0,5).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.title+(x.minutes?' ('+x.minutes+' min)':'')}),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:x.id}}).then(function(){row.remove()}).catch(warn)}}),thumbs('todo',x.title,row,x.id)]);nc.appendChild(row)});nc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'All next actions',onclick:function(){go('do')}})]));v.appendChild(nc)}
  if(a.soon.length){var sc=el('div',{cls:'card'},[el('h2',{text:'Coming up this week'})]);a.soon.forEach(function(e){sc.appendChild(evRow(e,true))});v.appendChild(sc)}
- if(a.radar.length){var rc=el('div',{cls:'card'},[el('h2',{text:'Worth a look'}),el('div',{cls:'mute',text:'Ideas only. None of these are booked.'})]);a.radar.forEach(function(e){rc.appendChild(evRow(e,true));if(e.why)rc.appendChild(el('div',{cls:'mute',text:e.why}));if(e.url&&/^https?:\\/\\//i.test(e.url))rc.appendChild(el('a',{href:e.url,text:'Event details',rel:'noreferrer'}))});v.appendChild(rc)}
+ if(a.radar.length){var rc=el('div',{cls:'card'},[el('h2',{text:'Worth a look'}),el('div',{cls:'mute',text:'Ideas only. None of these are booked.'})]);a.radar.forEach(function(e){rc.appendChild(evRow(e,true,'radar'));if(e.why)rc.appendChild(el('div',{cls:'mute',text:e.why}));if(e.url&&/^https?:\\/\\//i.test(e.url))rc.appendChild(el('a',{href:e.url,text:'Event details',rel:'noreferrer'}))});v.appendChild(rc)}
  var mc=el('div',{cls:'card'},[el('h2',{text:'In your inbox'})]);
- if(a.mail.items.length)a.mail.items.forEach(function(m){mc.appendChild(el('div',{style:'margin:6px 0'},[el('div',{text:m.subject||'(no subject)'}),el('div',{cls:'mute',text:m.from})]))});
+ if(a.mail.items.length)a.mail.items.forEach(function(m){{var mr=el('div',{cls:'tr'});mr.appendChild(el('div',{cls:'g'},[el('div',{text:m.subject||'(no subject)'}),el('div',{cls:'mute',text:m.from})]));if(m.subject)mr.appendChild(thumbs('mail',m.subject,mr));mc.appendChild(mr)}});
  else mc.appendChild(el('div',{cls:'mute',text:a.mail.note||'Nothing new.'}));
  v.appendChild(mc);
  if(a.prompt)v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to think about'}),el('div',{text:a.prompt})]))}
@@ -2642,12 +2775,31 @@ function who5Form(box){api('/companion/api/who5').then(function(q){box.innerHTML
  var out=el('div');box.appendChild(el('div',{cls:'row',style:'margin-top:10px'},[el('button',{cls:'p',text:'Save',onclick:function(){if(ans.indexOf(null)>=0){say(out,'One answer per line, please.');return}api('/companion/api/who5',{json:{items:ans}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error)})}})]));box.appendChild(out)})}
 function renderOffline(){var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:'No signal, still here.'}));v.appendChild(el('div',{cls:'card'},[el('div',{text:'I cannot reach the server right now. You can still tap your mood, capture a thought or write a journal line: I keep it on this phone and send it when you are online.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Try again',onclick:load})])]));v.appendChild(moodCard({mood:null}));showPending()}
 function load(){api('/companion/api/today').then(function(t){renderToday(t);flushQueue()}).catch(function(e){warn(e);if(CMPQ.isNetworkError(e))renderOffline()})}
-function capText(){var t=$('cap-text').value.trim();if(!t)return;$('cap-out').innerHTML='';say($('cap-out'),'Saving...');api('/companion/api/capture',{json:{text:t}}).then(function(r){$('cap-text').value='';showCap(r)})}
-function showCap(r){var o=$('cap-out');o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}if(r.queued){say(o,r.reply);return}var p=r.processed||{};var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
+function outEl(){return $('v-capture').classList.contains('hide')?$('qc-out'):$('cap-out')}
+function textEl(){return $('v-capture').classList.contains('hide')?$('qc-text'):$('cap-text')}
+function capText(){var te=textEl(),t=te.value.trim();if(!t)return;var o=outEl();o.innerHTML='';say(o,'Saving...');api('/companion/api/capture',{json:{text:t}}).then(function(r){te.value='';showCap(r)}).catch(function(e){o.innerHTML='';say(o,e.message,true)})}
+function showCap(r){var o=outEl();o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}if(r.queued){say(o,r.reply);return}var p=r.processed||{};if(r.sorting){say(o,'Saved'+(r.kind!=='text'&&r.text?': '+r.text.slice(0,160):'.')+' Sorting it now.');if(p.crisis)say(o,p.crisis,true);setTimeout(function(){if(!$('v-today').classList.contains('hide'))load();else if(!$('v-capture').classList.contains('hide'))inbox();setTimeout(function(){o.innerHTML=''},2500)},3500);return}var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
  say(o,w+(p.title?': '+p.title:'')+(p.context?' ('+p.context+')':'')+(r.kind!=='text'&&r.text?'\\n\\nI heard/saw: '+r.text.slice(0,400):''));if(p.crisis)say(o,p.crisis,true);inbox()}
-var rec=null,chunks=[];function toggleRec(){if(rec){rec.stop();return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){chunks=[];rec=new MediaRecorder(st);rec.ondataavailable=function(e){chunks.push(e.data)};rec.onstop=function(){st.getTracks().forEach(function(t){t.stop()});var b=new Blob(chunks,{type:rec.mimeType||'audio/webm'});rec=null;$('rec').textContent='Voice note';$('rec').classList.remove('sel');upload(b,'voice.'+(b.type.indexOf('mp4')>=0?'m4a':'webm'))};rec.start();$('rec').textContent='Stop';$('rec').classList.add('sel')}).catch(function(e){say($('cap-out'),'Microphone not available: '+e.message)})}
+var rec=null,chunks=[];function toggleRec(){if(rec){rec.stop();return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){chunks=[];rec=new MediaRecorder(st);rec.ondataavailable=function(e){chunks.push(e.data)};rec.onstop=function(){st.getTracks().forEach(function(t){t.stop()});var b=new Blob(chunks,{type:rec.mimeType||'audio/webm'});rec=null;$('rec').textContent='Voice note';$('rec').classList.remove('sel');upload(b,'voice.'+(b.type.indexOf('mp4')>=0?'m4a':'webm'))};rec.start();$('rec').textContent='Stop';$('rec').classList.add('sel')}).catch(function(e){say(outEl(),'Microphone not available: '+e.message)})}
+// COMPANION-VOICE-1: speech is recognised on the phone (Web Speech API, processLocally where the browser offers it), the words appear while
+// he talks and are saved the moment he stops: no upload, no server transcription, no waiting. A browser without it records and uploads as before.
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition,sr=null,srBase='',srLocal=true;
+function qcMic(){if(sr){sr.stop();return}
+ srRetry=false;
+ if(!SR){go('capture');toggleRec();return}
+ var te=textEl(),mic=$('qc-mic'),o=outEl();srBase=te.value.trim();
+ try{sr=new SR();sr.lang=navigator.language||'en-US';sr.interimResults=true;sr.continuous=true;if(srLocal)sr.processLocally=true}catch(e){sr=null;warn(e);go('capture');toggleRec();return}
+ sr.onresult=function(e){var s='';for(var i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;te.value=(srBase?srBase+' ':'')+s.trim()};
+ sr.onerror=function(e){var retry=srLocal&&(e.error==='language-not-supported'||e.error==='service-not-allowed');if(retry){srLocal=false;srRetry=true;sr=null;mic.classList.remove('sel');setTimeout(qcMic,50);return}if(e.error!=='no-speech'&&e.error!=='aborted'){o.innerHTML='';say(o,'Voice did not work here ('+e.error+'). Type it, or use the photo/Capture view.',true)}};
+ sr.onend=function(){sr=null;mic.classList.remove('sel');mic.setAttribute('aria-label','Speak a note');if(textEl().value.trim()&&!srRetry)capText()};
+ try{sr.start();mic.classList.add('sel');mic.setAttribute('aria-label','Stop and save')}catch(e){sr=null;warn(e)}}
+var srRetry=false;
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target&&e.target.id==='qc-text'){e.preventDefault();capText()}});
+// COMPANION-NO-TYPING-1: Dictate records on the phone and the server writes the words; the text lands in the box for one tap to send.
+var dict=null;function dictate(btn,target){if(dict){dict.r.stop();return}if(!navigator.mediaDevices||!window.MediaRecorder){alert('This browser cannot record. Voice note on Capture works on most phones.');return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){var ch=[],r=new MediaRecorder(st),label=btn.textContent;dict={r:r};r.ondataavailable=function(e){ch.push(e.data)};r.onstop=function(){st.getTracks().forEach(function(t){t.stop()});dict=null;btn.classList.remove('sel');btn.textContent='Writing it down...';btn.disabled=true;var b=new Blob(ch,{type:r.mimeType||'audio/webm'});fetch('/companion/api/dictate',{method:'POST',headers:Object.assign(hdrs(),{'Content-Type':b.type}),body:b}).then(function(x){return x.json()}).then(function(j){var box=$(target);if(j.ok){box.value=(box.value.trim()?box.value.trim()+' ':'')+j.text}else alert(j.error||'Could not write that down.')}).catch(function(e){alert('Could not write that down: '+e.message)}).then(function(){btn.disabled=false;btn.textContent=label})};r.start();btn.textContent='Stop';btn.classList.add('sel')}).catch(function(e){alert('Microphone not available: '+e.message)})}
+function quickJournal(btn){$('j-text').value=btn.textContent;btn.classList.add('sel');addJournal()}
 function capImg(inp){if(inp.files&&inp.files[0])upload(inp.files[0],inp.files[0].name);inp.value=''}
-function upload(blob,name){var f=new FormData();f.append('file',blob,name);f.append('text',$('cap-text').value.trim());$('cap-out').innerHTML='';say($('cap-out'),'Listening/looking...');api('/companion/api/capture',{method:'POST',body:f}).then(function(r){$('cap-text').value='';showCap(r)}).catch(function(e){say($('cap-out'),e.message)})}
+function upload(blob,name){var te=textEl(),o=outEl();var f=new FormData();f.append('file',blob,name);f.append('text',te.value.trim());o.innerHTML='';say(o,'Listening/looking...');api('/companion/api/capture',{method:'POST',body:f}).then(function(r){te.value='';showCap(r)}).catch(function(e){say(o,e.message)})}
 function inbox(){api('/companion/api/inbox').then(function(r){var b=$('inbox');b.innerHTML='';(r.items||[]).slice(0,15).forEach(function(i){var res={};try{res=JSON.parse(i.result_json||'{}')}catch(e){warn(e)}b.appendChild(el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:(i.raw_text||'(no text)').slice(0,160)}),el('div',{cls:'mute',text:i.ts.slice(0,16).replace('T',' ')+' · '+i.kind+' · '+(res.type||i.status)})])]))})})}
 var hist=[];try{hist=JSON.parse(sessionStorage.getItem('cmp-hist')||'[]')}catch(e){warn(e)}
 function drawChat(){var b=$('msgs');b.innerHTML='';hist.forEach(function(m){b.appendChild(el('div',{cls:'msg '+(m.role==='user'?'me':'it'),text:m.content}))});window.scrollTo(0,document.body.scrollHeight)}
@@ -2663,7 +2815,7 @@ var savedFocus=readFocusPrefs();
 var FOCUS={minutes:savedFocus.minutes,energy:savedFocus.energy,offset:0,options:[],choice:null,endAt:0,left:0,timer:null,paused:false,checks:[false,false,false],completed:[],lastGoal:'',costChecks:readFocusCostChecks(),saving:false};
 function rememberFocusPrefs(){try{localStorage.setItem('cmp-focus-prefs',JSON.stringify({minutes:FOCUS.minutes,energy:FOCUS.energy}))}catch(e){}}
 function rememberFocusCostChecks(){try{localStorage.setItem('cmp-focus-cost-checklist',JSON.stringify(FOCUS.costChecks))}catch(e){}}
-function loadFocus(){var b=$('focus');b.innerHTML='';b.appendChild(el('div',{cls:'card mute',text:'Finding one small thing…'}));Promise.all([api('/companion/api/actions'),api('/companion/api/activities')]).then(function(rs){FOCUS.options=CMP.focusOptions(rs[0].actions,rs[1].activities,FOCUS.minutes,FOCUS.energy);FOCUS.choice=null;drawFocus()}).catch(function(e){b.innerHTML='';say(b,'Could not load Focus. '+e.message,true)})}
+function loadFocus(){var b=$('focus');b.innerHTML='';api('/companion/api/ai-use').then(function(u){FOCUS.aiLine=u&&u.line||'';var a=$('focus-ai-use');if(a)a.textContent=FOCUS.aiLine;else if(FOCUS.options.length)drawFocus()}).catch(function(){FOCUS.aiLine='AI use could not be read just now.'});b.appendChild(el('div',{cls:'card mute',text:'Finding one small thing…'}));Promise.all([api('/companion/api/actions'),api('/companion/api/activities')]).then(function(rs){FOCUS.options=CMP.focusOptions(rs[0].actions,rs[1].activities,FOCUS.minutes,FOCUS.energy);FOCUS.choice=null;drawFocus()}).catch(function(e){b.innerHTML='';say(b,'Could not load Focus. '+e.message,true)})}
 function focusClearTimer(){if(FOCUS.timer)clearInterval(FOCUS.timer);FOCUS.timer=null;FOCUS.endAt=0;FOCUS.left=0;FOCUS.paused=false}
 function focusClock(){var c=$('focus-clock');if(!c)return;if(FOCUS.endAt)FOCUS.left=Math.max(0,Math.ceil((FOCUS.endAt-Date.now())/1000));var m=Math.floor(FOCUS.left/60),s=FOCUS.left%60;c.textContent=(FOCUS.left?m+':'+String(s).padStart(2,'0'):'Time. Done is enough.');if(FOCUS.endAt&&!FOCUS.left){clearInterval(FOCUS.timer);FOCUS.timer=null;FOCUS.endAt=0;FOCUS.paused=false}}
 function focusStart(){if(!FOCUS.choice)return;rememberFocusPrefs();focusClearTimer();FOCUS.left=FOCUS.choice.minutes*60;FOCUS.endAt=Date.now()+FOCUS.left*1000;FOCUS.checks=[false,false,false];FOCUS.timer=setInterval(focusClock,1000);drawFocus();focusClock()}
@@ -2680,7 +2832,7 @@ function drawFocus(){var b=$('focus');b.innerHTML='';var time=el('div',{cls:'car
  card.appendChild(el('div',{id:'focus-clock',cls:'flash',role:'timer','aria-label':'Focus timer','aria-live':'polite',text:FOCUS.endAt?'Timer running':FOCUS.paused?'Timer paused':'Timer starts when you tap Yes.'}));FOCUS_STEPS.forEach(function(t,i){card.appendChild(el('button',{cls:'row',style:'width:100%;margin-top:6px;text-align:left','aria-label':t,'aria-pressed':FOCUS.checks[i]?'true':'false',text:(FOCUS.checks[i]?'☑ ':'☐ ')+t,onclick:function(){FOCUS.checks[i]=!FOCUS.checks[i];drawFocus()}}))});var timerButtons=[];if(!FOCUS.endAt)timerButtons.push(el('button',{cls:'p',text:FOCUS.paused?'Resume timer':'Start without Yes',onclick:FOCUS.paused?focusResume:focusStart}));if(FOCUS.endAt)timerButtons.push(el('button',{text:'Pause timer',onclick:focusPause}));if(FOCUS.endAt||FOCUS.left)timerButtons.push(el('button',{text:'Reset timer',onclick:focusReset}));timerButtons.push(el('button',{cls:'p',text:'Done',onclick:focusDone}));card.appendChild(el('div',{cls:'row',style:'margin-top:10px'},timerButtons)); card.appendChild(el('div',{id:'focus-out'}));var copy=el('button',{text:'Copy session handoff'});copy.onclick=function(){return focusHandoff(copy)};card.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[copy]));card.appendChild(el('div',{id:'focus-handoff-out',role:'status','aria-live':'polite'}));b.appendChild(card);
  if(c.kind==='action'&&Number(c.minutes)>2){var small=el('button',{text:'Too long — make a 2-minute step',onclick:function(){return focusTooLong(small)}});card.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[small]));card.appendChild(el('div',{id:'focus-too-long-out',role:'status','aria-live':'polite'}))}
  var q=el('div',{cls:'card'},[el('h2',{text:'Qniverse, one tap'}),el('div',{cls:'mute',text:'Save a fixed item to your existing actions. No typing.'})]);[['Review the integrated Focus flow','next','Review Focus'],['Record a reproducible Qniverse bug','someday','Backlog a bug'],['Choose the next smallest Qniverse improvement','someday','Backlog next step']].forEach(function(x){var btn=el('button',{text:x[2],onclick:function(){focusBacklog('Qniverse: '+x[0].toLowerCase(),x[1],btn)}});q.appendChild(el('div',{style:'margin-top:6px'},[btn]))});q.appendChild(el('div',{id:'focus-backlog-out'}));q.appendChild(el('div',{style:'margin-top:8px'},[el('a',{href:'https://github.com/QNFO/qnfo-workers/blob/main/docs/ONE-THING-BACKLOG.md',text:'Open the roadmap on GitHub'})]));b.appendChild(q);
- var cost=el('div',{cls:'card'},[el('h2',{text:'Free, local checklist'}),el('div',{cls:'mute',text:'No purchases, API calls, or subscription changes. Saved in this browser only; not synced.'})]);FOCUS_COST_ITEMS.forEach(function(t,i){cost.appendChild(el('button',{cls:'row',style:'width:100%;margin-top:6px;text-align:left','aria-label':t,'aria-pressed':FOCUS.costChecks[i]?'true':'false',text:(FOCUS.costChecks[i]?'☑ ':'☐ ')+t,onclick:function(){FOCUS.costChecks[i]=!FOCUS.costChecks[i];rememberFocusCostChecks();drawFocus()}}))});b.appendChild(cost);if(FOCUS.endAt)focusClock()}
+ var cost=el('div',{cls:'card'},[el('h2',{text:'Free, local checklist'}),el('div',{cls:'mute',text:'No purchases, API calls, or subscription changes. Saved in this browser only; not synced.'})]);if(FOCUS.aiLine)cost.appendChild(el('div',{cls:'say',id:'focus-ai-use',text:FOCUS.aiLine}));FOCUS_COST_ITEMS.forEach(function(t,i){cost.appendChild(el('button',{cls:'row',style:'width:100%;margin-top:6px;text-align:left','aria-label':t,'aria-pressed':FOCUS.costChecks[i]?'true':'false',text:(FOCUS.costChecks[i]?'☑ ':'☐ ')+t,onclick:function(){FOCUS.costChecks[i]=!FOCUS.costChecks[i];rememberFocusCostChecks();drawFocus()}}))});b.appendChild(cost);if(FOCUS.endAt)focusClock()}
 var CTX=[];function loadDo(){api('/companion/api/actions').then(function(r){CTX=r.contexts||[];var s=$('a-ctx');if(!s.options.length)CTX.forEach(function(c){s.appendChild(el('option',{value:c.name,text:c.name}))});var b=$('do');b.innerHTML='';var groups={};(r.actions||[]).forEach(function(a){var g=a.gtd==='next'?(a.context||'@anywhere'):a.gtd;(groups[g]=groups[g]||[]).push(a)});
  Object.keys(groups).sort(function(x,y){return (x[0]==='@'?0:1)-(y[0]==='@'?0:1)||x.localeCompare(y)}).forEach(function(g){var c=el('div',{cls:'card'},[el('h2',{text:g})]);groups[g].forEach(function(a){var it=el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:a.title}),el('div',{cls:'mute',text:(a.minutes||15)+' min · '+(a.energy||'low')+' energy'+(a.due?' · due '+a.due:'')})]),el('button',{text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:a.id}}).then(function(){it.remove()})}}),a.gtd!=='next'?el('button',{text:'Now',onclick:function(){api('/companion/api/actions/move',{json:{id:a.id,gtd:'next'}}).then(loadDo)}}):el('button',{text:'Later',onclick:function(){api('/companion/api/actions/move',{json:{id:a.id,gtd:'someday'}}).then(loadDo)}})]);c.appendChild(it)});b.appendChild(c)});
  if(!(r.actions||[]).length)b.appendChild(el('div',{cls:'card mute',text:'Nothing here yet. Anything you capture that is a task lands here, sorted by where you can do it.'}))})}
@@ -2692,7 +2844,12 @@ function drawCard(){var b=$('learn');b.innerHTML='';if(!due.length){b.appendChil
 function addCard(){var f=$('c-front').value.trim(),bk=$('c-back').value.trim();if(!f||!bk)return;api('/companion/api/cards',{json:{front:f,back:bk}}).then(function(){$('c-front').value='';$('c-back').value='';loadLearn()})}
 function addJournal(){var t=$('j-text').value.trim();if(!t)return;api('/companion/api/journal',{json:{content:t}}).then(function(r){$('j-text').value='';$('j-out').innerHTML='';say($('j-out'),r.queued?r.reply:r.ok?'Kept. Thank you for writing it down.':r.error);if(r.crisis)say($('j-out'),r.crisis,true);loadJournal()})}
 function loadJournal(){api('/companion/api/journal').then(function(r){var b=$('journal');b.innerHTML='';(r.entries||[]).forEach(function(j){b.appendChild(el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:j.content.slice(0,600)}),el('div',{cls:'mute',text:j.date+(j.mood?' · '+j.mood:'')})])]))})})}
-function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('dash');b.innerHTML='';var c=el('div',{cls:'card'},[el('h2',{text:'Mood by week'})]);if(!(d.mood_weekly||[]).length)c.appendChild(el('div',{cls:'mute',text:'A few days of check-ins and the pattern shows up here.'}));
+function loadTaste(){api('/companion/api/feedback').then(function(r){var b=$('taste');b.innerHTML='';var c=el('div',{cls:'card'},[el('h2',{text:'What I have learned about your taste'})]);var any=false;
+ function list(title,rows){if(!rows.length)return;any=true;c.appendChild(el('div',{cls:'mute',text:title,style:'margin-top:8px'}));rows.slice(0,30).forEach(function(x){var row=el('div',{cls:'item'},[el('div',{cls:'grow',text:x.label}),el('button',{text:'Take back',onclick:function(){api('/companion/api/feedback',{json:{kind:x.kind,label:x.label,vote:0,id:x.ref}}).then(function(){row.remove()}).catch(warn)}})]);c.appendChild(row)})}
+ if((r.leaning_to||[]).length)c.appendChild(el('div',{text:'Leaning towards: '+r.leaning_to.join(', ')}));if((r.leaning_away_from||[]).length)c.appendChild(el('div',{text:'Leaning away from: '+r.leaning_away_from.join(', ')}));
+ list('Hidden (thumbs down)',r.disliked||[]);list('Liked (thumbs up)',r.liked||[]);
+ if(!any)c.appendChild(el('div',{cls:'mute',text:'Nothing yet. Tap the thumbs next to any event, to-do or suggestion on Today and I will remember.'}));b.appendChild(c)}).catch(warn)}
+function loadData(){loadTaste();api('/companion/api/dashboard').then(function(d){var b=$('dash');b.innerHTML='';var au=el('div',{cls:'card'},[el('h2',{text:'AI cost'}),el('div',{text:'Counting...'})]);b.appendChild(au);api('/companion/api/ai-use').then(function(u){au.lastChild.textContent=u.line}).catch(warn);var c=el('div',{cls:'card'},[el('h2',{text:'Mood by week'})]);if(!(d.mood_weekly||[]).length)c.appendChild(el('div',{cls:'mute',text:'A few days of check-ins and the pattern shows up here.'}));
  (d.mood_weekly||[]).forEach(function(w){c.appendChild(el('div',{cls:'row'},[el('div',{text:w.week,style:'width:86px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+Math.round((w.mood||0)/5*100)+'%'})]),el('div',{text:String(w.mood),style:'width:40px'})]))});b.appendChild(c);
  var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'Nudge'}),el('th',{text:'sent'}),el('th',{text:'did it'}),el('th',{text:'not today'})]));(d.nudge_loop_28d||[]).forEach(function(n){t.appendChild(el('tr',{},[el('td',{text:n.kind}),el('td',{text:String(n.fired)}),el('td',{text:String(n.done)}),el('td',{text:String(n.declined)})]))});
  b.appendChild(el('div',{cls:'card'},[el('h2',{text:'How nudges landed (28 days)'}),t,el('div',{cls:'mute',text:'A kind of nudge that never lands is retired automatically.'})]));
@@ -2747,8 +2904,9 @@ function enablePush(){if(!('serviceWorker' in navigator)||!('PushManager' in win
  Notification.requestPermission().then(function(perm){if(perm!=='granted')throw new Error('notifications were not allowed');return navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'})}).then(function(reg){return navigator.serviceWorker.ready.then(function(){return api('/companion/api/push/key')}).then(function(k){return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k.public_key)})})})
  .then(function(sub){return api('/companion/api/push/subscribe',{json:{subscription:sub.toJSON()}})}).then(function(){return api('/companion/api/push/test',{json:{}})}).then(load).catch(function(e){alert(e.message)})}
 var views={today:load,focus:loadFocus,capture:inbox,talk:drawChat,do:loadDo,learn:loadLearn,journal:loadJournal,data:loadData};
-function go(v){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
-Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
+function toggleMore(){var n=document.querySelector('nav');var o=n.classList.toggle('open');$('nav-more').setAttribute('aria-expanded',o?'true':'false')}
+function go(v){document.querySelector('nav').classList.remove('open');$('composer').classList.toggle('hide',v!=='today');Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
+Array.prototype.forEach.call(document.querySelectorAll('nav button[data-v]'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
 function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.mood!==undefined){go('today');setTimeout(function(){var m=$('mood-card');if(m)m.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
 fromHash();go('today')

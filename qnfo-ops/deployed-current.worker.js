@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.62.12-patch-budget";
+var VERSION = "2.62.19-codeagent";
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
 /* 2.62.0 RM-POLICY-SMT-GATE-1 (2026-11-01, pillar security; minor: records deterministic shadow decisions for outbound email, publish and delete tool calls without changing dispatch). */
@@ -1881,6 +1881,7 @@ var OPS_SYSTEM_PROMPT = [
   "16. KERNEL-REPLY-1 (binding, docs/DOCTRINE-KERNEL.md recognitions, 2026-10-12): a reply ends with the result. Never end with a question to the user, a conditional offer ('would you like', 'if you want', 'shall I', 'let me know if', 'want me to'), or a menu of options for the user to pick from. When evidence reveals an actionable defect and an issue write is authorized, file the issue now; never offer to file it later or defer it to a future write-capable session. For every other optional next step, decide: take it when reversible and in scope and report it done, or state in one line why it is not taken. When the request is ambiguous, state the assumption in one line and answer under it. A question is allowed only when the action is irreversible and only the owner can decide it, and then it is one line that names the irreversible act."
 ].join(String.fromCharCode(10));
 var OPS_TOOLS = [
+  // CODEMODE-SURFACE-1: ops_search + ops_execute exposed as a code-mode search+execute pair (issue #1000639)
   { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-gateway, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_issues_list", description: "List agent issues from qnfo-audit agent_issues (the ops backlog). Default: open issues, newest first.", parameters: { type: "object", properties: { status: { type: "string", enum: ["open", "closed", "all"], description: "issue status filter (default open)" }, priority: { type: "string", enum: ["high", "medium", "low"], description: "optional priority filter" }, limit: { type: "number", description: "max rows 1-50 (default 20)" } }, additionalProperties: false } },
   { name: "ops_issue_run", description: "Trigger the qnfo-backlog-exec drain on open agent_issues (safe by design: it only auto-closes health-availability rows whose re-probe PASSes; failures are escalated to alerts). confirm must be true to execute; otherwise returns the plan.", parameters: { type: "object", properties: { confirm: { type: "boolean", description: "must be true to trigger the drain" } }, additionalProperties: false } },
@@ -1906,6 +1907,33 @@ var OPS_TOOLS = [
   { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_fleet_log", description: "Read the last ops_ai_log entries (this endpoint execution log, qnfo-audit). Use when the user asks what the ops endpoint has done recently.", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 5)" } }, additionalProperties: false } },
   { name: "email_mark", description: "Update the status of an inbound/outbound email (received/processed/sent/replied/archived/spam/read/rejected). Requires the message id from email_check.", parameters: { type: "object", properties: { id: { type: "number", description: "message id" }, status: { type: "string", enum: ["received", "processed", "sent", "replied", "archived", "spam", "read", "rejected"], description: "new status" } }, required: ["id", "status"], additionalProperties: false } },
+  {
+    name: "ops_search",
+    description: "Keyword search over OPS_TOOLS names and descriptions. Returns an array of objects with 'name' and a one‑line snippet.",
+    args: [{ name: "query", type: "string", description: "Search term" }],
+    parameters: { type: "object", properties: { query: { type: "string", description: "Search term" } }, required: ["query"], additionalProperties: false },
+    exec: async (env, args) => {
+      const q = (args.query || "").toLowerCase();
+      const matches = OPS_TOOLS.filter(t => (t.name?.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q)))
+        .map(t => ({ name: t.name, snippet: t.description?.split("\n")[0] || "" }));
+      return { ok: true, result: matches };
+    }
+  },
+  {
+    name: "ops_execute",
+    description: "Execute a named OPS tool via the existing execTool path, preserving all gates and audit logging.",
+    args: [{ name: "tool", type: "string", description: "Name of the tool to execute" }, { name: "args", type: "object", description: "Arguments for the tool" }],
+    parameters: { type: "object", properties: { tool: { type: "string", description: "Name of the tool to execute" }, args: { type: "object", description: "Arguments for the tool", additionalProperties: true } }, required: ["tool"], additionalProperties: false },
+    exec: async (env, args) => {
+      const toolName = args.tool;
+      const toolArgs = args.args || {};
+      const r = await execTool(env, toolName, JSON.stringify(toolArgs), "", 20000);
+      let parsed = null;
+      try { parsed = JSON.parse(r.text); } catch (e) { parsed = r.text; }
+      return { ok: r.ok, result: parsed };
+    }
+  },
+  // End of added CODEMODE-SURFACE-1 tools
   { name: "email_respond", description: "Send a REPLY inside an existing inbound thread (reply_to_id from email_check). Requires explicit user affirmation in the latest message; replies only - never cold sends. Subject must not contain spam-trip tokens.", parameters: { type: "object", properties: { reply_to_id: { type: "number", description: "inbound message id being replied to" }, subject: { type: "string", description: "reply subject" }, body: { type: "string", description: "plain-text reply body" } }, required: ["reply_to_id", "body"], additionalProperties: false } },
   { name: "run_code", description: "Execute pure-JavaScript code directly on Cloudflare (isolated compute only: no network, filesystem, secrets, or worker bindings; math/verification/data transforms). Provide finite code that returns a value or uses console.log. Never fabricate results - if the tool errors, report the error.", parameters: { type: "object", properties: { code: { type: "string", description: "JavaScript code to execute. Use return to emit a value, or console.log() for text output." } }, required: ["code"], additionalProperties: false } },
   { name: "web_fetch", description: "Fetch a public http/https URL and return its readable text (HTML stripped). SSRF-guarded: private/internal/link-local hosts are blocked. Returns up to maxChars of text.", parameters: { type: "object", properties: { url: { type: "string", description: "full http(s) URL to fetch" }, maxChars: { type: "number", description: "max chars to return (default 8000, max 30000)" } }, required: ["url"], additionalProperties: false } },
@@ -3536,8 +3564,30 @@ async function webSearchTool(env, args) {
       results.push({ title: stripHtml(m[2]), url: href, snippet: stripHtml(m[3]).slice(0, 300) });
       guard++;
     }
-    if (!results.length) return { ok: true, results: [], note: "no results parsed (DDG may have rate-limited or changed markup)" };
-    return { ok: true, results };
+    let pathUsed = "primary";
+    if (!results.length) {
+      pathUsed = "fallback";
+      let fr = null;
+      try {
+        fr = await fetch("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(q), { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }, redirect: "follow" });
+      } catch (fe) {
+        return { ok: false, error: "search fallback fetch failed: " + (fe && fe.message || String(fe)), path: "fallback" };
+      }
+      if (!fr.ok) return { ok: false, error: "search fallback HTTP " + fr.status, path: "fallback" };
+      const lite = await fr.text();
+      const lre = /<a\b[^>]*?href=(["'])([^"']*uddg=[^"']*)\1[^>]*>([\s\S]*?)<\/a>/g;
+      let lm;
+      let lguard = 0;
+      while ((lm = lre.exec(lite)) && lguard < k) {
+        const lraw = lm[2] || "";
+        const lhref = lraw.indexOf("uddg=") >= 0 ? decodeURIComponent(lraw.split("uddg=")[1].split("&")[0]) : lraw;
+        results.push({ title: stripHtml(lm[3]), url: lhref, snippet: "" });
+        lguard++;
+      }
+      if (!results.length) return { ok: false, error: "no results parsed (fallback)", path: "fallback" };
+      return { ok: true, results, path: pathUsed };
+    }
+    return { ok: true, results, path: pathUsed };
   } catch (e) {
     return { ok: false, error: "search failed: " + (e && e.message || String(e)) };
   }
@@ -3912,6 +3962,12 @@ async function githubProjectsList(env, args) {
 }
 var FPA_GRAPH_OPS = ["find", "node", "impact", "path", "worker", "resource", "findings", "freshness"];
 async function fleetGraphTool(env, args) {
+  if (args && typeof args.query === "string") {
+    const wildcards = (args.query.match(/[%_]/g) || []).length;
+    if (args.query.length > 100 || wildcards > 10) {
+      return { ok: false, error: "Query pattern too complex" };
+    }
+  }
   const op = String(args && args.op || "").trim();
   if (FPA_GRAPH_OPS.indexOf(op) < 0) return { ok: false, error: "op must be one of " + FPA_GRAPH_OPS.join(", ") };
   if (!env.MEMORY) return { ok: false, error: "MEMORY binding (qnfo-memory-mcp) missing" };
@@ -6736,6 +6792,21 @@ async function logToolEvent(env, name, args, res, ms) {
     await logAuditTrail(env, name, args, res);
   } catch (e) {
   }
+  // Insert run event if runId present
+  try {
+    const runId = args && args.runId;
+    if (runId) {
+      const argsJson = JSON.stringify(args);
+      const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(argsJson));
+      const args_sha = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const okFlag = Boolean(res?.ok);
+      const bytesOut = res?.bytes_out ?? 0;
+      const detail = JSON.stringify(res?.detail ?? {});
+      await env.QNFO_AUDIT.prepare("INSERT INTO ops_run_events (run_id, ts, kind, tool, ok, bytes_out, detail, args_sha) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+        .bind(runId, iso(), "tool", name, okFlag ? 1 : 0, bytesOut, detail, args_sha).run();
+    }
+  } catch (_) {
+  }
 }
 __name(logToolEvent, "logToolEvent");
 __name2(logToolEvent, "logToolEvent");
@@ -6820,6 +6891,26 @@ __name222(logOps, "logOps");
 __name2222(logOps, "logOps");
 __name22222(logOps, "logOps");
 __name222222(logOps, "logOps");
+ // TRACE-FOLD-1: utility to fold run state from events
+ function foldRunState(events) {
+   const tools_used = [];
+   const errors = [];
+   let last_error = null;
+   let bytes_out_total = 0;
+   const open_items = [];
+   for (const ev of events || []) {
+     if (ev && ev.tool && !tools_used.includes(ev.tool)) tools_used.push(ev.tool);
+     if (!ev.ok) {
+       errors.push(ev);
+       if (!last_error || (ev.ts && last_error.ts && ev.ts > last_error.ts)) {
+         last_error = ev;
+       }
+     }
+     if (typeof ev.bytes_out === 'number') bytes_out_total += ev.bytes_out;
+     if (ev.kind === 'open' || ev.ok == null) open_items.push(ev);
+   }
+   return { tools_used, errors, last_error, bytes_out_total, open_items };
+ }
 async function callWorkersAI(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
   const msgs = truncateToContext(messages, CODE_MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
@@ -6951,8 +7042,10 @@ async function opsUpstreamError(env, status, where, model, detail) {
     _dsErrKey = key;
     _dsErrAt = now;
     if (!env || !env.QNFO_AUDIT) return;
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ops_upstream_error', ?3, ?4, 'qnfo-ops', 'error')")
-      .bind(randId("evt-"), iso(), "upstream " + status + " at " + where + " (" + (model || "?") + ") -> free fallback", JSON.stringify({ status: status, where: where, model: model, detail: String(redactSecrets(String(detail || ""))).slice(0, 240), version: VERSION })).run();
+    const _kind = status === 429 ? "ops_upstream_throttle" : "ops_upstream_error";
+    const _status = status === 429 ? "info" : "error";
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, 'qnfo-ops', ?6)")
+      .bind(randId("evt-"), iso(), _kind, "upstream " + status + " at " + where + " (" + (model || "?") + ") -> free fallback", JSON.stringify({ status: status, where: where, model: model, detail: String(redactSecrets(String(detail || ""))).slice(0, 240), version: VERSION }), _status).run();
   } catch (e) { console.error(JSON.stringify({ evt: "ops:opsUpstreamError:caught", error: String((e && e.message) || e) })); }
 }
 async function dsPaidBlocked(env, model) {
@@ -7103,7 +7196,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     try { _tx = await resp.text(); } catch (e) { console.error(JSON.stringify({ evt: "ops:callDeepSeekStream:caught", error: String((e && e.message) || e) })); }
     _dsLastErr = "deepseek stream " + _st + ": " + String(_tx || "").slice(0, 200);
     await opsUpstreamError(env, _st, "callDeepSeekStream", body.model, _tx);
-    if (_st === 429) { console.log("OPS_GW_429_FREE_FALLBACK stream " + _dsLastErr.slice(0, 120)); break; }
+    if (_st === 429) { console.log("OPS_GW_429_FREE_FALLBACK stream " + _dsLastErr.slice(0, 120)); if (await dsPaidTrip(env, body.model, _st, "callDeepSeekStream")) break; }
     if (await dsPaidTrip(env, body.model, _st, "callDeepSeekStream")) break;
     console.log("OPS_DS_STREAM_RETRY attempt=" + (_dsTry + 1) + " " + _dsLastErr.slice(0, 120));
     if (_st < 500 && _st !== 429) break;
@@ -10165,6 +10258,13 @@ async function ownerRestRoutes(request, env, path, method) {
     let parsed = null; try { parsed = JSON.parse(r.text); } catch (e) { parsed = r.text; }
     return { ok: r.ok, result: parsed };
   };
+  async function auditSurfaceSize(env2, text) {
+    try {
+      if (!env2.QNFO_AUDIT) return;
+      await env2.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, job TEXT, size INTEGER)").run();
+      await env2.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, size) VALUES (?1, ?2, ?3, ?4, ?5)").bind(randId("coe-"), iso(), "ops-surface-size", "qnfo-ops", String(text).length).run();
+    } catch (e) { console.error(JSON.stringify({ step: "audit-surface-size", error: String(e && e.message || e).slice(0, 160) })); }
+  }
   if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } return json(await ideaSubmit(env, b)); }
   if (path === "/v1/queue" && method === "GET") { const u = new URL(request.url); const a = {}; u.searchParams.forEach(function(v, k) { a[k] = v; }); return json(await queueRead(env, a)); }
   if (path === "/v1/tools" && method === "GET") return json({ object: "list", data: opsRestToolList(true).map(function(t) { return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }; }) });
@@ -10177,8 +10277,54 @@ async function ownerRestRoutes(request, env, path, method) {
     if (m.id === undefined && String(m.method || "").startsWith("notifications/")) return new Response(null, { status: 202, headers: CORS_HEADERS });
     if (m.method === "initialize") return json({ jsonrpc: "2.0", id, result: { protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "qnfo-ops", version: VERSION } } });
     if (m.method === "ping") return json({ jsonrpc: "2.0", id, result: {} });
-    if (m.method === "tools/list") return json({ jsonrpc: "2.0", id, result: { tools: opsRestToolList(true).map(function(t) { return { name: t.name, description: t.description, inputSchema: t.parameters }; }) } });
-    if (m.method === "tools/call") { const p = m.params || {}; const r = await run(String(p.name || ""), p.arguments || {}); return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(r.result) }], isError: !r.ok } }); }
+    if (m.method === "tools/list") {
+      const urlParams = new URL(request.url).searchParams;
+      const codemode = urlParams.get("surface") === "codemode" || (m.params && m.params.surface === "codemode");
+      let respBody;
+      if (codemode) {
+        // CODEMODE-SURFACE-1: opt-in MCP search/execute surface
+        respBody = { jsonrpc: "2.0", id, result: { tools: [
+          { name: "ops_search", description: "Search the ops tool catalogue by keyword, returning matching tool names and their first description line.", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+          { name: "ops_execute", description: "Execute a named ops tool with arguments. The name must exist in the catalogue; recursive calls are rejected.", inputSchema: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } }
+        ] } };
+      } else {
+        respBody = { jsonrpc: "2.0", id, result: { tools: opsRestToolList(true).map(function(t) { return { name: t.name, description: t.description, inputSchema: t.parameters }; }) } };
+      }
+      await auditSurfaceSize(env, JSON.stringify(respBody));
+      return json(respBody);
+    }
+    if (m.method === "tools/call") {
+      const p = m.params || {};
+      const nm = String(p.name || "");
+      if (nm === "ops_search" || nm === "ops_execute") {
+        let r;
+        if (nm === "ops_search") {
+          const q = String((p.arguments || {}).query || "").toLowerCase();
+          const hits = [];
+          if (q) {
+            for (const t of opsRestToolList(true)) {
+              const desc = String(t.description || "");
+              const firstLine = desc.split("\n")[0] || desc;
+              if (t.name.toLowerCase().indexOf(q) >= 0 || desc.toLowerCase().indexOf(q) >= 0) hits.push({ name: t.name, description: firstLine });
+            }
+          }
+          r = { ok: true, result: hits };
+        } else {
+          const target = String((p.arguments || {}).name || "");
+          const args = (p.arguments || {}).args || {};
+          let found = false;
+          for (const t of opsRestToolList(true)) if (t.name === target) { found = true; break; }
+          if (!found) r = { ok: false, result: { error: "tool not found: " + target } };
+          else if (target === "ops_execute") r = { ok: false, result: { error: "recursive ops_execute is not allowed" } };
+          else r = await run(target, args);
+        }
+        const respBody = { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(r.result) }], isError: !r.ok } };
+        await auditSurfaceSize(env, JSON.stringify(respBody));
+        return json(respBody);
+      }
+      const r = await run(nm, p.arguments || {});
+      return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(r.result) }], isError: !r.ok } });
+    }
     return json({ jsonrpc: "2.0", id, error: { code: -32601, message: "method not found" } });
   }
   return json({ error: "method not allowed" }, 405);

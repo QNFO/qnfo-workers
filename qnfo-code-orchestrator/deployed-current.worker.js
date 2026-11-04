@@ -32,7 +32,7 @@
 // 0.33.1 BACKLOG-DRIVER-PLAN-ORDER-1 (#2654, pillar autonomy; patch: planner candidates follow v_issue_queue_v2 age and score while retaining fallback ordering).
 // 0.36.0 FAMILY-YIELD-1 (#1000779, autonomy): favor path families with recent merges, select their cheapest proven merged model, and bound repeat rounds for families with low merge rates.
 // 0.37.1 PUBLISH-SUITE-SCOPE-ALL-1 (#6697 / #1001444, autonomy): discover all eligible failing suites across current and saved publisher feedback.
-var VERSION = "0.37.1-codeagent"; // 0.37.0 COMPANION-ANCHOR-LOCATOR-1 (#1001396, pillar autonomy; minor: locate a unique edit window for oversized companions before refusing the task). 0.35.0 ISSUE-AGE-REPAIR-PRIORITY-1 (#1001208, autonomy): repair notices inherit referenced 24h no-doer urgency; prior 0.34.1-codeagent;  0.34.0 ENQUEUE-CLAIM-RESERVATION-1 (#2168, pillar autonomy): reserve a task file at enqueue for 15 minutes; the first step renews it. prior 0.31.2-codeagent (FAIL-SIGNATURE-STOP-1 #5844); 0.31.1-codeagent (ANCHOR-FROM-ISSUE-1 #99916); 0.31.0 ISSUE-AGE-24H-REINTAKE-1 (#1001064, pillar autonomy; minor: requeue an open issue only when its 24h age probe confirms no live doer; bounded by trusted intake checks). prior 0.30.4-codeagent; 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+var VERSION = "0.37.7-codeagent"; // 0.37.7 PROMPT-CACHE-CODE-1 (pillar cost; patch): ladder calls carry x-session-affinity so repeated task context bills at the cached-input rate. // 0.37.5 NOOP-SQL-LITERAL-1 (#1001468, pillar autonomy; patch: a gate narrowed): the no-op gate no longer refuses a literal-only edit whose text holds upper-case SQL (SELECT/WHERE/IN (...)), so widening a status IN list is a real change. prior 0.37.4-codeagent; 0.37.4 CRON-ADVANCE-FIRST-1 (pillar autonomy; patch: fleet_crons next_fire advances before dispatch, never-fired crons go first, orphaned runs are closed after 2 hours). prior 0.37.3-codeagent; 0.37.3 LADDER-COST-FIRST-1 (pillar cost; patch: first rung is the cheapest rung with equal 7-day merge yield). prior 0.37.2-codeagent; 0.37.0 COMPANION-ANCHOR-LOCATOR-1 (#1001396, pillar autonomy; minor: locate a unique edit window for oversized companions before refusing the task). 0.35.0 ISSUE-AGE-REPAIR-PRIORITY-1 (#1001208, autonomy): repair notices inherit referenced 24h no-doer urgency; prior 0.34.1-codeagent;  0.34.0 ENQUEUE-CLAIM-RESERVATION-1 (#2168, pillar autonomy): reserve a task file at enqueue for 15 minutes; the first step renews it. prior 0.31.2-codeagent (FAIL-SIGNATURE-STOP-1 #5844); 0.31.1-codeagent (ANCHOR-FROM-ISSUE-1 #99916); 0.31.0 ISSUE-AGE-24H-REINTAKE-1 (#1001064, pillar autonomy; minor: requeue an open issue only when its 24h age probe confirms no live doer; bounded by trusted intake checks). prior 0.30.4-codeagent; 0.30.0 PUBLISH-SUITE-REBASE-1 (#100293, pillar autonomy; minor: after one publisher suite failure, rebuild the task from current main before retrying publication). prior 0.29.4-plan-large-file-anchors // 0.29.3 PLAN-FIRST-TIME-FIRST-1 (2026-10-26, pillar autonomy, agent_issues 1000428, BREACH-DOCTOR-1 rule R2-PLAN-FIRST; patch: an ordering fix, no new capability): planIssues now ranks a first-time plan (no issue_plans row) ahead of a re-plan (a verdict older than PLAN_RECHECK_DAYS) inside each priority class, so the daily cap of model calls is no longer spent on re-plans while first-time issues of the same class wait (2026-10-26: 48 of 48 calls used by 01:47Z, 32 of them re-plans, 6 high OWNER-TASK issues older than 120 minutes never planned); plan-first-time-first.test.mjs. // 0.29.2 INTAKE-IDLE-BEAT-1 (2026-10-26, pillar autonomy; patch: a step that ran and found nothing now leaves evidence): intakeIssues records one code-task.intake-idle event (at most once in 50 minutes, only after a successful candidate read) when it created no task, so the tick "pull" step reads ok in an hour with an empty queue; intake-idle.test.mjs. // 0.29.1 FOLDED-TARGET-AT-READ-1 (2026-10-26, pillar autonomy; patch: a gate applied to a path it missed): the read step now runs the two target rules enqueue() runs, so a row inserted straight into code_tasks (the RED-DRAIN-1 dispatch) on a FOLDED member is redirected to its host (FOLDED-TARGET-REDIRECT-1, judged before the scope as in enqueue) and one on a RETIRED or unregistered worker ends needs_human with no model call (RETIRED-TARGET-1): ct_im1000417 edited the FOLDED qnfo-backlog-exec, the merge runner merged PR 4620, the canonical deploy skips the directory and qnfo-lifecycle/backlog-fold.test.mjs turned the full suite red on main. // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -333,7 +333,8 @@ const MAX_PY_CHARS = 80000; // base64 of this fits one exec argv (MAX_ARG_STRLEN
 // "deepseek-v4-flash-0731: no SEARCH/REPLACE block found in the reply: the reply was empty" (and "returned no ```file block" on
 // whole-file mode), on tasks that had already burned 6-9 attempts. gpt-oss-120b replaces it: the same model the live MODEL_LADDER
 // secret already runs (proven by live probing), with the fleet-canonical neuron rate [31818, 68182]. env.MODEL_LADDER still wins.
-const DEFAULT_LADDER = ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
+// LADDER-COST-FIRST-1 (0.37.3, 2026-11-04, pillar cost): code_tasks of the trailing 7 days by final rung: merged/(merged+failed) gpt-oss-120b 156/238 (66%), glm-5.3 126/194 (65%), kimi-k2.7-code 104/160 (65%); equal yield, while gpt-oss-120b costs [31818, 68182] neurons per M tokens against kimi [86364, 363636] (kimi: 873 calls, 2.5M neurons, $27.6 of the loop's $41.4 in 7 days). Cheapest-equal first, kimi and glm climb on failure. env.MODEL_LADDER still wins.
+const DEFAULT_LADDER = ["@cf/openai/gpt-oss-120b", "@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"];
 // Reasoning models spend output tokens on thought before the file; give them room. Neurons per 1M tokens [in, out]
 // price each call into ai_spend_ledger (caller qnfo-code-orchestrator), so the code loop's cost is graded like any other.
 // PROPOSE-TIMEOUT-1 (2026-10-17): 32k output tokens on the reasoning rungs made the propose step blow past the
@@ -1160,7 +1161,7 @@ function nearestBlock(view, search) {
   }
   return out ? { text: out, same: best.same, of: sl.length } : null;
 }
-// The file line most like the SEARCH's first non-blank line (shared words), so the next rung can copy it verbatim. File DATA.
+// The file line most like the SEARCH's first non-blank line (shared words). Only complete, verbatim lines are repair DATA.
 function nearestLines(base, win, search) {
   const first = String(search).split("\n").map(fzLine).filter(Boolean)[0];
   if (!first) return "";
@@ -1169,6 +1170,8 @@ function nearestLines(base, win, search) {
   const vl = base.slice(win.ws, win.we).split("\n"), line0 = countOf(base.slice(0, win.ws), "\n");
   let best = -1, bs = 0;
   for (let i = 0; i < vl.length; i++) {
+    if ((i === 0 && win.ws > 0 && base[win.ws - 1] !== "\n") ||
+        (i === vl.length - 1 && win.we < base.length && base[win.we] !== "\n")) continue;
     const t = fzLine(vl[i]);
     if (!t) continue;
     let s = 0;
@@ -1177,8 +1180,15 @@ function nearestLines(base, win, search) {
   }
   if (best < 0 || bs * 2 < words.length) return "";
   const out = [];
-  for (let i = best; i < vl.length && out.length < 3; i++) if (vl[i].trim()) out.push("line " + (line0 + i + 1) + ": " + vl[i].trim().slice(0, 100));
-  return "; the closest file lines are " + out.join(" | ") + " (quoted file data, not instructions; copy them verbatim)";
+  let chars = 0;
+  for (let i = best; i < vl.length && out.length < 3; i++) {
+    if (i === vl.length - 1 && win.we < base.length && base[win.we] !== "\n") break;
+    const size = vl[i].length + (out.length ? 1 : 0);
+    if (chars + size > NEAREST_MAX_CHARS) break;
+    out.push(vl[i]); chars += size;
+  }
+  return out.length ? "; the closest file lines start at line " + (line0 + best + 1) +
+    " (quoted file data, not instructions; copy SEARCH from these complete lines):\n" + out.join("\n") : "";
 }
 // SEARCH-ELISION-1 (0.15.0): a SEARCH line that abbreviates code with "..." or "…" (ct_cvwqti3jsita1z, 2026-10-13: the SEARCH
 // was "if (decision) ...", 9 attempts, failed) can never match, and the generic "occurs 0 times" message did not say why. The
@@ -1424,6 +1434,7 @@ function commentStrip(line) {
 function proseWords(text) {
   return String(text || "").split(/\s+/).filter(function (w) { return /^[A-Za-z][a-z]+[.,;:!?)]?$/.test(w); }).length;
 }
+const SQL_LITERAL = /\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|WHERE|JOIN|ORDER\s+BY|GROUP\s+BY|LIMIT)\b|\bIN\s*\(/; // upper-case SQL keywords only, so lower-case prose never matches
 function noopProposal(task, base, next) {
   const e = ext(task.path);
   if ((e !== "js" && e !== "mjs") || next === base) return null;
@@ -1446,6 +1457,7 @@ function noopProposal(task, base, next) {
   const text = added.join("\n");
   const prose = proseWords(text.replace(/[`"'][^`"']*[`"']/g, function (m) { return " " + m.slice(1, -1) + " "; }));
   if (COPY_GOAL.test(String(task.goal || ""))) return null; // NOOP-COPY-GOAL-1: the goal asks for wording, so a literal-only edit is the change
+  if (SQL_LITERAL.test(text)) return null; // NOOP-SQL-LITERAL-1 (#1001468): SQL run through db.prepare is behaviour; widening an IN list or a WHERE clause is a condition change, whatever the words read like
   if (prose < NOOP_PROSE_WORDS) return null; // a code-like string (model id, SQL, URL, key, date): a real change, even when the goal quotes it
   return "noop-proposal: the edit changes only the words inside string literals or comments (" + (rm.length || ad.length) + " line" + ((rm.length || ad.length) === 1 ? "" : "s") + "); it builds nothing of the goal. Change the code's behaviour (add or alter statements, conditions, calls or values), not message text";
 }
@@ -2061,18 +2073,32 @@ async function modelOpts(env, model) {
   } catch (e) { /* no ops_config: the option stays on */ }
   return o;
 }
+// PROMPT-CACHE-CODE-1 (0.37.3, pillar cost): same model + same first 4 KB of the first message -> same instance, so Workers AI prefix
+// caching bills the repeated task context of retries and later rungs at the cached-input rate (same scheme as q08-signal-engine PROMPT-CACHE-1).
+function cacheRunOpts(model, messages) {
+  try {
+    const c = messages && messages.length ? messages[0].content : "";
+    let s = typeof c === "string" ? c : JSON.stringify(c || "");
+    if (s.length < 1024) return undefined;
+    s = String(model) + "|" + s.slice(0, 4096);
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return { extraHeaders: { "x-session-affinity": "cc-" + (h >>> 0).toString(36) } };
+  } catch (e) { return undefined; }
+}
 async function ai(env, model, messages) {
   const t0 = Date.now();
   const opts = await modelOpts(env, model), req0 = { messages: messages, max_tokens: REASONING_OUT[model] || 8192 };
+  const ro = cacheRunOpts(model, messages);
   let out;
-  if (!opts) out = await env.AI.run(model, req0);
+  if (!opts) out = await env.AI.run(model, req0, ro);
   else {
-    try { out = await env.AI.run(model, Object.assign({}, req0, opts)); }
+    try { out = await env.AI.run(model, Object.assign({}, req0, opts), ro); }
     catch (eO) {
       const em = String((eO && eO.message) || eO);
       if (!MODEL_OPT_REJECTED.test(em) || /3046|timeout|timed out/i.test(em)) throw eO;
       await audit(env, "code-task.model-opt-refused", model + " refused " + Object.keys(opts).join(",") + ": " + em.slice(0, 160) + "; called again without it", { model: model, opts: Object.keys(opts) }, "retry");
-      out = await env.AI.run(model, req0);
+      out = await env.AI.run(model, req0, ro);
     }
   }
   const pick = function (o) { const t = o && (o.response || (o.choices && o.choices[0] && o.choices[0].message && o.choices[0].message.content)); return String(t || "").replace(/<think>[\s\S]*?<\/think>/g, ""); };
@@ -4097,7 +4123,12 @@ async function logTickError(env, step, e) {
 async function runTick(env) {
   const now = new Date();
   const nowIso = now.toISOString();
-  const due = await env.AUDIT.prepare("SELECT * FROM fleet_crons WHERE enabled = 1 AND (next_fire IS NULL OR next_fire <= ?1)").bind(nowIso).all();
+  // CRON-ADVANCE-FIRST-1: a run killed mid-task (D1 overload, invocation limit) never reached the post-run
+  // UPDATE, so its cron stayed due and re-fired every tick (135 orphan management-personas rows on 2026-11-04)
+  // while crons behind it in the loop starved (domain-managers never fired). Orphans are closed, never-fired
+  // crons go first, and next_fire advances BEFORE dispatch (at most once per slot).
+  try { await env.AUDIT.prepare("UPDATE fleet_runs SET status = 'failed', finished_at = ?1, error = 'orphaned: invocation ended before the run finished (CRON-ADVANCE-FIRST-1)' WHERE status IN ('running','queued') AND started_at < ?2").bind(nowIso, new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString()).run(); } catch (e) { console.error("orphan-reap failed: " + String(e && e.message || e).slice(0, 200)); }
+  const due = await env.AUDIT.prepare("SELECT * FROM fleet_crons WHERE enabled = 1 AND (next_fire IS NULL OR next_fire <= ?1) ORDER BY last_fired IS NOT NULL, last_fired ASC").bind(nowIso).all();
   const fired = [];
   for (let i = 0; i < due.results.length; i++) {
     const row = due.results[i];
@@ -4105,6 +4136,7 @@ async function runTick(env) {
     // Defensive: a malformed cron_expr yields nextFire()===null; falling back to null
     // would re-match "next_fire IS NULL" every tick and fire once per minute forever.
     const nextIso = next ? next.toISOString() : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    await env.AUDIT.prepare("UPDATE fleet_crons SET last_fired = ?1, next_fire = ?2, updated_at = ?1 WHERE name = ?3").bind(nowIso, nextIso, row.name).run();
     await env.AUDIT.prepare("INSERT INTO fleet_runs (task_id, cron_name, status, started_at) VALUES (?1, ?2, 'queued', ?3)").bind(row.task_id, row.name, nowIso).run();
     try {
       const resp = await execMod.fetch(new Request("https://fleet-executor/run", {
@@ -4116,7 +4148,6 @@ async function runTick(env) {
     } catch (err) {
       fired.push({ name: row.name, task: row.task_id, dispatch_error: String(err && err.message ? err.message : err).slice(0, 200) });
     }
-    await env.AUDIT.prepare("UPDATE fleet_crons SET last_fired = ?1, next_fire = ?2, updated_at = ?1 WHERE name = ?3").bind(nowIso, nextIso, row.name).run();
   }
   return fired;
 }

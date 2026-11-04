@@ -7491,7 +7491,7 @@ function pfUnpinnedUses(workflows) {
   (workflows || []).forEach(function(f) {
     if (!f || f.type !== "blob" || !/\.(?:ya?ml)$/i.test(String(f.name || ""))) return;
     String(f.text || "").split(/\r?\n/).forEach(function(line) {
-      var m = line.match(/^\s*uses\s*:\s*['"]?([^\s'"#]+)/i);
+      var m = line.match(/^\s*(?:-\s*)?uses\s*:\s*['"]?([^\s'"#]+)/i);
       if (m && !/@[a-f0-9]{40}$/i.test(m[1])) count++;
     });
   });
@@ -7987,9 +7987,10 @@ function pfNeedsSync(last, version, nowMs) {
   if (isNaN(age) || age >= holdMs) return "last " + last.status + " run is " + Math.round(age / 3600000) + "h old";
   return null;
 }
+async function retryDb(fn, attempts = 3) { for (let i = 0; i < attempts; i++) { try { return await fn(); } catch (e) { if (e && e.message && e.message.includes('D1_ERROR')) { if (i < attempts - 1) await new Promise(r => setTimeout(r, 100 * Math.pow(2, i))); else throw e; } else { throw e; } } } }
 async function portfolioSyncIfStale(env) {
   await pfSchema(env);
-  var last = await charterOne(env, "SELECT ts, status, note FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
+  var last = await retryDb(() => charterOne(env, "SELECT ts, status, note FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1"));
   var why = pfNeedsSync(last, VERSION, Date.now());
   if (!why) return { ok: true, status: "fresh", last: last.ts, last_status: last.status };
   var r = await portfolioSync(env, false);
@@ -9380,6 +9381,14 @@ async function improvementLoopTick(env) {
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
   // METRIC-FIX-RELAPSED-1: install the post-close monitor at issue birth, before a later history row can show the fix relapsed.
+  // Program focus: file a task for every program_focus row with no doer so the loop keeps program focus moving (issue #1000311).
+  try {
+    var pfRes = await d1Run(env, "SELECT issue_id FROM program_focus WHERE has_doer = 0", []);
+    var pfRows = Array.isArray(pfRes) ? pfRes : ((pfRes && pfRes.results) ? pfRes.results : []);
+    for (var pfi = 0; pfi < pfRows.length; pfi++) {
+      await d1Run(env, "INSERT INTO code_tasks (owner, target, issue_id, created_at) VALUES ('qnfo-fleet-control', 'agent_issues', ?1, datetime('now')) ON CONFLICT DO NOTHING", [pfRows[pfi].issue_id]);
+    }
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   var relapseMonitors = 0, closedForMonitor = (f.closed_issues || []).slice().sort(function(a, b) {
     return String(a.closed_at || "").localeCompare(String(b.closed_at || ""));
   });
@@ -13166,7 +13175,7 @@ var BD_OWNER_REASONS = {
 };
 // The family of an issue comes from this code table of title prefixes and sources, never from the text; an unknown title is "other".
 var BD_FAMILIES = [
-  ["BREACH-DOCTOR-1:", "BREACH-DOCTOR-1"], ["CODE-MERGE-REFUSED-1:", "CODE-MERGE-REFUSED-1"], ["CODE-LOOP-EXHAUSTED-1:", "CODE-LOOP-EXHAUSTED-1"], ["PROBE-NEEDED-1:", "PROBE-NEEDED-1"],
+  ["BREACH-DOCTOR-1:", "BREACH-DOCTOR-1"], ["ISSUE-AGE-24H-REPAIR-1:", "ISSUE-AGE-24H-REPAIR-1"], ["CODE-MERGE-REFUSED-1:", "CODE-MERGE-REFUSED-1"], ["CODE-LOOP-EXHAUSTED-1:", "CODE-LOOP-EXHAUSTED-1"], ["PROBE-NEEDED-1:", "PROBE-NEEDED-1"],
   ["METRIC-TRIGGER-", "METRIC-TRIGGER"], ["METRIC-REGRESSION-1:", "METRIC-REGRESSION-1"], ["METRIC-FIX-RELAPSED-1:", "METRIC-FIX-RELAPSED-1"],
   ["TOOL-FAILURE:", "TOOL-FAILURE"], ["[self-heal] tool", "SELF-HEAL-TOOL"], ["SELF-AUDIT-TOOLERR", "SELF-AUDIT-TOOLERR"],
   ["CHAOS-DRILL-FAILED-1:", "CHAOS-DRILL-FAILED-1"], ["FLEET-JOURNEY-FAILED-1:", "FLEET-JOURNEY-FAILED-1"], ["PAPER-LEARN-1", "PAPER-LEARN-1"],
@@ -15597,6 +15606,10 @@ async function chaosDrill(env, force) {
   try { after = (await db.prepare("SELECT last_pass, last_pass_at FROM spof_alternate_probes WHERE enabled = 1").all()).results || []; } catch (e6) { after = []; }
   var untested = chaosUntested(after, nowMs);
   try { await db.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'spof_alternates_untested_24h'").bind(String(untested), nowIso).run(); } catch (e7) { console.error(JSON.stringify({ step: "chaos-drill-metric", error: String(e7 && e7.message || e7).slice(0, 200) })); }
+  try {
+    var recurringRow = await db.prepare("SELECT COUNT(*) AS n FROM v_failure_mode_status f WHERE f.status IN ('recurring','unprobed') AND NOT EXISTS (SELECT 1 FROM remediation_verifications rv WHERE rv.failure_mode_id = f.id AND rv.owner IS NOT NULL AND rv.owner <> 'qnfo-fleet-control') AND NOT EXISTS (SELECT 1 FROM issue_assignments ia WHERE ia.failure_mode_id = f.id AND ia.owner IS NOT NULL AND ia.owner <> 'qnfo-fleet-control')").first();
+    await db.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'failure_modes_recurring'").bind(String(Number(recurringRow && recurringRow.n || 0)), nowIso).run();
+  } catch (e7b) { console.error(JSON.stringify({ step: "failure-modes-metric", error: String(e7b && e7b.message || e7b).slice(0, 200) })); }
   try { await db.prepare("INSERT OR REPLACE INTO loop_watch_state (key, value) VALUES ('chaos_drill_last', ?1)").bind(nowIso).run(); } catch (e8) { console.error(JSON.stringify({ step: "chaos-drill-state", error: String(e8 && e8.message || e8).slice(0, 200) })); }
   var summary = verdicts.map(function(v) { return v.component + "=" + (v.pass ? "pass" : "FAIL(" + String(v.observed || "").slice(0, 80) + ")"); }).join("; ");
   try {
