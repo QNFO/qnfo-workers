@@ -7010,7 +7010,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   }
   const ms = Date.now() - t0;
   // OPS-DEGRADED-1: a qnfo-audit overload in the result feeds the breaker (another database named by the tool does not).
-  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) opsD1Note(Date.now(), res.error || res.message); } catch (_) {}
+  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) opsD1Note(Date.now(), res.error || res.message); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-feed", error: String(e && e.message || e) })); }
   const audit = composioAuditPayload(name, args, res);
   await logToolEvent(env, name, audit.args, audit.result, ms);
   /* OPS-TOOL-MAILBOX-LOGIN-LINKS-1: a mailbox read never hands a login link, one-time code or token to the model. */
