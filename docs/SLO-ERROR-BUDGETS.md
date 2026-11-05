@@ -29,8 +29,24 @@ time, so `postmortem_coverage` can read below 1.0 until they leave the 30-day wi
 
 ## Limits and what is next
 
-- Only availability has recorded history. Latency and freshness SLIs (the q08 desk published by 09:00 CET) are not defined yet because nothing records them; they are
-  added to `slo_definitions` when a producer exists. The `q08-research-desk-freshness` SLI is filed as roadmap row `ROADMAP-1: QNFO.OPS BP26-SLO-FRESHNESS-1`.
+- Availability is the SLI with history that opens incidents and postmortems and feeds the merge lane's flag. BP26-SLO-FRESHNESS-1 (2026-11-05) adds two more, recorded by
+  `scripts/bp26_web.py` as evidence rows of `slo_attainment_28d_min` under their own subjects (the availability figure ignores them): latency, `lat:<host>` (the home page
+  answered in under 2 s, 13 hosts, objective 0.95), and the research desk's freshness, `fresh:q08.org` (one sample a day: a q08 piece was published in the 24 hours before
+  09:00 Central European time, read from the `q08-signal` database; objective 0.9). `slo_definitions` holds them as `<host>#latency` and `q08.org#freshness`, each naming its
+  subject in `source`; `scripts/bp26_slo.py` writes their `slo_budget_state` (immature until 24 latency samples or ten daily freshness samples) but a latency or freshness
+  definition never opens an incident and never enters `slo_budget_spent`: a slow week or a quiet desk is information for the owning program, not a reason to freeze other merges.
 - "The merge lane takes reliability changes only when a budget is spent" is the lane's decision in `qnfo-fleet-control` (claimed by the code loop at the time of writing):
   roadmap row `ROADMAP-1: QNFO.OPS BP26-SLO-MERGE-LANE-1` carries the `code-task:` line; the flag it reads is live.
 - Samples are hourly: an outage shorter than the gap is invisible, and the root-cause class is what the sample detail shows (timeout, TLS, 5xx, 4xx), not a human diagnosis.
+
+## Closing an SLO-POSTMORTEM-ACTION-1 issue (SLO-ACTION-RECOVERY-2, 2026-11-05)
+
+- The closing probe (`action_recovery_probe` in `scripts/bp26_slo.py`, class `issue-<id>`, module `slo-action-recovery-1`) reads the last 24 hours of the surface: at least 12 observed samples
+  (a not-sampled row, `ok` NULL, is no observation), none failed, no availability incident of the surface still open, and a budget row exists. It does not read the budget state.
+- Why not the budget state (the 2026-11-03 version did): `slo_budget_state` is a 28-day figure. It reads `immature` below 200 samples (all 13 surfaces held 167 on 2026-11-04) and `spent` for
+  28 days after a single failed sample once a surface holds 200, so a probe on it could not pass inside the 120-minute issue SLA, and REMEDIATION-REOPEN-2 reopened each issue the earlier probe had closed
+  ("budget state is not ok" on 1000675 to 1000678 and 1000808), which fed the ROOT-CAUSE-1 ticket 1000892. The budget stays what it is for: the burn figure and `ops_config slo_budget_spent`.
+- The collector re-arms the current probe on every open action issue each run (`rearm_open_actions`: one exact-title lookup per surface), so a change to the definition reaches issues whose incident is already complete.
+- What the data showed on 2026-11-05: the only real unavailability was `fleet.qnfo.org` (87 of 167 samples over the 5 s limit, 2026-10-29 to 2026-11-04T14:09Z; the server waited, CPU 25 to 158 ms of 12 to 29 s), fixed
+  by V3-DASH-1 (dashboard 1.82.0, `/` became a static shell); the other four surfaces had single samples, the `travel.q08.org` ensureTravel cold start (PR 5165, 5175) and not-sampled artifacts (SLO-PROBE-BUDGET-1).
+  Side effect to know: `/` no longer exercises the data path, so the availability SLI of `fleet.qnfo.org` cannot see a slow dashboard API (`/api/v3/now`); a data-path sample is the follow-up.
