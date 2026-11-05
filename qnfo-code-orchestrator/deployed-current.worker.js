@@ -2267,16 +2267,18 @@ async function ai(env, model, messages) {
 }
 // ---- CODE-BATTERY-1:BEGIN ----
 // CODE-BATTERY-1 (RM-S4-BENCHMARK-1, charter pillar autonomy): a weekly, execution-graded coding battery for the models of the code ladder.
-// WHAT IT IS: 13 small tasks in the shape of SWE-bench (a defect or a spec in a function, hidden tests that decide) and Terminal-Bench (shell
+// WHAT IT IS: 19 small tasks (13 plain, 6 harder: an expression evaluator, cron next-fire, a unified-diff applier, CSV, npm semver ranges, a stable topological sort) in the shape of SWE-bench (a defect or a spec in a function, hidden tests that decide) and Terminal-Bench (shell
 // semantics: sort|uniq -c, cut, env files, globs, durations, tar paths). The model answers with code; the code runs in a Dynamic Worker with no
 // network and a CPU limit, against tests the model never sees; a task passes only when every test passes. Results are rows of benchmark_results
 // (task_id cb-1:<task>) plus report_card_inputs coding_battery_pass_rate and the metrics coding_battery_pass_rate / coding_battery_age_days.
-// WHAT IT IS NOT: SWE-bench Pro or Terminal-Bench (no repositories, no containers, 13 tasks): it is a labelled proxy of the same method, small
+// WHAT IT IS NOT: SWE-bench Pro or Terminal-Bench (no repositories, no containers, 19 tasks): it is a labelled proxy of the same method, small
 // enough to run for cents, and it is graded by execution and not by a model. A pass rate above 0.95 on two runs is a validity finding (it can
 // no longer separate models), see the migration that registers the metric.
 // Cost: about 1k to 3k neurons a task over four models, roughly 12k to 40k neurons a week. ops_config code_battery = off stops it; code_battery_models (csv)
 // and code_battery_every_days (default 7) steer it. One (task, model) pair runs per scheduled tick, behind a lease, so a slow model never stacks.
 const CB_ID = "cb-1";
+// CB_LOGIC changes whenever a change to the extraction, the grading or the not-answered rules would make an older run incomparable: a run written by another logic is abandoned and started again.
+const CB_LOGIC = "1.1"; // 1.1: empty reply = not answered, unclosed fence, 19 tasks
 const CB_DEFAULT_MODELS = ["@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/moonshotai/kimi-k2.7-code"];
 const CB_STATE_KEY = "code_battery_state";
 const CB_LEASE_MS = 6 * 60000;
@@ -2333,7 +2335,31 @@ const CB_TASKS = [
   { id: "term-tar-unsafe", fn: "unsafeEntries", kind: "term",
     brief: "Write unsafeEntries(paths): the entries of a tar listing that an extractor must refuse, as the original strings in input order. An entry is unsafe when it is absolute (starts with '/') or when, after resolving '.' and '..' segments, it climbs above the extraction root. Treat both '/' and '\\' as separators. A segment that merely contains dots, such as '..hidden' or 'a..b', is a normal name.",
     starter: "",
-    tests: [[[["a/b.txt", "../etc/passwd", "a/../../x", "/abs", "a/./b", "a/b/../c", "..\\win", "ok/..hidden"]], ["../etc/passwd", "a/../../x", "/abs", "..\\win"]], [[["a/../b", "a/..", "..", "./x/../.."]], ["..", "./x/../.."]], [[[]], []], [[["a..b/c", "..a/b"]], []]] }
+    tests: [[[["a/b.txt", "../etc/passwd", "a/../../x", "/abs", "a/./b", "a/b/../c", "..\\win", "ok/..hidden"]], ["../etc/passwd", "a/../../x", "/abs", "..\\win"]], [[["a/../b", "a/..", "..", "./x/../.."]], ["..", "./x/../.."]], [[[]], []], [[["a..b/c", "..a/b"]], []]] },
+  { id: "hard-eval-expr", fn: "evalExpr", kind: "term",
+    brief: "Write evalExpr(s) that evaluates an arithmetic expression and returns a number, or null when the text is not a valid expression. Tokens: decimal numbers, + - * / % ^ and parentheses; spaces are ignored; no other character is allowed. From the lowest precedence to the highest: binary + and -, then * / %, then unary + and -, then ^ which is right-associative. So -2^2 is -4, 2^3^2 is 512, 2*-3 is -6, 2^-1 is 0.5 (the exponent may carry a sign) and -7%4 is -3 (the sign binds before %, % keeps the sign of its left side as JavaScript does). Division or remainder by zero gives null, and so does an empty or incomplete expression.",
+    starter: "",
+    tests: [[["1+2*3"], 7], [["(1+2)*3"], 9], [["2^3^2"], 512], [["-2^2"], -4], [["2*-3"], -6], [["10/4"], 2.5], [["10%4"], 2], [["1 - 2 - 3"], -4], [["2^-1"], 0.5], [["((2))"], 2], [["1/0"], null], [["2+"], null], [["abc"], null], [["3.5*2"], 7], [["-7%4"], -3], [[""], null], [["2 3"], null], [["(1+2"], null], [["+5"], 5], [["2^2^0"], 2], [["8/2/2"], 2], [["5%0"], null]] },
+  { id: "hard-next-cron", fn: "nextCron", kind: "term",
+    brief: "Write nextCron(expr, fromIso) that returns the first fire time strictly after fromIso, as an ISO string like 2026-11-09T09:00:00.000Z (UTC, seconds and milliseconds zero), or null when there is none within 8 years. expr has five space-separated fields: minute (0-59), hour (0-23), day of month (1-31), month (1-12), day of week (0-6 with 0 and 7 both Sunday). Each field is a comma list of '*', 'N', 'A-B', '*/S', 'A-B/S'. A step counts from the start of its range. A day of month or day of week field counts as restricted when its text does not start with '*'. When both are restricted a day matches if EITHER matches; when only one is restricted that one decides. A day of month that the month does not have (31 in April, 30 in February) never matches. Keep it fast: a loop over every minute of eight years is too slow.",
+    starter: "",
+    tests: [[["*/15 * * * *", "2026-11-05T00:07:30.000Z"], "2026-11-05T00:15:00.000Z"], [["0 9 * * 1-5", "2026-11-06T10:00:00.000Z"], "2026-11-09T09:00:00.000Z"], [["30 2 29 2 *", "2026-03-01T00:00:00.000Z"], "2028-02-29T02:30:00.000Z"], [["0 0 1 * 1", "2026-11-05T12:00:00.000Z"], "2026-11-09T00:00:00.000Z"], [["59 23 31 * *", "2026-04-01T00:00:00.000Z"], "2026-05-31T23:59:00.000Z"], [["0 0 * * 7", "2026-11-05T00:00:00.000Z"], "2026-11-08T00:00:00.000Z"], [["0 12 * * *", "2026-11-05T12:00:00.000Z"], "2026-11-06T12:00:00.000Z"], [["5-10/2 3 * * *", "2026-11-05T03:06:00.000Z"], "2026-11-05T03:07:00.000Z"], [["0 0 30 2 *", "2026-01-01T00:00:00.000Z"], null]] },
+  { id: "hard-apply-patch", fn: "applyPatch", kind: "swe",
+    brief: "Write applyPatch(text, patch): apply a unified diff for one file to text and return the new text, or null when a hunk does not match. text is split on \\n. Lines of patch before the first '@@' (---, +++, diff) are ignored. A hunk starts with '@@ -A,B +C,D @@' (',B' and ',D' may be missing, meaning 1); its lines begin with ' ' (context), '-' (remove) or '+' (add); lines that begin with a backslash are ignored. A is the 1-based line of the ORIGINAL text where the hunk's old lines (context and removed, in order) start; every hunk uses original line numbers, applied from the top, and the old lines must equal the original exactly there, otherwise return null. A hunk with no old lines inserts after line A (A may be 0). The result ends with a newline exactly when text did.",
+    starter: "",
+    tests: [[["a\nb\nc\nd\ne\n", "@@ -2,2 +2,2 @@\n b\n-c\n+C\n"], "a\nb\nC\nd\ne\n"], [["a\nb\nc\nd\ne\n", "@@ -1,2 +1,3 @@\n a\n+a2\n b\n@@ -4,2 +5,1 @@\n-d\n e\n"], "a\na2\nb\nc\ne\n"], [["a\nb\nc\nd\ne\n", "@@ -2,1 +2,1 @@\n-x\n+y\n"], null], [["a\nb\nc\nd\ne\n", "@@ -5,1 +5,2 @@\n e\n+f\n"], "a\nb\nc\nd\ne\nf\n"], [["x\ny", "@@ -2,1 +2,1 @@\n-y\n+z\n\\ No newline at end of file\n"], "x\nz"], [["a\nb\n", "--- a/f\n+++ b/f\n@@ -1,1 +1,1 @@\n-a\n+A\n"], "A\nb\n"], [["a\nb\n", "@@ -0,0 +1,1 @@\n+top\n"], "top\na\nb\n"]] },
+  { id: "hard-csv-parse", fn: "csvParse", kind: "term",
+    brief: "Write csvParse(text) that parses RFC 4180 CSV and returns an array of rows, each an array of strings. The separator is a comma; rows end with \\n or \\r\\n; a field may be wrapped in double quotes, inside which commas, line breaks and a doubled quote (\"\") are literal. A final line break does not create an extra row; an empty line in the middle is a row with one empty string; an empty text gives []. A quote that is never closed gives null.",
+    starter: "",
+    tests: [[["a,b\nc,d\n"], [["a", "b"], ["c", "d"]]], [["\"x,1\",\"y \"\"q\"\"\"\r\nz,\n"], [["x,1", "y \"q\""], ["z", ""]]], [["a\n\nb"], [["a"], [""], ["b"]]], [["\"multi\nline\",2"], [["multi\nline", "2"]]], [["\"open"], null], [[""], []], [["a,b"], [["a", "b"]]], [[",,"], [["", "", ""]]], [["\"\"\n"], [[""]]], [["a,\"b\"\r\n"], [["a", "b"]]]] },
+  { id: "hard-semver-satisfies", fn: "satisfies", kind: "term",
+    brief: "Write satisfies(version, range) with npm semantics for plain versions X.Y.Z (no pre-release). A range is comparator sets joined by '||' (any set may match); a set is space-separated comparators that must all match. Comparators: '*' or an empty set (anything); x-ranges '1.x', '1.2.x'; '^V' (^1.2.3 is >=1.2.3 <2.0.0, ^0.2.3 is >=0.2.3 <0.3.0, ^0.0.3 is >=0.0.3 <0.0.4, ^0.0 is >=0.0.0 <0.1.0); '~V' (~1.2.3 and ~1.2 are >=1.2.x <1.3.0, ~1 is >=1.0.0 <2.0.0); and >, >=, <, <=, = (or a bare version) against a full or partial version, where a partial version is read as its lowest full version for >= and <, '>1.4' means >=1.5.0, and '<=1.4' means <1.5.0.",
+    starter: "",
+    tests: [[["1.2.3", "^1.0.0"], true], [["2.0.0", "^1.0.0"], false], [["0.2.5", "^0.2.3"], true], [["0.3.0", "^0.2.3"], false], [["0.0.3", "^0.0.3"], true], [["0.0.4", "^0.0.3"], false], [["1.2.9", "~1.2.3"], true], [["1.3.0", "~1.2.3"], false], [["1.9.9", "1.x"], true], [["2.0.0", "1.x"], false], [["1.2.3", ">=1.2.0 <1.3.0"], true], [["1.3.0", ">=1.2.0 <1.3.0"], false], [["3.0.0", "1.x || >=3"], true], [["2.5.0", "1.x || >=3"], false], [["1.2.3", "*"], true], [["1.4.9", ">1.4"], false], [["1.5.0", ">1.4"], true], [["1.4.9", "<=1.4"], true], [["0.0.5", "^0.0"], true], [["0.1.0", "^0.0"], false], [["1.2.3", "1.2.3"], true], [["1.2.4", "=1.2.3"], false]] },
+  { id: "hard-topo-sort", fn: "topoSort", kind: "term",
+    brief: "Write topoSort(nodes, edges): a topological order as an array, or null when there is a cycle. nodes is an array of names, edges an array of [from, to] pairs meaning from must come before to. A name that appears only in edges is a node too. Duplicate edges count once; an edge from a node to itself is a cycle. Among the nodes that could come next, always take the smallest name by code unit order (so \"B\" comes before \"a\").",
+    starter: "",
+    tests: [[[["a", "b", "c"], [["c", "a"]]], ["b", "c", "a"]], [[["a", "b", "c"], [["b", "a"], ["c", "a"]]], ["b", "c", "a"]], [[["a", "b"], [["a", "b"], ["b", "a"]]], null], [[[], [["x", "y"]]], ["x", "y"]], [[["a", "b"], [["a", "b"], ["a", "b"]]], ["a", "b"]], [[["a"], [["a", "a"]]], null], [[[], []], []], [[["B", "a"], []], ["B", "a"]], [[["d", "c", "b", "a"], [["d", "a"]]], ["b", "c", "d", "a"]]] }
 ];
 function cbHarness(code, fnName, tests) {
   const deq = "const deq=(a,b)=>{if(a===b)return true;if(typeof a==='number'&&typeof b==='number')return a!==a&&b!==b;if(a===null||b===null||typeof a!=='object'||typeof b!=='object')return false;if(Array.isArray(a)!==Array.isArray(b))return false;const ka=Object.keys(a),kb=Object.keys(b);if(ka.length!==kb.length)return false;return ka.every(k=>deq(a[k],b[k]));};\n";
@@ -2345,11 +2371,15 @@ function cbHarness(code, fnName, tests) {
 // The first fenced block, else the whole reply when it looks like code; export, import and module.exports lines are dropped because the harness wraps the code in a function body.
 function cbExtractCode(text) {
   const t = String(text || "");
-  const m = /```(?:javascript|js|typescript|ts|node)?[ \t]*\r?\n([\s\S]*?)```/i.exec(t);
-  let code = m ? m[1] : (/\b(function|class)\b|=>/.test(t) ? t : "");
+  // The closing fence is a line of its own, so three backticks inside a string or a regex of the answer do not cut it short.
+  const m = /```(?:javascript|js|typescript|ts|node)?[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```[ \t]*(?=\r?\n|$)/i.exec(t);
+  const open = m ? null : /```[A-Za-z]*[ \t]*\r?\n([\s\S]*)$/.exec(t); // an unclosed fence: the reply was cut off, the code before the cut still runs and fails on its own
+  let code = m ? m[1] : (open ? open[1] : (/\b(function|class)\b|=>/.test(t) ? t : ""));
   code = code.replace(/^\s*export\s+default\s+/gm, "").replace(/^\s*export\s+/gm, "").replace(/^\s*module\.exports\s*=.*$/gm, "").replace(/^\s*import\s.+$/gm, "");
   return code.trim();
 }
+// One line of a reply, so a failed pair says what the model sent.
+function cbSnip(text) { return String(text || "").replace(/\s+/g, " ").trim().slice(0, 80); }
 function cbPrompt(task) {
   const sys = "You are a careful software engineer. Reply with exactly one JavaScript code block that holds the complete code asked for and nothing else: no explanation, no tests, no import or export statements. Plain JavaScript that runs in a V8 isolate with no network and no Node modules.";
   const user = (task.starter ? "Here is the current code:\n\n```js\n" + task.starter + "```\n\nIssue: " : "Task: ") + task.brief
@@ -2397,14 +2427,14 @@ async function cbFinish(env, st) {
   const rows = await env.AUDIT_DB.prepare("SELECT model, task_id, pass FROM benchmark_results WHERE task_id LIKE 'cb-1:%' AND ts >= ?1").bind(st.started).all();
   const by = {};
   ((rows && rows.results) || []).forEach(function (r) {
-    if (r.pass == null) return;
-    const b = by[r.model] || (by[r.model] = { n: 0, ok: 0 });
+    const b = by[r.model] || (by[r.model] = { n: 0, ok: 0, na: 0 });
+    if (r.pass == null) { b.na++; return; }
     b.n++; if (r.pass === 1) b.ok++;
   });
-  const models = Object.keys(by).sort();
+  const models = Object.keys(by).filter(function (m) { return by[m].n > 0; }).sort();
   const rates = models.map(function (m) { return by[m].n ? by[m].ok / by[m].n : 0; });
   const rate = rates.length ? Math.round(1000 * rates.reduce(function (a, b) { return a + b; }, 0) / rates.length) / 1000 : null;
-  const detail = JSON.stringify({ battery: CB_ID, run: st.run, tasks: CB_TASKS.length, models: models.map(function (m) { return { model: m, answered: by[m].n, passed: by[m].ok }; }) });
+  const detail = JSON.stringify({ battery: CB_ID, run: st.run, tasks: CB_TASKS.length, logic: CB_LOGIC, models: models.map(function (m) { return { model: m, answered: by[m].n, passed: by[m].ok, not_answered: by[m].na }; }) });
   if (rate != null) {
     const nowIso = new Date().toISOString();
     await env.AUDIT_DB.batch([
@@ -2436,21 +2466,21 @@ async function codeBatteryTick(env, nowMs) {
     const r = await env.AUDIT_DB.prepare("UPDATE ops_config SET value = ?2, updated_at = datetime('now') WHERE key = ?1 AND value = ?3").bind(CB_STATE_KEY, nxt, raw).run();
     return !!(r && r.meta && r.meta.changes > 0);
   };
-  if (!st || st.done) {
-    const last = st && st.done ? Date.parse(st.done) : 0;
+  if (!st || st.done || st.logic !== CB_LOGIC) {
+    const last = st && st.done && st.logic === CB_LOGIC ? Date.parse(st.done) : 0;
     if (last && nowMs - last < everyMs) {
       if (nowMs - mem.ageAt > 3600000) { mem.ageAt = nowMs; await cbSetMetric(env, "coding_battery_age_days", Math.floor((nowMs - last) / 86400000)); }
       mem.skipUntil = nowMs + 600000;
       return { ran: false, reason: "idle", age_days: Math.floor((nowMs - last) / 86400000) };
     }
     const started = new Date(nowMs).toISOString();
-    const fresh = { run: CB_ID + "-" + started.slice(0, 10), started: started, i: 0, n: total, tries: 0, lease: new Date(nowMs + CB_LEASE_MS).toISOString() };
+    const fresh = { run: CB_ID + "-" + started.slice(0, 10) + "-" + started.slice(11, 16).replace(":", ""), logic: CB_LOGIC, started: started, i: 0, n: total, tries: 0, lease: new Date(nowMs + CB_LEASE_MS).toISOString() };
     if (!(await cas(fresh))) return { ran: false, reason: "start-lost" };
     await audit(env, "code-battery.started", "run " + fresh.run + " " + total + " pairs", { run: fresh.run, models: M, tasks: T }, "ok");
     return { ran: true, started: fresh.run };
   }
   if (st.lease && Date.parse(st.lease) > nowMs) return { ran: false, reason: "lease-held" };
-  if (st.i >= st.n) { const fin = await cbFinish(env, st); await cas({ run: st.run, started: st.started, done: new Date(nowMs).toISOString(), i: st.i, n: st.n }); return { ran: true, finished: st.run, rate: fin.rate }; }
+  if (st.i >= st.n) { const fin = await cbFinish(env, st); await cas({ run: st.run, logic: CB_LOGIC, started: st.started, done: new Date(nowMs).toISOString(), i: st.i, n: st.n }); return { ran: true, finished: st.run, rate: fin.rate }; }
   const claimed = Object.assign({}, st, { lease: new Date(nowMs + CB_LEASE_MS).toISOString() });
   if (!(await cas(claimed))) return { ran: false, reason: "lease-lost" };
   const task = CB_TASKS[st.i % T], model = M[Math.floor(st.i / T) % M.length];
@@ -2458,16 +2488,17 @@ async function codeBatteryTick(env, nowMs) {
   try { text = await ai(env, model, cbPrompt(task)); } catch (e) { aiErr = String((e && e.message) || e).replace(/\s+/g, " ").slice(0, 120); }
   let grade;
   if (aiErr) grade = { pass: null, actual: "ai-error: " + aiErr };
+  else if (!String(text || "").trim()) grade = { pass: null, actual: "empty-reply" }; // a reasoning model that spent its budget thinking: not an answer, retried, then recorded as not answered (as the truth probe does)
   else {
     const code = cbExtractCode(text);
-    if (!code) grade = { pass: 0, actual: "no-code" };
+    if (!code) grade = { pass: 0, actual: "no-code: " + cbSnip(text) };
     else {
       const res = await cbExec(env, cbHarness(code, task.fn, task.tests));
       grade = res.noLoader ? { pass: null, actual: "no-loader" } : cbGrade(res, task.tests.length);
     }
   }
   const retry = grade.pass == null && (st.tries || 0) < 2;
-  const cur = { run: st.run, started: st.started, i: retry ? st.i : st.i + 1, n: st.n, tries: retry ? (st.tries || 0) + 1 : 0 };
+  const cur = { run: st.run, logic: CB_LOGIC, started: st.started, i: retry ? st.i : st.i + 1, n: st.n, tries: retry ? (st.tries || 0) + 1 : 0 };
   const write = [];
   if (!retry) write.push(env.AUDIT_DB.prepare("INSERT INTO benchmark_results (ts, task_id, model, expected, actual, pass) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(new Date(nowMs).toISOString(), CB_ID + ":" + task.id, model, "tests:" + task.tests.length, grade.actual, grade.pass));
   write.push(env.AUDIT_DB.prepare("UPDATE ops_config SET value = ?2, updated_at = datetime('now') WHERE key = ?1 AND value = ?3").bind(CB_STATE_KEY, JSON.stringify(cur), JSON.stringify(claimed)));
