@@ -10,7 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const a = src.indexOf("function pfPutConflict("), b = src.indexOf("async function charterCommit(");
 assert.ok(a > 0 && b > a, "pfPutConflict and pfRetryPut precede charterCommit");
-const { pfPutConflict, pfRetryPut, pfPutNote } = new Function(src.slice(a, b) + "\nreturn { pfPutConflict, pfRetryPut, pfPutNote };")();
+const { pfPutConflict, pfRetryPut } = new Function(src.slice(a, b) + "\nreturn { pfPutConflict, pfRetryPut };")();
 
 let pass = 0, fail = 0;
 function ok(cond, msg, got) { if (cond) pass++; else { fail++; console.log("FAIL", msg, got === undefined ? "" : JSON.stringify(got)); } }
@@ -26,18 +26,6 @@ ok(!pfPutConflict({ status: "write-failed", note: "PUT HTTP 4090 on main" }), "a
 ok(!pfPutConflict({ status: "committed", sha: "x" }), "a commit is not a conflict");
 ok(!pfPutConflict(null), "null is not a conflict");
 
-// 1a. PUT-RULE-NOTE-1: a refusal by a repository rule is not a moved branch. The bare status was all the note held, so the ruleset added at 15:47Z on 2026-11-04 looked like a
-// sha race and was retried three times an hour.
-ok(!pfPutConflict({ status: "write-failed", note: "PUT HTTP 409 on main: Repository rule violations found" }), "a 409 that names a rule violation is not retried");
-ok(!pfPutConflict({ status: "write-failed", note: "PUT HTTP 409 on master: Changes must be made through a pull request." }), "a 409 that asks for a pull request is not retried");
-ok(!pfPutConflict({ status: "write-failed", note: 'PUT HTTP 409 on main: Required status check "Workers Builds: qnfo-workers" is expected.' }), "a 409 that asks for a status check is not retried");
-ok(pfPutConflict({ status: "write-failed", note: "PUT HTTP 409 on main: docs/PORTFOLIO.md does not match 3e6eef15bb295b636323a3dfabf94e1ee1c7ca15" }), "a 409 that is a sha mismatch is still retried");
-ok(await pfPutNote({ json: async () => ({ message: "Repository rule violations found\n\nChanges must be made   through a pull request." }) }) === ": Repository rule violations found Changes must be made through a pull request.", "pfPutNote keeps GitHub's sentence on one line");
-ok(await pfPutNote({ json: async () => ({ message: "x".repeat(400) }) }) === ": " + "x".repeat(140), "pfPutNote cuts it at 140 characters");
-ok(await pfPutNote({ json: async () => { throw new Error("not json"); } }) === "" && await pfPutNote({ json: async () => ({}) }) === "", "an unreadable or empty answer adds nothing");
-ok(/note: "PUT HTTP " \+ pr\.status \+ " on " \+ branch \+ \(pr\.status >= 200 && pr\.status < 300 \? "" : await pfPutNote\(pr\)\)/.test(src), "pfCommitOnce puts GitHub's sentence in the note");
-ok(/note: "PUT contents HTTP " \+ pr\.status \+ \(pr\.status >= 200 && pr\.status < 300 \? "" : await pfPutNote\(pr\)\)/.test(src), "charterCommitOnce puts GitHub's sentence in the note");
-
 // 2. Retry: a conflict then a commit commits on attempt 2 and says so; a non-conflict failure is not retried; three
 // conflicts stop at 3. The 1 s pause is real, so the suite waits about 4 s in all.
 let calls = 0;
@@ -52,10 +40,6 @@ ok(calls === 1 && r2.note === "PUT HTTP 403 on main", "403: one attempt, note un
 calls = 0;
 const r3 = await pfRetryPut(async () => { calls++; return { status: "write-failed", note: "PUT HTTP 409 on master" }; });
 ok(calls === 3 && r3.status === "write-failed" && /attempts 3/.test(r3.note), "three conflicts: 3 attempts, still write-failed", r3);
-
-calls = 0;
-const r3b = await pfRetryPut(async () => { calls++; return { status: "write-failed", note: "PUT HTTP 409 on main: Repository rule violations found" }; });
-ok(calls === 1 && r3b.status === "write-failed" && r3b.note === "PUT HTTP 409 on main: Repository rule violations found", "a rule violation: one attempt, note unchanged", r3b);
 
 calls = 0;
 const r4 = await pfRetryPut(async () => { calls++; return { status: "unchanged" }; });

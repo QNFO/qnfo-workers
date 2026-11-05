@@ -289,11 +289,14 @@ ok(M.jrnAgeMin("2026-10-14 01:10:00", NOW) === 10 && M.jrnAgeMin(null, NOW) === 
   const errors = [];
   const oldError = console.error;
   console.error = (...a) => errors.push(a.join(" "));
+  const realST = globalThis.setTimeout, delays = [];
+  globalThis.setTimeout = (f, ms, ...r) => { delays.push(ms); return realST(f, 0, ...r); };
   try {
     let d = mkDb(); let calls = flaky(d, 2);
     await M.journeyTick(mkEnv(d, NOW), { now: NOW });
     ok(JSON.stringify(names8(d)) === JSON.stringify(eight) && calls() === 3, "a batch that fails twice with a D1 overload is retried and writes all eight rows", { rows: names8(d), calls: calls() });
     ok(errors.filter((e) => /fleet-control:journeys:record/.test(e)).length === 2, "each failed attempt is logged", errors);
+    ok(JSON.stringify(delays.filter((x) => x === 2500 || x === 5000)) === JSON.stringify([2500, 5000]), "an overload is waited out at 2.5 s and 5 s between attempts", delays);
     errors.length = 0;
     d = mkDb(); calls = flaky(d, 99);
     await M.journeyTick(mkEnv(d, NOW), { now: NOW });
@@ -306,7 +309,7 @@ ok(M.jrnAgeMin("2026-10-14 01:10:00", NOW) === 10 && M.jrnAgeMin(null, NOW) === 
     d = mkDb(); d.raw.exec("DROP TABLE agent_issues");
     await M.journeyTick(mkEnv(d, NOW, { page: true }), { now: NOW });
     ok(names8(d).length === 8 && q(d, "SELECT ok FROM journey_runs WHERE journey = 'papers-path'")[0].ok === 0, "all eight rows are recorded even when issue handling fails for the failing journey", names8(d));
-  } finally { console.error = oldError; }
+  } finally { console.error = oldError; globalThis.setTimeout = realST; }
 }
 
 // 9. JOURNEY-HOP-RETRY-1: a GET that answered 5xx or failed before an answer is tried once more; a timeout and a POST are not.
