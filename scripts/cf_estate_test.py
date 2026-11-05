@@ -267,6 +267,7 @@ data = m.fetch_r2("acct", "tok", str(ROOT))
 ok(data["buckets"][0]["payload_bytes"] == 2000000000 and data["buckets"][0]["managed_enabled"] is True and data["ops"] is None, "fetch_r2 reads usage and public access; a depleted GraphQL budget leaves ops unknown", data)
 ok(any("r2OperationsAdaptiveGroups" in e for e in data["errors"]), "the degraded read is reported", data["errors"])
 ok(all(c[0] == "GET" for c in calls), "fetch_r2 only reads", calls)
+ok(any(c[1].endswith("/r2/buckets?per_page=1000") for c in calls) and not any("/r2/buckets" in c[1] and "page=" in c[1].replace("per_page=", "") for c in calls), "the R2 list is one cursor page: no page number is sent", calls)
 m.api = lambda *a, **k: (500, {"errors": [{"message": "boom"}]})
 errs = []
 ok(m.api_list("/accounts/a/workers/scripts", "t", "scripts", errs) == [] and errs and "HTTP 500" in errs[0], "api_list reports a failed page and stops", errs)

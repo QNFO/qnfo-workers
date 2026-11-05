@@ -85,11 +85,12 @@ def api_result(path: str, token: str, what: str, errors: list) -> list | dict | 
     return j.get("result")
 
 
-def api_list(path: str, token: str, what: str, errors: list, per_page: int = 100, max_pages: int = 20) -> list:
+def api_list(path: str, token: str, what: str, errors: list, per_page: int = 100, max_pages: int = 20, paged: bool = True) -> list:
+    """GET every page of a list endpoint. R2 lists by cursor and takes no page number: paged=False reads the one page of per_page items."""
     out, page = [], 1
     sep = "&" if "?" in path else "?"
     while page <= max_pages:
-        st, j = api("GET", "%s%sper_page=%d&page=%d" % (path, sep, per_page, page), token)
+        st, j = api("GET", "%s%sper_page=%d%s" % (path, sep, per_page, "&page=%d" % page if paged else ""), token)
         if st != 200 or j.get("success") is False:
             errors.append("%s: HTTP %s %s" % (what, st, json.dumps(j.get("errors") or "")[:160]))
             break
@@ -419,7 +420,7 @@ def scan_pages_refs(root: str, names: list) -> dict:
 
 def fetch_pages(acct: str, token: str, root: str) -> dict:
     errors: list = []
-    res = api_result("/accounts/%s/pages/projects" % acct, token, "pages/projects", errors) or []
+    res = api_list("/accounts/%s/pages/projects" % acct, token, "pages/projects", errors)
     projects = [{"name": p.get("name"), "domains": p.get("domains") or [], "created_on": p.get("created_on"),
                  "latest_deploy": (p.get("latest_deployment") or {}).get("created_on"), "source": bool(p.get("source"))} for p in res]
     zones = fetch_zones(token, errors, dns=False)
@@ -566,7 +567,7 @@ def fetch_dns(acct: str, token: str, root: str) -> dict:
     zones = fetch_zones(token, errors, dns=True)
     custom = [{"hostname": c.get("hostname"), "service": c.get("service")} for c in api_result("/accounts/%s/workers/domains" % acct, token, "workers/domains", errors) or []]
     scripts = [s.get("id") for s in api_list("/accounts/%s/workers/scripts" % acct, token, "workers/scripts", errors) if s.get("id")]
-    res = api_result("/accounts/%s/pages/projects" % acct, token, "pages/projects", errors) or []
+    res = api_list("/accounts/%s/pages/projects" % acct, token, "pages/projects", errors)
     pages = [{"name": p.get("name"), "domains": p.get("domains") or []} for p in res]
     delegation = {z: doh_nameservers(z) for z in zones}
     return {"zones": zones, "custom_domains": custom, "scripts": scripts, "pages": pages, "delegation": delegation, "errors": errors}
@@ -708,7 +709,7 @@ def classify_r2(buckets: list, bound: dict, ops: dict | None, refs: dict | None 
 def fetch_r2(acct: str, token: str, root: str) -> dict:
     errors: list = []
     out = []
-    for b in api_list("/accounts/%s/r2/buckets" % acct, token, "r2/buckets", errors):
+    for b in api_list("/accounts/%s/r2/buckets" % acct, token, "r2/buckets", errors, per_page=1000, paged=False):
         n = b.get("name")
         u = api_result("/accounts/%s/r2/buckets/%s/usage" % (acct, n), token, "r2 usage " + str(n), errors) or {}
         mg = api_result("/accounts/%s/r2/buckets/%s/domains/managed" % (acct, n), token, "r2 managed " + str(n), errors) or {}
