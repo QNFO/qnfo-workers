@@ -399,6 +399,9 @@ def gateway_routes(acct: str, token: str, gateway: str = "default", max_pages: i
 
 AUTO_PROBE_BODY = {"model": "cloudflare/auto", "max_tokens": 16,
                    "messages": [{"role": "user", "content": "Reply with the single word ok."}]}
+# The default Auto Router pool holds anthropic, openai and xai models (developers.cloudflare.com/ai-gateway/features/auto-router) and the fleet has
+# no Anthropic or other third-party upstream (owner decision 2026-10-01, NO-CLAUDE-RUNTIME-DEPENDENCY-1), so every call restricts the pool to Workers AI.
+AUTO_PROBE_POOL = {"cf-aig-allowed-providers": "workers-ai"}
 
 
 def raw_post(url: str, headers: dict, body: dict, timeout: int = 60) -> tuple[int, dict, dict]:
@@ -438,8 +441,8 @@ def gateway_auto_probe(acct: str, token: str, gateway: str = "default") -> int:
     tried = []
     st, hdr, j = 0, {}, {}
     for path, url, headers in (
-        ("rest", f"{API}/accounts/{acct}/ai/v1/chat/completions", {"Authorization": "Bearer " + token, "cf-aig-gateway-id": gw}),
-        ("compat", f"https://gateway.ai.cloudflare.com/v1/{acct}/{urllib.parse.quote(gw, safe='')}/compat/chat/completions", {"cf-aig-authorization": "Bearer " + token}),
+        ("rest", f"{API}/accounts/{acct}/ai/v1/chat/completions", dict(AUTO_PROBE_POOL, **{"Authorization": "Bearer " + token, "cf-aig-gateway-id": gw})),
+        ("compat", f"https://gateway.ai.cloudflare.com/v1/{acct}/{urllib.parse.quote(gw, safe='')}/compat/chat/completions", dict(AUTO_PROBE_POOL, **{"cf-aig-authorization": "Bearer " + token})),
     ):
         st, hdr, j = raw_post(url, headers, AUTO_PROBE_BODY)
         tried.append({"path": path, "http": st, "error": _auto_probe_error(j) if not 200 <= (st or 0) < 300 else ""})

@@ -116,13 +116,14 @@ ok(o["input_tokens"] == 14 and o["output_tokens"] == 2 and o["answered_chars"] =
 ok("content" not in str(o) and "choices" not in str(o), "the answer text is never printed", o)
 ok(posts[-1][0] == "https://api.cloudflare.com/client/v4/accounts/acct/ai/v1/chat/completions" and posts[-1][1].get("cf-aig-gateway-id") == "default" and posts[-1][2]["model"] == "cloudflare/auto" and posts[-1][2]["max_tokens"] == 16, "one bounded call to cloudflare/auto on the REST route", posts[-1])
 ok(len(posts) == 1 and len(o["tried"]) == 1, "a 200 on the first path stops there", o)
+ok(all(p[1].get("cf-aig-allowed-providers") == "workers-ai" for p in posts), "the Auto Router pool is restricted to Workers AI on every path (no anthropic/openai/xai upstream)", posts)
 
 posted[:] = [(403, {}, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]}), (200, {"cf-aig-routed-model": "m2"}, OKJ)]
 before = len(posts)
 rc = C.gateway_auto_probe("acct", "tok", "gw one")
 o = emitted[-1]
 ok(rc == 0 and o["ok"] and [t["path"] for t in o["tried"]] == ["rest", "compat"] and o["tried"][0]["http"] == 403 and "Authentication error" in o["tried"][0]["error"], "a 403 on the REST route falls to the compat route and both are named", o)
-ok(posts[before + 1][0] == "https://gateway.ai.cloudflare.com/v1/acct/gw%20one/compat/chat/completions" and posts[before + 1][1] == {"cf-aig-authorization": "Bearer tok"}, "the second path is the compat route with cf-aig-authorization", posts[before + 1])
+ok(posts[before + 1][0] == "https://gateway.ai.cloudflare.com/v1/acct/gw%20one/compat/chat/completions" and posts[before + 1][1] == {"cf-aig-allowed-providers": "workers-ai", "cf-aig-authorization": "Bearer tok"}, "the second path is the compat route with cf-aig-authorization", posts[before + 1])
 
 posted[:] = [(401, {}, {"errors": [{"message": "no auth"}]}), (400, {}, {"error": {"message": "Auto Router needs Unified Billing or a stored key", "code": 2049}})]
 rc = C.gateway_auto_probe("acct", "tok")
