@@ -2120,7 +2120,7 @@ const APPLY_JS = String.raw`
 function kitBytes(b64){var s=atob(b64),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
 function saveFile(name,b64){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([kitBytes(b64)]));a.download=name;document.body.appendChild(a);a.click();a.remove()}
 function kitPayload(k){return JSON.stringify({v:1,fields:k.fields,note:k.note,file:k.resume_file,b64:k.resume_docx_b64})}
-function fireKit(k){try{navigator.clipboard.writeText(kitPayload(k)).catch(function(){})}catch(e){}saveFile(k.resume_file,k.resume_docx_b64);window.open(k.apply_url,'_blank','noopener')}
+function fireKit(k){try{navigator.clipboard.writeText(kitPayload(k)).catch(function(e){console.warn('clipboard: '+e.message)})}catch(e){console.warn('clipboard: '+e.message)}saveFile(k.resume_file,k.resume_docx_b64);window.open(k.apply_url,'_blank','noopener')}
 function kwHtml(kw){if(!kw)return '<div class="mute">Keyword match unavailable: the posting page could not be read.</div>';
  return '<h4>Keyword match: '+(kw.coverage==null?'n/a':kw.coverage+'%')+'</h4><div class="mute">On this resume: '+esc(kw.matched.join(', ')||'none')+'</div>'
   +(kw.addable.length?'<div class="mute">In your CV, left off this resume: '+esc(kw.addable.join(', '))+'</div>':'')
@@ -2218,7 +2218,7 @@ $('#jgo').onclick=async()=>{const r=$('#jres');r.textContent='Reading the postin
  r.querySelectorAll('.fb').forEach(b=>b.onclick=async()=>{try{await authed(()=>api('/api/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:d.title,company:d.company,verdict:b.dataset.v})}));$('#fbmsg').textContent='Noted. The next search run uses it.'}catch(e){$('#fbmsg').textContent=e.message}})}catch(e){r.textContent=e.message}};
 ${APPLY_JS}
 var KITS={},KREADY={};
-function warm(id){if(!KITS[id]){KITS[id]=api('/api/matches/'+encodeURIComponent(id)+'/kit').then(function(k){KREADY[id]=k;return k}).catch(function(e){delete KITS[id];throw e});KITS[id].catch(function(){})}return KITS[id]}
+function warm(id){if(!KITS[id]){KITS[id]=api('/api/matches/'+encodeURIComponent(id)+'/kit').then(function(k){KREADY[id]=k;return k}).catch(function(e){delete KITS[id];throw e});KITS[id].catch(function(e){console.warn('kit: '+e.message)})}return KITS[id]}
 function kitPanel(el,id,k){
  el.innerHTML='<div class="note"><b>Application kit for '+esc(k.company)+'</b> ('+esc(k.ats)+(k.fresh?', rebuilt from the posting as it reads now':', draft from match time')+'). Press <b>Open application and copy kit</b>: the resume downloads, the kit is copied and the application opens. There click your <b>Fill application</b> bookmark, check everything and submit.</div>'
   +kwHtml(k.keywords)+'<h4>Left for you</h4>'+li(k.left_for_you)
