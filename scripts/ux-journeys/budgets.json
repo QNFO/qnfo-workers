@@ -21,6 +21,10 @@
    "taps": 4,
    "typing": 0
   },
+  "talk-what-is-on-today": {
+   "taps": 2,
+   "typing": 0
+  },
   "checkin-from-notification": {
    "taps": 1,
    "typing": 0

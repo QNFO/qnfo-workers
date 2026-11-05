@@ -164,6 +164,8 @@ export const DDL = [
      last_seen_ms INTEGER, revoked INTEGER NOT NULL DEFAULT 0, device TEXT)`,
   // COMPANION-TASTE-1: one row per thumbs vote. key = the normalised label, so a title he dislikes stays gone wherever it shows.
   `CREATE TABLE IF NOT EXISTS cmp_feedback (key TEXT PRIMARY KEY, kind TEXT NOT NULL, label TEXT NOT NULL, vote INTEGER NOT NULL, ref TEXT, ts TEXT NOT NULL)`,
+  // COMPANION-NO-TYPING-1:talk-cost: ten-minute copies of Talk answers, keyed by a hash of the ask (never the ask itself).
+  `CREATE TABLE IF NOT EXISTS cmp_talk_cache (k TEXT PRIMARY KEY, reply TEXT NOT NULL, ts TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS journal (id TEXT PRIMARY KEY, ts TEXT NOT NULL, date TEXT NOT NULL, content TEXT NOT NULL,
      mood TEXT, tags TEXT, source TEXT DEFAULT 'twin')`,
   `CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'task',
@@ -640,6 +642,43 @@ export function fallbackReply(level) {
   if (level >= 2) return "I'm here, and I read what you wrote. I can't put my own words together just now, so please read the lines below.";
   if (level === 1) return "I'm here, and I read what you wrote. I can't answer properly right now. If it gets heavier, 113 is there day and night (0800-0113 is free).";
   return "I'm here. I couldn't put an answer together just now; what you wrote is safe with me. Try again in a minute, or put it in Capture or the journal.";
+}
+// COMPANION-NO-TYPING-1:talk-cost (agent_issues 1001641): the Talk tab's one-tap asks. Their answer is the calendar and the next actions, so it comes from
+// today() with no model call; any other identical single-turn ask is answered from a ten-minute copy (table cmp_talk_cache, listed in PRIVACY_TABLES).
+export const TALK_PRESETS = [["What is on today?", "today"], ["What is next?", "next"]];
+export const TALK_CACHE_MS = 10 * 60 * 1000;
+export function talkPresetKind(text) {
+  const t = String(text == null ? "" : text).trim().toLowerCase();
+  const p = TALK_PRESETS.find((x) => x[0].toLowerCase() === t);
+  return p ? p[1] : null;
+}
+export function localTalkAnswer(kind, t) {
+  t = t || {};
+  const ev = ((t.agenda && t.agenda.today) || []).filter((e) => e && e.title);
+  const clock = (e) => { const m = !e.all_day && /T(\d\d:\d\d)/.exec(String(e.start || "")); return m ? m[1] : null; };
+  const label = (e) => (clock(e) ? clock(e) + " " : "") + e.title;
+  const acts = (t.next_actions || []).filter((a) => a && a.title);
+  const cal = t.agenda && t.agenda.calendar;
+  const calendarDown = !ev.length && cal && cal.state === "unreachable";
+  if (kind === "next") {
+    const nowH = Number(t.hour) || 0;
+    const later = ev.filter((e) => { const c = clock(e); return !!c && Number(c.slice(0, 2)) + Number(c.slice(3)) / 60 >= nowH - 0.1; });
+    const one = (t.one_thing && t.one_thing.title ? t.one_thing : null) || acts[0];
+    const parts = [];
+    if (later.length) parts.push("Next on your calendar: " + label(later[0]) + ".");
+    else if (calendarDown) parts.push("I could not read the calendar just now.");
+    if (one) parts.push("Next thing to do: " + one.title + (one.minutes ? " (about " + one.minutes + " min)" : "") + ".");
+    return parts.length ? parts.join(" ") : "Nothing is lined up next. Tap Focus on Today and I will pick one small thing.";
+  }
+  const cals = ev.length ? "On your calendar today: " + ev.slice(0, 6).map(label).join("; ") + "." : calendarDown ? "I could not read the calendar just now." : "Nothing on your calendar today.";
+  const todo = acts.length ? "Next actions: " + acts.slice(0, 4).map((a) => a.title).join("; ") + (acts.length > 4 ? " (and " + (acts.length - 4) + " more)" : "") + "." : "No open next actions.";
+  return cals + " " + todo;
+}
+export async function talkCacheKey(text) {
+  const norm = String(text == null ? "" : text).toLowerCase().replace(/\s+/g, " ").trim().slice(0, 2000);
+  if (!norm) return null;
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(norm));
+  return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
 }
 // RED-TEAM-1: lock-screen privacy was only settable in D1. discreet_push: care (default) | all | off.
 // COMPANION-EMAIL-OPT-IN-1: email_mode off (default) | daily (the morning brief only) | all. personal-companion reads the same
@@ -2113,7 +2152,8 @@ export const PRIVACY_TABLES = [
   { table: "cmp_measures", what: "two-weekly WHO-5 well-being answers", where: "1=1" },
   { table: "wellbeing_config", what: "your safety plan and companion settings", where: "key IN ('safety_plan', 'pause_until', 'discreet_push', 'email_mode')" },
   // RED-TEAM-1: the Talk tab's conversations were stored by the twin's chat log and missing from export and delete.
-  { table: "chat", what: "conversations on the Talk tab", where: "thread LIKE 'companion-%'" }
+  { table: "chat", what: "conversations on the Talk tab", where: "thread LIKE 'companion-%'" },
+  { table: "cmp_talk_cache", what: "ten-minute copies of Talk answers (kept so an identical ask costs no AI call)", where: "1=1" }
 ];
 const DELETABLE = { cmp_inbox: "id", cmp_mood: "id", tasks: "id", cmp_projects: "id", journal: "id", cmp_cards: "id", cmp_push_subs: "endpoint", companion_nudges: "id", cmp_activities: "id", cmp_activity_log: "id", cmp_measures: "id", cmp_feedback: "key" };
 export async function privacy(env) {
@@ -2575,11 +2615,30 @@ export async function handleCompanion(request, env, ctx, deps) {
       if (!last) return J({ ok: false, error: "messages required" }, 400);
       const req2 = new Request(new URL("/v1/chat/completions", url).toString(), { method: "POST", headers: { "Content-Type": "application/json", Authorization: bearerOk ? request.headers.get("Authorization") || "" : "Bearer " + String(env.API_KEY || ""), "User-Agent": "companion-page" }, body: JSON.stringify({ model: "personal", companion: true, thread_id: s(b.thread_id, 80) || "companion-" + dayKey(nowIso()), messages: msgs }) });
       const sig = crisisSignal(last.content);
-      let j = null;
-      try { const res = await deps.chat(req2, env, ctx); j = await res.json().catch(() => null); } catch (e) { console.error(JSON.stringify({ evt: "companion:chat", error: String(e && e.message || e).slice(0, 200) })); }
-      const text = j && j.choices && j.choices[0] && j.choices[0].message ? j.choices[0].message.content : null;
+      // COMPANION-NO-TYPING-1:talk-cost (agent_issues 1001641, owner 2026-10-29 "LLM cost keeps adding up"): the two one-tap asks on the Talk tab are answered from the
+      // calendar and next actions with no model call, and an identical single-turn ask is answered from a 10-minute copy. Words that carry any risk signal always go
+      // to the model path, which returns the fixed crisis lines, and are never cached.
+      let text = null, how = "model";
+      const preset = talkPresetKind(last.content);
+      if (preset && sig.level < 1) {
+        try { text = localTalkAnswer(preset, await today(env, deps)); how = "local"; } catch (e) { console.error(JSON.stringify({ evt: "companion:talk-local", error: String(e && e.message || e).slice(0, 200) })); }
+      }
+      const ck = !text && msgs.length === 1 && sig.level < 1 ? await talkCacheKey(last.content) : null;
+      if (ck) {
+        const hit = await one(env.PERSONAL, "SELECT reply FROM cmp_talk_cache WHERE k = ? AND ts > ?", ck, new Date(Date.now() - TALK_CACHE_MS).toISOString()).catch(() => null);
+        if (hit && hit.reply) { text = String(hit.reply); how = "cached"; }
+      }
+      if (!text) {
+        let j = null;
+        try { const res = await deps.chat(req2, env, ctx); j = await res.json().catch(() => null); } catch (e) { console.error(JSON.stringify({ evt: "companion:chat", error: String(e && e.message || e).slice(0, 200) })); }
+        text = j && j.choices && j.choices[0] && j.choices[0].message ? j.choices[0].message.content : null;
+        if (text && ck) {
+          await env.PERSONAL.prepare("INSERT INTO cmp_talk_cache (k, reply, ts) VALUES (?,?,?) ON CONFLICT(k) DO UPDATE SET reply = excluded.reply, ts = excluded.ts").bind(ck, String(text).slice(0, 8000), nowIso()).run().catch(() => null);
+          await env.PERSONAL.prepare("DELETE FROM cmp_talk_cache WHERE ts < ?").bind(new Date(Date.now() - 6 * TALK_CACHE_MS).toISOString()).run().catch(() => null);
+        }
+      }
       // RED-TEAM-1: when the model is down he gets a warm fixed line, never an upstream error string.
-      return J({ ok: !!text, reply: text || fallbackReply(sig.level), crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null });
+      return J({ ok: !!text, reply: text || fallbackReply(sig.level), how, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null });
     }
     // COMPANION-CONTEXT-QUERY-URL-1 (issue 100041): the owner's words go in the JSON body, never the URL, where request logs keep them.
     // A GET is told to POST and its query string is not read.
@@ -2706,7 +2765,7 @@ export const GUIDE_HTML = `<!doctype html><html lang="en"><head><meta charset="u
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Your companion: how it works</title><link rel="icon" href="/companion/icon.svg"><meta name="theme-color" content="#2f5d50"><meta name="robots" content="noindex">
 <style>
-:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2622;--mute:#69716c;--line:#e3dfd6;--acc:#2f5d50;--acc2:#e6efe9}
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2622;--mute:#636b66;--line:#e3dfd6;--acc:#2f5d50;--acc2:#e6efe9}
 @media (prefers-color-scheme:dark){:root{--bg:#141816;--card:#1d2320;--ink:#e9ece9;--mute:#9aa49e;--line:#2c3430;--acc:#7fbfa8;--acc2:#22322c}}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 main{max-width:680px;margin:0 auto;padding:20px 16px 64px}h1{font-size:1.5rem;margin:.2rem 0 .4rem}h2{font-size:1.05rem;margin:0 0 .5rem}
@@ -2784,7 +2843,7 @@ export const PAGE_HTML = `<!doctype html><html lang="en"><head><meta charset="ut
 <title>Companion</title><link rel="manifest" href="/companion/manifest.webmanifest"><link rel="icon" href="/companion/icon.svg">
 <meta name="theme-color" content="#2f5d50"><meta name="robots" content="noindex">
 <style>
-:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2622;--mute:#69716c;--line:#e3dfd6;--acc:#2f5d50;--acc2:#e6efe9;--warn:#8a3b2e;--warn2:#f7e8e4}
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2622;--mute:#636b66;--line:#e3dfd6;--acc:#2f5d50;--acc2:#e6efe9;--warn:#8a3b2e;--warn2:#f7e8e4}
 @media (prefers-color-scheme:dark){:root{--bg:#141816;--card:#1d2320;--ink:#e9ece9;--mute:#9aa49e;--line:#2c3430;--acc:#7fbfa8;--acc2:#22322c;--warn:#f0a593;--warn2:#3a2420}}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 main{max-width:640px;margin:0 auto;padding:16px 16px 96px}
@@ -2834,6 +2893,7 @@ nav .sec{display:none}nav.open{flex-wrap:wrap}nav.open .sec{display:block;flex:1
  <div id="cap-out"></div></div>
  <div class="card"><h2>Recently captured</h2><div id="inbox"></div></div></section>
 <section id="v-talk" class="v hide"><h1>Talk</h1><p class="mute">You are talking with an AI, not a person.</p><div id="msgs"></div>
+ <div class="card"><div class="mute">One tap, answered from your calendar and next actions (no AI call):</div><div class="row" style="margin-top:6px;flex-wrap:wrap"><button onclick="askPreset('What is on today?')">What is on today?</button><button onclick="askPreset('What is next?')">What is next?</button></div></div>
  <div class="card"><textarea id="chat-in" placeholder="Tap Dictate and speak, then Send."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="dictate(this,'chat-in')">Dictate</button><button id="chat-send" onclick="sendChat()">Send</button><button onclick="clearChat()">New conversation</button></div></div></section>
 <section id="v-do" class="v hide"><h1>Next actions</h1><div id="do"></div>
  <div class="card"><h2>Add</h2><div class="mute">One tap adds it:</div><div class="row" style="margin-top:6px;flex-wrap:wrap"><button onclick="presetAction('Tidy one surface',10,'low','@home')">Tidy one surface</button><button onclick="presetAction('A ten-minute walk outside',10,'low','@outside')">10-minute walk</button><button onclick="presetAction('Reply to one message',5,'low','@phone')">Reply to one message</button><button onclick="presetAction('One Quniverse task',15,'medium','@computer')">One Quniverse task</button></div><div class="mute" style="margin-top:10px">Or say your own:</div><div class="row" style="margin-top:6px"><input id="a-title" class="grow" placeholder="Next action" aria-label="Next action"><button onclick="dictate(this,'a-title')">Dictate</button></div><div class="row" style="margin-top:8px"><select id="a-ctx" class="grow" aria-label="Context"></select><select id="a-en" class="grow" aria-label="Energy needed"><option value="low">low energy</option><option value="medium">medium</option><option value="high">high</option></select></div><div class="row" style="margin-top:8px" role="group" aria-label="Minutes"><input id="a-min" type="hidden" value="15"><button class="amin" onclick="setMin(this,5)">5 min</button><button class="amin sel" onclick="setMin(this,15)">15 min</button><button class="amin" onclick="setMin(this,30)">30 min</button></div><div class="row" style="margin-top:8px"><button class="p" onclick="addAction()">Add</button></div></div></section>
@@ -2973,6 +3033,7 @@ var hist=[];try{hist=JSON.parse(sessionStorage.getItem('cmp-hist')||'[]')}catch(
 function drawChat(){var b=$('msgs');b.innerHTML='';hist.forEach(function(m){b.appendChild(el('div',{cls:'msg '+(m.role==='user'?'me':'it'),text:m.content}))});window.scrollTo(0,document.body.scrollHeight)}
 function sendChat(){var t=$('chat-in').value.trim();if(!t)return;hist.push({role:'user',content:t});$('chat-in').value='';drawChat();$('chat-send').disabled=true;
  api('/companion/api/chat',{json:{thread_id:'companion-'+new Date().toISOString().slice(0,10),messages:hist.slice(-16)}}).then(function(r){var c=r.reply||r.error||'(no answer)';if(r.crisis)c=c+'\\n\\n'+r.crisis;hist.push({role:'assistant',content:c});try{sessionStorage.setItem('cmp-hist',JSON.stringify(hist.slice(-30)))}catch(e){warn(e)}drawChat()}).catch(function(e){hist.push({role:'assistant',content:'I could not answer just now: '+e.message});drawChat()}).then(function(){$('chat-send').disabled=false})}
+function askPreset(t){$('chat-in').value=t;sendChat()}
 function clearChat(){hist=[];try{sessionStorage.removeItem('cmp-hist')}catch(e){warn(e)}drawChat()}
 // COMPANION-FOCUS-2: everything below is buttons over existing APIs and browser-local state. No free-text control or AI call.
 var FOCUS_STEPS=['Make the smallest possible start','Stop when the timer ends','Tap Done — a partial try counts'];

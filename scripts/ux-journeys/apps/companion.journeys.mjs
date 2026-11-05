@@ -43,6 +43,15 @@ export const journeys = [
       await u.tap("Dictate", { within: "#v-talk", wait: 1200 }); await u.tap("Stop", { within: "#v-talk", wait: 1500 });
       await u.tap("Send", { within: "#v-talk", wait: 1500 }); await u.see("good plan", { within: "#msgs" });
     } },
+  { id: "talk-what-is-on-today", title: "Ask what is on today with one tap, answered without the AI",
+    async run(u) {
+      await signedIn(u);
+      await u.tap("Talk", { within: "nav" });
+      await u.tap("What is on today?", { within: "#v-talk", wait: 1200 });
+      await u.see("Call the dentist", { within: "#msgs" }); // the seeded next action, read from D1; the fake chat model would have said something else
+      await u.notSee("good plan");
+      await u.screen("talk-answer");
+    } },
   { id: "checkin-from-notification", title: "Tap a check-in notification and answer how I feel",
     async run(u) {
       await u.open("/__harness/session"); await u.open("/#mood"); await u.see("What can I do right now?");
