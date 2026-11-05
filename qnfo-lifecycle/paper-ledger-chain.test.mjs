@@ -174,6 +174,19 @@ const metric = (a, name) => a.prepare("SELECT last_value v, state FROM metric_re
     ok(Number(metric(au, "paper_ledger_chain_breaks").v) >= 1, "the break metric reflects the anchor break");
   }
 }
+{ // sealer lag: 0 while nothing waits, small while a backlog is being worked off, large when the sealer has stopped
+  const db = mkLiving(), au = mkAudit(); seed(db, 12);
+  const env = { LIVING_PAPER: d1(db), QNFO_AUDIT: d1(au) };
+  const first = await P.tick(env, { maxRows: 5, page: 5 });
+  ok(first.sealed === 5 && first.unsealed_rows > 0 && first.unsealed_min <= 1, "while a backlog is being worked off the lag is the time since the last seal, not the age of the backlog", first);
+  const rest = await P.tick(env, {});
+  ok(rest.unsealed_rows === 0 && rest.unsealed_min === 0, "with nothing waiting the lag is 0", rest);
+  db.exec("DROP TRIGGER paper_ledger_chain_no_update");
+  db.exec("UPDATE paper_ledger_chain SET sealed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 hours') WHERE seq = (SELECT MAX(seq) FROM paper_ledger_chain)");
+  db.prepare("UPDATE papers SET body_md = ?, change_actor = 't:z', change_reason = 'late' WHERE slug = 'one'").run("# late " + "k".repeat(500));
+  const st = db.prepare("SELECT unsealed_rows, unsealed_min FROM v_paper_ledger_chain_status").get();
+  ok(st.unsealed_rows === 1 && st.unsealed_min >= 179 && st.unsealed_min <= 182, "a sealer that stopped three hours ago while a row waits reads about 180 minutes", st);
+}
 { // missing tables degrade quietly (a deploy that lands before the migration)
   const db = new DatabaseSync(":memory:");
   const r = await P.tick({ LIVING_PAPER: d1(db), QNFO_AUDIT: d1(mkAudit()) }, {});

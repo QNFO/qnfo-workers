@@ -17,6 +17,8 @@
 --   * paper_ledger_chain: one row per paper_change_ledger row, in seq order: row_hash = sha256(previous row_hash + canonical JSON of the ledger row + the sha256 of the body it kept). A BEFORE INSERT
 --     trigger accepts only the next ledger row (no gap, no repeat), the previous row's hash and a well formed hash; the table can never be updated or deleted. A worker (qnfo-lifecycle) writes the rows;
 --     the hash is computed there because SQLite has no sha256. The head of the chain is anchored in a second database (qnfo-audit paper_ledger_seals), so rewriting this table alone is detected.
+--   * unsealed_min is the minutes since the chain head was sealed while ledger rows wait (0 when none wait): a sealer that works hourly keeps it under 60 even while it catches up on a backlog,
+--     and a stalled sealer shows from the first hour.
 --   * v_paper_ledger_chain_breaks / v_paper_ledger_chain_body_breaks (two views: D1 rejects a compound SELECT over 5 terms) / v_paper_ledger_chain_status: the SQL-checkable part of the verification (link, genesis, a ledger row deleted or added below the head, a body added or an archive
 --     fingerprint changed after sealing) and the sealing lag. The hash recomputation and the anchor comparison run in the worker.
 --   * adr_enforcement + adr014_publish_audit + trg_papers_adr014_publish_ins / _upd: at publish (insert as published or distributed, or the first move into either from a non-public status, or an
@@ -86,7 +88,8 @@ SELECT
   (SELECT row_hash FROM paper_ledger_chain ORDER BY seq DESC LIMIT 1) AS head_hash,
   (SELECT COUNT(*) FROM paper_change_ledger WHERE seq > COALESCE((SELECT MAX(seq) FROM paper_ledger_chain), 0)) AS unsealed_rows,
   (SELECT MIN(ts) FROM paper_change_ledger WHERE seq > COALESCE((SELECT MAX(seq) FROM paper_ledger_chain), 0)) AS oldest_unsealed_ts,
-  COALESCE((SELECT CAST(ROUND((julianday('now') - julianday(MIN(ts))) * 1440) AS INTEGER) FROM paper_change_ledger WHERE seq > COALESCE((SELECT MAX(seq) FROM paper_ledger_chain), 0)), 0) AS unsealed_min,
+  CASE WHEN (SELECT COUNT(*) FROM paper_change_ledger WHERE seq > COALESCE((SELECT MAX(seq) FROM paper_ledger_chain), 0)) = 0 THEN 0
+       ELSE CAST(ROUND((julianday('now') - julianday(COALESCE((SELECT sealed_at FROM paper_ledger_chain ORDER BY seq DESC LIMIT 1), (SELECT MIN(ts) FROM paper_change_ledger)))) * 1440) AS INTEGER) END AS unsealed_min,
   ((SELECT COUNT(*) FROM v_paper_ledger_chain_breaks) + (SELECT COUNT(*) FROM v_paper_ledger_chain_body_breaks)) AS sql_breaks;
 
 CREATE TABLE IF NOT EXISTS adr_enforcement (

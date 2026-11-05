@@ -119,7 +119,7 @@ VALUES
    'living-paper.v_paper_ledger_chain_status + qnfo-audit.cloud_ops_events + paper_ledger_seals (qnfo-lifecycle PAPER-LEDGER-CHAIN-1)', 'unmeasured at rollout', '0',
    'qnfo-lifecycle', 'trigger gt 0', '1h', '> 0', '> 0', 'UNMEASURED', 'computed'),
   ('paper_ledger_unsealed_min', 'operational', 'leading',
-   'minutes since the oldest paper_change_ledger row that is not yet in paper_ledger_chain (0 when none)',
+   'minutes since the chain head was sealed while paper_change_ledger rows wait to be sealed (0 when none wait)',
    'living-paper.v_paper_ledger_chain_status (qnfo-lifecycle PAPER-LEDGER-CHAIN-1)', 'unmeasured at rollout', '<= 120',
    'qnfo-lifecycle', 'trigger gt 120', '1h', '> 90', '> 120', 'UNMEASURED', 'computed'),
   ('adr014_new_publication_violations', 'operational', 'guard',
@@ -150,7 +150,7 @@ VALUES
   ('paper_ledger_unsealed_min',
    'PAPER-LEDGER-CHAIN-1: paper ledger rows wait more than 120 minutes to be sealed',
    'registry', 'gt', 120, 7,
-   'Charter pillar: security. The qnfo-lifecycle hourly tick seals new ledger rows; read SELECT * FROM v_paper_ledger_chain_status (living-paper) for the head and the oldest unsealed row, SELECT text FROM cloud_ops_events WHERE job = ''paper-ledger-chain'' ORDER BY ts DESC LIMIT 5 for the last run, and the qnfo-lifecycle fire log (cron_fire_log cron_name like ''qnfo-lifecycle%''). Causes: the hourly tick not firing, a thrown step before the sealing step, the chain trigger refusing a page (a gap or a repeated previous hash), or a missing binding. Definition of done: paper_ledger_unsealed_min <= 120 at the latest metric refresh.'
+   'Charter pillar: security. The qnfo-lifecycle hourly tick seals new ledger rows; read SELECT * FROM v_paper_ledger_chain_status (living-paper) for the head, the unsealed rows and the minutes since the head was sealed, SELECT text FROM cloud_ops_events WHERE job = ''paper-ledger-chain'' ORDER BY ts DESC LIMIT 5 for the last run, and the qnfo-lifecycle fire log (cron_fire_log cron_name like ''qnfo-lifecycle%''). Causes: the hourly tick not firing, a thrown step before the sealing step, the chain trigger refusing a page (a gap or a repeated previous hash), or a missing binding. Definition of done: paper_ledger_unsealed_min <= 120 at the latest metric refresh.'
      || char(10) || 'code-task: repo=qnfo-workers path=qnfo-lifecycle/worker.js'
      || char(10) || 'code-anchor: async function paperLedgerChainTick(env, opts) {',
    'qnfo-lifecycle', 'agent_issues', 24, 1, 'RM-ADR-013-014-ENFORCEMENT-1'),
@@ -172,7 +172,7 @@ SELECT 'session-w2d2',
        'living-paper triggers on papers (observe mode writes only to adr014_publish_audit), paper_ledger_chain, qnfo-audit paper_ledger_seals, one hourly step in qnfo-lifecycle, four metric_registry rows',
        'DROP TRIGGER list in the header of migrations/living-paper/2026-11-05-w2d2-paper-ledger-chain.sql; UPDATE adr_enforcement SET mode = ''off'' stops the publish check at once; revert the qnfo-lifecycle deploy to stop sealing; chain, seal and audit rows stay as the record',
        'tamper-evident paper revision ledger with a cross-database anchor',
-       'paper_ledger_chain_breaks stays 0 and paper_ledger_unsealed_min stays under 120 once the first catch-up has sealed the 3178 existing rows (about 4 hourly ticks); adr014_new_publication_violations stays 0; adr014_legacy_byline_papers reads 276 and falls only as papers are revised',
+       'paper_ledger_chain_breaks stays 0 and paper_ledger_unsealed_min stays under 120 once the first catch-up has sealed the 3178 existing rows (about 7 hourly ticks at 500 rows a call); adr014_new_publication_violations stays 0; adr014_legacy_byline_papers reads 276 and falls only as papers are revised',
        'no external reach change',
        'node:sqlite suite with the real ledger migration and the real worker functions (58 cases); production replay of the publish rule over 1098 papers'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'RM-ADR-013-014-ENFORCEMENT-1: add a sha%');

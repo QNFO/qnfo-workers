@@ -3288,7 +3288,7 @@ async function plRetriage(env, o, mechs, now, out) {
 // ADR-014 (authorship mandate) is checked at publish by living-paper triggers (observe mode) and counted here from v_adr014_authorship_status. No signing key is used: the chain is
 // tamper-evident, not signed; the HMAC slice is filed as its own issue (an HMAC key must be minted under the secret lock).
 var PLC_COLS = ["seq", "ts", "slug", "slug_before", "identifier", "kind", "fields_changed", "actor", "reason", "withdrawal", "backfilled", "version_before", "version_after", "status_before", "status_after", "gate_reason_before", "gate_reason_after", "title_before", "abstract_before", "body_len_before", "body_fp_before", "body_len_after", "body_fp_after", "meta_before"];
-var PLC_MAX_ROWS = 1000;
+var PLC_MAX_ROWS = 500;
 var PLC_PAGE = 25;
 var PLC_VERIFY_ROWS = 100;
 var PLC_VERIFY_NEWEST = 25;

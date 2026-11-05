@@ -65,7 +65,7 @@ SELECT * FROM paper_ledger_seals ORDER BY id DESC LIMIT 5;   -- qnfo-audit: the 
 `GET https://qnfo-lifecycle.q08.workers.dev/paper-ledger/chain` (open, cached 60 s) returns the head, the lag and the newest seals; `?verify=1` re-computes the newest 50 rows and the anchors on the spot.
 Each tick also re-computes a rotating window of 100 rows (every row within a day at the current size), the newest 25, the newest three seals and one older seal; a row whose hash differs becomes a
 `plc-break-*` event in `cloud_ops_events`, stays open until the row hashes true again, and counts in the metric `paper_ledger_chain_breaks` (trigger at above 0). `paper_ledger_unsealed_min`
-(trigger at above 120) is the age of the oldest unsealed row. Detector: `fm-paper-ledger-chain-broken`. Never edit or delete a chain row or a seal; a wrong finding is answered by a new one.
+(trigger at above 120) is the minutes since the chain head was sealed while ledger rows wait (0 when none wait), so a backlog being worked off does not alarm and a stopped sealer does. Detector: `fm-paper-ledger-chain-broken`. Never edit or delete a chain row or a seal; a wrong finding is answered by a new one.
 
 ### Authorship (ADR-014)
 
