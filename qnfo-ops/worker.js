@@ -6845,7 +6845,7 @@ __name(policyGateShadow, "policyGateShadow");
 // every tool that writes qnfo-audit failed partway and late, and callers could not tell it from a bug. Three such errors inside 60 s now put the gateway in degraded mode for 60 s: the tools that write
 // qnfo-audit are refused before they start with {degraded: true, d1: "overloaded", retry_after_s: N} (HTTP 503 and Retry-After on POST /v1/tools/call), and every tool that does not need D1 keeps running
 // (cf_*, r2_*, kv_*, fleet probes, git, workspace and container tools, cf_worker_deploy and the /ops/deploy content PUT). The refusal itself writes nothing to D1 (that would add load to the thing that is
-// overloaded): it is counted in /health degraded.refused and logged as one console line {evt: "ops-degraded-refusal"}. Only an error that names D1 or SQLite together with "overloaded" or "too many resources" feeds
+// overloaded; the best-effort run-event ledger of an agent run and nothing else still writes): it is counted in /health degraded.refused and logged as one console line {evt: "ops-degraded-refusal"}. Only an error that names D1 or SQLite together with "overloaded" or "too many resources" feeds
 // the breaker (the EDC-BATCH-1 pattern also takes "rate limit" and "timed out", which a GitHub or model call produces too and would trip a D1 mode that is not needed). After the window the next call goes through
 // (half open): the error list was cleared, so three new errors are needed to trip again. The state is per isolate; another isolate learns from its own first errors.
 var OPS_D1_TRIP_ERRORS = 3;
@@ -6859,16 +6859,17 @@ var __opsD1Breaker = { errs: [], until: 0, since: null, trips: 0, refused: 0, la
 function opsD1IsOverload(text) {
   var t = String(text == null ? "" : text);
   if (!t) return false;
-  if (/overloaded|too many resources/i.test(t) && /D1|SQLITE|qnfo-audit|database/i.test(t)) return true;
-  return /D1_ERROR/i.test(t) && /timed out|timeout/i.test(t);
+  if (/overloaded|too many resources/i.test(t) && /\bD1\b|SQLITE_|qnfo-audit|\bdatabase\b/i.test(t)) return true;
+  return /\bD1_ERROR\b/.test(t) && /\btimed out\b/i.test(t);
 }
 function opsD1Note(now, text) {
   var b = __opsD1Breaker;
   if (!opsD1IsOverload(text)) return false;
   now = Number(now) || Date.now();
+  b.last_error = String(text).slice(0, 160);
+  if (b.until > now) return false;
   b.errs = b.errs.filter(function(t) { return now - t < OPS_D1_WINDOW_MS; });
   b.errs.push(now);
-  b.last_error = String(text).slice(0, 160);
   if (b.errs.length >= OPS_D1_TRIP_ERRORS && b.until <= now) {
     b.until = now + OPS_D1_DEGRADED_MS;
     b.since = new Date(now).toISOString();
@@ -6879,11 +6880,25 @@ function opsD1Note(now, text) {
   }
   return false;
 }
+function opsD1TargetsAudit(name, args) {
+  var n = String(name);
+  if (n !== "ops_d1_write" && n !== "ops_d1_query") return true;
+  var key = String(args && args.db || "audit");
+  var map = typeof DB_MAP !== "undefined" ? DB_MAP : { audit: "QNFO_AUDIT" };
+  return (map[key] || map.audit) === "QNFO_AUDIT";
+}
+// A dry run is not a write: ops_issue_run without confirm only counts the backlog, ops_research_kick/research_queue with express:false only read related papers.
+function opsD1WritesNow(name, args) {
+  var n = String(name);
+  if (OPS_D1_WRITING_TOOLS.indexOf(n) < 0) return false;
+  if (n === "ops_issue_run") return !!(args && args.confirm);
+  if (n === "research_queue") return !(args && args.express === false);
+  return opsD1TargetsAudit(n, args);
+}
 function opsD1Gate(now, name, args) {
   var b = __opsD1Breaker;
   now = Number(now) || Date.now();
-  if (b.until <= now || OPS_D1_WRITING_TOOLS.indexOf(String(name)) < 0) return null;
-  if (String(name) === "ops_d1_write" && args && args.db && String(args.db) !== "audit") return null;
+  if (b.until <= now || !opsD1WritesNow(name, args)) return null;
   var retry = Math.max(1, Math.ceil((b.until - now) / 1000));
   b.refused++;
   console.error(JSON.stringify({ evt: "ops-degraded-refusal", tool: String(name), retry_after_s: retry, refused: b.refused }));
@@ -6995,7 +7010,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   }
   const ms = Date.now() - t0;
   // OPS-DEGRADED-1: a qnfo-audit overload in the result feeds the breaker (another database named by the tool does not).
-  try { if (res && res.ok === false && (!res.db || res.db === "QNFO_AUDIT")) opsD1Note(Date.now(), res.error || res.message); } catch (_) {}
+  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) opsD1Note(Date.now(), res.error || res.message); } catch (_) {}
   const audit = composioAuditPayload(name, args, res);
   await logToolEvent(env, name, audit.args, audit.result, ms);
   /* OPS-TOOL-MAILBOX-LOGIN-LINKS-1: a mailbox read never hands a login link, one-time code or token to the model. */
@@ -10624,6 +10639,7 @@ function opsSurfaceOf(toolName) {
 async function opsSurfaceSizeLog(env, label, surface, chars, reqChars) {
   try {
     if (!env || !env.QNFO_AUDIT) return false;
+    if (typeof opsD1Health === "function" && opsD1Health(Date.now()).state === "degraded") return false; /* OPS-DEGRADED-1: a size sample is not worth a statement against the overloaded database */
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
       .bind(randId("evt-"), iso(), "ops-surface-size", String(label || "").slice(0, 80), JSON.stringify({ surface: surface, chars: Number(chars) || 0, req_chars: Number(reqChars) || 0 }), "qnfo-ops", "ok").run();
     return true;
@@ -10647,10 +10663,10 @@ async function ownerRestRoutes(request, env, path, method) {
     return r.degraded ? { ok: r.ok, result: parsed, degraded: true, retry_after_s: r.retry_after_s } : { ok: r.ok, result: parsed };
   };
   if (path === "/v1/run-state" && method === "GET") return json(await opsRunState(env, new URL(request.url).searchParams.get("run_id"))); // TRACE-FOLD-1
-  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } return json(await ideaSubmit(env, b)); }
+  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } const __ig = opsD1Gate(Date.now(), "idea_submit", b); if (__ig) return new Response(JSON.stringify(Object.assign({ ok: false, result: __ig.body }, __ig.body)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__ig.retry_after_s) }) }); return json(await ideaSubmit(env, b)); }
   if (path === "/v1/queue" && method === "GET") { const u = new URL(request.url); const a = {}; u.searchParams.forEach(function(v, k) { a[k] = v; }); return json(await queueRead(env, a)); }
   if (path === "/v1/tools" && method === "GET") return json({ object: "list", data: opsRestToolList(true).map(function(t) { return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }; }) });
-  if (path === "/v1/tools/call" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b.name) return json({ error: "name required" }, 400); const __tr = await run(String(b.name), b.arguments || {}); if (__tr.degraded) return new Response(JSON.stringify(__tr.result), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__tr.retry_after_s) }) }); return json(__tr); }
+  if (path === "/v1/tools/call" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b.name) return json({ error: "name required" }, 400); const __tr = await run(String(b.name), b.arguments || {}); if (__tr.degraded) return new Response(JSON.stringify(Object.assign({ ok: false, result: __tr.result }, __tr.result)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__tr.retry_after_s) }) }); return json(__tr); }
   if (path === "/mcp") {
     if (method === "GET") return new Response("MCP endpoint: POST JSON-RPC", { status: 405, headers: Object.assign({ Allow: "POST" }, CORS_HEADERS) });
     if (method !== "POST") return json({ error: "method not allowed" }, 405);
