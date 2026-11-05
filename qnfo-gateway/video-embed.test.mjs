@@ -8,7 +8,9 @@ const body = "# Embedded paper\n\n## Abstract\n\nText about coordination in ultr
 const mkRow = (slug) => ({ slug, title: "Embedded paper", body_md: body, abstract: "Text about coordination.", authors: '["R"]', keywords: "[]", doi: null, status: "published", version: "1.0.0", created_at: "2026-10-01", updated_at: "2026-10-02" });
 const st = (all) => ({ bind() { return st(all); }, async all() { return { results: all }; }, async first() { return all[0] || null; }, async run() { return {}; } });
 const VID = [{ slug: "with-video", video_id: "abcDEF12345", title: "Embedded paper in plain language", duration_s: 41.6, uploaded_at: "2026-11-02T10:00:00.000Z" },
-  { slug: "bad-id", video_id: "x<script>", title: "", duration_s: 0, uploaded_at: "" }];
+  { slug: "bad-id", video_id: "x<script>", title: "", duration_s: 0, uploaded_at: "" },
+  // PAPER-VIDEOS-PAGE-URL-1 (agent_issues 1001886): a versioned youtube_videos.slug ends in @v<N>; its page is /papers/<base>/v<N>, never a URL with an @.
+  { slug: "versioned-paper@v2", video_id: "verSIO12345", title: "Versioned paper", duration_s: 30, uploaded_at: "2026-11-03T10:00:00.000Z" }];
 let auditMode = "rows", auditCalls = 0;
 const mkEnv = () => ({
   LIVING_PAPER: { prepare(sql) { const m = /slug = \?/i.test(sql) ? null : null; return { bind(...a) { const slug = a[0]; return st(/FROM papers/i.test(sql) ? [mkRow(slug)] : []); }, async all() { return { results: [] }; }, async first() { return null; }, async run() { return {}; } }; } },
@@ -38,7 +40,9 @@ r = await get(env, "/papers/with-video/quickread"); h = await r.text();
 ok(r.status === 200 && h.includes("youtube-nocookie.com/embed/abcDEF12345") && h.includes("noindex"), "the quick read carries the embed and stays noindex");
 
 r = await get(env, "/api/paper-videos"); const j = await r.json();
-ok(r.status === 200 && j.count === 1 && j.items[0].slug === "with-video" && j.items[0].embed.endsWith("abcDEF12345"), "list route returns only valid rows", JSON.stringify(j));
+ok(r.status === 200 && j.count === 2 && j.items[0].slug === "with-video" && j.items[0].embed.endsWith("abcDEF12345"), "list route returns only valid rows", JSON.stringify(j));
+ok(j.items[0].page === "https://papers.qnfo.org/papers/with-video", "an unversioned slug keeps /papers/<slug>", j.items[0].page);
+ok(j.items[1].slug === "versioned-paper@v2" && j.items[1].page === "https://papers.qnfo.org/papers/versioned-paper/v2" && j.items.every((x) => !x.page.includes("@")), "a versioned slug yields /papers/<base>/v<N> and no page URL contains an @", JSON.stringify(j.items[1]));
 
 const before = auditCalls; await get(env, "/papers/with-video"); await get(env, "/papers/with-video");
 ok(auditCalls === before, "the map is cached: no extra audit read per request", auditCalls - before);
