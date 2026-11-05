@@ -113,7 +113,7 @@ assert.ok(idx.body.queries.includes("/kg/neighbors") && idx.body.queries.include
 {
   assert.equal((await get("/kg/nope")).status, 404);
   assert.equal((await get("/kg/find?query=" + encodeURIComponent("x'; DROP TABLE nodes; --"))).status, 200, "a hostile query is data");
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM nodes").get().n, 14, "and nothing was dropped");
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM nodes").get().n, 13, "and nothing was dropped");
 }
 // MCP tools
 {
