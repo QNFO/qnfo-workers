@@ -2,7 +2,7 @@
 -- WHAT WAS READ (qnfo-audit, 2026-11-05 03Z):
 --   planner   issue_plans held 0 rows planned in the last 12 h (about 8 planner tasks a day before 2026-11-04T15Z; 34 of the planner's last 77 tasks merged). planIssues was shut by its
 --             work-in-progress gate: 50 queued code_tasks rows on 21 files against code_plan_wip 40, while issue intake and this RED-DRAIN-1 dispatch refill the queue up to
---             MAX_OPEN_TASKS (48) whenever the loop frees a slot, so an issue with no code-task line never reached a doer. qnfo-code-orchestrator 0.48.2 counts files in motion and keeps
+--             MAX_OPEN_TASKS (48) whenever the loop frees a slot, so an issue with no code-task line never reached a doer. qnfo-code-orchestrator 0.48.3 counts files in motion and keeps
 --             6 slots for the planner on the intake side; this file does the same for the RED-DRAIN-1 dispatch (step 3 of fleet_tasks red-drain, LIMIT 5 an hour): it adds nothing while
 --             42 or more tasks are queued, so the last 6 slots of the queue stay with the planner.
 --   tickets   Six open METRIC-TRIGGER tickets belong to triggers that were disabled by a recorded decision (enabled = 0: 341 owner-outcome, 404 owner-outcome, 409 duplicate of 3689,
@@ -98,7 +98,7 @@ INSERT INTO decision_log
   (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session:breach-issue-backlog', 'a planner that writes nothing for 12 h with 334 doer-less issues is starved, not idle',
   'PLAN-STARVATION-1', 'issue_plans 0 rows in 12 h; 50 queued rows on 21 files vs code_plan_wip 40; intake and red-drain refill to 48; planner tasks merged 34 of 77 in 10 days',
-  'pending CI apply, orchestrator 0.48.2 deploy and live verification', 'red-drain dispatch step 3, six dead-end METRIC-TRIGGER tickets, two detector contracts',
+  'pending CI apply, orchestrator 0.48.3 deploy and live verification', 'red-drain dispatch step 3, six dead-end METRIC-TRIGGER tickets, two detector contracts',
   'Rollback line in migrations/2026-11-05-red-drain-headroom.sql', 'the planner can reach a doer for issues with no code-task line again',
   'issue_plans >= 20 rows in 12 h after deploy; driver_drain_24h >= 0.05; open_agent_issues -6', 'none', 'live read-only D1 diagnosis; offline SQLite suite migrations/red-drain-headroom.test.mjs'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action = 'PLAN-STARVATION-1');

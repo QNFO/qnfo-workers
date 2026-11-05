@@ -1,4 +1,4 @@
-// PLAN-STARVATION-1 offline suite (qnfo-code-orchestrator 0.48.2, pillar autonomy; metrics issues_over_24h_no_doer, driver_drain_24h).
+// PLAN-STARVATION-1 offline suite (qnfo-code-orchestrator 0.48.3, pillar autonomy; metrics issues_over_24h_no_doer, driver_drain_24h).
 // Measured 2026-11-05T03Z on qnfo-audit: issue_plans held 0 rows in the last 12 h (about 8 planner tasks a day before 2026-11-04T15Z; 34 of the planner's last 77 tasks merged),
 // because planIssues counted every unfinished code_tasks ROW as work in progress (50 queued rows, 21 files, code_plan_wip 40) while issue intake and the RED-DRAIN-1 dispatch
 // refilled the queue to MAX_OPEN_TASKS (48) as soon as the loop freed a slot: the intake always won, an issue with no code-task line never reached a doer, and the early
