@@ -98,7 +98,7 @@ def selftest():
     assert v("WHERE a LIKE 'ok%' AND b LIKE '" + long51 + "'") == [long51], "the second pattern on a line"
     assert v("WHERE x LIKE 'it''s " + "a" * 40 + "'") == [] and len(v("WHERE x LIKE 'it''s " + "a" * 50 + "'")) == 1, "an escaped quote counts as one byte"
     # the shapes that broke on 2026-11-04 (PRs 7277, 7281, 7282)
-    assert v("SELECT 'BLINDSPOT-1: ' || n || ' failure modes' WHERE m LIKE 'BLINDSPOT-1: % failure modes have a detector that never ran'") != [], "BLINDSPOT-1 shape"
+    assert v("SELECT 'BLINDSPOT-1: ' || n || ' failure modes' WHERE m LIKE 'BLINDSPOT-1: % failure modes have a detector that never ran'") != [], "BLINDSPOT-1 shape"  # like-limit-ok: the shape the guard must refuse
     diff = "\n".join([
         "diff --git a/migrations/x.sql b/migrations/x.sql", "--- a/migrations/x.sql", "+++ b/migrations/x.sql", "@@ -1,2 +1,4 @@",
         " context line", "+UPDATE t SET a = 1 WHERE b LIKE '" + long51 + "';", "-WHERE old LIKE '" + long51 + "'", "+-- comment LIKE '" + long51 + "'",
