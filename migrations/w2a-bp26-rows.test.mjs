@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs";
 const sql = readFileSync(new URL("./2026-11-05-w2a-bp26-rows.sql", import.meta.url), "utf8");
 const gateway = readFileSync(new URL("../qnfo-gateway/worker.js", import.meta.url), "utf8");
 const cloudOps = readFileSync(new URL("../qnfo-cloud-ops/worker.js", import.meta.url), "utf8");
+const aiSearch = readFileSync(new URL("../qnfo-ai-search/worker.js", import.meta.url), "utf8");
+const bp26web = readFileSync(new URL("../scripts/bp26_web.py", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 400))); } };
 
@@ -66,11 +68,12 @@ ok(run("rm-1413").expected !== run("rm-1413").observed, "rm-1413 fails when the 
 w.exec("UPDATE ops_config SET value = 'on' WHERE key = 'slo_merge_lane'; UPDATE metric_registry SET last_value = '0.5' WHERE metric = 'postmortem_coverage'");
 ok(run("rm-1413").expected !== run("rm-1413").observed, "rm-1413 fails when postmortem coverage is below 1");
 
-for (const [title, anchor, file, name] of [["BP26-PROVENANCE-BASIS-1:%", gateway, "qnfo-gateway", "gateway"], ["BP26-KILLSWITCH-READERS-2:%", cloudOps, "qnfo-cloud-ops", "cloud-ops"]].map((x) => [x[0], x[1], x[2], x[3]])) {
+for (const [title, anchor, file, name] of [["BP26-PROVENANCE-BASIS-1:%", gateway, "qnfo-gateway/worker.js", "gateway"], ["BP26-KILLSWITCH-READERS-2:%", cloudOps, "qnfo-cloud-ops/worker.js", "cloud-ops"],
+  ["BP26-AI-ASK-DISCLOSURE-1:%", aiSearch, "qnfo-ai-search/worker.js", "ai-search"], ["BP26-AI-ASK-DISCLOSURE-2:%", bp26web, "scripts/bp26_web.py", "bp26_web"]]) {
   const iss = w.prepare("SELECT description d FROM agent_issues WHERE title LIKE ? AND status = 'open'").get(title);
-  ok(iss && new RegExp("code-task: repo=qnfo-workers path=" + file + "/worker\\.js").test(iss.d), name + " doer issue carries a code-task");
+  ok(iss && iss.d.includes("code-task: repo=qnfo-workers path=" + file), name + " doer issue carries a code-task on " + file);
   const a = iss && (iss.d.match(/code-anchor: (.+)/) || [])[1];
-  ok(a && /^(async )?function \w+\(.*\) \{$/.test(a) && anchor.split(a).length - 1 === 1, name + " code-anchor is a function signature occurring exactly once", a);
+  ok(a && anchor.split(a.replace(/''/g, "'")).length - 1 === 1, name + " code-anchor occurs exactly once in the real file", a);
 }
 ok(/runtime-probe: \{"url": "https:\/\/papers\.qnfo\.org\/papers\/twisted-cuprate-twistronics\/provenance\.json"/.test(w.prepare("SELECT description d FROM agent_issues WHERE title LIKE 'BP26-PROVENANCE-BASIS-1:%'").get().d), "the provenance issue closes through a runtime-probe on the live sidecar");
 ok(/code-probe: \{"paths": \["qnfo-cloud-ops\/worker\.js"\], "contains": "fleet_kill_switch"\}/.test(w.prepare("SELECT description d FROM agent_issues WHERE title LIKE 'BP26-KILLSWITCH-READERS-2:%'").get().d), "the kill-switch issue closes through a code-probe");
@@ -80,7 +83,7 @@ ok(w.prepare("SELECT COUNT(*) n FROM decision_log WHERE actor = 'session-w2a'").
 w.exec("UPDATE roadmap_implementation SET status = 'verified' WHERE id = 1413");
 w.exec(sql);
 ok((st(1400).e.match(/Verified live 2026-11-05, after the merge/g) || []).length === 1, "the verification text is appended once");
-ok(w.prepare("SELECT COUNT(*) n FROM agent_issues").get().n === 2 && w.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 1 && w.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 3, "a replay inserts nothing twice");
+ok(w.prepare("SELECT COUNT(*) n FROM agent_issues").get().n === 4 && w.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 1 && w.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 3, "a replay inserts nothing twice");
 ok(st(1413).s === "verified", "a row already past built is not reset");
 
 // rollback
@@ -90,7 +93,7 @@ r.exec(sql);
 r.exec(rollback);
 const rs = (id) => r.prepare("SELECT status s, evidence e FROM roadmap_implementation WHERE id = ?").get(id);
 ok(ROWS.every((id) => rs(id).e === "old") && rs(1706).s === "in_progress" && rs(1390).s === "planned" && rs(1401).s === "planned" && rs(1710).s === "built", "the Rollback line restores status and evidence of every row");
-ok(r.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE status = 'superseded'").get().n === 3 && r.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status = 'closed'").get().n === 2 && r.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 0, "the Rollback line supersedes the contracts, closes the two issues and removes the decision row");
+ok(r.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE status = 'superseded'").get().n === 3 && r.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status = 'closed'").get().n === 4 && r.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 0, "the Rollback line supersedes the contracts, closes the four issues and removes the decision row");
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

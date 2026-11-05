@@ -13,7 +13,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261105_w2a_bp26_rows
--- Rollback: UPDATE roadmap_implementation SET status = (SELECT b.status FROM bak_20261105_w2a_bp26_rows b WHERE b.id = roadmap_implementation.id), evidence = (SELECT b.evidence FROM bak_20261105_w2a_bp26_rows b WHERE b.id = roadmap_implementation.id) WHERE id IN (SELECT id FROM bak_20261105_w2a_bp26_rows) AND status IN ('partial', 'built'); UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:rollback' WHERE class IN ('rm-1413', 'rm-1710', 'rm-1401'); UPDATE agent_issues SET status = 'closed' WHERE status = 'open' AND (title LIKE 'BP26-PROVENANCE-BASIS-1:%' OR title LIKE 'BP26-KILLSWITCH-READERS-2:%'); DELETE FROM decision_log WHERE actor = 'session-w2a' AND action LIKE 'BP26-PROVENANCE-KEY-2:%';
+-- Rollback: UPDATE roadmap_implementation SET status = (SELECT b.status FROM bak_20261105_w2a_bp26_rows b WHERE b.id = roadmap_implementation.id), evidence = (SELECT b.evidence FROM bak_20261105_w2a_bp26_rows b WHERE b.id = roadmap_implementation.id) WHERE id IN (SELECT id FROM bak_20261105_w2a_bp26_rows) AND status IN ('partial', 'built'); UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:rollback' WHERE class IN ('rm-1413', 'rm-1710', 'rm-1401'); UPDATE agent_issues SET status = 'closed' WHERE status = 'open' AND (title LIKE 'BP26-PROVENANCE-BASIS-1:%' OR title LIKE 'BP26-KILLSWITCH-READERS-2:%' OR title LIKE 'BP26-AI-ASK-DISCLOSURE-%'); DELETE FROM decision_log WHERE actor = 'session-w2a' AND action LIKE 'BP26-PROVENANCE-KEY-2:%';
 -- CAUSE-MAPPED: registers no metric_registry row.
 
 CREATE TABLE IF NOT EXISTS bak_20261105_w2a_bp26_rows AS
@@ -29,7 +29,7 @@ UPDATE roadmap_implementation SET status = 'partial', evidence = 'Read 2026-11-0
 
 UPDATE roadmap_implementation SET status = 'partial', evidence = 'Read 2026-11-05. Live: the content hash and the version route of a paper (qnfo-gateway 3.46.0; agent_issues 1000646 closed as already done by the research-reach cluster), CITATION.cff, BibTeX and CSL-JSON per paper (https://papers.qnfo.org/papers/scale-invariant-physics/cite.cff, cite.bib and cite.csl.json answer 200; 1000647 closed), OAI-PMH validates (oai_pmh_validates 1), a signed provenance sidecar per paper (row 1391). Open: paper_version_immutability reads 0.0275 against a target of 1.0 because stored hashes cover few versions (agent_issues 1001859 PAPER-PIDS-PIN-1, owned by the research-reach cluster).', verified_at = NULL WHERE id = 1394 AND status = 'planned';
 
-UPDATE roadmap_implementation SET status = 'partial', evidence = 'Read 2026-11-05. ai_label_coverage 0.8 (four of five surfaces carry a visible AI label: paper pages and qnfo.org through qnfo-gateway, the twin first screen through personal-api; the fifth, social post text, shows 31 of 52 posts of the last 14 days with a marker: the collector reads a 200 character preview, so a marker at the end of a long post is cut, and older posts predate the marker; qnfo-social 0.22.1 appends [AI-generated] to every post and open PR 7620 keeps the text that went out in the channel ledger). ai_interaction_disclosure 0.6667: the e-mail agent writes in the owner''s name, so its disclosure is the open IDENTITY-BOUND card bp26-email-agent-ai-disclosure (human_actions 173) and the labels on the social accounts are card bp26-social-bot-labels (174). The count moves with the 14-day window and with PR 7620.', verified_at = NULL WHERE id = 1397 AND status = 'planned';
+UPDATE roadmap_implementation SET status = 'partial', evidence = 'Read 2026-11-05. ai_label_coverage 0.8 (four of five surfaces carry a visible AI label: paper pages and qnfo.org through qnfo-gateway, the twin first screen through personal-api; the fifth, social post text, shows 31 of 52 posts of the last 14 days with a marker: the collector reads a 200 character preview, so a marker at the end of a long post is cut, and older posts predate the marker; qnfo-social 0.22.1 appends [AI-generated] to every post and open PR 7620 keeps the text that went out in the channel ledger). ai_interaction_disclosure 0.6667: the e-mail agent writes in the owner''s name, so its disclosure is the open IDENTITY-BOUND card bp26-email-agent-ai-disclosure (human_actions 173) and the labels on the social accounts are card bp26-social-bot-labels (174). The count moves with the 14-day window and with PR 7620. An independent scan of the visible text (2026-11-05) finds an AI label on qnfo.org, papers.qnfo.org pages, archive.qnfo.org, ideas.qnfo.org and its pages, q08.org and its pieces and reading.q08.org pieces, and none on ask.qwav.tech, the public question box (it names a research assistant and, in the footer, Workers AI, but no sentence that an AI system writes the answers; ai_interaction_disclosure does not count this surface): agent_issues BP26-AI-ASK-DISCLOSURE-1 and -2. qwav.org and the ipatent guide pages carry no label either; whether that copy is AI-written was not established.', verified_at = NULL WHERE id = 1397 AND status = 'planned';
 
 UPDATE roadmap_implementation SET status = 'built', evidence = 'Read 2026-11-05. Consent-gated analytics is live: the Google tag loads on qnfo.org and papers.qnfo.org only after the visitor presses Allow (qnfo-gateway 3.58.0, PR 7315; 3.58.1, PR 7422; /health reads 3.60.0; verified in a browser 2026-11-05); the gtag removals of idea-hub and qnfo-gateway are closed (agent_issues 1000654, 1000655). The last two cookies and the last tracker were the edge-injected tag of the qwav.tech Google Tag Gateway (setUpTag true wrote the tag into every page before any consent, so no Worker could gate it). PR 7611 added the cf-ops-actions action gtg-tag; session breach-bp26-web dispatched gtg-tag qwav.tech --model off at 03:35Z (decision_log: setUpTag true to false; endpoint, measurement id, hideOriginalIp and enabled unchanged). Read after that: https://ask.qwav.tech/ carries no googletagmanager, /dmzj/ or G-3VW2SVSSRH text and sets no cookie. non_essential_cookies_set (2) and third_party_trackers (1) are re-read on the next collector run (last 03:22Z). Cost of off, stated: the owner GA4 property G-3VW2SVSSRH stops receiving the automatic tag until the site carries it behind the consent loader; gtg-tag qwav.tech --model on restores it exactly. The steward verifies from rm-1401, a live absent-text probe on ask.qwav.tech.', verified_at = NULL WHERE id = 1401 AND status = 'planned';
 
@@ -100,6 +100,36 @@ code-anchor: async function runScheduledJob(env, job) {
 code-probe: {"paths": ["qnfo-cloud-ops/worker.js"], "contains": "fleet_kill_switch"}',
 'bp26-killswitch', 'reliability', 'medium', 'open', datetime('now'), datetime('now')
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE 'BP26-KILLSWITCH-READERS-2:%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'BP26-AI-ASK-DISCLOSURE-1: ask.qwav.tech says at the question box that an AI language model writes every answer',
+'Charter pillar: security. Serves BP26-AI-ACT-ART50-1 (agent_issues 1000341, roadmap row 1397, EU AI Act Article 50(1): a person who interacts with an AI system is told so unless that is obvious).
+
+Evidence read 2026-11-05: the visible text of https://ask.qwav.tech/ says "Ask the QNFO research corpus. Answers are written only from the program''s published papers", names a "QNFO research assistant" in the title and mentions Workers AI only in the footer. No sentence tells the visitor that an AI system writes the answer. A scan of the visible text of 11 public hosts finds the AI label on papers, q08.org pieces, reading.q08.org pieces, ideas.qnfo.org and qnfo.org, so this is the one public question box without it.
+
+Change in qnfo-ai-search: in the PAGE template the lede sentence gains one sentence, stated after reading how an answer is produced: "An AI language model writes every answer here; a person does not review it before it is shown." (if the pipeline has a human step the sentence says what it is). Keep the text visible (not in a script or an attribute). Add a case to the worker suite that fetches the page and checks the sentence, and bump the version with scripts/worker_release.py.
+
+Closing probe: runtime-probe below.
+
+code-task: repo=qnfo-workers path=qnfo-ai-search/worker.js
+code-anchor: <p class="lede">Answers are written only from the program''s published papers.
+runtime-probe: {"url": "https://ask.qwav.tech/", "status": 200, "contains": "AI language model writes every answer"}',
+'bp26-ai-act', 'security', 'medium', 'open', datetime('now'), datetime('now')
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE 'BP26-AI-ASK-DISCLOSURE-1:%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'BP26-AI-ASK-DISCLOSURE-2: ai_interaction_disclosure counts the ask.qwav.tech question box as a fourth surface',
+'Charter pillar: security. Serves BP26-AI-ACT-ART50-1 (agent_issues 1000341, roadmap row 1397). ai_interaction_disclosure reads 0.6667 over three surfaces (ipatent, the twin, the e-mail agent); the public question box of ask.qwav.tech is an AI interaction that no row measures, so the metric cannot show the gap that BP26-AI-ASK-DISCLOSURE-1 closes.
+
+Change in scripts/bp26_web.py (the collector that already owns has_visible_disclosure and DISCLOSURE_RX): add a helper ask_disclosure_rows(ctx) that fetches https://ask.qwav.tech/, applies the existing visible-text disclosure test and adds the row subject "ask.qwav.tech question box" to the ai_interaction_disclosure rows, so the ratio is over four surfaces. The file is held by session breach-bp26-web at the time of writing; this issue waits for that claim, and the code loop takes it afterwards.
+
+Closing probe: the code-probe below, and the next collect_web run lists the subject.
+
+code-task: repo=qnfo-workers path=scripts/bp26_web.py
+code-anchor: def has_visible_disclosure(page):
+code-probe: {"paths": ["scripts/bp26_web.py"], "contains": "ask_disclosure_rows"}',
+'bp26-ai-act', 'security', 'low', 'open', datetime('now'), datetime('now')
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE 'BP26-AI-ASK-DISCLOSURE-2:%');
 
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session-w2a',
