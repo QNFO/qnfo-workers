@@ -1277,16 +1277,33 @@ def next_due_offset(cadence_h, steady_state=False):
 
 
 STEADY_RUN = 6  # FM-5: identical passing verifications in a row before a contract backs off
-STEADY_CADENCE_H = 2  # SLA-120M-1: never beyond 120 minutes
+# FM-DRIFT-1 (2026-11-05, cluster C9-FAILURE-MODES): 1.5 hours, was 2. The back-off stamps next_due_at 15 minutes before its interval ("+75 minutes");
+# 2 hours stamped "+105", and fm-contract-cadence-drift (open-issue contracts due later than 90 minutes) read 5 of 5 backed-off contracts of open issues
+# (metric-relapse-2607, metric-relapse-1000326, issue-1000575, issue-1000609, issue-1001695, each passing, gap 105 minutes) as drift, and sla_breaches_over_120m
+# counts the same column. The two rules disagreed; the back-off now sits inside the drift bound and SLA-120M-1.
+STEADY_CADENCE_H = 1.5  # SLA-120M-1: never beyond 120 minutes; fm-contract-cadence-drift: never scheduled later than 90 minutes
+# FM-CADENCE-1 (RM 2026-11-04, cluster C9-FAILURE-MODES; metric failure_modes_recurring 208 = 80 recurring + 132 unprobed):
+# a standing detector is an audit, not an issue fix, and never backs off. v_failure_mode_status calls a detector 'unprobed'
+# when its newest verification is older than 60 minutes (FAILURE-MODE-PROBES-1, DETECTOR-CADENCE-1); FM-5 parked every
+# fm-* contract whose last six passes read the same value (which is every healthy detector: it reads 1) at +105 minutes, so
+# 117 of the 132 unprobed rows had last been probed 90-120 minutes ago while the in-Cloudflare tick, which would have
+# re-probed them every 18 minutes, found them not due. Measured before FM-5 (2026-10-19): 2 unprobed. FM-5 was written for
+# issue contracts (issue 1000473 re-verified with observed=0); the cost it saved on detectors is bought back by trimming
+# the redundant index of remediation_verifications (fm-redundant-indexes).
+STANDING_DETECTOR_PREFIXES = ("fm-", "belief-")
+
+
+def standing_detector(cls):
+    return str(cls or "").startswith(STANDING_DETECTOR_PREFIXES)
 
 
 def steady_state_cadence(cls, verdict, cadence_h, transport=None):
     """FM-5 (ROADMAP-1 even-keel-fm-audit, agent_issues 1000721, pillar cost): remediation_verifications took 191,906 rows in
     7 days (78.6 percent pass) and issue 1000473 was re-verified every 80 minutes with observed=0. A contract whose last
     STEADY_RUN verifications all passed with the same observed value is re-probed every STEADY_CADENCE_H hours instead of at its
-    own cadence (never beyond 2 hours, SLA-120M-1). Only a pass backs off: a failing, deferred or changing contract keeps its
+    own cadence (never beyond 90 minutes, FM-DRIFT-1; SLA-120M-1 allows 120). Only a pass backs off: a failing, deferred or changing contract keeps its
     cadence, so recovery and relapse are seen as fast as before. Runtime probes keep their hourly cadence."""
-    if transport == HTTPS_TRANSPORT:
+    if transport == HTTPS_TRANSPORT or standing_detector(cls):
         return cadence_h
     if verdict != "pass" or float(cadence_h) >= STEADY_CADENCE_H:
         return cadence_h
@@ -1488,7 +1505,7 @@ def main():
     # VIEW-HEALTH-1 (2026-11-04): every qnfo-audit view is planned with EXPLAIN (reads no rows); a view that errors on read is filed
     # as one BLINDSPOT-1 issue and closed when all compile (scripts/view_health.py). A failure here never stops the contract run.
     # CONSUMER-SPEED-1 (2026-11-04): 242 serial EXPLAINs took 4 to 6 minutes of a 9 to 11 minute step, on the path every issue close waits for. The workflow's `consume`
-    # job sets REMEDIATION_VIEW_HEALTH=sweeps and its `sweeps` job runs `view_health.py --run` beside the contract run, every cycle; any other caller still runs it here.
+    # job sets REMEDIATION_VIEW_HEALTH=sweeps and its `views` job runs `view_health.py --run` beside the contract run, every cycle; any other caller still runs it here.
     if os.environ.get("REMEDIATION_VIEW_HEALTH", "inline") == "inline":
         try:
             import view_health
@@ -1496,7 +1513,7 @@ def main():
         except Exception as e:  # noqa: BLE001
             out["view_health_error"] = str(e)[:200]
     else:
-        out["view_health"] = {"skipped": "runs in the sweeps job (REMEDIATION_VIEW_HEALTH=%s)" % os.environ.get("REMEDIATION_VIEW_HEALTH")}
+        out["view_health"] = {"skipped": "runs in the views job (REMEDIATION_VIEW_HEALTH=%s)" % os.environ.get("REMEDIATION_VIEW_HEALTH")}
 
     # FLEET-JOURNEYS-1 (2026-10-13): the end-to-end journeys from outside the account (runner gha, public hostnames), the second path
     # to qnfo-fleet-control's server-side journeyTick; at most every 50 minutes, self-filing and self-closing (scripts/fleet_journeys.py).
