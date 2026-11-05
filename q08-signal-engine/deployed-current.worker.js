@@ -4770,7 +4770,7 @@ var Q08_FEEDBACK_SCRIPT = `<script>
       status.textContent = result.updated === false ? "Your vote was already recorded." : "Thanks \u2014 your vote is recorded.";
     } catch (e) {
       status.textContent = "Your vote could not be saved. Please try again.";
-      if (typeof turnstile !== "undefined" && turnstile && typeof turnstile.reset === "function") { try { turnstile.reset(); } catch (e2) {} }
+      if (typeof turnstile !== "undefined" && turnstile && typeof turnstile.reset === "function") { try { turnstile.reset(); } catch (e2) { console.error(JSON.stringify({ evt: "q08.vote.turnstile-reset-failed", error: String(e2) })); } }
       buttons.forEach(function (button) { button.disabled = false; });
     }
   });
