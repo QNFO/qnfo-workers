@@ -37,10 +37,11 @@ VALUES ('papers_per_100usd_7d', 'system', 'leading',
   'qnfo-audit research_queue + cost_daily (computed by scripts/cost_ledger.py write_paper_yield)', 'new 2026-11-05 (about 12.8 on the 7 days to 2026-11-04: 39 versions, 305.52 USD)',
   'floor 10 per $100; no growth target until two weeks of readings exist', 'qnfo-research-exec', 'analytics_metric_triggers papers_per_100usd_7d -> agent_issues', 'hourly', '< 10', '< 5', 'PENDING', 'runner');
 
-INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
-VALUES ('papers_per_100usd_7d', 'Papers published per $100 of fleet spend fell below the floor', 'registry', 'lt', 10, 3,
+INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
+SELECT 'papers_per_100usd_7d', 'Papers published per $100 of fleet spend fell below the floor', 'registry', 'lt', 10, 3,
  'Pillar research and cost (OWNER-ACT-REVIEW-1, agent_issues 1000778). Published versions per $100 of all-billing spend, 7 days. Read it with research_neurons_per_publication_7d: yield falls when the pipeline spends on layers that do not end in a publication. Per-step cost of the last 7 days (ai_call_counters, qnfo-research-exec): revise 1.23M neurons, ensemble 0.98M, review 0.77M, complete 0.42M, reconcile 0.31M, verify 0.19M; error rates glm-5.3-flash ensemble 27 percent, reconcile 21 percent, revise 18 percent. Lever: cut the wasted calls first (errors that are retried at full price, duplicate review layers per ENSEMBLE-POLICY-1), then move the most expensive step to a cheaper capable model, and keep the output-quality measures (v_output_quality_by_surface) from falling. Definition of done: the metric is above the floor for 7 days with no guard worse.',
- 'qnfo-research-exec', 'agent_issues', 2, 1, 'OWNER-ACT-REVIEW-1 (migrations/2026-11-05-g-owner-act-1.sql)');
+ 'qnfo-research-exec', 'agent_issues', 2, 1, 'OWNER-ACT-REVIEW-1 (migrations/2026-11-05-g-owner-act-1.sql)'
+WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers WHERE metric_key = 'papers_per_100usd_7d');
 
 -- Cause mappings: the new metric, and three breaching metrics still unmapped after LEDGER-TRUTH-E-1.
 INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
