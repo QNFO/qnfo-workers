@@ -27,6 +27,10 @@ const mk = (survivorStatus = "open") => {
   db.exec("CREATE TABLE issue_project_map (issue_id INTEGER PRIMARY KEY, project_code TEXT NOT NULL, program_code TEXT NOT NULL, kind TEXT NOT NULL, updated_at TEXT)");
   db.exec("CREATE TABLE projects (project_code TEXT PRIMARY KEY)");
   db.exec("CREATE TABLE roadmap_implementation (id INTEGER PRIMARY KEY, item TEXT, evidence TEXT)");
+  db.exec("CREATE TABLE portfolio_gaps (kind TEXT NOT NULL, entity TEXT NOT NULL, detail TEXT, day TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', resolved_at TEXT, PRIMARY KEY (kind, entity, day))");
+  for (const e of ["WORK", "PAGE", "DNS", "D1", "R2"]) db.prepare("INSERT INTO portfolio_gaps (kind, entity, day) VALUES ('no-mapped-work', ?, '2026-11-05')").run("QNFO.INFRA." + e);
+  db.exec("INSERT INTO portfolio_gaps (kind, entity, day) VALUES ('no-mapped-work', 'QNFO.OPS.ELSE', '2026-11-05'), ('project-no-owner', 'QNFO.INFRA.WORK', '2026-11-05')");
+  for (const [id, e] of [[1001950, "PAGE"]]) db.prepare("INSERT INTO issue_project_map VALUES (?, ?, 'QNFO.INFRA', 'fix', 'then')").run(id, "QNFO.INFRA." + e);
   db.prepare("INSERT INTO agent_issues VALUES (1001932, ?, 'cf-estate-1', 'open')").run(WORK);
   db.prepare("INSERT INTO agent_issues VALUES (1001901, ?, 'x', ?)").run(SURV, survivorStatus);
   db.prepare("INSERT INTO agent_issues VALUES (1001950, 'ROADMAP-1: QNFO.INFRA.PAGE #1: other', 'cf-estate-1', 'open')").run();
@@ -50,6 +54,11 @@ ok(/Supersede 2026-11-05 \(c4-next\).*1001901/.test(db.prepare("SELECT evidence 
 db.exec(sql);
 ok((db.prepare("SELECT evidence FROM roadmap_implementation WHERE id = 610").get().evidence.match(/Supersede 2026-11-05/g) || []).length === 1, "a replay appends nothing more");
 
+const gaps = Object.fromEntries(db.prepare("SELECT kind || ':' || entity AS k, status FROM portfolio_gaps").all().map((r) => [r.k, r.status]));
+ok(gaps["no-mapped-work:QNFO.INFRA.WORK"] === "closed" && gaps["no-mapped-work:QNFO.INFRA.PAGE"] === "closed", "the gap of a project that now has an open mapped issue is closed (WORK through the survivor, PAGE through its own)", gaps);
+ok(gaps["no-mapped-work:QNFO.INFRA.DNS"] === "open" && gaps["no-mapped-work:QNFO.INFRA.D1"] === "open" && gaps["no-mapped-work:QNFO.INFRA.R2"] === "open", "a gap stays open while the project has no open mapped issue (these three have none in the fixture)", gaps);
+ok(gaps["no-mapped-work:QNFO.OPS.ELSE"] === "open" && gaps["project-no-owner:QNFO.INFRA.WORK"] === "open", "another project and another gap kind are untouched", gaps);
+
 const closed = mk("closed");
 closed.exec(sql);
 ok(closed.prepare("SELECT triage_state FROM issue_triage WHERE issue_id = 1001932").get().triage_state === "triaged" && closed.prepare("SELECT project_code FROM issue_project_map WHERE issue_id = 1001901").get().project_code === "W.qnfo-fleet-control", "nothing happens while the survivor is not open (never close a duplicate in favour of a closed issue)");
@@ -57,5 +66,6 @@ ok(closed.prepare("SELECT triage_state FROM issue_triage WHERE issue_id = 100193
 db.exec(hdr("Rollback"));
 ok(t(1001932).triage_state === "triaged" && t(1001932).close_evidence === null && c("issue-1001932").status === "active" && c("issue-1001932").last_verdict === null, "the Rollback reopens the triage row and the contract");
 ok(db.prepare("SELECT project_code FROM issue_project_map WHERE issue_id = 1001901").get().project_code === "W.qnfo-fleet-control" && db.prepare("SELECT evidence FROM roadmap_implementation WHERE id = 610").get().evidence === "Deliverable (PR 7413, x).", "the Rollback restores the mapping and the row text");
+ok(db.prepare("SELECT status FROM portfolio_gaps WHERE entity = 'QNFO.INFRA.WORK' AND kind = 'no-mapped-work'").get().status === "open", "the Rollback reopens the gaps");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
