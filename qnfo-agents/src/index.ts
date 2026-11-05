@@ -736,7 +736,7 @@ export class CodeSession extends Agent<Env, State> {
     return this.sql`SELECT * FROM code_session LIMIT 1`[0] || null;
   }
 
-  private planRow(): any {
+  private planRow(): any { // standards-ok: a method definition with a return type, not a call
     const r: any = this.sql`SELECT * FROM code_session_plan WHERE id = 1`;
     const x = r[0];
     if (!x) return null;
@@ -819,12 +819,12 @@ export class CodeSession extends Agent<Env, State> {
     };
   }
 
-  private claimKeys(): string[] {
+  private claimKeys(): string[] { // standards-ok: a method definition with a return type, not a call
     const r: any = this.sql`SELECT key FROM code_session_claims`;
     return (r || []).map((x: any) => String(x.key));
   }
 
-  private async gateCheck(turn: number, name: string, args: any): Promise<{ ok: true } | { ok: false; error: string }> {
+  private async gateCheck(turn: number, name: string, args: any): Promise<{ ok: true } | { ok: false; error: string }> { // standards-ok: a method definition with a return type, not a call
     const plan = this.planRow();
     const claims = this.claimKeys();
     const d: any = sandboxGate(name, args, { planApproved: !!plan && plan.status === "approved", claims, claimed: claims.length });
@@ -839,7 +839,7 @@ export class CodeSession extends Agent<Env, State> {
 
   // The work claim goes through qnfo-deploy-guard by service binding. A refusal names the holder; a claim service that cannot be reached is recorded and the edit
   // proceeds (CLAIM-UNREACHABLE-FALLBACK-1: the pull request body then says so).
-  private async takeClaim(turn: number, key: string, tool: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  private async takeClaim(turn: number, key: string, tool: string): Promise<{ ok: true } | { ok: false; error: string }> { // standards-ok: a method definition with a return type, not a call
     const now = Date.now();
     const unreachable = async (why: string) => {
       this.sql`INSERT OR REPLACE INTO code_session_claims (key, token, holder, note, created_ms) VALUES (${key}, '', 'unreachable', ${why.slice(0, 300)}, ${now})`;
@@ -959,6 +959,8 @@ export class CodeSession extends Agent<Env, State> {
       outputTokens = Number(usage && usage.outputTokens) || 0;
       const response = await out.response;
       modelId = String(response && response.modelId || routeId);
+      // AI-METER-1: a CodeSession's tokens belong in ai_spend_ledger too, or the daily neuron budget of the loop drain (agentPlan) never sees them.
+      await meter(this.env, routeId, { i: inputTokens, o: outputTokens, n: steps + 1, c: Number((usage && usage.inputTokenDetails && usage.inputTokenDetails.cacheReadTokens) ?? (usage && usage.cachedInputTokens) ?? 0) || 0 });
       neurons = codeSessionNeurons(modelId, inputTokens, outputTokens);
       if (!neurons) neurons = codeSessionNeurons(CODE_SESSION_NEURON_BASELINE, inputTokens, outputTokens);
       costUsd = codeSessionCost(neurons);
@@ -1030,10 +1032,9 @@ async function seedMeasurements(env: Env) {
     let seeded = 0;
     const have = async (requester: string, kind: string) => Number(((await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cf_agent_requests WHERE requester = ?1 AND kind = ?2").bind(requester, kind).first()) as any || {}).n) > 0;
     if (!(await have(CODE_SESSION_REPLAY_REQUESTER, "code_session"))) {
-      for (const text of CODE_SESSION_REPLAY_TURNS) {
-        await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) VALUES (?1, 'code_session', ?2, 'low')").bind(CODE_SESSION_REPLAY_REQUESTER, text).run();
-        seeded++;
-      }
+      // one atomic batch: all ten turns or none, so a fault half-way cannot leave a replay that never completes
+      await env.AUDIT_DB.batch(CODE_SESSION_REPLAY_TURNS.map((text) => env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) VALUES (?1, 'code_session', ?2, 'low')").bind(CODE_SESSION_REPLAY_REQUESTER, text)));
+      seeded += CODE_SESSION_REPLAY_TURNS.length;
     }
     // the selftest writes cf_agent_approvals rows: wait (this tick only) until that table exists, so a deploy that lands before its migration cannot burn the one request
     let approvalsReady = true;
