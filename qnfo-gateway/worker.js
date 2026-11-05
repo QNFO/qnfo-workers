@@ -3357,7 +3357,7 @@ function plainFillAfter(env, ctx, paper) {
   };
   if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(run());
 }
-async function handlePaperDetail(request, env, path, ctx) {
+async function handlePaperDetailRaw(request, env, path, ctx) {
   // PAPER-TAGS-1: /papers/tags is a catalogue, not a paper slug; the detail handler is the single place every
   // paper URL funnels through, so the reservation lives here and applies to every host that serves papers.
   if (/^\/papers\/tags\/?$/.test(new URL(request.url).pathname)) return handleTags(request, env);
@@ -3411,17 +3411,119 @@ async function handlePaperDetail(request, env, path, ctx) {
     return json({ error: e.message }, 500);
   }
 }
+__name(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name2(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name22(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name2222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name22222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name222222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name2222222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name22222222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name222222222(handlePaperDetailRaw, "handlePaperDetailRaw");
+__name2222222222(handlePaperDetailRaw, "handlePaperDetailRaw");
+// ---- PAPER-EDGE-CACHE-1:BEGIN (RM-EDGE-CACHE-PAPERS-1, 2026-11-05, pillar reach) ----
+// A paper page took 1.5 to 1.8 s to first byte on every view (about 99 KB, 15,669 uncached 200s in 24 h on papers.qnfo.org; the response header
+// said public, max-age=3600 but a Worker's own response is never held by the zone cache), each view reading the living-paper database six
+// or more times. The page is now served from the colo's edge cache (the Cache API, the same pattern as HUB-SWR-1): a copy built by this
+// VERSION is served at once while it is younger than PEC_FRESH_MS, then for up to PEC_SWR_MS while one background rebuild per colo and
+// slug refreshes it (stale-while-revalidate), and any stored copy is served when the rebuild fails or answers 5xx (stale-if-error, the
+// 504 case of RM-EDGE-CACHE-PAPERS-1). A copy built by another VERSION is never served as fresh (a deploy that changes the rendering takes
+// effect on the next view); it is kept only for stale-if-error. Only a GET for the html page of one paper is cached: not HEAD, not a JSON
+// Accept, not a query that carries a token, not the pdf, the provenance file, the tag catalogue or any non-200 answer. The cache key is the
+// host and slug, the stored copy keeps the handler's own Cache-Control for the visitor, and every answer says X-Edge-Cache: hit,
+// stale-revalidating, miss, stale-if-error or bypass. A failing Cache API call falls back to the plain handler, never to an error page.
+// Revert: deploy the previous version (stored copies of other versions are not served as fresh).
+var PEC_FRESH_MS = 5 * 60 * 1000;
+var PEC_SWR_MS = 24 * 3600 * 1000;
+var PEC_KEEP_S = 7 * 24 * 3600;
+var PEC_LOCK_S = 30;
+function pecKey(request, slug) {
+  return new Request("https://" + new URL(request.url).host + "/__pec/v1/" + encodeURIComponent(slug));
+}
+function pecLockKey(request, slug) {
+  return new Request("https://" + new URL(request.url).host + "/__pec/lock/" + encodeURIComponent(slug));
+}
+function pecEligible(request, path) {
+  if (String(request.method || "GET").toUpperCase() !== "GET") return null;
+  const parts = String(path || "").split("/");
+  if (parts.length !== 3 || parts[1] !== "papers" || !parts[2] || /\.pdf$/i.test(parts[2]) || parts[2] === "tags") return null;
+  const u = new URL(request.url);
+  if (PP_TOKEN_QUERY.test(u.search.slice(1))) return null;
+  const accept = request.headers.get("Accept") || "";
+  if (accept.includes("application/json") && !accept.includes("text/html")) return null;
+  return parts[2];
+}
+function pecCacheable(res) {
+  return !!res && res.status === 200 && String(res.headers.get("Content-Type") || "").toLowerCase().indexOf("text/html") === 0 && !res.headers.has("Set-Cookie");
+}
+async function pecStore(cache, key, res) {
+  const body = await res.text();
+  const h = new Headers(res.headers);
+  h.set("X-Pec-Cc", res.headers.get("Cache-Control") || "public, max-age=300");
+  h.set("X-Pec-Built", String(Date.now()));
+  h.set("X-Pec-Version", VERSION);
+  h.set("Cache-Control", "public, max-age=" + PEC_KEEP_S);
+  await cache.put(key, new Response(body, { status: 200, headers: h }));
+}
+function pecServe(hit, state) {
+  const built = Number(hit.headers.get("X-Pec-Built") || 0);
+  const h = new Headers(hit.headers);
+  h.set("Cache-Control", h.get("X-Pec-Cc") || "public, max-age=300");
+  h.delete("X-Pec-Cc");
+  h.delete("X-Pec-Built");
+  h.delete("X-Pec-Version");
+  h.set("X-Edge-Cache", state);
+  h.set("X-Edge-Cache-Age", String(Math.max(0, Math.round((Date.now() - built) / 1000))));
+  return new Response(hit.body, { status: 200, headers: h });
+}
+function pecLog(where, e) {
+  console.error(JSON.stringify({ worker: "qnfo-gateway", where: where, error: String(e && e.message || e).slice(0, 200) }));
+}
+async function pecRefresh(cache, request, env, path, ctx, slug) {
+  const lock = pecLockKey(request, slug);
+  try {
+    if (await cache.match(lock)) return;
+    await cache.put(lock, new Response("1", { headers: { "Cache-Control": "public, max-age=" + PEC_LOCK_S } }));
+    const res = await handlePaperDetailRaw(request, env, path, ctx);
+    if (pecCacheable(res)) await pecStore(cache, pecKey(request, slug), res);
+  } catch (e) { pecLog("pecRefresh", e); }
+}
+async function handlePaperDetail(request, env, path, ctx) {
+  const slug = pecEligible(request, path);
+  const cache = slug && typeof caches !== "undefined" && caches.default ? caches.default : null;
+  if (!cache) return handlePaperDetailRaw(request, env, path, ctx);
+  const key = pecKey(request, slug);
+  let hit = null;
+  try { hit = await cache.match(key); } catch (e) { hit = null; }
+  if (hit) {
+    const age = Date.now() - Number(hit.headers.get("X-Pec-Built") || 0);
+    if (hit.headers.get("X-Pec-Version") === VERSION && age >= 0 && age <= PEC_SWR_MS) {
+      if (age <= PEC_FRESH_MS) return pecServe(hit, "hit");
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(pecRefresh(cache, request, env, path, ctx, slug));
+      return pecServe(hit, "stale-revalidating");
+    }
+  }
+  let res = null, err = null;
+  try { res = await handlePaperDetailRaw(request, env, path, ctx); } catch (e) { err = e; }
+  if (!res || res.status >= 500) {
+    if (hit) return pecServe(hit, "stale-if-error");
+    if (err) throw err;
+    return res;
+  }
+  if (!pecCacheable(res)) {
+    const bypass = new Response(res.body, res);
+    bypass.headers.set("X-Edge-Cache", "bypass");
+    return bypass;
+  }
+  const copy = res.clone();
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(pecStore(cache, key, copy).catch(function (e) { pecLog("pecStore", e); }));
+  const out = new Response(res.body, res);
+  out.headers.set("X-Edge-Cache", "miss");
+  return out;
+}
 __name(handlePaperDetail, "handlePaperDetail");
-__name2(handlePaperDetail, "handlePaperDetail");
-__name22(handlePaperDetail, "handlePaperDetail");
-__name222(handlePaperDetail, "handlePaperDetail");
-__name2222(handlePaperDetail, "handlePaperDetail");
-__name22222(handlePaperDetail, "handlePaperDetail");
-__name222222(handlePaperDetail, "handlePaperDetail");
-__name2222222(handlePaperDetail, "handlePaperDetail");
-__name22222222(handlePaperDetail, "handlePaperDetail");
-__name222222222(handlePaperDetail, "handlePaperDetail");
-__name2222222222(handlePaperDetail, "handlePaperDetail");
+// ---- PAPER-EDGE-CACHE-1:END ----
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
