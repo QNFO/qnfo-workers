@@ -32,6 +32,11 @@ head_sampling_rate = 1
 enabled = true
 head_sampling_rate = 0.1
 
+# CASCADE-SHADOW-1 (2026-11-05, RM-BS-QUNIVERSE-SMALL-1, pillar cost): the hourly trigger of the cascade shadow (worker.js scheduled). The shadow itself runs once per 22 hours
+# (gate on cloud_ops_events kind cascade-shadow-run) and ops_config cascade_shadow = off stops it; the other 23 ticks read one indexed row and return.
+[triggers]
+crons = ["40 * * * *"]
+
 
 # v4.4.0 — internal RAG (/v1/search) + query history (/v1/history)
 # PAPER_VZ -> qwav-research-v2 (768-dim, bge-base-en-v1.5) — same index qnfo-archive uses
@@ -121,3 +126,10 @@ binding = "OPS"
 service = "qnfo-ops"
 environment = "production"
 props = { caller = "qnfo-ai" }
+
+# AI-METER-AE-1 (2026-11-05, pillar cost, roadmap RM-ANALYTICS-ENGINE-METERS-1, agent_issues 1001927): one Workers Analytics Engine data point per routed model call
+# (provider, model, caller, outcome; calls, in/out/cached tokens, usd), written in spendRecord before the D1 guard so it survives D1 overload. The dataset is created by the
+# first write; scripts/ai_meter_ae.py reads it back into qnfo-audit.ai_meter_ae_daily. Revert: remove this block and the aiMeterWrite call (a missing binding writes nothing).
+[[analytics_engine_datasets]]
+binding = "AI_METER"
+dataset = "qnfo_ai_calls"

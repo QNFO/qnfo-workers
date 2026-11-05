@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.6.3-codeagent";
+var VERSION = "1.6.7-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -357,7 +357,19 @@ async function ensure(env) {
   if (ensured) return;
   for (const q of DDL) await env.JOBS_DB.prepare(q).run();
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // why a posting was rejected: the search learns from it
-  ensured = true;
+  ensured = true; await generateWeeklyDossier(env);
+}
+// REACH-FOCUS-1.7: weekly dossier of five named people/organizations
+async function generateWeeklyDossier(env) {
+  // Run only on Monday UTC
+  const now = new Date();
+  if (now.getUTCDay() !== 1) return;
+  // Select up to five distinct employers from recent non‑stretch matches
+  const rows = await env.JOBS_DB.prepare(
+    "SELECT DISTINCT employer FROM jobsearch_matches WHERE employer IS NOT NULL AND tier <> 'C' ORDER BY last_seen DESC LIMIT 5"
+  ).all();
+  const dossier = (rows.results || []).map(r => r.employer).filter(Boolean);
+  if (dossier.length) await setMeta(env, "weekly_dossier", JSON.stringify(dossier));
 }
 const iso = (ms) => new Date(ms).toISOString();
 const log = (event, o) => console.log(JSON.stringify({ worker: WORKER, event, ...o }));
@@ -392,7 +404,7 @@ const BOARDS = {
   greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe", "adyen", "bird", "datadog", "cloudflare", "canonical", "grafanalabs", "mozilla", "wikimedia", "khanacademy",
     "codeforamerica", "givewell", "dataiku", "fivetran", "nesta", "gallup", "rti", "ideo", "waymo", "nuro", "lyft",
     "givedirectly", "goodfire", "ionq", "psiquantum", "riverlane", "turing", "via", "catawiki", "labelbox"],
-  lever: ["palantir", "mistral", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr", "rigetti"],
+  lever: ["palantir", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr", "rigetti"],   // JS-7 (2026-11-05): mistral left Lever (HTTP 404 on Lever, Ashby and Greenhouse, 0 postings on SmartRecruiters) and held fm-jobsearch-feed-down red at 3 failed runs
   ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro"],
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
@@ -1195,10 +1207,10 @@ async function collectAndRank(ctx, onlyGroups) {
 // from the ledger and re-verified, so no model word can reach them. The outcome of each run is written to jobsearch_meta rerank_status.
 const RERANK_TOP = 25;
 const RERANK_MODEL = "@cf/zai-org/glm-5.3-flash";   // the cheapest model the floor policy allows; the router sets reasoning_effort low for an answer of at most 2048 tokens (REASONING-BUDGET-1)
-const RERANK_SYSTEM = "You order job postings for one job seeker. You may ONLY reorder the numbered postings and write one short plain sentence per posting saying why it ranks where it does, using only words and numbers that appear in the posting fields or signals you are given. Never write or suggest resume, cover letter or note text, never say anything about the job seeker's experience, years, degrees, employers or skills, and never add a fact. Answer with JSON only: {\"order\":[posting numbers, best first, each number exactly once],\"reasons\":{\"<number>\":\"one sentence\"}}.";
+const RERANK_SYSTEM = "You order job postings for one job seeker. You may ONLY reorder the numbered postings and write one short plain sentence per posting saying why it ranks where it does, using only words and numbers that appear in the posting fields or signals you are given. Never write or suggest resume, cover letter or note text, never say anything about the job seeker's experience, years, degrees, employers or skills, and never add a fact. Write about the posting in the third person and never use the words you or your. Answer with JSON only: {\"order\":[posting numbers, best first, each number exactly once],\"reasons\":{\"<number>\":\"one sentence\"}}.";
 const RERANK_SIGNAL_RE = /^(title in your lane|generic title|evidence in the posting|no matching evidence in the posting|uncommon intersection)/;
 function rerankMessages(top) {
-  const items = top.map((j, i) => ({ n: i + 1, title: j.title, company: j.company, location: j.location || "", score: j.match.score, signals: (j.match.why || []).filter((w) => RERANK_SIGNAL_RE.test(w)).slice(0, 4) }));   // posting-fit signals only: what the owner liked, rejected or applied to never leaves the worker
+  const items = top.map((j, i) => ({ n: i + 1, title: j.title, company: j.company, location: j.location || "", score: j.match.score, signals: (j.match.why || []).filter((w) => RERANK_SIGNAL_RE.test(w)).map((w) => w.replace(/\byour\b/g, "the target")).slice(0, 4) }));   // "your" would be echoed into a reason and reasonOk rejects the second person (the first live run stored 13 rank lines and no reason)   // posting-fit signals only: what the owner liked, rejected or applied to never leaves the worker
   return [{ role: "system", content: RERANK_SYSTEM }, { role: "user", content: JSON.stringify(items) }];
 }
 // {order: [0-based indexes], reasons: {index: text}} or null when the answer is not a full permutation of 1..n
@@ -1223,7 +1235,7 @@ function reasonOk(reason, job) {
   if (r.length < 8 || r.length > 240) return null;
   if (/[<>`{}\[\]\\]|https?:|www\./i.test(r)) return null;
   if (/\b(i|i'm|i've|me|my|we|our|you|your|you're|candidate|applicant|owner)\b/i.test(r)) return null;
-  const corpus = [job.title, job.company, job.location, String(job.desc || "").slice(0, 4000), ...((job.match && job.match.why) || [])].join(" ").toLowerCase();
+  const corpus = [job.title, job.company, job.location, String(job.desc || "").slice(0, 4000), job.match && Number.isFinite(job.match.score) ? "score " + job.match.score : "", ...((job.match && job.match.why) || [])].join(" ").toLowerCase();   // the posting's own score is data the model was given, so a reason may repeat it (the first live reasons all said "score of 80" and were all dropped)
   for (const m of r.matchAll(/\d[\d.,%+]*/g)) if (!corpus.includes(m[0].replace(/[.,]+$/, "").toLowerCase())) return null;
   const words = r.split(/\s+/);
   for (let i = 0; i < words.length; i++) {

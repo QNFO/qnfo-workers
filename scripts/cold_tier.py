@@ -20,9 +20,28 @@ WHY   Measured 2026-11-04: qnfo-audit holds 1.55 M rows in 639 tables, 1.45 GB w
       tables; bp26_probe_results (62 k rows) has no retention at all. Restore: read the object named in cold_archive_ledger.r2_key, gunzip, INSERT OR
       IGNORE the lines back (columns are the table's own).
 
+COLD-TIER-2 (2026-11-05, agent_issues 1001971, roadmap RM-D1-RETENTION-1): cron_fire_log (keep 3 days), fleet_runs (7) and analytics_action_log (30) join TIERS.
+      A tier may name its own ok and fail expressions (ok_sql, fail_sql), the column that orders "newer" for the keep-latest check (newer: an indexed
+      column, so the check seeks instead of scanning the key's whole history), a keep-latest key of any length (the newest row of every (cron_name,
+      outcome), (task_id, status) or (trigger_id, status) stays, so "latest ok" and "latest failure" readers still find their row) and space_ts for a
+      table whose timestamps read YYYY-MM-DD HH:MM:SS (the cutoff is written the same way, so the keep window is exact). cloud_ops_events is NOT here: its
+      id is TEXT, its rowid is not time order (heartbeat rows are upserted), and v_trust_ledger / v_process_last_run read it without a 14 day window
+      (agent_issues COLD-TIER-3). Restore is the same as for every tier: gunzip the object, INSERT OR IGNORE the lines.
+
+BLOB-TIER-1 (2026-11-05, agent_issues 1001972, roadmap RM-D1-RETENTION-1): mode "blob" keeps the row and moves its heavy columns out. code_task_ctx_archive is the
+      archive CODE-TASKS-CTX-SLIM fills (code_tasks_ctx_slim_heavy_tick copies base and patch of a finished task out of code_tasks.ctx, 40 rows a tick): read 2026-11-05 it
+      held 1,153 rows with 108.6 MB of base and 75.8 MB of patch, about 184 MB of the 1.32 GB file, and no reader of those two columns (fleet-graph impact: only that
+      trigger touches the table, and it reads task_id and slimmed). A chunk is the next rows that are slimmed = 1, older than keep_days and still hold a blob; they are written
+      with ALL their columns (plus _rid, the rowid) to R2, read back and checked, ledgered (mode blob), and only then are base and patch set to NULL (task_id, orig_ctx_bytes,
+      slimmed stay, so the trigger's NOT EXISTS keeps working). Restore: gunzip the object named in cold_archive_ledger.r2_key and
+      UPDATE code_task_ctx_archive SET base = ?, patch = ? WHERE task_id = ? for each line. paper_integrity_backups is NOT here although the issue lists it: ciBackfillRetracted
+      and noticeRepairTick read its body_md to restore a retracted paper from the earliest backup (qnfo-research-exec), and errata_actions / version_queue bodies of unfinished
+      rows are read by the errata and revision pipelines; email_raw_archive is personal-plane text. Those need their own status filters (agent_issues BLOB-TIER-2).
+
 Runs from scripts/continuity_snapshot.py main() (the remediation-consumer workflow), never raises, prints one JSON line per run.
 Self-test: python scripts/cold_tier.py --selftest
 """
+import calendar
 import gzip
 import hashlib
 import io
@@ -36,7 +55,7 @@ import urllib.parse
 import urllib.request
 
 BUCKET = "qnfo-backups"
-COLD_BUDGET_SEC = float(os.environ.get("COLD_BUDGET_SEC") or 150)
+COLD_BUDGET_SEC = float(os.environ.get("COLD_BUDGET_SEC") or 270)   # 150 until COLD-TIER-2, 210 until COLD-TIER-TUNE-1: seven tiers share it (the workflow step allows 8 minutes for all four stages, the others take about 1.5)
 CHUNKS_PER_TIER = int(os.environ.get("COLD_CHUNKS_PER_TIER") or 6)
 DELETE_BATCH = 400          # D1 rows in one DELETE statement (RETENTION-PRUNE-SPREAD-1: a bigger statement stalls every other query)
 DELETE_PAUSE_SEC = 1.0
@@ -50,6 +69,17 @@ TIERS = [
      "ok": "ok", "num": None, "roll_days": 60, "chunk": 800},
     {"table": "remediation_verifications", "ts": "verified_at", "keep_days": 6, "mode": "copy", "latest": None, "dims": ("class", "transport"),
      "ok": "pass", "num": None, "roll_days": 7, "chunk": 2000},
+    # COLD-TIER-2. Readers (fleet-graph impact, 2026-11-05): v_cron_activity (7 days), v_cron_faults_worker (2 days; errors since the last ok), cronGridDue (last ok and
+    # errors since it, per cron_name) for cron_fire_log; v_cron_faults_task (last 5,000 ids, 24 h), v_cron_activity for fleet_runs; v_persona_recovered_close (newest
+    # row per trigger and status) for analytics_action_log. The keep-latest key therefore carries the status column the reader filters on.
+    {"table": "cron_fire_log", "ts": "fired_at", "keep_days": 3, "mode": "delete", "latest": ("cron_name", "outcome"), "dims": ("cron_name", "outcome"),
+     "ok": None, "ok_sql": "outcome IN ('ok', 'idle')", "fail_sql": "outcome = 'error'", "num": None, "newer": "fired_epoch_ms", "roll_days": 16, "chunk": 2000},
+    {"table": "fleet_runs", "ts": "started_at", "keep_days": 7, "mode": "delete", "latest": ("task_id", "status"), "dims": ("task_id", "status"),
+     "ok": None, "ok_sql": "status = 'ok'", "fail_sql": "status = 'failed'", "num": "cost_neurons", "newer": "id", "roll_days": 16, "chunk": 2000},
+    {"table": "analytics_action_log", "ts": "fired_at", "keep_days": 30, "mode": "delete", "latest": ("trigger_id", "status"), "dims": ("trigger_id", "status"),
+     "ok": None, "ok_sql": "status = 'recovered'", "fail_sql": "status = 'fired'", "num": "metric_value", "newer": "id", "space_ts": True, "roll_days": 70, "chunk": 800},
+    # BLOB-TIER-1: the row stays, base and patch go to R2 (see the docstring). keep_days 0.25: a row is only here once code_tasks.ctx no longer holds the text (slimmed = 1).
+    {"table": "code_task_ctx_archive", "ts": "archived_at", "keep_days": 0.25, "mode": "blob", "cols": ("base", "patch"), "where": "slimmed = 1", "chunk": 16, "chunks": 12},
 ]
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -92,6 +122,12 @@ def _day(offset_days, now=None):
     return time.strftime("%Y-%m-%d", time.gmtime((now or time.time()) + offset_days * 86400))
 
 
+def _next_day(day):
+    """The calendar day after a YYYY-MM-DD string, in UTC. (mktime minus time.timezone read a local midnight that daylight saving shifted by an hour, so on a machine
+    whose zone has DST the rollup loop stayed on the same day for ever; the runners are UTC, a developer machine is not.)"""
+    return time.strftime("%Y-%m-%d", time.gmtime(calendar.timegm(time.strptime(day, "%Y-%m-%d")) + 86400))
+
+
 def _iso(offset_days, now=None):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((now or time.time()) + offset_days * 86400))
 
@@ -109,18 +145,20 @@ def rollup(d1, t, now=None, max_days=40):
     out, day = [], max(lo, first)
     while day < today and len(out) < max_days:
         if day not in have:
-            nxt = time.strftime("%Y-%m-%d", time.gmtime(time.mktime(time.strptime(day, "%Y-%m-%d")) - time.timezone + 86400))
+            nxt = _next_day(day)
             ok = t["ok"]
+            ok_sql = t.get("ok_sql") or ('"%s" = 1' % ok if ok else "0")
+            fail_sql = t.get("fail_sql") or ('"%s" = 0' % ok if ok else "0")
             num_avg = 'ROUND(AVG("%s"), 1)' % t["num"] if t["num"] else "NULL"
             num_max = 'MAX("%s")' % t["num"] if t["num"] else "NULL"
             d1('INSERT OR REPLACE INTO cold_rollup_daily (src_table, day, dim1, dim2, n, n_ok, n_fail, v1, v2) '
-               'SELECT ?1, ?2, COALESCE("%s", ""), COALESCE("%s", ""), COUNT(*), COALESCE(SUM("%s" = 1), 0), COALESCE(SUM("%s" = 0), 0), %s, %s '
-               'FROM "%s" WHERE "%s" >= ?2 AND "%s" < ?3 GROUP BY 3, 4' % (d1_dims[0], d1_dims[1], ok, ok, num_avg, num_max, tab, ts, ts),
+               'SELECT ?1, ?2, COALESCE("%s", ""), COALESCE("%s", ""), COUNT(*), COALESCE(SUM(%s), 0), COALESCE(SUM(%s), 0), %s, %s '
+               'FROM "%s" WHERE "%s" >= ?2 AND "%s" < ?3 GROUP BY 3, 4' % (d1_dims[0], d1_dims[1], ok_sql, fail_sql, num_avg, num_max, tab, ts, ts),
                [tab, day, nxt])
             d1("INSERT OR IGNORE INTO cold_rollup_daily (src_table, day, dim1, dim2, n, n_ok, n_fail) "
                "SELECT ?1, ?2, '', '', 0, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM cold_rollup_daily WHERE src_table = ?1 AND day = ?2)", [tab, day])
             out.append(day)
-        day = time.strftime("%Y-%m-%d", time.gmtime(time.mktime(time.strptime(day, "%Y-%m-%d")) - time.timezone + 86400))
+        day = _next_day(day)
     return out
 
 
@@ -145,19 +183,37 @@ def _edge_id(d1, tab, ts, cutoff):
     return best
 
 
+def _cutoff(t, now=None):
+    """keep_days ago, written the way the table writes its timestamps (a table with space_ts reads YYYY-MM-DD HH:MM:SS, the rest ISO with a T and a Z)."""
+    c = _iso(-t["keep_days"], now)
+    return c.replace("T", " ").rstrip("Z") if t.get("space_ts") else c
+
+
+def chunk_sql(t):
+    """Delete-mode candidates: rows older than the cutoff whose day is rolled up and that have a NEWER row with the same keep-latest key. "Newer" is read on
+    t["newer"] when the table has an index that makes the check a seek (cron_fire_log: cron_name + fired_epoch_ms; fleet_runs and analytics_action_log: the key + id),
+    else on the timestamp column."""
+    tab, ts = t["table"], t["ts"]
+    same = " AND ".join('q."%s" = p."%s"' % (k, k) for k in t["latest"])
+    newer = t.get("newer") or ts
+    return ('SELECT p.* FROM "%s" p WHERE p.id <= ?1 AND p."%s" < ?2 AND EXISTS (SELECT 1 FROM "%s" q WHERE %s AND q."%s" > p."%s") '
+            'AND substr(p."%s", 1, 10) IN (SELECT day FROM cold_rollup_daily WHERE src_table = ?3) '
+            'ORDER BY p.id LIMIT %d' % (tab, ts, tab, same, newer, newer, ts, t["chunk"]))
+
+
 def _chunk_rows(d1, t, now=None):
     """The next chunk of rows to archive, oldest id first, as dicts. Mode delete: rows older than keep_days that have a newer row of the same key;
     mode copy: rows older than keep_days after the last archived id."""
     tab, ts = t["table"], t["ts"]
-    cutoff = _iso(-t["keep_days"], now)
+    cutoff = _cutoff(t, now)
+    if t["mode"] == "blob":
+        has = " OR ".join('"%s" IS NOT NULL' % c for c in t["cols"])
+        return d1('SELECT rowid AS _rid, * FROM "%s" WHERE %s AND (%s) AND "%s" < ?1 ORDER BY rowid LIMIT %d' % (tab, t["where"], has, ts, t["chunk"]), [cutoff])
     if t["mode"] == "delete":
         edge = _edge_id(d1, tab, ts, cutoff)
         if edge is None:
             return []
-        k1, k2 = t["latest"]
-        return d1('SELECT p.* FROM "%s" p WHERE p.id <= ?1 AND p."%s" < ?2 AND EXISTS (SELECT 1 FROM "%s" q WHERE q."%s" = p."%s" AND q."%s" = p."%s" AND q."%s" > p."%s") '
-                  'AND substr(p."%s", 1, 10) IN (SELECT day FROM cold_rollup_daily WHERE src_table = ?3) '
-                  'ORDER BY p.id LIMIT %d' % (tab, ts, tab, k1, k1, k2, k2, ts, ts, ts, t["chunk"]), [edge, cutoff, tab])
+        return d1(chunk_sql(t), [edge, cutoff, tab])
     last = d1("SELECT COALESCE(MAX(id_max), 0) AS m FROM cold_archive_ledger WHERE src_table = ?1 AND verified = 1", [tab])[0]["m"]
     return d1('SELECT * FROM "%s" WHERE id > ?1 AND "%s" < ?2 ORDER BY id LIMIT %d' % (tab, ts, t["chunk"]), [last, cutoff])
 
@@ -165,7 +221,8 @@ def _chunk_rows(d1, t, now=None):
 def archive_chunk(d1, r2, t, rows, now=None, sleep=time.sleep):
     """Write, read back, verify, ledger, then (delete mode) prune. Returns a small dict; never deletes before the verify passes."""
     tab = t["table"]
-    ids = [int(r["id"]) for r in rows]
+    idk = "_rid" if t["mode"] == "blob" else "id"
+    ids = [int(r[idk]) for r in rows]
     lo, hi = min(ids), max(ids)
     data = gz_bytes(rows)
     sha = hashlib.sha256(data).hexdigest()
@@ -176,21 +233,41 @@ def archive_chunk(d1, r2, t, rows, now=None, sleep=time.sleep):
     if back is None or hashlib.sha256(back).hexdigest() != sha:
         return {"error": "verify-sha-mismatch", "key": key}
     lines = gzip.decompress(back).decode("utf-8").splitlines()
-    if len(lines) != len(rows) or sorted(json.loads(x)["id"] for x in lines) != sorted(ids):
+    if len(lines) != len(rows) or sorted(json.loads(x)[idk] for x in lines) != sorted(ids):
         return {"error": "verify-rows-mismatch", "key": key}
     d1("INSERT INTO cold_archive_ledger (src_table, id_min, id_max, rows, bytes, sha256, r2_key, mode, verified) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)",
        [tab, lo, hi, len(rows), len(data), sha, key, t["mode"]])
     out = {"key": key, "rows": len(rows), "bytes": len(data)}
-    if t["mode"] != "delete":
+    if t["mode"] not in ("delete", "blob"):
         return out
+    blob = t["mode"] == "blob"
+    col = "rowid" if blob else "id"
     for i in range(0, len(ids), DELETE_BATCH):
-        part = ids[i:i + DELETE_BATCH]
-        d1('DELETE FROM "%s" WHERE id IN (%s)' % (tab, ",".join(str(x) for x in part)))
+        part = ",".join(str(x) for x in ids[i:i + DELETE_BATCH])
+        if blob:
+            d1('UPDATE "%s" SET %s WHERE rowid IN (%s)' % (tab, ", ".join('"%s" = NULL' % c for c in t["cols"]), part))
+        else:
+            d1('DELETE FROM "%s" WHERE id IN (%s)' % (tab, part))
         sleep(DELETE_PAUSE_SEC)
-    left = int(d1('SELECT COUNT(*) AS n FROM "%s" WHERE id IN (%s)' % (tab, ",".join(str(x) for x in ids[:900])))[0]["n"] or 0)
+    still = (" AND (" + " OR ".join('"%s" IS NOT NULL' % c for c in t["cols"]) + ")") if blob else ""
+    left = int(d1('SELECT COUNT(*) AS n FROM "%s" WHERE %s IN (%s)%s' % (tab, col, ",".join(str(x) for x in ids[:900]), still))[0]["n"] or 0)
     d1("UPDATE cold_archive_ledger SET deleted_rows = ?1, deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE r2_key = ?2", [len(ids) - left, key])
     out["deleted"] = len(ids) - left
     return out
+
+
+def brief(tiers):
+    """One short clause per tier for the cloud_ops_events line. The line used to be the whole JSON cut at 400 characters, which lost every tier after the third
+    (COLD-TIER-OBS-1: the 04:32Z run of 2026-11-05 showed cron_fire_log and then nothing)."""
+    parts = []
+    for name, v in tiers.items():
+        s = "%s rolled=%d chunks=%d rows=%d deleted=%d" % (name, len(v.get("rolled") or []), v.get("chunks", 0), v.get("rows", 0), v.get("deleted", 0))
+        if v.get("stopped"):
+            s += " stopped=" + str(v["stopped"])
+        if v.get("error"):
+            s += " error=" + str(v["error"])[:60]
+        parts.append(s)
+    return "; ".join(parts)
 
 
 def run(d1, r2=None, now=None, sleep=time.sleep, tiers=None, deadline=None):
@@ -205,15 +282,24 @@ def run(d1, r2=None, now=None, sleep=time.sleep, tiers=None, deadline=None):
             import remediation_consumer as RC
             r2 = R2(RC)
         stop = deadline or (time.time() + COLD_BUDGET_SEC)
-        for t in (tiers or TIERS):
+        # COLD-TIER-FAIR-1: the first tiers of the list used to spend the whole budget every run (the 04:07, 04:12 and 04:32Z runs of 2026-11-05 ended with
+        # bp26_probe_results "stopped: budget" and nothing for the tiers after it), so a tier added later never got a chunk while fleet_probe_log had a backlog.
+        # The order now rotates every 15 minutes, and COLD-TIER-SHARE-1 gives each tier an equal share of the time that is left (a tier with nothing to move hands its
+        # share on): rotation alone made a tier wait for its turn as the first one, about every 105 minutes with seven tiers, which is 17 hours for the 50,000 rows
+        # of cron_fire_log; with shares every tier moves a few chunks on every run.
+        order = list(tiers or TIERS)
+        k = int((now or time.time()) // 900) % len(order)
+        rotated = order[k:] + order[:k]
+        for i, t in enumerate(rotated):
             res = out["tiers"].setdefault(t["table"], {"rolled": [], "chunks": 0, "rows": 0, "deleted": 0})
             if not IDENT.match(t["table"]):
                 res["error"] = "odd-name"
                 continue
             try:
-                res["rolled"] = rollup(d1, t, now)
-                for _ in range(CHUNKS_PER_TIER):
-                    if time.time() > stop:
+                res["rolled"] = [] if t["mode"] == "blob" else rollup(d1, t, now)
+                tier_stop = min(stop, time.time() + max(0.0, stop - time.time()) / (len(rotated) - i))
+                for _ in range(t.get("chunks") or CHUNKS_PER_TIER):
+                    if time.time() > tier_stop:
                         res["stopped"] = "budget"
                         break
                     rows = _chunk_rows(d1, t, now)
@@ -233,7 +319,7 @@ def run(d1, r2=None, now=None, sleep=time.sleep, tiers=None, deadline=None):
         if any(v["rows"] or v["rolled"] for v in out["tiers"].values()):
             try:
                 d1("INSERT INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'cold-tier', 'ok', ?2, 'continuity-snapshot')",
-                   ["cold-tier-%d" % int(time.time()), ("COLD-TIER-1: " + json.dumps(out["tiers"]))[:400]])
+                   ["cold-tier-%d" % int(time.time()), ("COLD-TIER-1: " + brief(out["tiers"]))[:900]])
             except Exception as e:  # noqa: BLE001
                 out["event_error"] = str(e)[:120]
     except Exception as e:  # noqa: BLE001
@@ -243,6 +329,160 @@ def run(d1, r2=None, now=None, sleep=time.sleep, tiers=None, deadline=None):
 
 
 # ---- self-test -----------------------------------------------------------------------------------------------------------------------
+def selftest_tier2(c, d1, st, now, pauses):
+    """COLD-TIER-2: the three tiers with their own ok expressions, keep-latest keys, newer columns and timestamp format, on tables shaped like the live ones."""
+    c.executescript("""
+CREATE TABLE cron_fire_log (id INTEGER PRIMARY KEY AUTOINCREMENT, cron_name TEXT, task_id TEXT, cron_expr TEXT, fired_at TEXT, fired_epoch_ms INTEGER, outcome TEXT, source TEXT, note TEXT);
+CREATE INDEX idx_cron_fire_log_name_ms ON cron_fire_log (cron_name, fired_epoch_ms);
+CREATE TABLE fleet_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, cron_name TEXT, status TEXT, started_at TEXT, finished_at TEXT, result TEXT, error TEXT, cost_neurons REAL);
+CREATE INDEX idx_fleet_runs_task_status ON fleet_runs (task_id, status, id);
+CREATE TABLE analytics_action_log (id INTEGER PRIMARY KEY AUTOINCREMENT, trigger_id INTEGER, fired_at TEXT, metric_value REAL, action TEXT, queue_target TEXT, status TEXT, notes TEXT);
+CREATE INDEX idx_aal_trigger_id ON analytics_action_log (trigger_id, id);
+""")
+    T = {x["table"]: x for x in TIERS}
+    assert all(n in T for n in ("cron_fire_log", "fleet_runs", "analytics_action_log")), "the three COLD-TIER-2 tiers are in TIERS"
+    HOUR = 3600
+
+    def at(age_h):
+        return now - age_h * HOUR
+
+    # cron_fire_log: A runs hourly for 6 days (one error 134 h ago); B stopped 4 days ago (hourly ok for 2 days, one error 90 h ago)
+    rows = [(h, "A", "error" if h == 134 else "ok") for h in range(144, -1, -1)] + [(h, "B", "ok") for h in range(144, 95, -1)] + [(90, "B", "error")]
+    for h, name, out in sorted(rows, key=lambda r: -r[0]):
+        c.execute("INSERT INTO cron_fire_log (cron_name, fired_at, fired_epoch_ms, outcome, source) VALUES (?, ?, ?, ?, ?)",
+                  [name, _iso(0, at(h))[:-1] + ".123Z", int(at(h) * 1000), out, "worker:" + name])
+    # fleet_runs: task X every 12 h for 10 days, one failed run 192 h ago; task Y only recent
+    runs = [(h, "X", "failed" if h == 192 else "ok") for h in range(240, -1, -12)] + [(h, "Y", "ok") for h in (30, 20, 10, 1)]
+    for h, task, status in sorted(runs, key=lambda r: -r[0]):
+        c.execute("INSERT INTO fleet_runs (task_id, cron_name, status, started_at, cost_neurons) VALUES (?, ?, ?, ?, ?)",
+                  [task, task, status, _iso(0, at(h))[:-1] + ".500Z", float(h % 5)])
+    # analytics_action_log (timestamps with a space): trigger 1 'fired' once a day from 40 days to 6 days ago, trigger 2 'fired' once, 35 days ago
+    acts = [(d * 24 + 1, 1, "fired") for d in range(40, 5, -1)] + [(35 * 24 + 2, 2, "fired"), (5 * 24, 1, "recovering"), (24, 1, "recovered")]
+    for h, trig, status in sorted(acts, key=lambda r: -r[0]):
+        c.execute("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, status) VALUES (?, ?, 1.5, 'a', ?)",
+                  [trig, _iso(0, at(h)).replace("T", " ").rstrip("Z"), status])
+    c.commit()
+    tiers = [dict(T["cron_fire_log"], chunk=100), dict(T["fleet_runs"], chunk=100), dict(T["analytics_action_log"], chunk=100)]
+    before = {t["table"]: d1('SELECT COUNT(*) n FROM "%s"' % t["table"])[0]["n"] for t in tiers}
+    # the correlated keep-latest check must be an index seek on every new tier, never a scan of the key's whole history
+    for t in tiers:
+        plan = " | ".join(r["detail"] for r in d1("EXPLAIN QUERY PLAN " + chunk_sql(t), [10 ** 9, "9", t["table"]]))
+        assert re.search(r"SEARCH q USING (COVERING )?INDEX idx_", plan), (t["table"], plan)
+    for _ in range(12):
+        r = run(d1, st, now, pauses.append, tiers)
+        assert all("error" not in v for v in r["tiers"].values()), r
+    for t in tiers:
+        tab = t["table"]
+        cut = _cutoff(t, now)
+        led = d1("SELECT SUM(rows) r, SUM(deleted_rows) d, MIN(verified) v, COUNT(*) n FROM cold_archive_ledger WHERE src_table = ?", [tab])[0]
+        left = d1('SELECT COUNT(*) n FROM "%s"' % tab)[0]["n"]
+        assert led["n"] >= 1 and led["v"] == 1 and led["r"] == led["d"] == before[tab] - left, (tab, led, before[tab], left)
+        old = d1('SELECT COUNT(*) n FROM "%s" WHERE "%s" < ?' % (tab, t["ts"]), [cut])[0]["n"]
+        want = {"cron_fire_log": 3, "fleet_runs": 1, "analytics_action_log": 1}[tab]
+        assert old == want, (tab, "rows older than the cutoff that stay are exactly the newest of their key", old, want)
+        seen = []
+        for k, v in st.o.items():
+            if "/%s/" % tab in k:
+                seen += [json.loads(x)["id"] for x in gzip.decompress(v).decode().splitlines()]
+        assert len(seen) == len(set(seen)) == led["r"], (tab, len(seen), led["r"])
+        ro = d1("SELECT SUM(n) n, SUM(n_ok) o, SUM(n_fail) f, MAX(day) hi FROM cold_rollup_daily WHERE src_table = ?", [tab])[0]
+        assert ro["n"] >= led["r"] and ro["hi"] < _day(0, now), (tab, ro)
+    # the readers' "latest ok" and "latest failure" rows are still there
+    b = {x["outcome"]: x["h"] for x in d1("SELECT outcome, MIN(CAST((? - fired_epoch_ms) / 3600000 AS INTEGER)) h FROM cron_fire_log WHERE cron_name = 'B' GROUP BY outcome", [int(now * 1000)])}
+    assert b == {"ok": 96, "error": 90}, b
+    assert d1("SELECT COUNT(*) n FROM cron_fire_log WHERE cron_name = 'A' AND outcome = 'error'")[0]["n"] == 1
+    assert d1("SELECT COUNT(*) n FROM fleet_runs WHERE task_id = 'X' AND status = 'failed'")[0]["n"] == 1
+    assert d1("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id = 2")[0]["n"] == 1
+    # rollup expressions: ok_sql and fail_sql counted by the tier's own meaning, not by an ok column
+    rc = d1("SELECT SUM(n_ok) o, SUM(n_fail) f FROM cold_rollup_daily WHERE src_table = 'cron_fire_log' AND dim1 = 'A'")[0]
+    assert rc["f"] == 1 and rc["o"] >= 100, rc
+    rf = d1("SELECT SUM(n_ok) o, SUM(n_fail) f, MAX(v2) m FROM cold_rollup_daily WHERE src_table = 'fleet_runs' AND dim1 = 'X'")[0]
+    assert rf["f"] == 1 and rf["o"] >= 10 and rf["m"] is not None, rf
+    ra = d1("SELECT SUM(n) n FROM cold_rollup_daily WHERE src_table = 'analytics_action_log' AND dim1 = '2'")[0]
+    assert ra["n"] == 1, ra
+    # a timestamp written with a space is compared as written: the cutoff of that tier has no T and no Z
+    assert " " in _cutoff(T["analytics_action_log"], now) and "T" not in _cutoff(T["analytics_action_log"], now) and "T" in _cutoff(T["cron_fire_log"], now)
+
+
+def selftest_share(c, d1, now):
+    """COLD-TIER-SHARE-1: three tiers with a long backlog and a budget that only one of them could use up: every tier still moves chunks."""
+    for n in ("share_a", "share_b", "share_c"):
+        c.execute("CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, name TEXT, transport TEXT, ok INTEGER, ms INTEGER)" % n)
+        c.executemany("INSERT INTO %s (ts, name, transport, ok, ms) VALUES (?, 'p', 'http', 1, 5)" % n, [(_iso(0, now - 6 * 86400 + i * 60),) for i in range(3000)])
+        c.execute("INSERT INTO %s (ts, name, transport, ok, ms) VALUES (?, 'p', 'http', 1, 5)" % n, [_iso(0, now - 3600)])
+    c.commit()
+
+    class Slow:
+        def __init__(self):
+            self.o = {}
+
+        def put(self, key, data):
+            time.sleep(0.1)
+            self.o[key] = data
+            return True
+
+        def get(self, key):
+            return self.o.get(key)
+    tiers = [dict(TIERS[0], table=n, chunk=100, chunks=60) for n in ("share_a", "share_b", "share_c")]
+    r = run(d1, Slow(), now, lambda s: None, tiers, deadline=time.time() + 3.0)
+    moved = {k: v["chunks"] for k, v in r["tiers"].items()}
+    assert all(v >= 3 for v in moved.values()), ("every tier gets a share of the budget", moved)
+    assert max(moved.values()) <= 20 and all(v["stopped"] == "budget" for v in r["tiers"].values() if v["chunks"] < 60), moved
+
+
+def selftest_blob(c, d1, st, now, pauses):
+    """BLOB-TIER-1: the row stays, the heavy columns go to R2 after a verified read-back, and only for rows that are slimmed, old enough and still heavy."""
+    c.executescript("""
+CREATE TABLE code_task_ctx_archive (task_id TEXT PRIMARY KEY, base TEXT, patch TEXT, orig_ctx_bytes INTEGER, archived_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), slimmed INTEGER NOT NULL DEFAULT 0);
+""")
+    T = [x for x in TIERS if x["table"] == "code_task_ctx_archive"]
+    assert len(T) == 1 and T[0]["mode"] == "blob", "code_task_ctx_archive is a blob tier"
+    tiers = [dict(T[0], chunk=4)]
+    ins = c.execute
+
+    def put(tid, base, patch, age_h, slimmed):
+        ins("INSERT INTO code_task_ctx_archive (task_id, base, patch, orig_ctx_bytes, archived_at, slimmed) VALUES (?, ?, ?, ?, ?, ?)",
+            [tid, base, patch, len(base or "") + len(patch or ""), _iso(0, now - age_h * 3600), slimmed])
+    for i in range(9):        # nine heavy finished rows, a day old: all go
+        put("old%d" % i, "B" * (500 + i), "P" * (300 + i), 24, 1)
+    put("fresh", "BF" * 100, "PF" * 100, 1, 1)            # an hour old, inside keep_days (6 h)
+    put("unslimmed", "BU" * 100, "PU" * 100, 24, 0)       # code_tasks.ctx still holds the text: the archive row is not final
+    put("light", None, None, 24, 1)                       # nothing heavy to move
+    put("basefree", None, "P" * 50, 24, 1)                # only one column heavy
+    c.commit()
+    want = {r["task_id"]: (r["base"], r["patch"]) for r in d1("SELECT task_id, base, patch FROM code_task_ctx_archive")}
+    for _ in range(6):
+        r = run(d1, st, now, pauses.append, tiers)
+        assert "error" not in r["tiers"]["code_task_ctx_archive"], r
+    got = {r["task_id"]: (r["base"], r["patch"]) for r in d1("SELECT task_id, base, patch FROM code_task_ctx_archive")}
+    assert len(got) == len(want) == 13, "no row is deleted"
+    moved = [k for k in want if got[k] == (None, None) and want[k] != (None, None)]
+    assert sorted(moved) == sorted(["old%d" % i for i in range(9)] + ["basefree"]), moved
+    assert got["fresh"] == want["fresh"] and got["unslimmed"] == want["unslimmed"], "inside keep_days and not slimmed rows keep their text"
+    assert d1("SELECT COUNT(*) n FROM code_task_ctx_archive WHERE slimmed = 1 AND orig_ctx_bytes IS NOT NULL")[0]["n"] == 12, "task_id, orig_ctx_bytes and slimmed stay"
+    led = d1("SELECT SUM(rows) r, SUM(deleted_rows) d, MIN(verified) v, COUNT(*) n FROM cold_archive_ledger WHERE src_table = 'code_task_ctx_archive'")[0]
+    assert led["r"] == led["d"] == 10 and led["v"] == 1 and led["n"] == 3, led
+    # every nulled value is restorable from exactly one object, byte for byte
+    back = {}
+    for k, v in st.o.items():
+        if "/code_task_ctx_archive/" in k:
+            for x in gzip.decompress(v).decode().splitlines():
+                j = json.loads(x)
+                assert j["task_id"] not in back, "once"
+                back[j["task_id"]] = (j["base"], j["patch"])
+    assert all(back[k] == want[k] for k in moved) and sorted(back) == sorted(moved), "the objects hold the original text of every row that was nulled"
+    n_obj = len([k for k in st.o if "/code_task_ctx_archive/" in k])
+    assert run(d1, st, now, pauses.append, tiers)["tiers"]["code_task_ctx_archive"]["rows"] == 0 and len([k for k in st.o if "/code_task_ctx_archive/" in k]) == n_obj, "a finished table is a no-op"
+    # a failed read-back nulls nothing
+    put("late1", "L" * 200, "M" * 200, 24, 1)
+    c.commit()
+    st.corrupt = True
+    bad = run(d1, st, now, pauses.append, tiers)
+    assert bad["tiers"]["code_task_ctx_archive"]["error"] == "verify-sha-mismatch", bad
+    assert d1("SELECT base FROM code_task_ctx_archive WHERE task_id = 'late1'")[0]["base"] == "L" * 200, "nothing is nulled before the verify passes"
+    st.corrupt = False
+
+
 def selftest():
     import sqlite3
     c = sqlite3.connect(":memory:")
@@ -327,6 +567,13 @@ CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, cl
     assert bad["tiers"]["fleet_probe_log"]["error"] == "verify-sha-mismatch", bad
     assert d1("SELECT COUNT(*) n FROM cold_archive_ledger")[0]["n"] == n_led and d1("SELECT COUNT(*) n FROM fleet_probe_log")[0]["n"] == n_rows
     st.corrupt = False
+    selftest_tier2(c, d1, st, now, pauses)
+    selftest_blob(c, d1, st, now, pauses)
+    selftest_share(c, d1, now)
+    # the event line names every tier (7 of them, none cut) and carries an error
+    line = brief({"a": {"rolled": ["d"], "chunks": 2, "rows": 5, "deleted": 5}, "b": {"rolled": [], "chunks": 0, "rows": 0, "deleted": 0, "stopped": "budget"}, "c": {"error": "verify-sha-mismatch"}})
+    assert "a rolled=1 chunks=2 rows=5 deleted=5" in line and "b rolled=0" in line and "stopped=budget" in line and "c rolled=0" in line and "error=verify-sha-mismatch" in line, line
+    assert len(brief({t["table"]: {"rolled": [], "chunks": 6, "rows": 4800, "deleted": 4800} for t in TIERS})) < 900, "all tiers fit in the event text"
     # kill switch
     d1("INSERT INTO ops_config VALUES ('cold_tier', 'off')")
     assert run(d1, st, now, pauses.append, tiers)["status"] == "off" and d1("SELECT COUNT(*) n FROM fleet_probe_log")[0]["n"] == n_rows
