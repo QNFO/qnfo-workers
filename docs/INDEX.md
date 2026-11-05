@@ -79,6 +79,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [EXEC-2026-09-08 — Backlog drain executed; listIssues one-line fix (pending deploy)](EXEC-2026-09-08-listIssues-fix-pending.md) - `docs/EXEC-2026-09-08-listIssues-fix-pending.md`
 - [Exuvia integration (EXUVIA-1, EXUVIA-HANDOFF-1)](EXUVIA-INTEGRATION.md) - `docs/EXUVIA-INTEGRATION.md`
 - [FIX-2026-09-07 — ops_issues_list returns 0 rows (missing await on D1 .all())](FIX-2026-09-07-ops_issues_list-await.md) - `docs/FIX-2026-09-07-ops_issues_list-await.md`
+- [QNFO fleet audit, 2026-10-30](FLEET-AUDIT-2026-10-30.md) - `docs/FLEET-AUDIT-2026-10-30.md`
 - [FLEET-BUDGET (canonical, 2026-09-26) -- the consolidation wave plan](FLEET-BUDGET.md) - `docs/FLEET-BUDGET.md`
 - [FLEET-GRAPH-1: the fleet code and topology graph](FLEET-GRAPH.md) - `docs/FLEET-GRAPH.md`
 - [FLEET-NODE-MAP (canonical, 2026-09-26)](FLEET-NODE-MAP.md) - `docs/FLEET-NODE-MAP.md`
@@ -151,6 +152,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [WebMCP on the QNFO fleet (WEBMCP-FLEET-1)](WEBMCP.md) - `docs/WEBMCP.md`
 - [worker_logs sampling contract (WORKER-LOGS-CONTRACT-1)](WORKER-LOGS-CONTRACT.md) - `docs/WORKER-LOGS-CONTRACT.md`
 - [Workers standards (WORKERS-STANDARDS-DOC-1)](WORKERS-STANDARDS.md) - `docs/WORKERS-STANDARDS.md`
+- [YouTube channel packaging, ready to paste (YT-18)](YOUTUBE-CHANNEL-PACKAGE.md) - `docs/YOUTUBE-CHANNEL-PACKAGE.md`
 - [YouTube Shorts pipeline: cost model and tool choices (YT-SERVER-1, 2026-10-27)](YOUTUBE-PIPELINE-COST.md) - `docs/YOUTUBE-PIPELINE-COST.md`
 - [YouTube pipeline from plain-language papers (YT-POC-1)](YOUTUBE-PIPELINE.md) - `docs/YOUTUBE-PIPELINE.md`
 - [Shared fleet operating library](agent-library/README.md) - `docs/agent-library/README.md`
