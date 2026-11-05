@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.65.0-tool-arg-alias";
+var VERSION = "2.68.0-tool-arg-alias";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -1337,6 +1337,56 @@ async function logRouterMetric(env, rec) {
   }
 }
 __name(logRouterMetric, "logRouterMetric");
+// MODEL-MATRIX-1 (agent_issues 1000708, docs/MODEL-MATRIX.md row gate-decision), shadow mode only: next to the real routing of a chat turn, the decision model clef-flash is asked the
+// two questions the gate would route on (which class of model answers this task: free_small, cheap_mid or frontier; does it need a tool) and its answer is written to cost_router_metrics
+// as task_class gate-decision-shadow with the tier it predicted, the model that actually served the turn, and the agreement. Nothing is routed on it and it never blocks or fails the turn.
+// Routing on it needs agreement >= 0.7 with the incumbent over 200 rows (v_model_matrix_gate_shadow); the canary measured 0.125 on real data, so the first result may be "do not route".
+// ops_config model_matrix_gate = off stops it, model_matrix_gate_rate (0..1, default 1) samples it.
+var MM_GATE_MODEL = "@cf/cloudflare/clef-flash";
+var MM_GATE_TIERS = { free_small: 1, cheap_mid: 2, frontier: 3 };
+var MM_GATE_QUESTIONS = {
+  tier: { type: "choice", instructions: "Which class of model answers this fleet-operations request well at the lowest cost?", criteria: { free_small: "A lookup, a status read, a classification or a short reformat that a small free model answers correctly", cheap_mid: "Multi-step reasoning over several fleet sources, a summary of long text or code reading of moderate size", frontier: "Hard reasoning, a plan or a code change, or anything where a wrong answer is costly or irreversible" } },
+  needs_tools: { type: "noul", instructions: "Does answering need a tool call, that is a read of live fleet state or an action on the fleet?" }
+};
+function mmGateParse(out) {
+  const a = out && out.answers || {};
+  const t = a.tier;
+  let label = t && typeof t === "object" ? t.choice || t.chosen || t.label || t.option : typeof t === "string" ? t : null;
+  label = typeof label === "string" ? label.trim().toLowerCase().replace(/[^a-z_]+/g, "_") : null;
+  const nt = a.needs_tools;
+  const p = typeof nt === "number" ? nt : nt && typeof nt.noul === "number" ? nt.noul : null;
+  return { tier: label && MM_GATE_TIERS[label] ? label : null, needs_tools: p };
+}
+async function modelMatrixGateShadow(env, rec) {
+  try {
+    if (!env.WAI || typeof env.WAI.run !== "function" || !env.QNFO_AUDIT) return { skipped: "no-binding" };
+    const cfg = await env.QNFO_AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('model_matrix_gate', 'model_matrix_gate_rate')").all();
+    const conf = {};
+    ((cfg && cfg.results) || []).forEach(function(r) { conf[r.key] = r.value; });
+    if (String(conf.model_matrix_gate == null ? "shadow" : conf.model_matrix_gate).trim().toLowerCase() !== "shadow") return { skipped: "off" };
+    const rate = Number(conf.model_matrix_gate_rate == null ? 1 : conf.model_matrix_gate_rate);
+    if (!(Math.random() < (Number.isFinite(rate) ? Math.min(1, Math.max(0, rate)) : 1))) return { skipped: "sampled-out" };
+    const prompt = String(rec && rec.prompt || "").trim();
+    if (prompt.length < 8) return { skipped: "short" };
+    const t0 = Date.now();
+    const out = await env.WAI.run(MM_GATE_MODEL, { model: "clef-flash", state: prompt.slice(0, 800), questions: MM_GATE_QUESTIONS });
+    const g = mmGateParse(out);
+    const predicted = g.tier ? MM_GATE_TIERS[g.tier] : 0;
+    const agree = predicted > 0 && predicted === rec.tier ? 1 : 0;
+    const usedTools = (rec.toolCalls || 0) > 0;
+    const toolsAgree = g.needs_tools == null ? 0 : (g.needs_tools >= 0.5) === usedTools ? 1 : 0;
+    const inTok = Number(out && out.usage && out.usage.input_tokens || 0);
+    // columns reused for the shadow row: tier = the tier clef-flash predicted (0 when it named none), model = the model that served the turn,
+    // tool_calls = the tool calls the turn made, tool_calls_ok = 1 when needs_tools agreed with them, success = 1 when the predicted tier equals the actual tier
+    await env.QNFO_AUDIT.prepare("INSERT INTO cost_router_metrics (ts, worker, task_class, tier, model, in_tokens, out_tokens, cost_usd, latency_ms, cache_hit, escalations, tool_calls, tool_calls_ok, success) VALUES (?1,?2,?3,?4,?5,?6,0,0,?7,0,0,?8,?9,?10)")
+      .bind(iso(), WORKER, "gate-decision-shadow", predicted, String(rec.model || "").slice(0, 120), inTok, Date.now() - t0, rec.toolCalls || 0, toolsAgree, agree).run();
+    return { predicted, actual: rec.tier, agree, tools_agree: toolsAgree };
+  } catch (e) {
+    console.log("model_matrix_gate_shadow failed:", e && e.message || e);
+    return { skipped: "error" };
+  }
+}
+__name(modelMatrixGateShadow, "modelMatrixGateShadow");
 async function logEscalation(env, taskClass, fromModel, toModel, kind, reason) {
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO model_ladder_escalations (ts, task_class, from_tier, to_tier, model, kind, reason, budget_blocked) VALUES (?1,?2,?3,?4,?5,?6,?7,0)").bind(iso().slice(0, 19).replace("T", " "), taskClass || "chat", costTierOfModel(fromModel), costTierOfModel(toModel), String(toModel || "").slice(0, 80), kind || "escalation", String(reason || "").slice(0, 300)).run();
@@ -1996,7 +2046,7 @@ var OPS_TOOLS = [
   { name: "email_respond", description: "Send a REPLY inside an existing inbound thread (reply_to_id from email_check). Requires explicit user affirmation in the latest message; replies only - never cold sends. Subject must not contain spam-trip tokens.", parameters: { type: "object", properties: { reply_to_id: { type: "number", description: "inbound message id being replied to" }, subject: { type: "string", description: "reply subject" }, body: { type: "string", description: "plain-text reply body" } }, required: ["reply_to_id", "body"], additionalProperties: false } },
   { name: "run_code", description: "Execute pure-JavaScript code directly on Cloudflare (isolated compute only: no network, filesystem, secrets, or worker bindings; math/verification/data transforms). Provide finite code that returns a value or uses console.log. Never fabricate results - if the tool errors, report the error.", parameters: { type: "object", properties: { code: { type: "string", description: "JavaScript code to execute. Use return to emit a value, or console.log() for text output." } }, required: ["code"], additionalProperties: false } },
   { name: "web_fetch", description: "Fetch a public http/https URL and return its readable text (HTML stripped). SSRF-guarded: private/internal/link-local hosts are blocked. Returns up to maxChars of text.", parameters: { type: "object", properties: { url: { type: "string", description: "full http(s) URL to fetch" }, maxChars: { type: "number", description: "max chars to return (default 8000, max 30000)" } }, required: ["url"], additionalProperties: false } },
-  { name: "web_search", description: "Search the web (DuckDuckGo HTML, no key). Returns up to k results with title/url/snippet.", parameters: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "results 1-10 (default 5)" } }, required: ["q"], additionalProperties: false } },
+  { name: "web_search", description: "Search the web (no key; DuckDuckGo HTML, then DuckDuckGo lite, then Bing when a path returns nothing). Returns up to k results with title/url/snippet and names the provider that answered (search_path).", parameters: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "results 1-10 (default 5)" } }, required: ["q"], additionalProperties: false } },
   { name: "github_repo_read", description: "Read a file (text) or list a directory from a GitHub repo (owner/name) via the REST API. Works unauthenticated for public repos (rate-limited); set GITHUB_TOKEN for private repos.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name e.g. QNFO/qnfo-workers" }, path: { type: "string", description: "file or directory path relative to repo root (empty = root)" }, ref: { type: "string", description: "branch/tag/SHA (optional)" }, maxChars: { type: "number", description: "max chars of file content (default 20000)" } }, required: ["repo"], additionalProperties: false } },
   { name: "github_file_write", description: "Create or update a file in a GitHub repo (owner/name) via the REST API. Requires the GITHUB_TOKEN secret on qnfo-ops. Pass sha (from github_repo_read) to update an existing file.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, path: { type: "string", description: "file path" }, content: { type: "string", description: "full new file content" }, message: { type: "string", description: "commit message" }, branch: { type: "string", description: "branch to commit to (optional, default repo default branch). It must already exist: create it first with github_create_branch" }, sha: { type: "string", description: "current blob sha (required to update an existing file)" } }, required: ["repo", "path", "content"], additionalProperties: false } },
   { name: "github_pr", description: "Open a pull request in a GitHub repo (owner/name) via the REST API. Requires the GITHUB_TOKEN secret.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, title: { type: "string", description: "PR title" }, head: { type: "string", description: "head branch" }, base: { type: "string", description: "base branch (default main)" }, body: { type: "string", description: "PR body (optional)" } }, required: ["repo", "head"], additionalProperties: false } },
@@ -2025,7 +2075,7 @@ var OPS_TOOLS = [
   { name: "github_cherry_pick", description: "Graft one or more commits onto origin/main via GitHub Trees+Commits API (WORKTREE-GRAFT-PUSH-1). Server-side equivalent of: git worktree add --detach <tmp> origin/main && git cherry-pick <sha> && git push origin HEAD:main. ADVERSARIAL: does NOT resolve merge conflicts \u2014 check for file divergence first.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, owner: { type: "string", description: "owner, only with a bare repo name" }, commits: { type: "array", items: { type: "string" }, description: "array of commit SHAs to graft in order" }, base: { type: "string", description: "target branch (default main)" } }, required: ["repo", "commits"], additionalProperties: false } },
   { name: "dr_validate_schema", description: "Server-side D1 schema validation (JS port of dr_validate_schema.py). Validates required tables/columns in qnfo-audit + living-paper D1 databases directly via bound D1 bindings. Returns {ok, status:'SCHEMA OK'|'SCHEMA ERROR', violations, validated}.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "workspace_edit", description: "Surgical str_replace edit of a workspace file. Replaces Nth occurrence of old_str with new_str. Returns diff summary + preview. ADVERSARIAL: only replaces the FIRST match by default; pass occurrence:N for later matches.", parameters: { type: "object", properties: { path: { type: "string" }, old_str: { type: "string", description: "exact string to find (must match including whitespace)" }, new_str: { type: "string", description: "replacement string (omit or empty to delete)" }, occurrence: { type: "number", description: "which occurrence to replace, 1-based (default 1)" } }, required: ["path", "old_str"], additionalProperties: false } },
-  { name: "workspace_grep", description: "Regex search across workspace files. Returns file + line number + match + optional context lines. Equivalent to grep -rn.", parameters: { type: "object", properties: { pattern: { type: "string", description: "JavaScript regex pattern" }, prefix: { type: "string", description: "directory prefix to scope search" }, maxResults: { type: "number", description: "max matches 1-200 (default 50)" }, contextLines: { type: "number", description: "context lines before/after match 0-5 (default 0)" } }, required: ["pattern"], additionalProperties: false } },
+  { name: "workspace_grep", description: "Regex search across workspace files. Returns file + line number + match + optional context lines. Equivalent to grep -rn.", parameters: { type: "object", properties: { pattern: { type: "string", description: "JavaScript regex pattern (a leading (?i) is accepted; prefer ignoreCase:true)" }, prefix: { type: "string", description: "directory prefix to scope search" }, ignoreCase: { type: "boolean", description: "case-insensitive match (default false)" }, maxResults: { type: "number", description: "max matches 1-200 (default 50)" }, contextLines: { type: "number", description: "context lines before/after match 0-5 (default 0)" } }, required: ["pattern"], additionalProperties: false } },
   { name: "workspace_glob", description: "Discover workspace files by glob pattern. Supports * (any chars except /) and ** (any chars including /). Returns paths with size.", parameters: { type: "object", properties: { pattern: { type: "string", description: "glob pattern e.g. **/*.js or src/*.ts" }, prefix: { type: "string", description: "directory prefix" }, limit: { type: "number", description: "max results 1-500 (default 100)" } }, required: [], additionalProperties: false } },
   { name: "workspace_diff", description: "Compute unified diff between two workspace files. Returns diff string with added/removed line counts.", parameters: { type: "object", properties: { path_a: { type: "string" }, path_b: { type: "string" }, context: { type: "number", description: "context lines (default 3)" } }, required: ["path_a", "path_b"], additionalProperties: false } },
   { name: "workspace_patch", description: "Apply a unified diff patch to a workspace file. Patch must be in standard @@ -a,b +c,d @@ format.", parameters: { type: "object", properties: { path: { type: "string" }, patch: { type: "string", description: "unified diff string" } }, required: ["path", "patch"], additionalProperties: false } },
@@ -2907,8 +2957,10 @@ __name2222(emailRespond, "emailRespond");
 __name22222(emailRespond, "emailRespond");
 __name222222(emailRespond, "emailRespond");
 // OPS-USER-CODE-ERROR-1: an exception thrown by the caller's own JavaScript (TypeError, ReferenceError, SyntaxError) is the caller's bug, not a fleet failure.
-var OPS_USER_CODE_RE = /TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|is not iterable|Unexpected (token|end|identifier)|Cannot read propert|Cannot destructure|Invalid or unexpected/;
+var OPS_USER_CODE_RE = /TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|is not iterable|Unexpected (token|end|identifier)|Cannot read propert|Cannot destructure|Invalid or unexpected|Code generation from strings disallowed|is not valid JSON|is not a constructor|Invalid URL|Failed to parse URL|Invalid regular expression|Maximum call stack|Too many subrequests/;
 function opsUserCodeHint(msg) {
+  // OPS-TOOL-META-FIT-1: eval and new Function are refused by the isolate (2026-11-03 18:47, "Code generation from strings disallowed"); say what to do instead.
+  if (/Code generation from strings disallowed/.test(String(msg))) return "The sandbox refuses eval and new Function: call the function you need directly, or parse JSON with JSON.parse and print intermediate values with console.log.";
   return "Your code threw: " + String(msg).slice(0, 160) + ". Check the shape of values you call .map/.forEach on (a fetch().json() may be an object, not an array), await every promise, and print intermediate values with console.log.";
 }
 async function runCodeTool(env, args) {
@@ -3613,51 +3665,80 @@ __name222(webFetchTool, "webFetchTool");
 __name2222(webFetchTool, "webFetchTool");
 __name22222(webFetchTool, "webFetchTool");
 __name222222(webFetchTool, "webFetchTool");
+// OPS-WEBSEARCH-PATHS-1 (issue 1000810, GitHub 5776; SLA-AND-PATHS-1: a stage that can only succeed one way is a defect even while it works): web_search has three independent
+// paths, each tried only when the one before it produced nothing: DuckDuckGo HTML, DuckDuckGo lite, Bing HTML. A path that answers HTTP 4xx/5xx, DuckDuckGo's 202 challenge page, a
+// timeout or a page the parser reads as zero results falls through to the next (before, an HTTP error on the first path ended the call with no second try, and the lite path was the
+// same provider as the first, so one block took both). The answer names the path that produced the results (search_path, provider) and every path tried (paths_tried). When no path
+// returns a result the call fails closed: ok:false and search_unavailable:true, never an empty list presented as a successful search.
+var WS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
+function wsDdgTarget(raw) {
+  const s = String(raw || "");
+  if (s.indexOf("uddg=") < 0) return s;
+  try { return decodeURIComponent(s.split("uddg=")[1].split("&")[0]); } catch (e) { return s; } // standards-ok: a malformed escape keeps the raw link rather than failing the parse
+}
+function wsParseDdgHtml(html, k) {
+  const out = [];
+  const re = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(html)) && out.length < k) out.push({ title: stripHtml(m[2]), url: wsDdgTarget(m[1]), snippet: stripHtml(m[3]).slice(0, 300) });
+  return out;
+}
+function wsParseDdgLite(html, k) {
+  const out = [];
+  const re = /<a\b[^>]*?href=(["'])([^"']*uddg=[^"']*)\1[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(html)) && out.length < k) out.push({ title: stripHtml(m[3]), url: wsDdgTarget(m[2]), snippet: "" });
+  return out;
+}
+function wsParseBing(html, k) {
+  const out = [];
+  const blocks = String(html || "").split('<li class="b_algo"').slice(1);
+  for (let i = 0; i < blocks.length && out.length < k; i++) {
+    const h = /<h2[^>]*>\s*<a\b[^>]*?href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(blocks[i]);
+    if (!h) continue;
+    let href = h[1].replace(/&amp;/g, "&");
+    const u = /[?&]u=a1([A-Za-z0-9_-]+)/.exec(href); // Bing wraps the target as bing.com/ck/a?...&u=a1<base64url of the URL>
+    if (u) {
+      try {
+        let b64 = u[1].replace(/-/g, "+").replace(/_/g, "/");
+        while (b64.length % 4) b64 += "=";
+        href = b64Utf8(b64);
+      } catch (e) { continue; } // standards-ok: a link whose wrapper cannot be decoded is skipped, not returned as a bing.com redirect
+    }
+    if (!/^https?:\/\//i.test(href)) continue;
+    const sn = /<p[^>]*class="[^"]*b_(?:lineclamp|algoSlug)[^"]*"[^>]*>([\s\S]*?)<\/p>/.exec(blocks[i]) || /<div class="b_caption[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/.exec(blocks[i]);
+    out.push({ title: stripHtml(h[2]), url: href, snippet: sn ? stripHtml(sn[1]).slice(0, 300) : "" });
+  }
+  return out;
+}
+var WS_PATHS = [
+  { id: "ddg-html", legacy: "primary", url: function(q) { return "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q); }, parse: wsParseDdgHtml },
+  { id: "ddg-lite", legacy: "fallback", url: function(q) { return "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(q); }, parse: wsParseDdgLite },
+  { id: "bing", legacy: "bing", url: function(q) { return "https://www.bing.com/search?q=" + encodeURIComponent(q) + "&setlang=en&cc=us"; }, parse: wsParseBing }
+];
 async function webSearchTool(env, args) {
   const q = String(args && (args.q || args.query) || "").trim();
   if (!q) return { ok: false, error: "q required" };
   const k = Math.max(1, Math.min(parseInt(args && args.k, 10) || 5, 10));
-  try {
-    const r = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q), { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }, redirect: "follow" });
-    if (!r.ok) return { ok: false, error: "search HTTP " + r.status };
-    const html = await r.text();
-    const results = [];
-    const re = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-    let m;
-    let guard = 0;
-    while ((m = re.exec(html)) && guard < k) {
-      const raw = m[1] || "";
-      const href = raw.indexOf("uddg=") >= 0 ? decodeURIComponent(raw.split("uddg=")[1].split("&")[0]) : raw;
-      results.push({ title: stripHtml(m[2]), url: href, snippet: stripHtml(m[3]).slice(0, 300) });
-      guard++;
+  const tried = [];
+  for (let i = 0; i < WS_PATHS.length; i++) {
+    const p = WS_PATHS[i];
+    let results = [];
+    let status = 0;
+    let why = "";
+    try {
+      const r = await fetch(p.url(q), { headers: { "User-Agent": WS_UA, "Accept-Language": "en-US,en;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(7e3) });
+      status = r.status;
+      if (!r.ok || r.status === 202) why = "HTTP " + r.status + (r.status === 202 ? " (challenge page)" : "");
+      else results = p.parse(await r.text(), k);
+    } catch (e) {
+      why = "fetch failed: " + String(e && e.message || e).slice(0, 120);
     }
-    let pathUsed = "primary";
-    if (!results.length) {
-      pathUsed = "fallback";
-      let fr = null;
-      try {
-        fr = await fetch("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(q), { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }, redirect: "follow" });
-      } catch (fe) {
-        return { ok: false, error: "search fallback fetch failed: " + (fe && fe.message || String(fe)), path: "fallback" };
-      }
-      if (!fr.ok) return { ok: false, error: "search fallback HTTP " + fr.status, path: "fallback" };
-      const lite = await fr.text();
-      const lre = /<a\b[^>]*?href=(["'])([^"']*uddg=[^"']*)\1[^>]*>([\s\S]*?)<\/a>/g;
-      let lm;
-      let lguard = 0;
-      while ((lm = lre.exec(lite)) && lguard < k) {
-        const lraw = lm[2] || "";
-        const lhref = lraw.indexOf("uddg=") >= 0 ? decodeURIComponent(lraw.split("uddg=")[1].split("&")[0]) : lraw;
-        results.push({ title: stripHtml(lm[3]), url: lhref, snippet: "" });
-        lguard++;
-      }
-      if (!results.length) return { ok: false, error: "no results parsed (fallback)", path: "fallback" };
-      return { ok: true, results, path: pathUsed };
-    }
-    return { ok: true, results, path: pathUsed };
-  } catch (e) {
-    return { ok: false, error: "search failed: " + (e && e.message || String(e)) };
+    if (!results.length && !why) why = "0 results parsed";
+    tried.push({ path: p.id, status, results: results.length, error: why || undefined });
+    if (results.length) return { ok: true, results, path: p.legacy, search_path: p.id, provider: p.id, paths_tried: tried };
   }
+  return { ok: false, search_unavailable: true, error: "no search path returned results (" + tried.map(function(t) { return t.path + ": " + t.error; }).join("; ") + ")", path: "all-failed", paths_tried: tried, hint: "Every search provider answered empty or refused this request; retry with a shorter or different query, or fetch a known URL with web_fetch." };
 }
 __name(webSearchTool, "webSearchTool");
 __name2(webSearchTool, "webSearchTool");
@@ -4037,7 +4118,30 @@ function opsArgPick(args, keys) {
   return "";
 }
 function opsArgError(error, hint) { return { ok: false, arg_error: true, error: error, hint: hint }; }
-var FPA_GRAPH_OP_ALIASES = { search: "find", lookup: "find", get: "node", show: "node", dependents: "impact", dependencies: "impact", blast_radius: "impact", route: "path", bindings: "worker", table: "resource", drift: "findings", age: "freshness", status: "freshness" };
+// OPS-TOOL-ERRSHAPE-1 (issues 6671, 6792, 6193, 6173, 5780): a model sometimes sends the whole function-call envelope as the arguments,
+// {name:"cf_worker_read", arguments:{worker:"qnfo-x"}}, so the real arguments are one level down and `name` is the tool's own name. Unwrap that
+// one level before dispatch. Only an envelope is unwrapped: the outer object may hold nothing but call metadata besides the envelope key, and the
+// call's own name must equal the tool being run (or the envelope key must be arguments/parameters with no other outer key), so a tool whose real
+// parameter is called `arguments` or `input` (composio_execute, run_code) is never touched.
+var OPS_ENVELOPE_KEYS = ["arguments", "args", "parameters", "params", "input"];
+var OPS_ENVELOPE_META = ["name", "tool", "tool_name", "function", "type", "id", "call_id", "tool_call_id"];
+function opsUnwrapToolArgs(toolName, args) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return args;
+  var key = "", inner = null;
+  for (var i = 0; i < OPS_ENVELOPE_KEYS.length && !inner; i++) {
+    var v = args[OPS_ENVELOPE_KEYS[i]];
+    if (typeof v === "string" && /^\s*\{/.test(v)) { try { v = JSON.parse(v); } catch (e) { v = null; } } // standards-ok: a string that is not JSON is simply not an envelope
+    if (v && typeof v === "object" && !Array.isArray(v)) { key = OPS_ENVELOPE_KEYS[i]; inner = v; }
+  }
+  if (!inner) return args;
+  var others = Object.keys(args).filter(function(k) { return k !== key && OPS_ENVELOPE_META.indexOf(k) < 0; });
+  if (others.length) return args;
+  var named = OPS_ENVELOPE_META.some(function(k) { return args[k] === toolName; });
+  if (!named && !(key === "arguments" || key === "parameters")) return args;
+  if (!named && Object.keys(args).some(function(k) { return k !== key; })) return args;
+  return Object.assign({}, inner);
+}
+var FPA_GRAPH_OP_ALIASES = { search: "find", lookup: "find", get: "node", show: "node", dependents: "impact", dependencies: "impact", blast_radius: "impact", route: "path", bindings: "worker", table: "resource", drift: "findings", age: "freshness", status: "freshness", stats: "freshness", grep: "find", routes: "find", list: "find", query: "find", describe: "node", info: "node" };
 function fpaGraphArgs(args) {
   var a = Object.assign({}, args || {});
   var q = opsArgPick(a, ["query", "filter", "q", "search", "name", "text", "term"]);
@@ -4046,8 +4150,13 @@ function fpaGraphArgs(args) {
   if (id) a.id = id;
   var op = String(a.op || a.operation || a.action || "").trim().toLowerCase();
   if (FPA_GRAPH_OP_ALIASES[op]) op = FPA_GRAPH_OP_ALIASES[op];
+  // OPS-TOOL-ERRSHAPE-1 (issue 6193: op=grep/routes/stats on 2026-11-04 after the alias fix): an op that is no graph query is read as a missing op, so the
+  // call runs the query its other arguments ask for and says so, instead of answering an error the model then retries with another invented op.
+  var coercedFrom = "";
+  if (op && FPA_GRAPH_OPS.indexOf(op) < 0) { coercedFrom = op; op = ""; }
   if (!op) op = a.from && a.to ? "path" : a.severity ? "findings" : a.worker ? "worker" : a.id ? (a.depth || a.direction ? "impact" : "node") : a.query ? "find" : "freshness";
   a.op = op;
+  if (coercedFrom) a.op_coerced_from = coercedFrom.slice(0, 40);
   return a;
 }
 async function fleetGraphTool(env, args) {
@@ -4055,7 +4164,7 @@ async function fleetGraphTool(env, args) {
   if (args && typeof args.query === "string") {
     const wildcards = (args.query.match(/[%_]/g) || []).length;
     if (args.query.length > 100 || wildcards > 10) {
-      return { ok: false, error: "Query pattern too complex" };
+      return opsArgError("Query pattern too complex", "Send a plain search term of at most 100 characters (an id fragment or a name), without % or _ wildcards.");
     }
   }
   const op = String(args && args.op || "").trim();
@@ -4069,8 +4178,29 @@ async function fleetGraphTool(env, args) {
   let j = null;
   const t = await r.text();
   try { j = JSON.parse(t); } catch (e) { j = null; } // standards-ok: a non-JSON answer is returned as capped text below
-  if (!r.ok) return { ok: false, status: r.status, error: j && j.error || fpaCap(t, 300), candidates: j && j.candidates || undefined };
-  return Object.assign({ ok: true, op }, j || { text: fpaCap(t, 12e3) });
+  if (!r.ok) {
+    const why = j && j.error || fpaCap(t, 300);
+    // OPS-TOOL-ERRSHAPE-1 (issue 6173: impact on table:qnfo-audit:spof_registry): an id or name the graph does not hold is a lookup that missed, an answer and not a
+    // tool malfunction (TOOL-MISS-NOT-FAILURE-1). The miss carries the nearest nodes for the last token of the id, so the next call can use a real id.
+    if (r.status === 404 || r.status === 400) {
+      let near;
+      if (r.status === 400 && /^no node/.test(String(why)) && args.id) {
+        const tok = String(args.id).split(/[:.#\/]/).filter(Boolean).pop();
+        if (tok) {
+          try {
+            const fr = await env.MEMORY.fetch("https://qnfo-memory-mcp.internal/fleet-graph/find?query=" + encodeURIComponent(tok.slice(0, 60)));
+            const fj = await fr.json();
+            const rows = fj && (fj.nodes || fj.results || fj.candidates || fj.matches);
+            if (Array.isArray(rows) && rows.length) near = rows.slice(0, 8);
+          } catch (e) { near = undefined; } // standards-ok: the nearest-node lookup is a courtesy; the miss is returned either way
+        }
+      }
+      return { ok: false, not_found: /^(no node|no worker|ambiguous)/.test(String(why)), arg_error: !/^(no node|no worker|ambiguous)/.test(String(why)), status: r.status, op, error: why, candidates: j && j.candidates || near || undefined, hint: "Node ids look like worker:<name>, d1t:<db>.<table>, fn:<worker>#<function>; run {op:'find', query:'<text>'} to get the exact id." };
+    }
+    return { ok: false, status: r.status, error: why, candidates: j && j.candidates || undefined };
+  }
+  const note = args.op_coerced_from ? "op '" + args.op_coerced_from + "' is not a fleet_graph op; ran '" + op + "' from the other arguments (valid ops: " + FPA_GRAPH_OPS.join(", ") + ")" : undefined;
+  return Object.assign({ ok: true, op, note }, j || { text: fpaCap(t, 12e3) });
 }
 async function dashboardFeed(env, args) {
   const path = String(args && args.path || "/api").trim();
@@ -4441,7 +4571,9 @@ async function cfWorkerRead(env, args) {
           }
         } catch (_wrhE) { _wrh = ""; }
       }
-      return { ok: false, error: "CF API " + srcR.status + " reading " + worker + _wrh };
+      // OPS-TOOL-ERRSHAPE-1 (issue 6671; 2026-11-04 19:57 called with the worker name "cf_worker_read"): a worker name that is not deployed is a lookup that missed, so it
+      // answers with the real names and is logged as ok (TOOL-MISS-NOT-FAILURE-1), never as a tool error that files TOOL-FAILURE and LOOP-BREAKER rows.
+      return { ok: false, not_found: srcR.status === 404, error: "CF API " + srcR.status + " reading " + worker + _wrh };
     }
     const ct = srcR.headers.get("Content-Type") || "";
     let src = "";
@@ -6036,10 +6168,21 @@ async function workspaceGrep(env, args) {
   if (!pattern) return { ok: false, arg_error: true, error: "pattern required", hint: "Send {pattern:'<regex>', prefix:'<dir>'}; query, regex and search are accepted as aliases of pattern." };
   if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
   let re;
+  // OPS-TOOL-ERRSHAPE-1 (issue 5780; 2026-11-04 20:06 the pattern "(?i)qniverse|q08-tasks" failed: "Invalid group"): a model writes PCRE/Python inline flags, which a JavaScript
+  // RegExp rejects. A leading (?i), (?s), (?m) or a combination such as (?is) is turned into the matching RegExp flags; ignoreCase:true (also case_insensitive, "-i") does the same.
+  let flags = "gm";
+  let src = pattern;
+  const inl = /^\(\?([imsu]+)\)/.exec(src);
+  if (inl) {
+    src = src.slice(inl[0].length);
+    inl[1].split("").forEach(function(f) { if (flags.indexOf(f) < 0) flags += f; });
+  }
+  if (args && (args.ignoreCase === true || args.case_insensitive === true || args.caseInsensitive === true || args["-i"] === true) && flags.indexOf("i") < 0) flags += "i";
   try {
-    re = new RegExp(pattern, "gm");
+    re = new RegExp(src, flags);
   } catch (e) {
-    return { ok: false, error: "invalid regex: " + (e && e.message || String(e)) };
+    // a pattern that is no valid regex is the caller's input: arg_error with the cause and a way out, logged as rejected rather than as a tool failure
+    return { ok: false, arg_error: true, error: "invalid regex: " + (e && e.message || String(e)), hint: "pattern is a JavaScript regular expression: escape literal ( ) [ ] { } . * + ? | with a backslash, and pass ignoreCase:true instead of writing (?i) in the middle of a pattern." };
   }
   const listPfx = "ops-workspace/" + (prefix ? prefix.replace(/\/$/, "") + "/" : "");
   const listed = await env.BACKUPS_R2.list({ prefix: listPfx, limit: 500 });
@@ -6839,6 +6982,79 @@ async function policyGateShadow(env, name, args) {
   } catch (_) {}
 }
 __name(policyGateShadow, "policyGateShadow");
+// ---- OPS-DEGRADED-1:BEGIN
+// OPS-DEGRADED-1 (qnfo-ops 2.65.0, agent_issues 1001911, roadmap RM-S1-REDUNDANCY-1 second half, charter pillar autonomy): a small in-isolate circuit breaker for the qnfo-audit D1.
+// While qnfo-audit answers "D1 DB is overloaded" (spof_registry: a 345 M rows read fleet_tick fan-out in 24 h on 2026-11-04; qnfo-model-eval POST /run answered 500 with that text at 2026-11-04T23:04Z)
+// every tool that writes qnfo-audit failed partway and late, and callers could not tell it from a bug. Three such errors inside 60 s now put the gateway in degraded mode for 60 s: the tools that write
+// qnfo-audit are refused before they start with {degraded: true, d1: "overloaded", retry_after_s: N} (HTTP 503 and Retry-After on POST /v1/tools/call), and every tool that does not need D1 keeps running
+// (cf_*, r2_*, kv_*, fleet probes, git, workspace and container tools, cf_worker_deploy and the /ops/deploy content PUT). The refusal itself writes nothing to D1 (that would add load to the thing that is
+// overloaded; the best-effort run-event ledger of an agent run and nothing else still writes): it is counted in /health degraded.refused and logged as one console line {evt: "ops-degraded-refusal"}. Only an error that names D1 or SQLite together with "overloaded" or "too many resources" feeds
+// the breaker (the EDC-BATCH-1 pattern also takes "rate limit" and "timed out", which a GitHub or model call produces too and would trip a D1 mode that is not needed). After the window the next call goes through
+// (half open): the error list was cleared, so three new errors are needed to trip again. The state is per isolate; another isolate learns from its own first errors.
+var OPS_D1_TRIP_ERRORS = 3;
+var OPS_D1_WINDOW_MS = 60000;
+var OPS_D1_DEGRADED_MS = 60000;
+// Tools whose effect is a write to qnfo-audit, directly (ops_d1_write on the audit database, idea_submit) or through the worker they start (ops_issue_run starts the backlog run, ops_research_kick and research_queue start research work):
+// starting more D1-heavy work while the database is refusing statements only deepens the overload. email_mark and email_respond go through the email service, cf_worker_deploy through the Cloudflare API, and the tools that only log afterwards
+// stay available. ops_d1_write on another database (living, graph, portfolio and the rest) is not refused: those databases are not the one that is overloaded.
+var OPS_D1_WRITING_TOOLS = ["ops_d1_write", "ops_issue_run", "ops_research_kick", "research_queue", "idea_submit"];
+var __opsD1Breaker = { errs: [], until: 0, since: null, trips: 0, refused: 0, last_error: "" };
+function opsD1IsOverload(text) {
+  var t = String(text == null ? "" : text);
+  if (!t) return false;
+  if (/overloaded|too many resources/i.test(t) && /\bD1\b|SQLITE_|qnfo-audit|\bdatabase\b/i.test(t)) return true;
+  return /\bD1_ERROR\b/.test(t) && /\btimed out\b/i.test(t);
+}
+function opsD1Note(now, text) {
+  var b = __opsD1Breaker;
+  if (!opsD1IsOverload(text)) return false;
+  now = Number(now) || Date.now();
+  b.last_error = String(text).slice(0, 160);
+  if (b.until > now) return false;
+  b.errs = b.errs.filter(function(t) { return now - t < OPS_D1_WINDOW_MS; });
+  b.errs.push(now);
+  if (b.errs.length >= OPS_D1_TRIP_ERRORS && b.until <= now) {
+    b.until = now + OPS_D1_DEGRADED_MS;
+    b.since = new Date(now).toISOString();
+    b.trips++;
+    b.errs = [];
+    console.error(JSON.stringify({ evt: "ops-degraded-trip", until: new Date(b.until).toISOString(), trips: b.trips, last_error: b.last_error }));
+    return true;
+  }
+  return false;
+}
+function opsD1TargetsAudit(name, args) {
+  var n = String(name);
+  if (n !== "ops_d1_write" && n !== "ops_d1_query") return true;
+  var key = String(args && args.db || "audit");
+  var map = typeof DB_MAP !== "undefined" ? DB_MAP : { audit: "QNFO_AUDIT" };
+  return (map[key] || map.audit) === "QNFO_AUDIT";
+}
+// A dry run is not a write: ops_issue_run without confirm only counts the backlog, ops_research_kick/research_queue with express:false only read related papers.
+function opsD1WritesNow(name, args) {
+  var n = String(name);
+  if (OPS_D1_WRITING_TOOLS.indexOf(n) < 0) return false;
+  if (n === "ops_issue_run") return !!(args && args.confirm);
+  if (n === "research_queue") return !(args && args.express === false);
+  return opsD1TargetsAudit(n, args);
+}
+function opsD1Gate(now, name, args) {
+  var b = __opsD1Breaker;
+  now = Number(now) || Date.now();
+  if (b.until <= now || !opsD1WritesNow(name, args)) return null;
+  var retry = Math.max(1, Math.ceil((b.until - now) / 1000));
+  b.refused++;
+  console.error(JSON.stringify({ evt: "ops-degraded-refusal", tool: String(name), retry_after_s: retry, refused: b.refused }));
+  return { retry_after_s: retry, body: { ok: false, degraded: true, d1: "overloaded", retry_after_s: retry, tool: String(name), error: "qnfo-audit is overloaded (OPS-DEGRADED-1): " + String(name) + " writes qnfo-audit and was refused before it started. Do not retry it for " + retry + " s; tools that do not need D1 (cf_*, r2_*, kv_*, fleet probes, git, workspace, container) still work, or end the turn with a report." } };
+}
+function opsD1Health(now) {
+  var b = __opsD1Breaker;
+  now = Number(now) || Date.now();
+  var on = b.until > now;
+  return { state: on ? "degraded" : "ok", d1: on ? "overloaded" : "ok", since: b.since, retry_after_s: on ? Math.max(1, Math.ceil((b.until - now) / 1000)) : 0, trips: b.trips, refused: b.refused, trip_errors: OPS_D1_TRIP_ERRORS, window_s: OPS_D1_WINDOW_MS / 1000, degraded_s: OPS_D1_DEGRADED_MS / 1000 };
+}
+function opsD1Reset() { __opsD1Breaker = { errs: [], until: 0, since: null, trips: 0, refused: 0, last_error: "" }; }
+// ---- OPS-DEGRADED-1:END
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
   try {
@@ -6846,6 +7062,10 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   } catch (e) {
     args = { _parseError: String(e && e.message || e) };
   }
+  args = opsUnwrapToolArgs(name, args); // OPS-TOOL-ERRSHAPE-1: {name:<tool>, arguments:{...}} envelope sent as the arguments
+  // OPS-DEGRADED-1: while qnfo-audit is overloaded a tool that writes it is refused before it starts (nothing is written, not even the tool event).
+  const __dg = opsD1Gate(Date.now(), name, args);
+  if (__dg) return { tool_call_id: null, name, ok: false, degraded: true, retry_after_s: __dg.retry_after_s, text: JSON.stringify(__dg.body) };
   const t0 = Date.now();
   let res;
   // POLICY-GATE-1:shadow - observe deterministic irreversible-call rules before dispatch; telemetry must never fail the tool.
@@ -6933,6 +7153,8 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     res = { ok: false, error: "tool crashed: " + (e && e.message ? e.message : String(e)) };
   }
   const ms = Date.now() - t0;
+  // OPS-DEGRADED-1: a qnfo-audit overload in the result feeds the breaker (another database named by the tool does not).
+  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) opsD1Note(Date.now(), res.error || res.message); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-feed", error: String(e && e.message || e) })); }
   const audit = composioAuditPayload(name, args, res);
   await logToolEvent(env, name, audit.args, audit.result, ms);
   /* OPS-TOOL-MAILBOX-LOGIN-LINKS-1: a mailbox read never hands a login link, one-time code or token to the model. */
@@ -6991,10 +7213,36 @@ async function logAuditTrail(env, name, args, res) {
   }
 }
 __name(logAuditTrail, "logAuditTrail");
+// OPS-TOOL-META-FIT-1 (issue 6826, LOOP-BREAKER-1 run_code_net with an empty example): the meta column is cut at 600 characters, and a call whose arguments carry a long string (a run_code_net
+// program) was cut in the middle of the JSON, which a later reader stores as {"_truncated":1,"_raw":"..."}: $.error is then unreadable, the failure signature is the bare tool name, and
+// TRUNCATION-BLIND-GUARD-1 cannot classify the event (5 of 6 run_code_net errors in 7 days had no readable error). The arguments are shortened to fit a budget (long strings cut
+// to a prefix, nested values to a JSON prefix, keys beyond twelve dropped) so error, resultOk, ms and args always stay one valid JSON object; short arguments (op, id, worker) are unchanged.
+function opsFitArgs(args, budget) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return args;
+  const keys = Object.keys(args).slice(0, 12);
+  const caps = [200, 100, 50, 25];
+  for (let c = 0; c < caps.length; c++) {
+    const out = {};
+    for (let i = 0; i < keys.length; i++) {
+      const v = args[keys[i]];
+      let val = v;
+      if (typeof v === "string") val = v.length > caps[c] ? v.slice(0, caps[c]) + "..." : v;
+      else if (v !== null && typeof v === "object") {
+        const s = JSON.stringify(v);
+        val = s.length > caps[c] ? s.slice(0, caps[c]) + "..." : v;
+      }
+      out[keys[i]] = val;
+    }
+    let len = 0;
+    try { len = JSON.stringify(out).length; } catch (e) { len = budget + 1; } // standards-ok: an unserialisable value falls through to the keys-only form
+    if (len <= budget) return out;
+  }
+  return { _keys: keys.join(",").slice(0, Math.max(20, budget - 12)) };
+}
 async function logToolEvent(env, name, args, res, ms) {
   if (!env.QNFO_AUDIT) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, redactedSnippet({ /* OPS-TOOL-META-ERROR-FIRST-1, OPS-TOOL-MAILBOX-LOGIN-LINKS-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args }, 600), "qnfo-ops", res && (res.ok || res.not_found) ? "ok" : res && (res.rejected || res.arg_error || res.user_code_error) ? "rejected" : "error").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, redactedSnippet({ /* OPS-TOOL-META-ERROR-FIRST-1, OPS-TOOL-MAILBOX-LOGIN-LINKS-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args: opsFitArgs(args, res && !res.ok ? 200 : 480) }, 600), "qnfo-ops", res && (res.ok || res.not_found) ? "ok" : res && (res.rejected || res.arg_error || res.user_code_error) ? "rejected" : "error").run();
     await logAuditTrail(env, name, args, res);
   } catch (e) {
   }
@@ -8440,6 +8688,7 @@ async function handleChatCore(env, body, ua, ctx, pub) {
     if (_chain > 0) escalations += _chain;
     const _tier = cacheHit ? 0 : costTierOfModel(String(servedBy || "").split("->").pop());
     ctx.waitUntil(logRouterMetric(env, { worker: WORKER, task_class: strategy, tier: _tier, model: servedBy || wanted, in_tokens: promptTokens, out_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, cache_hit: cacheHit, escalations: escalations, tool_calls: toolLog.length, tool_calls_ok: toolLog.filter(function(t) { return t.ok; }).length, success: okFlag }));
+    if (!pub && !cacheHit && !clientHandoff) ctx.waitUntil(modelMatrixGateShadow(env, { prompt, tier: _tier, model: servedBy || wanted, toolCalls: toolLog.length })); // MODEL-MATRIX-1 shadow gate: observe only
     if (_chain > 0) {
       const _parts = String(servedBy || "").split("->").map(function(s) { return s.trim(); }).filter(Boolean);
       ctx.waitUntil(logEscalation(env, strategy, _parts[0] || UPSTREAM_MODEL, _parts[_parts.length - 1] || UPSTREAM_MODEL, "cascade-fallback", "servedBy chain: " + String(servedBy || "").slice(0, 200)));
@@ -9137,7 +9386,7 @@ function manifest() {
     version: VERSION,
     base_url: "https://ops.qnfo.org",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation", "agent-http-rpc", "tool-bridge", "agent-schedule", "session-autocontinue"],
+    capabilities: ["ops-ai-gateway", "ops-degraded-mode", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation", "agent-http-rpc", "tool-bridge", "agent-schedule", "session-autocontinue"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
@@ -10561,6 +10810,7 @@ function opsSurfaceOf(toolName) {
 async function opsSurfaceSizeLog(env, label, surface, chars, reqChars) {
   try {
     if (!env || !env.QNFO_AUDIT) return false;
+    if (typeof opsD1Health === "function" && opsD1Health(Date.now()).state === "degraded") return false; /* OPS-DEGRADED-1: a size sample is not worth a statement against the overloaded database */
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
       .bind(randId("evt-"), iso(), "ops-surface-size", String(label || "").slice(0, 80), JSON.stringify({ surface: surface, chars: Number(chars) || 0, req_chars: Number(reqChars) || 0 }), "qnfo-ops", "ok").run();
     return true;
@@ -10581,13 +10831,13 @@ async function ownerRestRoutes(request, env, path, method) {
   const run = async function(name, args) {
     const r = await execTool(env, name, JSON.stringify(args || {}), "", 20000);
     let parsed = null; try { parsed = JSON.parse(r.text); } catch (e) { parsed = r.text; }
-    return { ok: r.ok, result: parsed };
+    return r.degraded ? { ok: r.ok, result: parsed, degraded: true, retry_after_s: r.retry_after_s } : { ok: r.ok, result: parsed };
   };
   if (path === "/v1/run-state" && method === "GET") return json(await opsRunState(env, new URL(request.url).searchParams.get("run_id"))); // TRACE-FOLD-1
-  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } return json(await ideaSubmit(env, b)); }
+  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } const __ig = opsD1Gate(Date.now(), "idea_submit", b); if (__ig) return new Response(JSON.stringify(Object.assign({ ok: false, result: __ig.body }, __ig.body)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__ig.retry_after_s) }) }); return json(await ideaSubmit(env, b)); }
   if (path === "/v1/queue" && method === "GET") { const u = new URL(request.url); const a = {}; u.searchParams.forEach(function(v, k) { a[k] = v; }); return json(await queueRead(env, a)); }
   if (path === "/v1/tools" && method === "GET") return json({ object: "list", data: opsRestToolList(true).map(function(t) { return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }; }) });
-  if (path === "/v1/tools/call" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b.name) return json({ error: "name required" }, 400); return json(await run(String(b.name), b.arguments || {})); }
+  if (path === "/v1/tools/call" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b.name) return json({ error: "name required" }, 400); const __tr = await run(String(b.name), b.arguments || {}); if (__tr.degraded) return new Response(JSON.stringify(Object.assign({ ok: false, result: __tr.result }, __tr.result)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__tr.retry_after_s) }) }); return json(__tr); }
   if (path === "/mcp") {
     if (method === "GET") return new Response("MCP endpoint: POST JSON-RPC", { status: 405, headers: Object.assign({ Allow: "POST" }, CORS_HEADERS) });
     if (method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -10661,7 +10911,8 @@ var worker_default = {
     const method = request.method;
     const ua = request.headers.get("User-Agent") || "";
     try {
-      if (env.QNFO_AUDIT && (pathRaw.indexOf("chat") >= 0 || pathRaw.indexOf("model") >= 0 || pathRaw.indexOf("completion") >= 0 || pathRaw.indexOf("response") >= 0 || pathRaw.indexOf("/v1") === 0)) {
+      /* OPS-DEGRADED-1: the request log is a debug trail; it is not written while qnfo-audit is overloaded (two statements per request would add load to the database that is refusing). */
+      if (env.QNFO_AUDIT && opsD1Health(Date.now()).state !== "degraded" && (pathRaw.indexOf("chat") >= 0 || pathRaw.indexOf("model") >= 0 || pathRaw.indexOf("completion") >= 0 || pathRaw.indexOf("response") >= 0 || pathRaw.indexOf("/v1") === 0)) {
         await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_req_log (id TEXT PRIMARY KEY, ts TEXT, method TEXT, path TEXT, auth_prefix TEXT, auth_len INTEGER, ua TEXT, clen TEXT)").run();
         await env.QNFO_AUDIT.prepare("INSERT INTO ops_req_log (id, ts, method, path, auth_prefix, auth_len, ua, clen) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(randId("req-"), iso(), method, pathRaw, (request.headers.get("Authorization") || "").slice(0, 10), (request.headers.get("Authorization") || "").length, ua.slice(0, 60), request.headers.get("Content-Length") || "").run();
       }
@@ -10778,7 +11029,7 @@ var worker_default = {
       bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.gh_app = __ghAppState;
       bindings.ai = !!env.WAI;
-      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, limitations: OPS_ENDPOINT_LIMITATIONS, routes: ROUTES, models: opsModelIds(), bindings, gh_app: __ghAppState, generatedAt: iso() });
+      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, limitations: OPS_ENDPOINT_LIMITATIONS, routes: ROUTES, models: opsModelIds(), bindings, gh_app: __ghAppState, degraded: opsD1Health(), generatedAt: iso() });
     }
     if (path === "/agents/ops-exec" || path.startsWith("/agents/ops-exec")) {
       if (!env.AGENTIC_OPS_EXEC) return json({ error: "AgenticOpsExec DO not bound", code: 503 }, 503);

@@ -32,6 +32,13 @@ for (const [name, text] of [["duplicate", '{"order":[1,1,2]}'], ["missing", '{"o
 const job = { title: "Senior Policy Researcher", company: "Rijkswaterstaat", location: "Den Haag", desc: "The role needs 5 years of evidence-based policy research. Work with the OECD and ministries.", match: { why: ["title in your lane: policy", "evidence in the posting: federal"] } };
 ok(T.reasonOk("Policy research in a ministry setting matches the title and the federal evidence.", job) !== null, "a grounded reason is shown");
 ok(T.reasonOk("The posting asks for 5 years in the OECD setting.", job) !== null, "a number and an acronym the posting contains are allowed");
+// the posting's own score was given to the model, so repeating it is allowed; another number is still not
+{
+  const scored = { ...job, match: { ...job.match, score: 80 } };
+  ok(T.reasonOk("Ranks first with the highest score of 80 and a policy title with federal evidence.", scored) !== null, "a reason may repeat the posting's own score");
+  ok(T.reasonOk("Ranks first with the highest score of 99 and a policy title with federal evidence.", scored) === null, "a different score is still an invented number");
+  ok(T.reasonOk("Ranks first and the posting asks 12 years of policy research.", scored) === null, "an invented requirement is still rejected");
+}
 for (const [name, r] of [
   ["an invented number", "The posting asks for 12 years of policy research."],
   ["an invented name", "Strong fit for the Google research team."],
@@ -63,7 +70,8 @@ answer.calls = [];
   ok(sent.model === "@cf/zai-org/glm-5.3-flash" && sent.max_tokens <= 2048 && sent.stream === false && sent.temperature === 0 && sent.messages[0].role === "system" && /ONLY reorder/.test(sent.messages[0].content), "a pinned cheap model, deterministic, and the reorder-only instruction", sent.model);
   ok(!/Federal Highway|rwnquni|rowan\.quni|QNFO|ledger/i.test(JSON.stringify(sent.messages)), "no ledger text or personal data is sent to the model");
   const items = JSON.parse(sent.messages[1].content);
-  ok(items.every((x) => x.signals.every((s) => /^(title in your lane|evidence in the posting)/.test(s)) && x.signals.length === 2), "only posting-fit signals are sent", items[0]);
+  ok(items.every((x) => x.signals.every((s) => /^(title in the target lane|evidence in the posting)/.test(s)) && x.signals.length === 2), "only posting-fit signals are sent, without the second person", items[0]);
+  ok(!/\b(you|your)\b/i.test(JSON.stringify(items)) && /third person/.test(sent.messages[0].content), "neither the items nor the instruction invite a second-person reason");
   ok(items.length === 4 && items.map((x) => x.n).join() === "1,2,3,4", "postings are sent as numbered items");
   for (const j of r.kept) {
     const o = before.find((x) => x.id === j.id);
@@ -86,7 +94,7 @@ answer.calls = [];
   answer.calls.length = 0;
   await T.llmRerankRun(answer({ order: [1, 2, 3, 4] }), kept);
   const body = answer.calls[0].init.body;
-  ok(!/you rejected|you liked|not in your CV|past application|seniority/.test(body) && /title in your lane/.test(body) && /evidence in the posting/.test(body), "only posting-fit signals leave the worker", body.slice(0, 300));
+  ok(!/you rejected|you liked|not in your CV|past application|seniority/.test(body) && /title in the target lane/.test(body) && /evidence in the posting/.test(body), "only posting-fit signals leave the worker", body.slice(0, 300));
 }
 // the rank is shown as well, so the owner can see what the AI changed
 {
@@ -304,6 +312,8 @@ ok(T.titleCandidate("Senior beleidsadviseur mobiliteit") && T.titleCandidate("Pr
   ok(T.feedPrefix("smartrecruiters:oecd") === "sr:oecd:" && T.BOARDS.smartrecruiters.includes("oecd") && T.BOARDS.recruitee.includes("sweco"), "the feeds are registered and expire by prefix");
 }
 globalThis.fetch = realFetch;
+// JS-7: a board that answers 404 on every ATS is retired, not kept to fail 3 runs and turn fm-jobsearch-feed-down red (lever:mistral, 2026-11-05)
+ok(!T.BOARDS.lever.includes("mistral") && T.BOARDS.lever.includes("palantir") && T.BOARDS.lever.length === 8, "the dead lever:mistral board is retired and the others stay", T.BOARDS.lever);
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
