@@ -2,7 +2,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261105_e_ai_search_cost
--- Rollback: DROP TABLE IF EXISTS ai_search_cost_snapshots; DELETE FROM cost_source_registry WHERE source = 'ai_search:usage'
+-- Rollback: UPDATE roadmap_implementation SET status = (SELECT b.sql FROM bak_20261105_e_ai_search_cost b WHERE b.name = 'roadmap:1694:status'), evidence = (SELECT b.sql FROM bak_20261105_e_ai_search_cost b WHERE b.name = 'roadmap:1694:evidence') WHERE id = 1694 AND EXISTS (SELECT 1 FROM bak_20261105_e_ai_search_cost b WHERE b.name = 'roadmap:1694:status'); UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:rollback' WHERE class = 'rm-1694'; DROP TABLE IF EXISTS ai_search_cost_snapshots; DELETE FROM cost_source_registry WHERE source = 'ai_search:usage'
 -- The previous v_cost_lines_month text is the table bak_20261105_e_ai_search_cost (name, sql) and, unchanged, migrations/2026-11-04-vendor-cost-ledger.sql: recreate it from there to roll the view back.
 -- CAUSE-MAPPED: no metric is registered here; this creates a table, extends a view and replaces one contract probe.
 --
@@ -71,3 +71,20 @@ SET verify_probe = 'SELECT ''AI Search cost telemetry is live: a snapshot under 
     action = 'AI-SEARCH-COST-1: scripts/cost_ledger.py runs write_ai_search_snapshot hourly (ai_search_summary), ai_search_cost_snapshots holds the inventory and billable usage, v_cost_lines_month reads ai_search:usage. Billing starts 2026-12-01; the first invoice line replaces the bound in docs/AI-SEARCH-INSTANCES.md.',
     status = 'active', attempts = 0, last_verdict = NULL, deferred_since = NULL, next_due_at = datetime('now')
 WHERE class = 'issue-1000651' AND issue_id = 1000651;
+
+-- The roadmap row (GitHub #5573) is built once this change is on main: the hourly ledger run is the code that deploys it. The steward (psBuiltVerify, ROADMAP-BUILT-VERIFY-1) closes the mirror from the same
+-- probe, so the row stays open until the first fresh readable snapshot exists. The previous status and evidence are saved first (rows 'roadmap:1694:status' and 'roadmap:1694:evidence').
+INSERT OR IGNORE INTO bak_20261105_e_ai_search_cost (name, sql) SELECT 'roadmap:1694:status', status FROM roadmap_implementation WHERE id = 1694;
+INSERT OR IGNORE INTO bak_20261105_e_ai_search_cost (name, sql) SELECT 'roadmap:1694:evidence', evidence FROM roadmap_implementation WHERE id = 1694;
+
+UPDATE roadmap_implementation
+SET status = 'built',
+    evidence = 'AI-SEARCH-COST-1 (2026-11-05): scripts/cost_ledger.py ai_search_summary runs hourly and writes ai_search_cost_snapshots (migrations/2026-11-05-e-ai-search-cost.sql); v_cost_lines_month reads the ai_search:usage source; docs/AI-SEARCH-INSTANCES.md has the inventory (one instance, qnfo-corpus), the rates and the postponement of usage billing to 2026-12-01. Closes when a fresh readable snapshot exists (contract rm-1694).'
+WHERE id = 1694 AND item = 'RM-AISEARCH-GA-MIGRATE-1' AND status = 'planned';
+
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)
+SELECT 'rm-1694', NULL, 'ROADMAP-BUILT-VERIFY-1: roadmap item RM-AISEARCH-GA-MIGRATE-1 (id 1694) is built and waits for its closing probe',
+ 'AI-SEARCH-COST-1: scripts/cost_ledger.py runs ai_search_summary hourly, ai_search_cost_snapshots holds the inventory and billable usage, v_cost_lines_month reads ai_search:usage.',
+ (SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-1000651'),
+ 'd1-query', 48, 'qnfo-github-steward', 1, 'active', 'roadmap-dod-v1', datetime('now')
+FROM roadmap_implementation WHERE id = 1694 AND item = 'RM-AISEARCH-GA-MIGRATE-1' AND status IN ('built', 'deployed', 'implemented');

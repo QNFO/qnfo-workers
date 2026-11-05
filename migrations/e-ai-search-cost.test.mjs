@@ -8,7 +8,10 @@ db.exec(`CREATE TABLE cost_daily (date TEXT NOT NULL, source TEXT NOT NULL, scop
 CREATE TABLE cost_vendor_month (month TEXT, vendor TEXT, product TEXT, evidence TEXT, net_mtd_usd REAL, net_forecast_usd REAL, rate_daily_3d_usd REAL);
 CREATE TABLE cost_source_registry (source TEXT PRIMARY KEY, label TEXT NOT NULL, scope TEXT NOT NULL, payer TEXT NOT NULL, observable_via TEXT NOT NULL, notes TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, verify_probe TEXT, action TEXT, status TEXT, attempts INTEGER, last_verdict TEXT, deferred_since TEXT, next_due_at TEXT);
-INSERT INTO remediation_contracts VALUES ('issue-1000651', 1000651, 'OLD', 'old', 'active', 5, 'fail', NULL, NULL);`);
+INSERT INTO remediation_contracts VALUES ('issue-1000651', 1000651, 'OLD', 'old', 'active', 5, 'fail', NULL, NULL);
+CREATE TABLE roadmap_implementation (id INTEGER PRIMARY KEY, item TEXT, status TEXT, evidence TEXT);
+INSERT INTO roadmap_implementation VALUES (1694, 'RM-AISEARCH-GA-MIGRATE-1', 'planned', 'docs/SCOUT-ROADMAP-2026-10.md');
+ALTER TABLE remediation_contracts ADD COLUMN precondition TEXT; ALTER TABLE remediation_contracts ADD COLUMN verify_transport TEXT; ALTER TABLE remediation_contracts ADD COLUMN max_attempts INTEGER; ALTER TABLE remediation_contracts ADD COLUMN escalate_to TEXT; ALTER TABLE remediation_contracts ADD COLUMN expected_cadence_h INTEGER; ALTER TABLE remediation_contracts ADD COLUMN module TEXT;`);
 db.exec(viewOf(prior, "v_cost_lines_month"));
 let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log("FAIL " + m); } };
 // a month of ledger rows: two days ago the first AI Search charge
@@ -30,7 +33,13 @@ ok(tables.length === 2, "snapshot table and view backup exist: " + tables);
 ok(db.prepare("SELECT COUNT(*) n FROM bak_20261105_e_ai_search_cost WHERE sql LIKE '%v_cost_lines_month%'").get().n === 1, "the previous view text is saved");
 ok(db.prepare("SELECT COUNT(*) n FROM cost_source_registry WHERE source = 'ai_search:usage'").get().n === 1, "the source is registered");
 db.exec(sql);
-ok(db.prepare("SELECT COUNT(*) n FROM bak_20261105_e_ai_search_cost").get().n === 1, "re-running keeps the first backup");
+ok(db.prepare("SELECT COUNT(*) n FROM bak_20261105_e_ai_search_cost WHERE sql LIKE '%v_cost_lines_month%'").get().n === 1, "re-running keeps the first backup of the view");
+ok(db.prepare("SELECT sql FROM bak_20261105_e_ai_search_cost WHERE name = 'roadmap:1694:status'").get().sql === "planned", "the previous roadmap status is saved once");
+const rm = db.prepare("SELECT status, evidence FROM roadmap_implementation WHERE id = 1694").get();
+ok(rm.status === "built" && /ai_search_summary/.test(rm.evidence), "roadmap 1694 is built with the evidence: " + JSON.stringify(rm).slice(0, 120));
+const rmc = db.prepare("SELECT class, status, module, verify_transport, verify_probe FROM remediation_contracts WHERE class = 'rm-1694'").all();
+ok(rmc.length === 1 && rmc[0].status === "active" && rmc[0].module === "roadmap-dod-v1" && rmc[0].verify_transport === "d1-query", "one active roadmap-dod-v1 contract rm-1694 after two runs");
+ok(rmc[0] && rmc[0].verify_probe === db.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = 'issue-1000651'").get().p, "rm-1694 carries the same probe as the issue contract");
 // the snapshot DDL accepts the exact statement scripts/cost_ledger.py writes, and an unread inventory is NULL
 const ledger = readFileSync(new URL("../scripts/cost_ledger.py", import.meta.url), "utf8");
 const cols = /INSERT INTO ai_search_cost_snapshots \(([^)]*)\)/.exec(ledger)[1].split(",").map((s) => s.trim());
