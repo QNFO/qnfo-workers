@@ -114,7 +114,7 @@ def graphql(query: str, variables: dict, token: str) -> dict:
 
 def d1_rows(acct: str, token: str, db_id: str, sql: str, errors: list) -> list:
     st, j = api("POST", "/accounts/%s/d1/database/%s/query" % (acct, db_id), token, {"sql": sql, "params": []})
-    if st != 200 or j.get("success") is False:
+    if not 200 <= st < 300 or j.get("success") is False:
         errors.append("d1 %s: HTTP %s %s" % (sql[:48], st, json.dumps(j.get("errors") or "")[:160]))
         return []
     res = j.get("result") or []
