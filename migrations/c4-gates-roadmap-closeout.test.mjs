@@ -28,7 +28,7 @@ function fixture() {
     CREATE TABLE objective_revision_applies (goal_id INTEGER PRIMARY KEY, outcome TEXT NOT NULL);
     CREATE TABLE v_blocker_claims (target TEXT, text TEXT, created_ms INTEGER);
     CREATE TABLE human_actions (id INTEGER PRIMARY KEY, title TEXT, action TEXT, status TEXT);
-    CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, created_at INTEGER);`);
+    CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);`);
   for (const [id, item, st] of ROWS) d.prepare("INSERT INTO roadmap_implementation (id, item, status, evidence) VALUES (?, ?, ?, 'seed')").run(id, item, st);
   for (const k of GOALS) d.prepare("INSERT INTO goals (goal_key, status, goal_type) VALUES (?, 'adopted', 'instrumental')").run(k);
   d.exec("INSERT INTO objective_revision_applies VALUES (58, 'applied')");
@@ -98,6 +98,13 @@ ok(Number(runProbe(d, "closeout-goal-fleet-loop-actuation-gap").observed) === 1,
 const gdb = new DatabaseSync(":memory:");
 gdb.exec("CREATE TABLE fg_finding (kind TEXT, subject TEXT); INSERT INTO fg_finding VALUES ('untracked-worker', 'a'), ('env-undeclared', 'b')");
 ok(Number(gdb.prepare(probe(d, "closeout-goal-repo-mirror-drift-closeout").p).get().observed) === 1 && probe(d, "closeout-goal-repo-mirror-drift-closeout").t === "d1-query@qnfo-graph", "the untracked-worker probe reads the graph database and counts only that kind");
+
+// ---- the originated improvement: one open issue with a doer, a code-task anchor that occurs once, and a closing probe
+const hb = rows(d, "SELECT title, description, status, source FROM agent_issues WHERE title LIKE 'LOCAL-GUARD-HEARTBEAT-1:%'");
+ok(hb.length === 1 && hb[0].status === "open" && hb[0].source === "session:c4-gates", "one open LOCAL-GUARD-HEARTBEAT-1 issue", hb.length);
+const mg = readFileSync(join(repo, "docs/ops-governance/scripts/model_guard.py"), "utf8");
+ok(hb[0].description.startsWith("code-task: repo=qnfo-workers path=docs/ops-governance/scripts/model_guard.py\ncode-anchor: def main():\n") && mg.split("def main():").length === 2, "its code-task path exists and its anchor occurs exactly once in that file");
+ok(/Closing probe:/.test(hb[0].description) && /Doer:/.test(hb[0].description), "it names a closing probe and a doer");
 
 // ---- decisions and idempotence
 ok(one(d, "SELECT COUNT(*) n FROM decision_log").n === 3 && rows(d, "SELECT rollback_path r FROM decision_log").every((r) => r.r && r.r.length > 20), "three decisions, each with its revert path");
