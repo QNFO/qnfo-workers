@@ -37,6 +37,15 @@ ACTIONS
                          Create AP_PRIVATE_KEY and AP_PUBLIC_KEY Worker secrets (RSA-2048) for the ActivityPub actor
                          (ACTIVITYPUB-WEBFINGER-1). WORKER must be in AP_WORKERS. Idempotent, never rotates, runs under
                          the secret-lock lease, never prints the private key.
+  edge-rules ZONES       EDGE-RULES-1 (RM-WAF-RATE-LIMIT-1): the fleet's one Free-plan rate-limiting rule per zone (qnfo.org, q08.org, qwav.tech)
+                         on the public write routes, plus a custom rule on qnfo.org that blocks scanner paths. --model dry (default) prints the plan,
+                         live backs up the ruleset in the log, writes, GETs the hosts that must keep answering and restores the backup when one
+                         turns 403 or 429, revert removes the marked rules. Rules not carrying the marker are kept.
+  secrets-inventory      SECRETS-INVENTORY-1 (RM-SECRETS-STORE-1): read-only. Per worker the secret NAMES, the age of the newest secret change and the
+                         Secrets Store bindings; every Secrets Store entry with scope and age; the names present in both; the store bindings a wrangler.toml
+                         declares that the live worker does not carry. No value is readable.
+  obs-sampling WORKER    OBS-SAMPLING-1 (RM-TAIL-WORKERS-1): raise Workers Logs sampling of an allowlisted worker (q08-mind) to 1 so every exception
+                         reaches worker_logs through ERROR-DETAIL-CAPTURE-1. Reads the live setting first and sends the traces block back unchanged.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
                          status, metadata and user agent, for caller attribution.
   ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL). With --model, neurons and
@@ -96,6 +105,7 @@ Every action prints one line `RESULT_JSON=<json>` so the job log is machine-read
 from __future__ import annotations
 
 import argparse
+import calendar
 import collections
 import contextlib
 import hashlib
@@ -919,6 +929,289 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
     return rc
 
 
+# EDGE-RULES-1 (2026-11-04, roadmap RM-WAF-RATE-LIMIT-1, charter pillar security). Every zone is on the Free plan, which allows
+# ONE rate-limiting rule (10 s counting period, 10 s block, counted per address and data centre) and five custom WAF rules.
+# The fleet's three zones that carry public write routes each get their one rate-limiting rule, and qnfo.org also gets one
+# custom rule that answers the scanner paths no fleet host serves before a Worker runs. Rules carry the marker
+# "RM-WAF-RATE-LIMIT-1" in their description, so an apply replaces only its own rules and a revert removes only its own rules;
+# a rule written by anyone else is kept and stays first. mode "dry" (the default) prints the plan and writes nothing; "live"
+# records the existing ruleset in the run log (the backup), writes, then GETs the hosts that must keep answering and restores
+# the backed-up ruleset when one of them turns 403 or 429; "revert" removes the marked rules. The session connector token is
+# refused on ruleset writes (7500) and the repository token is not, so the rules are written here and not from a session.
+EDGE_MARK = "RM-WAF-RATE-LIMIT-1"
+EDGE_RL = "http_ratelimit"
+EDGE_FW = "http_request_firewall_custom"
+EDGE_RULE_KEYS = RULE_KEYS + ("ratelimit",)
+
+
+def edge_ratelimit_rule(ref: str, expression: str, limit: int, desc: str) -> dict:
+    return {"ref": ref, "action": "block", "expression": expression, "enabled": True,
+            "description": EDGE_MARK + ": " + desc,
+            "ratelimit": {"characteristics": ["cf.colo.id", "ip.src"], "period": 10, "requests_per_period": limit, "mitigation_timeout": 10}}
+
+
+# Measured 2026-11-04 (GraphQL httpRequestsAdaptiveGroups, 24 h, eyeball POSTs to these hosts): the busiest legitimate
+# write route took 144 requests a day from every address together, so 20 requests in 10 s from one address and data
+# centre is far above any person or runner and far below a flood. ops.qnfo.org and ai.qnfo.org are left out on purpose: the
+# runners and clients that call them hold a key and call in bursts, and the Free plan cannot tell a keyed request from an
+# unkeyed one (run 41942246628: "the use of field http.request.headers.names is not allowed, an higher Advanced Rate
+# Limiting plan is required"); their keys are the control there.
+EDGE_QNFO_RL = (
+    '(http.request.method eq "POST" and not starts_with(http.request.uri.path, "/cdn-cgi/") and ('
+    'http.host in {"ideas.qnfo.org" "ipatent.qnfo.org"}'
+    ' or (http.host eq "fleet.qnfo.org" and starts_with(http.request.uri.path, "/api/cmd/"))'
+    ' or (http.host eq "qnfo.org" and starts_with(http.request.uri.path, "/email/"))))'
+)
+EDGE_QNFO_FW = (
+    '(starts_with(http.request.uri.path, "/.env") or starts_with(http.request.uri.path, "/.git/") or starts_with(http.request.uri.path, "/wp-admin")'
+    ' or starts_with(http.request.uri.path, "/wp-login") or starts_with(http.request.uri.path, "/phpmyadmin") or ends_with(http.request.uri.path, "/xmlrpc.php"))'
+)
+EDGE_ZONES = {
+    "qnfo.org": {
+        EDGE_RL: [edge_ratelimit_rule("rm_waf_rl_qnfo", EDGE_QNFO_RL, 20, "per-address burst limit on public write routes (idea form, ipatent forms, owner sign-in code, email command route)")],
+        EDGE_FW: [{"ref": "rm_waf_fw_scanners", "action": "block", "expression": EDGE_QNFO_FW, "enabled": True,
+                   "description": EDGE_MARK + ": scanner paths no fleet host serves (/.env, /.git/, /wp-admin, /wp-login, /phpmyadmin, xmlrpc.php)"}],
+        "ok": ["https://qnfo.org/", "https://ideas.qnfo.org/", "https://papers.qnfo.org/", "https://ops.qnfo.org/health", "https://fleet.qnfo.org/"],
+        "blocked": ["https://papers.qnfo.org/.env"],
+    },
+    "q08.org": {
+        EDGE_RL: [edge_ratelimit_rule("rm_waf_rl_q08", '(http.request.method eq "POST" and ((http.host in {"q08.org" "www.q08.org"} and starts_with(http.request.uri.path, "/subscribe"))'
+                                      ' or (http.host eq "travel.q08.org" and starts_with(http.request.uri.path, "/travel/login"))))', 10,
+                                      "per-address burst limit on the q08 subscribe form and the travel sign-in code")],
+        "ok": ["https://q08.org/", "https://travel.q08.org/"],
+        "blocked": [],
+    },
+    "qwav.tech": {
+        EDGE_RL: [edge_ratelimit_rule("rm_waf_rl_ask", '(http.host eq "ask.qwav.tech" and http.request.method eq "POST" and starts_with(http.request.uri.path, "/api/"))', 15,
+                                      "per-address burst limit on the ask page's model-cost routes (/api/ask, /api/feedback)")],
+        "ok": ["https://ask.qwav.tech/"],
+        "blocked": [],
+    },
+}
+
+
+def edge_is_ours(rule: dict) -> bool:
+    return EDGE_MARK in str(rule.get("description") or "")
+
+
+def edge_clean(rule: dict) -> dict:
+    return {k: rule[k] for k in EDGE_RULE_KEYS if k in rule}
+
+
+def edge_merge(before: list, ours: list) -> list:
+    """Every rule that is not ours, in its place, then ours."""
+    return [edge_clean(r) for r in (before or []) if not edge_is_ours(r)] + [edge_clean(r) for r in ours]
+
+
+def edge_equal(before: list, want: list) -> bool:
+    return [edge_clean(r) for r in (before or [])] == [edge_clean(r) for r in want]
+
+
+def edge_probe(url: str, fetch=None) -> int:
+    """GET without following redirects; the HTTP status, or 0 for a connection error."""
+    if fetch is not None:
+        return fetch(url)
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    opener = urllib.request.build_opener(_NoRedirect)
+    req = urllib.request.Request(url, method="GET", headers={"User-Agent": "qnfo-cf-ops/1 edge-rules"})
+    try:
+        with opener.open(req, timeout=20) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except Exception:
+        return 0
+
+
+def edge_rules(zone_names: str, mode: str, token: str, fetch=None, sleep=time.sleep) -> int:
+    mode = (mode or "dry").strip() or "dry"
+    if mode not in ("dry", "live", "revert"):
+        emit({"action": "edge-rules", "ok": False, "error": "model must be dry, live or revert", "got": mode})
+        return 2
+    zones = [z.strip() for z in (zone_names or "").split(",") if z.strip()] or list(EDGE_ZONES)
+    bad = [z for z in zones if z not in EDGE_ZONES]
+    if bad:
+        emit({"action": "edge-rules", "ok": False, "error": "zone not in EDGE_ZONES", "zones": bad, "allowed": list(EDGE_ZONES)})
+        return 2
+    known = dict((name, zid) for zid, name in zaraz_zones(token))
+    rc = 0
+    for zone in zones:
+        zid = known.get(zone)
+        if not zid:
+            emit({"action": "edge-rules", "ok": False, "zone": zone, "error": "zone not in the account"})
+            rc = 1
+            continue
+        plan = EDGE_ZONES[zone]
+        phases = [p for p in (EDGE_RL, EDGE_FW) if plan.get(p)]
+        backups, written = {}, []
+        zone_ok, put_failed = True, False
+        for phase in phases:
+            path = "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, phase)
+            st, j = call("GET", path, token)
+            before = ((j.get("result") or {}).get("rules") or []) if st == 200 else []
+            backups[phase] = before
+            emit({"action": "edge-rules", "stage": "backup", "zone": zone, "phase": phase, "http": st, "rules": before})
+            want = edge_merge(before, [] if mode == "revert" else plan[phase])
+            needed = not edge_equal(before, want)
+            if mode == "dry" or not needed:
+                emit({"action": "edge-rules", "ok": True, "dry": mode == "dry", "zone": zone, "phase": phase, "changed": needed, "write": want})
+                continue
+            st2, j2 = call("PUT", path, token, {"rules": want})
+            ok2 = 200 <= (st2 or 0) < 300 and j2.get("success") is not False
+            emit({"action": "edge-rules", "ok": ok2, "zone": zone, "phase": phase, "stage": "put", "http": st2, "errors": j2.get("errors")})
+            if not ok2:
+                put_failed = True
+                continue
+            written.append(phase)
+        if mode == "live" and written and zone_ok:
+            sleep(8)
+            checks = [{"url": u, "status": edge_probe(u, fetch)} for u in plan.get("ok", [])]
+            bad_ok = [c for c in checks if c["status"] in (403, 429) or c["status"] >= 520 or c["status"] == 0]
+            blocked = [{"url": u, "status": edge_probe(u, fetch)} for u in plan.get("blocked", [])]
+            emit({"action": "edge-rules", "stage": "verify", "zone": zone, "ok_hosts": checks, "blocked_paths": blocked})
+            if bad_ok:
+                zone_ok = False
+        if not zone_ok and mode == "live" and written:
+            restored = []
+            for phase in written:
+                st3, j3 = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, phase), token, {"rules": [edge_clean(r) for r in backups[phase]]})
+                restored.append({"phase": phase, "http": st3})
+            emit({"action": "edge-rules", "ok": False, "zone": zone, "stage": "restored", "restored": restored})
+        if not zone_ok or put_failed:
+            rc = 1
+    return rc
+
+
+# SECRETS-INVENTORY-1 (2026-11-04, roadmap RM-SECRETS-STORE-1, pillar security). Read-only. Secret VALUES are write-only in
+# Cloudflare, so nothing here can read one; the inventory lists secret NAMES per worker (the /secrets listing carries a name
+# and a type), the age of the newest secret change per worker (a version triggered by "secret"), and every Secrets Store
+# entry with its scope and last change, then says which names exist in both places and which workers bind the store. Store
+# ids and comments are left out (this repository's job logs are public). The output is the work list for moving a credential
+# to the store, where one change reaches every worker that binds it and no redeploy.
+STALE_SECRET_DAYS = 90
+
+
+def _days_since(iso_ts: str, now: float | None = None) -> int | None:
+    try:
+        t = calendar.timegm(time.strptime(str(iso_ts)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception:
+        return None
+    return int(((now if now is not None else time.time()) - t) // 86400)
+
+
+def declared_store_bindings(root: str = ".") -> list:
+    """(worker, binding, secret_name) for every [[secrets_store_secrets]] block in a live repo directory's wrangler.toml."""
+    out = []
+    for d in sorted(os.listdir(root)):
+        w = os.path.join(root, d, "wrangler.toml")
+        if not os.path.isfile(w) or any(os.path.isfile(os.path.join(root, d, m)) for m in ("RETIRED", "FOLDED")):
+            continue
+        text = open(w, encoding="utf-8").read()
+        name = (re.search(r'^\s*name\s*=\s*"([^"]+)"', text, re.M) or [None, d])[1]
+        for block in re.split(r"^\s*\[\[secrets_store_secrets\]\]", text, flags=re.M)[1:]:
+            body = re.split(r"^\s*\[", block, maxsplit=1, flags=re.M)[0]
+            b = re.search(r'^\s*binding\s*=\s*"([^"]+)"', body, re.M)
+            sn = re.search(r'^\s*secret_name\s*=\s*"([^"]+)"', body, re.M)
+            if b and sn:
+                out.append((name, b.group(1), sn.group(1)))
+    return out
+
+
+def secrets_inventory(acct: str, token: str, now: float | None = None, root: str = ".") -> int:
+    st, j = call("GET", "/accounts/%s/workers/scripts" % acct, token)
+    scripts = sorted(str(s.get("id")) for s in (j.get("result") or []) if s.get("id")) if st == 200 else []
+    if not scripts:
+        emit({"action": "secrets-inventory", "ok": False, "http": st, "errors": j.get("errors")})
+        return 1
+    workers, by_name = [], collections.defaultdict(list)
+    for name in scripts:
+        base = "/accounts/%s/workers/scripts/%s" % (acct, name)
+        st_s, j_s = call("GET", base + "/secrets", token)
+        names = sorted(str(x.get("name")) for x in (j_s.get("result") or [])) if st_s == 200 else []
+        st_b, j_b = call("GET", base + "/bindings", token)
+        store_binds = sorted(str(b.get("name")) for b in (j_b.get("result") or []) if b.get("type") == "secrets_store_secret") if st_b == 200 else []
+        last = None
+        if names:
+            st_v, j_v = call("GET", base + "/versions?per_page=25", token)
+            res = j_v.get("result") or {}
+            items = res.get("items") if isinstance(res, dict) else res
+            for v in items or []:
+                ann, md = v.get("annotations") or {}, v.get("metadata") or {}
+                if str(ann.get("workers/triggered_by") or "").lower() == "secret" or str(md.get("source") or "").lower() == "secret":
+                    last = md.get("created_on")
+                    break
+        for n in names:
+            by_name[n].append(name)
+        workers.append({"worker": name, "secrets": len(names), "names": names, "store_bindings": store_binds, "last_secret_change": last,
+                        "secret_age_days": _days_since(last, now) if last else None, "http": {"secrets": st_s, "bindings": st_b}})
+    stores = []
+    st_t, j_t = call("GET", "/accounts/%s/secrets_store/stores" % acct, token)
+    for store in (j_t.get("result") or []) if st_t == 200 else []:
+        sid = store.get("id")
+        st_e, j_e = call("GET", "/accounts/%s/secrets_store/stores/%s/secrets?per_page=100" % (acct, sid), token)
+        entries = [{"name": e.get("name"), "scopes": e.get("scopes"), "status": e.get("status"), "modified": str(e.get("modified") or "")[:10],
+                    "age_days": _days_since(e.get("modified"), now)} for e in (j_e.get("result") or [])] if st_e == 200 else []
+        stores.append({"store": store.get("name"), "entries": entries, "http": st_e})
+    store_names = {e["name"] for s in stores for e in s["entries"]}
+    bound = sorted({b for w in workers for b in w["store_bindings"]})
+    both = sorted(n for n in by_name if n in store_names)
+    shared = {n: ws for n, ws in sorted(by_name.items()) if len(ws) >= 3}
+    stale = [w["worker"] for w in workers if (w["secret_age_days"] or 0) > STALE_SECRET_DAYS]
+    # A binding a wrangler.toml declares and the live worker does not carry: the canonical deploy installs only the binding
+    # types installDeclaredBindings knows, and a declared binding that never arrives leaves the worker on its legacy secret.
+    live_pairs = {(w["worker"], b) for w in workers for b in w["store_bindings"]}
+    declared = declared_store_bindings(root)
+    declared_not_live = sorted("%s:%s->%s" % (wn, bn, sn) for wn, bn, sn in declared if (wn, bn) not in live_pairs)
+    emit({"action": "secrets-inventory", "ok": st_t == 200, "workers": len(workers), "workers_with_secrets": sum(1 for w in workers if w["secrets"]),
+          "secret_bindings_total": sum(w["secrets"] for w in workers), "distinct_names": len(by_name), "stores_http": st_t,
+          "store_entries": sum(len(s["entries"]) for s in stores), "store_bindings_live": bound,
+          "declared_store_bindings": len(declared), "declared_not_live": declared_not_live,
+          "names_in_worker_and_store": both, "shared_names_3plus_workers": shared, "stale_over_days": STALE_SECRET_DAYS, "workers_stale": stale,
+          "store_entries_over_stale_days": sorted(e["name"] for s in stores for e in s["entries"] if (e["age_days"] or 0) > STALE_SECRET_DAYS),
+          "per_worker": [{k: w[k] for k in ("worker", "secrets", "store_bindings", "last_secret_change", "secret_age_days")} for w in workers if w["secrets"] or w["store_bindings"]],
+          "stores": stores})
+    return 0
+
+
+# OBS-SAMPLING-1 (2026-11-04, roadmap RM-TAIL-WORKERS-1, pillar observability). ERROR-DETAIL-CAPTURE-1 (qnfo-ops) copies every
+# error event Workers Logs holds into worker_logs, so a worker whose log sampling is below 1 loses the same share of its
+# exceptions. 38 of 39 workers log at 1; q08-mind logs at 0.1 and is deployed by wrangler only (the canonical path skips its
+# directory), so the live setting is raised here and the wrangler.toml carries the same value for the next wrangler deploy.
+# PATCH /script-settings changes only the fields it names; the traces block is sent back unchanged.
+OBS_SAMPLING_TARGETS = {"q08-mind": 1}
+
+
+def obs_sampling(worker: str, acct: str, token: str) -> int:
+    if worker not in OBS_SAMPLING_TARGETS:
+        emit({"action": "obs-sampling", "ok": False, "error": "worker not in OBS_SAMPLING_TARGETS", "allowed": sorted(OBS_SAMPLING_TARGETS)})
+        return 2
+    rate = OBS_SAMPLING_TARGETS[worker]
+    base = "/accounts/%s/workers/scripts/%s" % (acct, worker)
+    st, j = call("GET", base + "/settings", token)
+    obs = ((j.get("result") or {}).get("observability")) if st == 200 else None
+    if not isinstance(obs, dict):
+        emit({"action": "obs-sampling", "ok": False, "worker": worker, "stage": "read", "http": st, "errors": j.get("errors")})
+        return 1
+    want = json.loads(json.dumps(obs))
+    want["enabled"] = True
+    want["head_sampling_rate"] = rate
+    want.setdefault("logs", {})
+    want["logs"]["enabled"] = True
+    want["logs"]["head_sampling_rate"] = rate
+    if want == obs:
+        emit({"action": "obs-sampling", "ok": True, "worker": worker, "changed": False, "observability": obs})
+        return 0
+    st2, j2 = call("PATCH", base + "/script-settings", token, {"observability": want})
+    st3, j3 = call("GET", base + "/settings", token)
+    after = ((j3.get("result") or {}).get("observability")) if 200 <= (st3 or 0) < 300 else None
+    ok = 200 <= (st2 or 0) < 300 and isinstance(after, dict) and (after.get("logs") or {}).get("head_sampling_rate") == rate
+    emit({"action": "obs-sampling", "ok": ok, "worker": worker, "changed": True, "before": obs, "after": after, "patch_http": st2, "errors": j2.get("errors")})
+    return 0 if ok else 1
+
+
 LIVING_PAPER_DB = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 
 
@@ -1509,8 +1802,18 @@ def d1_restore_drill(acct: str, token: str, caller=None, sleep=time.sleep, now=t
 
 GUARD_URL = "https://qnfo-deploy-guard.q08.workers.dev"
 # The loops that read fleet_kill_switch today. A reader is added here in the change that teaches its worker to read the flag (docs/KILL-SWITCH-DRILL.md).
-KS_READERS = ("qnfo-deploy-guard",)
-KS_PENDING = ("qnfo-fleet-control", "qnfo-code-orchestrator", "qnfo-ops", "qnfo-social", "qnfo-email-orchestrator", "qnfo-research-exec", "qnfo-cloud-ops", "qnfo-github-steward")
+KS_READERS = ("qnfo-deploy-guard", "qnfo-code-orchestrator", "qnfo-github-steward")
+KS_PENDING = ("qnfo-fleet-control", "qnfo-ops", "qnfo-social", "qnfo-research-exec", "qnfo-cloud-ops")
+# BP26-KILLSWITCH-READERS-1: a reader whose work is a cron tick, not a request, cannot be sent a probing call. The drill reads its events instead. Per reader: wait_s is how long the drill
+# polls (a 5-minute grid worker needs up to 7 minutes), quiet_like (optional) is an event kind pattern that must be absent from the quiet window (the loop's own work events), and alive
+# is the query whose count (after T1 plus the 30 s cache) shows the worker ran again after the switch went off. Resumed also requires no new kill-switch.observed event after T1.
+KS_EVENT_READERS = {
+    "qnfo-code-orchestrator": {"wait_s": 150, "quiet_like": "code-task.%",
+                               "alive": "SELECT COUNT(*) AS n FROM fleet_heartbeat WHERE worker = 'qnfo-code-orchestrator' AND ts > ?1", "alive_arg": "iso"},
+    "qnfo-github-steward": {"wait_s": 420, "quiet_like": None,
+                            "alive": "SELECT COUNT(*) AS n FROM cron_fire_log WHERE source = 'worker:qnfo-github-steward' AND outcome = 'ok' AND fired_epoch_ms > ?1", "alive_arg": "ms"},
+}
+KS_QUIET_START_S = 100  # in-flight steps of a tick that began before the flag finish inside the 75 s loop lock; judge quiet after that
 
 
 def _guard(path: str, body: dict | None = None, timeout: int = 30) -> tuple[int, dict]:
@@ -1531,6 +1834,7 @@ def _guard(path: str, body: dict | None = None, timeout: int = 30) -> tuple[int,
 
 def kill_switch_drill(acct: str, token: str, guard=None, db=None, sleep=time.sleep, now=time.time, max_on_sec: int = 600) -> int:
     """BP26-LEASES-KILLSWITCH-1. The drill is the fleet's, run from the repository runner: it writes the one ops_config row, observes, restores, records."""
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))  # noqa: E731
     guard = guard or _guard
     db = db or (lambda sql, params=None: d1x(acct, token, AUDIT_DB, sql, params))
     ev, steps = {}, []
@@ -1548,6 +1852,7 @@ def kill_switch_drill(acct: str, token: str, guard=None, db=None, sleep=time.sle
     t0 = now()
     stopped = resumed = 0
     stopped_names, resumed_names = [], []
+    t_off = None
     try:
         okw, _ = db("INSERT INTO ops_config (key, value, note) VALUES ('fleet_kill_switch', 'on', 'BP26-LEASES-KILLSWITCH-1 drill') ON CONFLICT(key) DO UPDATE SET value = 'on', updated_at = datetime('now')")
         step("flag-on", okw)
@@ -1564,11 +1869,39 @@ def kill_switch_drill(acct: str, token: str, guard=None, db=None, sleep=time.sle
             stopped += 1
             stopped_names.append("qnfo-deploy-guard")
         ev["refusals"] = [st1, st2, st3]
+        # BP26-KILLSWITCH-READERS-1: the event-observed readers. One shared wait, polled every 10 s, so the time on stays inside max_on_sec.
+        readers = [r for r in KS_READERS if r in KS_EVENT_READERS]
+        seen_ev = {}
+        polls = max([KS_EVENT_READERS[r]["wait_s"] for r in readers] or [0]) // 10
+        for i in range(polls + 1):
+            for r in readers:
+                if r in seen_ev:
+                    continue
+                oke2, evr2 = db("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'kill-switch.observed' AND job = ?1 AND ts >= ?2", [r, iso(t0)])
+                if oke2 and int((evr2 or [{}])[0].get("n") or 0) >= 1:
+                    seen_ev[r] = i * 10
+            if len(seen_ev) == len(readers) or i == polls:
+                break
+            sleep(10)
+        for r in readers:
+            sw = r in seen_ev
+            step(r + "-observed-event", sw, ("seen after %s s" % seen_ev[r]) if sw else "no kill-switch.observed event within %s s" % KS_EVENT_READERS[r]["wait_s"])
+            quiet = True
+            like = KS_EVENT_READERS[r].get("quiet_like")
+            if like and sw:
+                okq, qr = db("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE job = ?1 AND kind LIKE ?2 AND ts > ?3", [r, like, iso(t0 + KS_QUIET_START_S)])
+                quiet = bool(okq) and int((qr or [{}])[0].get("n") or 0) == 0
+                step(r + "-quiet-while-on", quiet, "%s events of kind %s after T0+%ss: %s" % (r, like, KS_QUIET_START_S, (qr or [{}])[0].get("n")))
+            if sw and quiet:
+                stopped += 1
+                stopped_names.append(r)
+        ev["event_readers"] = {r: seen_ev.get(r) for r in readers}
     finally:
         # Off in every case, inside the time limit; a failed write is itself a failure (docs/KILL-SWITCH-DRILL.md rollback).
         restore = "off" if before in (None, "", "on") else before
         offw, _ = db("INSERT INTO ops_config (key, value, note) VALUES ('fleet_kill_switch', ?1, 'BP26-LEASES-KILLSWITCH-1 drill') ON CONFLICT(key) DO UPDATE SET value = ?1, updated_at = datetime('now')", [restore])
         step("flag-restored", offw, "restored to " + restore)
+        t_off = now()
     sleep(35)
     st4, j4 = guard("/work-lock/acquire", {"key": "file:drill/kill-switch", "owner": "kill-switch-drill", "ttl_sec": 60})
     ok_resume = st4 == 200 and j4.get("acquired") is True
@@ -1577,8 +1910,27 @@ def kill_switch_drill(acct: str, token: str, guard=None, db=None, sleep=time.sle
         resumed += 1
         resumed_names.append("qnfo-deploy-guard")
         guard("/work-lock/release", {"key": "file:drill/kill-switch", "token": j4.get("token"), "outcome": "done"})
-    elapsed = now() - t0
-    step("within-time-limit", elapsed <= max_on_sec + 120, "%.0f s" % elapsed)
+    # The event-observed readers resume when they ran again after the flag went off and the cache lapsed, and wrote no new observed event since.
+    t1 = now() - 35
+    for r in [x for x in KS_READERS if x in KS_EVENT_READERS and x in stopped_names]:
+        spec = KS_EVENT_READERS[r]
+        alive = False
+        arg = int(t1 * 1000) if spec["alive_arg"] == "ms" else iso(t1)
+        for i in range(spec["wait_s"] // 10 + 1):
+            oka, ar = db(spec["alive"], [arg])
+            if oka and int((ar or [{}])[0].get("n") or 0) >= 1:
+                alive = True
+                break
+            sleep(10)
+        okn, nr = db("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'kill-switch.observed' AND job = ?1 AND ts > ?2", [r, iso(t1)])
+        again = (not okn) or int((nr or [{}])[0].get("n") or 0) > 0
+        good = alive and not again
+        step(r + "-resumes", good, "ran again after the flag went off: %s; new observed events since: %s" % (alive, (nr or [{}])[0].get("n")))
+        if good:
+            resumed += 1
+            resumed_names.append(r)
+    on_s = (t_off if t_off is not None else now()) - t0
+    step("within-time-limit", on_s <= max_on_sec + 120, "switch on %.0f s" % on_s)
     expected = len(KS_READERS)
     outcome = "pass" if stopped == expected and resumed == expected and all(x["ok"] for x in steps) else "fail"
     evidence = json.dumps({"readers": list(KS_READERS), "stopped": stopped_names, "resumed": resumed_names, "readers_pending": list(KS_PENDING), "steps": steps}, separators=(",", ":"))[:3500]
@@ -1644,7 +1996,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill"])
+    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1677,6 +2029,12 @@ def main() -> int:
         return delete_vectorize_index(a.target, acct, token)
     if a.action == "kill-switch-drill":
         return kill_switch_drill(acct, token)
+    if a.action == "edge-rules":
+        return edge_rules(a.target, a.model, token)
+    if a.action == "secrets-inventory":
+        return secrets_inventory(acct, token)
+    if a.action == "obs-sampling":
+        return obs_sampling(a.target, acct, token)
     if a.action == "d1-restore-drill":
         return d1_restore_drill(acct, token)
     if a.action == "gen-activitypub-key":
