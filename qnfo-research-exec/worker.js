@@ -32859,6 +32859,11 @@ var CI_RETRACT_MIN = 5;
 var CI_BATCH_DEFAULT = 6;
 var CI_BUDGET_MS = 6 * 60 * 1e3;
 var CI_EXTRACT_MODEL = "@cf/openai/gpt-oss-120b";
+// MODEL-MATRIX-1 (agent_issues 1000709, docs/MODEL-MATRIX.md rows bulk-background and utility-text): the extraction call of the claim audit returns a short JSON list of candidate quotes that the
+// deterministic scan and the confirming model (CI_CONFIRM_MODEL) check afterwards, so it runs first on the cheaper gpt-oss-20b ($0.20 / $0.30 per M tokens against $0.35 / $0.75). An empty or
+// unparseable reply asks CI_EXTRACT_MODEL the same request (OWNER-STANDING-GRANT-1: a cheaper model with a per-request fallback to the previous one). The rewrite call (ciRewritePrompt, text outsiders
+// read), CI_CONFIRM_MODEL and the writing stages are untouched (ENSEMBLE-POLICY-1). ops_config claim_scan_model = off restores gpt-oss-120b for every request without a deploy.
+var CI_SCAN_MODEL = "@cf/openai/gpt-oss-20b";
 var CI_CONFIRM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var CI_SKIP_HEAD_RE = /^(?:[A-Z]?[\d.]*\s*)?(?:references|bibliography|provenance and ai involvement|correction notice|retraction notice|appendix b\.? claim attribution)\b/i;
 var CI_MODAL_RE = /\b(?:would|could|should|will|shall|may|might|must|propose[sd]?|proposal|planned|plans? to|future|hypothetical(?:ly)?|suppose|in principle|is needed|are needed|next (?:experiment|step|study|test)|de-risk\w*|follow-up)\b/i;
@@ -33094,8 +33099,17 @@ async function claimAudit(env, md, opts) {
   var seen = {};
   cands.forEach(function(h) { seen[h.quote] = 1; });
   var modelRan = false;
+  var extractModel = "";
   if (!o.scanOnly) {
-    var ex = ciJsonArray(await ciAi(env, CI_EXTRACT_MODEL, ciExtractPrompt(md), 8192));
+    var ex = null;
+    if (await ciScanModelOn(env)) {
+      ex = ciJsonArray(await ciAi(env, CI_SCAN_MODEL, ciExtractPrompt(md), 8192));
+      if (ex) extractModel = CI_SCAN_MODEL;
+    }
+    if (!ex) {
+      ex = ciJsonArray(await ciAi(env, CI_EXTRACT_MODEL, ciExtractPrompt(md), 8192));
+      if (ex) extractModel = CI_EXTRACT_MODEL;
+    }
     if (ex) {
       modelRan = true;
       ex.slice(0, 25).forEach(function(it) {
@@ -33106,14 +33120,23 @@ async function claimAudit(env, md, opts) {
       });
     }
   }
-  if (!cands.length) return { ok: true, confirmed: [], candidates: 0, modelRan: modelRan };
+  if (!cands.length) return { ok: true, confirmed: [], candidates: 0, modelRan: modelRan, extractModel: extractModel };
   if (o.scanOnly) return { ok: false, confirmed: cands, candidates: cands.length, modelRan: false };
   var verdicts = ciJsonArray(await ciAi(env, CI_CONFIRM_MODEL, ciConfirmPrompt(cands.slice(0, 30)), 2048));
-  if (!verdicts) return { ok: false, confirmed: cands, candidates: cands.length, modelRan: modelRan };
+  if (!verdicts) return { ok: false, confirmed: cands, candidates: cands.length, modelRan: modelRan, extractModel: extractModel };
   var byN = {};
   verdicts.forEach(function(v) { if (v && v.n) byN[Number(v.n)] = String(v.verdict || "").toUpperCase(); });
   var confirmed = cands.slice(0, 30).filter(function(h, i) { return byN[i + 1] === "FABRICATED"; });
-  return { ok: true, confirmed: confirmed, candidates: cands.length, modelRan: modelRan };
+  return { ok: true, confirmed: confirmed, candidates: cands.length, modelRan: modelRan, extractModel: extractModel };
+}
+async function ciScanModelOn(env) {
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'claim_scan_model'").first();
+    if (String(r && r.value || "").trim().toLowerCase() === "off") return false;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "claim-scan-model-config", error: String(e && e.message || e).slice(0, 200) }));
+  }
+  return true;
 }
 async function ciMode(env) {
   try {
