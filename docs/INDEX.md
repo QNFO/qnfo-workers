@@ -79,6 +79,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [EXEC-2026-09-08 — Backlog drain executed; listIssues one-line fix (pending deploy)](EXEC-2026-09-08-listIssues-fix-pending.md) - `docs/EXEC-2026-09-08-listIssues-fix-pending.md`
 - [Exuvia integration (EXUVIA-1, EXUVIA-HANDOFF-1)](EXUVIA-INTEGRATION.md) - `docs/EXUVIA-INTEGRATION.md`
 - [FIX-2026-09-07 — ops_issues_list returns 0 rows (missing await on D1 .all())](FIX-2026-09-07-ops_issues_list-await.md) - `docs/FIX-2026-09-07-ops_issues_list-await.md`
+- [QNFO fleet audit, 2026-10-30](FLEET-AUDIT-2026-10-30.md) - `docs/FLEET-AUDIT-2026-10-30.md`
 - [FLEET-BUDGET (canonical, 2026-09-26) -- the consolidation wave plan](FLEET-BUDGET.md) - `docs/FLEET-BUDGET.md`
 - [FLEET-GRAPH-1: the fleet code and topology graph](FLEET-GRAPH.md) - `docs/FLEET-GRAPH.md`
 - [FLEET-NODE-MAP (canonical, 2026-09-26)](FLEET-NODE-MAP.md) - `docs/FLEET-NODE-MAP.md`
@@ -98,8 +99,10 @@ and [the machine-readable catalog](agent-catalog.json).
 - [HANDOFF — 2026-10-19 (handoff backlog + R2 Basin Catalog + red drain)](HANDOFF-2026-10-19-red-drain.md) - `docs/HANDOFF-2026-10-19-red-drain.md`
 - [Infrastructure and AI-spend audit, 2026-11-04 (pillar: cost)](INFRA-AUDIT-2026-11-04.md) - `docs/INFRA-AUDIT-2026-11-04.md`
 - [Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)](KILL-SWITCH-DRILL.md) - `docs/KILL-SWITCH-DRILL.md`
+- [KG-CURATE-1: the content knowledge graph, curated by the fleet](KNOWLEDGE-GRAPH.md) - `docs/KNOWLEDGE-GRAPH.md`
 - [Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)](LEASES-FENCING.md) - `docs/LEASES-FENCING.md`
 - [Main push policy (MAIN-PUSH-POLICY-1, 2026-11-04)](MAIN-PUSH-POLICY.md) - `docs/MAIN-PUSH-POLICY.md`
+- [Tiered agent memory: how it is measured (RM-MEMORY-TIERING-1)](MEMORY-TIERING-EVAL.md) - `docs/MEMORY-TIERING-EVAL.md`
 - [MODEL-MATRIX-1: which Cloudflare model for which job](MODEL-MATRIX.md) - `docs/MODEL-MATRIX.md`
 - [MONOREPO-DECISION-1: keep qnfo-workers as one repository](MONOREPO-DECISION.md) - `docs/MONOREPO-DECISION.md`
 - [One Thing / Focus backlog and roadmap](ONE-THING-BACKLOG.md) - `docs/ONE-THING-BACKLOG.md`
