@@ -6143,7 +6143,10 @@ async function stageComplete(env, row) {
     delete nctx.completeFrom;
     delete nctx.extendFor;
     delete nctx.floorRounds;
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(nctx).slice(0, 6e3), row.id).run();
+    // COMPLETE-STRUCTURAL-3: research_queue.error is cleared only at publish, so a row this stage rescued (COMPLETE-STRUCTURAL-1 and -2) kept the text "complete:
+    // structural defects only, no writable section: ..." (bare, behind the stale-claim reaper's or the lane's prefix) for days; the contracts that count such rows could
+    // not read pass. Leaving for review clears that annotation and only that one: any other error text stays.
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=?, error = CASE WHEN error LIKE 'complete: structural%' OR error LIKE 'STALE-CLAIM-REAPER-1%no writable section%' OR error LIKE 'SINGLE-LANE-1%no writable section%' THEN NULL ELSE error END WHERE id=?").bind(JSON.stringify(nctx).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "complete->review", rounds: total, chars: paper.length, floor: fshEnd.need ? "gave-up" : "ok" };
   }
   if (stall >= COMPLETE_STALL_MAX) {
