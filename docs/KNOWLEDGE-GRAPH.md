@@ -42,7 +42,7 @@ gateway) are untouched, and an edge with `source IS NULL` is a legacy, authored 
 | `edges.weight` | strength (IDF-weighted cosine for coupling, cosine for similarity) |
 | `edges.evidence` | compact JSON: the alias that matched, the cosine, the cutoff, the rank, `rescue: true` |
 | `edges.status`, `invalidated_at` | `NULL`/`active`, or `stale` with the time it was last not derived |
-| `edges.last_seen` | the last run that derived it |
+| `edges.last_seen` | the last run that created or changed it (an unchanged row is not rewritten) |
 | `nodes.status` | `NULL` (active), `quarantined`, `duplicate`, `retracted`, `superseded`, `draft`, `ghost`, `archived`, `deprecated`, `stale`, `closed` |
 | `nodes.source`, `h` | the owning derivation and a content hash (a changed node is rewritten, an unchanged one is not) |
 | `nodes.canonical_id` | for a duplicate, the node it is the same as (a link, never a merge) |
@@ -88,14 +88,18 @@ Each phase is isolated: one that throws is reported and the rest still run. A wr
 | The curator making orphans | audit entities become nodes only when they link to something |
 | A monorepo name linking everything | `qnfo-workers` is never a worker mention |
 | Duplicate over-merge | `SAME_AS` and `canonical_id` only; groups above 10 members (a shared placeholder name) are skipped |
-| A short living-paper read ghosting the corpus | ghosting needs at least 500 papers read |
+| A short living-paper read ghosting the corpus | ghosting needs at least 500 papers read; a ghost waits 30 days from the day it was marked |
+| A node deleted while another writer links it | the delete runs only while no edge of any kind touches the node, checked by the database in the same statement |
+| A returning issue, worker or goal staying closed | a node whose status differs from the source is rewritten, and a source that returns nothing still closes its nodes |
 | Two runs at once | a 15-minute lease in `kg_state`, and a 25-minute minimum between runs |
 
 To restore a deleted row: `SELECT row FROM kg_tombstone WHERE kind = 'node' AND key = '<id>'` holds the whole row as JSON.
 
 ## Reading it
 
-Open, read-only, no key (OPEN-ACCESS-1) on `https://qnfo-memory-mcp.q08.workers.dev`, and the same as MCP tools `kg_*`:
+Open, read-only, no key (OPEN-ACCESS-1) on `https://qnfo-memory-mcp.q08.workers.dev`, and the same as MCP tools `kg_*`. The open routes never serve the
+owner's notes, people or vault (labels `Note`, `Person`, `Vault`): those come only through the authenticated MCP tools. A walk runs at most 40 D1 queries
+and says `truncated` when a budget cut it short, so "no path" is never reported as proof when the search was cut off.
 
 | Question | Query |
 |---|---|

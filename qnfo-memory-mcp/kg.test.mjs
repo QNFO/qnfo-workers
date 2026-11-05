@@ -28,11 +28,11 @@ const E = (id, s, t, r, o = {}) => db.prepare("INSERT INTO edges (id, source_id,
 N("paper:a", "Paper", "Alpha Paper", null, '{"slug":"a"}'); N("paper:b", "Paper", "Beta Paper"); N("paper:c", "Paper", "Gamma Paper"); N("paper:orphan", "Paper", "Lonely Paper");
 N("paper:ghost", "Paper", "Ghost Paper", "ghost"); N("paper:stale-only", "Paper", "Only a stale link");
 N("tag:x", "Tag", "x"); N("concept:k", "Concept", "Bruhat-Tits Tree"); N("worker:w", "Worker", "w"); N("vault", "Vault", "Vault"); N("note:1", "Note", "A note");
-N("dup:1", "Project", "Same Name"); N("dup:2", "Project", "same name");
+N("person:1", "Person", "Some Person"); N("dup:1", "Project", "Same Name"); N("dup:2", "Project", "same name");
 E("e1", "paper:a", "paper:b", "SIMILAR_TO", { source: "kg:semantic", c: 0.9, w: 0.9 }); E("e2", "paper:b", "paper:c", "CITES", { source: "kg:lp-cite", c: 1, w: 1 });
 E("e3", "paper:a", "tag:x", "HAS_TAG", { source: "kg:lp-tag", c: 1, w: 1 }); E("e4", "paper:c", "tag:x", "HAS_TAG", { source: "kg:lp-tag", c: 1, w: 1 });
 E("e5", "paper:a", "concept:k", "MENTIONS", { source: "kg:concept", c: 0.8, w: 0.8 }); E("e6", "paper:b", "concept:k", "MENTIONS", { source: "kg:concept", status: "stale" });
-E("e7", "vault", "note:1", "CONTAINS"); E("e8", "paper:stale-only", "paper:a", "SIMILAR_TO", { source: "kg:semantic", status: "stale" });
+E("e9", "paper:a", "person:1", "MENTIONS", { source: "kg:concept", c: 0.8, w: 0.8 }); E("e7", "vault", "note:1", "CONTAINS"); E("e8", "paper:stale-only", "paper:a", "SIMILAR_TO", { source: "kg:semantic", status: "stale" });
 db.exec("INSERT INTO kg_node_stats VALUES ('paper:a', 4, 3, 2.5, 1, 'paper:a', 'now'), ('paper:b', 2, 2, 1.2, 1, 'paper:a', 'now'), ('paper:c', 2, 1, 0.4, 1, 'paper:a', 'now')");
 db.exec("INSERT INTO kg_gap VALUES ('isolated-paper:paper:orphan', 'isolated-paper', 'paper:orphan', '{\"name\":\"Lonely Paper\"}', 1, 'open', 'a', 'b'), ('bridge-paper:paper:a', 'bridge-paper', 'paper:a', '{}', 3, 'open', 'a', 'b'), ('isolated-paper:old', 'isolated-paper', 'paper:old', '{}', 1, 'resolved', 'a', 'b')");
 const iso = (minAgo) => new Date(Date.now() - minAgo * 60000).toISOString();
@@ -83,17 +83,33 @@ assert.ok(idx.body.queries.includes("/kg/neighbors") && idx.body.queries.include
   assert.ok(r.body.edges.some((e) => e.s === "paper:c" && e.t === "tag:x"), "cross links between shown nodes are included");
   assert.ok(!r.body.edges.some((e) => e.r === "MENTIONS" && e.s === "paper:b"), "stale edges are not returned");
   assert.equal(r.body.nodes.find((x) => x.id === "paper:a").pagerank, 2.5);
-  const v = await get("/kg/neighbors?id=vault&depth=1"); assert.equal(v.body.nodes.length, 1, "CONTAINS is structural and hidden by default");
-  const v2 = await get("/kg/neighbors?id=vault&depth=1&structural=true"); assert.equal(v2.body.nodes.length, 2);
+  const tool = async (name, args) => JSON.parse((await mcp("tools/call", { name, arguments: args })).body.result.content[0].text);
+  const v = await tool("kg_neighbors", { id: "vault", depth: 1 }); assert.equal(v.nodes.length, 1, "CONTAINS is structural and hidden by default");
+  const v2 = await tool("kg_neighbors", { id: "vault", depth: 1, structural: true }); assert.equal(v2.nodes.length, 2);
   assert.equal((await get("/kg/neighbors?id=paper:a&depth=1&min_weight=0.95")).body.nodes.length, 2, "min_weight drops the 0.9 and 0.8 edges; the tag edge (no weight, counts as 1) stays");
 }
+// the open routes never serve the owner's notes or people; the authenticated tools do
+{
+  const tool = async (name, args) => JSON.parse((await mcp("tools/call", { name, arguments: args })).body.result.content[0].text);
+  for (const id of ["note:1", "person:1", "vault"]) { const r = await get("/kg/node?id=" + id); assert.equal(r.status, 400, id + " is withheld"); assert.match(r.body.error, /withheld/); }
+  assert.equal((await get("/kg/find?query=person")).body.count, 0, "find does not list people");
+  assert.equal((await get("/kg/find?query=a note")).body.count, 0, "or notes");
+  const n = await get("/kg/node?id=paper:a"); assert.ok(!n.body.out.some((x) => x.other === "person:1"), "a paper's edge to a person is not shown");
+  const nb = await get("/kg/neighbors?id=paper:a&depth=2"); assert.ok(!nb.body.nodes.some((x) => x.id === "person:1") && !nb.body.edges.some((e) => e.t === "person:1"), "nor in a neighbourhood");
+  assert.ok(!(await get("/kg/orphans")).body.results.some((x) => ["Note", "Person", "Vault"].includes(x.label)), "nor among the orphans");
+  assert.equal((await tool("kg_node", { id: "person:1" })).node.label, "Person", "an authenticated client sees them");
+  assert.ok((await tool("kg_neighbors", { id: "paper:a", depth: 1 })).nodes.some((x) => x.id === "person:1"));
+}
+// route names are own properties only
+for (const evil of ["constructor", "__proto__", "toString", "hasOwnProperty"]) { const r = await get("/kg/" + evil); assert.equal(r.status, 404, "/kg/" + evil); assert.ok(!JSON.stringify(r.body).includes("t0k3n"), "/kg/" + evil + " does not echo the env"); }
 // path
 {
   const p = await get("/kg/path?from=paper:a&to=paper:c");
   assert.equal(p.body.length, 2); assert.equal(p.body.via_structural_edges, false);
-  assert.deepEqual(p.body.path.map((s) => s.rel), ["SIMILAR_TO", "CITES"]);
-  const none = await get("/kg/path?from=paper:a&to=note:1"); assert.equal(none.body.path, null);
-  const viaStructural = await get("/kg/path?from=vault&to=note:1"); assert.equal(viaStructural.body.via_structural_edges, true);
+  assert.deepEqual(p.body.path.map((s) => s.rel), ["SIMILAR_TO", "CITES"]); assert.equal(p.body.truncated, false);
+  const none = await get("/kg/path?from=paper:a&to=paper:orphan"); assert.equal(none.body.path, null);
+  assert.equal((await get("/kg/path?from=vault&to=note:1")).status, 400, "a path through withheld nodes is refused on the open route");
+  const viaStructural = JSON.parse((await mcp("tools/call", { name: "kg_path", arguments: { from: "vault", to: "note:1" } })).body.result.content[0].text); assert.equal(viaStructural.via_structural_edges, true);
 }
 // central, gaps, orphans, communities
 {
@@ -113,7 +129,7 @@ assert.ok(idx.body.queries.includes("/kg/neighbors") && idx.body.queries.include
 {
   assert.equal((await get("/kg/nope")).status, 404);
   assert.equal((await get("/kg/find?query=" + encodeURIComponent("x'; DROP TABLE nodes; --"))).status, 200, "a hostile query is data");
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM nodes").get().n, 13, "and nothing was dropped");
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM nodes").get().n, 14, "and nothing was dropped");
 }
 // MCP tools
 {

@@ -813,56 +813,64 @@ async function fgTool(name, args, env) {
   return { content: [{ type: "text", text: JSON.stringify(out) }], isError: !!out.error };
 }
 __name(fgTool, "fgTool");
-// KG-CURATE-1 (2.8.0): the content knowledge graph's read side. scripts/kg_curate.mjs (run by fleet-graph.yml) curates qnfo-graph `nodes` / `edges`;
+// KG-CURATE-1: the content knowledge graph's read side. scripts/kg_curate.mjs (run by fleet-graph.yml) curates qnfo-graph `nodes` / `edges`;
 // these open, read-only, parameterised queries answer from them: health, node, neighbors, path, central, gaps, orphans, find, communities.
-// Active means status NULL or 'active'; a stale edge, a ghost or quarantined paper is hidden unless include_stale is passed.
+// Active means status NULL or 'active'; a stale edge, a ghost or quarantined paper is hidden unless include_stale is passed. The open routes
+// never serve the owner's notes or people (labels Note, Person, Vault): those are for authenticated MCP clients only.
 var KG_STRUCTURAL = ["CONTAINS", "CONTAINS_PHASE", "CONTAINS_TASK", "ULTRA_CONTAINS", "HAS_ROUTE", "HAS_ENDPOINT", "HAS_DOMAIN", "SAME_AS"];
 var KG_HUB_LABELS = ["Tag", "Category", "Vault", "Domain", "Bucket", "Database"];
+var KG_PRIVATE_LABELS = ["Note", "Person", "Vault"];
 var KG_EDGE_ACTIVE = "(e.status IS NULL OR e.status = 'active')";
-async function kgResolve(env, ref) {
+var KG_NOT_PRIVATE = "label NOT IN ('" + KG_PRIVATE_LABELS.join("','") + "')";
+var KG_MAX_QUERIES = 40; // one walk never runs more D1 queries than this
+async function kgResolve(env, ref, open) {
   const q = fgStr(ref);
   if (!q) return { error: "id required" };
   const exact = await env.GRAPH_DB.prepare("SELECT id, label, name, status, source, canonical_id FROM nodes WHERE id = ?1 LIMIT 1").bind(q).first();
-  if (exact) return { id: exact.id, node: exact };
-  const rows = ((await env.GRAPH_DB.prepare("SELECT id, label, name, status FROM nodes WHERE lower(name) = lower(?1) AND status IS NULL LIMIT 12").bind(q).all()).results) || [];
+  if (exact) return open && KG_PRIVATE_LABELS.indexOf(exact.label) >= 0 ? { error: "withheld: personal notes and people are served to authenticated MCP clients only" } : { id: exact.id, node: exact };
+  const rows = ((await env.GRAPH_DB.prepare("SELECT id, label, name, status FROM nodes WHERE lower(name) = lower(?1) AND status IS NULL" + (open ? " AND " + KG_NOT_PRIVATE : "") + " LIMIT 12").bind(q).all()).results) || [];
   if (rows.length === 1) return { id: rows[0].id, node: rows[0] };
   if (rows.length > 1) return { error: "ambiguous: " + rows.length + " nodes are named " + q + "; pass one id", candidates: rows };
   return { error: "no node with id or name " + q + "; use kg_find" };
 }
-async function kg_find(env, args) {
+async function kg_find(env, args, open) {
   const q = fgStr(args.query || args.q);
   if (!q) return { error: "query required" };
   const label = fgStr(args.label), limit = fgInt(args.limit, 20, 1, 100);
-  const sql = "SELECT id, label, name, status FROM nodes WHERE (id = ?1 OR instr(lower(name), lower(?1)) > 0)" + (label ? " AND label = ?2" : "") + " ORDER BY CASE WHEN id = ?1 OR lower(name) = lower(?1) THEN 0 ELSE 1 END, length(name) LIMIT " + limit;
+  const sql = "SELECT id, label, name, status FROM nodes WHERE (id = ?1 OR instr(lower(name), lower(?1)) > 0)" + (label ? " AND label = ?2" : "") + (open ? " AND " + KG_NOT_PRIVATE : "") + " ORDER BY CASE WHEN id = ?1 OR lower(name) = lower(?1) THEN 0 ELSE 1 END, length(name) LIMIT " + limit;
   const st = env.GRAPH_DB.prepare(sql), r = label ? await st.bind(q, label).all() : await st.bind(q).all();
   return { query: q, count: (r.results || []).length, results: r.results || [] };
 }
-async function kg_node(env, args) {
-  const res = await kgResolve(env, args.id);
+async function kg_node(env, args, open) {
+  const res = await kgResolve(env, args.id, open);
   if (res.error) return res;
   const limit = fgInt(args.limit, 60, 1, 300), stale = args.include_stale === true || args.include_stale === "true";
-  const act = stale ? "1 = 1" : KG_EDGE_ACTIVE;
+  const act = stale ? "1 = 1" : KG_EDGE_ACTIVE, hide = open ? " AND (n.label IS NULL OR n.label NOT IN ('" + KG_PRIVATE_LABELS.join("','") + "'))" : "";
   const props = await env.GRAPH_DB.prepare("SELECT properties, created_at, updated_at, last_seen FROM nodes WHERE id = ?1").bind(res.id).first();
   const stats = await env.GRAPH_DB.prepare("SELECT degree, deg_sem, pagerank, component, community FROM kg_node_stats WHERE node_id = ?1").bind(res.id).first().catch(() => null);
-  const out = await env.GRAPH_DB.prepare("SELECT e.relationship_type AS rel, e.target_id AS other, n.label, n.name, e.weight, e.confidence, e.source AS origin, e.status FROM edges e LEFT JOIN nodes n ON n.id = e.target_id WHERE e.source_id = ?1 AND " + act + " ORDER BY COALESCE(e.weight, 1) DESC, e.relationship_type LIMIT " + limit).bind(res.id).all();
-  const inc = await env.GRAPH_DB.prepare("SELECT e.relationship_type AS rel, e.source_id AS other, n.label, n.name, e.weight, e.confidence, e.source AS origin, e.status FROM edges e LEFT JOIN nodes n ON n.id = e.source_id WHERE e.target_id = ?1 AND " + act + " ORDER BY COALESCE(e.weight, 1) DESC, e.relationship_type LIMIT " + limit).bind(res.id).all();
+  const out = await env.GRAPH_DB.prepare("SELECT e.relationship_type AS rel, e.target_id AS other, n.label, n.name, e.weight, e.confidence, e.source AS origin, e.status FROM edges e LEFT JOIN nodes n ON n.id = e.target_id WHERE e.source_id = ?1 AND " + act + hide + " ORDER BY COALESCE(e.weight, 1) DESC, e.relationship_type LIMIT " + limit).bind(res.id).all();
+  const inc = await env.GRAPH_DB.prepare("SELECT e.relationship_type AS rel, e.source_id AS other, n.label, n.name, e.weight, e.confidence, e.source AS origin, e.status FROM edges e LEFT JOIN nodes n ON n.id = e.source_id WHERE e.target_id = ?1 AND " + act + hide + " ORDER BY COALESCE(e.weight, 1) DESC, e.relationship_type LIMIT " + limit).bind(res.id).all();
   const tally = (rows) => rows.reduce((m, x) => { m[x.rel] = (m[x.rel] || 0) + 1; return m; }, {});
   let p = {}; try { p = JSON.parse((props && props.properties) || "{}"); if (typeof p === "string") p = JSON.parse(p); } catch (e) { p = {}; }
   return { id: res.id, node: Object.assign({}, res.node, { properties: p && typeof p === "object" ? p : {}, created_at: props && props.created_at, updated_at: props && props.updated_at, last_seen: props && props.last_seen }), stats: stats || null, out: out.results || [], in: inc.results || [], out_by_relationship: tally(out.results || []), in_by_relationship: tally(inc.results || []) };
 }
-// Level-by-level walk, one query per level (frontier as one JSON parameter). Structural edges (CONTAINS ...) are skipped unless asked
-// for, and a hub label (Tag, Category, Vault ...) is shown but not expanded past depth 1, so one popular tag cannot flood a view.
+// Level-by-level walk, one query per level chunk (frontier as one JSON parameter), at most KG_MAX_QUERIES in all. Structural edges
+// (CONTAINS ...) are skipped unless asked for, a hub label (Tag, Category ...) is shown but not expanded past depth 1, and an open walk drops
+// private labels. `truncated` says a query hit its row limit or the query budget ran out, so "not reached" may be "not looked at".
 async function kgWalk(env, start, opts) {
   const seen = new Map([[start, { depth: 0, from: null, rel: null }]]);
-  let frontier = [start], capped = false;
+  let frontier = [start], capped = false, truncated = false, queries = 0;
   const rel = opts.structural ? "" : " AND e.relationship_type NOT IN ('" + KG_STRUCTURAL.join("','") + "')";
   const labelOf = new Map();
   for (let d = 1; d <= opts.depth && frontier.length; d++) {
     const next = [], fset = new Set(frontier);
     for (let i = 0; i < frontier.length; i += 300) {
+      if (queries >= KG_MAX_QUERIES) { truncated = true; break; }
+      queries++;
       const chunk = JSON.stringify(frontier.slice(i, i + 300));
-      const sql = "SELECT e.source_id AS s, e.target_id AS t, e.relationship_type AS r, e.weight AS w, e.confidence AS c, e.source AS origin FROM edges e WHERE e.source_id IN (SELECT value FROM json_each(?1)) AND " + KG_EDGE_ACTIVE + rel + " UNION ALL SELECT e.source_id, e.target_id, e.relationship_type, e.weight, e.confidence, e.source FROM edges e WHERE e.target_id IN (SELECT value FROM json_each(?1)) AND " + KG_EDGE_ACTIVE + rel + " LIMIT 6000";
+      const sql = "SELECT e.source_id AS s, e.target_id AS t, e.relationship_type AS r, e.weight AS w FROM edges e WHERE e.source_id IN (SELECT value FROM json_each(?1)) AND " + KG_EDGE_ACTIVE + rel + " UNION ALL SELECT e.source_id, e.target_id, e.relationship_type, e.weight FROM edges e WHERE e.target_id IN (SELECT value FROM json_each(?1)) AND " + KG_EDGE_ACTIVE + rel + " LIMIT 6000";
       const r = await env.GRAPH_DB.prepare(sql).bind(chunk).all();
+      if ((r.results || []).length >= 6000) truncated = true;
       for (const x of r.results || []) {
         const here = fset.has(x.s) ? x.s : x.t, there = here === x.s ? x.t : x.s;
         if (opts.minWeight && (x.w == null ? 1 : x.w) < opts.minWeight) continue;
@@ -871,22 +879,24 @@ async function kgWalk(env, start, opts) {
       if (capped) break;
     }
     if (opts.target && seen.has(opts.target)) break;
-    if (capped) break;
-    // hubs are shown at the depth they are reached but not expanded further
-    if (!opts.hubs && next.length) {
+    if (capped || (truncated && queries >= KG_MAX_QUERIES)) break;
+    if ((!opts.hubs || opts.hidePrivate) && next.length) {
+      if (queries >= KG_MAX_QUERIES) { truncated = true; break; }
+      queries++;
       const lab = await env.GRAPH_DB.prepare("SELECT id, label FROM nodes WHERE id IN (SELECT value FROM json_each(?1))").bind(JSON.stringify(next.slice(0, 2000))).all();
       for (const x of lab.results || []) labelOf.set(x.id, x.label);
-      frontier = next.filter((id) => KG_HUB_LABELS.indexOf(labelOf.get(id)) < 0 || id === start);
+      if (opts.hidePrivate) for (const id of next) if (KG_PRIVATE_LABELS.indexOf(labelOf.get(id)) >= 0) seen.delete(id);
+      frontier = next.filter((id) => seen.has(id) && (opts.hubs || KG_HUB_LABELS.indexOf(labelOf.get(id)) < 0));
     } else frontier = next;
   }
-  return { seen, capped };
+  return { seen, capped, truncated, queries };
 }
-async function kg_neighbors(env, args) {
-  const res = await kgResolve(env, args.id);
+async function kg_neighbors(env, args, open) {
+  const res = await kgResolve(env, args.id, open);
   if (res.error) return res;
   const depth = fgInt(args.depth, 1, 1, 3), cap = fgInt(args.limit, 150, 5, 500);
   const structural = args.structural === true || args.structural === "true";
-  const w = await kgWalk(env, res.id, { depth, cap, structural, hubs: args.hubs === true || args.hubs === "true", minWeight: Number(args.min_weight) || 0 });
+  const w = await kgWalk(env, res.id, { depth, cap, structural, hubs: args.hubs === true || args.hubs === "true", minWeight: Number(args.min_weight) || 0, hidePrivate: !!open });
   const ids = Array.from(w.seen.keys()), meta = new Map(), stat = new Map();
   for (let i = 0; i < ids.length; i += 400) {
     const part = JSON.stringify(ids.slice(i, i + 400));
@@ -901,25 +911,27 @@ async function kg_neighbors(env, args) {
     const r = await env.GRAPH_DB.prepare("SELECT e.source_id AS s, e.target_id AS t, e.relationship_type AS r, e.weight AS w, e.confidence AS c, e.source AS origin FROM edges e WHERE e.source_id IN (SELECT value FROM json_each(?1)) AND e.target_id IN (SELECT value FROM json_each(?1)) AND " + KG_EDGE_ACTIVE + (structural ? "" : " AND e.relationship_type NOT IN ('" + KG_STRUCTURAL.join("','") + "')") + " LIMIT 3000").bind(part).all();
     for (const e of r.results || []) edges.push(e);
   }
-  return { center: res.id, depth, count: nodes.length, truncated: w.capped, nodes, edges };
+  return { center: res.id, depth, count: nodes.length, truncated: w.capped || w.truncated, nodes, edges };
 }
-async function kg_path(env, args) {
-  const a = await kgResolve(env, args.from), b = await kgResolve(env, args.to);
+async function kg_path(env, args, open) {
+  const a = await kgResolve(env, args.from, open), b = await kgResolve(env, args.to, open);
   if (a.error) return { error: "from: " + a.error, candidates: a.candidates };
   if (b.error) return { error: "to: " + b.error, candidates: b.candidates };
   const maxd = fgInt(args.max_depth, 5, 1, 7);
+  let truncated = false;
   for (const structural of [false, true]) {
-    const w = await kgWalk(env, a.id, { depth: maxd, cap: 30000, structural, hubs: structural, target: b.id });
+    const w = await kgWalk(env, a.id, { depth: maxd, cap: 30000, structural, hubs: structural, target: b.id, hidePrivate: !!open });
+    truncated = truncated || w.capped || w.truncated;
     if (!w.seen.has(b.id)) continue;
     const steps = []; let cur = b.id;
     while (cur && cur !== a.id) { const s = w.seen.get(cur); steps.unshift({ from: s.from, rel: s.rel, to: cur }); cur = s.from; }
-    return { from: a.id, to: b.id, length: steps.length, via_structural_edges: structural, path: steps };
+    return { from: a.id, to: b.id, length: steps.length, via_structural_edges: steps.some((x) => KG_STRUCTURAL.indexOf(x.rel) >= 0), truncated, path: steps };
   }
-  return { from: a.id, to: b.id, path: null, note: "no path within " + maxd + " steps" };
+  return { from: a.id, to: b.id, path: null, truncated, note: truncated ? "no path found, but the search was cut short (query or row budget): this is not proof there is none" : "no path within " + maxd + " steps" };
 }
-async function kg_central(env, args) {
+async function kg_central(env, args, open) {
   const label = fgStr(args.label), limit = fgInt(args.limit, 25, 1, 200);
-  const sql = "SELECT s.node_id AS id, n.label, n.name, s.pagerank, s.deg_sem, s.community FROM kg_node_stats s JOIN nodes n ON n.id = s.node_id WHERE n.status IS NULL" + (label ? " AND n.label = ?1" : "") + " ORDER BY s.pagerank DESC LIMIT " + limit;
+  const sql = "SELECT s.node_id AS id, n.label, n.name, s.pagerank, s.deg_sem, s.community FROM kg_node_stats s JOIN nodes n ON n.id = s.node_id WHERE n.status IS NULL" + (label ? " AND n.label = ?1" : "") + (open ? " AND n.label NOT IN ('" + KG_PRIVATE_LABELS.join("','") + "')" : "") + " ORDER BY s.pagerank DESC LIMIT " + limit;
   const st = env.GRAPH_DB.prepare(sql), r = label ? await st.bind(label).all() : await st.all();
   return { label: label || null, note: "PageRank over non-structural active edges, scaled so the mean is 1", count: (r.results || []).length, results: r.results || [] };
 }
@@ -930,9 +942,9 @@ async function kg_gaps(env, args) {
   const st = env.GRAPH_DB.prepare(sql), r = kind ? await st.bind(kind).all() : await st.all();
   return { totals: tot, count: (r.results || []).length, note: "isolated-paper: no content relation; bridge-paper: neighbours in 3+ communities; link-candidate: two papers with shared neighbours and no link (Adamic-Adar, a lead not an edge)", results: (r.results || []).map((x) => Object.assign({}, x, { detail: fgAttrs(x.detail) })) };
 }
-async function kg_orphans(env, args) {
+async function kg_orphans(env, args, open) {
   const label = fgStr(args.label), limit = fgInt(args.limit, 50, 1, 300);
-  const sql = "SELECT n.id, n.label, n.name FROM nodes n WHERE n.status IS NULL" + (label ? " AND n.label = ?1" : "") + " AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.source_id = n.id AND " + KG_EDGE_ACTIVE + ") AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.target_id = n.id AND " + KG_EDGE_ACTIVE + ") LIMIT " + limit;
+  const sql = "SELECT n.id, n.label, n.name FROM nodes n WHERE n.status IS NULL" + (label ? " AND n.label = ?1" : "") + (open ? " AND n.label NOT IN ('" + KG_PRIVATE_LABELS.join("','") + "')" : "") + " AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.source_id = n.id AND " + KG_EDGE_ACTIVE + ") AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.target_id = n.id AND " + KG_EDGE_ACTIVE + ") LIMIT " + limit;
   const st = env.GRAPH_DB.prepare(sql), r = label ? await st.bind(label).all() : await st.all();
   return { label: label || null, count: (r.results || []).length, results: r.results || [] };
 }
@@ -951,14 +963,15 @@ async function kg_health(env) {
   return { as_of: row.ts, age_min: row.age_min, stale: row.age_min > 180, curator_version: row.version, metrics: m, tombstones: tomb ? tomb.n : null, state: Object.fromEntries(state.map((x) => [x.k, x.v])), trend_newest_first: trend, how: "scripts/kg_curate.mjs inside fleet-graph.yml; docs/KNOWLEDGE-GRAPH.md" };
 }
 var KG_ROUTES = { health: kg_health, find: kg_find, node: kg_node, neighbors: kg_neighbors, path: kg_path, central: kg_central, gaps: kg_gaps, orphans: kg_orphans, communities: kg_communities };
-async function kgCall(name, args, env) {
-  const fn = KG_ROUTES[name];
+async function kgCall(name, args, env, open) {
+  // MEMORY-MCP-ENV-LEAK-1: a route name is a URL segment; only the table's own properties are routes (KG_ROUTES["constructor"] is Object).
+  const fn = typeof name === "string" && Object.prototype.hasOwnProperty.call(KG_ROUTES, name) ? KG_ROUTES[name] : null;
   if (!fn) return { error: "unknown knowledge graph query " + name, queries: Object.keys(KG_ROUTES) };
-  try { return await fn(env, args || {}); }
+  try { return await fn(env, args || {}, !!open); }
   catch (e) { const m = String(e && e.message || e); return { error: /no such (table|column)/.test(m) ? "the knowledge graph has not been curated yet (" + m.slice(0, 80) + ")" : "query failed: " + m.slice(0, 300) }; }
 }
 async function kgTool(name, args, env) {
-  const out = await kgCall(name.replace(/^kg_/, ""), args, env);
+  const out = await kgCall(name.replace(/^kg_/, ""), args, env, false);
   return { content: [{ type: "text", text: JSON.stringify(out) }], isError: !!out.error };
 }
 __name(kgTool, "kgTool");
@@ -1107,7 +1120,7 @@ var worker_default = {
     }
     if (url.pathname.startsWith("/kg/") && request.method === "GET") {
       const q = url.pathname.slice("/kg/".length).replace(/\/+$/, "");
-      const out = await kgCall(q, Object.fromEntries(url.searchParams.entries()), env);
+      const out = await kgCall(q, Object.fromEntries(url.searchParams.entries()), env, true);
       const r = json(out, out.error ? (/^unknown/.test(out.error) ? 404 : /not been curated/.test(out.error) ? 503 : 400) : 200);
       if (!out.error) r.headers.set("Cache-Control", "public, max-age=60");
       return r;
