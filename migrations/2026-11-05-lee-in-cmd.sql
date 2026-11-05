@@ -1,5 +1,5 @@
 -- RM-LEE-CMD-1 (2026-11-05, charter pillar autonomy; program QNFO.OPS; GitHub 5482, owner correction: Lee belongs in fleet.qnfo.org/cmd, not on its own host).
--- WHAT THIS SHIPS (qnfo-fleet-dashboard 1.93.0, PR 7366): the read half of Lee in the fleet command line. cf <workers|worker|versions|logs|zones|dns|routes|traffic|pages|deployments|stats> answer with no
+-- WHAT THIS SHIPS (qnfo-fleet-dashboard 1.93.0, PR 7627): the read half of Lee in the fleet command line. cf <workers|worker|versions|logs|zones|dns|routes|traffic|pages|deployments|stats> answer with no
 -- model; "lee: <question>" runs a read-only Workers AI tool loop as a polled job (cmd_log kind lee); owner session only; the worker's own CF_TOKEN and AI binding (no second secret);
 -- GET /api/cmd/lee/health says per area whether that token can read the account. WHAT IT LEAVES ON PURPOSE: Lee's write tools (roll back a Worker, create, edit or delete DNS records and
 -- routes, create a Pages project) are not ported (a model that can delete a DNS record on a sentence is the wrong shape; they come back as confirm buttons behind a fresh code), and
