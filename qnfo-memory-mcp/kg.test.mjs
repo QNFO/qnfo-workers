@@ -1,4 +1,4 @@
-// KG-CURATE-1 offline suite for qnfo-memory-mcp 2.10.0: the open GET /kg/* routes and the kg_* MCP tools answer from the curated
+// KG-CURATE-1 offline suite for qnfo-memory-mcp 2.11.0: the open GET /kg/* routes and the kg_* MCP tools answer from the curated
 // tables (nodes/edges with status, kg_node_stats, kg_gap, kg_health, kg_state), hide stale edges and inactive nodes, keep hub nodes
 // from flooding a neighbourhood, refuse an ambiguous name, never run caller SQL and say plainly when nothing is curated yet.
 // Run: node qnfo-memory-mcp/kg.test.mjs
@@ -45,7 +45,7 @@ const get = async (p, e = env) => { const r = await w.fetch(new Request("https:/
 const mcp = async (method, params, token) => { const r = await w.fetch(new Request("https://m.test/mcp", { method: "POST", headers: { Authorization: "Bearer " + (token || "t0k3n"), "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }), env); return { status: r.status, body: await r.json() }; };
 
 const h = await get("/health");
-assert.ok(h.body.capabilities.includes("kg-curation") && versionAtLeast(h.body.version, "2.10.0"), "health names the capability and the minor bump");
+assert.ok(h.body.capabilities.includes("kg-curation") && versionAtLeast(h.body.version, "2.11.0"), "health names the capability and the minor bump");
 const idx = await get("/kg");
 assert.ok(idx.body.queries.includes("/kg/neighbors") && idx.body.queries.includes("/kg/health"));
 
