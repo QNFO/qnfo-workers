@@ -1182,7 +1182,7 @@ def obs_sampling(worker: str, acct: str, token: str) -> int:
         return 0
     st2, j2 = call("PATCH", base + "/script-settings", token, {"observability": want})
     st3, j3 = call("GET", base + "/settings", token)
-    after = ((j3.get("result") or {}).get("observability")) if st3 == 200 else None
+    after = ((j3.get("result") or {}).get("observability")) if 200 <= (st3 or 0) < 300 else None
     ok = 200 <= (st2 or 0) < 300 and isinstance(after, dict) and (after.get("logs") or {}).get("head_sampling_rate") == rate
     emit({"action": "obs-sampling", "ok": ok, "worker": worker, "changed": True, "before": obs, "after": after, "patch_http": st2, "errors": j2.get("errors")})
     return 0 if ok else 1
