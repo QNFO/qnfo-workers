@@ -7455,7 +7455,7 @@ async function charterCommitOnce(env, block, day, force) {
   var body = { message: "chore(charter): CHARTER-LOOP-1 refresh " + day + " [skip ci]", content: b64encode(next), sha: gj.sha, branch: "main" };
   var pr = await timedFetch("https://api.github.com/repos/" + CHARTER_REPO + "/contents/" + CHARTER_DOC_PATH, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
-  if (!pj || !pj.commit || !pj.commit.sha) return { status: "write-failed", note: "PUT contents HTTP " + pr.status + (pr.status === 200 || pr.status === 201 ? "" : await pfPutNote(pr)) };
+  if (!pj || !pj.commit || !pj.commit.sha) return { status: "write-failed", note: "PUT contents HTTP " + pr.status + (pr.status >= 200 && pr.status < 300 ? "" : await pfPutNote(pr)) };
   return { status: "committed", sha: pj.commit.sha, note: "docs/QUNIVERSE-CHARTER.md refreshed on main", doc: next };
 }
 // The full document for the mirror: the one charterCommit just read or wrote; otherwise (no token, already committed
@@ -8013,7 +8013,7 @@ async function pfCommitOnce(env, repo, path, content, message, mode) {
   if (sha) body.sha = sha;
   var pr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
-  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch + (pr.status === 200 || pr.status === 201 ? "" : await pfPutNote(pr)) };
+  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch + (pr.status >= 200 && pr.status < 300 ? "" : await pfPutNote(pr)) };
   return { path: repo + "/" + path, status: "committed", sha: pj.commit.sha, branch: branch };
 }
 async function portfolioSync(env, force) {

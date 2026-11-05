@@ -35,8 +35,8 @@ ok(pfPutConflict({ status: "write-failed", note: "PUT HTTP 409 on main: docs/POR
 ok(await pfPutNote({ json: async () => ({ message: "Repository rule violations found\n\nChanges must be made   through a pull request." }) }) === ": Repository rule violations found Changes must be made through a pull request.", "pfPutNote keeps GitHub's sentence on one line");
 ok(await pfPutNote({ json: async () => ({ message: "x".repeat(400) }) }) === ": " + "x".repeat(140), "pfPutNote cuts it at 140 characters");
 ok(await pfPutNote({ json: async () => { throw new Error("not json"); } }) === "" && await pfPutNote({ json: async () => ({}) }) === "", "an unreadable or empty answer adds nothing");
-ok(/note: "PUT HTTP " \+ pr\.status \+ " on " \+ branch \+ \(pr\.status === 200 \|\| pr\.status === 201 \? "" : await pfPutNote\(pr\)\)/.test(src), "pfCommitOnce puts GitHub's sentence in the note");
-ok(/note: "PUT contents HTTP " \+ pr\.status \+ \(pr\.status === 200 \|\| pr\.status === 201 \? "" : await pfPutNote\(pr\)\)/.test(src), "charterCommitOnce puts GitHub's sentence in the note");
+ok(/note: "PUT HTTP " \+ pr\.status \+ " on " \+ branch \+ \(pr\.status >= 200 && pr\.status < 300 \? "" : await pfPutNote\(pr\)\)/.test(src), "pfCommitOnce puts GitHub's sentence in the note");
+ok(/note: "PUT contents HTTP " \+ pr\.status \+ \(pr\.status >= 200 && pr\.status < 300 \? "" : await pfPutNote\(pr\)\)/.test(src), "charterCommitOnce puts GitHub's sentence in the note");
 
 // 2. Retry: a conflict then a commit commits on attempt 2 and says so; a non-conflict failure is not retried; three
 // conflicts stop at 3. The 1 s pause is real, so the suite waits about 4 s in all.
