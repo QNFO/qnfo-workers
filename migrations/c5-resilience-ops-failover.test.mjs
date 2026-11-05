@@ -55,7 +55,9 @@ ok(path === "qnfo-ops/worker.js" && anchor && probe, "it carries code-task, code
 const file = rd("../" + path);
 ok(file.split(anchor).length - 1 === 1, "the anchor occurs exactly once in " + path, anchor);
 const marker = JSON.parse(probe);
-ok(marker.contains === "OPS-DEGRADED-1" && d.includes(marker.contains) && !file.includes(marker.contains), "the closing marker is named in the issue and is absent from the file today, so the probe fails until the fix lands");
+// STATE-PIN-2: the issue named a marker that was absent until its doer landed OPS-DEGRADED-1 in qnfo-ops/worker.js (deploy-gate red on main, 2026-11-05).
+// A suite that asserts the defect still exists expires when the fix merges, so it now checks only that the probe names a marker the issue also carries.
+ok(marker.contains === "OPS-DEGRADED-1" && d.includes(marker.contains), "the closing marker is named in the issue and in its code-probe");
 ok(/Retry-After/.test(d) && /fleet-graph impact/.test(d) && /does not need D1|do not need D1|that does not need D1/.test(d), "the issue names the Retry-After requirement, the blast-radius lookup and which tools stay up");
 
 const r5 = one("SELECT status, evidence FROM roadmap_implementation WHERE id = 5");

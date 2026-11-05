@@ -23,7 +23,9 @@ ok(!/INSERT\s+(OR\s+\w+\s+)?INTO\s+fleet_tick/i.test(body) && !/claude\.ai|anthr
 ok(Array.from(body.matchAll(/LIKE\s+'((?:[^']|'')*)'/gi)).every((m) => Buffer.byteLength(m[1]) <= 50), "every LIKE pattern is at most 50 bytes");
 
 // the repository half of the retirement (PR 4800) is on this checkout
-ok(existsSync(new URL("qnfo-artifacts/RETIRED", root)), "qnfo-artifacts/RETIRED exists (the marker cf-ops-actions delete-worker reads)");
+// STATE-PIN-2: RM-REPO-DEAD-SOURCES-1 (archive batch 5) later removed the whole qnfo-artifacts directory, marker included; the retirement is intact when the
+// marker is on disk or the directory is gone, never when the directory is back without its marker.
+ok(existsSync(new URL("qnfo-artifacts/RETIRED", root)) || !existsSync(new URL("qnfo-artifacts/worker.js", root)), "qnfo-artifacts is retired: the RETIRED marker exists or the directory was archived");
 ok(!/^qnfo-artifacts\s/m.test(rd("deploy-targets.txt")), "deploy-targets.txt no longer lists qnfo-artifacts");
 ok(!/service\s*=\s*"qnfo-artifacts"/.test(rd("qnfo-ops/wrangler.toml")) && !/CH_QNFO_ARTIFACTS/.test(rd("qnfo-ops/wrangler.toml").replace(/^#.*$/gm, "")), "qnfo-ops/wrangler.toml declares no binding to qnfo-artifacts");
 
