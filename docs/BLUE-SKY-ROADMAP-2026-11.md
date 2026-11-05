@@ -82,12 +82,16 @@ Prediction lines are hypotheses to be logged in `decision_log` before the first 
   to about 82k (2.6x); `qnfo-code-orchestrator` neurons 180k to 480k (2.7x). In research-exec, `glm-5.3-flash` errors went from 3 of 346 calls (0.9 percent) to 636 of 3,014 (21 percent;
   by purpose 26 percent revise, 34 percent ensemble, 27 percent reconcile, 16 percent complete, 11 percent review), and two purposes, `complete` and `reconcile`, which had no calls
   on 10-22..24, took 764 calls on 11-01..03. The per-model ledger (117 rows since 10-01) names only about USD 11 of the roughly USD 30 a day rise in the meter, so about 63 percent of it
-  has no named caller. Reading: the rise is volume per paper (more calls, new stages, failed calls that are paid for and retried), not price and not paper count; so the first W0 steps
-  are to name the unattributed share [CF-A-01], read the error text of the failing glm-5.3-flash calls and route them to an alias fallback or stop retrying them [CF-A-02, CF-A-05],
-  and bound calls per paper before any model swap, which would only lower a price on a volume that has tripled. Open critical issues already own the cost levers (agent_issues 1000031
+  has no named caller. Reading: the rise is volume per paper (more calls, new stages, failed calls that are retried or sent to a dearer model), not price and not paper count.
+  Cause of the errors (R, `cloud_ops_events`, the last 60,000 events, which are capped per kind and so a lower bound): they are provider-side, not a prompt bug.
+  `aiText model=@cf/zai-org/glm-5.3-flash threw: 3040: Capacity temporarily exceeded` (405 events in the sample, 128 of them on 11-02), request timeouts `3046` on glm-5.3 and kimi-k2.6
+  (190 on 11-02 and 262 on 11-03, from 10 to 70 a day in mid-October), and `cost-first-empty` (the cheap model returned nothing and the call fell back to `gpt-oss-120b`) rising
+  from 35 a day on 10-27 to 206 a day on 11-03. Whether Workers AI bills a capacity or timeout failure is unverified. So the first W0 steps are to name the unattributed share [CF-A-01],
+  send capacity failures to an alias fallback with `rejectIfBusy` or defer them to the Batch API instead of retrying at once [CF-A-02, CF-A-05], and bound calls per paper before any model swap,
+  which would only lower a price on a volume that has tripled. Open critical issues already own the cost levers (agent_issues 1000031
   COST-LEVER-1, research-exec is 73.6 percent of Workers AI spend; 1000988 METRIC-354, research-exec escalates 50 percent of calls from `glm-5.3-flash` to the 1.7x dearer `gpt-oss-120b`),
-  so nothing new is filed: the error rate above is evidence for the second, since each failed flash call is paid for and then repeated on the dearer model. Caveats: three-day windows; the fleet counters undercount the meter
-  (2.4x, COST-AND-D1 analysis); error counts include retried calls; I did not read the error text, so the cause (capacity, token limits, a new stage's prompt) is open.
+  so nothing new is filed: the capacity errors are the cause behind the second. Caveats: three-day windows; the fleet counters undercount the meter
+  (2.4x, COST-AND-D1 analysis); error counts include retried calls; the event log is a sample, so its counts are not the 636 failed calls in the counters.
 - **Measure.** Prediction (est.): Workers AI neurons per engaged reader on the moved stages fall at least 3x within 60 days of W2 with no fall in the sealed
   eval (B4) and no rise in `open_high_errata_share`. Read on the Cloudflare account meter, not the fleet counters, which undercount 2.4x. A W0 prediction that can be checked sooner:
   the daily meter returns to USD 10 or less on at least 5 of 7 days within 14 days of the call-per-paper bound landing, the level it held on 7 of the last 24 days.
