@@ -12,6 +12,9 @@ WHAT   Runs the guards that apply to the files the pull request changes, in para
       non-slow check, so a failure blocks the merge before it happens instead of turning main red after.
 APPLIES  narrative-prompt-guard   a worker.js, a mirror, or the guard itself      worker-load-gate   a worker.js, a mirror, _shared or the gate
          metric-cause             migrations/                                      code-anchor-once   migrations/ or a worker.js (it reads the anchored files)
+         kaizen-gates             a worker.js, a wrangler.toml, the prompt-store scripts, or an enforcer file (scripts/kaizen_gates.py; RM-KAIZEN-GATE-CANDIDATES-1)
+         d1-like-limit            any .sql, .js, .mjs or .py file (diff-only: a LIKE or GLOB pattern literal over 50 bytes that the change adds; D1 refuses it)
+         dependency-allowlist     a package.json, a lock file, a workflow or scripts/dependency-allowlist.txt (BP26-AGENT-CHANGE-GATES-1)
          suite-regressions        the suites the change selects (scripts/run-suites.mjs); any change outside docs, ci-status and audits.
                                   The post-merge full-set run of deploy-gate was red in the 6 of 6 failed push runs sampled on 2026-11-04 (9 failing suites each).
 USAGE  python3 scripts/pr_fast_guards.py [--base REF] [--all] [--with-suites] [--jobs N] [--list]
@@ -57,11 +60,29 @@ GUARDS = [
      ["node", "migrations/metric-family-cluster-b.test.mjs"], None),
     ("code-anchor-once", lambda f: any_match(f, r"^migrations/", WORKER.pattern),
      ["node", "migrations/code-anchor-once.test.mjs"], None),
+    # D1-LIKE-LIMIT-GUARD-1 (PAPER-LEARN-1 learning 5677, agent_issues 1000871): D1 refuses a LIKE or GLOB pattern over 50 bytes, so a probe or query that adds one errors on every run. The same defect was fixed one file
+    # at a time on 2026-10-13 and again in PRs 7277, 7281, 7282 and 7283 on 2026-11-04. Diff-only like workers-standards-guard: it judges only what the change ADDS (about 1 s), so existing patterns never block a change.
+    ("d1-like-limit", lambda f: any_match(f, r"\.(sql|js|mjs|py)$"),
+     ["python3", "scripts/d1_like_limit_guard.py"], r"violation\(s\) added|^\S+:\d+ \[[a-z0-9-]+\]|failing closed|cannot read the diff"),
     # WORKERS-STANDARDS-GUARD-1 on the pull request (DEFAULT-APPROVE-1, agent_issues 1000657, owner card 200; owner directive 2026-10-19: reversible decisions take the recommended
     # option): the diff-only Workers anti-pattern guard (about 15 s) is the ONE deploy-gate step that blocks a pull request. It judges only what the change ADDS, so existing debt never
     # blocks an unrelated pull request, and the base tree (which adds nothing) passes it. The rest of deploy-gate stays advisory (MERGE-STREAMLINE-1). GUARD_BASE (set in main) is its base.
     ("workers-standards-guard", lambda f: any_match(f, r"^[^/]+/worker\.js$", r"^[^/]+/wrangler\.(toml|jsonc)$", r"^scripts/[^/]+\.py$", r"^scripts/workers-standards-allowlist\.txt$"),
      ["python3", "scripts/workers_standards_guard.py"], r"violation\(s\) added|^\S+:\d+ \[[a-z0-9-]+\]|failing closed|cannot read the diff"),
+    ("kaizen-gates", lambda f: any_match(f, WORKER.pattern, r"(^|/)wrangler\.toml$", r"^docs/ops-governance/scripts/", r"^qnfo-fleet-dashboard/probes\.json$",
+                                         r"^\.github/workflows/(canonical-deploy|fleet-autodeploy)\.yml$",
+                                         r"^scripts/(kaizen_gates|pr_fast_guards|cost_ledger|fleet-autoaudit|deploy-drift-guard|mirror-guard)\.py$",
+                                         r"^scripts/ux-journeys/apps/fleet\.journeys\.mjs$"),
+     ["python3", "scripts/kaizen_gates.py"], None),
+    # FLEET-LESSONS-GATES-1 (roadmap rows RM-GATE-C1, C3, D4, E2, H1, H2, H3; SUITE-RED-2): the repository half of the fleet-lessons gates (about 1 s, offline) was never registered here, so a change to the
+    # client-state guards or the owner-machine scripts it reads reached main unchecked and migrations/c4-gates-roadmap-closeout.test.mjs (detector fm-fleet-lessons-gates-wired) read red. Regression-only like
+    # the other guards: a VIOLATION line the base tree already has never holds an unrelated pull request.
+    ("fleet-lessons-gates", lambda f: any_match(f, r"^docs/ops-governance/scripts/[^/]+\.py$", r"^docs/ops-governance/scripts/chatbox-providers-canonical\.json$", r"^scripts/(fleet_lessons_gates|rotate-social-token|purge-agent-snapshots|skill_pull|deploy_gate)\.py$"),
+     ["python3", "scripts/fleet_lessons_gates.py"], r"^VIOLATION "),
+    # DEPENDENCY-ALLOWLIST-1 (BP26-AGENT-CHANGE-GATES-1, roadmap row 1414, OWASP ASI04): a dependency, an install script or an unpinned install in a workflow is declared in
+    # scripts/dependency-allowlist.txt, with a reason, in the same change. Regression-only: a violation the base tree already has never holds an unrelated pull request.
+    ("dependency-allowlist", lambda f: any_match(f, r"(^|/)package(-lock)?\.json$", r"^\.github/workflows/[^/]+\.ya?ml$", r"^scripts/dependency[-_]allowlist\.(py|txt)$"),
+     ["python3", "scripts/dependency_allowlist.py"], r"^VIOLATION "),
     ("suite-regressions", lambda f: any(not f_.startswith(("docs/", "ci-status/", "audits/")) for f_ in f),
      suites_cmd, r"^FAIL\s+<t>\s+\S+$|expired|malformed"),
 ]

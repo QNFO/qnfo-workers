@@ -323,7 +323,7 @@ def ai_search_inventory(call=cf):
 def write_ai_search_snapshot(d1, day, call=cf):
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     result = {"state": "unavailable", "errors": []}
-    inventory = []
+    inventory = None  # None: the inventory could not be read (an unread inventory is recorded as unknown, never as zero instances)
     try:
         inventory = ai_search_inventory(call)
     except Exception as error:  # noqa: BLE001
@@ -344,18 +344,26 @@ def write_ai_search_snapshot(d1, day, call=cf):
     except Exception as error:  # noqa: BLE001
         result["errors"].append("usage: %s" % str(error)[:120])
         result["state"] = "pre-billing" if day < AI_SEARCH_BILLING_START else "unavailable"
-    count = len(inventory)
-    instance_fee = 0 if count <= 100 else None
+    count = len(inventory) if inventory is not None else None
+    instance_fee = 0 if count is not None and count <= 100 else None
     d1("INSERT INTO ai_search_cost_snapshots (snapshot_day, observed_at, instance_count, known_instance_fee_usd, usage_state, usage_usd, query_start, query_end, inventory_json, usage_json) "
        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT(snapshot_day) DO UPDATE SET observed_at=excluded.observed_at, instance_count=excluded.instance_count, "
        "known_instance_fee_usd=excluded.known_instance_fee_usd, usage_state=excluded.usage_state, usage_usd=excluded.usage_usd, query_start=excluded.query_start, query_end=excluded.query_end, "
        "inventory_json=excluded.inventory_json, usage_json=excluded.usage_json",
        [day.isoformat(), now, count, instance_fee, result["state"], result.get("total_usd"), result.get("query_start"),
-        result.get("query_end"), json.dumps(inventory, separators=(",", ":")), json.dumps(result.get("details") or [], separators=(",", ":"))])
+        result.get("query_end"), json.dumps(inventory if inventory is not None else [], separators=(",", ":")), json.dumps(result.get("details") or [], separators=(",", ":"))])
     result["instance_count"] = count
     result["known_instance_fee_usd"] = instance_fee
-    result["inventory"] = inventory
+    result["inventory"] = inventory if inventory is not None else []
     return result
+
+
+def ai_search_summary(d1, day, call=cf):
+    """AI-SEARCH-COST-1 (RM-AISEARCH-GA-MIGRATE-1): the hourly run records the AI Search inventory and the account's billable AI Search usage
+    (write_ai_search_snapshot had no caller, and its table no DDL, so the 2026-12-01 usage billing would have reached no cost line) and
+    reports only a summary, because main prints the first 1500 characters of its result."""
+    r = write_ai_search_snapshot(d1, day, call)
+    return {"state": r.get("state"), "instances": r.get("instance_count"), "usage_usd": r.get("total_usd"), "errors": r.get("errors") or []}
 
 
 def owner_local_window(d1, first_day):
@@ -549,6 +557,26 @@ def write_unit_cost(d1):
     val = round(n / pubs, 1)
     d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED' WHERE metric = 'research_neurons_per_publication_7d'", [val])
     return {"neurons_7d": n, "publications_7d": pubs, "per_publication": val}
+
+
+def write_paper_yield(d1):
+    """PAPER-YIELD-1 (agent_issues 1000778, owner request "Yield: papers published per $100"): published versions per $100 of all-billing
+    spend over the 7 complete UTC days before today, the same window and the same published count as research_neurons_per_publication_7d, so
+    the two can be read together (yield up while the unit cost falls is the push and the trim of the card). Spend is the v_cost_run_rate
+    total:all-billing daily mean x 7 (Cloudflare plan, AI Gateway, owner gateway, owner-stated providers). POSTCONDITION: the metric carries
+    the ratio (0 when nothing was published but money was spent), or nothing is written when the spend is unknown (a ratio over no spend is not a measurement)."""
+    try:
+        r = d1("SELECT (SELECT COUNT(*) FROM research_queue WHERE published_at >= date('now', '-7 days') AND published_at < date('now')) AS pubs, "
+               "(SELECT daily_7d FROM v_cost_run_rate WHERE source_group = 'total:all-billing') AS daily")
+    except Exception as e:  # noqa: BLE001
+        return "paper yield unreadable: %s" % str(e)[:80]
+    pubs, daily = int(r[0]["pubs"] or 0), float(r[0]["daily"] or 0)
+    if daily <= 0:
+        return {"publications_7d": pubs, "usd_7d": 0.0, "written": False}
+    usd = daily * 7.0
+    val = round(100.0 * pubs / usd, 3)
+    d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED' WHERE metric = 'papers_per_100usd_7d'", [val])
+    return {"publications_7d": pubs, "usd_7d": round(usd, 2), "per_100usd": val}
 
 
 def billed_gateway(d1, call=cf):
@@ -876,11 +904,14 @@ def main(d1=None, call=cf, today=None):
     except Exception as e:  # noqa: BLE001
         out["run_rate"] = "view missing: %s" % str(e)[:80]
     out["forecast"] = write_forecast(d1)
-    for k, fn in (("unit_cost", lambda: write_unit_cost(d1)), ("billed", lambda: billed_gateway(d1, call))):
+    for k, fn in (("unit_cost", lambda: write_unit_cost(d1)), ("paper_yield", lambda: write_paper_yield(d1)), ("billed", lambda: billed_gateway(d1, call)),
+                  ("ai_search", lambda: ai_search_summary(d1, today, call))):
         try:
             out[k] = fn()
         except Exception as e:  # noqa: BLE001
             out["errors"].append("%s: %s" % (k, str(e)[:100]))
+    for e in (out.get("ai_search") or {}).get("errors") or []:
+        out["errors"].append("ai_search " + str(e)[:100])
     try:
         plan_basis = (
             "unavailable" if plan_m is None else
@@ -916,7 +947,9 @@ def selftest():
       CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT,
         formula TEXT, source_of_truth TEXT);
       CREATE TABLE ai_meter_model_daily (date TEXT NOT NULL, model TEXT NOT NULL, neurons REAL NOT NULL DEFAULT 0, requests INTEGER NOT NULL DEFAULT 0,
-        input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, observed_at TEXT, PRIMARY KEY (date, model));""")
+        input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, observed_at TEXT, PRIMARY KEY (date, model));
+      CREATE TABLE ai_search_cost_snapshots (snapshot_day TEXT PRIMARY KEY, observed_at TEXT, instance_count INTEGER, known_instance_fee_usd REAL,
+        usage_state TEXT, usage_usd REAL, query_start TEXT, query_end TEXT, inventory_json TEXT, usage_json TEXT);""")
 
     def d1(sql, params=None):
         sql = sql.replace("strftime('%Y-%m-%dT%H:%M:%SZ', 'now')", "'now'")
@@ -929,6 +962,20 @@ def selftest():
             return 403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]}
         if path.endswith("/invoice-preview"):
             return 200, {"result": {"invoice_lines": []}}
+        if "/billable-usage/info" in path:
+            return 200, {"success": True, "result": {"subscriptions": [{"billing_cycle_anchor_timestamp": "2026-10-01T00:00:00Z"}]}}
+        if "/billable-usage?" in path:
+            return 200, {"success": True, "result": [
+                {"ServiceFamilyName": "AI Search", "ServiceName": "AI Search", "ChargeDescription": "Semantic queries", "ChargePeriodStart": "2026-10-08T00:00:00Z",
+                 "ContractedCost": "0.42", "ConsumedQuantity": 560, "ConsumedUnit": "queries"},
+                {"ServiceFamilyName": "Workers", "ServiceName": "Workers", "ChargeDescription": "Requests", "ChargePeriodStart": "2026-10-08T00:00:00Z", "ContractedCost": "9.99"}]}
+        if "/ai-search/namespaces/" in path and path.endswith("/stats"):
+            return 200, {"success": True, "result": {"completed": 7, "engine": {"vectorize": {"vectorsCount": 1200}, "r2": {"payloadSizeBytes": 100, "metadataSizeBytes": 5, "objectCount": 7}}}}
+        if "/ai-search/namespaces/" in path:
+            return 200, {"success": True, "result": [{"id": "qnfo-corpus", "engine_version": 3, "hybrid_search_enabled": True,
+                                                      "embedding_model": "@cf/qwen/qwen3-embedding-0.6b", "reranking": False}], "result_info": {"total_pages": 1}}
+        if "/ai-search/namespaces" in path:
+            return 200, {"success": True, "result": [{"name": "default"}], "result_info": {"total_pages": 1}}
         q = body["query"]
         if "aiInferenceAdaptiveGroups" in q:
             if "dimensions { date }" in q:
@@ -955,6 +1002,25 @@ def selftest():
     assert ("2026-10-09", "ai_gateway:workers-ai") not in rows  # neuron-billed, never double counted
     assert abs(rows[("2026-10-09", "cloudflare_plan:daily")] - 200 / 30) < 1e-3 and abs(rows[("2026-10-09", "direct_providers_external:daily")] - 15) < 1e-9
     assert len([k for k in rows if k[1] == "workers_ai"]) == 11  # 10 complete days plus today
+    # AI-SEARCH-COST-1: the run records the AI Search inventory and the account's billable AI Search usage; the usage is a cost_daily line of its own
+    # (v_cost_lines_month reads it as cloudflare / ai_search / invoice), and an inventory that could not be read is NULL, never zero instances
+    snap = d1("SELECT * FROM ai_search_cost_snapshots")
+    assert len(snap) == 1 and snap[0]["snapshot_day"] == "2026-10-09" and snap[0]["instance_count"] == 1 and snap[0]["usage_state"] == "measured", snap
+    assert abs(snap[0]["usage_usd"] - 0.42) < 1e-9 and snap[0]["known_instance_fee_usd"] == 0 and "qnfo-corpus" in snap[0]["inventory_json"], snap
+    assert abs(rows[("2026-10-08", "ai_search:usage")] - 0.42) < 1e-9 and not [k for k in rows if k[1] == "ai_search:usage" and k[0] != "2026-10-08"], rows
+    assert not [k for k in rows if k[1].startswith("ai_search") and abs(rows[k] - 9.99) < 1e-9], "only AI Search lines of the billing report are kept"
+
+    def no_ai_search(method, path, body=None, timeout=30):
+        if "/ai-search/" in path:
+            return 403, {"success": False, "errors": [{"message": "test refusal"}]}
+        return call(method, path, body, timeout)
+    d1("DELETE FROM ai_search_cost_snapshots")
+    unread = ai_search_summary(d1, dt.date(2026, 10, 9), no_ai_search)
+    snap = d1("SELECT * FROM ai_search_cost_snapshots")
+    assert snap[0]["instance_count"] is None and snap[0]["known_instance_fee_usd"] is None and snap[0]["inventory_json"] == "[]", snap
+    assert unread["instances"] is None and unread["errors"] and unread["errors"][0].startswith("inventory:"), unread
+    assert snap[0]["usage_state"] == "measured", "the usage report is independent of the inventory"
+    assert ai_search_summary(d1, dt.date(2026, 10, 9), call)["instances"] == 1 and len(d1("SELECT * FROM ai_search_cost_snapshots")) == 1, "a read run replaces the unknown row"
     # AI-METER-MODEL-1: the per-model meter sums to the day's total, merges a model that GraphQL returns in two groups, and is idempotent
     mm = {(r["date"], r["model"]): r for r in d1("SELECT * FROM ai_meter_model_daily")}
     assert len(mm) == 22 and abs(mm[("2026-10-09", "@cf/openai/gpt-oss-120b")]["neurons"] - 60000) < 1e-6 and mm[("2026-10-09", "@cf/openai/gpt-oss-120b")]["requests"] == 40, mm
@@ -1047,8 +1113,9 @@ def selftest():
     assert rr["total:all-billing"] == 28.5, rr  # the owner's total monthly budget keeps its gateway spend: 3.5 + 10 + 15
     # COST-SUSTAIN-3: invoice-preview lines are cents and include credit-paid usage; a refusal writes nothing
     m = sqlite3.connect(":memory:")
-    m.executescript("CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT); INSERT INTO metric_registry (metric) VALUES ('billed_ai_gateway_mtd_usd'), ('research_neurons_per_publication_7d');"
-                    "CREATE TABLE ai_call_counters (day TEXT, worker TEXT, neurons REAL); CREATE TABLE research_queue (published_at TEXT);")
+    m.executescript("CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT); INSERT INTO metric_registry (metric) VALUES ('billed_ai_gateway_mtd_usd'), ('research_neurons_per_publication_7d'), ('papers_per_100usd_7d');"
+                    "CREATE TABLE ai_call_counters (day TEXT, worker TEXT, neurons REAL); CREATE TABLE research_queue (published_at TEXT);"
+                    "CREATE TABLE v_cost_run_rate (source_group TEXT, daily_7d REAL);")
 
     def md1(sql, params=None):
         sql = sql.replace("strftime('%Y-%m-%dT%H:%M:%SZ', 'now')", "'now'")
@@ -1059,11 +1126,21 @@ def selftest():
     assert billed_gateway(md1, lambda *a, **k: (200, inv))["billed_usd"] == 45.22
     assert md1("SELECT last_value FROM metric_registry WHERE metric = 'billed_ai_gateway_mtd_usd'")[0]["last_value"] == "45.22"
     assert isinstance(billed_gateway(md1, lambda *a, **k: (403, {})), str)
-    y = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    y = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)).isoformat()  # UTC like SQLite date('now'): the local date is a day ahead near midnight
     assert write_unit_cost(md1)["written"] is False  # no publication: no ratio
     m.execute("INSERT INTO ai_call_counters VALUES (?, 'qnfo-research-exec', 300000), (?, 'q08-signal-engine', 999999)", [y, y])
     m.executemany("INSERT INTO research_queue VALUES (?)", [[y + "T10:00:00Z"]] * 20)
     assert write_unit_cost(md1)["per_publication"] == 15000.0
+    # PAPER-YIELD-1: no spend figure writes nothing; 20 versions over 7 x 28.5 USD is 10.025 per $100; zero versions with spend is a measured 0
+    assert write_paper_yield(md1)["written"] is False
+    assert md1("SELECT last_value FROM metric_registry WHERE metric = 'papers_per_100usd_7d'")[0]["last_value"] is None
+    m.execute("INSERT INTO v_cost_run_rate VALUES ('total:all-billing', 28.5), ('total:cloudflare+gateway', 3.5)")
+    assert write_paper_yield(md1)["per_100usd"] == 10.025
+    assert md1("SELECT last_value, state FROM metric_registry WHERE metric = 'papers_per_100usd_7d'")[0] == {"last_value": "10.025", "state": "MEASURED"}
+    m.execute("DELETE FROM research_queue")
+    assert write_paper_yield(md1)["per_100usd"] == 0.0
+    m.executemany("INSERT INTO research_queue VALUES (?)", [[y + "T10:00:00Z"]] * 20)
+    assert isinstance(write_paper_yield(lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no such table"))), str)
 
     reconciliation_db = sqlite3.connect(":memory:")
     reconciliation_db.executescript("""CREATE TABLE cost_daily (date TEXT, source TEXT, scope TEXT, usd REAL);

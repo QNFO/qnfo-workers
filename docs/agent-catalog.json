@@ -176,6 +176,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BEST-PRACTICES-2026.md"
     },
     {
+      "path": "docs/BLUE-SKY-ROADMAP-2026-11.md",
+      "title": "Blue-sky roadmap and wish list (BLUESKY-2026-11)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BLUE-SKY-ROADMAP-2026-11.md"
+    },
+    {
       "path": "docs/BP26-EDGE-SECURITY-1.md",
       "title": "BP26-EDGE-SECURITY-1: secure headers, Turnstile on public forms, per-address limit on the fleet's OTP endpoints",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/BP26-EDGE-SECURITY-1.md"
@@ -416,6 +421,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FIX-2026-09-07-ops_issues_list-await.md"
     },
     {
+      "path": "docs/FLEET-AUDIT-2026-10-30.md",
+      "title": "QNFO fleet audit, 2026-10-30",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-AUDIT-2026-10-30.md"
+    },
+    {
       "path": "docs/FLEET-BUDGET.md",
       "title": "FLEET-BUDGET (canonical, 2026-09-26) -- the consolidation wave plan",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/FLEET-BUDGET.md"
@@ -511,6 +521,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/KILL-SWITCH-DRILL.md"
     },
     {
+      "path": "docs/KNOWLEDGE-GRAPH.md",
+      "title": "KG-CURATE-1: the content knowledge graph, curated by the fleet",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/KNOWLEDGE-GRAPH.md"
+    },
+    {
       "path": "docs/LEASES-FENCING.md",
       "title": "Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/LEASES-FENCING.md"
@@ -519,6 +534,11 @@
       "path": "docs/MAIN-PUSH-POLICY.md",
       "title": "Main push policy (MAIN-PUSH-POLICY-1, 2026-11-04)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MAIN-PUSH-POLICY.md"
+    },
+    {
+      "path": "docs/MEMORY-TIERING-EVAL.md",
+      "title": "Tiered agent memory: how it is measured (RM-MEMORY-TIERING-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/MEMORY-TIERING-EVAL.md"
     },
     {
       "path": "docs/MODEL-MATRIX.md",
@@ -775,6 +795,11 @@
       "path": "docs/WORKERS-STANDARDS.md",
       "title": "Workers standards (WORKERS-STANDARDS-DOC-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/WORKERS-STANDARDS.md"
+    },
+    {
+      "path": "docs/YOUTUBE-CHANNEL-PACKAGE.md",
+      "title": "YouTube channel packaging, ready to paste (YT-18)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/YOUTUBE-CHANNEL-PACKAGE.md"
     },
     {
       "path": "docs/YOUTUBE-PIPELINE-COST.md",

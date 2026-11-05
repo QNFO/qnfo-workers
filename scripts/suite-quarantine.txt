@@ -39,15 +39,12 @@ qnfo-fleet-control/pool-bound-sources.test.mjs | 2026-11-09 | #6598 | pre-existi
 qnfo-fleet-control/portfolio-archive.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-fleet-control/portfolio.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-fleet-control/probe-author-sink.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
-qnfo-fleet-control/probe-author.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-fleet-control/remediation-budget-metric.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-fleet-control/state-retired.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-fleet-dashboard/fleet-value.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-jobsearch/worker.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-ops/ds-402-breaker.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
-qnfo-research-exec/grounding.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 qnfo-lifecycle/paper-learn.test.mjs | 2026-11-10 | #6659 | pre-existing failure outside the ci-status-only change in the failing main run
-qnfo-research-exec/atomic-claims-ledger.test.mjs | 2026-11-10 | #6659 | pre-existing failure outside the ci-status-only change in the failing main run
 scripts/bp26-producers.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 scripts/close-channel-guard.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598
 scripts/cron-grid.test.mjs | 2026-11-09 | #6598 | pre-existing main failure outside #6589 dashboard-cache change; tracked by #6598

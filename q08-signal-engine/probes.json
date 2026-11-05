@@ -14,6 +14,18 @@
       "contains": [
         "data-brand=\"q08\""
       ]
+    },
+    {
+      "url": "https://q08.org/subscribe?probe=turnstile",
+      "contains": [
+        "cf-turnstile"
+      ]
+    },
+    {
+      "url": "https://q08.org/api/forecasts",
+      "contains": [
+        "\"criteria_clarification\""
+      ]
     }
   ]
 }

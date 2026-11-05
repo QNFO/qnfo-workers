@@ -561,6 +561,41 @@ def record(d1, results, verifier, now=None):
         title_like = "%s: %s %%" % (ISSUE_PREFIX, r["journey"])
         open_rows = d1("SELECT id FROM agent_issues WHERE status = 'open' AND title LIKE ?1", [title_like])
         if r["ok"]:
+            # RELAPSE-HOLD-1 gha-journeys: ensure a prior passing gha run exists at least 10 min earlier and after the issue's last reopen
+            # Fetch the most recent previous gha run for this journey
+            prev_gha = d1(
+                "SELECT ok, ts FROM journey_runs WHERE journey = ?1 AND runner = 'gha' AND ts < ?2 ORDER BY ts DESC LIMIT 1",
+                [r["journey"], at],
+            )
+            # Fetch the issue's last updated timestamp (used for reopen tracking)
+            issue_info = d1(
+                "SELECT updated_at FROM agent_issues WHERE id = ?1",
+                [open_rows[0]["id"]] if open_rows else [None],
+            )
+            keep_open = False
+            # Condition: no prior passing gha run, or it is too recent (<10 min), or it occurred before the issue was (re)opened
+            if not prev_gha or int(prev_gha[0].get("ok") or 0) != 1:
+                keep_open = True
+            else:
+                prev_ts = prev_gha[0].get("ts")
+                # Ensure at least 10 minutes earlier than the current run
+                if prev_ts is None or age_min(prev_ts, now) < 10:
+                    keep_open = True
+                else:
+                    # Compare timestamps: if the previous run is not after the issue's last update, keep open
+                    issue_updated = issue_info[0].get("updated_at") if issue_info else None
+                    if issue_updated is not None:
+                        # Convert ISO timestamp to epoch milliseconds
+                        try:
+                            t_struct = time.strptime(prev_ts[:19], "%Y-%m-%dT%H:%M:%S")
+                            prev_epoch_ms = int((time.mktime(t_struct) - time.timezone) * 1000)
+                        except Exception:  # noqa: BLE001
+                            prev_epoch_ms = None
+                        if prev_epoch_ms is None or prev_epoch_ms <= issue_updated:
+                            keep_open = True
+            if keep_open:
+                actions[r["journey"]] = "kept open: first passing run"
+                continue
             if not open_rows:
                 continue
             other = d1("SELECT ok FROM journey_runs WHERE journey = ?1 AND runner <> 'gha' AND ts > ?2 ORDER BY id DESC LIMIT 1", [r["journey"], since])
@@ -582,6 +617,15 @@ def record(d1, results, verifier, now=None):
                 "taken: %s. Every run is in qnfo-audit journey_runs; GET https://qnfo-fleet-control.q08.workers.dev/journeys shows both runners. "
                 "This issue closes itself the first run the journey passes every step. Pillar core.") % (at, r["journey"], listing, path or "none")
         if open_rows:
+            # JOURNEY-RENAME-UNIQUE-1 (2026-11-05, GitHub 5753 and 5213, agent_issues 1000772): both runners file this journey, so two open issues of it can exist with
+            # different counts in their titles (loop-heartbeats 2026-10-31 11:00 to 19:16Z: "1 of 13" and "2 of 7"). Renaming the first to the failure now at hand when the
+            # other already carries that title violates idx_agent_issues_open_title_ci (60 occurrences in the server-side runner's log, which does the same rename) and
+            # aborted this loop for every journey after it. The twin that holds the title is kept current instead; both close when the journey passes.
+            twin = d1("SELECT id FROM agent_issues WHERE status = 'open' AND id <> ?1 AND lower(trim(title)) = lower(trim(?2)) LIMIT 1", [open_rows[0]["id"], title])
+            if twin:
+                d1("UPDATE agent_issues SET description = ?1, updated_at = ?2 WHERE id = ?3", [desc, now_ms, twin[0]["id"]])
+                actions[r["journey"]] = "updated %s (the twin that carries the title)" % twin[0]["id"]
+                continue
             d1("UPDATE agent_issues SET title = ?1, description = ?2, updated_at = ?3 WHERE id = ?4", [title, desc, now_ms, open_rows[0]["id"]])
             actions[r["journey"]] = "updated %s" % open_rows[0]["id"]
         else:
@@ -811,6 +855,8 @@ def selftest():
         ok INTEGER NOT NULL, steps INTEGER, failed INTEGER, ms INTEGER, failed_json TEXT, path_json TEXT, healed_json TEXT, version TEXT);
       CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT,
         status TEXT, close_channel TEXT, created_at INTEGER, updated_at INTEGER);
+      CREATE UNIQUE INDEX idx_agent_issues_open_title ON agent_issues(title) WHERE status = 'open';
+      CREATE UNIQUE INDEX idx_agent_issues_open_title_ci ON agent_issues(lower(trim(title))) WHERE status = 'open';
       CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, close_evidence TEXT);
       CREATE TRIGGER t AFTER INSERT ON agent_issues BEGIN INSERT INTO issue_triage (issue_id) VALUES (NEW.id); END;
       CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
@@ -837,13 +883,37 @@ def selftest():
     con.execute("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'cf', 'papers-path', 0)", [time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t + 90))])
     r3 = record(d1, good, "selftest", now=t + 120)
     expect("stays open while the server-side newest run fails", q("SELECT status FROM agent_issues")[0]["status"] == "open" and "kept open" in r3["issues"].get("papers-path", ""))
-    con.execute("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'cf', 'papers-path', 1)", [time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t + 150))])
-    r4 = record(d1, good, "selftest", now=t + 180)
+    # RELAPSE-HOLD-1 gha-journeys (PR 7380): a journey issue closes only on a second passing gha run at least 10 minutes after the first, so the fixture's two passes are 700 s apart
+    con.execute("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'cf', 'papers-path', 1)", [time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t + 790))])
+    r4 = record(d1, good, "selftest", now=t + 820)
     row = q("SELECT a.status, t.close_evidence FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id")[0]
     expect("closes with evidence once both runners pass", row["status"] == "closed" and "passed all 3 steps" in row["close_evidence"] and "qnfo-gateway 200" in row["close_evidence"] and r4["issues"].get("papers-path") == "closed 1")
     expect("metric returns to 0", q("SELECT last_value v FROM metric_registry")[0]["v"] == "0")
     expect("one gha row per journey per run", q("SELECT COUNT(*) n FROM journey_runs WHERE runner = 'gha'")[0]["n"] == 4)
     expect("host to worker mapping", _host_worker("https://papers.qnfo.org/x") == "qnfo-gateway" and _host_worker("https://qnfo-ops.q08.workers.dev/fleet") == "qnfo-ops")
+    # JOURNEY-RENAME-UNIQUE-1: two open issues of one journey (both runners filed it with different counts). The failure whose title the second already carries updates that
+    # twin and renames nothing; the legacy rename of the first to that title violates the open-title index, as on the live schema.
+    twin_a = "%s: twin-path (1 of 3 steps failing)" % ISSUE_PREFIX
+    twin_b = "%s: twin-path (2 of 3 steps failing)" % ISSUE_PREFIX
+    for ttl in (twin_a, twin_b):
+        con.execute("INSERT INTO agent_issues (title, description, status, created_at, updated_at) VALUES (?, 'old', 'open', 1, 1)", [ttl])
+    con.commit()
+    legacy_err = ""
+    try:
+        con.execute("UPDATE agent_issues SET title = ? WHERE title = ?", [twin_b, twin_a])
+    except sqlite3.IntegrityError as e:
+        legacy_err = str(e)
+    expect("the legacy rename violates the open-title index", "UNIQUE constraint failed" in legacy_err)
+    two = [{"journey": "twin-path", "ok": False, "ms": 1, "steps": 3, "failed": [{"step": "x", "ok": False, "detail": "y"}, {"step": "z", "ok": False, "detail": "y"}], "passed": ["a"], "path": path}]
+    err5, r5 = "", {"issues": {}}
+    try:
+        r5 = record(d1, two, "selftest", now=t + 240)
+    except Exception as e:  # noqa: BLE001
+        err5 = str(e)
+    expect("two open twins: the failure at hand raises nothing" + (" " + err5 if err5 else ""), err5 == "")
+    expect("the twin that carries the title is kept current", "the twin that carries the title" in r5["issues"].get("twin-path", ""))
+    expect("the other open issue keeps its title and text", q("SELECT description FROM agent_issues WHERE title = '%s'" % twin_a)[0]["description"] == "old")
+    expect("the title holder is rewritten", q("SELECT description FROM agent_issues WHERE title = '%s'" % twin_b)[0]["description"] != "old")
 
     failed = [c for c, ok in checks if not ok]
     return {"selftest": "ok" if not failed else "fail", "checks": len(checks), "failed": failed}

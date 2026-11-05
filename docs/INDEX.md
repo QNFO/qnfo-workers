@@ -31,6 +31,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [QNFO Quniverse — Autonomous Use Cases & Best Practices](AUTONOMOUS-USE-CASES.md) - `docs/AUTONOMOUS-USE-CASES.md`
 - [AUTONOMY-DECISION-POLICY-1: a human is an override, never a dependency](AUTONOMY-DECISION-POLICY.md) - `docs/AUTONOMY-DECISION-POLICY.md`
 - [Fleet best-practice catalogue 2026 (BP26)](BEST-PRACTICES-2026.md) - `docs/BEST-PRACTICES-2026.md`
+- [Blue-sky roadmap and wish list (BLUESKY-2026-11)](BLUE-SKY-ROADMAP-2026-11.md) - `docs/BLUE-SKY-ROADMAP-2026-11.md`
 - [BP26-EDGE-SECURITY-1: secure headers, Turnstile on public forms, per-address limit on the fleet's OTP endpoints](BP26-EDGE-SECURITY-1.md) - `docs/BP26-EDGE-SECURITY-1.md`
 - [BP26-PAPER-PIDS-1 and BP26-FORECAST-HYGIENE-1: research, design, state (2026-10-28)](BP26-PAPER-PIDS-AND-FORECAST-HYGIENE.md) - `docs/BP26-PAPER-PIDS-AND-FORECAST-HYGIENE.md`
 - [BP26-PROMPT-INJECTION-1 and BP26-NO-TRACKING-1: research and state (2026-10-28)](BP26-PROMPT-INJECTION.md) - `docs/BP26-PROMPT-INJECTION.md`
@@ -79,6 +80,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [EXEC-2026-09-08 — Backlog drain executed; listIssues one-line fix (pending deploy)](EXEC-2026-09-08-listIssues-fix-pending.md) - `docs/EXEC-2026-09-08-listIssues-fix-pending.md`
 - [Exuvia integration (EXUVIA-1, EXUVIA-HANDOFF-1)](EXUVIA-INTEGRATION.md) - `docs/EXUVIA-INTEGRATION.md`
 - [FIX-2026-09-07 — ops_issues_list returns 0 rows (missing await on D1 .all())](FIX-2026-09-07-ops_issues_list-await.md) - `docs/FIX-2026-09-07-ops_issues_list-await.md`
+- [QNFO fleet audit, 2026-10-30](FLEET-AUDIT-2026-10-30.md) - `docs/FLEET-AUDIT-2026-10-30.md`
 - [FLEET-BUDGET (canonical, 2026-09-26) -- the consolidation wave plan](FLEET-BUDGET.md) - `docs/FLEET-BUDGET.md`
 - [FLEET-GRAPH-1: the fleet code and topology graph](FLEET-GRAPH.md) - `docs/FLEET-GRAPH.md`
 - [FLEET-NODE-MAP (canonical, 2026-09-26)](FLEET-NODE-MAP.md) - `docs/FLEET-NODE-MAP.md`
@@ -98,8 +100,10 @@ and [the machine-readable catalog](agent-catalog.json).
 - [HANDOFF — 2026-10-19 (handoff backlog + R2 Basin Catalog + red drain)](HANDOFF-2026-10-19-red-drain.md) - `docs/HANDOFF-2026-10-19-red-drain.md`
 - [Infrastructure and AI-spend audit, 2026-11-04 (pillar: cost)](INFRA-AUDIT-2026-11-04.md) - `docs/INFRA-AUDIT-2026-11-04.md`
 - [Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)](KILL-SWITCH-DRILL.md) - `docs/KILL-SWITCH-DRILL.md`
+- [KG-CURATE-1: the content knowledge graph, curated by the fleet](KNOWLEDGE-GRAPH.md) - `docs/KNOWLEDGE-GRAPH.md`
 - [Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)](LEASES-FENCING.md) - `docs/LEASES-FENCING.md`
 - [Main push policy (MAIN-PUSH-POLICY-1, 2026-11-04)](MAIN-PUSH-POLICY.md) - `docs/MAIN-PUSH-POLICY.md`
+- [Tiered agent memory: how it is measured (RM-MEMORY-TIERING-1)](MEMORY-TIERING-EVAL.md) - `docs/MEMORY-TIERING-EVAL.md`
 - [MODEL-MATRIX-1: which Cloudflare model for which job](MODEL-MATRIX.md) - `docs/MODEL-MATRIX.md`
 - [MONOREPO-DECISION-1: keep qnfo-workers as one repository](MONOREPO-DECISION.md) - `docs/MONOREPO-DECISION.md`
 - [One Thing / Focus backlog and roadmap](ONE-THING-BACKLOG.md) - `docs/ONE-THING-BACKLOG.md`
@@ -151,6 +155,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [WebMCP on the QNFO fleet (WEBMCP-FLEET-1)](WEBMCP.md) - `docs/WEBMCP.md`
 - [worker_logs sampling contract (WORKER-LOGS-CONTRACT-1)](WORKER-LOGS-CONTRACT.md) - `docs/WORKER-LOGS-CONTRACT.md`
 - [Workers standards (WORKERS-STANDARDS-DOC-1)](WORKERS-STANDARDS.md) - `docs/WORKERS-STANDARDS.md`
+- [YouTube channel packaging, ready to paste (YT-18)](YOUTUBE-CHANNEL-PACKAGE.md) - `docs/YOUTUBE-CHANNEL-PACKAGE.md`
 - [YouTube Shorts pipeline: cost model and tool choices (YT-SERVER-1, 2026-10-27)](YOUTUBE-PIPELINE-COST.md) - `docs/YOUTUBE-PIPELINE-COST.md`
 - [YouTube pipeline from plain-language papers (YT-POC-1)](YOUTUBE-PIPELINE.md) - `docs/YOUTUBE-PIPELINE.md`
 - [Shared fleet operating library](agent-library/README.md) - `docs/agent-library/README.md`
