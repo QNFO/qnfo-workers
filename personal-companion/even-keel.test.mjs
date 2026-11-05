@@ -143,7 +143,7 @@ ok(!/var BALANCE_FAMILY/.test(src) && !/=== BALANCE_FAMILY/.test(src), "the filt
   const none = await V.writeBalanceMetrics({ PERSONAL: { prepare: () => ({ bind: () => ({ first: zero }), first: zero }) }, AUDIT: audit }, now);
   ok(none && none.scoredShare === null && none.holdShare === null, "no passes, no share (not zero)", none);
   ok(await V.writeBalanceMetrics({ PERSONAL: { prepare: () => { throw new Error("db down"); } }, AUDIT: audit }, now) === null, "a read failure is logged and returns null, never throws into the stall detector");
-  ok(/await writeBalanceMetrics\(env, now\);\n  var open = await env\.AUDIT/.test(src), "the stall detector writes them every hourly tick");
+  ok(/await writeBalanceMetrics\(env, now\); await writeSourceMetrics\(env, now\);\n  var open = await env\.AUDIT/.test(src), "the stall detector writes them every hourly tick");
 }
 
 console.log("even-keel: " + pass + " passed, " + fail + " failed");
