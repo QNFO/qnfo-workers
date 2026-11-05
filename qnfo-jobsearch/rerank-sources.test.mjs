@@ -301,6 +301,7 @@ ok(T.titleCandidate("Senior beleidsadviseur mobiliteit") && T.titleCandidate("Pr
   const jobs = await T.FETCHERS.smartrecruiters("oecd");
   ok(jobs.length === 3 && fetched.length === 3, "SmartRecruiters: the list and one detail request per candidate title, not for the auditor", fetched);
   ok(jobs[0].id === "sr:oecd:1" && jobs[0].location === "Paris, FR" && /Lead policy research/.test(jobs[0].desc) && jobs[0].url.includes("-x") && jobs[1].desc === "" && /\(Remote\)/.test(jobs[2].location), "jobs carry id, place, text and url", jobs);
+  ok(!T.BOARDS.lever.includes("mistral") && T.BOARDS.lever.includes("palantir"), "the Lever board that answers 404 is gone, the others stay");
   ok(T.feedPrefix("smartrecruiters:oecd") === "sr:oecd:" && T.BOARDS.smartrecruiters.includes("oecd") && T.BOARDS.recruitee.includes("sweco"), "the feeds are registered and expire by prefix");
 }
 globalThis.fetch = realFetch;
