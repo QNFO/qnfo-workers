@@ -92,6 +92,20 @@
    "typing": 0
   }
  },
+ "reading": {
+  "read-newest-piece": {
+   "taps": 1,
+   "typing": 0
+  },
+  "filter-essays": {
+   "taps": 1,
+   "typing": 0
+  },
+  "find-subscribe": {
+   "taps": 1,
+   "typing": 0
+  }
+ },
  "fleet": {
   "plus-page-loads": {
    "taps": 0,
@@ -131,7 +145,41 @@
   }
  },
  "papers": {
+  "paper-from-list": {
+   "taps": 1,
+   "typing": 0
+  },
   "paper-with-short": {
+   "taps": 0,
+   "typing": 0
+  }
+ },
+ "fleet-lee": {
+  "cmd-cf-zones": {
+   "taps": 1,
+   "typing": 1
+  },
+  "cmd-lee-ask": {
+   "taps": 1,
+   "typing": 1
+  },
+  "cmd-lee-chip": {
+   "taps": 1,
+   "typing": 0
+  },
+  "lee-health-live": {
+   "taps": 0,
+   "typing": 0
+  }
+ },
+ "ipatent": {
+  "register-open-publish": {
+   "taps": 1,
+   "typing": 0
+  }
+ },
+ "signal": {
+  "archive-open": {
    "taps": 0,
    "typing": 0
   }
