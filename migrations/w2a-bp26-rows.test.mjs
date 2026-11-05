@@ -47,11 +47,13 @@ function freshSurfaces(w, hoursAgo) {
 const w = world();
 w.exec(sql);
 const st = (id) => w.prepare("SELECT status s, evidence e FROM roadmap_implementation WHERE id = ?").get(id);
-ok(["1390", "1391", "1393", "1394", "1397", "1401", "1407", "1408", "1412", "1414", "1419", "1706"].every((id) => st(id).s === "partial" && st(id).e !== "old"), "twelve rows are partial with evidence");
-ok(st(1413).s === "built" && st(1710).s === "built", "row 1413 is built and row 1710 stays built");
+ok(["1390", "1391", "1393", "1394", "1397", "1407", "1408", "1412", "1414", "1419", "1706"].every((id) => st(id).s === "partial" && st(id).e !== "old"), "eleven rows are partial with evidence");
+ok(st(1413).s === "built" && st(1710).s === "built" && st(1401).s === "built" && /gtg-tag qwav\.tech --model off at 03:35Z/.test(st(1401).e), "rows 1413 and 1401 are built and row 1710 stays built");
 ok(st(1400).s === "partial" && /Verified live 2026-11-05, after the merge/.test(st(1400).e) && st(1400).e.startsWith("old"), "row 1400 keeps its status and gains the live verification once");
 ok(!w.prepare("SELECT 1 FROM roadmap_implementation WHERE status IN ('verified', 'closed') OR verified_at IS NOT NULL").get(), "nothing is verified by this file");
-ok(w.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE class IN ('rm-1413', 'rm-1710') AND status = 'active' AND module = 'roadmap-dod-v1' AND verify_transport = 'd1-query'").get().n === 2, "both rm- contracts are active d1-query contracts of the roadmap-dod-v1 module");
+ok(w.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE class IN ('rm-1413', 'rm-1710') AND status = 'active' AND module = 'roadmap-dod-v1' AND verify_transport = 'd1-query'").get().n === 2, "rm-1413 and rm-1710 are active d1-query contracts of the roadmap-dod-v1 module");
+const c1401 = w.prepare("SELECT verify_probe p, verify_transport t, status s FROM remediation_contracts WHERE class = 'rm-1401'").get();
+ok(c1401 && c1401.t === "runner-https" && c1401.s === "active" && JSON.parse(c1401.p).absent === "googletagmanager" && JSON.parse(c1401.p).url === "https://ask.qwav.tech/", "rm-1401 is a runner-https probe that the tag text is absent from ask.qwav.tech", c1401);
 const probe = (cls) => w.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = ?").get(cls).p;
 freshSurfaces(w, 1);
 const run = (cls) => w.prepare(probe(cls)).get();
@@ -78,7 +80,7 @@ ok(w.prepare("SELECT COUNT(*) n FROM decision_log WHERE actor = 'session-w2a'").
 w.exec("UPDATE roadmap_implementation SET status = 'verified' WHERE id = 1413");
 w.exec(sql);
 ok((st(1400).e.match(/Verified live 2026-11-05, after the merge/g) || []).length === 1, "the verification text is appended once");
-ok(w.prepare("SELECT COUNT(*) n FROM agent_issues").get().n === 2 && w.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 1 && w.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 2, "a replay inserts nothing twice");
+ok(w.prepare("SELECT COUNT(*) n FROM agent_issues").get().n === 2 && w.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 1 && w.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 3, "a replay inserts nothing twice");
 ok(st(1413).s === "verified", "a row already past built is not reset");
 
 // rollback
@@ -87,8 +89,8 @@ const r = world();
 r.exec(sql);
 r.exec(rollback);
 const rs = (id) => r.prepare("SELECT status s, evidence e FROM roadmap_implementation WHERE id = ?").get(id);
-ok(ROWS.every((id) => rs(id).e === "old") && rs(1706).s === "in_progress" && rs(1390).s === "planned" && rs(1710).s === "built", "the Rollback line restores status and evidence of every row");
-ok(r.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE status = 'superseded'").get().n === 2 && r.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status = 'closed'").get().n === 2 && r.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 0, "the Rollback line supersedes the contracts, closes the two issues and removes the decision row");
+ok(ROWS.every((id) => rs(id).e === "old") && rs(1706).s === "in_progress" && rs(1390).s === "planned" && rs(1401).s === "planned" && rs(1710).s === "built", "the Rollback line restores status and evidence of every row");
+ok(r.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE status = 'superseded'").get().n === 3 && r.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status = 'closed'").get().n === 2 && r.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 0, "the Rollback line supersedes the contracts, closes the two issues and removes the decision row");
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
