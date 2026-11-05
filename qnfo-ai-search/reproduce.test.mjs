@@ -40,6 +40,7 @@ const LEDGER = {
     { run_id: "evil-1", repo: "QNFO/qnfo-research", run_path: "runs/../../secret", cycle: "c", status: "ok", commit_sha: null, deposited_at: "2026-11-04" },
     { run_id: "evil-2", repo: "someone-else/repo", run_path: "runs/cycle-4/bad", cycle: "c", status: "ok", commit_sha: null, deposited_at: "2026-11-04" },
     { run_id: "evil-3", repo: "QNFO/qnfo-research", run_path: "runs/cycle 4/bad?x=1", cycle: "c", status: "ok", commit_sha: null, deposited_at: "2026-11-04" },
+    { run_id: "evil-4", repo: "QNFO/..", run_path: "runs/cycle-4/bad", cycle: "c", status: "ok", commit_sha: null, deposited_at: "2026-11-04" },
   ],
   huge: [{ run_id: "run-h", repo: "QNFO/qnfo-research", run_path: "runs/cycle-5/huge", cycle: "cycle-5", paper_version: "1.0.0", status: "ok", commit_sha: null, deposited_at: "2026-11-04T09:55:10.783Z" }],
 };

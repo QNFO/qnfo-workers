@@ -1151,7 +1151,7 @@ async function reproRuns(env, slug) {
   var d = db(env);
   if (!d) return [];
   var r = await d.prepare("SELECT run_id, repo, run_path, cycle, paper_version, status, commit_sha, deposited_at FROM research_run_ledger WHERE slug = ?1 AND run_path IS NOT NULL AND status IN ('ok','landed-unverified','verified','deposited') ORDER BY deposited_at DESC LIMIT ?2").bind(slug, REPRO_RUNS_MAX).all();
-  return ((r && r.results) || []).filter(function (x) { return REPRO_REPO_RE.test(String(x.repo || "")) && REPRO_PATH_RE.test(String(x.run_path || "")) && String(x.run_path).indexOf("..") < 0; });
+  return ((r && r.results) || []).filter(function (x) { return REPRO_REPO_RE.test(String(x.repo || "")) && String(x.repo).indexOf("..") < 0 && REPRO_PATH_RE.test(String(x.run_path || "")) && String(x.run_path).indexOf("..") < 0; });
 }
 async function rawText(url, cap) {
   var ctrl = new AbortController(), t = setTimeout(function () { ctrl.abort(); }, 8000);
@@ -1243,7 +1243,7 @@ var REPRODUCE_PAGE = navHead("Reproduce | Ask QWAV", "Run the script that checke
 <h2>The script</h2>
 <details class="code"><summary id="csum">Show the script</summary><pre class="out" id="code"></pre></details>
 <h2>Run it in your browser</h2>
-<p class="note" id="warn">The script runs in a background thread of this tab, with no access to the page. It comes from the public research repository, so read it first. The first run downloads Python (about 10 MB) from cdn.jsdelivr.net, then the packages the script imports; the script's output stays in your browser.</p>
+<p class="note" id="warn">The script runs in a background thread of this tab, with no access to the page, but it can use the network like any web page. It comes from the public research repository, so read it first. The first run downloads Python (about 10 MB) from cdn.jsdelivr.net, then the packages the script imports; the script's output stays in your browser.</p>
 <div class="toolbar"><button type="button" class="go" id="run">Run in my browser</button><button type="button" class="sm" id="stop" hidden>Stop</button><span class="meta" id="rstat" role="status"></span></div>
 <pre class="out" id="rout" aria-live="polite" hidden></pre>
 </div>
