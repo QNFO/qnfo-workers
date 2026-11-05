@@ -2053,7 +2053,14 @@ export async function today(env, deps) {
     email_mode: EMAIL_MODES.includes(st.cfg.email_mode) ? st.cfg.email_mode : "off",
     stale_reminders: await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'open' AND NOT " + FRESH_DUE_SQL).first().then((x) => (x ? Number(x.n) : 0)).catch(() => 0),
     tick_age_min: st.cfg.cmp_last_tick ? Math.round((Date.parse(st.nowIso) - Date.parse(st.cfg.cmp_last_tick)) / 60000) : null,
-    plan_preview: (() => { const p = planNudge(Object.assign({}, st, { pushReady: true })); return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason }; })(),
+    plan_preview: (() => {
+      const p = planNudge(Object.assign({}, st, { pushReady: true }));
+      if (p.skip && st.nextActions && st.nextActions.length > 0) {
+        // Force a useful push when there are open next actions.
+        return { kind: "cmp-action", reason: "next_action" };
+      }
+      return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason };
+    })(),
     agenda: await agenda(env, deps, st)
   };
   return tasteFilterToday(env, res);
