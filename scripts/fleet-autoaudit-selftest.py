@@ -461,5 +461,91 @@ check("the purge keeps the row this run advanced and a tombstone row refreshed w
 check("and purges an older row, an orphan, a stale tombstone and a row without a note", "older-sync" not in _left and "orphan" not in _left and "stub-stale" not in _left and "no-note" not in _left, _left)
 check("the purge keeps one placeholder and no LIKE pattern above 50 bytes", fa.PURGE.count("?") == 1 and "LIKE 'TOMBSTONE%'" in fa.PURGE, fa.PURGE)
 
+# FLEET-AUTOAUDIT-APPLY-REUSE-1 (agent_issues 100366): the --apply pass of a job whose audit, minutes old, listed no repo-ahead worker makes no second sweep;
+# anything that could make a deploy possible (a worker ahead, a narrow or old or missing state) still probes.
+import json as _json, time as _time
+_st = os.path.join(tempfile.mkdtemp(), "state.json")
+def _write(d, age_s=0):
+    with open(_st, "w", encoding="utf-8") as fh:
+        _json.dump(d, fh)
+    if age_s:
+        os.utime(_st, (_time.time() - age_s, _time.time() - age_s))
+_full = {"scope": "all", "_guard_rc": 0, "drift": [], "content_drift": [], "ahead": [], "sync_workers": [{"worker": "a", "version": "1"}]}
+_write(_full)
+check("apply reuse: a full audit of this job with nothing ahead is reused", fa.fresh_state_without_ahead(_st) is not None)
+_write(dict(_full, drift=[{"worker": "w", "repo": "1.0.0", "live": "1.0.1"}]))
+check("apply reuse: drift with no repo-ahead worker still means nothing to deploy", fa.fresh_state_without_ahead(_st) is not None)
+_write(dict(_full, ahead=[{"worker": "w", "repo": "1.0.1", "live": "1.0.0", "artifact": "w/worker.js"}]))
+check("apply reuse: a repo-ahead worker means a fresh probe before any deploy", fa.fresh_state_without_ahead(_st) is None)
+_write(dict(_full, scope="narrative"))
+check("apply reuse: a narrow audit is not reused", fa.fresh_state_without_ahead(_st) is None)
+_write({k: v for k, v in _full.items() if k != "_guard_rc"})
+check("apply reuse: a state the guard did not write is not reused", fa.fresh_state_without_ahead(_st) is None)
+_write(dict(_full, ahead=True))
+check("apply reuse: a flag where a list belongs reads as nothing ahead (AUDIT-CRASH-FIX-1 shape)", fa.fresh_state_without_ahead(_st) is not None)
+_write(_full, age_s=fa.APPLY_REUSE_MAX_S + 60)
+check("apply reuse: a state older than the window is not reused", fa.fresh_state_without_ahead(_st) is None)
+_write(_full, age_s=fa.APPLY_REUSE_MAX_S - 60)
+check("apply reuse: a state inside the window is reused", fa.fresh_state_without_ahead(_st) is not None)
+check("apply reuse: a missing state file is not reused", fa.fresh_state_without_ahead(_st + ".absent") is None)
+with open(_st, "w", encoding="utf-8") as fh:
+    fh.write("{not json")
+check("apply reuse: an unreadable state file is not reused", fa.fresh_state_without_ahead(_st) is None)
+
+def _run_main(argv, env_off=False):
+    """main() with a faked guard: returns (exit code, guard sweeps made)."""
+    sweeps = {"n": 0}
+    def fake_guard():
+        sweeps["n"] += 1
+        return dict(_full, _guard_rc=0)
+    saved = (fa.run_guard, fa.classify, fa.write_audit_rows, fa.purge_stale, fa.summary_md, fa.apply_ahead, fa.publish_issue, sys.argv, fa.ROOT, fa.STATE)
+    fa.run_guard, fa.classify = fake_guard, (lambda d: [])
+    fa.write_audit_rows, fa.purge_stale = (lambda rows: (0, [], "2026-11-05 00:00:00")), (lambda now: (0, None))
+    fa.summary_md, fa.apply_ahead = (lambda *a, **k: "body"), (lambda d=None: [])
+    fa.publish_issue = lambda body, has: ("none-needed", 0, None)
+    fa.ROOT, fa.STATE, sys.argv = tempfile.mkdtemp(), _st, ["fleet-autoaudit.py"] + argv
+    if env_off:
+        os.environ["FLEET_AUTOAUDIT_APPLY_REUSE"] = "off"
+    try:
+        try:
+            fa.main()
+            code = None
+        except SystemExit as e:
+            code = e.code
+    finally:
+        os.environ.pop("FLEET_AUTOAUDIT_APPLY_REUSE", None)
+        (fa.run_guard, fa.classify, fa.write_audit_rows, fa.purge_stale, fa.summary_md, fa.apply_ahead, fa.publish_issue, sys.argv, fa.ROOT, fa.STATE) = saved
+    return code, sweeps["n"]
+_write(_full)
+_r = _run_main(["--apply"])
+check("main --apply after a clean audit makes no sweep and exits 0", _r == (0, 0), _r)
+_write(_full)
+check("main --audit always sweeps", _run_main(["--audit"])[1] == 1)
+_write(_full)
+check("main --apply with FLEET_AUTOAUDIT_APPLY_REUSE=off sweeps as before", _run_main(["--apply"], env_off=True)[1] == 1)
+_write(dict(_full, ahead=[{"worker": "w", "repo": "1.0.1", "live": "1.0.0", "artifact": "w/worker.js"}]))
+check("main --apply with a worker ahead sweeps again before it deploys", _run_main(["--apply"])[1] == 1)
+
+# ---------------------------------------------------------------- HEALTH-READBACK-1 (agent_issues 1000982)
+# worker_live_audit.health_probed_at and health_error existed since migration 2026-11-01-one-probe-pass and nothing wrote them, so a version label in service_registry never had a read-back on record.
+_HN = "2026-11-05 01:20:52"
+check("health_stamp: a 200 that names a version is stamped", fa.health_stamp({"http": 200, "live": "1.2.3", "note": "SYNC"}, _HN) == (_HN, None))
+check("health_stamp: a 200 that names no version is not a read-back", fa.health_stamp({"http": 200, "live": None, "note": "NO_LIVE_VERSION"}, _HN) == (None, "/health answered 200 without a version (NO_LIVE_VERSION)"))
+check("health_stamp: a blank version is not a read-back", fa.health_stamp({"http": 200, "live": "  ", "note": "SYNC"}, _HN)[0] is None)
+check("health_stamp: a 404 is an error with its reason", fa.health_stamp({"http": 404, "live": None, "note": "NOT_DEPLOYED"}, _HN) == (None, "/health answered http 404 (NOT_DEPLOYED)"))
+check("health_stamp: a cron-only worker had no /health read", fa.health_stamp({"http": None, "live": None, "note": "CRON_ONLY"}, _HN) == (None, "no /health read (CRON_ONLY)"))
+check("health_stamp: a transport failure (http 0) is an error", fa.health_stamp({"http": 0, "live": None, "note": "LIVE_ERR"}, _HN) == (None, "/health answered http 0 (LIVE_ERR)"))
+_hdb = sqlite3.connect(":memory:")
+_hdb.execute("CREATE TABLE worker_live_audit (worker TEXT PRIMARY KEY, http INTEGER, live_version TEXT, registry_before TEXT, match INTEGER, note TEXT, probed_at TEXT, health_probed_at TEXT, health_error TEXT)")
+def _hput(row, now):
+    hp, he = fa.health_stamp(row, now)
+    _hdb.execute(fa.UPSERT, [row["worker"], row["http"], row["live"], row["before"], row["match"], row["note"], now, hp, he])
+_hput({"worker": "w", "http": 200, "live": "1.0.0", "before": "1.0.0", "match": 1, "note": "SYNC"}, "2026-11-05 01:00:00")
+check("the upsert writes the read-back stamp with the row", _hdb.execute("SELECT live_version, health_probed_at, health_error FROM worker_live_audit WHERE worker = 'w'").fetchone() == ("1.0.0", "2026-11-05 01:00:00", None))
+_hput({"worker": "w", "http": 0, "live": None, "before": None, "match": 0, "note": "LIVE_ERR"}, "2026-11-05 02:00:00")
+check("a later failed read clears the stamp and records why (a stamp never outlives its read)", _hdb.execute("SELECT health_probed_at, health_error FROM worker_live_audit WHERE worker = 'w'").fetchone() == (None, "/health answered http 0 (LIVE_ERR)"))
+_hput({"worker": "w", "http": 200, "live": "1.0.1", "before": "1.0.1", "match": 1, "note": "SYNC"}, "2026-11-05 03:00:00")
+check("a recovered read stamps again with the new version", _hdb.execute("SELECT live_version, health_probed_at, health_error FROM worker_live_audit WHERE worker = 'w'").fetchone() == ("1.0.1", "2026-11-05 03:00:00", None))
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)

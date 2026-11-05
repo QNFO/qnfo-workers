@@ -438,7 +438,10 @@ def social_posts(ctx):
         rows = ctx.d1("SELECT platform, content_preview FROM social_media_posts WHERE platform IN ('buffer-x','buffer-mastodon','buffer-linkedin','bluesky') "
                       "AND created_at > datetime('now', ?1) AND content_preview IS NOT NULL", ["-%d days" % SOCIAL_DAYS])
         posts = [("%s" % r["platform"], r["content_preview"] or "") for r in rows]
-        rows = ctx.d1("SELECT posts FROM social_threads WHERE status = 'posted' AND posted_at > datetime('now', ?1)", ["-%d days" % SOCIAL_DAYS])
+        # BP26-LABEL-LEDGER-1 (2026-11-05): a row THREAD-CLOSE-1 closed ("carried on linkedin,mastodon,twitter") was never posted as a thread; its `posts` is the unmarked
+        # draft, and what went out is already counted above from social_media_posts, marked on the wire. Counting the draft read a marked post as unmarked (thread 189,
+        # 2026-10-30, after the marker shipped) and would re-open the breach for 14 days on every carried thread. A thread posted to Bluesky stores the text as sent.
+        rows = ctx.d1("SELECT posts FROM social_threads WHERE status = 'posted' AND posted_at > datetime('now', ?1) AND COALESCE(notes, '') NOT LIKE 'THREAD-CLOSE-1: carried%'", ["-%d days" % SOCIAL_DAYS])
         for r in rows:
             try:
                 lst = json.loads(r["posts"] or "[]")
@@ -849,10 +852,11 @@ def selftest():
     c.executescript("""
 CREATE TABLE bp26_probe_results (id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT, metric TEXT, subject TEXT, ok INTEGER, detail TEXT, producer TEXT);
 CREATE TABLE social_media_posts (id TEXT, platform TEXT, content_preview TEXT, created_at TEXT);
-CREATE TABLE social_threads (id INTEGER, posts TEXT, status TEXT, posted_at TEXT);
+CREATE TABLE social_threads (id INTEGER, posts TEXT, status TEXT, posted_at TEXT, notes TEXT);
 INSERT INTO social_media_posts VALUES ('1', 'buffer-x', 'Forecast, 85%: x. Settles by 2026-12-31', datetime('now'));
 INSERT INTO social_media_posts VALUES ('2', 'buffer-mastodon', 'Forecast, 60%: y', datetime('now'));
-INSERT INTO social_threads VALUES (1, '["thread post one"]', 'posted', datetime('now'));
+INSERT INTO social_threads VALUES (1, '["thread post one"]', 'posted', datetime('now'), NULL);
+INSERT INTO social_threads VALUES (2, '["carried draft"]', 'posted', datetime('now'), 'THREAD-CLOSE-1: carried on linkedin,mastodon,twitter; selected');
 """)
 
     def d1(sql, params=None):
@@ -939,6 +943,9 @@ INSERT INTO q08_retractions VALUES ('retracted-piece');
     res7 = {r.metric: r for r in collect_web(P.Ctx(d1=d1, d1_db=d1_db, http=fake_http, root=td_root, now=win))}
     ok(any(sub == "fresh:q08.org" for sub, _v, _d in res7["slo_attainment_28d_min"].rows), "collect_web carries the freshness row on the SLO result")
     ok(len(res7["slo_attainment_28d_min"].rows) < 60, "the evidence rows stay under the framework's 60-row cap: %d" % len(res7["slo_attainment_28d_min"].rows))
+    # BP26-LABEL-LEDGER-1: a thread closed by THREAD-CLOSE-1 (carried on the channels, never posted as a thread) is not a post of its own
+    sp, sp_err = social_posts(P.Ctx(d1=d1, http=fake_http, root=td_root))
+    ok(sp_err is None and ("bluesky-thread", "thread post one") in sp and not any(t == "carried draft" for _s, t in sp), "a carried thread draft is not counted as a post, a thread posted on Bluesky is: %r %r" % (sp, sp_err))
     print("bp26_web selftest %s" % ("ok" if not fails else "FAILED %d" % len(fails)))
     return 1 if fails else 0
 
