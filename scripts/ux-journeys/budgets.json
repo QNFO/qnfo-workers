@@ -120,10 +120,36 @@
   "code-run-status": {
    "taps": 2,
    "typing": 0
+  },
+  "cmd-ask-streams": {
+   "taps": 1,
+   "typing": 1
+  },
+  "cmd-mic-allowed": {
+   "taps": 0,
+   "typing": 0
   }
  },
  "papers": {
   "paper-with-short": {
+   "taps": 0,
+   "typing": 0
+  }
+ },
+ "fleet-lee": {
+  "cmd-cf-zones": {
+   "taps": 1,
+   "typing": 1
+  },
+  "cmd-lee-ask": {
+   "taps": 1,
+   "typing": 1
+  },
+  "cmd-lee-chip": {
+   "taps": 1,
+   "typing": 0
+  },
+  "lee-health-live": {
    "taps": 0,
    "typing": 0
   }

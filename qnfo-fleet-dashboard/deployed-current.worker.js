@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.93.2";
+var VERSION = "1.95.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -12136,6 +12136,8 @@ var CMD_HELP = [
 "  tools [word]           every fleet tool: Cloudflare API, D1, R2, KV, GitHub, shell, containers, deploys",
 "  tool <name> {json}     run one, e.g. tool fleet_status {}",
 "  agent: <text>          one turn of the durable coding agent (8 tool rounds)",
+"  cf <zones|dns|workers|...>  Lee, the Cloudflare account reader: cf workers, cf zones, cf dns <zone>, cf routes <zone>, cf traffic <zone>, cf pages, cf stats, cf logs <script> (cf help)",
+"  lee: <question>        the same reads in plain English (read only; changes need the confirm buttons)",
 "  cfagent <request>      the Cloudflare Agents SDK agent (agents.qnfo.org): Code Mode over every fleet tool, MCP, schedules",
 "  cfagent! <request>     the same with the write scope: mutating tools, fleet issues, schedules, MCP connections (*)",
 "  cfagent runs | cfagent run <id> | cfagent tools | cfagent schedules | cfagent mcp",
@@ -12649,6 +12651,8 @@ function cmdFallback(c, err, local) {
 function cmdPlainFailure(err) {
   const tail = " Nothing was changed. Ask again; instant commands (status, queue, issues; type help) never need the model.";
   if (/^abandoned/i.test(String(err || ""))) return "Not answered: this request was cut off before the fleet saved an answer." + tail;
+  // RM-CMD-FAILURES-1: a CodeSession turn that failed names its own reason, not the AI model answer leg.
+  if (/^stream:/i.test(String(err || ""))) return "Not answered: the code session did not finish (" + String(err).replace(/^stream:\s*/i, "").slice(0, 160) + ")." + tail;
   return "Not answered: the AI model did not answer (" + cmdModelReason(err) + ")." + tail;
 }
 // IPATENT-USAGE-1 (2026-10-02, owner: "What are recent ipatent web queries?" -> connect it). iPatent keeps no search or
@@ -13305,8 +13309,11 @@ async function askRetry(env) {
 async function cmdSweep(env) {
   try {
     await cmdEnsure(env);
-    await env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error='abandoned: the worker stopped before answering' WHERE status='running' AND kind != 'agent' AND ts < datetime('now', '-3 minutes')").run();
+    // RM-CMD-FAILURES-1: a CodeSession stream turn is settled from the session (answered or failed with its own error) before any sweep can call it abandoned.
+    await cmdSettleStreams(env).catch(function() { return null; });
+    await env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error='abandoned: the worker stopped before answering' WHERE status='running' AND kind NOT IN ('agent', 'agent-stream') AND ts < datetime('now', '-3 minutes')").run();
     await env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error='abandoned: the agent run did not finish in 30 minutes' WHERE status='running' AND kind = 'agent' AND ts < datetime('now', '-30 minutes')").run();
+    await env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error='stream: the code session did not finish in 30 minutes' WHERE status='running' AND kind = 'agent-stream' AND ts < datetime('now', '-30 minutes')").run();
   } catch (e) {
   }
   try {
@@ -13480,6 +13487,92 @@ async function cmdCodeSessionFetch(env, path, body) {
     return j ? Object.assign({ http: r.status }, j) : { ok: false, http: r.status, error: "qnfo-agents HTTP " + r.status + ": " + conClip(text, 300) };
   } catch (e) { return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }; }
 }
+// RM-CMD-FAILURES-1: the stage of the command line a failed or fallen-back cmd_log row died in. Pure (kind, status, error in; a stage name out), so the
+// GET /api/cmd/failures answer, the docs inventory and the closing probe all use one reading. hand-off: a start call (CodeSession or ops-exec) was refused and the line
+// fell to the next path; ops-exec: the qnfo-ops agent run was lost or never finished; stream: a CodeSession turn failed or was never settled; model: the AI answer leg
+// timed out or was refused; worker-stopped: the invocation ended before it saved an answer; other: anything else (a defect in the worker itself).
+var CMD_STAGES = ["hand-off", "ops-exec", "stream", "model", "worker-stopped", "other"];
+function cmdFailureStage(kind, status, error) {
+  const k = String(kind || ""), e = String(error || "");
+  if (/^hand-off:/i.test(e)) return "hand-off";
+  if (k === "agent-stream" || /^stream:/i.test(e)) return "stream";
+  if (k === "agent" || /agent run (lost|failed)|did not finish in 30 minutes/i.test(e)) return "ops-exec";
+  if (/^abandoned: the worker stopped/i.test(e)) return "worker-stopped";
+  if (status === "fallback" || /timeout|router_timeout|\bhttp \d{3}\b|model/i.test(e)) return "model";
+  return "other";
+}
+// Folds grouped cmd_log failure rows ({kind, status, err, n, o, last_ts}) into one entry per stage, most failures first.
+function cmdFailureSummary(groups, turns) {
+  const by = {};
+  let failed = 0;
+  (groups || []).forEach(function(g) {
+    const stage = cmdFailureStage(g.kind, g.status, g.err);
+    const n = Number(g.n) || 0;
+    failed += n;
+    const s = by[stage] || (by[stage] = { stage: stage, n: 0, owner_n: 0, last_ts: null, kinds: {}, sample: null });
+    s.n += n;
+    s.owner_n += Number(g.o) || 0;
+    s.kinds[String(g.kind || "?")] = (s.kinds[String(g.kind || "?")] || 0) + n;
+    if (!s.last_ts || String(g.last_ts || "") > s.last_ts) { s.last_ts = String(g.last_ts || ""); s.sample = String(g.err || "").slice(0, 120) || null; }
+  });
+  const list = Object.keys(by).map(function(k) { return by[k]; }).sort(function(a, b) { return b.n - a.n; });
+  const t = Number(turns) || 0;
+  return { turns: t, failed: failed, rate: t ? Math.round(failed / t * 1e4) / 1e4 : null, by_stage: list };
+}
+// RM-CMD-FAILURES-1: a hand-off that was refused is a failing stage even when the next path answers, so it gets its own row (no prompt text is stored).
+async function cmdLogHandoff(env, where, error) {
+  try {
+    await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, error, owner, done_ms) VALUES (?1, '', 'handoff', 'fallback', ?2, 1, ?3)").bind("cmd-" + cmdRandHex(10), ("hand-off: " + where + ": " + String(error || "no reason given")).slice(0, 300), Date.now()).run();
+  } catch (e) {
+  }
+}
+// A CodeSession stream turn is a cmd_log row of kind agent-stream whose answer, while it runs, is the link "session:<id> turn:<n>". Nothing used to settle it, so the
+// 3-minute sweep marked every stream turn "abandoned" (2 of 2 owner stream turns on 2026-11-02 and 11-04) although qnfo-agents had finished them (cf_agent_session_usage
+// rows). The row is now settled from the session itself: answered with the turn's answer, failed with its error, or left running while the turn is.
+var CMD_STREAM_LINK_RE = /^session:(run_[a-z0-9_]{8,60}) turn:(\d{1,4})$/;
+async function cmdCodeSessionGet(env, path) {
+  const svc = env && env.SVC_QNFO_AGENTS;
+  if (!svc || typeof svc.fetch !== "function") return { ok: false, error: "no service binding to qnfo-agents (SVC_QNFO_AGENTS)" };
+  try {
+    const r = await svc.fetch("https://agents.qnfo.org" + path, { method: "GET", signal: AbortSignal.timeout(8e3) });
+    const text = await r.text();
+    let j = null;
+    try { j = JSON.parse(text); } catch (e) {} // standards-ok: a non-JSON answer is reported by its HTTP status below
+    return j ? Object.assign({ http: r.status }, j) : { ok: false, http: r.status, error: "qnfo-agents HTTP " + r.status };
+  } catch (e) { return { ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 200) }; }
+}
+async function cmdSettleStreams(env, onlyId) {
+  const out = { settled: 0, running: 0 };
+  let rows = [];
+  try {
+    // the primary, not a read replica: a row inserted a moment ago must be seen
+    const q = onlyId ? env.AUDIT.prepare("SELECT id, answer, ts FROM cmd_log WHERE id = ?1 AND kind = 'agent-stream' AND status = 'running'").bind(onlyId) : env.AUDIT.prepare("SELECT id, answer, ts FROM cmd_log WHERE kind = 'agent-stream' AND status = 'running' ORDER BY ts LIMIT 5");
+    rows = (await q.all()).results || [];
+  } catch (e) {
+    return out;
+  }
+  for (const row of rows) {
+    const m = CMD_STREAM_LINK_RE.exec(String(row.answer || ""));
+    if (!m) continue;
+    const r = await cmdCodeSessionGet(env, "/code-sessions/" + m[1]);
+    const turn = r.ok && r.session && Array.isArray(r.session.turns) ? r.session.turns.filter(function(t) { return Number(t.turn) === Number(m[2]); })[0] : null;
+    try {
+      if (turn && turn.status === "done") {
+        await env.AUDIT.prepare("UPDATE cmd_log SET status='answered', answer=?1, model=?2, done_ms=?3 WHERE id=?4 AND status='running'").bind(String(turn.answer || "(the code session returned no text)").slice(0, 16e3), String(turn.model || "code-session").slice(0, 80), Number(turn.finished_ms) || Date.now(), row.id).run();
+        out.settled++;
+      } else if (turn && turn.status === "failed") {
+        await env.AUDIT.prepare("UPDATE cmd_log SET status='failed', answer=NULL, error=?1, done_ms=?2 WHERE id=?3 AND status='running'").bind(("stream: " + String(turn.error || "the code session turn failed")).slice(0, 300), Number(turn.finished_ms) || Date.now(), row.id).run();
+        out.settled++;
+      } else if (!turn && r.ok === false && /no such code session/i.test(String(r.error || ""))) {
+        await env.AUDIT.prepare("UPDATE cmd_log SET status='failed', answer=NULL, error='stream: the code session is gone (no such code session)', done_ms=?1 WHERE id=?2 AND status='running'").bind(Date.now(), row.id).run();
+        out.settled++;
+      } else out.running++;
+    } catch (e) {
+      out.running++;
+    }
+  }
+  return out;
+}
 // CMD-VOICE-1: speech to text for the command line. The body is the raw recording (webm, ogg, mp4, wav or mp3, at most 8 MB);
 // the answer is {ok, text, model, ms}. Owner session or loop token only (it spends Workers AI neurons). The first model that
 // answers wins, so a retired model id costs one fallback, not the feature. No vendor SDK: the Workers AI binding only.
@@ -13531,8 +13624,33 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     const after = Math.max(0, Number(new URL(request.url).searchParams.get("after")) || Number(request.headers.get("last-event-id")) || 0);
     try {
       const r = await svc.fetch("https://agents.qnfo.org/code-sessions/" + streamMatch[1] + "/events?after=" + after, { method: "GET" });
+      // RM-CMD-FAILURES-1: when the stream ends, the cmd_log row of the turn is settled from the session (the page only reads the stream; nothing else wrote the answer back).
+      if (r.body && typeof r.body.tee === "function" && ctx && typeof ctx.waitUntil === "function") {
+        const halves = r.body.tee();
+        ctx.waitUntil((async function() {
+          try {
+            const rd = halves[1].getReader();
+            for (;;) { const x = await rd.read(); if (x.done) break; }
+          } catch (e) { console.error(JSON.stringify({ worker: NAME, where: "cmd-stream-drain", error: String(e && e.message || e).slice(0, 160) })); }
+          await cmdSettleStreams(env).catch(function() { return null; });
+        })());
+        return new Response(halves[0], { status: r.status, headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
+      }
       return new Response(r.body, { status: r.status, headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
     } catch (e) { return ownerJson({ ok: false, error: "qnfo-agents: " + String(e && e.message || e).slice(0, 300) }, 502); }
+  }
+  // RM-CMD-FAILURES-1: where the command line fails, by stage. Aggregates only (no prompt, answer or visitor text), open like the other fleet reads.
+  if (request.method === "GET" && path === "/api/cmd/failures") {
+    const days = Math.max(1, Math.min(365, parseInt(new URL(request.url).searchParams.get("days"), 10) || 30));
+    const since = "-" + days + " days";
+    try {
+      const groups = await d1all(env.AUDIT, "SELECT kind, status, substr(error, 1, 120) AS err, COUNT(*) AS n, SUM(CASE WHEN owner = 1 THEN 1 ELSE 0 END) AS o, MAX(ts) AS last_ts FROM cmd_log WHERE status IN ('failed', 'fallback') AND ts >= datetime('now', ?1) GROUP BY kind, status, substr(error, 1, 120) ORDER BY n DESC LIMIT 80", [since]);
+      const tot = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cmd_log WHERE ts >= datetime('now', ?1)", [since]);
+      const sum = cmdFailureSummary(groups, tot.length ? tot[0].n : 0);
+      return ownerJson({ ok: true, days: days, stages: CMD_STAGES, turns: sum.turns, failed: sum.failed, failure_rate: sum.rate, by_stage: sum.by_stage, note: "Counts of failed and fallback rows in cmd_log; model is the AI answer leg falling back to stored data, the other stages are defects of the command line itself." });
+    } catch (e) {
+      return ownerJson({ ok: false, error: "cmd_log could not be read: " + String(e && e.message || e).slice(0, 160) }, 503);
+    }
   }
   if (request.method === "GET" && path.indexOf("/api/cmd/job/") === 0) {
     const id = path.slice("/api/cmd/job/".length);
@@ -13544,6 +13662,12 @@ async function cmdRoutes(request, env, ctx, path, owner) {
       const ag = await cmdAgentPoll(env, id);
       if (ag.status === "running") return ownerJson({ ok: true, status: "running", agent: true, progress: ag.progress, holder });
       row.status = ag.status; row.answer = ag.answer || null; row.error = ag.error || null; row.model = "ops-agent";
+    } else if (row.kind === "agent-stream" && row.status === "running") {
+      // RM-CMD-FAILURES-1: a CodeSession turn started from a client that does not read the stream (the terminal client) is settled by this poll.
+      await cmdSettleStreams(env, id);
+      const again = await env.AUDIT.prepare("SELECT status, answer, actions_json, model, error, ts, kind FROM cmd_log WHERE id = ?1").bind(id).first();
+      if (again && again.status === "running") return ownerJson({ ok: true, status: "running", agent: true, progress: "the code session is working", holder });
+      if (again) Object.assign(row, again);
     } else if (row.status === "running" && Date.parse(String(row.ts).replace(" ", "T") + "Z") < Date.now() - CMD_RUNNING_STALE_MS) {
       await cmdSweep(env);
       return ownerJson({ ok: false, status: "failed", error: cmdPlainFailure("abandoned") });
@@ -13555,6 +13679,8 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     }
     return ownerJson({ ok: row.status !== "failed", status: row.status, answer: row.answer || null, actions, model: row.model || null, error: row.status === "failed" ? cmdPlainFailure(row.error) : null, holder });
   }
+  // RM-LEE-CMD-1: can this worker's token reach the account, per area (booleans and statuses only; the closing probe of "production serves Lee").
+  if (request.method === "GET" && path === "/api/cmd/lee/health") return ownerJson(await leeHealth(env));
   if (request.method === "GET" && path === "/api/cmd/whoami") return ownerJson({ holder, session: !!owner.session, stepup: !!(owner.session && owner.session.stepup) || !!owner.loop, code_to: cmdMaskedTo() });
   if (request.method === "GET" && path === "/api/cmd/tools") {
     const tl = await cmdToolList(env);
@@ -13667,6 +13793,12 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     return ownerJson({ ok: !!aj.ok, kind: "answer", text: aj.ok ? String(aj.reply || "(empty reply)") + "\n\n\u00b7 " + (aj.turns || 0) + " tool rounds \u00b7 " + (ar.ms || 0) + "ms" : "agent failed: " + (ar.error || aj.error || ("http " + ar.http)), holder }, aj.ok ? 200 : 502);
   }
 
+  // RM-LEE-CMD-1: Lee, the Cloudflare-account assistant: the deterministic "cf <verb>" reads and "lee: <question>". Owner session only, read tools only; ops_config cmd_lee = off switches it off.
+  const lp = leeParse(text);
+  if (lp) {
+    const lr = await leeRoute(env, ctx, holder, text, lp, from);
+    return ownerJson(lr.body, lr.status);
+  }
   if (/^(i-?patent|patent)( usage| queries| searches| metrics| stats)?\??$/i.test(text.trim())) return ownerJson({ ok: true, kind: "answer", text: ipatentText(await ipatentUsage(env)), links: [{ label: "iPatent metrics JSON", href: "https://ipatent.qnfo.org/api/metrics" }], holder });
   // DASH-OWNER-ACTIONS-1: three lines that used to land in the wrong path. A bare "retry" asks the last unanswered question
   // again (here, where the text can be replaced); a bare six-digit line is a sign-in code only while a code is waiting (an issue
@@ -13745,12 +13877,15 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     const sessionPath = existingSession ? "/code-sessions/" + existingSession + "/turns" : "/code-sessions";
     const session = await cmdCodeSessionFetch(env, sessionPath, { text: text });
     if (session.ok && session.session_id) {
+      // RM-CMD-FAILURES-1: the row carries the link to its session ("session:<id> turn:<n>" until it is settled) and its id goes to the client, which may poll /api/cmd/job/<id>.
+      const logId = "cmd-" + cmdRandHex(10);
       try {
-        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, model) VALUES (?1, ?2, ?3, 'agent-stream', 'running', 1, 'deepseek-v4-flash-wa')").bind("cmd-" + cmdRandHex(10), text, from || null).run();
+        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, answer, owner, model) VALUES (?1, ?2, ?3, 'agent-stream', 'running', ?4, 1, 'deepseek-v4-flash-wa')").bind(logId, text, from || null, "session:" + session.session_id + " turn:" + (Number(session.turn) || 1)).run();
       } catch (e) {}
-      return ownerJson({ ok: true, kind: "stream", session_id: session.session_id, turn: session.turn, holder }, 202);
+      return ownerJson({ ok: true, kind: "stream", id: logId, session_id: session.session_id, turn: session.turn, holder }, 202);
     }
     console.error(JSON.stringify({ worker: NAME, where: "cmd-code-session-start", http: session.http || 0, error: String(session.error || "").slice(0, 200) }));
+    await cmdLogHandoff(env, "code-session start", "http " + (session.http || 0) + " " + String(session.error || "").slice(0, 160));
     // Keep the existing qnfo-ops run as an independent fallback if CodeSession is unavailable.
     const aid = "cmd-" + cmdRandHex(10);
     const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", text: text, sid: "console-" + new Date().toISOString().slice(0, 10), run_id: aid, max_iters: 16 }) });
@@ -13759,6 +13894,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
       return ownerJson({ ok: true, kind: "pending", id: aid, agent: true, holder }, 202);
     }
     console.error(JSON.stringify({ worker: NAME, where: "cmd-agent-start", http: st.http, error: String(st.error || (st.json && st.json.error) || "").slice(0, 200) }));
+    await cmdLogHandoff(env, "ops-exec start", "http " + (st.http || 0) + " " + String(st.error || (st.json && st.json.error) || "").slice(0, 160));
   }
   // Natural language: capped AI in the background; the browser polls /api/cmd/job/<id>.
   const cap =Math.max(1, Math.min(200, parseInt(env.OWNER_PROMPTS_DAILY_CAP || OWNER_PROMPT_CAP_DEFAULT, 10) || OWNER_PROMPT_CAP_DEFAULT));
@@ -13782,6 +13918,288 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     return env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error=?1 WHERE id=?2").bind(String(e && e.message || e).slice(0, 200), id).run();
   }));
   return ownerJson({ ok: true, kind: "pending", id, holder, quick: quick && quick.matched ? { text: quick.text, actions: quick.actions } : void 0 }, 202);
+}
+// ==== RM-LEE-CMD-1: Lee, the Cloudflare-account assistant, in the command line (GitHub 5482; owner correction: Lee belongs in fleet.qnfo.org/cmd, not on its own host) ====
+// Lee (rwnq8/qnfo-fleet-dashboard, live as lee.qnfo.org) answers questions about the Cloudflare account: workers and their versions, zones, DNS records, worker routes, Pages, traffic and worker
+// analytics, logs. This is its read half in the fleet's own command line, on this worker's CF_TOKEN and Workers AI binding (no second secret, no new binding). The deterministic verbs
+// `cf zones`, `cf dns <zone>` ... answer with no model; `lee <question>` runs Lee's tool loop (read tools only) as a polled job (cmd_log kind lee). Lee's write tools (rollback, DNS and route
+// changes, Pages create) are NOT ported: a model that can delete a DNS record on a sentence is the wrong shape for the fleet, so they come back as confirm buttons behind a fresh code
+// (ROADMAP-1 row filed with this change). Flag: ops_config cmd_lee ('off' switches Lee off without a deploy; any other value or no row is on). Owner session only.
+var LEE_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+var LEE_MAX_STEPS = 5;
+var LEE_BUDGET_MS = 40e3;
+var LEE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/;
+var LEE_ZONE_RE = /^(?:[0-9a-f]{32}|[A-Za-z0-9][A-Za-z0-9.-]{1,100}\.[A-Za-z]{2,24})$/;
+var LEE_SYSTEM = "You are Lee, the Cloudflare account assistant inside the QNFO fleet command line. You read the Cloudflare account \"quniverse\" (Workers, zones, DNS records, Worker routes, Pages projects, traffic and worker analytics, logs) with the tools provided. " +
+  "Be concise and plain: summarise tool results, do not dump JSON. Call out spikes, error rates and anomalies in analytics rather than listing rows. When listing versions give number, id and date. " +
+  "You can only read. If asked to change anything (roll back a Worker, create, edit or delete a DNS record or a route, create a Pages project), say it is not available in this assistant and that changes are made with the fleet's confirm buttons behind an email code; never claim you did it. " +
+  "If a tool returns an error, say what it means and how to fix it (a 403 names a missing token permission). Real production resources: state only what the tools returned.";
+var LEE_TOOL_DEFS = [
+  ["list_workers", "List all Workers scripts in the account.", {}],
+  ["get_worker", "Settings of one Worker script.", { script: "Worker script name" }, ["script"]],
+  ["list_worker_versions", "Recent versions of a Worker script (number, id, created date).", { script: "Worker script name" }, ["script"]],
+  ["list_zones", "List all DNS zones in the account.", {}],
+  ["list_dns_records", "DNS records of a zone (zone name or id).", { zone: "Zone name such as qnfo.org, or zone id" }, ["zone"]],
+  ["list_worker_routes", "Worker routes of a zone (pattern, script, route id).", { zone: "Zone name or id" }, ["zone"]],
+  ["list_pages_projects", "List all Pages projects.", {}],
+  ["list_pages_deployments", "Recent deployments of a Pages project.", { name: "Pages project name" }, ["name"]],
+  ["get_zone_analytics", "HTTP traffic per day for a zone (requests, cached, threats, page views, bytes).", { zone: "Zone name or id", days: "Days back, default 14, max 60" }, ["zone"]],
+  ["get_worker_analytics", "Worker invocations by script and status (requests, errors, CPU, wall time) over the last hours; optional script filter.", { script: "Worker script name (optional)", hours: "Hours back, default 24, max 168" }],
+  ["get_worker_logs", "Recent logs of a Worker (Workers Observability must be on for it).", { script: "Worker script name", minutes: "Minutes back, default 60, max 10080", limit: "Max entries, default 50, max 100" }, ["script"]]
+].map(function(d) {
+  const props = {};
+  Object.keys(d[2]).forEach(function(k) { props[k] = { type: /^(days|hours|minutes|limit)$/.test(k) ? "number" : "string", description: d[2][k] }; });
+  return { type: "function", function: { name: d[0], description: d[1], parameters: { type: "object", properties: props, required: d[3] || [] } } };
+});
+// The CF token permission each tool needs, said when the API answers 401 or 403 so a missing scope reads as a scope, not as a broken tool.
+var LEE_NEEDS = { list_workers: "Workers Scripts Read", get_worker: "Workers Scripts Read", list_worker_versions: "Workers Scripts Read", list_zones: "Zone Read", list_dns_records: "DNS Read", list_worker_routes: "Workers Routes Read", list_pages_projects: "Pages Read", list_pages_deployments: "Pages Read", get_zone_analytics: "Analytics Read", get_worker_analytics: "Account Analytics Read", get_worker_logs: "Workers Observability Read" };
+async function leeEnabled(env) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'cmd_lee'").first();
+    return !(r && String(r.value == null ? "" : r.value).trim().toLowerCase() === "off");
+  } catch (e) {
+    return true;
+  }
+}
+async function leeCf(env, path, method, body) {
+  if (!env.CF_TOKEN) return { ok: false, error: "CF_TOKEN is not set on this worker, so Lee cannot read the account" };
+  try {
+    const r = await fetch("https://api.cloudflare.com/client/v4" + path, { method: method || "GET", headers: { Authorization: "Bearer " + env.CF_TOKEN, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(9e3) });
+    let j = null;
+    try { j = await r.json(); } catch (e) {} // standards-ok: a non-JSON answer is reported by its HTTP status below
+    const errs = j && Array.isArray(j.errors) ? j.errors.map(function(x) { return String(x && x.message || x).slice(0, 160); }).filter(Boolean) : [];
+    if (j && j.success === false || !r.ok) return { ok: false, status: r.status, error: "Cloudflare API HTTP " + r.status + (errs.length ? ": " + errs.join("; ") : ""), denied: r.status === 401 || r.status === 403 };
+    return { ok: true, status: r.status, result: j && j.result !== undefined ? j.result : j };
+  } catch (e) {
+    return { ok: false, error: "Cloudflare API unreachable: " + String(e && e.message || e).slice(0, 120) };
+  }
+}
+async function leeGraphql(env, query, variables) {
+  if (!env.CF_TOKEN) return { ok: false, error: "CF_TOKEN is not set on this worker, so Lee cannot read the account" };
+  try {
+    const r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { Authorization: "Bearer " + env.CF_TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ query: query, variables: variables }), signal: AbortSignal.timeout(12e3) });
+    const j = await r.json().catch(function() { return null; });
+    if (!r.ok || !j || j.errors) return { ok: false, status: r.status, denied: r.status === 401 || r.status === 403, error: "Cloudflare GraphQL HTTP " + r.status + (j && j.errors ? ": " + j.errors.map(function(x) { return String(x && x.message || x).slice(0, 140); }).join("; ") : "") };
+    return { ok: true, data: j.data };
+  } catch (e) {
+    return { ok: false, error: "Cloudflare GraphQL unreachable: " + String(e && e.message || e).slice(0, 120) };
+  }
+}
+async function leeZoneId(env, zone) {
+  const z = String(zone || "").trim().toLowerCase();
+  if (!LEE_ZONE_RE.test(z)) return { error: "zone must be a domain name such as qnfo.org or a 32-character zone id" };
+  if (/^[0-9a-f]{32}$/.test(z)) return { id: z };
+  const r = await leeCf(env, "/zones?name=" + encodeURIComponent(z) + "&per_page=1");
+  if (!r.ok) return { error: r.error, denied: r.denied };
+  const hit = Array.isArray(r.result) ? r.result[0] : null;
+  return hit && hit.id ? { id: hit.id } : { error: "no zone named " + z + " in the account" };
+}
+function leeNum(v, def, max) {
+  const n = Math.floor(Number(v));
+  return Math.max(1, Math.min(max, Number.isFinite(n) && n > 0 ? n : def));
+}
+// One read tool: {ok, rows|data} or {ok:false, error, hint}. Arguments are validated; nothing here can write (every call is a GET, or a read-only GraphQL or telemetry query).
+async function leeTool(env, name, a) {
+  a = a && typeof a === "object" ? a : {};
+  const fail = function(r) {
+    return { ok: false, error: r.error, hint: r.denied ? "the Cloudflare token of this worker lacks the " + (LEE_NEEDS[name] || "needed") + " permission" : undefined };
+  };
+  const script = String(a.script || "").trim();
+  const needScript = function() { return LEE_NAME_RE.test(script) ? null : { ok: false, error: "script must be a Worker script name (letters, digits, - and _)" }; };
+  if (name === "list_workers") {
+    const r = await leeCf(env, "/accounts/" + ACCOUNT + "/workers/scripts?per_page=100");
+    return r.ok ? { ok: true, rows: (r.result || []).slice(0, 100).map(function(w) { return { script: w.id, modified: w.modified_on }; }) } : fail(r);
+  }
+  if (name === "get_worker") {
+    const bad = needScript();
+    if (bad) return bad;
+    const r = await leeCf(env, "/accounts/" + ACCOUNT + "/workers/scripts/" + script + "/settings");
+    return r.ok ? { ok: true, data: r.result } : fail(r);
+  }
+  if (name === "list_worker_versions") {
+    const bad = needScript();
+    if (bad) return bad;
+    const r = await leeCf(env, "/accounts/" + ACCOUNT + "/workers/scripts/" + script + "/versions?per_page=20");
+    const items = r.ok ? (Array.isArray(r.result) ? r.result : r.result && r.result.items || []) : [];
+    return r.ok ? { ok: true, rows: items.slice(0, 20).map(function(v) { return { number: v.number, id: v.id, created: v.metadata && v.metadata.created_on || v.created_on, source: v.metadata && v.metadata.source }; }) } : fail(r);
+  }
+  if (name === "list_zones") {
+    const r = await leeCf(env, "/zones?per_page=50");
+    return r.ok ? { ok: true, rows: (r.result || []).slice(0, 50).map(function(z) { return { zone: z.name, id: z.id, status: z.status }; }) } : fail(r);
+  }
+  if (name === "list_dns_records" || name === "list_worker_routes") {
+    const z = await leeZoneId(env, a.zone);
+    if (z.error) return { ok: false, error: z.error, hint: z.denied ? "the Cloudflare token of this worker lacks the Zone Read permission" : undefined };
+    const r = await leeCf(env, "/zones/" + z.id + (name === "list_dns_records" ? "/dns_records?per_page=100" : "/workers/routes"));
+    if (!r.ok) return fail(r);
+    const rows = (r.result || []).slice(0, 100).map(function(x) {
+      return name === "list_dns_records" ? { type: x.type, name: x.name, content: String(x.content || "").slice(0, 120), proxied: x.proxied, ttl: x.ttl, id: x.id } : { pattern: x.pattern, script: x.script, id: x.id };
+    });
+    return { ok: true, rows: rows };
+  }
+  if (name === "list_pages_projects") {
+    const r = await leeCf(env, "/accounts/" + ACCOUNT + "/pages/projects");
+    return r.ok ? { ok: true, rows: (r.result || []).slice(0, 50).map(function(p) { return { project: p.name, branch: p.production_branch, domains: (p.domains || []).slice(0, 3).join(","), latest: p.latest_deployment && p.latest_deployment.created_on }; }) } : fail(r);
+  }
+  if (name === "list_pages_deployments") {
+    const pn = String(a.name || "").trim();
+    if (!LEE_NAME_RE.test(pn)) return { ok: false, error: "name must be a Pages project name" };
+    const r = await leeCf(env, "/accounts/" + ACCOUNT + "/pages/projects/" + pn + "/deployments");
+    return r.ok ? { ok: true, rows: (r.result || []).slice(0, 10).map(function(d) { return { id: d.id, environment: d.environment, created: d.created_on, stage: d.latest_stage && (d.latest_stage.name + ":" + d.latest_stage.status) }; }) } : fail(r);
+  }
+  if (name === "get_zone_analytics") {
+    const z = await leeZoneId(env, a.zone);
+    if (z.error) return { ok: false, error: z.error };
+    const days = leeNum(a.days, 14, 60);
+    const g = await leeGraphql(env, "query($zoneTag:String!,$start:Date!,$end:Date!){viewer{zones(filter:{zoneTag:$zoneTag}){httpRequests1dGroups(filter:{date_geq:$start,date_leq:$end},limit:60,orderBy:[date_ASC]){sum{requests cachedRequests threats pageViews bytes} dimensions{date}}}}}", { zoneTag: z.id, start: new Date(Date.now() - days * 864e5).toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) });
+    if (!g.ok) return fail(g);
+    const groups = (((g.data || {}).viewer || {}).zones || [])[0];
+    return { ok: true, rows: ((groups && groups.httpRequests1dGroups) || []).map(function(x) { return { date: x.dimensions.date, requests: x.sum.requests, cached: x.sum.cachedRequests, threats: x.sum.threats, page_views: x.sum.pageViews, bytes: x.sum.bytes }; }) };
+  }
+  if (name === "get_worker_analytics") {
+    const hours = leeNum(a.hours, 24, 168);
+    if (script && !LEE_NAME_RE.test(script)) return { ok: false, error: "script must be a Worker script name (letters, digits, - and _)" };
+    const g = await leeGraphql(env, "query($a:String!,$s:Time!,$e:Time!" + (script ? ",$n:String!" : "") + "){viewer{accounts(filter:{accountTag:$a}){workersInvocationsAdaptive(filter:{datetime_geq:$s,datetime_leq:$e" + (script ? ",scriptName:$n" : "") + "},limit:1000){sum{requests errors cpuTime wallTime} dimensions{scriptName status}}}}}", Object.assign({ a: ACCOUNT, s: new Date(Date.now() - hours * 36e5).toISOString(), e: new Date().toISOString() }, script ? { n: script } : {}));
+    if (!g.ok) return fail(g);
+    const acc = (((g.data || {}).viewer || {}).accounts || [])[0];
+    return { ok: true, rows: ((acc && acc.workersInvocationsAdaptive) || []).slice(0, 200).map(function(x) { return { script: x.dimensions.scriptName, status: x.dimensions.status, requests: x.sum.requests, errors: x.sum.errors, cpu_ms: Math.round((x.sum.cpuTime || 0) / 1000), wall_ms: x.sum.wallTime }; }) };
+  }
+  if (name === "get_worker_logs") {
+    const bad = needScript();
+    if (bad) return bad;
+    const minutes = leeNum(a.minutes, 60, 10080), limit = leeNum(a.limit, 50, 100), now = Date.now();
+    const r = await leeCf(env, "/accounts/" + ACCOUNT + "/workers/observability/telemetry/query", "POST", { queryId: "workers-logs", timeframe: { from: now - minutes * 6e4, to: now }, parameters: { datasets: ["cloudflare-workers"], filters: [{ key: "$metadata.service", operation: "eq", type: "string", value: script }], calculations: [], groupBys: [], havings: [], orderBys: [{ key: "$metadata.timestamp", order: "desc" }], limit: limit } });
+    if (!r.ok) return Object.assign(fail(r), { hint: r.denied ? "the Cloudflare token lacks Workers Observability Read" : "Workers Logs must be enabled on that Worker (observability.logs.enabled)" });
+    return { ok: true, data: r.result };
+  }
+  return { ok: false, error: "unknown tool: " + String(name).slice(0, 40) + " (Lee reads only; changes are not available here)" };
+}
+// One line per row, "key value" pairs, for the verbs that answer without the model.
+function leeText(name, r) {
+  if (!r.ok) return name + " failed: " + r.error + (r.hint ? " (" + r.hint + ")" : "");
+  if (r.rows) {
+    if (!r.rows.length) return name + ": nothing found.";
+    return name + " (" + r.rows.length + "):\n" + r.rows.slice(0, 60).map(function(x) {
+      return "  " + Object.keys(x).filter(function(k) { return x[k] != null && x[k] !== ""; }).map(function(k) { return k + " " + x[k]; }).join(" | ");
+    }).join("\n") + (r.rows.length > 60 ? "\n  ... " + (r.rows.length - 60) + " more" : "");
+  }
+  let s = "";
+  try { s = JSON.stringify(r.data, null, 1); } catch (e) { s = String(r.data); }
+  return name + ":\n" + (s.length > 3500 ? s.slice(0, 3500) + "\n... (" + (s.length - 3500) + " more characters)" : s);
+}
+// The deterministic verbs and the model entry. null: not a Lee line.
+var LEE_VERBS = { workers: ["list_workers"], worker: ["get_worker", "script"], versions: ["list_worker_versions", "script"], zones: ["list_zones"], dns: ["list_dns_records", "zone"], routes: ["list_worker_routes", "zone"], pages: ["list_pages_projects"], deployments: ["list_pages_deployments", "name"], traffic: ["get_zone_analytics", "zone", "days"], stats: ["get_worker_analytics", "script", "hours"], logs: ["get_worker_logs", "script", "minutes"] };
+var LEE_HELP = "Lee reads the Cloudflare account (owner session; read only):\n  cf workers | cf worker <script> | cf versions <script> | cf logs <script> [minutes]\n  cf zones | cf dns <zone> | cf routes <zone> | cf traffic <zone> [days]\n  cf pages | cf deployments <project> | cf stats [script] [hours]\n  lee: <question>   plain English, Lee picks the reads (up to " + LEE_MAX_STEPS + " tool calls)\nChanges (roll back a Worker, edit DNS or routes) are not available here yet; they need the confirm buttons behind an email code.";
+function leeParse(text) {
+  const t = String(text || "").trim();
+  let m = /^cf\s+([a-z]+)(?:\s+([\s\S]*))?$/i.exec(t);
+  if (m) {
+    const verb = m[1].toLowerCase();
+    if (verb === "help") return { help: true };
+    const spec = LEE_VERBS[verb];
+    if (!spec) return null; // "cf" followed by a word that is not a Lee verb stays an ordinary line
+    const parts = String(m[2] || "").trim().split(/\s+/).filter(Boolean);
+    const args = {};
+    spec.slice(1).forEach(function(k, i) { if (parts[i] !== undefined) args[k] = parts[i]; });
+    return { tool: spec[0], args: args };
+  }
+  // "lee:" with the colon is deliberate, as "agent:" is: a line that starts with the name Lee ("Lee is not a person") must stay an ordinary question.
+  m = /^(?:ask\s+)?lee\s*:\s*([\s\S]*)$/i.exec(t);
+  if (m) return m[1].trim() && !/^(help|\?)$/i.test(m[1].trim()) ? { ask: m[1].trim().slice(0, 1500) } : { help: true };
+  return /^lee$/i.test(t) ? { help: true } : null;
+}
+function leeToolCalls(c) {
+  if (Array.isArray(c.tool_calls) && c.tool_calls.length) return c.tool_calls;
+  const msg = c.choices && c.choices[0] && c.choices[0].message;
+  return msg && Array.isArray(msg.tool_calls) && msg.tool_calls.length ? msg.tool_calls : null;
+}
+function leeReply(c) {
+  if (typeof c === "string") return c;
+  if (c && typeof c.response === "string") return c.response;
+  const msg = c && c.choices && c.choices[0] && c.choices[0].message;
+  return msg && typeof msg.content === "string" ? msg.content : "";
+}
+function leeCallArgs(tc) {
+  const a = tc.arguments != null ? tc.arguments : tc.function && tc.function.arguments;
+  if (typeof a === "string") {
+    try { return JSON.parse(a); } catch (e) { return {}; }
+  }
+  return a && typeof a === "object" ? a : {};
+}
+// Lee's tool loop (read tools only). Returns {ok, text, steps} or {ok:false, error, steps}; the error names the model leg so the failure stage is the model, not the line.
+async function leeRun(env, question, budgetMs) {
+  const steps = [];
+  if (!env.AI || typeof env.AI.run !== "function") return { ok: false, error: "model: no Workers AI binding", steps: steps };
+  const model = env.LEE_MODEL || LEE_MODEL;
+  const t0 = Date.now();
+  const convo = [{ role: "system", content: LEE_SYSTEM }, { role: "user", content: question }];
+  for (let i = 0; i < LEE_MAX_STEPS; i++) {
+    const left = (budgetMs || LEE_BUDGET_MS) - (Date.now() - t0);
+    if (left < 4e3) break;
+    let out = null;
+    try {
+      let timer = null;
+      out = await Promise.race([env.AI.run(model, { messages: convo, tools: LEE_TOOL_DEFS, max_tokens: 900 }, { gateway: { id: env.AI_GATEWAY_ID || "default" } }), new Promise(function(_, rej) { timer = setTimeout(function() { rej(new Error("timeout " + Math.round(left / 1e3) + "s")); }, left); })]).finally(function() { if (timer) clearTimeout(timer); });
+    } catch (e) {
+      return { ok: false, error: "model: " + model + ": " + String(e && e.message || e).slice(0, 140), steps: steps };
+    }
+    const calls = leeToolCalls(out || {});
+    if (!calls) {
+      const text = leeReply(out || {}).trim();
+      return text ? { ok: true, text: text, steps: steps, model: model } : { ok: false, error: "model: " + model + ": empty answer", steps: steps };
+    }
+    convo.push({ role: "assistant", content: leeReply(out || {}) || null, tool_calls: calls.map(function(tc, n) { return { id: tc.id || "call_" + i + "_" + n, type: "function", function: { name: tc.name || tc.function && tc.function.name || "", arguments: JSON.stringify(leeCallArgs(tc)) } }; }) });
+    for (let n = 0; n < calls.length && n < 4; n++) {
+      const tc = calls[n], tname = String(tc.name || tc.function && tc.function.name || ""), targs = leeCallArgs(tc);
+      const res = await leeTool(env, tname, targs);
+      steps.push({ tool: tname, args: JSON.stringify(targs).slice(0, 110), ok: !!res.ok });
+      convo.push({ role: "tool", name: tname, tool_call_id: tc.id || "call_" + i + "_" + n, content: JSON.stringify(res).slice(0, 12e3) });
+    }
+  }
+  return { ok: false, error: "lee: the model reached its step or time limit before an answer; ask a narrower question or use a cf verb", steps: steps };
+}
+async function leeRunAndSettle(env, id, question) {
+  const r = await leeRun(env, question, LEE_BUDGET_MS);
+  const trace = (r.steps || []).map(function(s) { return "> " + s.tool + (s.args && s.args !== "{}" ? " " + s.args : "") + (s.ok ? "" : "  (failed)"); }).join("\n");
+  await env.AUDIT.prepare("UPDATE cmd_log SET status=?1, answer=?2, error=?3, model=?4, done_ms=?5 WHERE id=?6 AND status='running'").bind(r.ok ? "answered" : "failed", (trace ? trace + "\n\n" : "") + String(r.ok ? r.text : "").slice(0, 12e3) || null, r.ok ? null : String(r.error || "lee failed").slice(0, 300), String(r.model || env.LEE_MODEL || LEE_MODEL).slice(0, 80), Date.now(), id).run();
+}
+// Called from the /api/cmd route after the owner-session check: the parsed Lee line becomes an answer or a polled job.
+async function leeRoute(env, ctx, holder, text, parsed, from) {
+  if (!holder) return { status: 401, body: { ok: false, kind: "answer", need: "code", error: "Lee reads the Cloudflare account, so it needs your email code. Type login." } };
+  if (!(await leeEnabled(env))) return { status: 200, body: { ok: true, kind: "answer", text: "Lee is switched off (ops_config cmd_lee = off).", holder: holder } };
+  if (parsed.help) return { status: 200, body: { ok: true, kind: "answer", text: LEE_HELP, holder: holder } };
+  if (parsed.tool) {
+    const t0 = Date.now();
+    const r = await leeTool(env, parsed.tool, parsed.args);
+    const id = "cmd-" + cmdRandHex(10), out = leeText(parsed.tool, r);
+    try {
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, answer, error, model, owner, done_ms) VALUES (?1, ?2, ?3, 'lee', ?4, ?5, ?6, 'cf-api', 1, ?7)").bind(id, text.slice(0, 2e3), from || null, r.ok ? "answered" : "failed", out.slice(0, 12e3), r.ok ? null : String(r.error || "").slice(0, 300), Date.now()).run();
+    } catch (e) { console.error(JSON.stringify({ worker: NAME, where: "lee-log", error: String(e && e.message || e).slice(0, 160) })); }
+    return { status: r.ok ? 200 : 502, body: { ok: r.ok, kind: "answer", text: out, tool: parsed.tool, ms: Date.now() - t0, holder: holder } };
+  }
+  const id = "cmd-" + cmdRandHex(10);
+  await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, model) VALUES (?1, ?2, ?3, 'lee', 'running', 1, ?4)").bind(id, text.slice(0, 2e3), from || null, String(env.LEE_MODEL || LEE_MODEL).slice(0, 80)).run();
+  ctx.waitUntil(leeRunAndSettle(env, id, parsed.ask).catch(function(e) {
+    return env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error=?1 WHERE id=?2 AND status='running'").bind("lee: " + String(e && e.message || e).slice(0, 200), id).run();
+  }));
+  return { status: 202, body: { ok: true, kind: "pending", id: id, holder: holder } };
+}
+// GET /api/lee/health: can this worker's own token reach the account, per area? Booleans and HTTP statuses only (no account data), cached for 10 minutes. This is the closing probe of
+// "production serves Lee": a missing permission shows as false here before it shows as a failed answer.
+var LEE_HEALTH = { at: 0, body: null };
+async function leeHealth(env) {
+  if (LEE_HEALTH.body && Date.now() - LEE_HEALTH.at < 6e5) return LEE_HEALTH.body;
+  const probe = async function(path) {
+    const r = await leeCf(env, path);
+    return { ok: r.ok, status: r.status || 0 };
+  };
+  const hasToken = !!env.CF_TOKEN;
+  const w = hasToken ? await probe("/accounts/" + ACCOUNT + "/workers/scripts?per_page=1") : { ok: false, status: 0 };
+  const z = hasToken ? await probe("/zones?per_page=1") : { ok: false, status: 0 };
+  const p = hasToken ? await probe("/accounts/" + ACCOUNT + "/pages/projects") : { ok: false, status: 0 };
+  const body = { ok: true, version: VERSION, enabled: await leeEnabled(env), cf_token_set: hasToken, ai_binding: !!(env.AI && typeof env.AI.run === "function"), model: env.LEE_MODEL || LEE_MODEL, can: { workers: w.ok, zones: z.ok, pages: p.ok }, status: { workers: w.status, zones: z.status, pages: p.status }, note: "booleans and HTTP statuses only; a false means the Cloudflare token of this worker lacks that read permission", checked_at: new Date().toISOString() };
+  LEE_HEALTH = { at: Date.now(), body: body };
+  return body;
 }
 // ==== AREA-MAP platform: fleet console: reads and gated writes (DASHBOARD-FULL-ACCESS-1) ====
 // FLEET-CONSOLE-1 (2026-10-05, owner request: "full control, input and remediation from the UI ... get all information and
@@ -15733,12 +16151,12 @@ async function decIsObjective(env, id) {
 // Proposals the model may make: console read commands only, shown as buttons that type the command (its own gates apply).
 var CON_AI_CMD = /^(diagnose \d{1,7}|approve [\w:.#-]{1,160}( \d{1,2}([-,]\d{1,2})*)?|decline [\w:.#-]{1,160}( \d{1,2}([-,]\d{1,2})*)?|mail( [\w .@:#-]{1,80})?|issue \d{1,7}|backlog( [\w .:-]{1,60})?|info \S{1,160}|tasks( [\w .\/:-]{1,60})?|locks|prs|pr \d{1,6}|runs( [a-z0-9._-]+\.ya?ml)?|logs [a-z0-9-]{2,63}( \d{1,2})?)$/i;
 // ---- UI ----
-var CMD_CSS = ".cmd{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}.cmd form{display:flex;gap:8px;align-items:flex-start}.cmd .pr0{font:600 15px/34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--link)}#ctext{flex:1;min-width:0;resize:none;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:36px;max-height:160px}#ctext:focus{outline:2px solid var(--link);outline-offset:0}.cmd button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer;white-space:nowrap}.cmd button.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}.cmd button.d{border-color:var(--act);color:var(--act)}.cmd button:disabled{opacity:.5;cursor:default}#cout{margin-top:8px}.co{border-top:1px solid var(--line);padding:8px 0 4px;font-size:14px}.co .q{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mute)}.co pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 0;font:13.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.co .err{color:var(--act)}.co .acts{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}.co .acts button{min-height:44px}.co .acts .why{flex-basis:100%}.co .acts input{min-height:44px;font-size:16px}.co .qk{margin-top:4px}.co .acts button{white-space:normal;text-align:left;max-width:100%}.co .why{font-size:12px;color:var(--mute);margin:2px 0 0 2px}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.cmeta a{color:var(--mute)}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chips button{font-size:12px;padding:3px 9px;border-radius:99px}.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--link);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}@keyframes sp{to{transform:rotate(360deg)}}";
+var CMD_CSS = ".cmd{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}.cmd form{display:flex;gap:8px;align-items:flex-start}.cmd .pr0{font:600 15px/34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--link)}#ctext{flex:1;min-width:0;resize:none;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:36px;max-height:160px}#ctext:focus{outline:2px solid var(--link);outline-offset:0}.cmd button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer;white-space:nowrap}.cmd button.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}.cmd button.d{border-color:var(--act);color:var(--act)}.cmd button:disabled{opacity:.5;cursor:default}#cout{margin-top:8px}.co{border-top:1px solid var(--line);padding:8px 0 4px;font-size:14px}.co .q{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mute)}.co pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 0;font:13.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.co .err{color:var(--act)}.co .acts{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}.co .acts button{min-height:44px}.co .acts .why{flex-basis:100%}.co .acts input{min-height:44px;font-size:16px}.co .qk{margin-top:4px}.co .acts button{white-space:normal;text-align:left;max-width:100%}.co .why{font-size:12px;color:var(--mute);margin:2px 0 0 2px}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.cmeta a{color:var(--mute);display:inline-block;min-height:24px;line-height:24px}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chips button{font-size:12px;padding:3px 9px;border-radius:99px}.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--link);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}@keyframes sp{to{transform:rotate(360deg)}}";
 function cmdPanelHtml(holder, from, q) {
-  return '<section class="cmd" id="cmd" data-from="' + esc(from || "") + '" data-q="' + esc(q || "") + '"><form id="cform" autocomplete="off"><span class="pr0">&rsaquo;</span><textarea id="ctext" rows="1" maxlength="8000" placeholder="Ask or tell the fleet" aria-label="Fleet command line"></textarea><button type="button" id="cmic" title="Speak a command (needs your email code)" aria-label="Speak a command">Speak</button><button class="p" id="cgo" type="submit">Run</button></form><div class="chips" id="cchips"><button type="button" data-c="status">status</button><button type="button" data-c="queue">queue</button><button type="button" data-c="suggest">suggest</button><button type="button" data-c="issues">issues</button><button type="button" data-c="tools">tools</button><button type="button" data-c="spend">spend</button><button type="button" data-c="help">help</button></div><div id="cout" aria-live="polite"></div><div class="cmeta"><span id="cwho">' + (holder ? "Signed in: actions enabled" : "Reading and asking are open to everyone. Actions need your email code.") + '</span><span>' + (holder ? '<a href="#" id="clogout">sign out</a>' : '<a href="#" id="clogin">email me a code</a>') + (from ? ' &middot; from <a href="' + esc(from) + '">' + esc(String(from).replace(/^https?:\/\//, "").slice(0, 48)) + "</a>" : "") + "</span></div></section>";
+  return '<section class="cmd" id="cmd" data-from="' + esc(from || "") + '" data-q="' + esc(q || "") + '"><form id="cform" autocomplete="off"><span class="pr0">&rsaquo;</span><textarea id="ctext" rows="1" maxlength="8000" placeholder="Ask or tell the fleet" aria-label="Fleet command line"></textarea><button type="button" id="cmic" title="Speak a command (needs your email code)" aria-label="Speak a command">Speak</button><button class="p" id="cgo" type="submit">Run</button></form><div class="chips" id="cchips"><button type="button" data-c="status">status</button><button type="button" data-c="queue">queue</button><button type="button" data-c="suggest">suggest</button><button type="button" data-c="issues">issues</button><button type="button" data-c="tools">tools</button><button type="button" data-c="spend">spend</button><button type="button" data-c="cf help">lee</button><button type="button" data-c="help">help</button></div><div id="cout" aria-live="polite"></div><div class="cmeta"><span id="cwho">' + (holder ? "Signed in: actions enabled" : "Reading and asking are open to everyone. Actions need your email code.") + '</span><span>' + (holder ? '<a href="#" id="clogout">sign out</a>' : '<a href="#" id="clogin">email me a code</a>') + (from ? ' &middot; from <a href="' + esc(from) + '">' + esc(String(from).replace(/^https?:\/\//, "").slice(0, 48)) + "</a>" : "") + "</span></div></section>";
 }
 // Client: submit, history (Up/Down), "/" to focus, background polling, action buttons, inline code sign-in.
-var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]')}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function acts(p,list,c){var a=el('div','acts');list.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){if(x.fill){ta.value=x.fill;fit();ta.focus()}else if(x.cmd)send(x.cmd);else run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});p.appendChild(a)}function quick(c,q){var d=el('div','qk');if(q.text)d.appendChild(el('pre',null,q.text));if(q.actions&&q.actions.length)acts(d,q.actions,c);var w=c.querySelector('.wait');c.insertBefore(d,w)}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var qk=c.querySelector('.qk');if(qk)c.removeChild(qk);acts(c,j.actions,c)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{cf_turnstile:((document.querySelector('[name=cf-turnstile-response]')||{}).value||'')}).then(function(j){try{if(window.turnstile)turnstile.reset()}catch(x){}a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<(j.agent?1500000:45000)){var w=c.querySelector('.wait span.t');if(w)w.textContent=(j.progress||'thinking')+' '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='pending'&&j.id){if(j.quick)quick(c,j.quick);poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-cmd]');if(!t)return;e.preventDefault();send(t.getAttribute('data-fleet-cmd'));if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-fill]');if(!t)return;e.preventDefault();ta.value=t.getAttribute('data-fleet-fill');fit();ta.focus();if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});var mic=document.getElementById('cmic');if(mic){var rec=null,chunks=[];mic.onclick=function(){if(rec){rec.stop();return}if(!navigator.mediaDevices||!window.MediaRecorder){body(card('speak'),{error:'This browser cannot record audio.'});return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(s){chunks=[];rec=new MediaRecorder(s);rec.ondataavailable=function(e){if(e.data&&e.data.size)chunks.push(e.data)};rec.onstop=function(){s.getTracks().forEach(function(t){t.stop()});var blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});rec=null;mic.textContent='Speak';mic.classList.remove('rec');if(!blob.size)return;who.textContent='Transcribing...';fetch('/api/cmd/transcribe',{method:'POST',headers:{'x-fleet-ui':'1','Content-Type':blob.type},body:blob,credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})}).then(function(j){setHolder(holder);if(j.ok){ta.value=(ta.value?ta.value+' ':'')+j.text;fit();ta.focus()}else{var c=card('speak');body(c,{error:j.error||'failed',need:j.need})}}).catch(function(){setHolder(holder);body(card('speak'),{error:'Network error - nothing was sent.'})})};rec.start();mic.textContent='Stop';mic.classList.add('rec')}).catch(function(){body(card('speak'),{error:'Microphone permission was refused.'})})}}var q0=box.getAttribute('data-q');if(q0)send(q0)})();"; // standards-ok: a browser script in a string; its catch blocks guard sessionStorage in the visitor's browser, where Workers Logs cannot see them
+var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,sid='',seqs={},holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]');sid=sessionStorage.getItem('fleetcmdsid')||''}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function acts(p,list,c){var a=el('div','acts');list.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){if(x.fill){ta.value=x.fill;fit();ta.focus()}else if(x.cmd)send(x.cmd);else run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});p.appendChild(a)}function quick(c,q){var d=el('div','qk');if(q.text)d.appendChild(el('pre',null,q.text));if(q.actions&&q.actions.length)acts(d,q.actions,c);var w=c.querySelector('.wait');c.insertBefore(d,w)}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var qk=c.querySelector('.qk');if(qk)c.removeChild(qk);acts(c,j.actions,c)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{cf_turnstile:((document.querySelector('[name=cf-turnstile-response]')||{}).value||'')}).then(function(j){try{if(window.turnstile)turnstile.reset()}catch(x){}a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<(j.agent?1500000:45000)){var w=c.querySelector('.wait span.t');if(w)w.textContent=(j.progress||'thinking')+' '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function stream(c,j){var sj=j.session_id,tn=Number(j.turn)||1,w=c.querySelector('.wait'),txt=el('pre',null,''),stp=el('div','why'),tries=0,fin=false;if(w){c.insertBefore(stp,w);c.insertBefore(txt,w)}else{c.appendChild(stp);c.appendChild(txt)}function status(t){var s=c.querySelector('.wait span.t');if(s)s.textContent=t}function finish(){if(fin)return;fin=true;var x=c.querySelector('.wait');if(x)c.removeChild(x);done()}function frame(f){var ev='message',data='',id=0;f.split('\\n').forEach(function(l){if(l.indexOf('event: ')===0)ev=l.slice(7);else if(l.indexOf('data: ')===0)data+=l.slice(6);else if(l.indexOf('id: ')===0)id=Number(l.slice(4))||0});if(id)seqs[sj]=Math.max(seqs[sj]||0,id);var d={};try{d=JSON.parse(data||'{}')}catch(e){return}var mine=d.turn==null||Number(d.turn)===tn;if(ev==='text'&&mine){txt.textContent+=d.delta||'';status('answering')}else if(ev==='tool'&&mine){if(d.phase==='call'){stp.appendChild(el('div',null,'> '+d.name));status('step: '+d.name)}else if(d.phase==='error')stp.appendChild(el('div',null,'! '+d.name+': '+(d.error||'')))}else if(ev==='complete'&&mine){txt.textContent=d.answer||txt.textContent||'(the code session returned no text)';c.appendChild(el('div','why',[d.model,(d.input_tokens||0)+' in / '+(d.output_tokens||0)+' out tokens',d.cost_usd!=null?'$'+Number(d.cost_usd).toFixed(4):''].filter(Boolean).join(' - ')));finish()}else if(ev==='error'&&mine){c.appendChild(el('pre','err','Not answered: '+(d.error||'the code session failed')+'. Nothing was changed.'));finish()}}function open(){fetch('/api/cmd/session/'+sj+'/events?after='+(seqs[sj]||0),{credentials:'same-origin',cache:'no-store'}).then(function(r){if(!r.ok||!r.body)throw new Error('http '+r.status);var rd=r.body.getReader(),dec=new TextDecoder(),buf='';function pump(){return rd.read().then(function(x){if(fin){try{rd.cancel()}catch(e){}return}if(x.done){if(!fin)retry();return}buf+=dec.decode(x.value,{stream:true});var ps=buf.split('\\n\\n');buf=ps.pop();ps.forEach(frame);return pump()})}return pump()}).catch(retry)}function retry(){if(fin)return;if(++tries>3){if(txt.parentNode)c.removeChild(txt);if(j.id)poll(c,j.id,Date.now());else{c.appendChild(el('pre','err','Lost the stream and no job id to poll. The run may still be going on the server.'));finish()}return}status('reconnecting');setTimeout(open,1500*tries)}open()}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from,session_id:sid||undefined}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='stream'&&j.session_id){sid=j.session_id;try{sessionStorage.setItem('fleetcmdsid',sid)}catch(e){}stream(c,j);return}if(j.kind==='pending'&&j.id){if(j.quick)quick(c,j.quick);poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-cmd]');if(!t)return;e.preventDefault();send(t.getAttribute('data-fleet-cmd'));if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-fill]');if(!t)return;e.preventDefault();ta.value=t.getAttribute('data-fleet-fill');fit();ta.focus();if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});var mic=document.getElementById('cmic');if(mic){var rec=null,chunks=[];mic.onclick=function(){if(rec){rec.stop();return}if(!navigator.mediaDevices||!window.MediaRecorder){body(card('speak'),{error:'This browser cannot record audio.'});return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(s){chunks=[];rec=new MediaRecorder(s);rec.ondataavailable=function(e){if(e.data&&e.data.size)chunks.push(e.data)};rec.onstop=function(){s.getTracks().forEach(function(t){t.stop()});var blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});rec=null;mic.textContent='Speak';mic.classList.remove('rec');if(!blob.size)return;who.textContent='Transcribing...';fetch('/api/cmd/transcribe',{method:'POST',headers:{'x-fleet-ui':'1','Content-Type':blob.type},body:blob,credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})}).then(function(j){setHolder(holder);if(j.ok){ta.value=(ta.value?ta.value+' ':'')+j.text;fit();ta.focus()}else{var c=card('speak');body(c,{error:j.error||'failed',need:j.need})}}).catch(function(){setHolder(holder);body(card('speak'),{error:'Network error - nothing was sent.'})})};rec.start();mic.textContent='Stop';mic.classList.add('rec')}).catch(function(e){var pol=document.permissionsPolicy||document.featurePolicy,refusedBySite=false;try{refusedBySite=!!pol&&typeof pol.allowsFeature==='function'&&!pol.allowsFeature('microphone')}catch(x){}body(card('speak'),{error:refusedBySite?'The microphone is refused by this site policy, not by your browser: the page was served with Permissions-Policy microphone=(), which no browser can override. Type the command instead; a request to lift that rule for /cmd is open with the owner.':'Microphone permission was refused'+(e&&e.name?' ('+e.name+')':'')+'. This browser or app denied it before asking. Open this page in Chrome or Edge, allow the microphone for fleet.qnfo.org (address bar lock icon), and check Windows Settings > Privacy > Microphone is on.'})})}}var q0=box.getAttribute('data-q');if(q0)send(q0)})();"; // standards-ok: a browser script in a string; its catch blocks guard sessionStorage in the visitor's browser, where Workers Logs cannot see them
 // TURNSTILE-EDGE-1 (1.73.0, BP26-EDGE-SECURITY-1): every page that carries the console script also carries one interaction-only Turnstile widget; /api/cmd/code (the e-mail-me-a-code request) verifies its token.
 // BEGIN TURNSTILE-EDGE-1
 var TURNSTILE_SITEKEY_DEFAULT = "0x4AAAAAAFpf2WdSG4-h5mu_";
@@ -17361,7 +17779,7 @@ async function plusView(env) {
 __name(plusView, "plusView");
 
 function plusHtml(v, holder) {
-  const css = "<style>.pl-dg{white-space:pre-wrap;font:14.5px/1.6 var(--sans);margin:0;max-width:95ch}.pl-w{overflow-x:auto}.pl-t{width:100%;border-collapse:collapse;font-size:14px}.pl-t th,.pl-t td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule);vertical-align:top}.pl-t th{color:var(--muted);font-weight:600;white-space:nowrap}.pl-t td.n{text-align:right;white-space:nowrap}.pl-un{color:var(--muted)}</style>";
+  const css = "<style>.pl-dg{white-space:pre-wrap;font:14.5px/1.6 var(--sans);margin:0;max-width:95ch}.pl-w{overflow-x:auto}.pl-t{width:100%;border-collapse:collapse;font-size:14px}.pl-t th,.pl-t td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule);vertical-align:top}.pl-t th{color:var(--muted);font-weight:600;white-space:nowrap}.pl-t td.n{text-align:right;white-space:nowrap}.pl-un{color:var(--muted)}@media(max-width:640px){.pl-t thead{display:none}.pl-t,.pl-t tbody,.pl-t tr{display:block;width:100%}.pl-t tr{padding:10px 0;border-bottom:1px solid var(--rule)}.pl-t td{display:flex;justify-content:space-between;gap:14px;border:0;padding:2px 0;text-align:right}.pl-t td:first-child{display:block;text-align:left;padding-bottom:6px}.pl-t td[data-l]::before{content:attr(data-l);color:var(--muted);text-align:left;flex:none}.pl-t td.n{white-space:normal}}</style>";
   const head = fleetHead("Plus: what got better") + css + fleetTop("plus", false, holder);
   const fmt = function(n) { return Number(n).toLocaleString("en-GB"); };
   const day = function(s) { return s ? esc(String(s).slice(0, 10)) : "never"; };
@@ -17373,17 +17791,17 @@ function plusHtml(v, holder) {
   } else if (!(v.unavailable || []).includes("plus_digest")) {
     body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 6px">Digest</h2><p class="meta">No digest has been written yet; the first one is written by the hourly plus task on a Monday.</p></section>';
   }
-  body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 8px">Products</h2><div class="pl-w" role="region" aria-label="Products" tabindex="0"><table class="pl-t"><tr><th>Product</th><th>Host</th><th>Last plus</th><th>In flight</th><th>Kept</th><th>Reverted</th><th>Used (7 days)</th></tr>';
+  body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 8px">Products</h2><div class="pl-w" role="region" aria-label="Products" tabindex="0"><table class="pl-t"><thead><tr><th>Product</th><th>Host</th><th>Last plus</th><th>In flight</th><th>Kept</th><th>Reverted</th><th>Used (7 days)</th></tr></thead><tbody>';
   for (const p of v.products) {
     const rest = p.rest_until && String(p.rest_until) > new Date().toISOString() ? ' <span class="tag">resting to ' + day(p.rest_until) + '</span>' : "";
-    const use = p.usage ? '<b>' + esc(fmt(p.usage.value)) + '</b> <span class="meta">' + esc(p.usage.metric === "youtube_views_total" ? "views" : "requests") + (p.usage.errors ? ', ' + esc(fmt(p.usage.errors)) + ' errors' : '') + '</span>' : '<span class="pl-un">unmeasured</span>';
-    body += '<tr><td><b>' + esc(p.product) + '</b>' + rest + '<br><span class="meta">' + esc(p.what_for || "") + '</span></td><td>' + esc(p.host || "") + '</td><td>' + day(p.last_plus_at) + '</td><td class="n">' + esc(String(p.in_flight)) + '</td><td class="n">' + esc(String(p.shipped)) + '</td><td class="n">' + esc(String(p.reverted)) + '</td><td>' + use + '</td></tr>';
+    const use = p.usage ? '<span><b>' + esc(fmt(p.usage.value)) + '</b> <span class="meta">' + esc(p.usage.metric === "youtube_views_total" ? "views" : "requests") + (p.usage.errors ? ', ' + esc(fmt(p.usage.errors)) + ' errors' : '') + '</span></span>' : '<span class="pl-un">unmeasured</span>';
+    body += '<tr><td><b>' + esc(p.product) + '</b>' + rest + '<br><span class="meta">' + esc(p.what_for || "") + '</span></td><td data-l="Host">' + esc(p.host || "") + '</td><td data-l="Last plus">' + day(p.last_plus_at) + '</td><td class="n" data-l="In flight">' + esc(String(p.in_flight)) + '</td><td class="n" data-l="Kept">' + esc(String(p.shipped)) + '</td><td class="n" data-l="Reverted">' + esc(String(p.reverted)) + '</td><td data-l="Used (7 days)">' + use + '</td></tr>';
   }
-  body += '</table></div><p class="meta" style="margin:8px 0 0;max-width:95ch">Used is Cloudflare Worker requests for the product\'s worker over 7 days, cron ticks and calls between workers included: it shows which products are alive, not how many people use them. Unmeasured means no number was read, never zero.</p></section>';
+  body += '</tbody></table></div><p class="meta" style="margin:8px 0 0;max-width:95ch">Used is Cloudflare Worker requests for the product\'s worker over 7 days, cron ticks and calls between workers included: it shows which products are alive, not how many people use them. Unmeasured means no number was read, never zero.</p></section>';
   if (v.week && v.week.length) {
-    body += '<section class="card"><h2 style="font-size:18px;margin:0 0 8px">The last 7 days</h2><div class="pl-w" role="region" aria-label="The last 7 days" tabindex="0"><table class="pl-t"><tr><th>When</th><th>Product</th><th>Plus</th><th>State</th></tr>';
-    for (const w of v.week) body += '<tr><td>' + day(w.decided_at) + '</td><td>' + esc(w.product || "") + '</td><td>' + esc(w.title || "") + (w.pr_url ? ' <a href="' + esc(w.pr_url) + '">PR</a>' : '') + '</td><td>' + esc(w.status || "") + '</td></tr>';
-    body += '</table></div></section>';
+    body += '<section class="card"><h2 style="font-size:18px;margin:0 0 8px">The last 7 days</h2><div class="pl-w" role="region" aria-label="The last 7 days" tabindex="0"><table class="pl-t"><thead><tr><th>Product, when</th><th>Plus</th><th>State</th></tr></thead><tbody>';
+    for (const w of v.week) body += '<tr><td><b>' + esc(w.product || "") + '</b> <span class="meta">' + day(w.decided_at) + '</span></td><td data-l="Plus">' + esc(w.title || "") + (w.pr_url ? ' <a href="' + esc(w.pr_url) + '">PR</a>' : '') + '</td><td data-l="State">' + esc(w.status || "") + '</td></tr>';
+    body += '</tbody></table></div></section>';
   } else if (!(v.unavailable || []).includes("plus_ledger")) {
     body += '<section class="card"><h2 style="font-size:18px;margin:0 0 6px">The last 7 days</h2><p class="meta">No plus was proposed, shipped or reverted in the last 7 days.</p></section>';
   }
