@@ -3232,7 +3232,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.44.15";
+var VERSION = "1.45.2";
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
 /* 1.43.5 BP26-EDGE-SECURITY-1 (2026-10-26, agent_issues 1000356, pillar security; patch): every response of reading.q08.org and travel.q08.org now carries a Referrer-Policy (strict-origin-when-cross-origin), X-Frame-Options DENY and X-Content-Type-Options nosniff unless the route already set its own; measured before: reading.q08.org sent no referrer policy and no frame protection, travel.q08.org no frame protection. A wrapper around the final fetch handler copies the response only when a header is missing; redirects, streams and WebSocket upgrades are untouched. */
@@ -3305,6 +3305,317 @@ __name2(L, "L");
 __name22(L, "L");
 var RHYTHM = ["notes", "essay", "notes", "essay", "notes", "essay", "serial"];
 // COMPANION-VERIFY-1 (1.14.0): there is no hard-coded topic list. pickTopic() draws the subject from live Wikipedia and arXiv.
+// ANALYSIS-FORM-1:BEGIN (sourced from _shared/analysis-form.js; applied by _shared/inline-analysis-form.mjs; do not edit inside a worker)
+// ---- ANALYSIS-FORM-1 (EK-6, roadmap row 1753, charter pillar reach). One analysis form for every writer that outsiders read.
+//
+// WHAT. The form that reading.q08.org grew over October 2026 lives here once: the writer's rules (lede, systems analysis, quotation,
+// contested-topic sources, the strongest objection, even keel), the essay form and the adversarial reader's rubric; the objection
+// finder; the lede helpers; the even-keel check (prompt, parser, verdict, reviewer choice, revision note); the sources footer with
+// the host profile table; the AI label. A form improvement is made in this file, inlined into each adopting worker by
+// `node _shared/inline-analysis-form.mjs <worker>`, and proved by `_shared/analysis-form.test.mjs`, which also fails when an adopting
+// worker holds a stale copy. Nothing here imports anything or touches a binding: pure strings and pure functions, so any worker can
+// take it (personal-companion today; q08-signal-engine and the research writers by the same script).
+//
+// WHY. Before this file the form existed only inside personal-companion/worker.js while q08 and the research writers kept separate
+// prompts, so each fix (a lede that names its subject, an objection placed where the argument needs it, a label for AI text) had to be
+// ported by hand, and the even-keel check (EK-3) was written against a model family that did not exist (BALANCE_FAMILY "ensemble-policy-1").
+//
+// HOW TO ADOPT (q08-signal-engine, research writers). 1) Run `node _shared/inline-analysis-form.mjs q08-signal-engine --anchor "<a line of
+// the worker to insert the block before>"` once; it writes the block between its BEGIN and END marker lines
+// and mirrors deployed-current.worker.js; later runs replace the block in place (`--check` only reports a stale copy). 2) Build the
+// writer prompt from the AF_ rules (AF_LEDE_RULE, AF_SYSTEMS_RULE, AF_QUOTE_RULE, AF_CONTESTED_RULE, AF_OBJECTION_RULE, AF_EVEN_KEEL_RULE) and
+// AF_P_ESSAY; keep the worker's own voice and format lines around them. 3) After the deterministic gate and the fact-check, ask one reviewer
+// from another family (afPickBalanceReviewer) with AF_BALANCE_PROMPT, read the reply with afParseBalanceScore, decide with afBalanceVerdict,
+// and on a fail revise with afBalanceRevisionNote. 4) Render with afSourcesFooter and afAiLabelHtml.
+//
+// RULES FOR EDITING. ES5 style (var and function), no import or export, every name starts with AF_ or af, no `*` followed by `/` in a
+// comment. A change here changes every adopter on its next inline run: version the change in AF_VERSION and say what moved in the PR.
+var AF_VERSION = "1.0.0";
+var AF_NL = "\n";
+function afLines() { return Array.prototype.slice.call(arguments).join(AF_NL); }
+function afEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+// ---- the writer's rules, one string each, verbatim from reading.q08.org's prompt (the pinned tests read them back)
+var AF_LEDE_RULE = "LEDE (inverted pyramid, checked before anything else): the first paragraph, at most 110 words and before any heading, tells a reader who has never heard of the subject what it is, where it comes from in the world (the place, the period, the field or the people) and why it matters. Never credit or name the source document in the lede or anywhere in the prose: no 'according to the Wikipedia article', no 'the arXiv paper describes'; the sources are listed under the piece for the reader. Name the subject in the first sentence. Then the most important facts from the source, most important first, and only then the analysis. Never open on a generality, an aphorism, a question or an abstract noun ('the idea of', 'the pattern').";
+var AF_SYSTEMS_RULE = "CONTEXT AND SYSTEMS ANALYSIS (required; this is why the piece exists, and a piece that only retells its source is rejected): after the facts, place the subject in its bigger picture and explain the system behind it, from the source material. Name the parties or parts involved and what each is rewarded, punished or constrained by; the constraint, delay or information gap that shapes the outcome; the feedback loop that keeps it in place or changes it; who gains and who pays; and where the same arrangement operates beyond this case. Reason openly and say it is reasoning ('the incentive is ...', 'that means ...', 'if ... then ...'), introducing no name, date, number, event or quotation the source material does not contain. Every sentence of the analysis that the source does not state must read as reasoning from its first words; never state an inferred arrangement, funding, motive or behaviour as a reported fact. Build the analysis from this subject's own particulars in the source (its named parties, figures, dates and events): a paragraph that would read the same for any other subject is boilerplate and is rejected. Begin the analysis with a line of its own that contains exactly <!-- analysis --> (readers never see it): everything before that line is reporting from the source material, everything after it is your analysis.";
+var AF_QUOTE_RULE = "Quotations: quote only words that appear verbatim in the source material, attributed to the person the source attributes them to, and only from the source that concerns that person; never invent, paraphrase into quotation marks or move a quotation to another subject. Every quotation of five or more words is checked against the sources.";
+var AF_CONTESTED_RULE = "- For a contested topic in policy, history, geopolitics, health or economics, use at least three independent full-text sources with at least two explicit viewpoint labels and one verified non-US source. Compare where the viewpoints differ; source metadata is not evidence for factual claims.";
+var AF_OBJECTION_RULE = "- The strongest objection to your central claim must appear in the piece, stated fairly in your own words as an objection a careful reader could raise, with an honest assessment of how bad it is. Never put it in quotation marks and never attribute it to critics, scholars, commentators or anyone the source material does not name making that objection. It may rest on the source material or be pure logic; it may not rest on facts from outside it. Where it sits is your choice; do not give it the same heading or the same position twice in a row.";
+// EK-3 (writer side): the reviewer below scores what the writer was asked for here, so a draft is told its bar before it is judged.
+var AF_EVEN_KEEL_RULE = "- Even keel: a disputed claim is stated as the position of the party that holds it, naming the party only where the source material names it, never as settled fact. Use neutral descriptive words for people, groups, causes and events; where the source material's own wording is loaded, report it as that party's wording or replace it with a plain description. Where the source material holds more than one account of an event or a policy, give each its strongest form and say where they differ.";
+// The long-form essay contract (reading.q08.org's P_ESSAY; the probe for issue 1000716 reads the first line of it in both files).
+var AF_P_ESSAY = afLines(
+  "FORM: essay, 2000 to 2800 words. This is long-form. One sustained line of thought, carried to the end; do not stop while the argument is still thin, and do not pad.",
+  "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
+  "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
+  "You are given real source material below. Mine it. Use the names, dates, numbers, mechanisms and cases it contains, and only those; a piece that could have been written without reading the sources has failed, and a piece that states anything the sources do not contain is discarded.",
+  "Required content, not required sections: (a) the strongest objection to your central claim, stated fairly in your own words (never as a quotation or an unnamed critic), weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call - the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
+  "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
+);
+// The adversarial reader's rubric (reading.q08.org's P_CRITIQUE).
+var AF_P_CRITIQUE = afLines(
+  "You are an adversarial reader. You dislike fluency. You are looking for reasons this piece is worthless.",
+  "You are given the SOURCE MATERIAL the writer was allowed to use, and the piece.",
+  "Score each dimension 0 to 10. Be harsh: a 7 means genuinely good.",
+  "specificity: does it hang on concrete checkable particulars from the source material, or could it have been written about anything?",
+  "argument: is there a claim that could be wrong, or only gestures?",
+  "objection: is the stated objection the strongest available one, or a straw man?",
+  "voice: plain scholarly prose free of filler, tells, and self-reference?",
+  "grounding: does every concrete claim (name, date, number, event, quotation) trace to the source material? Score 0 if you find one that does not. A sentence that reports as fact something the source does not state (an event, an arrangement, a behaviour, a cause) counts as such a claim. Reasoning the writer frames as reasoning ('the incentive is ...', 'that means ...', 'if ... then ...', 'it follows that ...') and that adds no name, date, number, event or quotation is not a grounding failure: judge it under argument and systems. Text after a line <!-- analysis --> is the writer's marked analysis: there, count under grounding only a concrete invented fact (a name, date, number, event, rule, quotation or study the source material does not contain); claims about incentives, constraints, motives and consequences in that section are judged under argument and systems, never grounding. Text before that line is held to the full rule.",
+  "systems: does the piece place its subject in a bigger picture and explain the system behind it (the parties and what each is rewarded or constrained by, the constraint or information gap, the feedback loop, who gains and who pays, where else it operates), or does it only retell the source? A retelling scores at most 3.",
+  "invented: every concrete claim you found that the source material does not support, each as a short quotation copied exactly from the piece (at most 16; an empty list when there is none).",
+  'Return JSON only: {"specificity":n,"argument":n,"objection":n,"voice":n,"grounding":n,"systems":n,"invented":["exact quotation", ...],"verdict":"accept" or "reject","why":"one sentence"}'
+);
+
+// ---- the objection finder (OBJECTION-FIND-1): where the essay contract lets the objection sit, not only under a heading that says so
+function afExtractSection(md, needle) {
+  var lines = String(md).split(AF_NL);
+  var out = [];
+  var on = false;
+  for (var i = 0; i < lines.length; i++) {
+    var t = lines[i].trim();
+    if (t.indexOf("#") === 0) {
+      if (on) break;
+      if (t.toLowerCase().indexOf(needle) >= 0) on = true;
+      continue;
+    }
+    if (on) out.push(t);
+  }
+  return out.join(" ").trim();
+}
+var AF_OBJECTION_CUE_RE = /\b(objections?|object(?:s)? that|counter-?arguments?|case against|argument against|strongest (?:challenge|reply|doubt)|a careful reader|a sceptic|a skeptic)\b/i;
+var AF_OBJECTION_HEAD_RE = /\b(objections?|against|counter|critics?|sceptic|skeptic|doubts?|wrong|other side|caveats?|challenges?|reservations?|rebuttal|dissent|weakness(?:es)?)\b/i;
+function afFindObjection(md) {
+  var s = afExtractSection(md, "objection");
+  if (s.length >= 40) return s;
+  var paras = String(md || "").split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+  for (var i = 0; i < paras.length; i++) {
+    if (paras[i].indexOf("#") === 0 || !AF_OBJECTION_CUE_RE.test(paras[i])) continue;
+    var t = paras[i];
+    if (t.length < 200 && i + 1 < paras.length && paras[i + 1].indexOf("#") !== 0) t += " " + paras[i + 1];
+    t = t.replace(/\s+/g, " ").trim();
+    if (t.length >= 40) return t;
+  }
+  var lines = String(md || "").split(AF_NL), on = false, out = [];
+  for (var j = 0; j < lines.length; j++) {
+    var l = lines[j].trim();
+    if (l.indexOf("#") === 0) {
+      if (on && out.join(" ").trim().length >= 40) break;
+      on = AF_OBJECTION_HEAD_RE.test(l.replace(/^#+/, "")); out = [];
+      continue;
+    }
+    if (on && l) out.push(l);
+  }
+  var h = out.join(" ").replace(/\s+/g, " ").trim();
+  return on && h.length >= 40 ? h : s;
+}
+
+// ---- the lede (COMPANION-LEDE-1, LEDE-RULE-1, LEDE-SPLIT-1) and the sentence splitter it shares with sentence deletion
+// SENT-INITIALISM-1 (1.26.2, companion_runs 6224 of 2026-10-14 08:11 UTC): a dotted initialism ("U.S.", "D.C.") ended a sentence, so the
+// critic prune that deleted "... of the U.S." left the fragment "Consul. Negotiations failed ..." and the critic scored the fragment
+// invented. An initialism of two or more dotted capitals no longer ends a sentence (a sentence that truly ends on one joins the next).
+var AF_SENT_ABBREV_RE = /(?:^|[\s(])(?:(?:[A-Z]\.)+[A-Z]|[A-Z]|Dr|Mr|Mrs|Ms|Prof|St|No|vs|v|cf|Fig|Eq|et al|e\.g|i\.e|pp?|Jr|Sr|Gen|Gov|Sen|Rep|Lt|Col|Capt|Sgt|Hon|Stat|Ct|Mt|Ft)\.\s*$/;
+function afExtractLede(md) {
+  var lines = String(md).split(AF_NL);
+  var i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  var startsHeading = i < lines.length && lines[i].trim().indexOf("#") === 0;
+  while (i < lines.length && lines[i].trim().indexOf("#") === 0) {
+    i++;
+    while (i < lines.length && !lines[i].trim()) i++;
+  }
+  var buf = [];
+  while (i < lines.length) {
+    var t = lines[i].trim();
+    if (!t) break;
+    if (t.indexOf("#") === 0) break;
+    if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) break;
+    buf.push(t);
+    i++;
+  }
+  var lede = buf.join(" ").trim();
+  var rest = startsHeading ? String(md).trim() : lines.slice(i).join(AF_NL).trim();
+  return { lede, rest, startsHeading };
+}
+// COMPANION-LEDE-1 (1.17.0; owner 2026-10-13: every piece opens with a proper lede, inverted pyramid). The lede is the first paragraph a
+// reader sees (piece.lede, else the first prose paragraph of the body). It must share at least one significant word with the subject's
+// title (the first five letters, so "trackway" matches "trackways"), must not open on abstract framing or a question, and stays short.
+var AF_LEDE_MAX_WORDS = 120;
+var AF_LEDE_ABSTRACT_RE = /^\s*(?:(?:the|this|that|these|such|our)\s+(?:very\s+)?(?:idea|notion|concept|question|problem|pattern|mechanism|story|history|tension|dynamics?|nature|essence|meaning|paradox)\s+of\b|in\s+(?:a|an|the|our|today's)\s+(?:world|age|era|time|times)\b|throughout\s+(?:history|time|the\s+ages)\b|since\s+the\s+dawn\b|(?:imagine|consider|picture)\b|what\s+(?:if|does|do|is|makes|happens)\b|(?:we|you)\s+(?:often|rarely|tend|all|like)\b|there\s+is\s+something\b|few\s+\w+\s+(?:are|have|capture)\b)/i;
+var AF_LEDE_STOP = /^(this|that|with|from|have|were|their|there|which|when|what|into|than|then|they|them|been|also|only|more|most|such|does|each|over|will|would|could|should|about|after|before|because|while|where|your|using|based|towards?|new|how|why|the|and|for)$/;
+function afLedeWords(t) { return String(t || "").toLowerCase().replace(/[‐-―−]/g, "-").split(/[^a-z0-9À-ɏ]+/).filter(function (w) { return w.length >= 4 && !AF_LEDE_STOP.test(w); }); }
+function afLedeOf(piece) {
+  var l = String(piece && piece.lede || "").trim();
+  if (l) return l;
+  var paras = String(piece && piece.body_md || "").split(/\n\s*\n/);
+  for (var i = 0; i < paras.length; i++) { var p = paras[i].trim(); if (p && p.charAt(0) !== "#" && p.indexOf("- ") !== 0 && p.indexOf("> ") !== 0 && p.indexOf("<!--") !== 0) return p.replace(/\s+/g, " "); }
+  return "";
+}
+function afLedeProblems(piece, subject) {
+  var lede = afLedeOf(piece), out = [];
+  if (!lede) return ["lede missing: open with a paragraph that says what the subject is and where it comes from"];
+  var n = lede.split(/\s+/).filter(Boolean).length;
+  if (n > AF_LEDE_MAX_WORDS) out.push("lede too long (" + n + " words; the first paragraph is at most " + AF_LEDE_MAX_WORDS + ")");
+  var first = (lede.match(/^[\s\S]*?[.!?](?=\s|$)/) || [lede])[0];
+  if (AF_LEDE_ABSTRACT_RE.test(lede.replace(/^[*_\s]+/, "")) || /\?\s*$/.test(first)) out.push("lede opens on abstract framing or a question ('" + lede.slice(0, 50) + "'): open by saying what the subject is and where it comes from");
+  var want = afLedeWords(subject);
+  var have = afLedeWords(lede).map(function (w) { return w.slice(0, 5); });
+  if (want.length && !want.some(function (w) { return have.indexOf(w.slice(0, 5)) >= 0; })) out.push("lede does not name the subject: the first paragraph must say what " + String(subject).slice(0, 80) + " is and where it comes from");
+  return out;
+}
+// LEDE-SPLIT-1 (1.19.1, run 5342-5364: three of five drafts failed only or mainly on "lede too long", 137-174 words). An over-long first
+// paragraph is split at a sentence boundary: the opening sentences up to AF_LEDE_SPLIT_WORDS stay the lede, the rest becomes the first body
+// paragraph. Nothing is added or removed, so no fact changes; a single sentence longer than the limit is left to the check.
+var AF_LEDE_SPLIT_WORDS = 100;
+function afSplitLongLede(piece) {
+  var lede = String(piece && piece.lede || "").trim();
+  var count = function (s) { return String(s).split(/\s+/).filter(Boolean).length; };
+  if (!lede || count(lede) <= AF_LEDE_MAX_WORDS) return piece;
+  var raw = lede.match(/[\s\S]*?[.!?]+["')\]’”]*(?=\s|$)\s*|[\s\S]+$/g) || [lede], sents = [];
+  raw.forEach(function (x) { if (sents.length && AF_SENT_ABBREV_RE.test(sents[sents.length - 1])) sents[sents.length - 1] += x; else sents.push(x); });
+  var kept = [], n = 0, i = 0;
+  for (; i < sents.length; i++) { var w = count(sents[i]); if (kept.length && n + w > AF_LEDE_SPLIT_WORDS) break; kept.push(sents[i]); n += w; }
+  if (i >= sents.length) return piece;
+  var head = kept.join("").trim(), rest = sents.slice(i).join("").trim();
+  var body = String(piece.body_md || "");
+  // when the lede was read out of the body (a draft that opened with a heading) the body already holds the paragraph: shorten only the lede
+  if (body.indexOf(lede) !== -1) return Object.assign({}, piece, { lede: head });
+  return Object.assign({}, piece, { lede: head, body_md: rest + "\n\n" + body });
+}
+// EK-1 (roadmap row 1748): the lede a reader is shown. The stored lede when there is one; otherwise, when the body OPENS on a prose paragraph, that
+// paragraph, cut at a sentence boundary when it runs past AF_LEDE_SPLIT_WORDS. The index preview and the piece page both call this, so they always agree,
+// and a piece whose stored lede was lost to a prune (2 of the 14 newest reading.q08.org pieces on 2026-11-04) still opens on a set-apart lede. A body that
+// opens on a heading, list, quote or comment yields none: the paragraph under a heading is a section's lead-in and would be shown twice. Empty then.
+function afShownLede(piece) {
+  var stored = String(piece && piece.lede || "").trim();
+  if (stored) return stored;
+  var body = String(piece && piece.body_md || "").replace(/^\s+/, "");
+  if (!body || /^(?:#|[-*] |> |<!--)/.test(body)) return "";
+  var first = body.split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
+  if (!first) return "";
+  return String(afSplitLongLede({ lede: first, body_md: "" }).lede || first).trim();
+}
+
+// ---- the even-keel check (EK-3): one reviewer from a family other than the writer's scores how fairly the piece handles disagreement
+var AF_BALANCE_MIN_SCORE = 70;
+var AF_BALANCE_PROMPT = afLines(
+  "You are an even-keel reviewer. You did not write this draft and you are not its editor. Score how fairly it handles disagreement, using only what is on the page.",
+  "Score each part from 0 to 10:",
+  "opposing: is the strongest argument against the draft's central claim stated at the strength its own holders would give it, and weighed honestly rather than set up to fail? A draft that makes no contested claim scores 10 here.",
+  "wording: are loaded or partisan terms for people, groups, causes and events avoided, or reported as a party's own words? 10 means none unattributed.",
+  "attribution: is every disputed claim attributed to the party that makes it, or stated as disputed, instead of asserted as settled fact? 10 means none unattributed.",
+  "Do not judge accuracy, style, length or whether you agree with the draft. A draft is one-sided when it argues one position while presenting it as the only reasonable view.",
+  "Return only JSON: {\"opposing\":n,\"wording\":n,\"attribution\":n,\"reason\":\"one sentence that names the weakest passage\"}"
+);
+function afBalanceScore(parts) { return Math.round(parts.opposing * 5 + parts.wording * 2.5 + parts.attribution * 2.5); }
+// Reads a reviewer's reply: sub-scores 0 to 10 combined by weight into 0 to 100 (opposing counts double); a reply that gives only "score" is read as such.
+// null when nothing usable is in the reply.
+function afParseBalanceScore(text) {
+  var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
+  var o = null, m = t.match(/\{[\s\S]*\}/);
+  if (m) { try { o = JSON.parse(m[0]); } catch (e) { o = null; } }
+  if (!o) {
+    var parts0 = {}, any = 0;
+    ["opposing", "wording", "attribution"].forEach(function (k) { var mm = t.match(new RegExp("\"" + k + "\"\\s*:\\s*(\\d+(?:\\.\\d+)?)")); if (mm) { parts0[k] = Number(mm[1]); any++; } });
+    if (any === 3) o = parts0;
+    else { var sm = t.match(/"score"\s*:\s*(\d+(?:\.\d+)?)/); if (!sm) return null; o = { score: Number(sm[1]) }; }
+  }
+  var reason = String(o.reason || "").replace(/\s+/g, " ").trim().slice(0, 260);
+  var p = { opposing: Number(o.opposing), wording: Number(o.wording), attribution: Number(o.attribution) };
+  var haveParts = [p.opposing, p.wording, p.attribution].every(function (x) { return isFinite(x) && x >= 0 && x <= 10; });
+  if (haveParts) return { score: afBalanceScore(p), parts: p, reason: reason };
+  var score = Number(o.score);
+  if (!isFinite(score) || score < 0 || score > 100) return null;
+  return { score: Math.round(score), parts: null, reason: reason };
+}
+// pass, fail or unavailable: a missing or unreadable reply is "unavailable" (the caller fails open only after the deterministic gate and the
+// fact-check have passed, and records that it did), never a pass.
+function afBalanceVerdict(res, minScore) {
+  var min = typeof minScore === "number" ? minScore : AF_BALANCE_MIN_SCORE;
+  if (!res || typeof res.score !== "number" || !isFinite(res.score)) return { state: "unavailable", score: null, reason: String(res && res.reason || "no score") };
+  return { state: res.score >= min ? "pass" : "fail", score: res.score, parts: res.parts || null, reason: String(res.reason || "") };
+}
+// The reviewers, in the order to ask them: models whose family is known and is not the writer's, families that have not yet judged the piece
+// first (a fresh family reads it, ENSEMBLE-POLICY-1 rule 2), then those that have; one model per family. The start rotates with the seed.
+// Empty when no model qualifies. opts: familyOf(id) -> family, allowed(id) -> bool, writerFamily, avoid (families), sick (map of model ids to skip), seed.
+function afBalanceReviewers(pool, opts) {
+  opts = opts || {};
+  var fam = opts.familyOf || function (id) { return String(id).split("/")[1] || String(id); };
+  var avoid = {}; (opts.avoid || []).forEach(function (f) { avoid[f] = 1; });
+  var seen = {};
+  var list = (pool || []).filter(function (id) {
+    var f = fam(id);
+    if (!f || String(f).indexOf("unknown") === 0 || f === opts.writerFamily || (opts.allowed && !opts.allowed(id)) || (opts.sick && opts.sick[id]) || seen[f]) return false;
+    seen[f] = 1;
+    return true;
+  });
+  if (!list.length) return [];
+  var start = Math.abs(opts.seed | 0) % list.length, rotated = list.slice(start).concat(list.slice(0, start));
+  return rotated.filter(function (id) { return !avoid[fam(id)]; }).concat(rotated.filter(function (id) { return avoid[fam(id)]; }));
+}
+function afPickBalanceReviewer(pool, opts) { return afBalanceReviewers(pool, opts)[0] || ""; }
+// The instruction a draft gets when the even-keel reviewer found it one-sided. It may reorganise, attribute and reword; it may not add a fact.
+function afBalanceRevisionNote(reason) {
+  return "EVEN-KEEL REVISION. A reviewer from another editorial family found the draft below one-sided: " + String(reason || "it argues one position as the only reasonable view") + AF_NL +
+    "Return the SAME piece in the SAME output format (a single # heading with the title, then the prose). State the strongest argument against your central claim at the strength its own holders would give it and weigh it honestly; attribute each disputed claim to the party the source material names as making it, or say it is disputed; replace loaded words with plain description. Use only what the source material states: add no name, date, figure, event or claim it does not contain, and keep the title, the headings and the length.";
+}
+
+// The instruction for a fresh draft after an attempt was rejected as one-sided and could not be revised in the time left.
+function afBalanceRetryFeedback(reason) {
+  return "The previous draft was found one-sided by a reviewer from another editorial family: " + String(reason || "it argues one position as the only reasonable view") + " Write a new draft that states the strongest argument against its central claim at the strength its own holders would give it, attributes each disputed claim to the party the source material names or says it is disputed, and uses plain descriptive words. Use only facts the source material states.";
+}
+// What is stored with the piece (quality_json): what the check said, never the draft. res is a balanceCheck result: { unavailable, ok, score, parts, reason, model, family, tried }.
+function afBalanceRecord(res) {
+  if (!res) return { state: "not-run" };
+  if (res.unavailable) return { state: "unavailable", reason: String(res.reason || "").slice(0, 200), tried: res.tried || [] };
+  return { state: res.ok ? "pass" : "fail", score: res.score, parts: res.parts || null, reason: String(res.reason || "").slice(0, 260), model: res.model || "", family: res.family || "" };
+}
+
+// ---- the sources footer and the host profile table (EK-2): where a source is from and what standpoint it speaks from
+// country is an ISO 3166 alpha-2 code of the publisher; viewpoint is a short standpoint label ("" for an encyclopedia or a journal, which speak from none).
+var AF_SOURCE_PROFILES = {
+  "wikipedia.org": { label: "Wikipedia", country: "US", viewpoint: "" },
+  "arxiv.org": { label: "arXiv", country: "US", viewpoint: "" },
+  "hansard.parliament.uk": { label: "Hansard (UK Parliament)", country: "GB", viewpoint: "uk-parliament" },
+  "globalvoices.org": { label: "Global Voices", country: "NL", viewpoint: "global-citizen-media" },
+  "gov.uk": { label: "GOV.UK", country: "GB", viewpoint: "uk-government" }
+};
+function afHost(ref) {
+  var m = /^https:\/\/([^\/?#:]+)/i.exec(String(ref || ""));
+  return m ? m[1].toLowerCase().replace(/^(?:www|m)\./, "") : "";
+}
+// The profile of the longest registered host suffix of the reference's host (en.wikipedia.org matches wikipedia.org); null when unregistered.
+function afSourceProfile(ref) {
+  var host = afHost(ref), best = "";
+  Object.keys(AF_SOURCE_PROFILES).forEach(function (h) { if ((host === h || host.slice(-(h.length + 1)) === "." + h) && h.length > best.length) best = h; });
+  return best ? AF_SOURCE_PROFILES[best] : null;
+}
+function afSourceLabel(ref) {
+  var r = String(ref || ""), m = /wikipedia\.org\/wiki\/([^?#]+)/.exec(r);
+  if (m) { try { return decodeURIComponent(m[1]).replace(/_/g, " ") + " (Wikipedia)"; } catch (e) { return r; } }
+  var a = /arxiv\.org\/abs\/([^?#]+)/.exec(r);
+  if (a) return "arXiv " + a[1];
+  var prof = afSourceProfile(r);
+  return prof ? prof.label : (afHost(r) || r);
+}
+// refs: https URLs (anything else is dropped); esc: the host's HTML escaper (default afEsc). The markup is the footer reading.q08.org has always had.
+function afSourcesFooter(refs, esc) {
+  var e = esc || afEsc, Q = String.fromCharCode(34);
+  var list = (refs || []).filter(function (r) { return /^https:\/\//.test(String(r)); });
+  if (!list.length) return "";
+  var items = list.slice(0, 8).map(function (r) { return "<a href=" + Q + e(r) + Q + " rel=noopener>" + e(afSourceLabel(r)) + "</a>"; });
+  return "<p class=src>Sources: " + items.join(" &middot; ") + "</p>";
+}
+function afSourcesFooterFromJson(anchorJson, esc) {
+  var refs = [];
+  try { refs = JSON.parse(String(anchorJson || "{}")).refs || []; } catch (e) { return ""; }
+  return afSourcesFooter(refs, esc);
+}
+
+// ---- the AI label (BP26-AI-LABEL-1, BP26-AI-ACT-ART50-1): the visible label and the machine-readable credit ride the same sentence
+var AF_AI_LABEL_TEXT = "Written by AI and checked against its source material by automated review. No human reviews pieces before they appear.";
+function afAiLabelHtml() { return "<span class=ai title=" + String.fromCharCode(34) + AF_AI_LABEL_TEXT + String.fromCharCode(34) + ">AI-generated</span>"; }
+// ANALYSIS-FORM-1:END
 var BANNED = [
   "delve",
   "tapestry",
@@ -3350,9 +3661,9 @@ var P_STYLE = L(
   "He reads for the pleasure of a true thing well put. He is not impressed by fluency, by volume, or by enthusiasm.",
   "",
   "Voice: plain scholarly prose. Concrete before abstract. Short declaratives, occasionally a long sentence that earns its length.",
-  "LEDE (inverted pyramid, checked before anything else): the first paragraph, at most 110 words and before any heading, tells a reader who has never heard of the subject what it is, where it comes from in the world (the place, the period, the field or the people) and why it matters. Never credit or name the source document in the lede or anywhere in the prose: no 'according to the Wikipedia article', no 'the arXiv paper describes'; the sources are listed under the piece for the reader. Name the subject in the first sentence. Then the most important facts from the source, most important first, and only then the analysis. Never open on a generality, an aphorism, a question or an abstract noun ('the idea of', 'the pattern').",
-  "CONTEXT AND SYSTEMS ANALYSIS (required; this is why the piece exists, and a piece that only retells its source is rejected): after the facts, place the subject in its bigger picture and explain the system behind it, from the source material. Name the parties or parts involved and what each is rewarded, punished or constrained by; the constraint, delay or information gap that shapes the outcome; the feedback loop that keeps it in place or changes it; who gains and who pays; and where the same arrangement operates beyond this case. Reason openly and say it is reasoning ('the incentive is ...', 'that means ...', 'if ... then ...'), introducing no name, date, number, event or quotation the source material does not contain. Every sentence of the analysis that the source does not state must read as reasoning from its first words; never state an inferred arrangement, funding, motive or behaviour as a reported fact. Build the analysis from this subject's own particulars in the source (its named parties, figures, dates and events): a paragraph that would read the same for any other subject is boilerplate and is rejected. Begin the analysis with a line of its own that contains exactly <!-- analysis --> (readers never see it): everything before that line is reporting from the source material, everything after it is your analysis.",
-  "Quotations: quote only words that appear verbatim in the source material, attributed to the person the source attributes them to, and only from the source that concerns that person; never invent, paraphrase into quotation marks or move a quotation to another subject. Every quotation of five or more words is checked against the sources.",
+  AF_LEDE_RULE,
+  AF_SYSTEMS_RULE,
+  AF_QUOTE_RULE,
   "Present tense where possible. Active voice. Name the actor.",
   "Figures, dates, names and quotations: use one only exactly as the source material states it. Never compute, round, convert, estimate, combine or recall a number from memory; if a point needs a figure the sources do not give, make the point without one.",
   "",
@@ -3373,21 +3684,15 @@ var P_STYLE = L(
   "- Do not add examples, precedents, historical episodes or comparisons from outside the source material. A scenario you need must be an explicit hypothetical that names no real person, organisation, product, date or number.",
   "- Reasoning that follows from the source material is welcome. State it as reasoning (it follows that, if this holds then), never as a further reported fact.",
   "- State uncertainty about the claim at its true size. Never inflate confidence to make a piece land better. Where the evidence leaves a point open, say the point is open, in terms of the subject itself; never write about the source material (what it covers, omits or does not say).",
-  "- For a contested topic in policy, history, geopolitics, health or economics, use at least three independent full-text sources with at least two explicit viewpoint labels and one verified non-US source. Compare where the viewpoints differ; source metadata is not evidence for factual claims.",
-  "- The strongest objection to your central claim must appear in the piece, stated fairly in your own words as an objection a careful reader could raise, with an honest assessment of how bad it is. Never put it in quotation marks and never attribute it to critics, scholars, commentators or anyone the source material does not name making that objection. It may rest on the source material or be pure logic; it may not rest on facts from outside it. Where it sits is your choice; do not give it the same heading or the same position twice in a row.",
+  AF_CONTESTED_RULE,
+  AF_OBJECTION_RULE,
+  AF_EVEN_KEEL_RULE,
   "",
   "The source material is raw research notes, usually encyclopedic extracts in a register you must not copy. Never reproduce their sentences. Banned habits they carry: definitional lead sentences, hedged attributions ('commentators have linked', 'observers note', 'a study found', 'some argue'), and disambiguation-style enumeration. If you need a definition, state it in your own words.",
   "Do not open with 'In [year], ...' unless the date itself is doing the work. Never repeat the opening move of one of your recent pieces (listed below). Pieces listed below are not sources.",
   "Reader verdicts (worth your time? yes/flat/no) are listed below. flat and no mean the piece did not earn its reading time; note what those pieces shared and do not repeat it. A recent no outweighs an old yes."
 );
-var P_ESSAY = L(
-  "FORM: essay, 2000 to 2800 words. This is long-form. One sustained line of thought, carried to the end; do not stop while the argument is still thin, and do not pad.",
-  "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
-  "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
-  "You are given real source material below. Mine it. Use the names, dates, numbers, mechanisms and cases it contains, and only those; a piece that could have been written without reading the sources has failed, and a piece that states anything the sources do not contain is discarded.",
-  "Required content, not required sections: (a) the strongest objection to your central claim, stated fairly in your own words (never as a quotation or an unnamed critic), weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call - the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
-  "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
-);
+var P_ESSAY = AF_P_ESSAY;
 var P_NOTES = L(
   "FORM: connected field essay, 1800 to 2400 words, in 3 to 5 movements.",
   "Each movement is one concrete thing taken from the source material.",
@@ -3403,19 +3708,7 @@ var P_SERIAL = L(
   "This installment must add at least one claim that was not available before it, and it must close mid-motion on a question the next installment has to answer.",
   "Keep the running work's title. Put the installment number in the subtitle."
 );
-var P_CRITIQUE = L(
-  "You are an adversarial reader. You dislike fluency. You are looking for reasons this piece is worthless.",
-  "You are given the SOURCE MATERIAL the writer was allowed to use, and the piece.",
-  "Score each dimension 0 to 10. Be harsh: a 7 means genuinely good.",
-  "specificity: does it hang on concrete checkable particulars from the source material, or could it have been written about anything?",
-  "argument: is there a claim that could be wrong, or only gestures?",
-  "objection: is the stated objection the strongest available one, or a straw man?",
-  "voice: plain scholarly prose free of filler, tells, and self-reference?",
-  "grounding: does every concrete claim (name, date, number, event, quotation) trace to the source material? Score 0 if you find one that does not. A sentence that reports as fact something the source does not state (an event, an arrangement, a behaviour, a cause) counts as such a claim. Reasoning the writer frames as reasoning ('the incentive is ...', 'that means ...', 'if ... then ...', 'it follows that ...') and that adds no name, date, number, event or quotation is not a grounding failure: judge it under argument and systems. Text after a line <!-- analysis --> is the writer's marked analysis: there, count under grounding only a concrete invented fact (a name, date, number, event, rule, quotation or study the source material does not contain); claims about incentives, constraints, motives and consequences in that section are judged under argument and systems, never grounding. Text before that line is held to the full rule.",
-  "systems: does the piece place its subject in a bigger picture and explain the system behind it (the parties and what each is rewarded or constrained by, the constraint or information gap, the feedback loop, who gains and who pays, where else it operates), or does it only retell the source? A retelling scores at most 3.",
-  "invented: every concrete claim you found that the source material does not support, each as a short quotation copied exactly from the piece (at most 16; an empty list when there is none).",
-  'Return JSON only: {"specificity":n,"argument":n,"objection":n,"voice":n,"grounding":n,"systems":n,"invented":["exact quotation", ...],"verdict":"accept" or "reject","why":"one sentence"}'
-);
+var P_CRITIQUE = AF_P_CRITIQUE;
 function json(obj, status) {
   return new Response(JSON.stringify(obj, null, 2), {
     status: status || 200,
@@ -3896,6 +4189,114 @@ async function fetchWiki(title) {
   return { kind: "concept", ref: "https://en.wikipedia.org/wiki/" + encodeURIComponent(p.title || title), title: squish(p.title || title), text: text.slice(0, 12e3) };
 }
 __name(fetchWiki, "fetchWiki");
+// EK-2 (roadmap row 1749, agent_issues 1000713): independent sources for a contested topic. The gate in fitAnchors wants three publishers, two labelled
+// viewpoints and one non-US source, and nothing supplied them: every Wikipedia anchor shares one host, so CONTESTED-PRESKIP-1 skipped every contested
+// candidate and the companion wrote no policy, history, geopolitics, health or economics piece after the gate landed (companion_runs 2026-11-04:
+// "contested, one-host sources" on every history and politics candidate). These adapters read open, keyless APIs of publishers that are not Wikipedia
+// and whose country and standpoint are on record (AF_SOURCE_PROFILES in the shared analysis form): the UK Parliament's Hansard (speeches by named
+// members and parties), Global Voices (citizen media written by people in the countries concerned) and GOV.UK (the UK government's own statements).
+// Each returns an anchor {kind, ref, title, text, viewpoint, sourceCountry, full} or null, none is ever required, and a contested topic is drafted only when
+// the gate (contestedSourcesOk) passes on what they returned; the gate itself is unchanged. The text is the publisher's own words, never a summary.
+var CSRC_MAX_CHARS = 9000, CSRC_TRIES = 2, CSRC_CONTRIB_MAX = 1300, CSRC_CONTRIBS = 7;
+var CSRC_STOP_RE = /^(?:the|and|for|with|from|that|this|into|over|under|between|against|during|after|before|their|about|were|was|has|have|had|its|his|her|of|in|on)$/i;
+function csrcWords(topic) { return String(topic || "").toLowerCase().split(/[^a-z0-9À-ɏ]+/).filter(function (w) { return w.length >= 4 && !CSRC_STOP_RE.test(w); }); }
+// The text names the topic: its whole name, or (two or more significant words) every one of them. A source that does not is not about the topic.
+function csrcRelevant(text, topic) {
+  var low = String(text || "").toLowerCase(), base = linkBase(topic).toLowerCase();
+  if (base.length >= 6 && low.indexOf(base) >= 0) return true;
+  var w = csrcWords(base);
+  return w.length >= 2 && w.every(function (x) { return low.indexOf(x) >= 0; });
+}
+// The source discusses the topic rather than naming it once: its whole name occurs at least twice, or the name is long enough (three or more significant
+// words) that every word being present in the opening is already specific.
+function csrcDiscusses(body, topic) {
+  var low = String(body || "").toLowerCase(), base = linkBase(topic).toLowerCase(), n = 0, at = -1;
+  if (base.length >= 6) while ((at = low.indexOf(base, at + 1)) >= 0) n++;
+  return n >= 2 || csrcWords(base).length >= 3;
+}
+function csrcQueries(topic) {
+  var base = linkBase(topic), q = [base], w = base.split(/\s+/).filter(function (x) { return /^[A-ZÀ-ɏ]/.test(x) && x.length >= 3 && !/^\d+$/.test(x); });
+  if (w.length >= 2 && w.slice(0, 2).join(" ") !== base) q.push(w.slice(0, 2).join(" "));
+  return q.filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+}
+function csrcPartyOf(who) { var m = /\(([^()]{2,12})\)\s*$/.exec(String(who || "")); return m ? m[1] : ""; }
+// Hansard: the debate (Commons, Lords or Westminster Hall) whose title names the topic; a handful of its speeches by different members, round-robin over
+// parties so that government and opposition both speak, each marked with who said it. Text is the speeches as recorded.
+async function fetchHansardSource(topic) {
+  var qs = csrcQueries(topic), debate = null;
+  for (var qi = 0; qi < qs.length && !debate; qi++) {
+    var j = await srcJson("hansard debates", "https://hansard-api.parliament.uk/search/debates.json?take=6&searchTerm=" + encodeURIComponent(qs[qi]));
+    var res = ((j && j.Results) || []).filter(function (r) { return r && r.DebateSectionExtId && csrcRelevant(r.Title, topic); });
+    res.sort(function (a, b) { return String(b.SittingDate).localeCompare(String(a.SittingDate)); });
+    if (res.length) debate = res[0];
+  }
+  if (!debate) return null;
+  var d = await srcJson("hansard debate", "https://hansard-api.parliament.uk/debates/debate/" + encodeURIComponent(debate.DebateSectionExtId) + ".json");
+  var items = ((d && d.Items) || []).filter(function (it) { return it && it.ItemType === "Contribution" && it.AttributedTo && String(it.AttributedTo).toLowerCase() !== "none" && String(it.Value || "").length >= 200; });
+  var byParty = {}, order = [], seen = {};
+  items.forEach(function (it) {
+    var who = String(it.AttributedTo).replace(/\s+/g, " ").trim(), key = who.split("(")[0].trim().toLowerCase(); // a member reappears without constituency and party: one speech each
+    if (seen[key]) return;
+    seen[key] = 1;
+    var party = csrcPartyOf(who) || "other";
+    if (!byParty[party]) { byParty[party] = []; order.push(party); }
+    byParty[party].push({ who: who, text: squish(String(it.Value)).slice(0, CSRC_CONTRIB_MAX) });
+  });
+  var picked = [];
+  for (var round = 0; picked.length < CSRC_CONTRIBS; round++) {
+    var any = false;
+    for (var oi = 0; oi < order.length && picked.length < CSRC_CONTRIBS; oi++) { var c = byParty[order[oi]][round]; if (c) { picked.push(c); any = true; } }
+    if (!any) break;
+  }
+  if (!picked.length) return null;
+  var date = String(debate.SittingDate || "").slice(0, 10), house = String(debate.House || "Commons");
+  var text = "Hansard, the official record of the UK Parliament: " + house + ", " + (debate.DebateSection ? debate.DebateSection + ", " : "") + date + ", debate " + squish(debate.Title) + ". Speeches as recorded. " +
+    picked.map(function (c) { return c.who + ": " + c.text; }).join(" ");
+  text = text.slice(0, CSRC_MAX_CHARS);
+  if (!csrcRelevant(text, topic)) return null;
+  return { kind: "source", ref: "https://hansard.parliament.uk/" + house + "/" + date + "/debates/" + debate.DebateSectionExtId + "/" + squish(debate.Title).replace(/[^A-Za-z0-9]+/g, ""), title: "Hansard: " + squish(debate.Title) + ", " + house + ", " + date, text: text, viewpoint: "uk-parliament", sourceCountry: "GB", full: true };
+}
+// Global Voices: the newest post that names the topic, in full. Citizen media from outside the major outlets, written by people in the countries concerned.
+async function fetchGlobalVoicesSource(topic) {
+  var qs = csrcQueries(topic);
+  for (var qi = 0; qi < qs.length; qi++) {
+    var j = await srcJson("globalvoices", "https://globalvoices.org/wp-json/wp/v2/posts?per_page=6&_fields=link,title,date,content&search=" + encodeURIComponent(qs[qi]));
+    var posts = Array.isArray(j) ? j : [];
+    for (var i = 0; i < posts.length; i++) {
+      var p = posts[i], title = squish(decodeEntities(stripTags(String(p && p.title && p.title.rendered || "")))), body = squish(decodeEntities(stripTags(String(p && p.content && p.content.rendered || ""))));
+      if (!p || !/^https:\/\/globalvoices\.org\//.test(String(p.link || "")) || body.length < ANCHOR_MIN_CHARS || !csrcRelevant(title + " " + body.slice(0, 800), topic) || !csrcDiscusses(title + " " + body, topic)) continue;
+      return { kind: "source", ref: String(p.link), title: "Global Voices: " + title, text: ("Global Voices, " + String(p.date || "").slice(0, 10) + ", " + title + ". " + body).slice(0, CSRC_MAX_CHARS), viewpoint: "global-citizen-media", sourceCountry: "NL", full: true };
+    }
+  }
+  return null;
+}
+// GOV.UK: a speech, statement or press release of the UK government that names the topic, as published.
+var GOVUK_FORMATS = { speech: 1, oral_statement: 1, written_statement: 1, press_release: 1, news_story: 1, government_response: 1 };
+async function fetchGovUkSource(topic) {
+  var qs = csrcQueries(topic);
+  for (var qi = 0; qi < qs.length; qi++) {
+    var j = await srcJson("govuk search", "https://www.gov.uk/api/search.json?count=6&fields=title,link,format,public_timestamp&q=" + encodeURIComponent("\"" + qs[qi] + "\""));
+    var rs = ((j && j.results) || []).filter(function (r) { return r && GOVUK_FORMATS[r.format] && /^\/government\//.test(String(r.link || "")); });
+    for (var i = 0; i < rs.length && i < 3; i++) {
+      var c = await srcJson("govuk content", "https://www.gov.uk/api/content" + rs[i].link);
+      var body = squish(decodeEntities(stripTags(String(c && c.details && c.details.body || ""))));
+      var title = squish(String(rs[i].title || ""));
+      if (body.length < ANCHOR_MIN_CHARS || !csrcRelevant(title + " " + body.slice(0, 800), topic) || !csrcDiscusses(title + " " + body, topic)) continue;
+      return { kind: "source", ref: "https://www.gov.uk" + rs[i].link, title: "GOV.UK: " + title, text: ("GOV.UK, the UK government, " + String(rs[i].public_timestamp || "").slice(0, 10) + ", " + title + ". " + body).slice(0, CSRC_MAX_CHARS), viewpoint: "uk-government", sourceCountry: "GB", full: true };
+    }
+  }
+  return null;
+}
+// All three in parallel; the diagnostic line says which answered (the run log shows it when a candidate is dropped).
+async function gatherContestedSources(primary) {
+  var topic = primary && primary.title || "", names = ["hansard", "globalvoices", "govuk"];
+  var jobs = [fetchHansardSource, fetchGlobalVoicesSource, fetchGovUkSource].map(function (fn, i) {
+    return fn(topic).catch(function (e) { diagNote(names[i] + ": " + String(e && e.message || e).slice(0, 60)); return null; });
+  });
+  var got = await Promise.all(jobs), out = got.filter(Boolean);
+  diagNote("contested sources for " + topic.slice(0, 40) + ": " + names.map(function (n, i) { return n + " " + (got[i] ? got[i].text.length : "none"); }).join(", "));
+  return out;
+}
 async function fetchArxivQuery(label, query, sortBy) {
   var resp = await srcFetch(label, "https://export.arxiv.org/api/query?search_query=" + query + "&sortBy=" + (sortBy || "submittedDate") + "&sortOrder=descending&max_results=8");
   if (!resp) return [];
@@ -4011,7 +4412,7 @@ function cutAtSentence(text, max) {
 var PRIMARY_SHARE = 0.7; // FULLTEXT-BUDGET-1 (1.26.2): was 0.55 of 18000
 // EK-2: a contested topic is not drafted unless source records prove three distinct publishers, differing viewpoints,
 // and a non-US source. Missing perspective or country metadata is not evidence and fails closed.
-var CONTESTED_TOPIC_RE = /\b(?:policy|policies|politics|political|election|elections|parliament|congress|government|governance|war|wars|conflict|invasion|occupation|insurgen\w*|geopolitic\w*|foreign relations|international relations|history|historical|history of|empire|colonial\w*|treaty|treaties|sanction\w*|health|medicine|medical|disease|diseases|epidemic|pandemic|vaccin\w*|econom\w*|inflation|recession|trade|tariff\w*|taxation|market|markets|budget|debt|poverty)\b/i;
+// CONTESTED_TOPIC_RE is defined once, beside composePiece; an earlier, broader definition here was replaced at load by that one and never took effect, so it was removed (EK-2, 1.45.2).
 function isContestedTopic(text) { return CONTESTED_TOPIC_RE.test(String(text || "").slice(0, 4000)); }
 function sourceHost(ref) {
   try {
@@ -4214,7 +4615,7 @@ async function wikiAnchors(used, cooled, seed) {
   var scored = screenTopics(fresh, intros);
   if (Object.keys(intros).length) diagNote("intro screen: " + scored.slice(0, 3).map(function (x) { return x.t.slice(0, 40) + " " + x.s; }).join(", "));
   var titles = scored.map(function (x) { return x.t; });
-  var primary = null, fallback = null, skipped = [], fitted = null, fittedCausal = -1, causalSeen = [];
+  var primary = null, fallback = null, skipped = [], fitted = null, fittedCausal = -1, causalSeen = [], contestedTried = 0;
   for (var t = 0; t < titles.length && !primary && t < 10; t++) {
     var key = "wiki:" + titles[t];
     if (used.indexOf(key) >= 0 || cooled[key]) continue;
@@ -4223,7 +4624,16 @@ async function wikiAnchors(used, cooled, seed) {
     // CONTESTED-PRESKIP-1 (1.44.15, agent_issues 1000633): every Wikipedia anchor shares one host, so a contested primary can never pass
     // the EK-2 source gate in fitAnchors (three publishers); 94 runs on 3-4 Nov fetched and screened one only to drop it, and
     // reading.q08.org published two pieces in a week. Skip such a candidate here and try the next; the gate itself is unchanged.
-    if (isContestedTopic(String(art.title || "") + " " + String(art.text || ""))) { skipped.push(titles[t] + " (contested, one-host sources)"); continue; }
+    if (isContestedTopic(String(art.title || "") + " " + String(art.text || ""))) {
+      // EK-2 (1.45.2): a contested candidate is kept only when independent sources for it exist and the unchanged gate passes on them; otherwise it is
+      // skipped as before, with the reason in the run log. At most CSRC_TRIES candidates per run are given sources, so the fetches stay bounded.
+      if (contestedTried >= CSRC_TRIES) { skipped.push(titles[t] + " (contested, source budget spent)"); continue; }
+      contestedTried++;
+      var extra = await gatherContestedSources(art);
+      var cgate = contestedSourcesOk([art].concat(extra));
+      if (!cgate.ok) { skipped.push(titles[t] + " (contested, " + cgate.why + ")"); continue; }
+      art.sources = extra;
+    }
     var fit = systemsFit(art);
     if (fit.ok) {
       var cs = causalScore(art.text); // CAUSAL-SOURCE-1
@@ -4243,12 +4653,13 @@ async function wikiAnchors(used, cooled, seed) {
   var named = rankLinked(pool, primary.text, primary.title);
   var linked = named.slice(0, 4).concat(pickSeeded(pool.filter(function (x) { return named.indexOf(x) < 0; }), seed, 6)).slice(0, 6);
   var got = 0, picked = [];
-  for (var li = 0; li < linked.length && got < 2; li++) {
+  for (var li = 0; li < linked.length && got < (primary.sources ? 1 : 2); li++) {
     var la = await fetchWiki(linked[li]);
     if (la && la.text.length >= LINK_MIN_CHARS) { anchors.push(la); got++; picked.push(la.title + (named.indexOf(linked[li]) >= 0 ? " (named)" : " (random)")); }
   }
   if (picked.length) diagNote("context links: " + picked.join(", "));
-  return anchors;
+  if (primary.sources) { anchors = [primary].concat(primary.sources, anchors.slice(1)); diagNote("contested topic sources: " + primary.sources.map(function (x) { return sourceHost(x.ref); }).join(", ")); }
+  return anchors.map(function (a) { if (a === primary && a.sources) { var c = Object.assign({}, a); delete c.sources; return c; } return a; });
 }
 async function paperAnchors(subject, seed) {
   var papers = [];
@@ -4516,18 +4927,7 @@ var CREDIT_HEAD_RE = new RegExp("(^|[.!?]\\s+)(?:According\\s+to|As\\s+(?:descri
 function plainCredit(text) {
   return String(text || "").replace(CREDIT_TAIL_RE, "").replace(CREDIT_HEAD_RE, function (m, pre, c) { return pre + c.toUpperCase(); });
 }
-function sourcesFoot(anchorJson) {
-  var refs = [];
-  try { refs = (JSON.parse(String(anchorJson || "{}")).refs || []).filter(function (r) { return /^https:\/\//.test(String(r)); }); } catch (e) { return ""; }
-  if (!refs.length) return "";
-  var items = refs.slice(0, 8).map(function (r) {
-    var label = r, m = /wikipedia\.org\/wiki\/([^?#]+)/.exec(r);
-    if (m) { try { label = decodeURIComponent(m[1]).replace(/_/g, " ") + " (Wikipedia)"; } catch (e2) { label = r; } }
-    else if (/arxiv\.org\/abs\/([^?#]+)/.test(r)) label = "arXiv " + /arxiv\.org\/abs\/([^?#]+)/.exec(r)[1];
-    return "<a href=" + String.fromCharCode(34) + escHtml(r) + String.fromCharCode(34) + " rel=noopener>" + escHtml(label) + "</a>";
-  });
-  return "<p class=src>Sources: " + items.join(" &middot; ") + "</p>";
-}
+function sourcesFoot(anchorJson) { return afSourcesFooterFromJson(anchorJson, escHtml); }
 function renderBody(md) {
   var lines = String(md || "").split(NL);
   var out = [];
@@ -4658,7 +5058,7 @@ function renderIndex(pieces, keyQS, filter) {
   var items = [];
   for (var i = 0; i < pieces.length; i++) {
     var p = pieces[i];
-    items.push("<li><a class=t href=" + String.fromCharCode(34) + "/p/" + p.slug + keyQS + String.fromCharCode(34) + ">" + escHtml(p.title) + "</a><div class=m>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div>" + (p.lede ? "<div class=l>" + escHtml(plainCredit(p.lede)) + "</div>" : "") + "</li>");
+    items.push("<li><a class=t href=" + String.fromCharCode(34) + "/p/" + p.slug + keyQS + String.fromCharCode(34) + ">" + escHtml(p.title) + "</a><div class=m>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div>" + (afShownLede(p) ? "<div class=l>" + escHtml(plainCredit(afShownLede(p))) + "</div>" : "") + "</li>");
   }
   var nav = "<nav class=forms><a href=/" + keyQS + ">all</a>";
   nav += "<a href=/?form=essay" + (keyQS ? "&" + keyQS.slice(1) : "") + ">essays</a>";
@@ -4671,13 +5071,13 @@ __name(renderIndex, "renderIndex");
 __name2(renderIndex, "renderIndex");
 __name22(renderIndex, "renderIndex");
 // BP26-AI-LABEL-1 (1.43.0): Article 50(4) disclosure on every piece; there is no human editorial review, so the label is unconditional.
-var AI_LABEL_HTML = "<span class=ai title=\"Written by AI and checked against its source material by automated review. No human reviews pieces before they appear.\">AI-generated</span>";
+var AI_LABEL_HTML = afAiLabelHtml();
 // BP26-AI-ACT-ART50-1 (1.43.6): the JSON-LD flag that goes with AI_LABEL_HTML. Both ride the same sentence, so the visible label and the machine-readable one never disagree.
 function pieceLd(p) {
   var url = "https://reading.q08.org/p/" + String(p.slug || "");
   var ld = { "@context": "https://schema.org", "@type": "Article", headline: String(p.title || "").slice(0, 200), datePublished: String(p.day || ""), inLanguage: "en", url: url, mainEntityOfPage: url,
     author: { "@type": "Organization", name: "Reading (reading.q08.org)", url: "https://reading.q08.org/" }, publisher: { "@type": "Organization", name: "q08", url: "https://q08.org/" },
-    creditText: "Written by AI and checked against its source material by automated review. No human reviews pieces before they appear." };
+    creditText: AF_AI_LABEL_TEXT };
   return "<script type=\"application/ld+json\">" + JSON.stringify(ld).replace(/</g, "\\u003c") + "</script>";
 }
 function readingIndexLd() {
@@ -4687,10 +5087,11 @@ function readingIndexLd() {
 function renderPiece(p, keyQS) {
   var bodyMd = String(p.body_md || "");
   var startsHeading = /^\s*#/.test(bodyMd);
-  var ledeHtml = p.lede ? "<p class=lede>" + escHtml(plainCredit(p.lede)) + "</p>" : "";
+  var shownLede = afShownLede(p); // EK-1: the index preview and this page read the same lede, stored or lifted from the body's opening paragraph
+  var ledeHtml = shownLede ? "<p class=lede>" + escHtml(plainCredit(shownLede)) + "</p>" : "";
   var bodyContent = plainCredit(bodyMd);
-if (p.lede) {
-  var ledePlain = plainCredit(p.lede).trim();
+if (shownLede) {
+  var ledePlain = plainCredit(shownLede).trim();
   if (bodyContent.trim().startsWith(ledePlain)) {
     bodyContent = bodyContent.trim().slice(ledePlain.length).trim();
   }
@@ -4739,24 +5140,7 @@ function countHeadings(md, level) {
 __name(countHeadings, "countHeadings");
 __name2(countHeadings, "countHeadings");
 __name22(countHeadings, "countHeadings");
-function extractSection(md, needle) {
-  var lines = String(md).split(NL);
-  var out = [];
-  var on = false;
-  for (var i = 0; i < lines.length; i++) {
-    var t = lines[i].trim();
-    if (t.indexOf("#") === 0) {
-      if (on) break;
-      if (t.toLowerCase().indexOf(needle) >= 0) on = true;
-      continue;
-    }
-    if (on) out.push(t);
-  }
-  return out.join(" ").trim();
-}
-__name(extractSection, "extractSection");
-__name2(extractSection, "extractSection");
-__name22(extractSection, "extractSection");
+// extractSection moved to _shared/analysis-form.js (afExtractSection, used by afFindObjection).
 // OBJECTION-FIND-1 (1.25.3, agent_issues 2552; companion_runs 5965, 5968 and 5972, 2026-10-14 04:06-04:07 UTC): the essay contract
 // lets the objection sit anywhere ("a heading, two sentences mid-argument, or the whole last section") and the output rule forbids
 // the same heading or position twice in a row, but the objection was read only from a heading containing "objection", so three of
@@ -4764,55 +5148,10 @@ __name22(extractSection, "extractSection");
 // section under such a heading, else the paragraph that raises it in so many words (with the next one when it only opens the
 // point), else the section under a heading that names a challenge to the claim. The critic still scores whether it is the
 // strongest objection; nothing here judges its quality.
-var OBJECTION_CUE_RE = /\b(objections?|object(?:s)? that|counter-?arguments?|case against|argument against|strongest (?:challenge|reply|doubt)|a careful reader|a sceptic|a skeptic)\b/i;
-var OBJECTION_HEAD_RE = /\b(objections?|against|counter|critics?|sceptic|skeptic|doubts?|wrong|other side|caveats?|challenges?|reservations?|rebuttal|dissent|weakness(?:es)?)\b/i;
-function findObjection(md) {
-  var s = extractSection(md, "objection");
-  if (s.length >= 40) return s;
-  var paras = String(md || "").split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean);
-  for (var i = 0; i < paras.length; i++) {
-    if (paras[i].indexOf("#") === 0 || !OBJECTION_CUE_RE.test(paras[i])) continue;
-    var t = paras[i];
-    if (t.length < 200 && i + 1 < paras.length && paras[i + 1].indexOf("#") !== 0) t += " " + paras[i + 1];
-    t = t.replace(/\s+/g, " ").trim();
-    if (t.length >= 40) return t;
-  }
-  var lines = String(md || "").split(NL), on = false, out = [];
-  for (var j = 0; j < lines.length; j++) {
-    var l = lines[j].trim();
-    if (l.indexOf("#") === 0) {
-      if (on && out.join(" ").trim().length >= 40) break;
-      on = OBJECTION_HEAD_RE.test(l.replace(/^#+/, "")); out = [];
-      continue;
-    }
-    if (on && l) out.push(l);
-  }
-  var h = out.join(" ").replace(/\s+/g, " ").trim();
-  return on && h.length >= 40 ? h : s;
-}
+// OBJECTION_CUE_RE and OBJECTION_HEAD_RE moved to _shared/analysis-form.js (AF_OBJECTION_CUE_RE, AF_OBJECTION_HEAD_RE).
+function findObjection(md) { return afFindObjection(md); }
 __name(findObjection, "findObjection");
-function extractLede(md) {
-  var lines = String(md).split(NL);
-  var i = 0;
-  while (i < lines.length && !lines[i].trim()) i++;
-  var startsHeading = i < lines.length && lines[i].trim().indexOf("#") === 0;
-  while (i < lines.length && lines[i].trim().indexOf("#") === 0) {
-    i++;
-    while (i < lines.length && !lines[i].trim()) i++;
-  }
-  var buf = [];
-  while (i < lines.length) {
-    var t = lines[i].trim();
-    if (!t) break;
-    if (t.indexOf("#") === 0) break;
-    if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) break;
-    buf.push(t);
-    i++;
-  }
-  var lede = buf.join(" ").trim();
-  var rest = startsHeading ? String(md).trim() : lines.slice(i).join(NL).trim();
-  return { lede, rest, startsHeading };
-}
+function extractLede(md) { return afExtractLede(md); }
 __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
 __name22(extractLede, "extractLede");
@@ -4824,7 +5163,12 @@ function sourceDiversityOk(srcs) {
   if (!hasNonUS) return false;
   var vpSet = {};
   srcs.forEach(function (a) { if (a.viewpoint) vpSet[a.viewpoint] = true; });
-  return Object.keys(vpSet).length >= 2;
+  if (Object.keys(vpSet).length < 2) return false;
+  // EK-2: the 3 sources must be independent - distinct refs, not the same anchor counted twice.
+  var seen = {};
+  var independent = true;
+  srcs.forEach(function (a) { var k = String(a.ref || a.title || "").trim(); if (!k || seen[k]) independent = false; seen[k] = true; });
+  return independent;
 }
 __name(sourceDiversityOk, "sourceDiversityOk");
 __name2(sourceDiversityOk, "sourceDiversityOk");
@@ -4847,7 +5191,7 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
   var sys = [P_STYLE, P_ADV1, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular that appears in the source material, and you may name nothing that does not appear there. A sentence that could have been written without the source material is a failed sentence. Write the title and every heading in sentence case: capitalise only the first word and names that appear in the source material.";
   var lenRule = concreteRule + " " + "Length: " + bandText + (form === "notes" ? ", in 3 to 5 movements" : "") + ". Reach it with what the source material says, never with particulars it does not hold: a shorter piece that adds nothing is better than a longer one that invents.";
-  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : "", revision ? NL + factRevisionPrompt(revision.problems) + NL + NL + "--- DRAFT TO REVISE ---" + NL + "# " + String(revision.title || "") + NL + NL + String(revision.body_md || "").slice(0, 24e3) : ""].join(NL);
+  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : "", revision ? NL + (revision.note || factRevisionPrompt(revision.problems)) + NL + NL + "--- DRAFT TO REVISE ---" + NL + "# " + String(revision.title || "") + NL + NL + String(revision.body_md || "").slice(0, 24e3) : ""].join(NL);
   var writerModel = form === "notes" ? WRITER_MODEL : WRITER_MODEL_ESSAY;
   authorFamilies = {}; // WRITER-FAMILY-1: a new draft, a new set of author families
   var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, WRITER_TIMEOUT_MS, writerModel, form === "notes" ? "writer" : "essay");
@@ -4996,51 +5340,13 @@ function pruneRepairFeedback(problems, form, piece, subject) {
   return "The previous draft was good, but its first paragraph no longer names its subject. Do not start over. Return the same piece, same title and the same sections in the same order. " +
     ledeLine + " Keep every other sentence as it is. The draft follows." + NL + NL + "# " + String(piece && piece.title || "") + NL + NL + String(piece && piece.body_md || "").slice(0, 24e3);
 }
-// COMPANION-LEDE-1 (1.17.0; owner 2026-10-13: every piece opens with a proper lede, inverted pyramid). The lede is the first paragraph a
-// reader sees (piece.lede, else the first prose paragraph of the body). It must share at least one significant word with the subject's
-// title (the first five letters, so "trackway" matches "trackways"), must not open on abstract framing or a question, and stays short.
-var LEDE_MAX_WORDS = 120;
-var LEDE_ABSTRACT_RE = /^\s*(?:(?:the|this|that|these|such|our)\s+(?:very\s+)?(?:idea|notion|concept|question|problem|pattern|mechanism|story|history|tension|dynamics?|nature|essence|meaning|paradox)\s+of\b|in\s+(?:a|an|the|our|today's)\s+(?:world|age|era|time|times)\b|throughout\s+(?:history|time|the\s+ages)\b|since\s+the\s+dawn\b|(?:imagine|consider|picture)\b|what\s+(?:if|does|do|is|makes|happens)\b|(?:we|you)\s+(?:often|rarely|tend|all|like)\b|there\s+is\s+something\b|few\s+\w+\s+(?:are|have|capture)\b)/i;
-var LEDE_STOP = /^(this|that|with|from|have|were|their|there|which|when|what|into|than|then|they|them|been|also|only|more|most|such|does|each|over|will|would|could|should|about|after|before|because|while|where|your|using|based|towards?|new|how|why|the|and|for)$/;
-function ledeWords(t) { return String(t || "").toLowerCase().replace(/[‐-―−]/g, "-").split(/[^a-z0-9À-ɏ]+/).filter(function (w) { return w.length >= 4 && !LEDE_STOP.test(w); }); }
-function ledeOf(piece) {
-  var l = String(piece && piece.lede || "").trim();
-  if (l) return l;
-  var paras = String(piece && piece.body_md || "").split(/\n\s*\n/);
-  for (var i = 0; i < paras.length; i++) { var p = paras[i].trim(); if (p && p.charAt(0) !== "#" && p.indexOf("- ") !== 0 && p.indexOf("> ") !== 0 && p.indexOf("<!--") !== 0) return p.replace(/\s+/g, " "); }
-  return "";
-}
-function ledeProblems(piece, subject) {
-  var lede = ledeOf(piece), out = [];
-  if (!lede) return ["lede missing: open with a paragraph that says what the subject is and where it comes from"];
-  var n = lede.split(/\s+/).filter(Boolean).length;
-  if (n > LEDE_MAX_WORDS) out.push("lede too long (" + n + " words; the first paragraph is at most " + LEDE_MAX_WORDS + ")");
-  var first = (lede.match(/^[\s\S]*?[.!?](?=\s|$)/) || [lede])[0];
-  if (LEDE_ABSTRACT_RE.test(lede.replace(/^[*_\s]+/, "")) || /\?\s*$/.test(first)) out.push("lede opens on abstract framing or a question ('" + lede.slice(0, 50) + "'): open by saying what the subject is and where it comes from");
-  var want = ledeWords(subject);
-  var have = ledeWords(lede).map(function (w) { return w.slice(0, 5); });
-  if (want.length && !want.some(function (w) { return have.indexOf(w.slice(0, 5)) >= 0; })) out.push("lede does not name the subject: the first paragraph must say what " + String(subject).slice(0, 80) + " is and where it comes from");
-  return out;
-}
-// LEDE-SPLIT-1 (1.19.1, run 5342-5364: three of five drafts failed only or mainly on "lede too long", 137-174 words). An over-long first
-// paragraph is split at a sentence boundary: the opening sentences up to LEDE_SPLIT_WORDS stay the lede, the rest becomes the first body
-// paragraph. Nothing is added or removed, so no fact changes; a single sentence longer than the limit is left to the check.
-var LEDE_SPLIT_WORDS = 100;
-function splitLongLede(piece) {
-  var lede = String(piece && piece.lede || "").trim();
-  var count = function (s) { return String(s).split(/\s+/).filter(Boolean).length; };
-  if (!lede || count(lede) <= LEDE_MAX_WORDS) return piece;
-  var raw = lede.match(/[\s\S]*?[.!?]+["')\]’”]*(?=\s|$)\s*|[\s\S]+$/g) || [lede], sents = [];
-  raw.forEach(function (x) { if (sents.length && SENT_ABBREV_RE.test(sents[sents.length - 1])) sents[sents.length - 1] += x; else sents.push(x); });
-  var kept = [], n = 0, i = 0;
-  for (; i < sents.length; i++) { var w = count(sents[i]); if (kept.length && n + w > LEDE_SPLIT_WORDS) break; kept.push(sents[i]); n += w; }
-  if (i >= sents.length) return piece;
-  var head = kept.join("").trim(), rest = sents.slice(i).join("").trim();
-  var body = String(piece.body_md || "");
-  // when the lede was read out of the body (a draft that opened with a heading) the body already holds the paragraph: shorten only the lede
-  if (body.indexOf(lede) !== -1) return Object.assign({}, piece, { lede: head });
-  return Object.assign({}, piece, { lede: head, body_md: rest + "\n\n" + body });
-}
+// COMPANION-LEDE-1, LEDE-SPLIT-1: the lede constants and helpers live in _shared/analysis-form.js (EK-6, ANALYSIS-FORM-1); these names stay for the callers and the suites.
+var LEDE_MAX_WORDS = AF_LEDE_MAX_WORDS;
+var LEDE_SPLIT_WORDS = AF_LEDE_SPLIT_WORDS;
+function ledeWords(t) { return afLedeWords(t); }
+function ledeOf(piece) { return afLedeOf(piece); }
+function ledeProblems(piece, subject) { return afLedeProblems(piece, subject); }
+function splitLongLede(piece) { return afSplitLongLede(piece); }
 // LENGTH-LEDE-1 (1.22.7, companion_runs 5678-5691 of 2026-10-13 20:00 UTC): composePiece cuts the first paragraph out into piece.lede
 // whenever the draft opens with a paragraph, and leaves it in the body when the draft opens with a heading, so the length rails counted
 // the same text 70-120 words shorter in the first layout (notes drafts of 834, 702 and 769 words were rejected against a floor of 850).
@@ -5096,7 +5402,7 @@ var GROUNDING_PREFIX = "grounding:";
 // SENT-INITIALISM-1 (1.26.2, companion_runs 6224 of 2026-10-14 08:11 UTC): a dotted initialism ("U.S.", "D.C.") ended a sentence, so the
 // critic prune that deleted "... of the U.S." left the fragment "Consul. Negotiations failed ..." and the critic scored the fragment
 // invented. An initialism of two or more dotted capitals no longer ends a sentence (a sentence that truly ends on one joins the next).
-var SENT_ABBREV_RE = /(?:^|[\s(])(?:(?:[A-Z]\.)+[A-Z]|[A-Z]|Dr|Mr|Mrs|Ms|Prof|St|No|vs|v|cf|Fig|Eq|et al|e\.g|i\.e|pp?|Jr|Sr|Gen|Gov|Sen|Rep|Lt|Col|Capt|Sgt|Hon|Stat|Ct|Mt|Ft)\.\s*$/;
+var SENT_ABBREV_RE = AF_SENT_ABBREV_RE;
 function deleteSentences(piece, cutFn) {
   var fields = { lede: String(piece && piece.lede || ""), body_md: String(piece && piece.body_md || "") }, units = [], layout = {};
   Object.keys(fields).forEach(function (f) {
@@ -6156,36 +6462,45 @@ function aiReplyText(resp) {
   if (c && typeof c !== "string") c = JSON.stringify(c);
   return c || "";
 }
-var BALANCE_FAMILY = "ensemble-policy-1";
-var BALANCE_PROMPT = "You are an even-keel balance reviewer from a different editorial family. Score the draft for one-sidedness on a 0-100 scale, where 100 means the strongest opposing argument is stated at full strength, every disputed claim is attributed, and loaded terms are avoided. Return only JSON: {\"score\":<int>,\"pass\":<bool>,\"reason\":<string>}. A piece passes with score >= 70.";
-var BALANCE_MIN_SCORE = 70;
-function parseBalanceScore(text) {
-  var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
-  var o = null, m = t.match(/\{[\s\S]*\}/);
-  if (m) { try { o = JSON.parse(m[0]); } catch (e) { o = null; } }
-  if (!o) { var sm = t.match(/"score"\s*:\s*(\d+)/); if (!sm) return null; o = { score: parseInt(sm[1], 10) }; }
-  var score = Number(o.score);
-  if (!Number.isFinite(score) || score < 0 || score > 100) return null;
-  var pass = typeof o.pass === "boolean" ? o.pass : score >= BALANCE_MIN_SCORE;
-  return { score: score, pass: pass, reason: String(o.reason || "").slice(0, 260) };
-}
+// EK-3 (roadmap row 1750, agent_issues 1000714): the even-keel check. Until 1.44.17 the reviewer was chosen from a family called "ensemble-policy-1", which
+// no model has (MODEL_FAMILY names nvidia, openai, moonshot, deepseek and zai), so balanceCheck answered "unavailable" for every piece, verifyPiece
+// ignored an unavailable check, and companion_audits.balance_score is NULL on every row, 2026-10-28 to 2026-11-04. The reviewer is now chosen by
+// afBalanceReviewers (_shared/analysis-form.js): a family other than the writer's, one that has not judged the piece when there is one, asked after
+// the grounding check and both fact-check judges have passed it. Measured 2026-11-04 on 16 published pieces with kimi-k2.6 and nemotron (31 scores):
+// min 68, max 90, one score under 70; three one-sided polemics and three balanced essays on the same topics scored 0 to 25 and 88 to 95 with
+// kimi, nemotron and gpt-oss alike, so the bar of 70 separates them and costs a published piece about one verdict in thirty.
+var BALANCE_MIN_SCORE = AF_BALANCE_MIN_SCORE;
+var BALANCE_PROMPT = AF_BALANCE_PROMPT;
+var BALANCE_TIMEOUT_MS = 6e4;
+var BALANCE_ASKS = 2;
+function parseBalanceScore(text) { return afParseBalanceScore(text); }
 async function balanceCheckOne(env, modelId, draft) {
   try {
     var body = BALANCE_PROMPT + "\n\n" + todayLine() + "\n\n--- DRAFT ---\n" + String(draft).trim().slice(0, 30000);
-    var resp = await aiRunAttr(env, "personal-companion", "balance", modelId, { messages: [{ role: "user", content: body }], max_tokens: REVIEW_MAX_TOKENS, temperature: 0.1 }, { gateway: { id: "default", skipCache: true }, signal: AbortSignal.timeout(REVIEW_TIMEOUT_MS) });
+    var resp = await aiRunAttr(env, "personal-companion", "balance", modelId, Object.assign({ messages: [{ role: "user", content: body }], max_tokens: REVIEW_MAX_TOKENS, temperature: 0.1 }, factCheckExtra(modelId)), { gateway: { id: "default", skipCache: true }, signal: AbortSignal.timeout(BALANCE_TIMEOUT_MS) });
     var out = aiReplyText(resp);
     var s = parseBalanceScore(out);
     if (s) { s.model = modelId; s.family = familyOf(modelId); return s; }
     return { failed: true, model: modelId, error: "no balance score in reply (" + String(out).length + " chars)" };
   } catch (e) { return { failed: true, model: modelId, error: String(e && e.message || e).slice(0, 140) }; }
 }
-async function balanceCheck(env, draft, writerModel, seedText) {
+// judged: the fact-check judges (their families are the ones the piece has already been read by). Fails open ("unavailable") when no reviewer answers;
+// verifyPiece records that, and only after the grounding check and the fact-check have passed.
+async function balanceCheck(env, draft, writerModel, seedText, judged) {
   var wf = writerModel ? familyOf(writerModel) : "";
-  var ids = orderByHealth(pickReviewers(wf ? [wf] : [], 20, seedOf(seedText)).filter(function (id) { return familyOf(id) === BALANCE_FAMILY && (!wf || familyOf(id) !== wf); }), await sickReviewers(env));
-  if (!ids.length) return { unavailable: true, reason: "no " + BALANCE_FAMILY + " reviewer available", score: null };
-  var res = await balanceCheckOne(env, ids[0], draft);
-  if (res.failed) return { unavailable: true, reason: res.error, score: null, model: res.model };
-  return { unavailable: false, ok: res.pass !== false, score: res.score, pass: res.pass, reason: res.reason, model: res.model, family: res.family };
+  var avoid = (judged || []).map(function (j) { return j && (j.family || familyOf(j.model)); }).filter(Boolean);
+  var order = afBalanceReviewers(REVIEW_POOL, { familyOf: familyOf, allowed: modelAllowed, writerFamily: wf, avoid: avoid, sick: await sickReviewers(env), seed: seedOf(seedText) });
+  if (!order.length) return { unavailable: true, reason: "no reviewer from a family other than the writer's", score: null, tried: [] };
+  var tried = [];
+  for (var i = 0; i < order.length && i < BALANCE_ASKS; i++) {
+    var res = await balanceCheckOne(env, order[i], draft);
+    if (!res.failed) {
+      var v = afBalanceVerdict(res);
+      return { unavailable: false, ok: v.state === "pass", score: v.score, parts: v.parts, reason: v.reason, model: res.model, family: res.family };
+    }
+    tried.push(String(order[i]).split("/").pop() + ": " + res.error);
+  }
+  return { unavailable: true, reason: "no balance score from " + tried.length + " reviewer(s) (" + tried.join(" | ").slice(0, 300) + ")", score: null, tried: tried };
 }
 // FACTCHECK-NOTHINK-1 (measured 2026-10-12 against the live models with the same fact-check prompt): reasoning reviewers spent 4-9 s thinking about a
 // task that needs a comparison. These per-model switches return the same verdict in 0.7-2.6 s. Models without a measured switch get none.
@@ -6353,9 +6668,11 @@ async function verifyPiece(env, text, ground, writerModel, seedText, opts) {
   var det = groundingProblems(stripAnalysisMark(text), ground, opts);
   if (det.length) return { ok: false, stage: "grounding", problems: det, judges: [], unavailable: false };
   var fc = await factCheck(env, reviewText(text), ground, writerModel, seedText);
-  var bal = await balanceCheck(env, reviewText(text), writerModel, seedText);
-  if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true, balance: bal };
-  if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false, balance: bal };
+  if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true, balance: null };
+  if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false, balance: null };
+  // EK-3: the even-keel reviewer reads a draft only after the deterministic gate and both fact-check judges passed it (class A layers first, no model call
+  // spent on a draft that is about to be pruned). opts.noBalance skips it: the audit of published pieces judges accuracy, and a one-sided piece is not retracted.
+  var bal = opts && opts.noBalance ? null : await balanceCheck(env, reviewText(text), writerModel, seedText, fc.judges);
   if (bal && !bal.unavailable && !bal.ok) return { ok: false, stage: "balance", problems: ["one-sided: " + (bal.reason || ("score " + (bal.score == null ? "unknown" : bal.score)))], judges: fc.judges.concat(bal.model ? [{ model: bal.model, family: bal.family, verdict: "balance-fail" }] : []), unavailable: false, balance: bal };
   return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false, inferences: fc.inferences || [], balance: bal };
 }
@@ -6393,7 +6710,11 @@ async function recordAudit(env, slug, verdict, stage, vr) {
       slug,
       verdict,
       stage,
-      ((vr && vr.judges) || []).map(function (j) { return j.model; }).join(","),
+      (function () {
+        var m = ((vr && vr.judges) || []).map(function (j) { return j.model; });
+        if (vr && vr.balance && vr.balance.model) m.push(vr.balance.model);
+        return m.join(",");
+      })(),
       JSON.stringify(((vr && vr.problems) || []).slice(0, 10)),
       nowIso(),
       (vr && vr.balance && typeof vr.balance.score === "number") ? vr.balance.score : null
@@ -6425,7 +6746,7 @@ async function auditPublished(env, limit) {
       res.withdrawn++;
       continue;
     }
-    var vr = await verifyPiece(env, pieceText(p), p.ground_text, "", "audit:" + p.slug, {});
+    var vr = await verifyPiece(env, pieceText(p), p.ground_text, "", "audit:" + p.slug, { noBalance: true });
     if (vr.unavailable) { res.deferred++; continue; }
     res.checked++;
     if (vr.ok) { await recordAudit(env, p.slug, "pass", vr.stage, vr); res.passed++; continue; }
@@ -6824,7 +7145,7 @@ async function generate(env, form, opts) {
         if (prunedShort && extendFb) finalPiece = prunedShort.piece;
         var rev = extendFb
           ? await composePiece(env, form, topic, anchors, life, profile, continuity, extendFb + NL + NL + "Add no name, date, figure or claim that the source material does not state.")
-          : await composePiece(env, form, topic, anchors, life, profile, continuity, "", { title: finalPiece.title, body_md: (finalPiece.lede ? finalPiece.lede + NL + NL : "") + finalPiece.body_md, problems: vr.problems });
+          : await composePiece(env, form, topic, anchors, life, profile, continuity, "", { title: finalPiece.title, body_md: (finalPiece.lede ? finalPiece.lede + NL + NL : "") + finalPiece.body_md, problems: vr.problems, note: vr.stage === "balance" ? afBalanceRevisionNote(vr.balance && vr.balance.reason) : "" });
         var rp = rev && rev.piece ? withAutoMark(splitLongLede(rev.piece)) : null; // ANALYSIS-AUTO-1
         // the revision keeps the draft's title when it dropped the "# " line (composePiece then falls back to the topic name)
         if (rp && !/^\s*(?:```[^\n]*\n)?\s*# /.test(String(rev.raw || ""))) rp.title = finalPiece.title;
@@ -6854,7 +7175,7 @@ async function generate(env, form, opts) {
       }
       if (!vr.ok) {
         await logRun(env, form, model, topic.id, "rejected", "fact-check " + vr.stage + ": " + vr.problems.slice(0, 4).join(" | ").slice(0, 600), Date.now() - t0);
-        feedback = "The previous draft was rejected by independent fact-checkers; every item is a claim the source material does not support. Write a new draft that uses only facts copied word-for-word from the source material with a quoted citation after each, and no outside knowledge: " + vr.problems.slice(0, 4).join(" | ");
+        feedback = vr.stage === "balance" ? afBalanceRetryFeedback(vr.balance && vr.balance.reason) : "The previous draft was rejected by independent fact-checkers; every item is a claim the source material does not support. Write a new draft that uses only facts copied word-for-word from the source material with a quoted citation after each, and no outside knowledge: " + vr.problems.slice(0, 4).join(" | ");
         continue;
       }
       // COMPANION-FACT-INFERENCE-1: sentences the reviewers listed as the piece's own reasoning are deleted when the draft can spare them
@@ -6900,6 +7221,9 @@ async function generate(env, form, opts) {
       }
       q.gate = "passed";
       q.factcheck = { stage: vr.stage, models: (vr.judges || []).map(function (j) { return j.model; }), pruned: pruneTrail.join(", ") };
+      // EK-3: the even-keel result is stored with the piece (quality_json.balance) and as companion_audits.balance_score; a check that could not run says so
+      q.balance = afBalanceRecord(vr.balance);
+      await logRun(env, form, model, topic.id, "stage", "even-keel: " + (q.balance.state === "unavailable" ? "unavailable (" + q.balance.reason + "), published after the grounding check and both fact-check judges passed" : q.balance.state + " " + q.balance.score + " by " + String(q.balance.model).split("/").pop() + " (" + q.balance.family + ")"), Date.now() - t0);
       // COMPANION-SERIAL-TITLE-1: a reframe, a prune or the fact revision can hand the title back as the bare running title
       if (installmentTitle && finalPiece.title !== installmentTitle && serialTitleMatches(finalPiece.title, serialRun && serialRun.title)) finalPiece = Object.assign({}, finalPiece, { title: installmentTitle });
       best = { piece: finalPiece, quality: q, words: v.words, vr: vr };
@@ -7026,6 +7350,39 @@ function stallRecurred(statuses) {
   }
   return false;
 }
+// EK-3 (1.45.0, roadmap row 1750): the even-keel check is measured, counts only (no text leaves the personal plane). scored_share_last5: of the five newest audit rows
+// that passed, the share that carry a balance_score, i.e. the check ran and answered (0 of 20 rows before this version; the newest five move with the pieces, so a
+// repair shows in days, not after a week of old rows). hold_share_7d: of the drafts that reached the even-keel reviewer in the 7 days to now (the scored passes plus the
+// attempts it stopped at stage balance), the share it stopped: a wall would show here before it shows as a stall. Written each hourly tick into the two metrics the
+// migration registers; an unregistered metric updates no row.
+async function writeBalanceMetrics(env, now) {
+  try {
+    var since = new Date(now - 7 * 864e5).toISOString();
+    var a = await env.PERSONAL.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN balance_score IS NOT NULL THEN 1 ELSE 0 END) AS scored FROM (SELECT balance_score FROM companion_audits WHERE verdict = 'pass' ORDER BY checked_at DESC LIMIT 5)").first();
+    var h = await env.PERSONAL.prepare("SELECT COUNT(*) AS held FROM companion_runs WHERE status = 'rejected' AND run_at >= ?1 AND detail LIKE 'fact-check balance:%'").bind(since).first();
+    var passes = Number(a && a.n) || 0, scored = Number(a && a.scored) || 0, held = Number(h && h.held) || 0;
+    var scoredShare = passes ? Math.round(1000 * scored / passes) / 1000 : null;
+    var recent = await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM companion_audits WHERE verdict = 'pass' AND balance_score IS NOT NULL AND checked_at >= ?1").bind(since).first();
+    var holdShare = Number(recent && recent.n) + held ? Math.round(1000 * held / (Number(recent && recent.n) + held)) / 1000 : null;
+    var stamp = new Date(now).toISOString();
+    var put = "UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1";
+    await env.AUDIT.prepare(put).bind("companion_balance_scored_share_last5", scoredShare == null ? null : String(scoredShare), stamp).run();
+    await env.AUDIT.prepare(put).bind("companion_balance_hold_share_7d", holdShare == null ? null : String(holdShare), stamp).run();
+    return { passes: passes, scored: scored, held: held, scoredShare: scoredShare, holdShare: holdShare };
+  } catch (e) { stallLog("balance.metric", e); return null; }
+}
+// EK-2 (1.45.3, roadmap row 1749): how many of the visible pieces of the last 30 days cite a publisher other than Wikipedia and arXiv in their sources footer (their
+// anchor_json refs), i.e. were written on independent sources. Counts only. It reads 0 until the first contested topic with sources publishes, and is the closing measure of
+// issue 1000713; an unregistered metric updates no row.
+async function writeSourceMetrics(env, now) {
+  try {
+    var since = new Date(now - 30 * 864e5).toISOString();
+    var r = await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM companion_pieces WHERE created_at >= ?1 AND CASE WHEN json_valid(anchor_json) THEN EXISTS (SELECT 1 FROM json_each(companion_pieces.anchor_json, '$.refs') j WHERE j.value LIKE 'https://%' AND j.value NOT LIKE 'https://%wikipedia.org/%' AND j.value NOT LIKE 'https://arxiv.org/%') ELSE 0 END AND " + VISIBLE_SQL).bind(since).first();
+    var n = Number(r && r.n) || 0;
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind("companion_independent_source_pieces_30d", String(n), new Date(now).toISOString()).run();
+    return { pieces: n };
+  } catch (e) { stallLog("source.metric", e); return null; }
+}
 async function companionStallDetector(env, nowMs) {
   if (!env.AUDIT || !env.PERSONAL) return { skipped: "no binding" };
   var now = nowMs || Date.now();
@@ -7039,6 +7396,7 @@ async function companionStallDetector(env, nowMs) {
   try {
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind("companion_hours_since_last_piece", hours == null ? null : String(hours), new Date(now).toISOString()).run();
   } catch (eM) { stallLog("stall.metric", eM); }
+  await writeBalanceMetrics(env, now); await writeSourceMetrics(env, now);
   var open = await env.AUDIT.prepare("SELECT id, created_at FROM agent_issues WHERE status='open' AND title LIKE ?1 ORDER BY id DESC").bind(STALL_TITLE + ":%").all();
   var openRows = (open && open.results) || [];
   var openIds = openRows.map(function (o) { return o.id; });
@@ -7262,7 +7620,7 @@ var worker_default = {
     if (p === "/" || p === "") {
       await ensureSchema(env);
       var filter = u.searchParams.get("form") || "";
-      var sql2 = filter ? "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE form = ? AND " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 200" : "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 200";
+      var sql2 = filter ? "SELECT slug, form, title, lede, CASE WHEN lede IS NULL OR lede = '' THEN substr(body_md, 1, 1500) ELSE '' END AS body_md, word_count, day FROM companion_pieces WHERE form = ? AND " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 200" : "SELECT slug, form, title, lede, CASE WHEN lede IS NULL OR lede = '' THEN substr(body_md, 1, 1500) ELSE '' END AS body_md, word_count, day FROM companion_pieces WHERE " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 200";
       var st2 = filter ? env.PERSONAL.prepare(sql2).bind(filter) : env.PERSONAL.prepare(sql2);
       var rows = await st2.all();
       var res = html(renderIndex(rows.results || [], keyQS, filter));
@@ -8187,6 +8545,8 @@ function groundingNeedles(problems) {
   return needles.filter(function (n, i, a) { return n.length > 0 && a.indexOf(n) === i; });
 }
 var __verify = { stallRecurred: stallRecurred, shortenFeedback: shortenFeedback, LENGTH_CEILING: LENGTH_CEILING, pruneClassOf: pruneClassOf, pruneClassesOf: pruneClassesOf, pruneRepeat: pruneRepeat, PRUNE_REPEAT_AFTER: PRUNE_REPEAT_AFTER, attemptBudgetStop: attemptBudgetStop, STALL_MIN: STALL_MIN, pruneHeadings: pruneHeadings, mirrorPipeline: mirrorPipeline, pipeItem: pipeItem, pipeSince: pipeSince, PIPE_SELECT: PIPE_SELECT, PIPE_PROPERTY: PIPE_PROPERTY, PIPE_ID_PREFIX: PIPE_ID_PREFIX, qualityWorst: qualityWorst, gateWorst: gateWorst, criticGroundingGates: criticGroundingGates, STARVED_RETRY_QUIET_MS: STARVED_RETRY_QUIET_MS, quotesAllSourced: quotesAllSourced, sourcedPassage: sourcedPassage, sourceSentences: sourceSentences, sourcedRereadNote: sourcedRereadNote, SOURCED_COVER: SOURCED_COVER, SENT_ABBREV_RE: SENT_ABBREV_RE, GROUND_MAX: GROUND_MAX, PRIMARY_SHARE: PRIMARY_SHARE, deleteSentences: deleteSentences, rubricNoQuoteNote: rubricNoQuoteNote, quotesAllInAnalysis: quotesAllInAnalysis, rubricRereadNote: rubricRereadNote, eventTitles: eventTitles, eventDay: eventDay, fetchEventTitles: fetchEventTitles, EVENT_POOL: EVENT_POOL, WRITER_LEAD: WRITER_LEAD, CF_FALLBACK_GPT_OSS: CF_FALLBACK_GPT_OSS, loadWriterOrder: loadWriterOrder, fallbackChain: fallbackChain, cutAtSentence: cutAtSentence, causalScore: causalScore, CAUSAL_MIN: CAUSAL_MIN, CAUSAL_CHARS: CAUSAL_CHARS, fitAnchors: fitAnchors, logCaught: logCaught, foldAccents: foldAccents, todayLine: todayLine, reframePiece: reframePiece, parseDraftMd: parseDraftMd, P_REFRAME: P_REFRAME, REFRAME_BAND: REFRAME_BAND, REFRAME_START_BEFORE_MS: REFRAME_START_BEFORE_MS, CF_FALLBACK: CF_FALLBACK, pieceWords: pieceWords, splitText: splitText, autoMarkAnalysis: autoMarkAnalysis, withAutoMark: withAutoMark, analysisSplitInfo: analysisSplitInfo, CRITIC_INVENTED_MAX: CRITIC_INVENTED_MAX, writerBand: writerBand, writerIsFallback: writerIsFallback, WRITER_TEMPERATURE_FB: WRITER_TEMPERATURE_FB, CRITIC_TEMPERATURE: CRITIC_TEMPERATURE, ANALYSIS_MARK: ANALYSIS_MARK, stripAnalysisMark: stripAnalysisMark, analysisSplitOk: analysisSplitOk, reviewText: reviewText, stripPieceMark: stripPieceMark, persistPiece: persistPiece, STARVED_RETRY_MAX_24H: STARVED_RETRY_MAX_24H, fetchWikiIntros: fetchWikiIntros, introScore: introScore, screenTopics: screenTopics, wikiAnchors: wikiAnchors, TOPIC_POOL: TOPIC_POOL, pruneBlockFixable: pruneBlockFixable, pruneRepairFeedback: pruneRepairFeedback, expandFeedback: expandFeedback, rankLinked: rankLinked, linkMentionScore: linkMentionScore, CRITIC_PRUNE_ROUNDS: CRITIC_PRUNE_ROUNDS, criticQuotes: criticQuotes, critiqueWorst: critiqueWorst, QUOTE_MIN_WORDS: QUOTE_MIN_WORDS, systemsFit: systemsFit, generationHold: generationHold, gatherVerdicts: gatherVerdicts, orderByHealth: orderByHealth, sickReviewers: sickReviewers, FACTCHECK_HEDGE_MS: FACTCHECK_HEDGE_MS, starvedRetryDue: starvedRetryDue, arxivWindow: arxivWindow, fetchWiki: fetchWiki, splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, unwrapJsonItem: unwrapJsonItem, itemHasNoClaim: itemHasNoClaim, reviewerSaysSupported: reviewerSaysSupported, factItemText: factItemText, splitFactItems: splitFactItems, serialInstallmentTitle: serialInstallmentTitle, serialBaseTitle: serialBaseTitle, serialChaptersDone: serialChaptersDone, serialTitleMatches: serialTitleMatches, withInstallmentTitle: withInstallmentTitle, freeInstallmentPiece: freeInstallmentPiece, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, plainCredit: plainCredit, sourcesFoot: sourcesFoot, renderPiece: renderPiece, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+Object.assign(__verify, { gatherContestedSources: gatherContestedSources, fetchHansardSource: fetchHansardSource, fetchGlobalVoicesSource: fetchGlobalVoicesSource, fetchGovUkSource: fetchGovUkSource, csrcRelevant: csrcRelevant, csrcDiscusses: csrcDiscusses, csrcQueries: csrcQueries, wikiAnchors: wikiAnchors, getSrcDiag: function () { return srcDiag; } });
+Object.assign(__verify, { writeSourceMetrics: writeSourceMetrics, writeBalanceMetrics: writeBalanceMetrics, balanceCheck: balanceCheck, balanceCheckOne: balanceCheckOne, parseBalanceScore: parseBalanceScore, verifyPiece: verifyPiece, recordAudit: recordAudit, factRevisionPrompt: factRevisionPrompt, BALANCE_MIN_SCORE: BALANCE_MIN_SCORE, REVIEW_POOL: REVIEW_POOL, familyOf: familyOf });
 Object.assign(__verify, { isContestedTopic: isContestedTopic, sourceHost: sourceHost, sourceViewpoint: sourceViewpoint, sourceCountry: sourceCountry, contestedSourcesOk: contestedSourcesOk });
 export {
   __verify,

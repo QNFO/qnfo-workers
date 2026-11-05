@@ -1,4 +1,40 @@
-var VERSION = "1.17.8-codeagent";
+var VERSION = "1.18.1-codeagent";
+// WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+// binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+// Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+function __aiAttrEnv(env, worker, aiKey, dbKey) {
+  try {
+    if (!env || env.__aiAttr) return env;
+    var ai = env[aiKey], db = env[dbKey];
+    if (!ai || typeof ai.run !== "function" || !db) return env;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return async function (model, input, opts) {
+        var t0 = Date.now(), ok = 1, res;
+        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        finally {
+          try {
+            var u = res && typeof res === "object" && res.usage || {};
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({ worker: worker, where: "ai-attr-input-chars", error: String(e1 && e1.message || e1).slice(0, 200) })); }
+            var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
+            var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+            var r = __AI_ATTR_RATES[String(model)] || [0, 0];
+            var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+          } catch (e2) { console.error(JSON.stringify({ worker: worker, where: "ai-attr-counter", error: String(e2 && e2.message || e2).slice(0, 200) })); }
+        }
+      };
+    } });
+    var copy = Object.assign({}, env);
+    copy[aiKey] = wrapped;
+    copy.__aiAttr = 1;
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
 // Spend governor: demote hourly route to the cheapest sufficient model
 globalThis.spendGovernor = { hourlyRoute: "cheapest" }; /* 1.17.1 BACKLOG-CATCHUP-1 (2026-11-02, issue 1001290, pillar autonomy): the folded daily backlog member catches up on an hourly tick after a missed daily run. */ /* 1.17.0 PAPER-LEARN-GAP-PROBATION-1 (2026-11-01, issue 100294, pillar autonomy): model-identified direct learnings without a verified cover become owned goals with a completion probe instead of remaining silently proposed. */ /* 1.15.3 BACKUP-PAGED-1 (2026-10-26, pillar reliability; CF-OBS group a539fdc8, agent_issues 100522, 1000239, 1000265, FLEET-JOURNEY traffic-health 1000262): the daily 05:00 UTC backup no longer reads a whole table into memory; tables are paged by rowid and written in parts, and the result is logged. */ /* prior: 1.15.1-codeagent */ /* 1.15.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and is not used or named in any code): the finished hourly body scrub and its status route are removed. */ /* prior: 1.14.1-close-channel */ /* 1.14.1 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MODEL-HEALTH-SWEEP-1 closes write close_channel auto:lifecycle/model-health-sweep. */ /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks) /* 1.15.2 PAPER-LEARN-ANCHOR-1 (2026-10-26, pillar research; patch): PAPER-LEARN-1 errata now carry an `At: "<passage>"` anchor in claim_text, the contract errata-hub's internal confirm already reads (qnfo-paper-reviser and READER-REPORT-1 write one), so the third-model confirm centres its excerpt on the passage instead of reading the first 24,000 characters. paper-learn-anchor.test.mjs. */ /* prior: 1.15.1-codeagent */ /* 1.15.0 NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and is not used or named in any code): the finished hourly body scrub and its status route are removed. */ /* prior: 1.14.1-close-channel */ /* 1.14.1 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MODEL-HEALTH-SWEEP-1 closes write close_channel auto:lifecycle/model-health-sweep. */ /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
@@ -181,6 +217,17 @@ async function closeIssue(env, id, now, target, evidence) {
     }
   }
   return env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel='auto:backlog-exec', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, id).run();
+}
+// CLOSE-REFUSAL-1 (2026-11-05, pillar autonomy; CHAOS-DRILL-FAILED-1 control:model-health-sweep, agent_issues 1001590): the BEFORE UPDATE trigger issue_close_evidence_required raises ABORT
+// 'close-while-contract-fails' for an issue whose own contract still reads a failing verdict, and the call sites below let that error end the whole daily run: qnfo-lifecycle logged it 23 times
+// from 2026-11-03T05:00Z and the 02:00 UTC run of 2026-11-04 never reached its summary job-run event, which is the evidence the drill probe of model-health-sweep reads. A refused close is a
+// decision of the guard, not a failure of the run: the issue stays open for its contract to close and the run goes on to the next row. Any other error is still thrown.
+async function closeIssueGuarded(env, id, now, target, evidence) {
+  try { await closeIssue(env, id, now, target, evidence); return ""; } catch (e) {
+    const m = String((e && e.message) || e);
+    if (m.indexOf("close-while-contract-fails") >= 0 || m.indexOf("close-without-evidence") >= 0) return m.slice(0, 160);
+    throw e;
+  }
 }
 // BACKLOG-EXEC-EVIDENCE-1 (2.0.4, agent_issues 1808): exception-class issues (WORKER-EXCEPTION-DETECTED <worker>,
 // ALERT-STORM-DETECTED <worker>, filed by qnfo-error-selfheal until it was retired on 2026-10-01) closed when alerts held no
@@ -516,7 +563,8 @@ async function run(env) {
       const pLog = await probeHealthyViaLog(env, optIn.target, PROBE_WIN_MIN);
       const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts, transport: pLog.transport } : await probeHealth(optIn.target);
       if (p.ok && transportTrusted(p.transport)) {
-        await closeIssue(env, row.id, now, optIn.target);
+        const refused = await closeIssueGuarded(env, row.id, now, optIn.target);
+        if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
         closed++;
         detail.push({ id: row.id, target: optIn.target, action: "closed", note: "health re-probe PASS " + p.host + " transport=" + p.transport + " (fresh<=" + PROBE_WIN_MIN + "m, age>" + Math.round(MIN_AGE_MS / 6e4) + "m)" });
         await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + optIn.target + "): " + p.host + " transport=" + p.transport, { id: row.id, target: optIn.target, action: "closed", reason: "health predicate v1.5.0: opt-in + fresh + trusted transport", transport: p.transport }, WORKER, "ok");
@@ -544,7 +592,8 @@ async function run(env) {
         }
         if (rec.ok && pr && pr.ok) {
           const evidence = "BACKLOG-EXEC-EVIDENCE-1 (" + VERSION + ") exception-class closed on evidence: " + rec.ev + "; " + pr.ev;
-          await closeIssue(env, row.id, now, exc.target, evidence);
+          const refused = await closeIssueGuarded(env, row.id, now, exc.target, evidence);
+          if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
           closed++;
           detail.push({ id: row.id, target: exc.target, action: "closed", note: evidence.slice(0, 400) });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + exc.target + "): exception-class closed on evidence", { id: row.id, target: exc.target, action: "closed", reason: "BACKLOG-EXEC-EVIDENCE-1: errors stopped and probe passed" }, WORKER, "ok");
@@ -561,7 +610,8 @@ async function run(env) {
         const named = title.replace(/^MODEL-DEGRADED\s*/i, "").split(",").map((s) => s.trim()).filter(Boolean);
         const still = named.filter((m) => degraded.has(m));
         if (degraded.size === 0 || still.length === 0) {
-          await closeIssue(env, row.id, now);
+          const refused = await closeIssueGuarded(env, row.id, now);
+          if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
           closed++;
           detail.push({ id: row.id, action: "closed", note: "model-health stale: none of [" + named.slice(0, 4).join(",") + "] degraded now (degraded rows=" + degraded.size + ")" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (model-health): no named model degraded now", { id: row.id, action: "closed", reason: "model-health predicate cleared v1.2.7" }, WORKER, "ok");
@@ -579,7 +629,8 @@ async function run(env) {
         const model = probeFail[1];
         const h = await env.AUDIT.prepare("SELECT status FROM ai_model_health WHERE model_id=?1").bind(model).first();
         if (!h || String(h.status) !== "degraded") {
-          await closeIssue(env, row.id, now);
+          const refused = await closeIssueGuarded(env, row.id, now);
+          if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
           closed++;
           detail.push({ id: row.id, target: model, action: "closed", note: "ai-cal probe-failing stale: ai_model_health status=" + (h ? h.status : "absent") });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (ai-cal " + model + "): health no longer degraded", { id: row.id, target: model, action: "closed", reason: "ai-cal probe predicate cleared v1.2.7" }, WORKER, "ok");
@@ -598,7 +649,8 @@ async function run(env) {
         const rec = await env.AUDIT.prepare("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE model=?1 AND ts >= ((strftime('%s','now') - 86400) * 1000)").bind(model).first();
         const n = rec ? Number(rec.n || 0) : 0;
         if (n === 0) {
-          await closeIssue(env, row.id, now);
+          const refused = await closeIssueGuarded(env, row.id, now);
+          if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
           closed++;
           detail.push({ id: row.id, target: model, action: "closed", note: "gw-fail stale: 0 failures for " + model + " in 24h" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (gw-fail " + model + "): no recurrence in 24h", { id: row.id, target: model, action: "closed", reason: "gateway-failure predicate cleared v1.2.7" }, WORKER, "ok");
@@ -615,7 +667,8 @@ async function run(env) {
       try {
         const q = await env.AUDIT.prepare("SELECT status, version_to, updated_at FROM version_queue WHERE id=?1").bind(Number(vq[1])).first();
         if (!q || String(q.status).toLowerCase() !== "error") {
-          await closeIssue(env, row.id, now);
+          const refused = await closeIssueGuarded(env, row.id, now);
+          if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
           closed++;
           detail.push({ id: row.id, target: "version_queue#" + vq[1], action: "closed", note: q ? "version_queue status=" + q.status + " (not error) - condition cleared" : "version_queue row absent - ticket orphaned" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (VQ " + vq[1] + "): " + (q ? "status=" + q.status : "row absent"), { id: row.id, action: "closed", reason: "publish predicate cleared v1.2.9" }, WORKER, "ok");
@@ -632,7 +685,8 @@ async function run(env) {
         const t = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM research_queue WHERE status='failed' AND recover_count>=2").first();
         const still = t ? Number(t.c || 0) : 0;
         if (still === 0) {
-          await closeIssue(env, row.id, now);
+          const refused = await closeIssueGuarded(env, row.id, now);
+          if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
           closed++;
           detail.push({ id: row.id, action: "closed", note: "research terminal condition cleared: 0 rows with status='failed' AND recover_count>=2" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (research): no terminal-failed queue rows remain", { id: row.id, action: "closed", reason: "research-pipeline predicate cleared v1.2.9" }, WORKER, "ok");
@@ -665,7 +719,8 @@ async function run(env) {
       const vrMs = vr ? Date.parse(String(vr.verified_at || "").replace(" ", "T") + (/[zZ]$/.test(String(vr.verified_at || "")) ? "" : "Z")) : NaN;
       if (vr && Number(vr.pass) === 1 && Number.isFinite(vrMs) && now - vrMs <= LATEST_PASS_MAX_H * 36e5) {
         const evidence = "BACKLOG-LATEST-PASS-1 latest verification #" + vr.id + " pass at " + vr.verified_at + " via " + (vr.transport || "?") + ": " + String(vr.observed || "").slice(0, 160);
-        await closeIssue(env, row.id, now, null, evidence);
+        const refused = await closeIssueGuarded(env, row.id, now, null, evidence);
+        if (refused) { rechecked++; detail.push({ id: row.id, action: "recheck", note: "close refused by the contract guard (CLOSE-REFUSAL-1): " + refused }); continue; }
         closed++;
         detail.push({ id: row.id, action: "closed", note: evidence.slice(0, 300) });
         await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (latest verification passed)", { id: row.id, action: "closed", reason: "BACKLOG-LATEST-PASS-1", verification: vr.id, probe: vr.probe_url, transport: vr.transport }, WORKER, "ok");
@@ -812,8 +867,16 @@ async function sweepModelHealthIssues(env, nowMs) {
     var still = named.filter(function (m) { return bad[m]; });
     if (still.length) { out.kept.push(rows[i].id); continue; }
     var ev = "MODEL-HEALTH-SWEEP-1 (qnfo-lifecycle " + VERSION.split(" ")[0] + ") closed on evidence " + new Date(now).toISOString() + ": ai_model_health reads no degraded or failing row for [" + named.slice(0, 6).join(",") + "] (" + named.filter(function (m) { return seen[m]; }).length + " of " + named.length + " named models have a health row, all ok); family " + family;
-    await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence, triaged_at) VALUES (?1,'RC-03','closed','qnfo-lifecycle',datetime('now'),'auto-close by qnfo-lifecycle MODEL-HEALTH-SWEEP-1',?2,datetime('now')) ON CONFLICT(issue_id) DO UPDATE SET triage_state='closed', close_evidence=?2, triaged_at=datetime('now')").bind(rows[i].id, ev).run();
-    var u = await db.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:lifecycle/model-health-sweep', updated_at = ?1 WHERE id = ?2 AND status = 'open'").bind(now, rows[i].id).run();
+    var u;
+    try {
+      await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence, triaged_at) VALUES (?1,'RC-03','closed','qnfo-lifecycle',datetime('now'),'auto-close by qnfo-lifecycle MODEL-HEALTH-SWEEP-1',?2,datetime('now')) ON CONFLICT(issue_id) DO UPDATE SET triage_state='closed', close_evidence=?2, triaged_at=datetime('now')").bind(rows[i].id, ev).run();
+      u = await db.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:lifecycle/model-health-sweep', updated_at = ?1 WHERE id = ?2 AND status = 'open'").bind(now, rows[i].id).run();
+    } catch (eClose) {
+      // CLOSE-REFUSAL-1: the contract guard refused this close (the issue's own probe still fails); keep the issue, go on to the next row.
+      var refusal = String((eClose && eClose.message) || eClose);
+      if (refusal.indexOf("close-while-contract-fails") >= 0 || refusal.indexOf("close-without-evidence") >= 0) { out.kept.push(rows[i].id); continue; }
+      throw eClose;
+    }
     if (u && u.meta && Number(u.meta.changes) === 0) { out.kept.push(rows[i].id); continue; }
     out.closed.push(rows[i].id);
     try { await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,'job-run',?3,?4,'qnfo-lifecycle','ok')").bind("jr-mhs-" + rows[i].id + "-" + now.toString(36), new Date(now).toISOString(), ("model-health sweep closed issue " + rows[i].id + " (" + family + "): " + named.slice(0, 4).join(",") + " no longer degraded or failing").slice(0, 800), JSON.stringify({ id: rows[i].id, action: "closed", reason: "MODEL-HEALTH-SWEEP-1" })).run(); } catch (eE) { /* the close evidence is the record */ }
@@ -2813,6 +2876,7 @@ function plNormalize(parsed) {
   return out;
 }
 async function plAi(env, model, prompt, maxTokens) {
+  env = __aiAttrEnv(env, "qnfo-lifecycle", "AI", "QNFO_AUDIT"); // AI-METER-COVER-3c: every call lands in ai_call_counters under qnfo-lifecycle
   var opts = { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens || 4096, temperature: 0.2 };
   if (/^@cf\/zai-org\/glm-/.test(model)) opts.reasoning_effort = "low";
   var r = await env.AI.run(model, opts);
@@ -3070,10 +3134,10 @@ function plMatchMechanisms(mechs, claim, lever) {
 }
 function plTriagePrompt(L, mechs) {
   return "You triage one learning that a research paper suggested for an autonomous fleet of Cloudflare Workers (loops, a D1 issue queue, remediation probes, a doctrine of rules, a trust ledger, model ensembles). " +
-    "Decide: reject (the learning is the paper's own authoring convention, or only an analogy, or conflicts with an existing fleet mechanism listed below) or apply (the fleet has a real gap this would close and no listed mechanism covers it).\n" +
+    "Decide: covered (a listed mechanism already does what the learning proposes: name its key), reject (the learning is the paper's own authoring convention, or only an analogy, or conflicts with an existing fleet mechanism listed below) or apply (the fleet has a real, measurable gap this would close and no listed mechanism covers it; name the file, table or metric a person would change).\n" +
     "Existing fleet mechanisms:\n" + mechs.map(function (m) { return "- " + m.mech_key + ": " + m.title; }).join("\n") + "\n\n" +
     "LEARNING: " + plStr(L.claim, 600) + "\nLEVER: " + plStr(L.fleet_lever, 200) + "\nAPPLICATION: " + plStr(L.application, 600) + "\nKIND: " + L.kind + " (" + L.verification + ")\n\n" +
-    "Answer with JSON only: {\"disposition\":\"reject|apply\",\"category\":\"paper-convention|analogy-only|conflicts|gap\",\"mechanism\":\"<a key above when category is conflicts, else empty>\",\"reason\":\"one or two specific sentences\"}";
+    "Answer with JSON only: {\"disposition\":\"covered|reject|apply\",\"category\":\"covered|paper-convention|analogy-only|conflicts|gap\",\"mechanism\":\"<a key above when category is covered or conflicts, else empty>\",\"reason\":\"one or two specific sentences\"}";
 }
 async function plTriageModel(env, L, mechs, now) {
   var prompt = plTriagePrompt(L, mechs), answers = [];
@@ -3082,6 +3146,13 @@ async function plTriageModel(env, L, mechs, now) {
     var r = await plRead(env, prompt, 1024, orders[i]);
     var j = r.json || {};
     answers.push({ model: r.model, d: String(j.disposition || "").toLowerCase(), cat: String(j.category || "").toLowerCase(), mech: plStr(j.mechanism, 60), reason: plStr(j.reason, 400) });
+  }
+  // PAPER-LEARN-RETRIAGE-1: both families say a listed mechanism already does this, name the same key, and its evidence probe reads ok now.
+  var bothCovered = answers.every(function (a) { return a.model && a.d === "covered" && a.reason.length >= 40 && a.mech && a.mech === answers[0].mech; });
+  if (bothCovered) {
+    var cm = mechs.filter(function (x) { return x.mech_key === answers[0].mech; })[0];
+    if (!cm || !(await plRunProbe(env, cm.evidence_probe))) return { settled: false, why: "a covered answer named a mechanism that is not in the catalogue or whose probe is not ok" };
+    return { settled: true, status: "already-in-place", note: PL_TRIAGE_MARK + " in place (two model families agree, " + now + "): " + cm.mech_key + " - " + cm.citation + " (evidence probe ok). " + answers[0].reason };
   }
   var bothReject = answers.every(function (a) { return a.model && a.d === "reject" && a.reason.length >= 40 && ["paper-convention", "analogy-only", "conflicts"].indexOf(a.cat) >= 0; });
   if (bothReject) {
@@ -3106,7 +3177,7 @@ async function plProbationGoal(env, L, proposal, now) {
   var source = "paper_learnings " + id + " (PAPER-LEARN-TRIAGE-1; " + plStr(L.slug, 120) + " " + plStr(L.version, 40) + ")";
   var statement = ("Probationary direct learning from " + plStr(L.slug, 120) + " v" + plStr(L.version, 40) + ": " + plStr(L.claim, 500)).slice(0, 700);
   var alignment = ("PAPER-LEARN-TRIAGE-1 probation: no verified fleet mechanism covers this direct learning. Apply signal from " + plStr(proposal.model, 80) + ": " + plStr(proposal.reason, 400)).slice(0, 700);
-  var dod = "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM paper_learnings WHERE id = " + id + " AND fleet_status NOT IN ('applied', 'rejected')";
+  var dod = "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM paper_learnings WHERE id = " + id + " AND fleet_status NOT IN ('applied', 'rejected', 'routed', 'already-in-place')"; // PAPER-LEARN-RETRIAGE-1: the four settled states
   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO goals (goal_key, statement, goal_type, parent_objective, alignment, source, priority, status, dod, owner) VALUES (?1, ?2, 'instrumental', 'mission', ?3, ?4, 1, 'adopted', ?5, 'qnfo-code-orchestrator')")
     .bind(goalKey, statement, alignment, source, dod).run();
   var goal = await env.QNFO_AUDIT.prepare("SELECT id, source FROM goals WHERE goal_key = ?1").bind(goalKey).first();
@@ -3151,10 +3222,61 @@ async function plTriageTick(env, opts) {
         }
       } else out.kept++;
     }
+    await plRetriage(env, o, mechs, now, out);
   } catch (e) {
     out.error = String(e && e.message || e).slice(0, 200);
   }
   return out;
+}
+// ---- PAPER-LEARN-RETRIAGE-1 (2026-11-05, pillar autonomy; cluster C8-PROJECTS-GOALS of the roadmap sweep) ----
+// A learning is parked in probation once, by one pass against the catalogue, and nothing settled it again: 225 goals PAPER-LEARN-<id> sat adopted and failing, with 229 created in
+// four days (37, 81, 69, 42 a day) and 4 completed. The catalogue now holds the fleet's real mechanisms, the model prompt has a third answer (covered), and each probation
+// learning is read again every PL_RETRIAGE_GAP_H hours by both families: covered or rejected by both settles it (the goal then completes on its probe), an "apply" again is counted
+// in the note, and after PL_RETRIAGE_PASSES passes with no taker the learning lapses as rejected with that reason, so a suggestion no one will take does not hold a roadmap row open
+// for ever (re-propose with a measured gap). ops_config paper_learn_retriage = off stops this step. Revert one row: UPDATE paper_learnings SET fleet_status = 'probation' WHERE id = <id>.
+var PL_RETRIAGE_EXAMINE = 6, PL_RETRIAGE_MODEL_MAX = 2, PL_RETRIAGE_GAP_H = 20, PL_RETRIAGE_PASSES = 3;
+async function plRetriage(env, o, mechs, now, out) {
+  out.retriaged = 0; out.lapsed = 0;
+  var rflag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'paper_learn_retriage'").first();
+  if (rflag && String(rflag.value || "").trim().toLowerCase() === "off") { out.retriage_skipped = true; return; }
+  var cut = new Date(Date.parse(now) - (o.retriageGapH == null ? PL_RETRIAGE_GAP_H : o.retriageGapH) * 3600e3).toISOString();
+  var prows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, version, kind, verification, claim, fleet_lever, application, status_note FROM paper_learnings WHERE fleet_status = 'probation' AND applicability = 'direct' AND updated_at < ?1 ORDER BY updated_at ASC LIMIT ?2").bind(cut, o.retriage || PL_RETRIAGE_EXAMINE).all()).results) || [];
+  var budget = o.retriageModelMax == null ? PL_RETRIAGE_MODEL_MAX : o.retriageModelMax;
+  for (var p = 0; p < prows.length; p++) {
+    var R = prows[p];
+    out.retriaged++;
+    var old = String(R.status_note || "");
+    var passes = Number((/ \| PL-RETRIAGE (\d+)/.exec(old) || [0, 0])[1]) || 0;
+    var base = old.replace(/ \| PL-RETRIAGE \d+.*$/, "").slice(0, 380);
+    var hits = plMatchMechanisms(mechs, R.claim, R.fleet_lever), hit = null;
+    for (var k = 0; k < hits.length && !hit; k++) if (await plRunProbe(env, hits[k].evidence_probe)) hit = hits[k];
+    if (hit) {
+      await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'already-in-place', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'")
+        .bind(R.id, (PL_TRIAGE_MARK + " in place (" + now + "): " + hit.mech_key + " - " + hit.citation + " (evidence probe ok)").slice(0, 600), now).run();
+      out.in_place++;
+      continue;
+    }
+    if (budget <= 0 || !env.AI) continue;
+    budget--;
+    var v = await plTriageModel(env, R, mechs, now);
+    if (v.settled) {
+      await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, v.status, v.note.slice(0, 700), now).run();
+      if (v.status === "rejected") out.rejected++; else out.in_place++;
+    } else if (v.apply) {
+      passes++;
+      if (passes >= PL_RETRIAGE_PASSES) {
+        var lapse = ("PL-TRIAGE-2 rejected (lapsed; " + passes + " triage passes by two model families over " + (PL_RETRIAGE_GAP_H * (passes - 1)) + " hours or more found no covering mechanism and no taker for the apply signal, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'rejected', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, lapse, now).run();
+        out.lapsed++;
+      } else {
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'")
+          .bind(R.id, (base + " | PL-RETRIAGE " + passes + " (" + now + "): apply again, " + plStr(v.apply.reason, 200)).slice(0, 700), now).run();
+      }
+    } else {
+      // No agreement or an unreadable answer: no pass is counted, the row waits its gap again so it does not starve the others.
+      await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET updated_at = ?2 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, now).run();
+    }
+  }
 }
 function withPaperLearn(inner) {
   var out = Object.assign({}, inner, {

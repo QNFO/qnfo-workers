@@ -40,7 +40,7 @@ stop writing to main. `reader` is what a grep of the repository and the workers 
 | canonical-deploy | `ci-status/canonical-deploy.json` | none in code | c | via `push_artifact.sh` |
 | fleet-telemetry-probe | `ci-status/fleet-telemetry.json` | none in code | c | via `push_artifact.sh` |
 | ux-journeys | `ci-status/ux-journeys-{live,local}.json` | none in code | c | via `push_artifact.sh` |
-| attach-jobs-q08-route, attach-me-q08-route, attach-mind-q08-route, attach-surface-routes, attach-travel-host, attach-watch-q08-route | `ci-status/attach-*.json` | none in code | c | via `push_artifact.sh` |
+| attach-surface-routes (the other five attach-* workflows were retired in TP-3b, archive/ATTACH-WORKFLOWS-MANIFEST.md) | `ci-status/attach-*.json` | none in code | c | via `push_artifact.sh` |
 | attach-ask-qwav-route, attach-lifecycle-custom-domain | `ci-status/<name>.json` | none in code | c | `push_head.sh artifact` |
 | dup-worker-name-gate, guard-timebudget, remediation-bridge, remediation-consumer | `ci-status/<name>.json` | none in code (code comments describe the file as public; `status_unchanged.py` diffs against `origin/main`, see risks) | c | `push_head.sh artifact` |
 | container-config-autoverify, container-config-selfheal-cron, deploy-containers-pilot, restore-container-config-1485 | `ci-status/<name>.json` | none in code | c | `push_head.sh artifact` |
@@ -51,6 +51,7 @@ stop writing to main. `reader` is what a grep of the repository and the workers 
 | mirror-sync | `*/deployed-current.worker.js` | `mirror-guard`, the canonical deploy | b | code to `fleet-bot/mirror-sync` plus pull request |
 | deploy-code-orchestrator, canonical-deploy (canary) | automatic revert commit via `scripts/canary_revert.py` | the deploy path | b, NOT yet converted | `canary_revert.py` was under another session's work claim (`session:deploy-proof`); pending in `main-push-policy.test.mjs` (`PENDING`). Follow-up: push the revert to a branch, open the pull request, dispatch the redeploy from it |
 | code-task-publish, canary scripts' tests | test fixtures only | n/a | a | not a push to the real main |
+| qnfo-fleet-control PORTFOLIO-LOOP-1 and CHARTER-LOOP-1 (worker code, not a workflow) | `docs/PORTFOLIO.md` and `docs/QUNIVERSE-CHARTER.md` on main; `PORTFOLIO.md` and `profile/README.md` on the default branch of `QNFO/.github` (the organisation landing page) | people and agents read them from the default branch; LOOP-WATCH and the loop-heartbeats journey read the sync status | b, NOT yet converted | every `pfCommitOnce` and `charterCommitOnce` PUT is refused (HTTP 409) since 2026-11-04T16:05Z (`portfolio_sync_runs` 773 to 776; the note now carries GitHub's sentence, PUT-RULE-NOTE-1). Doer: `ROADMAP-1: QNFO.OPS #portfolio-pr-publish` (write to a branch, open a pull request, merge only where no status check is required); the daily charter refresh meets the same refusal |
 
 ## Mechanics (MAIN-PUSH-POLICY-2)
 
