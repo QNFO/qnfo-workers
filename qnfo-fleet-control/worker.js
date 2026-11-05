@@ -5391,9 +5391,24 @@ async function bhReadHold(env, n, head, nowMs) {
   var d = bhHoldDecide(cs.j.slice(-30), headAt, nowMs);
   d.head_at = headAt ? new Date(headAt).toISOString() : null;
   d.comments = cs.j.length;
+  d.raw = cs.j.slice(-30);
   return d;
 }
 __name(bhReadHold, "bhReadHold");
+// LANE-WAITS-FOR-REVIEW-1: the last gate after the hold read. ONE read of the reviews; a High finding of the reviewer bot on the head posts the HOLD comment once per head (the marker in the
+// comment is searched in the comments bhReadHold already read) and holds this tick; a review still due inside the wait holds without a comment. A read that fails assumes nothing.
+async function bhReadReview(env, n, prj, names, d, cfg, comments, nowMs) {
+  var head = prj.head && prj.head.sha;
+  var rv = await evApi(env, "GET", "/pulls/" + n + "/reviews?per_page=100");
+  if (!rv.ok || !Array.isArray(rv.j)) return { hold: false, why: "reviews HTTP " + rv.status + " (not read; no hold assumed)", read_failed: true };
+  var v = bhReviewVerdict(rv.j, head, prj, Number(nowMs) || Date.now(), { risky: bhReviewRisky(names, d), waitMin: cfg && cfg.reviewWaitMin });
+  if (v.state === "pending") return { hold: true, wait: true, why: "waiting for the automated review of " + String(head).slice(0, 7) + " (requested " + Math.round(v.waited_ms / 60000) + " min after the pull request opened; the lane waits at most " + Math.round(v.wait_ms / 60000) + ")", verdict: v };
+  if (v.state !== "high") return { hold: false, verdict: v };
+  if ((comments || []).some(function(c) { return c && String(c.body || "").indexOf(BH_REVIEW_MARK + head) >= 0; })) return { hold: false, posted: true, verdict: v, why: "the review hold of " + String(head).slice(0, 7) + " was posted earlier and has since been released or has expired" };
+  var post = await evApi(env, "POST", "/issues/" + n + "/comments", { body: bhReviewHoldText(v, head) });
+  return { hold: true, posted_now: true, verdict: v, why: "the automated reviewer lists " + v.findings.length + " High severity item(s) on " + String(head).slice(0, 7) + "; HOLD " + (post.ok ? "posted" : "not posted (HTTP " + post.status + ")") + ": " + v.findings.slice(0, 3).map(function(f) { return f.title; }).join("; ").slice(0, 200) };
+}
+__name(bhReadReview, "bhReadReview");
 var BH_MAX_ACTIONS = 40;
 var BH_MAX_COMPARES = 60;
 var BH_ARCHIVE_PREFIX = "refs/archive/";
@@ -5424,7 +5439,7 @@ __name(bhDecide, "bhDecide");
 async function bhConfig(env) {
   var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, drafts: true, workflows: true, emptyDraft: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
   try {
-    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'docs_only_incomplete', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled', 'stale_pr_merge_drafts', 'stale_pr_merge_workflows', 'empty_draft_pr_close')").all()).results || [];
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'docs_only_incomplete', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled', 'stale_pr_merge_drafts', 'stale_pr_merge_workflows', 'empty_draft_pr_close', 'slo_budget_spent', 'slo_merge_lane', 'lane_review_hold', 'lane_review_wait_min')").all()).results || [];
     rows.forEach(function(r) {
       var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
       if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
@@ -5446,6 +5461,12 @@ async function bhConfig(env) {
       if (r.key === "empty_draft_pr_close" && v) cfg.emptyDraft = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       // PR-LANE-FAST-1: minutes of quiet before a merge; a value below the floor or unreadable keeps the floor or the default.
       if (r.key === "stale_pr_merge_idle_min" && v && isFinite(Number(v))) cfg.idleMin = Math.max(BH_MERGE_IDLE_MIN_FLOOR, Math.round(Number(v)));
+      // BP26-SLO-MERGE-LANE-1: the surfaces whose error budget is spent (comma list written hourly by scripts/bp26_slo.py) and the switch that lifts the freeze.
+      if (r.key === "slo_budget_spent") cfg.sloSpent = String(r.value == null ? "" : r.value).split(",").map(function(x) { return x.trim(); }).filter(Boolean);
+      if (r.key === "slo_merge_lane" && v) cfg.sloLane = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
+      // LANE-WAITS-FOR-REVIEW-1: off stops the review read; the wait (minutes, 0 = never wait) is bounded at 15.
+      if (r.key === "lane_review_hold" && v) cfg.reviewHold = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
+      if (r.key === "lane_review_wait_min" && v && isFinite(Number(v))) cfg.reviewWaitMin = Math.max(0, Math.min(15, Math.round(Number(v))));
     });
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhConfig:caught", error: String(e && e.message) })); }
   return cfg;
@@ -5477,6 +5498,85 @@ function bhControlPlaneDecide(names, opts) {
   return { ok: true, workers: list };
 }
 __name(bhControlPlaneDecide, "bhControlPlaneDecide");
+// ---- LANE-WAITS-FOR-REVIEW-1 + BP26-SLO-MERGE-LANE-1:BEGIN (agent_issues 1000872 and roadmap 1709; pillar autonomy) ----
+// (1) LANE-WAITS-FOR-REVIEW-1: PR 5366 was merged at 08:51:03Z, five minutes after the automated reviewer (copilot-pull-request-reviewer[bot]) submitted a review of its head with two High
+// severity findings (review 5709974064, 08:46:20Z). The workflow lane requests that review when a pull request opens or becomes ready (REQUEST-COPILOT-REVIEW-1); nothing read it. Here the lane
+// reads the reviews of the head just before it merges (ONE extra REST read, only for a pull request that passed every other gate): a review of the HEAD commit by the reviewer bot whose open
+// issues list a High severity item holds the merge with a comment that starts HOLD: (the convention bhHoldDecide and the workflow lane both read; a new push, a later comment saying so, or 24 hours
+// release it). A review that has not arrived is waited for at most lane_review_wait_min minutes (default 8, so the 10-minute merge SLA holds) after the pull request was created, and only for a
+// pull request that changes a migration, a workflow or a control-plane worker, where PR 5366 sat; any other change merges as before. ops_config lane_review_hold = off stops the read.
+var BH_REVIEW_BOT = /^copilot-pull-request-reviewer(\[bot\])?$/i;
+var BH_REVIEW_WAIT_MIN_DEFAULT = 8;
+var BH_REVIEW_MARK = "<!-- lane-review-hold:";
+// Pure. The High severity items of a Copilot code-review overview body: the list items of its "N open issues" block whose severity image reads High (an image alt, the only place the
+// severity is stated). A body without that block is scanned whole; titles are the link text of the item.
+function bhReviewFindings(body) {
+  var text = String(body || ""), scope = text;
+  var from = text.search(/<summary><strong>\s*\d+\s+open issues?\s*<\/strong><\/summary>/i);
+  if (from >= 0) { var end = text.indexOf("</details>", from); scope = end < 0 ? text.slice(from) : text.slice(from, end); }
+  var out = [];
+  scope.split("\n").forEach(function(line) {
+    if (!/^\s*[-*]\s/.test(line) || !/alt="High severity"/i.test(line)) return;
+    var m = /<\/picture>\s*\[([^\]]+)\]\(([^)\s]+)\)/.exec(line) || /\[([^\]]+)\]\(([^)\s]+)\)/.exec(line);
+    out.push({ title: m ? m[1].replace(/\s+/g, " ").trim().slice(0, 160) : "(untitled)", url: m ? m[2] : null });
+  });
+  return out;
+}
+__name(bhReviewFindings, "bhReviewFindings");
+// Pure. reviews = GET /pulls/{n}/reviews, headSha the head commit, pr = GET /pulls/{n}. State: "high" (the bot's latest review of the head lists a High item), "clean" (it reviewed the head and
+// lists none), "pending" (requested, not delivered, risky change, still inside the wait), "none" (no review and nothing to wait for).
+function bhReviewVerdict(reviews, headSha, pr, nowMs, opts) {
+  opts = opts || {};
+  var mine = (Array.isArray(reviews) ? reviews : []).filter(function(r) {
+    return r && r.user && BH_REVIEW_BOT.test(String(r.user.login || "")) && String(r.commit_id || "") === String(headSha || "");
+  });
+  if (mine.length) {
+    mine.sort(function(a, b) { return (Date.parse(a.submitted_at || "") || 0) - (Date.parse(b.submitted_at || "") || 0); });
+    var last = mine[mine.length - 1], f = bhReviewFindings(last.body);
+    return f.length ? { state: "high", findings: f, review_id: last.id } : { state: "clean", review_id: last.id };
+  }
+  var requested = ((pr && pr.requested_reviewers) || []).some(function(u) { return u && /copilot/i.test(String(u.login || "")); });
+  var waitMs = Math.max(0, Number(opts.waitMin == null ? BH_REVIEW_WAIT_MIN_DEFAULT : opts.waitMin) || 0) * 60000;
+  var created = Date.parse(String(pr && pr.created_at || "")) || 0;
+  if (requested && opts.risky && waitMs > 0 && created && Number(nowMs) - created < waitMs) return { state: "pending", waited_ms: Number(nowMs) - created, wait_ms: waitMs };
+  return { state: "none" };
+}
+__name(bhReviewVerdict, "bhReviewVerdict");
+// Pure. A pull request is risky for the wait when it changes a migration, a workflow or a control-plane worker (d = the merge decision, whose control_plane lists them).
+function bhReviewRisky(names, d) {
+  return (names || []).some(function(n) { return /^migrations\/.+\.sql$/.test(String(n)) || /^\.github\/(workflows|actions)\//.test(String(n)); }) || !!(d && d.control_plane && d.control_plane.length);
+}
+__name(bhReviewRisky, "bhReviewRisky");
+// Pure. The comment: it starts HOLD: (both lanes read it), names the findings with the lane's release phrases defused so that quoting a finding can never release the hold, and ends with
+// the marker that keeps one comment per head.
+function bhReviewHoldText(v, sha) {
+  var safe = function(t) {
+    return String(t || "").replace(/\s+/g, " ").replace(/@(\w)/g, "@\u200b$1")
+      .replace(/\b(resolved|unhold|hold|do[\s-]*not[\s-]*merge|changes requested)\b/gi, function(x) { return x.charAt(0) + "\u200b" + x.slice(1); }).slice(0, 160);
+  };
+  var items = (v.findings || []).slice(0, 6).map(function(f, i) { return (i + 1) + ". " + safe(f.title); }).join(" ");
+  return "HOLD: the automated reviewer (copilot-pull-request-reviewer[bot]) lists " + (v.findings || []).length + " High severity item(s) on " + String(sha).slice(0, 7) + " and the lane will not merge past them: " + items +
+    " Push a new commit to release this (LANE-WAITS-FOR-REVIEW-1, review " + v.review_id + ").\n\n" + BH_REVIEW_MARK + sha + " -->";
+}
+__name(bhReviewHoldText, "bhReviewHoldText");
+// (2) BP26-SLO-MERGE-LANE-1: ops_config slo_budget_spent lists the public surfaces whose 28-day error budget is spent (scripts/bp26_slo.py, hourly; empty when none). While it is non-empty the lane
+// takes reliability changes only: a pull request that adds a release fragment for a new capability (<worker>/releases/X.Y.0-...md: the patch number is 0, VERSION-MINOR-CAPABILITY-1) waits. Fixes
+// (patch releases), tests, docs, migrations and scripts merge. The label reliability or slo, or a body line "slo-exempt: <reason>", lets a capability through; ops_config slo_merge_lane = off lifts
+// the freeze without a deploy. Pure. slo = { on, spent } from bhConfig.
+var BH_CAPABILITY_FRAGMENT_RE = /^[^/]+\/releases\/(\d+)\.(\d+)\.(\d+)[^/]*\.md$/;
+function bhSloGate(pr, names, slo) {
+  if (!slo || slo.on === false) return { hold: false };
+  var spent = (slo.spent || []).filter(Boolean);
+  if (!spent.length) return { hold: false };
+  var labels = ((pr && pr.labels) || []).map(function(l) { return String(l && l.name || "").toLowerCase(); });
+  if (labels.indexOf("reliability") >= 0 || labels.indexOf("slo") >= 0 || labels.indexOf("kind:fix") >= 0) return { hold: false, exempt: "label" };
+  if (/^\s*slo-exempt:\s*\S/mi.test(String(pr && pr.body || ""))) return { hold: false, exempt: "body" };
+  var caps = (names || []).filter(function(n) { var m = BH_CAPABILITY_FRAGMENT_RE.exec(String(n)); return !!m && Number(m[3]) === 0; });
+  if (!caps.length) return { hold: false };
+  return { hold: true, spent: spent, capability: caps[0], why: "the 28-day SLO error budget of " + spent.join(", ") + " is spent (ops_config slo_budget_spent): the lane takes reliability changes only, and this adds a new capability (" + caps[0] + "). Label it reliability or add a body line slo-exempt: <reason> if it restores availability; ops_config slo_merge_lane = off lifts the freeze (BP26-SLO-MERGE-LANE-1)" };
+}
+__name(bhSloGate, "bhSloGate");
+// ---- LANE-WAITS-FOR-REVIEW-1 + BP26-SLO-MERGE-LANE-1:END ----
 // STALE-PR-MERGE-FIRST-1: the merge decision for a session pull request (pure). pr is GET /pulls/{n}, files GET /pulls/{n}/files,
 // runs the head's check runs, statusJ its combined status. Returns { merge: true, why, required } or { merge: false, why }.
 function bhMergeDecide(pr, files, runs, statusJ, opts) {
@@ -5509,6 +5609,9 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   if (ck.pending.length) return no("check(s) still running on " + sha7 + ": " + ck.pending.join(", "));
   if (ck.other.length) return no("check(s) failed on " + sha7 + ": " + ck.other.join(", "));
   if (ck.status === "failure" || ck.status === "error" || ck.status === "pending") return no("the commit status on " + sha7 + " is " + ck.status);
+  // BP26-SLO-MERGE-LANE-1: while an SLO error budget is spent the lane takes reliability changes only (pure; empty ops_config slo_budget_spent changes nothing).
+  var sg = bhSloGate(pr, names, opts && opts.slo);
+  if (sg.hold) return no(sg.why);
   return { merge: true, draft: !!pr.draft, workflow_files: gh, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
 }
 __name(bhMergeDecide, "bhMergeDecide");
@@ -5737,7 +5840,7 @@ async function bhTryMerge(env, p, cfg) {
   var cr = await evApi(env, "GET", "/commits/" + head + "/check-runs?per_page=100");
   var st = await evApi(env, "GET", "/commits/" + head + "/status");
   if (!fl.ok || !cr.ok || !st.ok) return { merged: false, why: "files HTTP " + fl.status + ", check-runs HTTP " + cr.status + ", status HTTP " + st.status };
-  var mopts = { controlPlane: !cfg || cfg.controlPlane !== false, drafts: !cfg || cfg.drafts !== false, workflows: !cfg || cfg.workflows !== false, docsOnly: !cfg || cfg.docsOnly !== false };
+  var mopts = { controlPlane: !cfg || cfg.controlPlane !== false, drafts: !cfg || cfg.drafts !== false, workflows: !cfg || cfg.workflows !== false, docsOnly: !cfg || cfg.docsOnly !== false, slo: { on: !cfg || cfg.sloLane !== false, spent: (cfg && cfg.sloSpent) || [] } };
   var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j, mopts);
   if (!d.merge) {
     var why = d.why;
@@ -5762,6 +5865,12 @@ async function bhTryMerge(env, p, cfg) {
     var hd = await bhReadHold(env, n, head, cfg && cfg.now);
     if (hd.hold) return { merged: false, keep: true, held: true, why: hd.why, pr: pr.j };
     if (hd.expired) d.why += "; " + hd.why;
+  }
+  // LANE-WAITS-FOR-REVIEW-1 (agent_issues 1000872): the reviewer bot's High finding on this head holds the merge (needs the hold read above: the comment it posts is what both lanes obey).
+  if ((!cfg || cfg.holds !== false) && (!cfg || cfg.reviewHold !== false) && hd) {
+    var rr = await bhReadReview(env, n, pr.j, fl.j.map(function(f) { return f.filename; }), d, cfg, hd.raw, cfg && cfg.now);
+    if (rr.hold) return { merged: false, keep: true, held: true, why: rr.why, pr: pr.j };
+    if (rr.posted) d.why += "; " + rr.why;
   }
   // PR-MERGE-SLA-10M-1: the REST merge refuses a draft, so a draft that passed every gate above is marked ready first (GraphQL) and decided once more on the
   // fresh read; when GitHub is not clean yet the next lane tick (a poke, the event of the ready mark itself, or the 10-minute cron) merges it.
