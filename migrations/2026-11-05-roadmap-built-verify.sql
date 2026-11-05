@@ -5,7 +5,8 @@
 -- WHAT a closing probe per item: a remediation contract rm-<roadmap id> (module roadmap-dod-v1, issue_id NULL) whose probe measures what the item claims, read live on 2026-11-05 before this file was written
 -- (d1-query probes returned 'ok' through the D1 MCP read; runner-https probes through curl; code-read probes through the scripts/remediation_consumer.py rules). qnfo-github-steward 0.16.0 (psBuiltVerify) moves a built/deployed/implemented
 -- item to verified when its contract's latest verdict is a pass inside 240 minutes, writes the contract's proof text and the built evidence into the row, retires the contract, and closes the mirror in the same tick.
--- fm-roadmap-built-unverified reads built rows older than 3 days that have no live rm- contract, expected 0, so the next built item cannot be forgotten.
+-- fm-roadmap-built-unverified reads built rows older than 3 days whose GitHub mirror is open and that have no live rm- contract, expected 0, so the next built item cannot be forgotten
+-- (six older built rows, ids 9, 23, 32, 120, 123, 135, have closed mirrors because their sources are out of the mirror scope; they are not counted).
 -- WAITING, not hidden: PLUS-3/4/6 pass only once management-personas-plus runs ok again (PLUS-LEDGER-STATUS-1 fixes its CHECK constraint); YT-17 passes after the next Short starts (a pending: read is a deferral).
 -- PREDICTION: within about 2 hours of the steward deploy, 22 of the 24 mirrors close with their proof comment (YT-17 and the three PLUS items follow when their conditions hold); a pass that stops holding does not reopen them.
 -- APPLY-BY: ci
@@ -113,15 +114,15 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
 VALUES ('roadmap-built-unverified', 'a roadmap item sits at built, deployed or implemented with no closing probe, so its GitHub mirror stays open for ever',
   'no loop verifies an item a session marks built: roadmap-self-maintain handles GL-, NEXT-, PROJ- and FM- rows and the steward only the metric-breach rows (24 mirrors open 4 to 8 days on 2026-11-04)',
   'register the item closing probe as a remediation contract rm-<roadmap id> (module roadmap-dod-v1) in the migration that marks it built; qnfo-github-steward psBuiltVerify verifies the item when the probe passes and the mirror closes',
-  'the fm-roadmap-built-unverified contract counts built, deployed and implemented roadmap rows older than 3 days with no active or holding rm- contract, expected 0',
+  'the fm-roadmap-built-unverified contract counts built, deployed and implemented roadmap rows older than 3 days whose GitHub mirror is open and that have no active or holding rm- contract, expected 0',
   'fm-roadmap-built-unverified', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), NULL,
-  'a roadmap_implementation row at built, deployed or implemented created more than 3 days ago whose class rm-<id> has no active or holding remediation contract',
+  'a roadmap_implementation row at built, deployed or implemented created more than 3 days ago, mirrored as an open GitHub issue, whose class rm-<id> has no active or holding remediation contract',
   'open roadmap mirrors on GitHub whose code is merged; roadmap items that never reach verified',
   'roadmap and the GitHub mirror: finished work reads as open');
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)
 VALUES ('fm-roadmap-built-unverified', NULL, 'ROADMAP-BUILT-VERIFY-1', 'failure-mode detector',
-  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM roadmap_implementation r WHERE r.status IN (''built'', ''deployed'', ''implemented'') AND r.created_at < datetime(''now'', ''-3 days'') AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.class = ''rm-'' || r.id AND c.status IN (''active'', ''holding''))) AS TEXT) AS observed',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM roadmap_implementation r WHERE r.status IN (''built'', ''deployed'', ''implemented'') AND r.created_at < datetime(''now'', ''-3 days'') AND EXISTS (SELECT 1 FROM roadmap_gh_links g WHERE g.roadmap_id = r.id AND g.gh_state = ''open'') AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.class = ''rm-'' || r.id AND c.status IN (''active'', ''holding''))) AS TEXT) AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', datetime('now'));
 
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)

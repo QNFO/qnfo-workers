@@ -21,12 +21,14 @@ function world() {
   db.exec(`
     CREATE TABLE roadmap_implementation (id INTEGER PRIMARY KEY, item TEXT NOT NULL, source TEXT NOT NULL DEFAULT 's', status TEXT NOT NULL, evidence TEXT, verified_at TEXT, created_at TEXT DEFAULT (datetime('now')));
     CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, next_due_at TEXT);
+    CREATE TABLE roadmap_gh_links (roadmap_id INTEGER PRIMARY KEY, gh_number INTEGER, gh_state TEXT);
     CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
     CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
   `);
   // every (id, item) the migration names, as a built row created five days ago
   for (const m of sql.matchAll(/WHERE id = (\d+) AND item = '([^']+)' AND status IN/g))
     db.prepare("INSERT INTO roadmap_implementation (id, item, status, created_at) VALUES (?, ?, 'built', datetime('now', '-5 days'))").run(Number(m[1]), m[2]);
+  db.exec("INSERT INTO roadmap_gh_links SELECT id, 1000 + id, 'open' FROM roadmap_implementation");
   return db;
 }
 const contracts = (db) => db.prepare("SELECT * FROM remediation_contracts WHERE module = 'roadmap-dod-v1' ORDER BY class").all();
@@ -117,7 +119,9 @@ test("the detector counts built rows older than 3 days that have no live rm- con
   assert.deepEqual({ ...db.prepare(probe).get() }, { expected: "0", observed: "0" });
   db.prepare("INSERT INTO roadmap_implementation (id, item, status, created_at) VALUES (9001, 'LATE', 'deployed', datetime('now', '-4 days'))").run();
   db.prepare("INSERT INTO roadmap_implementation (id, item, status, created_at) VALUES (9002, 'NEW', 'built', datetime('now', '-1 hours'))").run();
-  assert.equal(db.prepare(probe).get().observed, "1", "an old built row without a contract is counted, a new one is not");
+  db.prepare("INSERT INTO roadmap_implementation (id, item, status, created_at) VALUES (9003, 'OUT-OF-SCOPE', 'built', datetime('now', '-40 days'))").run();
+  db.exec("INSERT INTO roadmap_gh_links VALUES (9001, 9001, 'open'), (9002, 9002, 'open'), (9003, 9003, 'closed')");
+  assert.equal(db.prepare(probe).get().observed, "1", "an old built row with an open mirror and no contract is counted; a new one and one whose mirror is closed are not");
   db.prepare("UPDATE remediation_contracts SET status = 'escalated' WHERE class = 'rm-1618'").run();
   assert.equal(db.prepare(probe).get().observed, "2", "an escalated contract no longer protects its item");
   db.prepare("UPDATE roadmap_implementation SET status = 'verified' WHERE id IN (1618, 9001)").run();
