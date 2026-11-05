@@ -1158,7 +1158,7 @@ async function collectAndRank(ctx, onlyGroups) {
 // (3) only match.why gets an "LLM: " line: score, tier, flags, the posting and the drafts are never touched, and the resume and note are built afterwards
 // from the ledger and re-verified, so no model word can reach them. The outcome of each run is written to jobsearch_meta rerank_status.
 const RERANK_TOP = 25;
-const RERANK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const RERANK_MODEL = "@cf/zai-org/glm-5.3-flash";   // the cheapest model the floor policy allows; the router sets reasoning_effort low for an answer of at most 2048 tokens (REASONING-BUDGET-1)
 const RERANK_SYSTEM = "You order job postings for one job seeker. You may ONLY reorder the numbered postings and write one short plain sentence per posting saying why it ranks where it does, using only words and numbers that appear in the posting fields or signals you are given. Never write or suggest resume, cover letter or note text, never say anything about the job seeker's experience, years, degrees, employers or skills, and never add a fact. Answer with JSON only: {\"order\":[posting numbers, best first, each number exactly once],\"reasons\":{\"<number>\":\"one sentence\"}}.";
 function rerankMessages(top) {
   const items = top.map((j, i) => ({ n: i + 1, title: j.title, company: j.company, location: j.location || "", score: j.match.score, signals: (j.match.why || []).filter((w) => !/^LLM: /.test(w)).slice(0, 5) }));
@@ -1201,7 +1201,7 @@ async function rerankAsk(env, messages) {
   try {
     const r = await env.QNFO_AI.fetch("https://qnfo-ai.internal/v1/chat/completions", {
       method: "POST", headers: { "content-type": "application/json" }, signal: ac.signal,
-      body: JSON.stringify({ model: RERANK_MODEL, messages, max_tokens: 2500, temperature: 0, stream: false }),
+      body: JSON.stringify({ model: RERANK_MODEL, messages, max_tokens: 2000, temperature: 0, stream: false }),
     });
     if (!r.ok) throw Object.assign(new Error("http " + r.status), { code: "http-" + r.status });
     const j = await r.json();

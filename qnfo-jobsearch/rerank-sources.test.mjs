@@ -58,7 +58,7 @@ answer.calls = [];
   ok(r.status === "reordered" && r.kept.map((j) => j.id).join() === "t:3,t:1,t:4,t:2", "the stub order is applied", r.kept.map((j) => j.id));
   ok(answer.calls.length === 1 && /\/v1\/chat\/completions$/.test(answer.calls[0].url), "one call to the router chat route");
   const sent = JSON.parse(answer.calls[0].init.body);
-  ok(sent.model.startsWith("@cf/") && sent.stream === false && sent.temperature === 0 && sent.messages[0].role === "system" && /ONLY reorder/.test(sent.messages[0].content), "a pinned cheap model, deterministic, and the reorder-only instruction", sent.model);
+  ok(sent.model === "@cf/zai-org/glm-5.3-flash" && sent.max_tokens <= 2048 && sent.stream === false && sent.temperature === 0 && sent.messages[0].role === "system" && /ONLY reorder/.test(sent.messages[0].content), "a pinned cheap model, deterministic, and the reorder-only instruction", sent.model);
   ok(!/Federal Highway|rwnquni|rowan\.quni|QNFO|ledger/i.test(JSON.stringify(sent.messages)), "no ledger text or personal data is sent to the model");
   const items = JSON.parse(sent.messages[1].content);
   ok(items.length === 4 && items.map((x) => x.n).join() === "1,2,3,4", "postings are sent as numbered items");
