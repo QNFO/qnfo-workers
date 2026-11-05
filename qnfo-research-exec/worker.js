@@ -463,32 +463,31 @@ function rxSecretEqual(given, expected) {
   for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-// REVISE-COUNT-WIRE-1 (0.42.0, issue #3765, agent_issues 100624): count each no-op atomically and park at the ceiling.
-// The durable counter and terminal disposition are one D1 update; a failed write is reported and never treated as success.
+// REVISE-COUNT-WIRE-1 (0.42.0, issue #3765, agent_issues 100624): count each no-op durably and stop at the ceiling.
+// SINGLE-LANE-1 (0.54.0, agent_issues 1001450): at the ceiling the row re-enters the lane through laneReenter (never a parked state).
+// A failed write is reported and never treated as success.
 var REVISE_NOOP_MAX = 2;
 async function reviseNoopBound(env, row) {
   const id = row && row.id;
   if (!id || !env || !env.QNFO_AUDIT) {
     console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "revise-count", row: String(id || "").slice(0, 8), error: "audit database unavailable" }));
-    return { parked: false, revise_count: Number(row && row.revise_count) || 0, failed: true };
+    return { lane: false, revise_count: Number(row && row.revise_count) || 0, failed: true };
   }
   try {
-    const updated = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET revise_count = COALESCE(revise_count, 0) + 1, status = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN 'wontfix' ELSE status END, stage = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN 'parked' ELSE stage END, error = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN 'REVISE-NOOP-BOUND-1 revise_count>=2; PARKED-REVISE-NOOP-CEILING-1' ELSE error END, claimed_at = CASE WHEN COALESCE(revise_count, 0) + 1 >= ?1 THEN NULL ELSE claimed_at END WHERE id = ?2 RETURNING revise_count, status, stage")
-      .bind(REVISE_NOOP_MAX, id).first();
+    const updated = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET revise_count = COALESCE(revise_count, 0) + 1 WHERE id = ?1 RETURNING revise_count")
+      .bind(id).first();
     if (!updated) throw new Error("research queue row was not updated");
     const count = Number(updated.revise_count) || 0;
-    const parked = updated.status === "wontfix" && updated.stage === "parked";
     row.revise_count = count;
-    if (parked) {
-      row.status = "wontfix";
-      row.stage = "parked";
-      row.error = "REVISE-NOOP-BOUND-1 revise_count>=2; PARKED-REVISE-NOOP-CEILING-1";
-      row.claimed_at = null;
+    if (count >= REVISE_NOOP_MAX) {
+      const lane = await laneReenter(env, row, { kind: "noop", prior: "revise", reason: "REVISE-NOOP-BOUND-1 revise_count>=" + REVISE_NOOP_MAX + ": no applicable revise edit twice" });
+      if (!lane || !lane.requeued) throw new Error("lane re-entry wrote no row");
+      return { lane: true, stage: lane.stage, revise_count: count };
     }
-    return { parked: parked, revise_count: count };
+    return { lane: false, revise_count: count };
   } catch (e) {
     console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "revise-count", row: String(id).slice(0, 8), error: String(e && e.message || e).slice(0, 200) }));
-    return { parked: false, revise_count: Number(row.revise_count) || 0, failed: true };
+    return { lane: false, revise_count: Number(row.revise_count) || 0, failed: true };
   }
 }
 // worker.js
@@ -1085,11 +1084,53 @@ function ensureCrossFamily(writerFamilies, reviewerFamilies) {
     throw new Error("CROSS-FAMILY-1 violation: overlapping families " + overlap.join(","));
   }
 }
-async function parkPoisonRow(env, row, msg) {
-  var reason = "PARKED-POISON-1: recover_count exhausted (" + Number(row.recover_count || 0) + "); last error: " + String(msg || "unknown");
-  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed','review')").bind(reason.slice(0, 300), row.id).run();
-  try { await logEvent(env, "poison-park", "parked research row " + String(row.id).slice(0, 8) + " recover_count=" + Number(row.recover_count || 0), "warn"); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "poison-park-log", error: String(e && e.message || e).slice(0, 200) })); }
-  return r;
+// SINGLE-LANE-1 (0.54.0, agent_issues 1001450, GitHub 6709; owner directive 2026-11-03: "NO MORE PARKED ITEMS! There shall only be a single line from idea
+// to publish"): this worker never writes a parked state. Every place that used to park a row (the recover ceiling, a stale claim at the ceiling, the
+// review-cycle cap, the second revise pass, the revise no-op ceiling, the math gate) calls laneReenter instead: the row goes back to status queued at
+// the stage the failure names, with the reason in error ("SINGLE-LANE-1: re-entered at <stage>, no parked state. Was: <reason>") and one lane-reenter
+// event. No publication gate moves: a paper that cannot pass review is still never published, it keeps cycling through revise and ground.
+// Bounded, so the cycle cannot run hot: each re-entry is counted in research_queue.terminal_rearms (a durable column the stages never rewrite, unlike
+// context), resets recover_count and revise_count so a cycle gets its own recoveries, and sets context.laneNotBefore = now + a cooldown that grows with the
+// count (3 h, 1 day, 3 days, then 7 days). The claim (RESEARCH_CLAIM_ID_SQL, claimErrataFair) skips a row until its laneNotBefore has passed, and the
+// backpressure order of qnfo-fleet-control (priority class, score, age) meters the rest as before. ops_config research_lane_cooldown = off writes no
+// laneNotBefore (the recover ceiling and the order still apply). Stage: a failure with open findings (review unresolved, second revise pass) keeps its
+// draft and re-enters at revise with a fresh cycle budget the first LANE_REVISE_FIRST times (the PARK-REARM-1 ladder); every other failure, and every
+// later cycle, drafts again from ground (the PARKED-REGROUND-1 ladder).
+var LANE_COOLDOWN_MIN = [180, 1440, 4320, 10080];
+var LANE_REVISE_FIRST = 2;
+function laneCooldownMinutes(cycle) {
+  var n = Math.max(1, Math.floor(Number(cycle) || 1));
+  return LANE_COOLDOWN_MIN[Math.min(n, LANE_COOLDOWN_MIN.length) - 1];
+}
+function laneStageFor(kind, cycles) {
+  return kind === "findings" && Number(cycles || 0) < LANE_REVISE_FIRST ? "revise" : "ground";
+}
+var LANE_FROM_STATUS = "'researching','queued','failed','review'";
+var LANE_LEGACY_FROM_STATUS = "'researching','queued','failed','review','wontfix','archived','deferred'";
+async function laneReenter(env, row, o) {
+  o = o || {};
+  var kind = String(o.kind || "poison");
+  var id = row && row.id;
+  if (!id || !env || !env.QNFO_AUDIT) return { requeued: false, reason: "no row" };
+  var rid = String(id).slice(0, 8);
+  var cur = await env.QNFO_AUDIT.prepare("SELECT terminal_rearms, recover_count FROM research_queue WHERE id = ?1").bind(id).first();
+  var cycles = Number(cur && cur.terminal_rearms || 0);
+  var recoverWas = Number(cur && cur.recover_count != null ? cur.recover_count : row.recover_count || 0);
+  var cycle = cycles + 1;
+  var stage = laneStageFor(kind, cycles);
+  var notBefore = null;
+  if ((await floorFlag(env, "research_lane_cooldown")) !== "off") notBefore = new Date(Date.now() + laneCooldownMinutes(cycle) * 6e4).toISOString().replace(/\.\d+Z$/, "Z");
+  var ctx = stage === "revise" ? { cycles: 0, verifyPass: 1, laneCycle: cycle } : { laneCycle: cycle };
+  if (notBefore) ctx.laneNotBefore = notBefore;
+  var reason = String(o.reason || "unknown");
+  var err = ("SINGLE-LANE-1: re-entered at " + stage + ", no parked state. Was: " + reason).slice(0, 300);
+  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = ?1, error = ?2, claimed_at = NULL, attempt = 0, recover_count = 0, revise_count = 0, terminal_rearms = COALESCE(terminal_rearms, 0) + 1, context = ?3 WHERE id = ?4 AND status IN (" + (o.legacy ? LANE_LEGACY_FROM_STATUS : LANE_FROM_STATUS) + ")")
+    .bind(stage, err, JSON.stringify(ctx).slice(0, 6e3), id).run();
+  var changed = !!(r && r.meta && r.meta.changes);
+  if (!changed) return { requeued: false, stage: stage, reason: "row is not in a re-enterable status" };
+  row.status = "queued"; row.stage = stage; row.error = err; row.claimed_at = null; row.recover_count = 0; row.revise_count = 0; row.terminal_rearms = cycle;
+  try { await logEvent(env, "lane-reenter", "row=" + rid + " kind=" + kind + " prior=" + String(o.prior || "?") + " stage=" + stage + " cycle=" + cycle + " recover_count=" + recoverWas + " not_before=" + (notBefore || "none") + " reason=" + reason.slice(0, 200), "warn"); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "lane-reenter-log", error: String(e && e.message || e).slice(0, 200) })); }
+  return { requeued: true, stage: stage, cycle: cycle, notBefore: notBefore };
 }
 var RESEARCH_CLAIM_STALE_MIN = 30;
 var RESEARCH_FAILED_REARM_MIN = 30;
@@ -1105,7 +1146,13 @@ async function reclaimStaleResearching(env) {
   var staleClaim = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + _staleMin + " minutes')";
   var staleRearm = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + _staleMin + " minutes')";
   var _rmax = Number(await recoverMax(env));
-var parked = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', claimed_at=NULL, error='PARKED-POISON-1: stale researching claim with recover_count exhausted (' || recover_count || '); not re-armed' WHERE " + staleClaim + " AND recover_count >= " + _rmax).run();
+  // SINGLE-LANE-1: a stale claim whose recover_count is spent re-enters the lane (laneReenter: queued, a fresh draft from ground, cooldown) instead of being parked.
+  var exhausted = (await env.QNFO_AUDIT.prepare("SELECT id, recover_count FROM research_queue WHERE " + staleClaim + " AND recover_count >= " + _rmax + " LIMIT 25").all()).results || [];
+  var reentered = 0;
+  for (var xi = 0; xi < exhausted.length; xi++) {
+    var lr = await laneReenter(env, { id: exhausted[xi].id, recover_count: exhausted[xi].recover_count }, { kind: "stale", prior: "claim", reason: "stale researching claim with recover_count exhausted (" + Number(exhausted[xi].recover_count || 0) + ")" });
+    if (lr && lr.requeued) reentered++;
+  }
   var req = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=NULL, attempt=attempt+1, recover_count=recover_count+1, error='STALE-CLAIM-REAPER-1: reclaimed after ' || " + _staleMin + " || ' min claimed_at; previous error: ' || COALESCE(error,'') WHERE " + staleRearm + " AND recover_count < " + _rmax).run();
   if (req.meta && req.meta.changes === 0) {
     var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status='queued'").first();
@@ -1117,32 +1164,29 @@ var parked = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='won
       await logEvent(env, "research-stalled", "research_stage_stalled=1: queued work exists and budget is not holding (runRate=" + runRate.toFixed(4) + " limit=" + budgetLimit + ")", "warn");
     }
   }
-  return { parked: (parked.meta && parked.meta.changes) || 0, requeued: (req.meta && req.meta.changes) || 0 };
+  return { reentered: reentered, requeued: (req.meta && req.meta.changes) || 0 };
 }
 // RERUN-ROUTE-1 (0.18.0, agent_issues 2473, pillar cost): markError sent every failing row back to stage ground, so a paper
 // whose only problem was unresolved review findings (review-unresolved, revise-noop) was grounded, drafted by the ensemble,
 // reconciled and verified again from scratch: 0.67 full re-runs per published paper, about 12.3k neurons each. A failure that
 // starts "review:" or "revise:" means the paper exists and only its findings are open, so the row re-enters once at stage
 // revise with its findings (fixes.json stays in R2) and is marked RERUN_ROUTE_MARK in error. When that second revise pass
-// fails too, the row is parked (REVIEW-UNRESOLVED-PARK-1: status wontfix, stage parked, the prior stage and the findings in
-// error, with its revert line). Infrastructure and content failures (ground, ensemble, verify, publish, timeouts) keep the
-// full re-run from ground. Each decision is a cloud_ops_events row of kind rerun-route.
+// fails too, the row re-enters the lane through laneReenter (SINGLE-LANE-1: status queued, the stage the ladder names, the reason in error,
+// one lane-reenter event; it was parked as REVIEW-UNRESOLVED-PARK-1 before). Infrastructure and content failures (ground, ensemble,
+// verify, publish, timeouts) keep the full re-run from ground. Each other decision is a cloud_ops_events row of kind rerun-route.
 var RERUN_ROUTE_MARK = "RERUN-ROUTE-1 revise-once:";
 function rerunRoute(row, msg) {
   var m = String(msg || "");
   var prior = (m.match(/^(review|revise):/) || [])[1] || "";
-  if (m.indexOf("PARKED-REVISE-NOOP-CEILING-1") >= 0) {
-    return { stage: "parked", prior, reason: "revise_count reached the no-op ceiling" };
-  }
-  // Treat a noop (applied=0) as a terminal condition: record it but do not re‑queue.
+  // A noop (applied=0) is a ceiling: another revise pass would repeat it, so the row re-enters the lane (SINGLE-LANE-1) with a fresh draft.
   if (/applied\s*[:=]\s*0/.test(m)) {
-    return { stage: "parked", prior, reason: "noop terminal – applied=0, no further revise passes" };
+    return { stage: "lane", kind: "noop", prior, reason: "noop terminal – applied=0, no further revise passes" };
   }
   if (!prior) return { stage: "ground", prior: String(row && row.stage || "?"), reason: "not a review or revise failure: full re-run from ground" };
   if (/^review:\s*\d+\s+HARD findings unresolved after \d+ revise cycles\b/.test(m)) {
-    return { stage: "parked", prior, reason: "configured review-cycle cap exhausted; no extra revise pass" };
+    return { stage: "lane", kind: "findings", prior, reason: "configured review-cycle cap exhausted; no extra revise pass" };
   }
-  if (String(row && row.error || "").indexOf(RERUN_ROUTE_MARK) === 0) return { stage: "parked", prior, reason: "the second revise pass also failed" };
+  if (String(row && row.error || "").indexOf(RERUN_ROUTE_MARK) === 0) return { stage: "lane", kind: "findings", prior, reason: "the second revise pass also failed" };
   return { stage: "revise", prior, reason: "the paper exists and only its findings are unresolved: revise once with the findings" };
 }
 async function markError(env, row, msg) {
@@ -1163,11 +1207,9 @@ async function markError(env, row, msg) {
       await logEvent(env, "rerun-route", "row=" + rid + " route=revise prior=" + route.prior + " recover_count=" + (recoverCount + 1) + " reason=" + route.reason + " msg=" + String(msg).slice(0, 200), "warn");
       return;
     }
-    if (route.stage === "parked") {
-      var parkCode = String(msg).indexOf("PARKED-REVISE-NOOP-CEILING-1") >= 0 ? "PARKED-REVISE-NOOP-CEILING-1" : "REVIEW-UNRESOLVED-PARK-1";
-      var park = (parkCode + ": prior stage " + route.prior + "; " + String(msg).slice(0, 180) + " Revert: status queued, stage ground").slice(0, 300);
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=?").bind(park, row.id).run();
-      await logEvent(env, "rerun-route", "row=" + rid + " route=parked prior=" + route.prior + " reason=" + route.reason + " msg=" + String(msg).slice(0, 200), "warn");
+    if (route.stage === "lane") {
+      // SINGLE-LANE-1: the review-cycle cap, the second revise pass and a no-op ceiling re-enter the lane (one lane-reenter event), they are not parked.
+      await laneReenter(env, row, { kind: route.kind, prior: route.prior, reason: String(msg).slice(0, 200) + " (" + route.reason + ")" });
       return;
     }
     await env.QNFO_AUDIT.prepare(
@@ -1175,10 +1217,10 @@ async function markError(env, row, msg) {
     ).bind(String(msg).slice(0, 300), row.id).run();
     await logEvent(env, "rerun-route", "row=" + rid + " route=ground prior=" + route.prior + " recover_count=" + (recoverCount + 1) + " msg=" + String(msg).slice(0, 200), "warn");
   } else {
-    // RESEARCH-POISON-PARK-1 (#1700): a row that exhausted recover_count is NOT re-armed with a reset
-    // counter (its inputs are unchanged, so it would just loop); it leaves researching for a parked
-    // terminal status with the reason recorded. UPDATE only, never DELETE.
-    await parkPoisonRow(env, row, msg);
+    // RESEARCH-POISON-PARK-1 (#1700) parked a row that exhausted recover_count so it would not loop on unchanged inputs. SINGLE-LANE-1 keeps the
+    // bound and drops the dead end: the row re-enters the lane at ground with a fresh draft, its recoveries reset, its cycle counted in
+    // terminal_rearms and a cooldown (laneReenter), so it cannot loop hot. UPDATE only, never DELETE.
+    await laneReenter(env, row, { kind: "poison", prior: String(row.stage || "?"), reason: "recover_count exhausted (" + Number(row.recover_count || 0) + "); last error: " + String(msg || "unknown") });
     try {
       var _rid = String(row.id).slice(0, 8);
       // RESEARCH-TERMINAL-REARMED-1: dedupe against OPEN issues only (ANTIFRAGILE-1: a closed issue is reopened by the D1 refile trigger or
