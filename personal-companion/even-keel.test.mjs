@@ -127,5 +127,21 @@ ok(!/var BALANCE_FAMILY/.test(src) && !/=== BALANCE_FAMILY/.test(src), "the filt
   ok(/EVEN-KEEL REVISION/.test(shared) && !/Every item in the list is a claim the source material does not support/.test(shared.slice(shared.indexOf("function afBalanceRevisionNote"), shared.indexOf("function afBalanceRetryFeedback"))), "the even-keel revision note does not say the items are unsupported claims");
 }
 
+// (9) the check is measured: scored share and hold share, counts only, written to the two registered metrics each tick
+{
+  const writes = [];
+  const personal = { prepare: (sql) => ({ bind: () => ({ first: async () => (/FROM companion_audits/.test(sql) ? { n: 10, scored: 8 } : /FROM companion_runs/.test(sql) ? { held: 2 } : null) }) }) };
+  const audit = { prepare: (sql) => ({ bind: (...a) => ({ run: async () => { writes.push({ sql, a }); return {}; } }) }) };
+  const now = Date.parse("2026-11-05T12:00:00Z");
+  const out = await V.writeBalanceMetrics({ PERSONAL: personal, AUDIT: audit }, now);
+  ok(out && out.scoredShare === 0.8 && out.holdShare === 0.2, "8 of 10 passes scored is 0.8; 2 held beside 8 scored is 0.2", out);
+  const byMetric = Object.fromEntries(writes.map((w) => [w.a[0], w.a[1]]));
+  ok(byMetric.companion_balance_scored_share_7d === "0.8" && byMetric.companion_balance_hold_share_7d === "0.2" && writes.every((w) => /UPDATE metric_registry SET last_value/.test(w.sql)), "both metrics are written as UPDATEs of registered rows", writes.map((w) => w.a));
+  const none = await V.writeBalanceMetrics({ PERSONAL: { prepare: () => ({ bind: () => ({ first: async () => ({ n: 0, scored: 0, held: 0 }) }) }) }, AUDIT: audit }, now);
+  ok(none && none.scoredShare === null && none.holdShare === null, "no passes, no share (not zero)", none);
+  ok(await V.writeBalanceMetrics({ PERSONAL: { prepare: () => { throw new Error("db down"); } }, AUDIT: audit }, now) === null, "a read failure is logged and returns null, never throws into the stall detector");
+  ok(/await writeBalanceMetrics\(env, now\);\n  var open = await env\.AUDIT/.test(src), "the stall detector writes them every hourly tick");
+}
+
 console.log("even-keel: " + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
