@@ -5036,8 +5036,8 @@ var CSS = L(
   ".idx .m{color:var(--mut);font-size:.8rem;letter-spacing:.05em;text-transform:uppercase}",
   ".idx .l{color:var(--mut);font-size:.93rem;margin-top:.35rem}",
   "nav.forms{margin:1.6rem 0 2.2rem;color:var(--mut);font-size:.85rem}",
-  "nav.forms a{margin-right:.9rem}
-header.mast h1 a,nav.forms a{display:inline-block;padding:.35rem 0;min-width:24px;text-align:center}",
+  "nav.forms a{margin-right:.9rem}",
+  "header.mast h1 a,nav.forms a{display:inline-block;padding:.35rem 0;min-width:24px;text-align:center}",
   ".fb{margin:2.6rem 0 0;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.85rem}",
   ".fb a{margin-right:1rem}",
   "footer{margin-top:3.4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.78rem}",
