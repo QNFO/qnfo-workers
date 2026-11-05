@@ -159,6 +159,7 @@ async function reconcileOrg(env, result) {
     result.errors.push({ scope: "org:" + ORG, status: r.status, why: "cannot read org" });
     return;
   }
+  try { await stewardSettingsOrg(env, r.body, result, result.settings_mode); } catch (eS) { result.errors.push({ scope: "org-settings", why: String(eS && eS.message || eS).slice(0, 140) }); }
   var patch = {};
   Object.keys(DESIRED_ORG).forEach(function (k) {
     if (r.body[k] !== DESIRED_ORG[k]) patch[k] = DESIRED_ORG[k];
@@ -267,7 +268,165 @@ async function reconcileRepo(env, listed, result) {
   } else {
     result.limitations.push(full + ":branch_protection (needs GitHub Pro on a private repo)");
   }
+
+  /* GITHUB-STEWARD-2: the settings the steward did not declare before (public repositories only; the pass reports in dry mode and writes in on). */
+  try { await stewardSettingsRepo(env, listed, repo, result, result.settings_mode); } catch (eS) { result.errors.push({ scope: full + ":settings", why: String(eS && eS.message || eS).slice(0, 140) }); }
 }
+
+// ---- GITHUB-STEWARD-2:BEGIN (#5530, pillar security; docs/FLEET-AUDIT-2026-10-30.md section 4) ----
+// Settings the steward did not declare before: the default workflow token and whether workflows may approve pull requests, secret scanning and push protection,
+// Actions and code scanning on forks, and the organisation website. Switch: ops_config steward_settings_enforce = off | dry | on (default dry: the drift is computed and
+// reported on GET /report, nothing is written). Public, non-fork, non-archived repositories of the organisation only (forks for their own two settings); private
+// repositories, archived repositories and the owner's personal account are never read or written. A refusal is recorded with its status and a trimmed text and is not retried
+// with another credential; a plan limit is a limitation; a rate limit latches GH_LIMIT like every other stage.
+var DESIRED_WORKFLOW_PERMS = { default_workflow_permissions: "read", can_approve_pull_request_reviews: false };
+// conflict-repair, mirror-autosync and code-task-publish open or merge pull requests with the workflow token in this repository (the setting "Allow GitHub Actions to create and approve pull requests").
+var WORKFLOW_PERMS_EXCEPTIONS = { "QNFO/qnfo-workers": { can_approve_pull_request_reviews: true } };
+var DESIRED_ORG_BLOG = "https://qnfo.org";
+var STEWARD_SETTINGS_READ_CAP = 240;
+function stewardSettingsMode(v) {
+  var m = String(v == null ? "" : v).trim().toLowerCase();
+  return m === "off" || m === "on" ? m : "dry";
+}
+function desiredWorkflowPerms(full) {
+  return Object.assign({}, DESIRED_WORKFLOW_PERMS, WORKFLOW_PERMS_EXCEPTIONS[full] || {});
+}
+// Pure: the writes one repository needs, from what was read. reads = { workflow, actions, codeScanning } (each a parsed body or null when unread); repo = the single-repository body.
+function stewardSettingsPlan(listed, repo, reads) {
+  var plan = [];
+  if (!listed || listed.private === true || listed.archived === true || !listed.full_name || String(listed.full_name).indexOf(ORG + "/") !== 0) return plan;
+  var full = listed.full_name, r = reads || {};
+  if (listed.fork === true) {
+    if (r.actions && r.actions.enabled === true) plan.push({ field: "fork_actions", method: "PUT", path: "/repos/" + full + "/actions/permissions", body: { enabled: false }, current: "enabled", desired: "disabled" });
+    if (r.codeScanning && r.codeScanning.state && r.codeScanning.state !== "not-configured") plan.push({ field: "fork_code_scanning", method: "PATCH", path: "/repos/" + full + "/code-scanning/default-setup", body: { state: "not-configured" }, current: String(r.codeScanning.state), desired: "not-configured" });
+    return plan;
+  }
+  if (r.workflow) {
+    var want = desiredWorkflowPerms(full), diff = {}, cur = [];
+    Object.keys(want).forEach(function (k) { if (r.workflow[k] !== want[k]) { diff[k] = want[k]; cur.push(k + "=" + r.workflow[k]); } });
+    if (Object.keys(diff).length) plan.push({ field: "workflow_permissions", method: "PUT", path: "/repos/" + full + "/actions/permissions/workflow", body: want, current: cur.join(","), desired: JSON.stringify(want) });
+  }
+  var sa = repo && repo.security_and_analysis;
+  if (sa && typeof sa === "object") {
+    var sab = {}, ss = sa.secret_scanning && sa.secret_scanning.status, pp = sa.secret_scanning_push_protection && sa.secret_scanning_push_protection.status;
+    if (ss && ss !== "enabled") sab.secret_scanning = { status: "enabled" };
+    if (pp && pp !== "enabled") sab.secret_scanning_push_protection = { status: "enabled" };
+    if (Object.keys(sab).length) plan.push({ field: "secret_scanning", method: "PATCH", path: "/repos/" + full, body: { security_and_analysis: sab }, current: "secret_scanning=" + ss + ",push_protection=" + pp, desired: "enabled,enabled" });
+  }
+  return plan;
+}
+function stewardSettingsState(result) {
+  return result.settings || (result.settings = { mode: "dry", repos_considered: 0, reads: 0, drift: {}, fixed: {}, refused: [], limitations: [], org_actions_workflow: null, org_blog: null });
+}
+function stewardSettingsNote(result, field, fixed) {
+  var s = stewardSettingsState(result);
+  s.drift[field] = (s.drift[field] || 0) + 1;
+  if (fixed) s.fixed[field] = (s.fixed[field] || 0) + 1;
+}
+// One read, counted against the per-run cap; null when the cap is spent, GitHub is rate limiting, or the answer is not a 200 (the status is returned for the ledger).
+async function stewardSettingsRead(env, result, path) {
+  var s = stewardSettingsState(result);
+  if (s.reads >= STEWARD_SETTINGS_READ_CAP || ghLimited()) return { status: 0, body: null };
+  s.reads++;
+  var r = await gh(env, "GET", path);
+  return { status: r.status, body: r.status === 200 ? r.body : null, text: r.text };
+}
+async function stewardSettingsWrite(env, result, repoFull, item) {
+  var s = stewardSettingsState(result);
+  var w = await gh(env, item.method, item.path, item.body);
+  if (w.status >= 200 && w.status < 300) { stewardSettingsNote(result, item.field, true); return true; }
+  stewardSettingsNote(result, item.field, false);
+  if (w.limited) return false;
+  var why = String(w.text || "").replace(/\s+/g, " ").slice(0, 160);
+  if (w.status === 422 || (w.status === 403 && /plan|upgrade|not available|advanced security/i.test(why))) s.limitations.push(repoFull + ":" + item.field + " (" + w.status + " " + why.slice(0, 100) + ")");
+  else s.refused.push({ repo: repoFull, field: item.field, status: w.status, why: why });
+  return false;
+}
+async function stewardSettingsRepo(env, listed, repo, result, mode) {
+  if (mode === "off" || !listed || listed.private === true || listed.archived === true || String(listed.full_name || "").indexOf(ORG + "/") !== 0) return;
+  var s = stewardSettingsState(result);
+  s.mode = mode;
+  s.repos_considered++;
+  var full = listed.full_name, reads = {};
+  if (listed.fork === true) {
+    var a = await stewardSettingsRead(env, result, "/repos/" + full + "/actions/permissions");
+    reads.actions = a.body;
+    var c = await stewardSettingsRead(env, result, "/repos/" + full + "/code-scanning/default-setup");
+    if (c.status === 200) reads.codeScanning = c.body;
+    else if (c.status && c.status !== 404) s.limitations.push(full + ":fork_code_scanning (read " + c.status + ")");
+  } else {
+    var wf = await stewardSettingsRead(env, result, "/repos/" + full + "/actions/permissions/workflow");
+    reads.workflow = wf.body;
+    if (!wf.body && wf.status && wf.status !== 404) s.refused.push({ repo: full, field: "workflow_permissions", status: wf.status, why: String(wf.text || "").replace(/\s+/g, " ").slice(0, 160) });
+  }
+  var plan = stewardSettingsPlan(listed, repo, reads);
+  for (var i = 0; i < plan.length; i++) {
+    if (mode === "on" && !ghLimited()) await stewardSettingsWrite(env, result, full, plan[i]);
+    else stewardSettingsNote(result, plan[i].field, false);
+  }
+}
+// Organisation: the workflow-token defaults are only reported (they also govern private repositories whose workflows were not audited); the website is written only when empty.
+async function stewardSettingsOrg(env, orgBody, result, mode) {
+  if (mode === "off") return;
+  var s = stewardSettingsState(result);
+  s.mode = mode;
+  var o = await stewardSettingsRead(env, result, "/orgs/" + ORG + "/actions/permissions/workflow");
+  s.org_actions_workflow = o.body ? { default_workflow_permissions: o.body.default_workflow_permissions, can_approve_pull_request_reviews: o.body.can_approve_pull_request_reviews } : { status: o.status };
+  if (!orgBody) return;
+  var blog = String(orgBody.blog == null ? "" : orgBody.blog).trim();
+  s.org_blog = blog;
+  if (blog) return;
+  var item = { field: "org_blog", method: "PATCH", path: "/orgs/" + ORG, body: { blog: DESIRED_ORG_BLOG } };
+  if (mode === "on" && !ghLimited()) await stewardSettingsWrite(env, result, ORG, item);
+  else stewardSettingsNote(result, "org_blog", false);
+}
+async function stewardSettingsModeRead(env) {
+  if (!env || !env.AUDIT) return "dry";
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'steward_settings_enforce'").first();
+    return stewardSettingsMode(r && r.value);
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-github-steward", where: "steward-settings-mode", error: String(e && e.message || e).slice(0, 160) })); return "dry"; }
+}
+async function stewardSettingsSave(env, result) {
+  var s = result.settings;
+  if (!s || !env.AUDIT) return;
+  var summary = { at: new Date().toISOString(), version: VERSION, mode: s.mode, repos_considered: s.repos_considered, reads: s.reads, drift: s.drift, fixed: s.fixed, refused: s.refused.slice(0, 20), limitations: s.limitations.slice(0, 20), org_actions_workflow: s.org_actions_workflow, org_blog: s.org_blog };
+  try { await tsState(env, "settings_last_run", JSON.stringify(summary).slice(0, 20000)); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-github-steward", where: "steward-settings-save", error: String(e && e.message || e).slice(0, 160) })); }
+}
+// ---- GITHUB-STEWARD-2:END ----
+
+// ---- BP26-KILLSWITCH-READERS-1:BEGIN (docs/KILL-SWITCH-DRILL.md; reader 3 of 9 after qnfo-deploy-guard and qnfo-code-orchestrator) ----
+// The global kill switch is one ops_config row, fleet_kill_switch = on | off. While it is on this worker starts nothing that reaches outside the fleet: no GitHub issue, comment,
+// label, project or repository setting is written by a scheduled run, and the billing read waits too. The read is cached for 30 seconds and FAILS OPEN: an unreadable row
+// is treated as off and logged, so a D1 overload can never stop the steward. A scheduled run that finds the switch on records one cloud_ops_events row of kind
+// kill-switch.observed per five minutes (job qnfo-github-steward), which the monthly drill reads. POST /tick and the other keyed routes are a person's explicit request and stay.
+var KS_CACHE = { at: 0, on: false };
+async function killSwitchOn(env) {
+  var n = Date.now();
+  if (n - KS_CACHE.at < 30000) return KS_CACHE.on;
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'fleet_kill_switch'").first();
+    KS_CACHE = { at: n, on: !!r && String(r.value == null ? "" : r.value).trim().toLowerCase() === "on" };
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-github-steward", where: "kill-switch-read", failed_open: true, error: String(e && e.message || e).slice(0, 160) }));
+    KS_CACHE = { at: n, on: false };
+  }
+  return KS_CACHE.on;
+}
+async function killSwitchObserved(env, what) {
+  try {
+    var since = new Date(Date.now() - 300000).toISOString();
+    var ex = await env.AUDIT.prepare("SELECT id FROM cloud_ops_events WHERE kind = 'kill-switch.observed' AND job = 'qnfo-github-steward' AND ts > ?1 LIMIT 1").bind(since).first();
+    if (ex) return false;
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'kill-switch.observed', ?3, 'qnfo-github-steward', 'ok')")
+      .bind("ks-qnfo-github-steward-" + Date.now(), new Date().toISOString(), ("skipped " + String(what || "scheduled run") + " while fleet_kill_switch = on").slice(0, 300)).run();
+    return true;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-github-steward", where: "kill-switch-observed", error: String(e && e.message || e).slice(0, 160) }));
+    return false;
+  }
+}
+// ---- BP26-KILLSWITCH-READERS-1:END ----
 
 async function auditWorkflows(env, repo, result) {
   var r = await gh(env, "GET", "/repos/" + repo.full_name + "/actions/workflows");
@@ -1900,6 +2059,7 @@ async function runReconcile(env, opts) {
     drift: [], workflow_issues: [], limitations: [], errors: [], issue_sync: null, issue_sync_reverse: null
   };
 
+  result.settings_mode = await stewardSettingsModeRead(env);
   await reconcileOrg(env, result);
 
   var repos = await paginate(env, "/orgs/" + ORG + "/repos?type=all");
@@ -1928,6 +2088,7 @@ async function runReconcile(env, opts) {
   }
 
   protectionLimitation(result);
+  await stewardSettingsSave(env, result);
   try { await mainRulesVisibility(env, result); } catch (eM) { result.errors.push({ scope: "main_rules", why: String(eM && eM.message || eM).slice(0, 140) }); }
   try { await modelFloorGuardVisibility(env, result); } catch (eM) { result.errors.push({ scope: "model_floor_guard", why: String(eM && eM.message || eM).slice(0, 140) }); }
 
@@ -2004,9 +2165,12 @@ var CAPABILITIES = [
   "model-floor-guard-visibility: records the model-floor-guard workflow runs on main as a countable fact",
   "dispatch-liveness: files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes, from outside that failure domain",
   "reports: GET /report, GET /tracker, GET /portfolio and GET /roadmap return the last run of each stage",
+  "kill-switch-reader: while ops_config fleet_kill_switch is on a scheduled run starts nothing that writes outside the fleet and records a kill-switch.observed event; the read is cached 30 s and fails open (BP26-KILLSWITCH-READERS-1)",
+  "settings-reconcile: declares the default workflow token (read) and whether workflows may approve pull requests (only in qnfo-workers), secret scanning and push protection on public repositories, Actions and code scanning off on public forks, and the organisation website; ops_config steward_settings_enforce is off, dry (default: drift reported on GET /report, nothing written) or on (GITHUB-STEWARD-2)",
   "github-billing-ledger: reads the organization and owner billing usage summaries hourly into qnfo-audit cost_vendor_month (list value, discount, net) so the all-vendor monthly cost ledger carries GitHub as an invoice-evidence line (COST-LEDGER-ALLVENDOR-1)"
 ];
 var LIMITATIONS = [
+  "settings-reconcile touches public repositories of the QNFO organisation only: private repositories, archived repositories and the personal account are never read or written, the organisation workflow-token defaults are reported and never written, and a plan limit (422, or a 403 that names the plan) is a limitation, not an error (GITHUB-STEWARD-2)",
   "additive only: never deletes a repository, archives one, pushes a commit or rewrites a workflow file; workflow findings are reported, not edited",
   "a setting the platform refuses (branch protection and auto-merge on a private repository on the free plan) is recorded as a permanent limitation and not retried as a failure",
   "organisation two_factor_requirement_enabled cannot be set through the REST API on this plan",
@@ -2035,7 +2199,9 @@ export default {
     }
 
     if (p === "/report" && request.method === "GET") {
-      return json({ version: VERSION, last_run: await lastRun(env) });
+      var settingsLast = null;
+      try { settingsLast = JSON.parse(await tsState(env, "settings_last_run") || "null"); } catch (eSl) { settingsLast = { error: String(eSl && eSl.message || eSl).slice(0, 160) }; }
+      return json({ version: VERSION, last_run: await lastRun(env), settings: settingsLast });
     }
 
     if (p === "/tracker" && request.method === "GET") {
@@ -2142,6 +2308,8 @@ async function githubBillingTick(env, nowMs) {
 }
 // ---- COST-LEDGER-ALLVENDOR-1:END
 async function stewardScheduled(event, env, ctx) {
+    // BP26-KILLSWITCH-READERS-1: with fleet_kill_switch on, a scheduled run starts nothing that writes outside the fleet; it records that it saw the switch.
+    if (await killSwitchOn(env)) { await killSwitchObserved(env, "scheduled run " + String((event && event.cron) || "")); return; }
     // COST-LEDGER-ALLVENDOR-1: hourly (throttled inside), before the tracker and reconcile work; a failure is logged and never fails the fire.
     try { var gb = await githubBillingTick(env); if (gb && !gb.skipped) console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event && event.cron, billing: gb })); } catch (eB) { console.error(JSON.stringify({ worker: "qnfo-github-steward", where: "githubBillingTick", error: String(eB && eB.message || eB).slice(0, 200) })); }
     if (event && event.cron === TS_CRON) {
