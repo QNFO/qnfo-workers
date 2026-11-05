@@ -1086,24 +1086,22 @@ function ensureCrossFamily(writerFamilies, reviewerFamilies) {
 }
 // SINGLE-LANE-1 (0.54.0, agent_issues 1001450, GitHub 6709; owner directive 2026-11-03: "NO MORE PARKED ITEMS! There shall only be a single line from idea
 // to publish"): this worker never writes a parked state. Every place that used to park a row (the recover ceiling, a stale claim at the ceiling, the
-// review-cycle cap, the second revise pass, the revise no-op ceiling, the math gate) calls laneReenter instead: the row goes back to status queued at
-// the stage the failure names, with the reason in error ("SINGLE-LANE-1: re-entered at <stage>, no parked state. Was: <reason>") and one lane-reenter
-// event. No publication gate moves: a paper that cannot pass review is still never published, it keeps cycling through revise and ground.
+// review-cycle cap, the second revise pass, the revise no-op ceiling, the math gate) calls laneReenter instead: the row goes back into the lane at the
+// stage the failure names, with the reason in error ("SINGLE-LANE-1: re-entered at <stage>, no parked state. Was: <reason>") and one lane-reenter event.
+// No publication gate moves: a paper that cannot pass review is still never published, it keeps cycling through revise and ground.
 // Bounded, so the cycle cannot run hot: each re-entry is counted in research_queue.terminal_rearms (a durable column the stages never rewrite, unlike
-// context), resets recover_count and revise_count so a cycle gets its own recoveries, and sets context.laneNotBefore = now + a cooldown that grows with the
-// count (3 h, 1 day, 3 days, then 7 days). The claim (RESEARCH_CLAIM_ID_SQL, claimErrataFair) skips a row until its laneNotBefore has passed, and the
-// backpressure order of qnfo-fleet-control (priority class, score, age) meters the rest as before. ops_config research_lane_cooldown = off writes no
-// laneNotBefore (the recover ceiling and the order still apply). Stage: a failure with open findings (review unresolved, second revise pass) keeps its
-// draft and re-enters at revise with a fresh cycle budget the first LANE_REVISE_FIRST times (the PARK-REARM-1 ladder); every other failure, and every
-// later cycle, drafts again from ground (the PARKED-REGROUND-1 ladder).
-var LANE_COOLDOWN_MIN = [180, 1440, 4320, 10080];
+// context) and resets recover_count and revise_count so a cycle gets its own recoveries. The first TERMINAL_RECOVERY_MAX re-entries are status queued
+// (the claim is already throttled to a few rows an hour by the tick allowance); from then on the row re-enters as status deferred at ground, so the
+// RESEARCH-BACKPRESSURE-1 release of qnfo-fleet-control (priority, score, age) decides when it gets an executor slot again, like any other waiting row.
+// Stage: a failure with open findings (review unresolved, second revise pass) keeps its draft and re-enters at revise with a fresh cycle budget the
+// first LANE_REVISE_FIRST times (the PARK-REARM-1 ladder); every other failure, and every later cycle, drafts again from ground (the PARKED-REGROUND-1 ladder).
+var TERMINAL_RECOVERY_MAX = 2;
 var LANE_REVISE_FIRST = 2;
-function laneCooldownMinutes(cycle) {
-  var n = Math.max(1, Math.floor(Number(cycle) || 1));
-  return LANE_COOLDOWN_MIN[Math.min(n, LANE_COOLDOWN_MIN.length) - 1];
-}
 function laneStageFor(kind, cycles) {
   return kind === "findings" && Number(cycles || 0) < LANE_REVISE_FIRST ? "revise" : "ground";
+}
+function laneStatusFor(cycles) {
+  return Number(cycles || 0) < TERMINAL_RECOVERY_MAX ? "queued" : "deferred";
 }
 var LANE_FROM_STATUS = "'researching','queued','failed','review'";
 var LANE_LEGACY_FROM_STATUS = "'researching','queued','failed','review','wontfix','archived','deferred'";
@@ -1117,20 +1115,18 @@ async function laneReenter(env, row, o) {
   var cycles = Number(cur && cur.terminal_rearms || 0);
   var recoverWas = Number(cur && cur.recover_count != null ? cur.recover_count : row.recover_count || 0);
   var cycle = cycles + 1;
-  var stage = laneStageFor(kind, cycles);
-  var notBefore = null;
-  if ((await floorFlag(env, "research_lane_cooldown")) !== "off") notBefore = new Date(Date.now() + laneCooldownMinutes(cycle) * 6e4).toISOString().replace(/\.\d+Z$/, "Z");
+  var status = laneStatusFor(cycles);
+  var stage = status === "deferred" ? "ground" : laneStageFor(kind, cycles);
   var ctx = stage === "revise" ? { cycles: 0, verifyPass: 1, laneCycle: cycle } : { laneCycle: cycle };
-  if (notBefore) ctx.laneNotBefore = notBefore;
   var reason = String(o.reason || "unknown");
   var err = ("SINGLE-LANE-1: re-entered at " + stage + ", no parked state. Was: " + reason).slice(0, 300);
-  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = ?1, error = ?2, claimed_at = NULL, attempt = 0, recover_count = 0, revise_count = 0, terminal_rearms = COALESCE(terminal_rearms, 0) + 1, context = ?3 WHERE id = ?4 AND status IN (" + (o.legacy ? LANE_LEGACY_FROM_STATUS : LANE_FROM_STATUS) + ")")
-    .bind(stage, err, JSON.stringify(ctx).slice(0, 6e3), id).run();
+  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = ?1, stage = ?2, error = ?3, claimed_at = NULL, attempt = 0, recover_count = 0, revise_count = 0, terminal_rearms = COALESCE(terminal_rearms, 0) + 1, context = ?4 WHERE id = ?5 AND status IN (" + (o.legacy ? LANE_LEGACY_FROM_STATUS : LANE_FROM_STATUS) + ")")
+    .bind(status, stage, err, JSON.stringify(ctx).slice(0, 6e3), id).run();
   var changed = !!(r && r.meta && r.meta.changes);
-  if (!changed) return { requeued: false, stage: stage, reason: "row is not in a re-enterable status" };
-  row.status = "queued"; row.stage = stage; row.error = err; row.claimed_at = null; row.recover_count = 0; row.revise_count = 0; row.terminal_rearms = cycle;
-  try { await logEvent(env, "lane-reenter", "row=" + rid + " kind=" + kind + " prior=" + String(o.prior || "?") + " stage=" + stage + " cycle=" + cycle + " recover_count=" + recoverWas + " not_before=" + (notBefore || "none") + " reason=" + reason.slice(0, 200), "warn"); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "lane-reenter-log", error: String(e && e.message || e).slice(0, 200) })); }
-  return { requeued: true, stage: stage, cycle: cycle, notBefore: notBefore };
+  if (!changed) return { requeued: false, stage: stage, status: status, reason: "row is not in a re-enterable status" };
+  row.status = status; row.stage = stage; row.error = err; row.claimed_at = null; row.recover_count = 0; row.revise_count = 0; row.terminal_rearms = cycle;
+  try { await logEvent(env, "lane-reenter", "row=" + rid + " kind=" + kind + " prior=" + String(o.prior || "?") + " status=" + status + " stage=" + stage + " cycle=" + cycle + " recover_count=" + recoverWas + " reason=" + reason.slice(0, 200), "warn"); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "lane-reenter-log", error: String(e && e.message || e).slice(0, 200) })); }
+  return { requeued: true, stage: stage, status: status, cycle: cycle };
 }
 var RESEARCH_CLAIM_STALE_MIN = 30;
 var RESEARCH_FAILED_REARM_MIN = 30;
@@ -1252,20 +1248,15 @@ function isContentOnlyTerminal(msg) {
 }
 // RESEARCH-TERMINAL-REARMED-1 (2026-10-20, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues
 // 100026, 100043, 100049, 100051, 100153, 100165; pillar autonomy): every RESEARCH-TERMINAL issue gets a self-closing contract, not only the two
-// content kinds. The row it names is resolved when it has left the terminal state (re-armed by FLOOR-REARM-1, PARK-REARM-1 or PARKED-REGROUND-1
-// and back in the pipeline, or published), or, for a content kind, parked with its reason while the queue advances, or when every automatic
-// recovery is spent (terminal_rearms >= 2: the paper cannot converge, the gate withholds it, the row keeps its reason). A reason that can be
-// a pipeline fault (a gate failure, "no applicable edit") closes only on the first or last of these, so a defect that nothing recovers stays
-// open. The signal is kept: the row, its error, terminal_rearms and the terminal-issue / rerun-route events remain, and a row that goes terminal
-// again files (or reopens) its issue because markError dedupes against open issues only.
-var TERMINAL_RECOVERY_MAX = 2;
+// content kinds. SINGLE-LANE-1: the row it names is resolved once it has left the terminal state, which laneReenter does in the same step as the
+// ceiling event (the row is queued or deferred in the lane, or published). The signal is kept: the row, its error, terminal_rearms and the
+// terminal-issue / lane-reenter events remain, and a row that reaches the ceiling again files (or reopens) its issue because markError dedupes
+// against open issues only.
 function terminalResolveProbe(id, kind) {
+  // SINGLE-LANE-1: a row that reached the recover ceiling re-enters the lane (status queued) in the same step, so its issue resolves once the row is out of
+  // wontfix/parked. A row left in that state by an older worker (or another writer) stays pending until legacyParkedSweep returns it.
   var left = "EXISTS (SELECT 1 FROM research_queue WHERE id = '" + id + "' AND status <> 'wontfix' AND COALESCE(stage, '') <> 'parked')";
-  var spent = "EXISTS (SELECT 1 FROM research_queue WHERE id = '" + id + "' AND stage = 'parked' AND terminal_rearms >= " + TERMINAL_RECOVERY_MAX + ")";
-  var parkedCond = kind === "hard-review" ? "instr(error, 'HARD findings unresolved after') > 0" : kind === "mismatch" ? "error LIKE 'PARKED-POISON-1:%mismatch=true%'" : "";
-  var moving = "EXISTS (SELECT 1 FROM cloud_ops_events WHERE job = 'qnfo-research-exec' AND status = 'ok' AND text LIKE '%->%' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-6 hours'))";
-  var content = parkedCond ? " OR (EXISTS (SELECT 1 FROM research_queue WHERE id = '" + id + "' AND stage = 'parked' AND " + parkedCond + ") AND " + moving + ")" : "";
-  return "SELECT 'resolved' AS expected, CASE WHEN " + left + " OR (" + spent + " AND " + moving + ")" + content + " THEN 'resolved' ELSE 'pending' END AS observed";
+  return "SELECT 'resolved' AS expected, CASE WHEN " + left + " THEN 'resolved' ELSE 'pending' END AS observed";
 }
 async function terminalContentContract(env, row, msg, rid) {
   var id = String(row && row.id || "");
@@ -1275,9 +1266,9 @@ async function terminalContentContract(env, row, msg, rid) {
     if (!iss || !iss.id) return null;
     var kind = terminalContentKind(msg);
     var probe = terminalResolveProbe(id, kind);
-    var pre = kind === "hard-review" ? "row parked for HARD review findings unresolved after the revise cycles" : kind === "mismatch" ? "row parked for a verify mismatch with every gate passing" : "row parked for a failure that may be a pipeline fault";
+    var pre = kind === "hard-review" ? "row re-entered the lane for HARD review findings unresolved after the revise cycles" : kind === "mismatch" ? "row re-entered the lane for a verify mismatch with every gate passing" : "row re-entered the lane for a failure that may be a pipeline fault";
     // An upsert on the class: a row that went terminal again after its first issue closed re-points the contract at the new issue.
-    await env.QNFO_AUDIT.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-research-exec', 1, 'active', datetime('now')) ON CONFLICT (class) DO UPDATE SET issue_id = excluded.issue_id, precondition = excluded.precondition, action = excluded.action, verify_probe = excluded.verify_probe, status = 'active', last_verdict = NULL, attempts = 0, next_due_at = datetime('now')").bind("research-terminal-" + rid, Number(iss.id), pre, "none: the row is re-armed by the park sweeps (FLOOR-REARM-1, PARK-REARM-1, PARKED-REGROUND-1) and the issue closes when it is back in the pipeline, published, or every recovery is spent", probe).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-research-exec', 1, 'active', datetime('now')) ON CONFLICT (class) DO UPDATE SET issue_id = excluded.issue_id, precondition = excluded.precondition, action = excluded.action, verify_probe = excluded.verify_probe, status = 'active', last_verdict = NULL, attempts = 0, next_due_at = datetime('now')").bind("research-terminal-" + rid, Number(iss.id), pre, "none: the row re-entered the lane itself (SINGLE-LANE-1, laneReenter) and the issue closes when it is back in the pipeline or published", probe).run();
     return Number(iss.id);
   } catch (e) {
     console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "terminal-contract", error: String(e && e.message || e).slice(0, 200) }));
@@ -3431,7 +3422,6 @@ async function drainV2(env) {
     // bound never compares less (same type-mismatch class as DEPLOY-LOCK-EPOCH-TYPE-1).
     var _cl = await reclaimStaleResearching(env);
     if (_cl.requeued) await logEvent(env, "claim-reclaim", "released " + _cl.requeued + " stale researching claim(s)", "ok");
-    if (_cl.parked) await logEvent(env, "poison-park", "parked " + _cl.parked + " stale researching row(s) with recover_count exhausted", "warn");
   } catch (eCl) {
   }
   try {
@@ -3562,104 +3552,23 @@ async function recoverMax(env) {
   }
   return RECOVER_MAX;
 }
-// PARK-REARM-1 (2026-10-17, owner directive: "I should never have to run external agents/code or fleet diagnostics
-// for the fleet to clear its own backlogs"). REVISE-BUDGET-1 widened the loop, but a row that still exhausts it goes
-// to wontfix/parked and until now only an outside session ever brought one back. This sweep returns a bounded batch
-// per hour to the revise loop with a fresh cycle budget, once per row (context.parkRearm), so a paper that cannot
-// converge stops costing AI instead of looping. Rows go back as status=queued so the backpressure cap meters them;
-// the claim already resumes a queued row at its own stage. ops_config park_rearm = off stops the sweep.
-// PARK-REARM-CAP-1 (0.36.6, agent_issues 100615, 1000029): the cap on re-arms is a DURABLE count in research_queue.terminal_rearms, shared with
-// PARKED-REGROUND-1 (TERMINAL_RECOVERY_MAX recoveries in all), not context.parkRearm. The revise, review and verify stages rewrite `context`
-// without that key, so a re-armed row that parked again looked unrearmed to the "once per row" check: rem-rev-b9f3a431 was parked 15 times in 2880
-// minutes ("re-arm 1 of 1" every time) and revise-noop rounds ran on the same rows for days. After its recoveries a row stays parked with its reason
-// plus PARK-REARM-EXHAUSTED-1, and one park-rearm-exhausted event records it.
-var PARK_REARM_MAX = TERMINAL_RECOVERY_MAX;
-// FLOOR-REARM-1 (RESEARCH-FLOOR-1, migrations/2026-10-19-research-rearm-after-repair.sql): the rows parked on a defect that
-// 0.21.0 corrects (gate-length, gate-refcount, HARD findings unresolved, no applicable edit) were frozen at merge in
-// bak_20261019_research_parked. This hourly step, which exists only in the corrected worker, returns FLOOR_REARM_PER_RUN of them
-// at a time to `complete` (the draft is in R2; RESUME-DRAFT-1 falls back to ground without it), once each (terminal_rearms 0
-// -> 1), so no row is queued before the fix is live and the queue is metered instead of flooded. ops_config park_rearm = off
-// stops it with the sweep above; a missing backup table (migration not applied) makes it a no-op.
-var FLOOR_REARM_PER_RUN = 5;
-async function floorRearmTick(env) {
-  var out = { rearmed: 0 };
-  // FLOOR-REARM-NOOP-1 (0.33.2, 2026-10-25): the contract above says a missing backup table makes this a no-op, but SQLite
-  // resolves the IN (SELECT ...) subquery before the empty outer result, so the query threw D1_ERROR "no such table:
-  // bak_20261019_research_parked" on every tick (134 scheduled exceptions a day, the worker's only error class) and the
-  // documented no-op was really an error. Ask sqlite_master first and return the no-op the contract promises.
-  var hasBak = false;
+// SINGLE-LANE-1 (0.54.0, agent_issues 1001450): parkRearmTick, floorRearmTick and parkedRegroundTick (PARK-REARM-1, FLOOR-REARM-1, PARKED-REGROUND-1) existed only to
+// undo the parked state this worker used to write; with laneReenter nothing writes it, so they are gone. This is the one tolerant read of the old state: any
+// row still holding stage 'parked' (written by a release older than 0.54.0 that was still running, by qnfo-fleet-control's POOL-BOUND-1 branch, or left by a
+// migration that missed it) is returned to the lane at ground, LEGACY_PARKED_PER_RUN a run, oldest first, so nothing is stranded. It runs from the hourly
+// tick and leaves its count in the lane-heartbeat event. Revert: none needed (the rows are in the lane).
+var LEGACY_PARKED_PER_RUN = 10;
+async function legacyParkedSweep(env) {
+  var out = { reentered: 0 };
   try {
-    var t = await env.QNFO_AUDIT.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bak_20261019_research_parked'").first();
-    hasBak = !!(t && t.name);
-  } catch (e) { hasBak = false; }
-  if (!hasBak) { out.skipped = "no-backup-table"; return out; }
-  try {
-    var cand = await env.QNFO_AUDIT.prepare("SELECT id, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND terminal_rearms = 0 AND id IN (SELECT id FROM bak_20261019_research_parked) ORDER BY created_at DESC LIMIT " + FLOOR_REARM_PER_RUN).all();
+    var cand = await env.QNFO_AUDIT.prepare("SELECT id, error, recover_count FROM research_queue WHERE stage = 'parked' ORDER BY created_at ASC LIMIT " + LEGACY_PARKED_PER_RUN).all();
     var list = (cand && cand.results) || [];
     for (var i = 0; i < list.length; i++) {
-      var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'complete', attempt = 0, recover_count = 0, claimed_at = NULL, terminal_rearms = terminal_rearms + 1, error = ?1, context = ?2 WHERE id = ?3 AND status = 'wontfix' AND terminal_rearms = 0").bind(("FLOOR-REARM-1 (RESEARCH-FLOOR-1; prior state in bak_20261019_research_parked). Was: " + String(list[i].error || "")).slice(0, 300), JSON.stringify({ cycles: 0, verifyPass: 0, extendFor: "floor", floorRearm: 1 }), list[i].id).run();
-      if (!r || !r.meta || r.meta.changes !== 0) out.rearmed++;
+      var lr = await laneReenter(env, { id: list[i].id, recover_count: list[i].recover_count }, { kind: "legacy", prior: "parked", legacy: true, reason: String(list[i].error || "no reason recorded") });
+      if (lr && lr.requeued) out.reentered++;
     }
-    if (out.rearmed) await logEvent(env, "floor-rearm", JSON.stringify(out), "ok");
   } catch (e) {
-    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "floor-rearm", error: String(e && e.message || e).slice(0, 200) }));
-  }
-  return out;
-}
-// PARKED-REGROUND-1 (2026-10-20, with RESEARCH-TERMINAL-REARMED-1; agent_issues 100043, 100051): FLOOR-REARM-1 resumes a parked paper at `complete`
-// from the draft in R2, and PARK-REARM-1 returns a REVIEW-UNRESOLVED-PARK-1 row to `revise` once. A draft that cannot be repaired (db5dc635: a
-// reconcile that ended in a loop of "Te Te Te", then "no applicable edit for 6 HARD fixes" on the resumed draft) is parked again and nothing
-// else ever recovers it, so its RESEARCH-TERMINAL issue waits for a person. A row parked for a content or convergence failure that has had fewer
-// than TERMINAL_RECOVERY_MAX automatic recoveries is returned to `ground` with a fresh draft, PARKED_REGROUND_PER_RUN a run, oldest first and rows
-// with an open RESEARCH-TERMINAL issue first, once per recovery (terminal_rearms + 1). Rows come back as status=queued so the backpressure cap
-// meters them. After the last recovery the row stays parked with its reason and the terminal-issue contract closes on that evidence.
-// ops_config park_rearm = off stops it with the other sweeps. Revert: UPDATE research_queue SET status='wontfix', stage='parked' WHERE error LIKE 'PARKED-REGROUND-1%'.
-var PARKED_REGROUND_PER_RUN = 2;
-async function parkedRegroundTick(env) {
-  var out = { regrounded: 0 };
-  try {
-    var cand = await env.QNFO_AUDIT.prepare("SELECT q.id, q.error FROM research_queue q WHERE q.status = 'wontfix' AND q.stage = 'parked' AND q.terminal_rearms < " + TERMINAL_RECOVERY_MAX + " AND q.id NOT LIKE 'rem-%' AND instr(q.error, 'PARKED-REVISE-NOOP-CEILING-1') = 0 AND (instr(q.error, 'no applicable edit') > 0 OR instr(q.error, 'invalid paper contract') > 0 OR instr(q.error, 'HARD findings unresolved') > 0 OR instr(q.error, 'mismatch=true') > 0 OR instr(q.error, 'output too short') > 0 OR instr(q.error, 'gate-') > 0) ORDER BY EXISTS (SELECT 1 FROM agent_issues a WHERE a.status = 'open' AND a.title LIKE 'RESEARCH-TERMINAL ' || substr(q.id, 1, 8) || '%') DESC, q.created_at ASC LIMIT " + PARKED_REGROUND_PER_RUN).all();
-    var list = (cand && cand.results) || [];
-    for (var i = 0; i < list.length; i++) {
-      var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'ground', attempt = 0, recover_count = 0, claimed_at = NULL, terminal_rearms = terminal_rearms + 1, error = ?1, context = '{}' WHERE id = ?2 AND status = 'wontfix' AND stage = 'parked' AND terminal_rearms < " + TERMINAL_RECOVERY_MAX).bind(("PARKED-REGROUND-1: fresh draft from ground. Was: " + String(list[i].error || "")).slice(0, 300), list[i].id).run();
-      if (r && r.meta && r.meta.changes !== 0) out.regrounded++;
-    }
-    if (out.regrounded) await logEvent(env, "parked-reground", JSON.stringify(out), "ok");
-  } catch (e) {
-    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "parked-reground", error: String(e && e.message || e).slice(0, 200) }));
-  }
-  return out;
-}
-async function parkRearmTick(env) {
-  var out = { enabled: false, rearmed: 0, exhausted: 0, reground: { regrounded: 0 } };
-  try {
-    var flag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'park_rearm'").first();
-    if (flag && String(flag.value || "").trim().toLowerCase() === "off") return out;
-    out.enabled = true;
-    out.floor = await floorRearmTick(env);
-    out.reground = await parkedRegroundTick(env);
-    var cand = await env.QNFO_AUDIT.prepare("SELECT id, error, terminal_rearms FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND error LIKE 'REVIEW-UNRESOLVED-PARK-1%' AND terminal_rearms < " + PARK_REARM_MAX + " ORDER BY created_at ASC LIMIT 5").all();
-    var list = (cand && cand.results) || [];
-    for (var i = 0; i < list.length; i++) {
-      var row = list[i];
-      var rearm = Number(row.terminal_rearms || 0);
-      var up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'revise', attempt = 0, recover_count = 0, claimed_at = NULL, terminal_rearms = terminal_rearms + 1, error = ?1, context = ?2 WHERE id = ?3 AND status = 'wontfix' AND stage = 'parked' AND terminal_rearms < " + PARK_REARM_MAX).bind("PARK-REARM-1 re-arm " + (rearm + 1) + " of " + PARK_REARM_MAX + ": " + String(row.error || "").slice(0, 180), JSON.stringify({ cycles: 0, verifyPass: 1, parkRearm: rearm + 1 }).slice(0, 6e3), row.id).run();
-      if (up && up.meta && up.meta.changes !== 0) out.rearmed++;
-    }
-    // PARK-REARM-CAP-1: a row that has used its recoveries stays parked with its reason; mark it once and record it, so the disposition is visible.
-    var spent = await env.QNFO_AUDIT.prepare("SELECT id, error, terminal_rearms FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND error LIKE 'REVIEW-UNRESOLVED-PARK-1%' AND terminal_rearms >= " + PARK_REARM_MAX + " AND instr(error, 'PARK-REARM-EXHAUSTED-1') = 0 ORDER BY created_at ASC LIMIT 20").all();
-    var spentList = (spent && spent.results) || [];
-    for (var j = 0; j < spentList.length; j++) {
-      var sp = spentList[j];
-      var mk = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET error = substr(error, 1, 600) || ' | PARK-REARM-EXHAUSTED-1: ' || terminal_rearms || ' automatic recoveries spent, the row stays parked with this reason' WHERE id = ?1 AND status = 'wontfix' AND stage = 'parked' AND instr(error, 'PARK-REARM-EXHAUSTED-1') = 0").bind(sp.id).run();
-      if (mk && mk.meta && mk.meta.changes !== 0) {
-        out.exhausted++;
-        await logEvent(env, "park-rearm-exhausted", "row=" + sp.id + " parked for good after " + Number(sp.terminal_rearms || 0) + " automatic recoveries: " + String(sp.error || "").slice(0, 160), "warn");
-      }
-    }
-    if (out.rearmed || out.exhausted) await logEvent(env, "park-rearm", JSON.stringify(out), "ok");
-  } catch (e) {
-    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "park-rearm", error: String(e && e.message || e).slice(0, 200) }));
+    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "legacy-parked-sweep", error: String(e && e.message || e).slice(0, 200) }));
   }
   return out;
 }
@@ -7067,11 +6976,10 @@ async function stageReview(env, row) {
     if (_mode === "enforce") {
       // RERUN-ROUTE-CAP-1 (METRIC-TRIGGER-10931): rerun-route re-queued rows with unresolved HARD findings back into
       // revise/review, so each publication burned many paid calls with no edit. Cap the recovery at one attempt: a
-      // review/revise failure on a row that already recovered once is parked instead of re-queued.
+      // review/revise failure on a row that already recovered once leaves the paid loop through laneReenter (SINGLE-LANE-1: it was parked).
       if ((row.recover_count || 0) >= 1) {
-        await logEvent(env, "rerun-route", "row=" + row.id + " prior=review recover=" + (row.recover_count || 0) + ": rerun already attempted after revise/review failure; blocking paid loop", "warn");
-        await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='parked' WHERE id=?").bind(row.id).run();
-        return { ok: false, stage: "review", withheld: "review-hard", hardLeft: _blocking.length, cycle, parked: true };
+        await laneReenter(env, row, { kind: "findings", prior: "review", reason: "review: " + _blocking.length + " HARD findings unresolved after " + cycle + " revise cycles (" + _ids + "); rerun already attempted after a revise/review failure (recover_count=" + (row.recover_count || 0) + ")" });
+        return { ok: false, stage: "review", withheld: "review-hard", hardLeft: _blocking.length, cycle, lane: true };
       }
       await markError(env, row, "review: " + _blocking.length + " HARD findings unresolved after " + cycle + " revise cycles (" + _ids + ")");
       return { ok: false, stage: "review", withheld: "review-hard", hardLeft: _blocking.length, cycle };
@@ -7265,10 +7173,10 @@ async function stageRevise(env, row) {
         return f && f.id === "review-parse";
       });
       const _noopBound = _onlyParse ? null : await reviseNoopBound(env, row);
-      const _noopDisposition = _onlyParse ? "the review output was unreadable, review runs again" : _noopBound.parked ? "parked after two revise-noops" : _noopBound.failed ? "revise counter write failed; recovery path" : "the paper does not advance unrevised; revise failed, recover path";
+      const _noopDisposition = _onlyParse ? "the review output was unreadable, review runs again" : _noopBound.lane ? "re-entered the lane after two revise-noops" : _noopBound.failed ? "revise counter write failed; recovery path" : "the paper does not advance unrevised; revise failed, recover path";
       await logEvent(env, _onlyParse ? "revise-review-parse" : "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_p.refused ? "shrink refused: " + _p.refused + "; " : "") + _noopDisposition, "warn");
-      if (_noopBound && _noopBound.parked) {
-        return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, parked: true, revise_count: _noopBound.revise_count };
+      if (_noopBound && _noopBound.lane) {
+        return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, lane: true, revise_count: _noopBound.revise_count };
       }
       if (_onlyParse && (ctx.reparse || 0) < 2) {
         await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: ctx.cycles || 0, patch: 0, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
@@ -7279,11 +7187,11 @@ async function stageRevise(env, row) {
         return { ok: false, stage: "revise", withheld: "review-parse", fixes: _fx.length, proposed: _p.proposed };
       }
       // RERUN-ROUTE-CAP-1 (METRIC-TRIGGER-10931): the recover loop re-queues a no-op revise into another paid
-      // revise/review cycle (153 rerun-route events in 7 days). One retry is allowed; after that the row parks.
+      // revise/review cycle (153 rerun-route events in 7 days). One retry is allowed; after that the row leaves the paid loop through laneReenter
+      // (SINGLE-LANE-1: it was parked).
       if ((row.recover_count || 0) >= 1) {
-        await logEvent(env, "rerun-route", "row=" + row.id + " prior=revise recover=" + (row.recover_count || 0) + ": rerun already attempted after revise/review failure; blocking paid loop", "warn");
-        await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='parked' WHERE id=?").bind(row.id).run();
-        return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, parked: true };
+        await laneReenter(env, row, { kind: "noop", prior: "revise", reason: "revise: no applicable edit for " + _fx.length + " HARD fixes (" + _hardIds.join(",").slice(0, 120) + "); rerun already attempted after a revise/review failure (recover_count=" + (row.recover_count || 0) + ")" });
+        return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, lane: true };
       }
       await markError(env, row, "revise: no applicable edit for " + _fx.length + " HARD fixes (" + _hardIds.join(",").slice(0, 120) + ") from two models, strict retry included (not advanced unrevised)" + (_noopBound.failed ? "; revise counter write failed" : " revise_count=" + _noopBound.revise_count + "/" + REVISE_NOOP_MAX));
       return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed, revise_count: _noopBound.revise_count };
@@ -7678,9 +7586,10 @@ async function mathGate(env, row, paper, gates) {
 function mathOnlyFailure(gates, mismatch) {
   return !mismatch && !gates.ok && gates.fixes.length > 0 && gates.fixes.every(function(f) { return f && f.id === "gate-math-latex"; });
 }
-async function parkMathRow(env, row, pm) {
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed')").bind(("PARKED-MATH-LATEX-2: " + pm.count + " plain-text math tokens remain after the rewrite; not re-armed (the same prompts would repeat it)").slice(0, 300), row.id).run();
-  await logEvent(env, "math-park", "parked research row " + String(row.id).slice(0, 8) + " pseudo_math=" + pm.count, "warn");
+// SINGLE-LANE-1: the second math-only failing pass used to park the row (PARKED-MATH-LATEX-2, "the same prompts would repeat it"); it re-enters the lane
+// through laneReenter now (a fresh draft from ground, counted in terminal_rearms, deferred once the ceiling is reached). The math gate itself is unchanged.
+async function reenterMathRow(env, row, pm) {
+  return await laneReenter(env, row, { kind: "math", prior: "verify", reason: "MATH-LATEX-2: " + pm.count + " plain-text math tokens remain after the rewrite" });
 }
 // VERIFY-DERIV-1 (#2405, retry 2): an independent audit of AI Scientist papers (Beel et al. 2025, arXiv:2502.14297) found
 // incorrect or hallucinated numbers in 4 of 7, because verify recomputed only the stated claims. This adds the missing checks,
@@ -7971,8 +7880,8 @@ async function stageVerify(env, row) {
     // review -> verify every 15 minutes (13:21Z to 14:07Z) on gate-refcount. A second failing pass is terminal here, as
     // in the claims branch below; the recover loop re-arms the row from ground.
     if (ctx.verifyPass && mathOnlyFailure(gates2, false)) {
-      await parkMathRow(env, row, _pm2);
-      return { ok: false, stage: "verify", gate: gates2.reason, parked: true };
+      await reenterMathRow(env, row, _pm2);
+      return { ok: false, stage: "verify", gate: gates2.reason, lane: true };
     }
     if (!gates2.ok && ctx.verifyPass) {
       await markError(env, row, "verify: unresolved after revision - gates=" + gates2.reason);
@@ -8101,8 +8010,8 @@ async function stageVerify(env, row) {
     }
   }
   if (ctx.verifyPass && mathOnlyFailure(gates, mismatch)) {
-    await parkMathRow(env, row, _pm);
-    return { ok: false, stage: "verify", gate: gates.reason, parked: true };
+    await reenterMathRow(env, row, _pm);
+    return { ok: false, stage: "verify", gate: gates.reason, lane: true };
   }
   if (!mismatch && !ctx.verifyPass && floorOnlyFailure(gates) && await floorExtendOn(env)) return await routeVerifyToFloor(env, row, ctx, gates);
   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
@@ -34639,7 +34548,7 @@ var worker_default = {
       }
       try {
         var _sMin = new Date(Number(event && event.scheduledTime) || Date.now()).getUTCMinutes();
-        const _rearm = _sMin === 0 ? await parkRearmTick(env) : { rearmed: 0 };
+        const _lane = _sMin === 0 ? await legacyParkedSweep(env) : { reentered: 0 };
         if (_sMin === 0) {
           try {
             await logEvent(env, "idea-to-publish", JSON.stringify(await ideaToPublishMetric(env)), "ok");
@@ -34647,13 +34556,11 @@ var worker_default = {
             await logEvent(env, "idea-to-publish", "threw: " + String(eItp && eItp.message || eItp).slice(0, 200), "warn");
           }
         }
-        // PARK-REARM-HEARTBEAT-1 (0.37.0, agent_issues 1000328): the sweep logged only when it re-armed a row, so a healthy sweep with nothing left
-        // to re-arm looked like a dead one (13 of 48 hours had an event). The hourly run now always leaves one event with its counts; the floor
-        // entry carries its own skip reason (no-backup-table) so a sweep step that does nothing says why.
-        if (_sMin === 0) await logEvent(env, "park-rearm-heartbeat", JSON.stringify(_rearm).slice(0, 600), "ok");
-        if (_rearm.rearmed) await logEvent(env, "park-rearm-tick", JSON.stringify(_rearm), "ok");
+        // PARK-REARM-HEARTBEAT-1 (0.37.0, agent_issues 1000328) became the lane heartbeat (SINGLE-LANE-1): a healthy hourly sweep with nothing left to
+        // return looked like a dead one, so the run always leaves one event with its count.
+        if (_sMin === 0) await logEvent(env, "lane-heartbeat", JSON.stringify(_lane).slice(0, 600), "ok");
       } catch (eRep) {
-        await logEvent(env, "error", "parkRearmTick threw: " + String(eRep && eRep.message || eRep).slice(0, 200), "error");
+        await logEvent(env, "error", "legacyParkedSweep threw: " + String(eRep && eRep.message || eRep).slice(0, 200), "error");
       }
       try {
         const lr = await runLeased(env, "cron-" + Date.now().toString(36), 8, RUN_LOOP_BUDGET_MS);
@@ -34782,7 +34689,11 @@ export {
   summaryOnlyCitations,
   markError,
   mathGate,
-  parkPoisonRow,
+  laneReenter,
+  laneStageFor,
+  laneStatusFor,
+  legacyParkedSweep,
+  reviseNoopBound,
   pseudoMathScan,
   reviewBibliography,
   slopScan,
@@ -34847,9 +34758,6 @@ export {
   reviseShrinkRefusal,
   reviseShrinkReasons,
   reviseRefsOnly,
-  floorRearmTick,
-  parkRearmTick,
-  parkedRegroundTick,
   terminalResolveProbe,
   terminalContentKind,
   FLOOR_EXTEND_TARGET,
