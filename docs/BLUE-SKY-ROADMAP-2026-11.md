@@ -19,11 +19,14 @@ and the personal/research separation keep their precedence. Section 9 says exact
    output swung 2 to 89 papers a day and readers did not move. No Cloudflare feature the scouts found moves engaged readers by itself. The reader bets
    therefore remove blockers, make the work findable by agents and answer engines, and build things people use (demos, an oracle, a dataset), not more pages.
 2. **Cost needs a different shape, not a trim.** Platform features reach roughly 40 to 50 percent of the measured Workers AI line (COST-AND-D1 analysis, R);
-   a 3x cut needs fewer or cheaper stages: cascades, routers, distilled classifiers, a sealed eval that lets a cheap model replace an expensive one.
+   a 3x cut needs fewer or cheaper stages: cascades, routers, distilled classifiers, a sealed eval that lets a cheap model replace an expensive one. Measured (R, B1 first reading):
+   the meter went from USD 6 a day on 10-22 to USD 33 to 40 on 11-01 to 11-04 while papers a day rose 1.3x, because research-exec makes 3.7x the calls (21 percent of its
+   `glm-5.3-flash` calls now error) and neurons per paper are 2.6x higher; bounding calls per paper comes before any model swap.
 3. **D1 should hold control state and nothing else.** Telemetry goes to a lake, locks go to Durable Objects, switches go to flags. Size is not the limit
    (10 GB per database, F); one query at a time per database is.
-4. **Nobody can say whether the fleet is getting better.** At 6.3 engaged readers a day a 3-point swing is below the noise floor (MEAS-01). Honest
-   measurement is a bet of its own because every other bet is judged by it.
+4. **Nobody can say whether the fleet is getting better.** Measured (R): the reader series has a standard deviation of 5.0 on a mean of 5.1 a day, so two 7-day windows
+   cannot tell a change smaller than +7.4 a day (more than double) from noise; two 28-day windows reach +3.7 (B4, first reading). Honest measurement is a bet of its
+   own because every other bet is judged by it.
 5. **Sixteen bets, three waves, four gates.** Wave 0 is small, reversible and has dated deadlines; later waves open on metrics, not on the calendar.
 6. **Verified defects found on the way, filed with doers:** `ideas.qnfo.org` publicly lists a raw prompt as a thread; `ask.qwav.org` declares
    `ask.qwav.tech` canonical; `qwav.org/llms.txt` redirects to the homepage; `fleet.qnfo.org` serves "Loading..." with no social tags; a paper's `.md`
@@ -72,8 +75,26 @@ Prediction lines are hypotheses to be logged in `decision_log` before the first 
   degenerate-text pre-screen [CF-A-03, AGT-06]; `rejectIfBusy` plus the Batch API for latency-tolerant stages [CF-A-05]; two-stage judging with a small judge first
   [AGT-05]; replay a learned router on `ops_ai_log` against Cloudflare's own Auto Router, whose claim is up to 30 percent [AGT-02]. W2: GEPA prompt search on
   the cheap tier [AGT-01]; in-context distillation with escalation on disagreement [AGT-03].
+- **First reading (W0, R, 2026-11-05; qnfo-audit `cost_daily`, `ai_call_counters`, `ai_spend_ledger`, read-only).** The cost problem is a recent rise, not a standing level.
+  Account-meter Workers AI spend (fleet scope) was USD 6 to 9 a day on 7 of the 24 days from 10-12 to 11-04 (the target of USD 300 a month is USD 10 a day), spiked to USD 40 to 56
+  on 10-18 to 10-20 (the 56-paper day), fell back to USD 6.2 to 6.5 on 10-22 and 10-23, then climbed to USD 33 to 40 a day on 11-01 to 11-04. Comparing 10-22..24 with 11-01..03
+  (per day): papers published 8 to 10.7 (1.3x); `qnfo-research-exec` calls 420 to 1,561 (3.7x) and neurons 254k to 876k (3.4x), so neurons per published paper rose from about 32k
+  to about 82k (2.6x); `qnfo-code-orchestrator` neurons 180k to 480k (2.7x). In research-exec, `glm-5.3-flash` errors went from 3 of 346 calls (0.9 percent) to 636 of 3,014 (21 percent;
+  by purpose 26 percent revise, 34 percent ensemble, 27 percent reconcile, 16 percent complete, 11 percent review), and two purposes, `complete` and `reconcile`, which had no calls
+  on 10-22..24, took 764 calls on 11-01..03. The per-model ledger (117 rows since 10-01) names only about USD 11 of the roughly USD 30 a day rise in the meter, so about 63 percent of it
+  has no named caller. Reading: the rise is volume per paper (more calls, new stages, failed calls that are retried or sent to a dearer model), not price and not paper count.
+  Cause of the errors (R, `cloud_ops_events`, the last 60,000 events, which are capped per kind and so a lower bound): they are provider-side, not a prompt bug.
+  `aiText model=@cf/zai-org/glm-5.3-flash threw: 3040: Capacity temporarily exceeded` (405 events in the sample, 128 of them on 11-02), request timeouts `3046` on glm-5.3 and kimi-k2.6
+  (190 on 11-02 and 262 on 11-03, from 10 to 70 a day in mid-October), and `cost-first-empty` (the cheap model returned nothing and the call fell back to `gpt-oss-120b`) rising
+  from 35 a day on 10-27 to 206 a day on 11-03. Whether Workers AI bills a capacity or timeout failure is unverified. So the first W0 steps are to name the unattributed share [CF-A-01],
+  send capacity failures to an alias fallback with `rejectIfBusy` or defer them to the Batch API instead of retrying at once [CF-A-02, CF-A-05], and bound calls per paper before any model swap,
+  which would only lower a price on a volume that has tripled. Open critical issues already own the cost levers (agent_issues 1000031
+  COST-LEVER-1, research-exec is 73.6 percent of Workers AI spend; 1000988 METRIC-354, research-exec escalates 50 percent of calls from `glm-5.3-flash` to the 1.7x dearer `gpt-oss-120b`),
+  so nothing new is filed: the capacity errors are the cause behind the second. Caveats: three-day windows; the fleet counters undercount the meter
+  (2.4x, COST-AND-D1 analysis); error counts include retried calls; the event log is a sample, so its counts are not the 636 failed calls in the counters.
 - **Measure.** Prediction (est.): Workers AI neurons per engaged reader on the moved stages fall at least 3x within 60 days of W2 with no fall in the sealed
-  eval (B4) and no rise in `open_high_errata_share`. Read on the Cloudflare account meter, not the fleet counters, which undercount 2.4x.
+  eval (B4) and no rise in `open_high_errata_share`. Read on the Cloudflare account meter, not the fleet counters, which undercount 2.4x. A W0 prediction that can be checked sooner:
+  the daily meter returns to USD 10 or less on at least 5 of 7 days within 14 days of the call-per-paper bound landing, the level it held on 7 of the last 24 days.
 - **Kill.** Any moved stage whose sealed-eval score falls more than one noise-floor width reverts to its previous model within the day.
 - **Failure mode.** Prompt search overfits a 20 to 100 item set and one review reports the headline gain flips under variance weighting (AGT-01, F);
   distillation lost 21 percent accuracy on one benchmark (AGT-03, F); Cloudflare's decision model agreed 0.17 with the fleet's labels, so labels come first.
@@ -119,6 +140,20 @@ Prediction lines are hypotheses to be logged in `decision_log` before the first 
   one-tap owner labels a month, with prediction-powered inference giving valid intervals for judge scores [MEAS-04]; human anchors re-scored by the current
   judge to separate judge drift from system drift [MEAS-02]; a 5 percent holdout on a frozen "fleet v0" [MEAS-07]; enter the q08 forecasts in an external bot
   tournament [MEAS-05].
+- **First reading (W0, R, 2026-11-05).** From `reader_yield_daily` (qnfo-audit, 11 complete days 2026-10-25 to 2026-11-04, the span GA4 has been ingested), externally
+  sourced engaged sessions a day (`ga4_engaged_external`, the series behind the North Star "readers" figure; the managers' 6.29 reproduces as the 7-day mean ending 11-03):
+  mean 5.1, standard deviation 5.0, variance 4.8 times the mean (spiky, not Poisson), range 0 to 15. Treating days as independent, a 7-day mean carries a standard error of
+  1.9 (a 95 percent band of about plus or minus 3.7); the five rolling 7-day means in the data span 5.4 to 7.6 with nothing changed on purpose. The smallest effect two
+  7-day windows can tell apart (alpha 0.05, power 0.8) is **+7.4 a day, 145 percent of the mean**; two 14-day windows +5.2; two 28-day windows +3.7 (73 percent). So a
+  keep-or-revert rule that compares a reader count across two 7-day windows (PLUSSING-4's seven-day outcome check, wherever a plus registers a reader count as its outcome)
+  will keep or revert most plusses on noise; a reader-outcome plus needs a 28-day read, or a measure with more events (per-page engaged rate, click-through on owned
+  surfaces). The target of 12 a day sits 3.7 standard errors above the current 7-day mean, so reaching it would be visible within a week; a drift from 6 to 8 would not.
+  Caveats: 11 days, one weekly cycle at most, a 15 on 11-01 inflates the deviation, days are not independent in practice (shared referrers), and the owner's own browsing is
+  still in the series until the GA4 internal-traffic filter (`ga4-internal-traffic-1`) is active. Papers published against next-day external engaged sessions correlate at
+  -0.7 on 10 pairs, which is descriptive only and consistent with READER-YIELD's finding that readers do not follow output. The other reader North Star, external visits per
+  paper (`paper_readership.ext_30d`): 62 external loads over 870 papers in 30 days (34 papers have any, the most is 7), 0.07 a paper against a target of 0.25, which needs about 218
+  loads. Poisson error on 62 events is about plus or minus 13 percent, but loads cluster on few pages, so the effective sample is nearer the 34 papers: a tripling would show in one
+  30-day window, a 30 percent gain would not. Cost has the opposite problem: its day-to-day swing (USD 6 to 56) is large, but the gap to target is 3x, so a 7-day cost reading is decisive.
 - **Measure.** Prediction: within 30 days every metric in `v_output_quality_headline` has a published noise floor, and the verdict names which movements
   are below it. Success is a claim the fleet withdraws because it was inside the noise.
 - **Failure mode.** At 6.3 readers a day nothing may be detectable; the honest result is then "unmeasurable at this volume", which redirects effort to B5 rather than
@@ -133,6 +168,13 @@ Prediction lines are hypotheses to be logged in `decision_log` before the first 
   with rate limits [PROD-11]; redirects for verified AI-training crawlers to the canonical paper version [CF-A-26, CF-B-20]; agent journeys through Browser Run proving an
   agent can use the paper tools [CF-A-13]. W2: "ask the paper" endpoints with a reproduction capsule where a paper ships code [SCI-03]; shareable answer permalinks
   with a citation-card image [PROD-27].
+- **First reading (W0, R, 2026-11-05; one-off by hand, not yet the daily probe CF-A-09 asks for).** Nothing blocks AI crawlers at the robots or user-agent layer. `robots.txt` on
+  `qnfo.org`, `qwav.org`, `q08.org`, `papers.qnfo.org` and `ask.qwav.org` carries no Disallow for GPTBot, ClaudeBot, PerplexityBot, CCBot or Google-Extended; `papers.qnfo.org` lists 17 named search
+  and AI agents with a Content-Signal of search, ai-input and ai-train all yes, and `qnfo.org` declares the same signals. `qwav.org` and `q08.org` declare no Content-Signal at all (an
+  undeclared preference, not a no). Fetching `/` of the first three hosts and a paper page with the user agents of GPTBot, ClaudeBot, PerplexityBot, CCBot and Bytespider returned 200 every time
+  (24 of 24), the same as a browser. Caveats: a spoofed user agent from an unverified address is not what a verified crawler sees, and zone-level AI Crawl Control and bot-management settings were
+  not read, so a block that applies only to verified bot traffic is not ruled out; the daily probe should read those settings through the API. So the lever here is discoverability and
+  declared preference (Content-Signal on `qwav.org` and `q08.org`, a real `llms.txt` and sitemap on `qwav.org`, QWAV-DISCOVERY-1), not unblocking.
 - **Measure.** Prediction (est.): agent and answer-engine referrals become a measured series within 14 days (today there is none), and external-referrer loads per
   paper rise from 0.12 to 0.3 within 90 days. Cloudflare cites a 1,700 to 1 crawl-to-referral ratio for one operator (S, June 2025): the series may show that
   agents read far more than they send.
@@ -338,7 +380,9 @@ funding of a capped Cloudflare Wallet and any pay-per-crawl policy (money, a leg
   PAPER-META-1 (qnfo-gateway), FLEET-PUBLIC-SSR-1 (qnfo-fleet-dashboard), D1-RESULT-CAP-1 (qnfo-ops).
 - The AI Search billing date corrected in docs/AI-SEARCH-INSTANCES.md.
 - Not filed, and why: ideas resting on search excerpts or unpriced betas; items already owned (D1-SPLIT-1a to 1c, COST-D1-DRILL-1, BP26-OBSERVABILITY-1, RM-QWAV-CROSS-SIMULATOR-1, RM-CITE-EXISTENCE-GATE-1, RM-PAPER-PROVENANCE-TRACE-1, RM-MEMORY-TIERING-1, RM-CODEMODE-MCP-SURFACE-1).
-- Next originated item: **B4 W0 (MEAS-01)**, the A/A noise floor, because every other bet is judged by it; it is the first row to take a doer when W0 closes.
+- B4 W0 started in this PR: the first noise-floor reading of the reader series is in B4 (R). Next originated item: extend it to the other north-star and outcome measures
+  (cost per day, external visits per paper, `v_output_quality_headline`), and size the keep-or-revert window of every count-valued plus outcome from its minimum detectable
+  effect; that is the first row of `RM-BS-HONEST-MEASURE-1` to take a doer.
 
 ## Appendix A. Scout index
 
