@@ -123,7 +123,28 @@ const govRoutes = [
   a = await V.wikiAnchors([], {}, 1);
   ok(a.length >= 1 && a[0].title === "Calm Gardens" && !calls.some((u) => /hansard|globalvoices|gov\.uk/.test(u)), "a topic that is not contested never reaches the source adapters", { n: a.length, calls: calls.filter((u) => /hansard|globalvoices|gov\.uk/.test(u)).length });
 }
-// (6) wiring that cannot be exercised here
+// (6) the closing measure: visible pieces of the last 30 days whose sources footer holds a publisher other than Wikipedia and arXiv (real SQLite, the D1 dialect)
+{
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE companion_pieces (slug TEXT, created_at TEXT, anchor_json TEXT); CREATE TABLE companion_audits (slug TEXT PRIMARY KEY, verdict TEXT); CREATE TABLE companion_retractions (slug TEXT);");
+  const now = Date.parse("2026-11-05T12:00:00Z"), day = 864e5, iso = (d) => new Date(now - d * day).toISOString();
+  const add = (slug, ago, refs, verdict) => { db.prepare("INSERT INTO companion_pieces VALUES (?,?,?)").run(slug, iso(ago), refs === null ? "not json" : JSON.stringify({ refs })); db.prepare("INSERT INTO companion_audits VALUES (?,?)").run(slug, verdict || "pass"); };
+  add("wiki-only", 1, ["https://en.wikipedia.org/wiki/A", "https://arxiv.org/abs/2401.1"]);
+  add("with-hansard", 2, ["https://en.wikipedia.org/wiki/B", "https://hansard.parliament.uk/Commons/2022-07-11/debates/X/Y"]);
+  add("with-gv-and-gov", 3, ["https://en.wikipedia.org/wiki/C", "https://globalvoices.org/2022/04/06/x/", "https://www.gov.uk/government/speeches/z"]);
+  add("bad-json", 4, null);
+  add("too-old", 45, ["https://hansard.parliament.uk/Commons/2022-07-11/debates/X/Y"]);
+  add("retracted", 5, ["https://hansard.parliament.uk/Commons/2022-07-11/debates/X/Y"]); db.prepare("INSERT INTO companion_retractions VALUES (?)").run("retracted");
+  add("failed-audit", 6, ["https://globalvoices.org/2022/04/06/x/"], "fail");
+  const writes = [];
+  const wrap = { prepare: (sql) => ({ bind: (...a) => ({ first: async () => db.prepare(sql).get(...a), run: async () => { writes.push({ sql, a }); return {}; } }) }) };
+  const out = await V.writeSourceMetrics({ PERSONAL: wrap, AUDIT: wrap }, now);
+  ok(out && out.pieces === 2, "two visible pieces of the last 30 days cite a publisher other than Wikipedia and arXiv (old, retracted, unaudited and malformed rows are not counted)", out);
+  ok(writes.length === 1 && writes[0].a[0] === "companion_independent_source_pieces_30d" && writes[0].a[1] === "2" && /UPDATE metric_registry SET last_value/.test(writes[0].sql), "the count is written to the registered metric", writes);
+  ok(await V.writeSourceMetrics({ PERSONAL: { prepare: () => { throw new Error("db down"); } }, AUDIT: wrap }, now) === null, "a read failure is logged, never thrown into the stall detector");
+}
+// (7) wiring that cannot be exercised here
 ok(/art\.sources = extra;/.test(src) && /var cgate = contestedSourcesOk\(\[art\]\.concat\(extra\)\);/.test(src), "the unchanged gate decides whether a contested candidate is kept");
 ok(src.split("var CONTESTED_TOPIC_RE").length - 1 === 1, "CONTESTED_TOPIC_RE is defined once (the earlier definition was replaced at load and never took effect)");
 
