@@ -7418,7 +7418,13 @@ async function charterBreaches(env, ev) {
 // PORTFOLIO-PUT-RETRY-1 (0.26.4, agent_issues 2523): the contents API answers 409 (branch moved) or 422 (sha mismatch) when
 // main takes a push between the GET of the sha and the PUT; bot status commits land every few minutes. Read the sha again and
 // PUT again, at most 3 attempts with a 1 s pause; the result names the attempt count.
-function pfPutConflict(r) { return !!(r && r.status === "write-failed" && /HTTP (409|422)\b/.test(String(r.note || ""))); }
+// PUT-RULE-NOTE-1 (agent_issues 1001171, 2026-11-05): a 409 or 422 that names a repository rule (a required pull request or status check) is a refusal, not a moved branch: it is not retried, and the note carries
+// GitHub's own sentence. Every portfolio and charter write answered "PUT HTTP 409" three times an hour from 16:05Z on 2026-11-04, after the require-build ruleset (15:47Z, admin-only bypass) was added, and the
+// bare status hid which rule it was.
+function pfPutConflict(r) { return !!(r && r.status === "write-failed" && /HTTP (409|422)\b/.test(String(r.note || "")) && !/rule violation|through a pull request|status check/i.test(String(r.note || ""))); }
+async function pfPutNote(resp) {
+  try { var ej = await resp.json(); var m = String((ej && ej.message) || "").replace(/\s+/g, " ").trim().slice(0, 140); return m ? ": " + m : ""; } catch (e) { return ""; }
+}
 async function pfRetryPut(fn) {
   var r = null;
   for (var attempt = 1; attempt <= 3; attempt++) {
@@ -7449,7 +7455,7 @@ async function charterCommitOnce(env, block, day, force) {
   var body = { message: "chore(charter): CHARTER-LOOP-1 refresh " + day + " [skip ci]", content: b64encode(next), sha: gj.sha, branch: "main" };
   var pr = await timedFetch("https://api.github.com/repos/" + CHARTER_REPO + "/contents/" + CHARTER_DOC_PATH, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
-  if (!pj || !pj.commit || !pj.commit.sha) return { status: "write-failed", note: "PUT contents HTTP " + pr.status };
+  if (!pj || !pj.commit || !pj.commit.sha) return { status: "write-failed", note: "PUT contents HTTP " + pr.status + (pr.status === 200 || pr.status === 201 ? "" : await pfPutNote(pr)) };
   return { status: "committed", sha: pj.commit.sha, note: "docs/QUNIVERSE-CHARTER.md refreshed on main", doc: next };
 }
 // The full document for the mirror: the one charterCommit just read or wrote; otherwise (no token, already committed
@@ -8007,7 +8013,7 @@ async function pfCommitOnce(env, repo, path, content, message, mode) {
   if (sha) body.sha = sha;
   var pr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
-  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch };
+  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch + (pr.status === 200 || pr.status === 201 ? "" : await pfPutNote(pr)) };
   return { path: repo + "/" + path, status: "committed", sha: pj.commit.sha, branch: branch };
 }
 async function portfolioSync(env, force) {
@@ -10961,20 +10967,35 @@ async function jrnCall(env, j, binding, url, init) {
   try { var u = new URL(url); hop.path = u.host + u.pathname; } catch (e) { hop.path = String(url).slice(0, 80); }
   var out = { status: 0, text: "", json: null };
   if (!svc || !svc.fetch) { hop.error = "binding missing"; j.path.push(hop); return out; }
-  var ac = new AbortController(), tmMs = (init && Number(init.timeoutMs) > 0) ? Number(init.timeoutMs) : JRN_TIMEOUT_MS, tm = setTimeout(function() { ac.abort(); }, tmMs);
-  try {
-    var hdr = Object.assign({ "User-Agent": JRN_UA, "Accept": "application/json, text/event-stream, text/html;q=0.8", "x-qnfo-synthetic": "1" }, (init && init.headers) || {});
-    var fi = Object.assign({}, init || {}, { headers: hdr, signal: ac.signal }); delete fi.timeoutMs;
-    var r = await svc.fetch(url, fi);
-    out.status = r.status;
-    out.text = (await r.text()).slice(0, 4e5);
-    try { out.json = JSON.parse(out.text); } catch (e) { out.json = null; }
-  } catch (e) {
-    hop.error = String(e && e.name === "AbortError" ? "timeout" : (e && e.message) || e).slice(0, 80);
-    // JRN-ASK-TIMEOUT-1: a timeout while the body was still streaming happened after the status arrived; say so instead of letting the
-    // caller read a 200 with an empty body as "0 events"
-    if (out.status && !out.text) out.timedOut = tmMs;
-  } finally { clearTimeout(tm); }
+  var tmMs = (init && Number(init.timeoutMs) > 0) ? Number(init.timeoutMs) : JRN_TIMEOUT_MS;
+  var isGet = !(init && init.method && String(init.method).toUpperCase() !== "GET");
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    out = { status: 0, text: "", json: null };
+    delete hop.error;
+    var ac = new AbortController(), tm = setTimeout(function() { ac.abort(); }, tmMs);
+    try {
+      var hdr = Object.assign({ "User-Agent": JRN_UA, "Accept": "application/json, text/event-stream, text/html;q=0.8", "x-qnfo-synthetic": "1" }, (init && init.headers) || {});
+      var fi = Object.assign({}, init || {}, { headers: hdr, signal: ac.signal }); delete fi.timeoutMs;
+      var r = await svc.fetch(url, fi);
+      out.status = r.status;
+      out.text = (await r.text()).slice(0, 4e5);
+      try { out.json = JSON.parse(out.text); } catch (e) { out.json = null; }
+    } catch (e) {
+      hop.error = String(e && e.name === "AbortError" ? "timeout" : (e && e.message) || e).slice(0, 80);
+      // JRN-ASK-TIMEOUT-1: a timeout while the body was still streaming happened after the status arrived; say so instead of letting the
+      // caller read a 200 with an empty body as "0 events"
+      if (out.status && !out.text) out.timedOut = tmMs;
+    } finally { clearTimeout(tm); }
+    // JOURNEY-HOP-RETRY-1 (2026-11-05, agent_issues 1001171): one more try of a GET that answered 5xx or failed before any answer, after a second. loop-heartbeats read /api/loop 500 and
+    // /api/state through the dashboard binding several times a day while qnfo-audit was overloaded, and the same URLs answered in about a second from outside; a timeout is never retried
+    // (a page that hangs for 12 s is the finding) and neither is a POST. The hop records that it was retried and its ms covers both tries.
+    if (attempt === 1 && isGet && (out.status >= 500 || (!out.status && hop.error && hop.error !== "timeout"))) {
+      hop.retried = 1;
+      await new Promise(function(res) { setTimeout(res, 1000); });
+      continue;
+    }
+    break;
+  }
   hop.status = out.status; hop.ms = Date.now() - t0;
   j.path.push(hop);
   return out;
@@ -11051,6 +11072,14 @@ async function jCensusAndRegistry(env, db) {
   if (r.healed.length) jrnCheck(r, "registry drift healed in the loop", true, r.healed.map(function(h) { return h.worker + " " + h.from + "->" + h.to; }).join("; "));
   return [j, r];
 }
+// LOOP-ERR-COVERED-1 (agent_issues 1001171): dashboard issue categories whose error level another journey judges. worker-errors is the per-worker error rate over real traffic, read by
+// traffic-health every 20 minutes; counting it here kept loop-heartbeats red for as long as any worker threw, whatever the state of the loops it is named for. Mirror of
+// scripts/fleet_journeys.py LOOP_ERR_COVERED. An answer without an issues list falls back to issue_counts.err, and an unreadable one counts as an error.
+var JRN_ERR_COVERED = ["worker-errors"];
+function jrnDashErrors(sj) {
+  if (sj && Array.isArray(sj.issues)) return sj.issues.filter(function(i) { return i && i.sev === "err" && JRN_ERR_COVERED.indexOf(i.category) < 0; }).length;
+  return sj && sj.issue_counts && typeof sj.issue_counts === "object" && sj.issue_counts.err !== undefined ? Number(sj.issue_counts.err) : 1;
+}
 async function jLoopHeartbeats(env, now) {
   var j = jrnNew("loop-heartbeats");
   var l = await jrnCall(env, j, "SVC_QNFO_DASH", "https://fleet.qnfo.org/api/loop");
@@ -11062,7 +11091,8 @@ async function jLoopHeartbeats(env, now) {
   var s = await jrnCall(env, j, "SVC_QNFO_DASH", "https://fleet.qnfo.org/api/state");
   var sj = s.json || {};
   jrnFresh(j, "dashboard state generated_at", sj.generated_at, now);
-  jrnCheck(j, "dashboard state: no error-level issues", s.status === 200 && sj.issue_counts && Number(sj.issue_counts.err) === 0, "issue_counts " + JSON.stringify(sj.issue_counts) + " verdict " + sj.verdict);
+  var stateErrs = jrnDashErrors(sj);
+  jrnCheck(j, "dashboard state: no error-level issues", s.status === 200 && stateErrs === 0, "error-level issues outside " + JRN_ERR_COVERED.join("/") + ": " + stateErrs + "; issue_counts " + JSON.stringify(sj.issue_counts) + " verdict " + sj.verdict);
   var a = await jrnCall(env, j, "SVC_QNFO_AI_SEARCH", "https://ask.qwav.tech/api/loop");
   var runs = (a.json && a.json.runs) || [];
   jrnFresh(j, "ai-search loop runs[0]", runs.length ? runs[0].ts : null, now);
@@ -11205,15 +11235,44 @@ async function jTrafficHealth(env, db, nowMs) {
   });
   return j;
 }
+// JOURNEY-RECORD-DURABLE-1 (agent_issues 1001363 / GitHub 6623, 1001171 / 6420; 2026-11-05): every run's rows are written before any issue work, in one D1 batch retried on a transient
+// failure. They used to be inserted one at a time, each followed by that journey's issue handling (D1 reads and writes; a failing journey also fetches a worker source from GitHub),
+// inside a waitUntil that the runtime ends 30 s after the handler returns; a failed insert was logged and dropped. Measured in journey_runs: 11 of the 62 cf ticks on 2026-11-04 held
+// fewer than the eight journeys (ask-path, the last row and the slowest journey, is the first to go: no run at 18:00Z, so the ask-path contract read an age of 670 minutes) against 1 of 72
+// on 2026-11-02, and 10 ticks recorded nothing.
+async function jrnWriteRows(db, results, at) {
+  var stmts = results.map(function(j) {
+    var failed = j.steps.filter(function(s) { return !s.ok; });
+    return db.prepare("INSERT INTO journey_runs (ts, runner, journey, ok, steps, failed, ms, failed_json, path_json, healed_json, version) VALUES (?1, 'cf', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
+      .bind(at, j.name, jrnOk(j) ? 1 : 0, j.steps.length, failed.length, j.ms || 0, JSON.stringify(failed).slice(0, 4000), JSON.stringify(j.path).slice(0, 4000), j.healed.length ? JSON.stringify(j.healed).slice(0, 2000) : null, VERSION);
+  });
+  var pause = function(ms) { return new Promise(function(res) { setTimeout(res, ms); }); };
+  if (typeof db.batch === "function" && stmts.length) {
+    for (var a = 1; a <= 3; a++) {
+      try { await db.batch(stmts); return { written: stmts.length, attempts: a }; } catch (e) {
+        console.error(JSON.stringify({ evt: "fleet-control:journeys:record", attempt: a, rows: stmts.length, error: String(e && e.message || e).slice(0, 160) }));
+        if (a < 3) await pause(600 * a);
+      }
+    }
+  }
+  // The batch is all or nothing: rows it could not write are tried one by one, twice each.
+  var written = 0;
+  for (var i = 0; i < stmts.length; i++) {
+    for (var t = 1; t <= 2; t++) {
+      try { await stmts[i].run(); written++; break; } catch (e) {
+        if (t === 2) console.error(JSON.stringify({ evt: "fleet-control:journeys:record", journey: results[i].name, error: String(e && e.message || e).slice(0, 160) }));
+        else await pause(500);
+      }
+    }
+  }
+  return { written: written, attempts: 0 };
+}
 async function jrnRecord(env, db, results, now) {
   var at = new Date(now).toISOString(), failing = [];
+  await jrnWriteRows(db, results, at);
   for (var i = 0; i < results.length; i++) {
     var j = results[i], ok = jrnOk(j), failed = j.steps.filter(function(s) { return !s.ok; });
     if (!ok) failing.push(j.name);
-    try {
-      await db.prepare("INSERT INTO journey_runs (ts, runner, journey, ok, steps, failed, ms, failed_json, path_json, healed_json, version) VALUES (?1, 'cf', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
-        .bind(at, j.name, ok ? 1 : 0, j.steps.length, failed.length, j.ms || 0, JSON.stringify(failed).slice(0, 4000), JSON.stringify(j.path).slice(0, 4000), j.healed.length ? JSON.stringify(j.healed).slice(0, 2000) : null, VERSION).run();
-    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:journeys:record", journey: j.name, error: String(e && e.message || e).slice(0, 160) })); }
     await jrnIssue(db, j, ok, failed, at, now).catch(function(e) { console.error(JSON.stringify({ evt: "fleet-control:journeys:issue", journey: j.name, error: String(e && e.message || e).slice(0, 160) })); });
   }
   // The metric reads both runners: a journey fails while its newest run (either runner, within 2 h) failed.
@@ -12023,7 +12082,9 @@ var worker_default2 = {
       // METRIC-REFRESHER-2 (0.25.0): the second path for the audits_stale and publish-freshness metrics (spof_registry).
       if (onTwentyGrid) ctx.waitUntil(metricRefresher2(env).catch((e) => console.error("metricRefresher2 error:", e && e.message || e)));
       // FLEET-JOURNEYS-2 (0.27.0): end-to-end journeys through service bindings, real-traffic health and the in-loop registry fix.
-      if (onTwentyGrid) ctx.waitUntil(journeyTick(env, { now: event.scheduledTime || Date.now() }).then(function (r) { console.log("journeys (20m): " + JSON.stringify(r)); }).catch((e) => console.error("journeyTick error:", e && e.message || e)));
+      // JOURNEY-RECORD-DURABLE-1: the handler also awaits the journeys (below). A waitUntil task is cancelled 30 s after the handler returns, and a run with the ask journey takes 15 to 60 s.
+      var journeyRun = onTwentyGrid ? journeyTick(env, { now: event.scheduledTime || Date.now() }).then(function (r) { console.log("journeys (20m): " + JSON.stringify(r)); }).catch((e) => console.error("journeyTick error:", e && e.message || e)) : null;
+      if (journeyRun) ctx.waitUntil(journeyRun);
       // DEPLOY-DRIFT-CF-1 (0.26.0): the deploy's second runner: a worker whose main VERSION has been ahead of live for 45 minutes
       // with no canonical-deploy run active is deployed through qnfo-ops /ops/deploy (spof_registry 'GitHub Actions').
       ctx.waitUntil(deployDriftCf(env).catch((e) => console.error("deployDriftCf error:", e && e.message || e)));
@@ -12035,7 +12096,11 @@ var worker_default2 = {
       // fleet_tick; ops_config breach_doctor = off stops it before any write, and it never throws out of the slot.
       ctx.waitUntil(breachDoctorTick(env, {}).then(function (r) { console.log("breach doctor (10m): " + JSON.stringify({ ok: r.ok, mode: r.mode, diagnosed: r.diagnosed, acted: r.acted, verified: r.verified, failed: r.failed, taint: r.taint_dropped, undiagnosed: r.undiagnosed, error: r.error || null, ms: r.ms })); }).catch((e) => console.error("breachDoctorTick error:", e && e.message || e)));
       ctx.waitUntil(remediationContractsTick(env, { budgetMs: 25000 }).then(function (r) { console.log("remediation tick (10m): " + JSON.stringify({ due: r.due, pass: r.pass, fail: r.fail, skipped: r.skipped, budget_left: r.budget_left })); }).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
-      if (onTwentyGrid) return advisorMod.default.scheduled(event, env, ctx);
+      if (onTwentyGrid) {
+        var advisorRun = advisorMod.default.scheduled(event, env, ctx);
+        await journeyRun;
+        return advisorRun;
+      }
       return;
     }
     if (cron === "0 3 * * *") {

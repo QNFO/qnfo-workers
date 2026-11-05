@@ -58,6 +58,9 @@ JOURNEY_EVERY_MIN = int(os.environ.get("JOURNEY_EVERY_MIN", "50"))
 DEPLOY_GRACE_MIN = int(os.environ.get("JOURNEY_DEPLOY_GRACE_MIN", "45"))
 BLIND_MAX = int(os.environ.get("JOURNEY_BLIND_MAX", "0"))
 TIMEOUT = int(os.environ.get("JOURNEY_TIMEOUT_S", "30"))
+# JOURNEY-HOP-RETRY-1 (agent_issues 1001171, 2026-11-05): a GET that answers 5xx is asked once more after this pause. The dashboard answered /api/loop with a 500 and timed out on /api/state several
+# times a day while qnfo-audit was overloaded, and the same URLs answered in about a second from outside; qnfo-fleet-control's journeys do the same (jrnCall).
+RETRY_5XX_PAUSE_S = float(os.environ.get("JOURNEY_RETRY_5XX_PAUSE_S", "1"))
 ISSUE_PREFIX = "FLEET-JOURNEY-FAILED-1"
 METRIC = "fleet_journeys_failing"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -127,9 +130,12 @@ class Http:
             headers["Content-Type"] = "application/json"
         t0 = time.time()
         last = None
-        for attempt in range(2):  # one retry, for transport errors only; an HTTP status is an answer
+        for attempt in range(2):  # one retry, for transport errors and for a GET answered 5xx (JOURNEY-HOP-RETRY-1); any other HTTP status is an answer
             try:
                 status, text = self.opener(method, url, body, headers)
+                if attempt == 0 and method == "GET" and status >= 500:
+                    time.sleep(RETRY_5XX_PAUSE_S)
+                    continue
                 self.calls.append((method, url, status, int((time.time() - t0) * 1000)))
                 return status, text
             except Exception as e:  # noqa: BLE001
@@ -733,6 +739,42 @@ def selftest():
         state["claims"].clear()
         return fn(Http(site(hop)), **kw)
 
+    # JOURNEY-HOP-RETRY-1: a GET answered 5xx is asked once more; a 4xx, a POST and a second 5xx are answers.
+    global RETRY_5XX_PAUSE_S
+    saved_pause, RETRY_5XX_PAUSE_S = RETRY_5XX_PAUSE_S, 0
+    try:
+        seq = {"n": 0}
+
+        def flaky_get(method, url, body, headers):
+            seq["n"] += 1
+            return (500, "boom") if seq["n"] == 1 else (200, json.dumps({"ok": True}))
+
+        h_retry = Http(flaky_get)
+        expect("retry: a GET answered 500 then 200 returns the 200 after exactly two calls", h_retry.json("GET", "https://x.example/a") == (200, {"ok": True}) and seq["n"] == 2)
+        expect("retry: the run record holds the answer, not the failed first try", [c[2] for c in h_retry.calls] == [200])
+        post = {"n": 0}
+
+        def flaky_post(method, url, body, headers):
+            post["n"] += 1
+            return 500, "boom"
+
+        expect("retry: a POST answered 500 is not repeated", Http(flaky_post).req("POST", "https://x.example/b", {"k": 1})[0] == 500 and post["n"] == 1)
+        both = {"n": 0}
+
+        def always_500(method, url, body, headers):
+            both["n"] += 1
+            return 503, "down"
+
+        expect("retry: a GET that answers 5xx twice is a 503 after two calls, never a loop", Http(always_500).req("GET", "https://x.example/c")[0] == 503 and both["n"] == 2)
+        nf = {"n": 0}
+
+        def not_found(method, url, body, headers):
+            nf["n"] += 1
+            return 404, ""
+
+        expect("retry: a 404 is an answer", Http(not_found).req("GET", "https://x.example/d")[0] == 404 and nf["n"] == 1)
+    finally:
+        RETRY_5XX_PAUSE_S = saved_pause
     expect("deploy passes", run_one(j_deploy_coherence, repo=repo, commit_age=old, main_ver=lambda d: "1.0.0").ok)
     expect("deploy mismatch fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: "1.0.0").ok)
     expect("deploy mismatch in grace passes", run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=young).ok)
