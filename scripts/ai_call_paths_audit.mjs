@@ -30,7 +30,6 @@ export const DIRECT_ALLOW = {
 // file alone, and the next change here removes the line.
 export const UNMETERED_BASELINE = {
   "qnfo-ai-calibration:qnfo-model-eval": { expires: "2026-11-12", why: "benchmark calls (6 sites) of the member folded into qnfo-ai-calibration on 2026-11-05: its env is built from the raw host env, so the host's __aiAttrEnv never reaches it; qnfo-ai-calibration/worker.js was claimed by another session, fix filed as AI-METER-COVER-3a (code-task on qnfo-ai-calibration/worker.js, the member's own env function)" },
-  "qnfo-fleet-dashboard": { expires: "2026-11-12", why: "ask-panel and cmd calls (2 sites): file claimed by another session on 2026-11-05, fix filed as AI-METER-COVER-3b (code-task on qnfo-fleet-dashboard/worker.js)" },
 };
 
 // env.AI.run( and a binding named like WAI (qnfo-ops calls env.WAI.run)
@@ -107,7 +106,7 @@ export function findings(rows, opts = {}) {
   const today = opts.today || new Date().toISOString().slice(0, 10);
   const f = [];
   for (const r of rows) {
-    if (r.paths.includes("binding") && !r.metered && !(r.dir in baseline)) f.push({ dir: r.dir, kind: "binding-unmetered", detail: "calls env.AI.run with no __aiAttrEnv wrapper and no ai_call_counters write" });
+    if (r.paths.includes("binding") && !r.metered && !(r.dir in baseline)) f.push({ dir: r.dir, kind: "binding-unmetered", detail: "calls env.AI.run with no __aiAttrEnv wrapper and no ai_call_counters write" + (r.member_of ? "; it runs as a FOLD-KIT member of " + r.member_of + ", whose own wrapper never reaches it: wrap the member's env function, return __aiAttrEnv(env, \"<member>\", \"AI\", \"AUDIT\")" : "") });
     if (r.paths.includes("direct") && !(r.dir in directAllow)) f.push({ dir: r.dir, kind: "direct-provider", detail: "calls " + r.direct.join(", ") + " itself; use the binding, qnfo-ai or the gateway, or add the worker to DIRECT_ALLOW with a reason" });
   }
   for (const [d, e] of Object.entries(baseline)) {
