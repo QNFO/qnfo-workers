@@ -41,8 +41,9 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { addRepoDocs, loadManifest, repoFindings, fetchGithubRepos, selftestRepos } from "./fleet_graph_repos.mjs";
+import { curateWithCloudflare } from "./kg_curate.mjs";
 
-export const VERSION = "1.1.0"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): root-level Workers are inventoried by wrangler.toml name
+export const VERSION = "1.2.0"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): root-level Workers are inventoried by wrangler.toml name
 export const GRAPH_DB_ID = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"; // qnfo-graph (also in qnfo-memory-mcp/wrangler.toml)
 export const AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"; // qnfo-audit
 export const SNAPSHOT_BUCKET = "qnfo-backups";
@@ -1033,6 +1034,14 @@ export async function main(argv) {
     const age = rows[0] && rows[0].age_min;
     if (age !== null && age !== undefined && age < Number(olderThan)) { report.skipped = "last ok live build " + Math.round(age) + " min ago (< " + olderThan + ")"; console.log(JSON.stringify(report)); return 0; }
   }
+  // KG-CURATE-1: the content knowledge graph's curator runs here (same workflow, same push and dispatch triggers) so it needs no cron of its
+  // own; `--scope kg` runs it alone. A failure of either never stops the other: the curator isolates its phases and reports in `report.kg`.
+  const runKg = async () => {
+    if (!cf || (scope !== "all" && scope !== "kg")) return;
+    try { report.kg = await curateWithCloudflare(cf, { dryRun, force: argv.includes("--kg-force") }); }
+    catch (e) { report.kg = { ok: false, error: String(e && e.stack || e).slice(0, 600) }; }
+  };
+  if (scope === "kg") { await runKg(); console.log(JSON.stringify(report)); return report.kg && report.kg.ok === false ? 1 : 0; }
   if (cf && !dryRun) for (const s of SCHEMA_SQL) await cf.d1(GRAPH_DB_ID, s);
   const now = new Date().toISOString();
   let live = null, liveGraph = null, triggersByDb = null;
@@ -1100,6 +1109,7 @@ export async function main(argv) {
         if (refused) { report.ok = false; console.log(JSON.stringify(report)); return 1; }
       }
     }
+    await runKg();
     report.ok = true; report.ms = Date.now() - t0;
     console.log(JSON.stringify(report));
     return 0;
