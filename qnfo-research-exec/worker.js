@@ -34251,7 +34251,7 @@ $('go').addEventListener('click',function(){
   out.appendChild(el('p','meta','Checking2026'));
   fetch('/api/precheck',{method:'POST',headers:{'Content-Type':'text/markdown'},body:t}).then(function(r){return r.json().then(function(j){return[r.status,j]})}).then(function(p){
     clear(out);var s=p[0],d=p[1];
-    if(s!==200||!d||d.error){out.appendChild(el('p','note',(d&&d.error)||'The check could not be completed. Try again in a minute.'));return}
+    if(s<200||s>=300||!d||d.error){out.appendChild(el('p','note',(d&&d.error)||'The check could not be completed. Try again in a minute.'));return}
     out.appendChild(el('h2',null,d.summary));
     var ul=el('ul','c');d.checks.forEach(function(c){ul.appendChild(el('li',c.result==='pass'?'':c.result,c.label+(c.result==='pass'?' 2713':c.result==='fix'?' 2013 fix':' 2013 look')))});out.appendChild(ul);
     d.findings.forEach(function(f){var c=el('div','card '+f.severity);c.appendChild(el('strong',null,f.severity==='fix'?'Fix before submitting':'Worth a second look'));c.appendChild(el('p',null,f.claim));c.appendChild(el('p','meta',f.fix));out.appendChild(c)});
