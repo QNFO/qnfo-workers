@@ -181,6 +181,10 @@ async function w(ctx, sql, rows = 1) {
   if (ctx.stats.writes > ctx.maxWrites) throw new Error("write cap " + ctx.maxWrites + " reached");
   if (!ctx.dryRun) await ctx.graph.run(sql);
 }
+// Independent statements (inserts and upserts of one table) go four at a time: D1 serialises the writes, but the round trip is most of the cost.
+async function runMany(ctx, stmts) {
+  for (let i = 0; i < stmts.length; i += 4) await Promise.all(stmts.slice(i, i + 4).map((st) => w(ctx, st, 0)));
+}
 async function setState(ctx, k, v) {
   const s = typeof v === "string" ? v : JSON.stringify(v);
   ctx.state.set(k, s);
@@ -205,8 +209,8 @@ export async function putNodes(ctx, source, nodes, opts = {}) {
     else rep.kept++;
   }
   bump(ctx, rep.inserted + rep.updated); // the cap is checked before the first statement runs
-  for (const s of insertBatches("INSERT OR IGNORE INTO nodes (" + NODE_COLS + ") VALUES ", tuples)) await w(ctx, s, 0);
-  for (const s of insertBatches("INSERT INTO nodes (" + NODE_COLS + ") VALUES ", upserts, " ON CONFLICT(id) DO UPDATE SET label = excluded.label, name = excluded.name, properties = excluded.properties, status = excluded.status, h = excluded.h, last_seen = excluded.last_seen, updated_at = excluded.updated_at")) await w(ctx, s, 0);
+  await runMany(ctx, insertBatches("INSERT OR IGNORE INTO nodes (" + NODE_COLS + ") VALUES ", tuples));
+  await runMany(ctx, insertBatches("INSERT INTO nodes (" + NODE_COLS + ") VALUES ", upserts, " ON CONFLICT(id) DO UPDATE SET label = excluded.label, name = excluded.name, properties = excluded.properties, status = excluded.status, h = excluded.h, last_seen = excluded.last_seen, updated_at = excluded.updated_at"));
   for (const f of apply) f();
   if (opts.close) {
     const keep = new Set(nodes.map((n) => n.id)), gone = [];
@@ -242,8 +246,8 @@ export async function reconcileEdges(ctx, source, desired, opts = {}) {
     else if (!isActiveEdge(ex) || Math.abs((ex.w || 0) - (wv || 0)) > 0.002 || Math.abs((ex.c || 0) - (cv || 0)) > 0.002) { upd.push(tuple); apply.push(() => Object.assign(ex, { w: wv, c: cv, status: "active", inv: null, seen: ctx.now })); rep.updated++; }
   }
   bump(ctx, rep.inserted + rep.updated);
-  for (const s of insertBatches("INSERT OR IGNORE INTO edges (" + cols + ") VALUES ", ins)) await w(ctx, s, 0);
-  for (const s of insertBatches("INSERT INTO edges (" + cols + ") VALUES ", upd, " ON CONFLICT(id) DO UPDATE SET confidence = excluded.confidence, weight = excluded.weight, status = 'active', invalidated_at = NULL, evidence = excluded.evidence, last_seen = excluded.last_seen, updated_at = excluded.updated_at")) await w(ctx, s, 0);
+  await runMany(ctx, insertBatches("INSERT OR IGNORE INTO edges (" + cols + ") VALUES ", ins));
+  await runMany(ctx, insertBatches("INSERT INTO edges (" + cols + ") VALUES ", upd, " ON CONFLICT(id) DO UPDATE SET confidence = excluded.confidence, weight = excluded.weight, status = 'active', invalidated_at = NULL, evidence = excluded.evidence, last_seen = excluded.last_seen, updated_at = excluded.updated_at"));
   for (const f of apply) f();
   if (opts.sweep !== false) {
     const gone = mine.filter((e) => isActiveEdge(e) && !want.has(ekey(e.s, e.r, e.t)));
@@ -621,7 +625,7 @@ export async function phaseSemantic(ctx) {
       const m = meta.get(slugs[i]), { q, sc } = quantize(vecs[i]);
       tuples.push("(" + [slugs[i], sha(EMBED_MODEL + "|" + (m.updated_at || "") + "|" + (m.version || "")).slice(0, 12), EMBED_MODEL, q, sc, ctx.now].map(lit).join(", ") + ")");
     }
-    for (const s of insertBatches("INSERT OR REPLACE INTO kg_embed (slug, h, model, q, sc, updated_at) VALUES ", tuples, "", 60000, 60)) await w(ctx, s, 0);
+    await runMany(ctx, insertBatches("INSERT OR REPLACE INTO kg_embed (slug, h, model, q, sc, updated_at) VALUES ", tuples, "", 60000, 60));
     bump(ctx, tuples.length); embedded += tuples.length;
   }
   if (noText) await setState(ctx, "noText", noTextMap);
@@ -853,7 +857,7 @@ export async function phaseAnalytics(ctx) {
   for (let i = 0; i < n; i++) { const x = g.act[i]; if (degSem[i] > 0 || x.label === "Paper") want.set(x.id, { degree: deg[i], deg_sem: degSem[i], pagerank: +(pr[i] * n).toFixed(4), component: compOf.get(g.comp[i]) || 0, community: commLabel.get(i) || null }); }
   const tuples = [];
   for (const [id, v] of want) { const p = prev.get(id); if (p && p.degree === v.degree && p.deg_sem === v.deg_sem && Math.abs((p.pagerank || 0) - v.pagerank) < 0.01 && p.component === v.component && (p.community || null) === v.community) continue; tuples.push("(" + [id, v.degree, v.deg_sem, v.pagerank, v.component, v.community, ctx.now].map(lit).join(", ") + ")"); }
-  for (const s of insertBatches("INSERT OR REPLACE INTO kg_node_stats (node_id, degree, deg_sem, pagerank, component, community, updated_at) VALUES ", tuples, "", 60000, 200)) await w(ctx, s, 0);
+  await runMany(ctx, insertBatches("INSERT OR REPLACE INTO kg_node_stats (node_id, degree, deg_sem, pagerank, component, community, updated_at) VALUES ", tuples, "", 60000, 200));
   bump(ctx, tuples.length); rep.statsWritten = tuples.length;
   const gone = [...prev.keys()].filter((id) => !want.has(id));
   for (const c of chunks(gone, 150)) await w(ctx, "DELETE FROM kg_node_stats WHERE node_id IN (" + inList(c) + ")", c.length);
@@ -869,10 +873,14 @@ export async function phaseAnalytics(ctx) {
   const linked = new Set(); for (const [, i] of papers) for (const j of pn(i)) linked.add(Math.min(i, j) + "," + Math.max(i, j));
   const cand = [...aa.entries()].filter(([k]) => !linked.has(k)).sort((a, b) => b[1] - a[1]).slice(0, 40);
   for (const [k, sc] of cand) { const [a, b] = k.split(",").map(Number); gaps.set(gid("link-candidate", g.act[a].id + "|" + g.act[b].id), { kind: "link-candidate", subject: g.act[a].id + "|" + g.act[b].id, score: round(sc, 3), detail: { a: String(g.act[a].name).slice(0, 100), b: String(g.act[b].name).slice(0, 100) } }); }
-  const oldGaps = new Map((await ctx.graph.all("SELECT id, status, first_seen FROM kg_gap")).map((r) => [r.id, r]));
+  const oldGaps = new Map((await ctx.graph.all("SELECT id, status, first_seen, score, detail FROM kg_gap")).map((r) => [r.id, r]));
   const gt = [];
-  for (const [id, v] of gaps) { const o = oldGaps.get(id); gt.push("(" + [id, v.kind, v.subject, JSON.stringify(v.detail).slice(0, 400), v.score, "open", o ? o.first_seen : ctx.now, ctx.now].map(lit).join(", ") + ")"); }
-  for (const s of insertBatches("INSERT OR REPLACE INTO kg_gap (id, kind, subject, detail, score, status, first_seen, last_seen) VALUES ", gt, "", 60000, 150)) await w(ctx, s, 0);
+  for (const [id, v] of gaps) {
+    const o = oldGaps.get(id), detail = JSON.stringify(v.detail).slice(0, 400);
+    if (o && o.status === "open" && o.detail === detail && Math.abs((o.score || 0) - v.score) < 0.0005) continue; // an unchanged gap is not rewritten
+    gt.push("(" + [id, v.kind, v.subject, detail, v.score, "open", o ? o.first_seen : ctx.now, ctx.now].map(lit).join(", ") + ")");
+  }
+  await runMany(ctx, insertBatches("INSERT OR REPLACE INTO kg_gap (id, kind, subject, detail, score, status, first_seen, last_seen) VALUES ", gt, "", 60000, 150));
   const closed = [...oldGaps.keys()].filter((id) => !gaps.has(id) && oldGaps.get(id).status === "open");
   for (const c of chunks(closed, 150)) await w(ctx, "UPDATE kg_gap SET status = 'resolved', last_seen = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length);
   bump(ctx, gt.length); rep.gaps = { open: gaps.size, resolved: closed.length };
@@ -926,7 +934,7 @@ export const PHASES = [
 ];
 export async function runCurate(opts) {
   const t0 = Date.now(), now = opts.now || new Date().toISOString();
-  const o = Object.assign({ dryRun: false, force: false, minIntervalMin: 25, maxWrites: 60000, maxDeletes: 800, maxEmbed: 1000, log: () => {} }, opts, { now });
+  const o = Object.assign({ dryRun: false, force: false, minIntervalMin: 25, maxWrites: 60000, maxDeletes: 800, maxEmbed: 1000, budgetMs: 8 * 60000, log: () => {} }, opts, { now });
   const report = { marker: "KG-CURATE-1", version: VERSION, dry_run: o.dryRun };
   const schema = await ensureSchema(o.graph, o.dryRun);
   if (o.dryRun && schema.pending) { report.skipped = "schema not applied yet (" + schema.pending + " columns missing); a dry run does not alter qnfo-graph"; report.ok = true; return report; }
@@ -941,7 +949,11 @@ export async function runCurate(opts) {
   await lease();
   report.before = { nodes: ctx.nodes.size, edges: ctx.edges.size };
   let failed = 0;
+  // The fleet-graph job has 12 minutes in all and its own build comes first: past the budget the remaining phases wait for the next run (every
+  // phase is idempotent), and the run does not count as a good one for the 25-minute throttle.
+  let deferred = 0;
   for (const [name, fn] of PHASES) {
+    if (Date.now() - t0 > o.budgetMs) { ctx.phases[name] = { deferred: "past the " + Math.round(o.budgetMs / 1000) + " s budget" }; deferred++; continue; }
     const p0 = Date.now();
     await lease();
     try { ctx.phases[name] = await fn(ctx); }
@@ -949,10 +961,11 @@ export async function runCurate(opts) {
     ctx.phases[name].ms = Date.now() - p0;
   }
   const ok = failed === 0;
+  report.deferred = deferred;
   if (!ctx.health && !o.dryRun && o.audit) { try { await o.audit.run("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('kg-curate', " + lit(VERSION) + ", " + lit(now) + ", 0) ON CONFLICT(worker) DO UPDATE SET version = excluded.version, ts = excluded.ts, ok = 0"); } catch (e) { ctx.warnings.push("heartbeat: " + String(e.message || e).slice(0, 100)); } }
   try { ctx.phases.publish = await phasePublish(ctx, ok, JSON.stringify({ version: VERSION, failed, writes: ctx.stats.writes, health: ctx.health && { orphan_share: ctx.health.orphan_share, density: ctx.health.edge_density, giant: ctx.health.giant_component_share } })); }
   catch (e) { ctx.phases.publish = { error: String(e.message || e).slice(0, 300) }; }
-  if (!o.dryRun) { await setState(ctx, "lastRun", { at: now, ok }); await setState(ctx, "lease", { owner: o.owner || "kg-curate", until: now }); }
+  if (!o.dryRun) { await setState(ctx, "lastRun", { at: now, ok: ok && !deferred }); await setState(ctx, "lease", { owner: o.owner || "kg-curate", until: now }); }
   report.phases = ctx.phases; report.writes = ctx.stats.writes; report.deletes = ctx.stats.deletes; report.warnings = ctx.warnings.slice(0, 20);
   report.after = { nodes: ctx.nodes.size, edges: ctx.edges.size }; report.health = ctx.health || null; report.ok = ok; report.ms = Date.now() - t0;
   return report;

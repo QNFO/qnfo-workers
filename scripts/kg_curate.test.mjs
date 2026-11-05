@@ -189,7 +189,7 @@ assert.equal(A.one("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE job = 'kg-c
 // ---- idempotent: the same input writes (almost) nothing -------------------------------------------------------------------
 const r2 = await K.runCurate({ ...base, now: "2026-11-05T10:30:00.000Z" });
 assert.equal(r2.ok, true);
-assert.ok(r2.writes <= 40, "a second run on unchanged input writes few rows (got " + r2.writes + ")");
+assert.ok(r2.writes <= 4, "a second run on unchanged input writes few rows (got " + r2.writes + ")");
 assert.equal(G.one("SELECT COUNT(*) AS n FROM edges WHERE status = 'stale'").n, 0);
 
 // ---- throttle and lease -----------------------------------------------------------------------------------------------------
@@ -305,4 +305,12 @@ assert.ok(G.one("SELECT COUNT(*) AS n FROM kg_tombstone WHERE kind = 'edge' AND 
   assert.equal(rep.ok, false); assert.ok(Object.values(rep.phases).some((p) => /write cap/.test(p.error || "")), "the cap stops the run with a named reason");
 }
 
+// ---- the wall-clock budget: past it the remaining phases wait for the next run, and the run does not count as a good one
+{
+  const r = await K.runCurate({ ...base, budgetMs: -1, now: "2026-12-20T00:00:00.000Z" });
+  assert.ok(r.deferred >= 10 && Object.values(r.phases).filter((p) => p.deferred).length >= 10, "every phase is deferred when the budget is gone");
+  assert.equal(JSON.parse(G.one("SELECT v FROM kg_state WHERE k = 'lastRun'").v).ok, false, "so the next run is not throttled");
+  const r2 = await K.runCurate({ ...base, force: false, now: "2026-12-20T00:01:00.000Z" });
+  assert.ok(!r2.skipped && r2.ok, "and it starts at once");
+}
 console.log("kg_curate suite ok");

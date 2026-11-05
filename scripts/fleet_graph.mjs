@@ -571,7 +571,10 @@ export function cfClient(token, account, fetchImpl = globalThis.fetch) {
   async function req(method, path, body, ctype, raw) {
     let last;
     for (let i = 0; i < 4; i++) {
-      const r = await fetchImpl(API + path, { method, headers: Object.assign({ Authorization: "Bearer " + token }, body !== undefined ? { "Content-Type": ctype || "application/json" } : {}), body: body === undefined ? undefined : (raw ? body : JSON.stringify(body)) });
+      let r;
+      // A dropped connection (ECONNRESET, a socket timeout) is retried like a 5xx: it ended a rehearsal of the knowledge-graph curator that the 429/5xx path never saw.
+      try { r = await fetchImpl(API + path, { method, headers: Object.assign({ Authorization: "Bearer " + token }, body !== undefined ? { "Content-Type": ctype || "application/json" } : {}), body: body === undefined ? undefined : (raw ? body : JSON.stringify(body)) }); }
+      catch (e) { last = "network " + String(e && (e.cause && e.cause.code || e.message) || e).slice(0, 40); await new Promise((s) => setTimeout(s, 800 * (i + 1) * (i + 1))); continue; }
       if (r.status === 429 || r.status >= 500) { last = r.status; await new Promise((s) => setTimeout(s, 800 * (i + 1) * (i + 1))); continue; }
       const text = await r.text();
       let j; try { j = JSON.parse(text); } catch (e) { j = { success: r.ok, raw: text.slice(0, 300) }; }
