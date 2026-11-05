@@ -7350,21 +7350,23 @@ function stallRecurred(statuses) {
   }
   return false;
 }
-// EK-3 (1.45.0, roadmap row 1750): the even-keel check is measured, counts only (no text leaves the personal plane). scored_share: of the audit rows that passed in the
-// 7 days to now, the share that carry a balance_score, i.e. the check ran and answered (it was 0 of 20 rows before this version). hold_share: of the drafts that
-// reached the even-keel reviewer in the same window (the scored passes plus the attempts it stopped at stage balance), the share it stopped: a wall would show here
-// before it shows as a stall. Written each hourly tick into the two metrics the migration registers; an unregistered metric updates no row.
+// EK-3 (1.45.0, roadmap row 1750): the even-keel check is measured, counts only (no text leaves the personal plane). scored_share_last5: of the five newest audit rows
+// that passed, the share that carry a balance_score, i.e. the check ran and answered (0 of 20 rows before this version; the newest five move with the pieces, so a
+// repair shows in days, not after a week of old rows). hold_share_7d: of the drafts that reached the even-keel reviewer in the 7 days to now (the scored passes plus the
+// attempts it stopped at stage balance), the share it stopped: a wall would show here before it shows as a stall. Written each hourly tick into the two metrics the
+// migration registers; an unregistered metric updates no row.
 async function writeBalanceMetrics(env, now) {
   try {
     var since = new Date(now - 7 * 864e5).toISOString();
-    var a = await env.PERSONAL.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN balance_score IS NOT NULL THEN 1 ELSE 0 END) AS scored FROM companion_audits WHERE verdict = 'pass' AND checked_at >= ?1").bind(since).first();
+    var a = await env.PERSONAL.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN balance_score IS NOT NULL THEN 1 ELSE 0 END) AS scored FROM (SELECT balance_score FROM companion_audits WHERE verdict = 'pass' ORDER BY checked_at DESC LIMIT 5)").first();
     var h = await env.PERSONAL.prepare("SELECT COUNT(*) AS held FROM companion_runs WHERE status = 'rejected' AND run_at >= ?1 AND detail LIKE 'fact-check balance:%'").bind(since).first();
     var passes = Number(a && a.n) || 0, scored = Number(a && a.scored) || 0, held = Number(h && h.held) || 0;
     var scoredShare = passes ? Math.round(1000 * scored / passes) / 1000 : null;
-    var holdShare = scored + held ? Math.round(1000 * held / (scored + held)) / 1000 : null;
+    var recent = await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM companion_audits WHERE verdict = 'pass' AND balance_score IS NOT NULL AND checked_at >= ?1").bind(since).first();
+    var holdShare = Number(recent && recent.n) + held ? Math.round(1000 * held / (Number(recent && recent.n) + held)) / 1000 : null;
     var stamp = new Date(now).toISOString();
     var put = "UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1";
-    await env.AUDIT.prepare(put).bind("companion_balance_scored_share_7d", scoredShare == null ? null : String(scoredShare), stamp).run();
+    await env.AUDIT.prepare(put).bind("companion_balance_scored_share_last5", scoredShare == null ? null : String(scoredShare), stamp).run();
     await env.AUDIT.prepare(put).bind("companion_balance_hold_share_7d", holdShare == null ? null : String(holdShare), stamp).run();
     return { passes: passes, scored: scored, held: held, scoredShare: scoredShare, holdShare: holdShare };
   } catch (e) { stallLog("balance.metric", e); return null; }
