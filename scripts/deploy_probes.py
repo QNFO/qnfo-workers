@@ -442,11 +442,17 @@ def routable_to_version(url, worker):
     return (urlparse(str(url)).hostname or "") == str(worker) + ".q08.workers.dev"
 
 
-def preview_check(decl, worker, version_id, fetch=None, tries=3, wait_sec=2, sleep=time.sleep, budget_sec=120):
+def preview_check(decl, worker, version_id, fetch=None, tries=3, wait_sec=2, sleep=time.sleep, budget_sec=120, expect_version=None):
     """Run the HTTP probes of a worker's declaration against an UPLOADED version that takes no traffic (version override on the worker's workers.dev address).
-    -> {"state": ok | regression | inconclusive | none, "probes": [{key, label, outcome, reason}]}
+    -> {"state": ok | regression | inconclusive | none, "routing": observed | unverified | not-observed, "probes": [{key, label, outcome, reason}]}
     outcome per probe: ok | regression (fails on the version, passes on production) | pre-existing (fails on both) | inconclusive | skipped (+ why).
     D1 EXPLAIN probes and probes on other hosts are skipped: the first checks the database, not the candidate code, the second cannot be routed to the version.
+    ROUTING PROOF. Cloudflare docs (Version overrides): "a version override will only be applied if the specified version is in the current deployment", so the candidate must
+    first be deployed at 0 percent beside the live version. Read live 2026-11-05 on qnfo-deploy-guard: an override naming an unknown version id, and one naming the previous
+    version (uploaded, not in the current deployment), were both IGNORED and answered by production (200, VERSION 1.4.7). A passing probe proves nothing unless the version took
+    the request. expect_version is the VERSION constant of the candidate's worker.js: when given,
+    /health with the override must report it before any probe counts, else the run is inconclusive (routing not-observed). Without it routing is `unverified` and an `ok`
+    must not be read as the version passing.
     Reads only (GET). A Version URL or override uses the production bindings, so a candidate GET handler that writes would write production data: the same exposure
     as the first percentage of a gradual rollout, taken before any traffic shifts. fetch(url, headers) -> (status, body); default is the runner transport."""
     fetch = fetch or (lambda u, h: fetch_text(u, headers=h))
@@ -454,6 +460,23 @@ def preview_check(decl, worker, version_id, fetch=None, tries=3, wait_sec=2, sle
     on_version = {"fetch": lambda u: fetch(u, hdr)}
     on_prod = {"fetch": lambda u: fetch(u, None)}
     deadline = (time.monotonic() + budget_sec) if budget_sec else None
+    routing = "unverified"
+    if expect_version:
+        pst, pbody = fetch("https://%s.q08.workers.dev/health" % worker, None)
+        if pst == 200 and str(expect_version) in str(pbody):
+            return {"state": "inconclusive", "routing": "indistinguishable", "probes": [{"key": "routing", "label": "VERSION " + str(expect_version)[:40] + " is already live",
+                    "outcome": "inconclusive", "reason": "production already reports the candidate's VERSION, so an override cannot be told from production (a redeploy of the live version has nothing to preview)"}]}
+        routing = "not-observed"
+        for attempt in range(max(1, tries)):
+            st, body = fetch("https://%s.q08.workers.dev/health" % worker, hdr)
+            if st == 200 and str(expect_version) in str(body):
+                routing = "observed"
+                break
+            if attempt + 1 < max(1, tries):
+                sleep(wait_sec)
+        if routing != "observed":
+            return {"state": "inconclusive", "routing": routing, "probes": [{"key": "routing", "label": "GET /health with the override must report VERSION " + str(expect_version)[:40],
+                    "outcome": "inconclusive", "reason": "the version did not answer (HTTP %s): an override naming an unknown version, or one not in the current deployment (deploy it at 0 percent first), is answered by production" % st}]}
     rows = []
     for key, kind, spec in probe_list(decl):
         row = {"key": key, "label": label(kind, spec)}
@@ -478,7 +501,7 @@ def preview_check(decl, worker, version_id, fetch=None, tries=3, wait_sec=2, sle
         rows.append(row)
     outs = [r["outcome"] for r in rows]
     state = "regression" if "regression" in outs else ("inconclusive" if "inconclusive" in outs else ("ok" if ("ok" in outs or "pre-existing" in outs) else "none"))
-    return {"state": state, "probes": rows}
+    return {"state": state, "routing": routing, "probes": rows}
 
 
 def summary(result, limit=3):
@@ -871,6 +894,17 @@ def selftest():
     ok(r["state"] == "regression" and r["probes"][0]["outcome"] == "regression", "preview_check: a 500 on the version with production healthy is a regression", r)
     r = preview_check({"http": [{"url": "https://qnfo.org/page", "contains": ["hello"]}]}, "qnfo-x", vid, mk({}, {}), sleep=lambda s: None)
     ok(r["state"] == "none", "preview_check: only unroutable probes -> none (no verdict from the version)", r)
+    # routing proof: an override naming an unknown version is answered by production, so the candidate's VERSION must be seen first
+    hz = "https://qnfo-x.q08.workers.dev/health"
+    wl = "https://qnfo-x.q08.workers.dev/work-locks"
+    r = preview_check(pdecl, "qnfo-x", vid, mk({hz: (200, '{"ok":true,"version":"2.0.0"}'), wl: good_w}, {}), sleep=lambda s: None, expect_version="2.0.0")
+    ok(r["state"] == "ok" and r["routing"] == "observed", "preview_check: the candidate's VERSION seen on /health with the override -> routing observed", r)
+    r = preview_check(pdecl, "qnfo-x", vid, mk({hz: (200, '{"ok":true,"version":"1.9.0"}'), wl: good_w}, {}), sleep=lambda s: None, expect_version="2.0.0")
+    ok(r["state"] == "inconclusive" and r["routing"] == "not-observed" and len(r["probes"]) == 1, "preview_check: production's old VERSION answered the override (unknown or not yet visible version) -> inconclusive, never ok", r)
+    r = preview_check(pdecl, "qnfo-x", vid, mk({hz: good_h, wl: good_w}, {}), sleep=lambda s: None)
+    ok(r["state"] == "ok" and r["routing"] == "unverified", "preview_check: without expect_version an ok is labelled routing unverified", r)
+    r = preview_check(pdecl, "qnfo-x", vid, mk({hz: (200, '{"version":"2.0.0"}'), wl: good_w}, {hz: (200, '{"version":"2.0.0"}'), wl: good_w}), sleep=lambda s: None, expect_version="2.0.0")
+    ok(r["state"] == "inconclusive" and r["routing"] == "indistinguishable", "preview_check: a candidate VERSION production already reports cannot be told from an unknown-id fall-through -> inconclusive", r)
     # the repository's own declarations
     bad = validate_repo()
     ok(not bad, "every probes.json in the repository validates against its wrangler.toml", bad[:3])
@@ -897,6 +931,7 @@ def main(argv=None):
     ap.add_argument("--tries", type=int, default=2)
     ap.add_argument("--preview", metavar="WORKER", help="run the worker's declared HTTP probes against an uploaded version that takes no traffic (needs --version-id)")
     ap.add_argument("--version-id", help="--preview: the uploaded Worker version id")
+    ap.add_argument("--expect-version", help="--preview: the candidate's VERSION constant; /health with the override must report it, else the run is inconclusive (an unknown version id is answered by production)")
     ap.add_argument("--baseline", action="store_true")
     ap.add_argument("--targets")
     ap.add_argument("--out")
@@ -939,14 +974,14 @@ def main(argv=None):
             emit("invalid: " + "; ".join(errs))
             return 2
         try:
-            res = preview_check(decl, d, a.version_id, tries=a.tries)
+            res = preview_check(decl, d, a.version_id, tries=a.tries, expect_version=a.expect_version)
         except ValueError as e:
             emit("refused: " + str(e))
             return 2
         for p in res["probes"]:
             emit("%-12s %s (%s)" % (p["outcome"], p["label"], p["reason"][:160] or "ok"))
-        emit("RESULT_JSON=" + json.dumps({"worker": d, "version": a.version_id, "state": res["state"], "probes": res["probes"]}, sort_keys=True))
-        emit(d + " preview: " + res["state"])
+        emit("RESULT_JSON=" + json.dumps({"worker": d, "version": a.version_id, "state": res["state"], "routing": res["routing"], "probes": res["probes"]}, sort_keys=True))
+        emit(d + " preview: " + res["state"] + " (routing " + res["routing"] + ")")
         return 1 if res["state"] == "regression" else 0
     if a.live:
         d = a.live.strip("/")
