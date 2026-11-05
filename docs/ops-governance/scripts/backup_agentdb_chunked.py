@@ -78,6 +78,31 @@ def upload(key, data):
         except Exception:
             pass
 
+# RM-GATE-H1 (fleet-lessons H1): a run killed hard (power loss, task kill, OOM) never reaches its finally block and leaks a multi-GB snapshot, and the daily
+# purge (purge-agent-snapshots.py, formerly a 24-hour cutoff) could not clean a same-day orphan, so the next run stacked a second one on a full disk. Every run now
+# purges the orphans of earlier runs BEFORE its first snapshot. A file younger than the cutoff may belong to a run still going, and Windows refuses to delete one
+# that is open, so a live snapshot is never taken away. scripts/fleet_lessons_gates.py (gate H1) fails a snapshot writer that does not do this first.
+ORPHAN_MIN_AGE_MIN = float(os.environ.get('SNAPSHOT_ORPHAN_MIN_AGE_MIN', '180'))
+ORPHAN_PATTERNS = ('agent-snapshot-*.db', 'agent-snapshot-*.db-wal', 'agent-snapshot-*.db-shm')
+
+def purge_orphan_snapshots(temp_dir=None, min_age_min=None):
+    import glob
+    temp_dir = temp_dir or os.environ.get('TEMP', 'C:/Users/LENOVO/AppData/Local/Temp')
+    cutoff = time.time() - (ORPHAN_MIN_AGE_MIN if min_age_min is None else min_age_min) * 60
+    removed = freed = 0
+    for pat in ORPHAN_PATTERNS:
+        for p in glob.glob(os.path.join(temp_dir, pat)):
+            try:
+                st = os.stat(p)
+                if st.st_mtime < cutoff:
+                    os.remove(p)
+                    removed += 1
+                    freed += st.st_size
+            except OSError as e:
+                print('  [WARN] orphan snapshot kept %s: %s' % (os.path.basename(p), str(e)[:80]), flush=True)
+    print('purged %d orphan snapshot file(s), %.2f GB' % (removed, freed / 1e9), flush=True)
+    return removed, freed
+
 def snapshot(db_src, suffix):
     tmp = os.path.join(os.environ.get('TEMP', 'C:/Users/LENOVO/AppData/Local/Temp'),
                        'agent-snapshot-' + STAMP + '-' + suffix + '.db')
@@ -217,6 +242,7 @@ def main():
     if not TOKEN:
         print('ERROR: CLOUDFLARE_API_TOKEN missing'); return 1
     db_src = os.path.join(ROAM, 'app_db', 'agent.db')
+    purge_orphan_snapshots()  # RM-GATE-H1: before the free-space gate below, so freed orphans count toward it
     # DEEP-CLEANUP-2026-09-30: pre-flight free-space gate - never start a multi-GB snapshot
     # unless %TEMP%'s volume has room for it + 2GB headroom (the 2026-09-28 disk-fill:
     # leaked snapshots hit ~97% usage and broke app startup).
