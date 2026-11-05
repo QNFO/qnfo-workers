@@ -84,6 +84,25 @@
 // COMPANION-FOCUS-1 (2026-10-31, owner: click-first choices, no free text, existing Cloudflare/GitHub only):
 //  29. Focus reuses actions, the activity bank and activity logging. Time/energy chips, Yes/No/Surprise me, a timer and
 //      fixed Qniverse backlog presets need no typing or model call; D1 remains authoritative and the timer is ephemeral.
+// RED-DRAIN-1 (issue #1001640, 2026-10-29): Focus offers one 15-minute, one-tap Quniverse item read from the open
+// queue (rate a post, tap good/unclear on a new paper abstract, check one fleet.qnfo.org card) with Done / Not now
+// buttons only — no typing, no model call. The open queue is read as data (JSON), never rendered text.
+export const QUNIVERSE_DEFAULTS = [
+  { id: "rate-post", kind: "rate", title: "Rate one Quniverse post", url: "https://qniverse.qnfo.org/queue", minutes: 15 },
+  { id: "abstract", kind: "abstract", title: "Tap good or unclear on a new paper abstract", url: "https://qniverse.qnfo.org/abstracts/new", minutes: 15 },
+  { id: "fleet-card", kind: "fleet", title: "Check one fleet.qnfo.org card", url: "https://fleet.qnfo.org/queue", minutes: 15 }
+];
+// Picks today's one item: the first still-open row from the Quniverse queue, else the built-in rota. The result is a
+// plain object the Focus page can render as two buttons (Done / Not now); it never calls a model and never asks for text.
+export function quniverseItem(openQueue, dayIndex) {
+  const open = Array.isArray(openQueue) ? openQueue.filter((q) => q && q.id && !q.closed) : [];
+  if (open.length) {
+    const q = open[0];
+    return { id: "qn-" + q.id, kind: q.kind || "queue", title: s(q.title || "One Quniverse item"), url: q.url || "https://qniverse.qnfo.org/queue", minutes: 15, choices: ["Done", "Not now"], typing: false, model: false };
+  }
+  const d = Math.abs(Math.floor(Number(dayIndex) || 0)) % QUNIVERSE_DEFAULTS.length;
+  return { ...QUNIVERSE_DEFAULTS[d], choices: ["Done", "Not now"], typing: false, model: false };
+}
 // COMPANION-NO-TYPING-1 (2026-11-04, owner 2026-10-29: "I'm not typing ... if you want free text from me ... ask me to dictate";
 //      "if I keep using LLMs, the cost keeps adding up"):
 //  30. Every box that takes words has a Dictate button beside it (Talk, Journal, Capture). It records on the phone and the
