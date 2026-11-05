@@ -49,6 +49,7 @@ const mod = new Function("console", "fetch", body +
   " abOneFixture, abAlreadyRun, abPersist, abStaleRevCandidates: typeof abStaleRevCandidates === 'undefined' ? undefined : abStaleRevCandidates, AB_HARNESS_REV: typeof AB_HARNESS_REV === 'undefined' ? undefined : AB_HARNESS_REV," +
   " AB_RETRY_MAX_TOKENS: typeof AB_RETRY_MAX_TOKENS === 'undefined' ? undefined : AB_RETRY_MAX_TOKENS, handlers: __default };")
   ({ log() {}, error() {} }, (...a) => fetchImpl(...a));
+const REV = mod.AB_HARNESS_REV; // the scoring revision under test is read from the source, never pinned here
 
 /* ---- scaffolding: the production DDL the harness reads or writes, then the real migration ------------------------------ */
 const SCAFFOLD = `
@@ -271,10 +272,30 @@ async function run(post, opts = {}, c = cand()) {
   }
 }
 
+/* ---- 3a. AB-5XX-RETRY-1 and AB-EVIDENCE-1 (harness rev 3, agent_issues 1001233) ---------------------------------------------- */
+{
+  // a router 504 on the first ask of every post-change prompt is asked once more: the run measures the model, not the gateway timeout
+  const seen = new Set();
+  const decided = new WeakMap(); // aiStub asks status() twice per call, so the answer is decided once per request body
+  const r5 = await run((fx) => fx.baseline, { status: (role, b) => { if (role !== "post") return 200; if (decided.has(b)) return decided.get(b); const k = b.messages[0].content; const code = seen.has(k) ? 200 : 504; seen.add(k); decided.set(b, code); return code; } });
+  ok(r5.row.verdict === "pass" && r5.row.n === 8, "a transient 504 on the first ask of each post-change prompt does not cost a fixture (AB-5XX-RETRY-1)", r5.row);
+  ok(r5.ai.calls.filter((x) => x.role === "post").length === 16, "each such prompt was asked exactly twice", r5.ai.calls.filter((x) => x.role === "post").length);
+  // a 504 that stays is still an error row, after exactly one retry per prompt
+  const r6 = await run((fx) => fx.baseline, { status: (role) => (role === "post" ? 504 : 200) });
+  ok(r6.row.verdict === "error" && r6.row.n === 0 && /http 504/.test(r6.row.reason), "a persistent 504 is still the error verdict", r6.row);
+  ok(r6.ai.calls.filter((x) => x.role === "post").length === 16, "and costs one retry per prompt, not more", r6.ai.calls.filter((x) => x.role === "post").length);
+  // a lost fixture keeps the start of the reply that lost; a won or tied one does not
+  const r7 = await run((fx) => "I do not know. " + "x".repeat(300));
+  const d7 = JSON.parse(r7.rows[0].detail);
+  ok(r7.row.verdict === "regression" && d7.items.length === 8 && d7.items.every((i) => typeof i.post === "string" && i.post.startsWith("I do not know.") && i.post.length === 100), "every lost fixture records the first 100 characters of the losing reply (AB-EVIDENCE-1)", d7.items.slice(0, 2));
+  const r8 = await run((fx) => fx.baseline);
+  ok(JSON.parse(r8.rows[0].detail).items.every((i) => i.post === undefined), "a tied fixture records no reply text", JSON.parse(r8.rows[0].detail).items.slice(0, 2));
+}
+
 /* ---- 3b. AB-LENGTH-RETRY-1: a length-empty reply is the harness's budget, not the model's answer ---------------------------- */
 const LENGTH_SMALL = (b) => b.max_tokens < 1000; // the fixture budgets are 200 to 400; the retry is at least 2048
 {
-  ok(mod.AB_HARNESS_REV === 2 && mod.AB_RETRY_MAX_TOKENS === 4096, "the harness is at revision 2 and the retry is capped at 4096 tokens", { rev: mod.AB_HARNESS_REV, cap: mod.AB_RETRY_MAX_TOKENS });
+  ok(mod.AB_HARNESS_REV >= 3 && mod.AB_RETRY_MAX_TOKENS === 4096, "the harness is at revision 3 or later and the retry is capped at 4096 tokens", { rev: mod.AB_HARNESS_REV, cap: mod.AB_RETRY_MAX_TOKENS });
   ok(typeof mod.VERSION === "string" && versionAtLeast(mod.VERSION, "1.8.0"), "VERSION is at least 1.8.0 (a new trigger source is a minor release)", mod.VERSION);
   // (a) empty with finish length at the fixture's budget, a normal answer at the larger retry: judged, scored, not a regression
   const r = await run((fx, m, b) => (LENGTH_SMALL(b) ? "" : fx.baseline), { finish: (fx, m, b) => (LENGTH_SMALL(b) ? "length" : "stop") });
@@ -639,7 +660,7 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
 
 /* ---- 5b. AB-LENGTH-RETRY-1: a regression scored by an older harness is measured again; the revision leads the detail ------------- */
 {
-  const REV2 = '{"harness_rev":2,"reason":"win rate 0.5 >= threshold 0.4"}';
+  const REV2 = '{"harness_rev":' + REV + ',"reason":"win rate 0.5 >= threshold 0.4"}';
   const ins = (db, verdict, detail, o = {}) => db.prepare("INSERT INTO model_ab_runs (created_at, model_pair, worker, task_set, pre_model, post_model, threshold, verdict, detail) VALUES (datetime('now', ?), 'a -> b', ?, 'grounded-qa', ?, ?, 0.4, ?, ?)")
     .run(o.age || "-1 hour", o.worker || "errata-hub", o.pre || PRE, o.post || POST, verdict, detail);
   const done = async (db, o = {}) => (await mod.abAlreadyRun(envOf(db, null), { worker: o.worker || "errata-hub", pre_model: PRE, post_model: POST })).done;
@@ -671,7 +692,7 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
   ok((await done(db)) === false && (await done(db, { worker: "someone-else" })) === true, "the dedupe stays per worker");
   db = freshDb();
   ins(db, "regression", '{"harness_rev":1,"reason":"x"}');
-  ins(db, "regression", '{"harness_rev":20,"reason":"x"}');
+  ins(db, "regression", '{"harness_rev":' + REV + '0,"reason":"x"}');
   ok((await done(db)) === false, "only the current revision counts: rev 1 and rev 20 do not match the rev 2 prefix");
   // errors are unchanged: they never count as done and exhaust at three a day
   db = freshDb();
@@ -689,7 +710,7 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
   let t = await mod.abTick(envOf(db, aiStub(post, { finish: fin })));
   ok(t.candidates === 1 && t.ran.length === 1 && t.ran[0].verdict === "pass" && t.ran[0].worker === "errata-hub", "the hourly tick re-runs the pair whose only regression row is rev 1, and the retried answers pass", t);
   const rows = db.prepare("SELECT id, verdict, detail FROM model_ab_runs ORDER BY id").all();
-  ok(rows.length === 2 && rows[0].verdict === "regression" && rows[0].detail === REV1 && rows[1].verdict === "pass" && rows[1].detail.startsWith('{"harness_rev":2,'), "the old row is history and untouched; the new row is a rev-2 pass", rows.map((x) => [x.id, x.verdict, x.detail.slice(0, 24)]));
+  ok(rows.length === 2 && rows[0].verdict === "regression" && rows[0].detail === REV1 && rows[1].verdict === "pass" && rows[1].detail.startsWith('{"harness_rev":' + REV + ','), "the old row is history and untouched; the new row is a rev-2 pass", rows.map((x) => [x.id, x.verdict, x.detail.slice(0, 24)]));
   t = await mod.abTick(envOf(db, aiStub(post, { finish: fin })));
   ok(t.ran.length === 0 && t.skipped === 1 && db.prepare("SELECT COUNT(*) n FROM model_ab_runs").get().n === 2, "and the next tick does not run it again", t);
   // a genuine regression at rev 2 files its issue and is then done for 7 days
@@ -732,7 +753,7 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
     let ts = await mod.abTick(envOf(dbs, stub()));
     ok(ts.candidates === 2 && ts.ran.length === 2 && ts.ran.every((x) => x.verdict === "pass") && JSON.stringify(ts.ran.map((x) => x.worker).sort()) === JSON.stringify(["errata-hub", "qnfo-research-exec"]), "with no ai_call_counters rows the tick re-runs both stale pairs and both pass at the fixed scoring", ts);
     const rowsS = dbs.prepare("SELECT worker, verdict, trigger_source, detail FROM model_ab_runs WHERE id > 2 ORDER BY id").all();
-    ok(rowsS.length === 2 && rowsS.every((x) => x.trigger_source === "stale-rev" && x.verdict === "pass" && x.detail.startsWith('{"harness_rev":2,')), "the new rows are rev 2, say stale-rev, and the two old rows are untouched history", rowsS.map((x) => [x.worker, x.verdict, x.trigger_source]));
+    ok(rowsS.length === 2 && rowsS.every((x) => x.trigger_source === "stale-rev" && x.verdict === "pass" && x.detail.startsWith('{"harness_rev":' + REV + ',')), "the new rows are rev 2, say stale-rev, and the two old rows are untouched history", rowsS.map((x) => [x.worker, x.verdict, x.trigger_source]));
     ts = await mod.abTick(envOf(dbs, stub()));
     ok(ts.ran.length === 0 && ts.skipped === 2 && dbs.prepare("SELECT COUNT(*) n FROM model_ab_runs").get().n === 4, "and the next tick runs neither again: the pairs are deduped by their rev-2 rows", ts);
     // the same pair also seen by the observed source is one candidate, and the observed source names the row
@@ -764,8 +785,8 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
 
   // (i) the second path for a pair the harness could not measure: an inconclusive run that lost fixtures to an unavailable retry is tried again
   {
-    const SKIP_RETRY = '{"harness_rev":2,"reason":"only 0 of the fixtures reached a verdict (needs 6)","skipped":[{"id":"gq-1","why":"retry unavailable: http 500"}]}';
-    const SKIP_JUDGES = '{"harness_rev":2,"reason":"no judge family is independent of the models the pair uses","skipped":[]}';
+    const SKIP_RETRY = '{"harness_rev":' + REV + ',"reason":"only 0 of the fixtures reached a verdict (needs 6)","skipped":[{"id":"gq-1","why":"retry unavailable: http 500"}]}';
+    const SKIP_JUDGES = '{"harness_rev":' + REV + ',"reason":"no judge family is independent of the models the pair uses","skipped":[]}';
     const state = async (db2) => mod.abAlreadyRun(envOf(db2, null), { worker: "errata-hub", pre_model: PRE, post_model: POST });
     db = freshDb();
     ins(db, "inconclusive", SKIP_RETRY);
@@ -824,14 +845,14 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
   const big = { verdict: "pass", reason: "r", wins: 1, ties: 2, losses: 3, n: 6, win_rate: 0.5, threshold: 0.4, judges: ["j1", "j2"], items: Array.from({ length: 200 }, (_, i) => ({ id: "gq-" + i, s: 0.5, js: [0.5, 0.5], via: "workers-ai", retried: 2048 })), skipped: [] };
   const id = await mod.abPersist(envOf(db, null), { worker: "errata-hub", pre_model: PRE, post_model: POST, task_set: "grounded-qa", source: "observed" }, big);
   const detail = db.prepare("SELECT detail FROM model_ab_runs WHERE id = ?").get(id).detail;
-  ok(detail.length === 6000 && detail.startsWith('{"harness_rev":2,"reason":"r"'), "the 6000-character cut leaves harness_rev in place at the front", { len: detail.length, head: detail.slice(0, 40) });
+  ok(detail.length === 6000 && detail.startsWith('{"harness_rev":' + REV + ',"reason":"r"'), "the 6000-character cut leaves harness_rev in place at the front", { len: detail.length, head: detail.slice(0, 40) });
   const small = await mod.abPersist(envOf(db, null), { worker: "errata-hub", pre_model: PRE, post_model: POST, task_set: "grounded-qa", source: "observed" }, { verdict: "pass", reason: "r", wins: 0, ties: 1, losses: 0, n: 1, win_rate: 0.5, threshold: 0.4, judges: [], items: [] });
   ok(Object.keys(JSON.parse(db.prepare("SELECT detail FROM model_ab_runs WHERE id = ?").get(small).detail))[0] === "harness_rev", "harness_rev is the first key of a detail that is not cut");
   const like = '{"harness_rev":' + mod.AB_HARNESS_REV + ',%';
   ok(db.prepare("SELECT COUNT(*) n FROM model_ab_runs WHERE detail LIKE ?").get(like).n === 2 && Buffer.byteLength(like) < 50, "the LIKE prefix the dedupe and the probes bind finds both and is shorter than D1's 50-byte limit", Buffer.byteLength(like));
   // every row the harness writes, whatever its verdict, carries the revision
   const err = await run((fx) => fx.baseline, { status: () => 500 });
-  ok(err.row.verdict === "error" && err.rows[0].detail.startsWith('{"harness_rev":2,'), "an error row carries it too", err.rows[0].detail.slice(0, 30));
+  ok(err.row.verdict === "error" && err.rows[0].detail.startsWith('{"harness_rev":' + REV + ','), "an error row carries it too", err.rows[0].detail.slice(0, 30));
 }
 
 /* ---- 6. scheduled dispatch and routes -------------------------------------------------------------------------------------- */

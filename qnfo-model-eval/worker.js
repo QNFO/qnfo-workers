@@ -872,6 +872,31 @@ async function filePromoteTickets(env, tickets) {
   return out;
 }
 
+// ADOPTION-CLOSE-1 (agent_issues 1001568/1001569 and roadmap items RM-923, RM-1614, RM-1646, pillar autonomy): decide() writes the roadmap item "MODEL-<id>" (status open) when it
+// promotes a model, and the same model later becomes cf_model_catalog status in_production with an active model_ladder_models row, but no code ever moved the item: on 2026-11-05 all four cf-model-eval items
+// were still open and three of them described models that had been live for days. A pass closes an item (status verified, with the catalog and ladder facts as evidence) only when both facts hold;
+// a withdrawn or blocked promotion keeps its BLOCKED evidence and stays open (blockDecisionPromotion), and at most 20 items are touched a pass.
+async function closeAdoptedRoadmapItems(env) {
+  const r = await env.AUDIT.prepare(
+    `SELECT r.item AS item, c.model_id AS model_id, l.tier AS tier
+       FROM roadmap_implementation r
+       JOIN cf_model_catalog c ON r.item = 'MODEL-' || c.model_id
+       JOIN model_ladder_models l ON l.id = c.model_id AND l.active = 1
+      WHERE r.source = 'cf-model-eval' AND r.status = 'open' AND c.status = 'in_production' LIMIT 20`
+  ).all();
+  let closed = 0;
+  for (const x of (r.results || [])) {
+    const res = await env.AUDIT.prepare(
+      `UPDATE roadmap_implementation
+          SET status = 'verified', verified_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+              evidence = substr(COALESCE(evidence, '') || ' | VERIFIED (ADOPTION-CLOSE-1): cf_model_catalog status in_production and model_ladder_models tier ' || ?2 || ' active', 1, 800)
+        WHERE item = ?1 AND source = 'cf-model-eval' AND status = 'open'`
+    ).bind(x.item, String(x.tier)).run();
+    if (res && res.meta && Number(res.meta.changes) > 0) closed++;
+  }
+  return { closed, candidates: (r.results || []).length };
+}
+
 async function recordEval(env, e, role) {
   const cost = await costOf(env, e.model_id, e);
   await env.AUDIT.prepare(
@@ -988,6 +1013,9 @@ async function runLoop(env, trigger, opts) {
     for (const m of pt.errors) summary.errors.push("promote-ticket: " + m);
   } catch (e) { summary.errors.push("promote-tickets: " + String(e.message || e)); }
 
+  // ADOPTION-CLOSE-1: a roadmap item "Adopt <model> in the chat lane" is done once the model is live; nothing ever closed them.
+  try { summary.adopted = await closeAdoptedRoadmapItems(env); } catch (e) { summary.errors.push("adopted: " + String(e.message || e)); }
+
   // safety net: candidates sitting unevaluated too long
   const idle = await db.prepare(
     `SELECT slug, model_id FROM cf_model_catalog
@@ -1083,8 +1111,9 @@ const AB_RETRY_MAX_TOKENS = 4096;
 // pair whose regression row (last 7 days) does not, so a regression found by an older scoring is measured again on the next hourly
 // tick whether or not ai_call_counters still shows a model change (rev 1 scored a length-empty reply as a loss; rev 2 retries it).
 // A pass or an inconclusive row keeps its 7-day dedupe, except an inconclusive row that lost fixtures to an unavailable retry (see
-// abAlreadyRun), and no row is edited or deleted (they are history).
-const AB_HARNESS_REV = 2;
+// abAlreadyRun), and no row is edited or deleted (they are history). Rev 3 (agent_issues 1001233, MODEL-AB-REGRESSION-1 qnfo-ai dynamic/standard, 6 losses and no evidence on row 23): a router 5xx is asked once more (AB-5XX-RETRY-1)
+// and a lost fixture keeps the start of the reply that lost (AB-EVIDENCE-1), so the re-measured pair can be judged on what it answered.
+const AB_HARNESS_REV = 3;
 const AB_POLICY_URL = "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/scripts/model-policy.json";
 // Judges, in preference order. One model per family; the pair under test and (preferably) the worker's families are skipped.
 const AB_JUDGE_POOL = [
@@ -1307,7 +1336,13 @@ async function abDirect(env, model, content, maxTokens, timeoutMs) {
   } finally { clearTimeout(timer); }
 }
 async function abCall(env, model, content, maxTokens) {
-  const r = await abChat(env, model, content, maxTokens, 90000);
+  let r = await abChat(env, model, content, maxTokens, 90000);
+  // AB-5XX-RETRY-1 (harness rev 3, agent_issues 1001233): model_ab_runs 24 to 27 lost 5 of 8 fixtures (run 24) or all of them (runs 25 to 27, verdict error) to "post-call http 504", a router
+  // gateway timeout on a dynamic route, which is the route's moment and not the model's answer. A 5xx from the router is asked once more before the call is given up.
+  if (!r.ok && /^http 5\d\d$/.test(String(r.error || ""))) {
+    await new Promise((res) => setTimeout(res, 1500));
+    r = await abChat(env, model, content, maxTokens, 90000);
+  }
   if (r.ok && abSameModel(r.served, model)) return Object.assign(r, { via: "router" });
   const d = await abDirect(env, model, content, maxTokens, 90000);
   if (d.ok) return d;
@@ -1401,14 +1436,17 @@ async function abRunPair(env, c) {
   return Object.assign({}, s, {
     judges: pick.judges.map((j) => j.model), independent: pick.independent, pre_source: c.live_pre ? "live" : "baseline",
     skipped: items.filter((i) => i.score == null).map((i) => ({ id: i.id, why: i.why })),
-    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried })),
+    // AB-EVIDENCE-1 (harness rev 3): run 23 recorded six losses with both judges at 0 and nothing to read, so a loss could not be told from a broken harness; a lost fixture now keeps the first 100 characters of the reply that lost.
+    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried, post: i.score < 0.5 && i.post ? String(i.post).slice(0, 100) : undefined })),
     post_paths: items.reduce((a, i) => { if (i.via) a[i.via] = (a[i.via] || 0) + 1; return a; }, {}),
   });
 }
 
 async function abWorkerModels(env, worker) {
   try {
-    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL").bind(worker).all();
+    // AB-WORKER-MODELS-1: qnfo-ai counts its reads of the quality headline in this table with the VIEW name in the model column (purpose quality-floor-read, 30 to 76 rows a day), so the view showed up as a
+    // model the worker uses (run 23 lists "v_output_quality_headline" among its worker_models) and skewed judge-family selection; that purpose is not a model call.
+    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL AND purpose <> 'quality-floor-read'").bind(worker).all();
     return (r.results || []).map((x) => x.model);
   } catch (_) { return []; }
 }
@@ -1496,8 +1534,8 @@ async function abObservedCandidates(env, notes) {
   const minCalls = Math.max(5, Number(await cfg(env, "ab_min_calls", "20")) || 20);
   const defSet = await cfg(env, "ab_default_task_set", "grounded-qa");
   const r = await env.AUDIT.prepare(
-    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL GROUP BY worker, model HAVING SUM(calls) >= ?1),
-          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL GROUP BY worker, model)
+    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL AND purpose <> 'quality-floor-read' GROUP BY worker, model HAVING SUM(calls) >= ?1),
+          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL AND purpose <> 'quality-floor-read' GROUP BY worker, model)
      SELECT r.worker, r.model AS post_model, r.c AS recent_calls,
             (SELECT p2.model FROM prior p2 WHERE p2.worker = r.worker AND p2.model <> r.model AND p2.c >= ?1 ORDER BY p2.c DESC LIMIT 1) AS pre_model
        FROM recent r LEFT JOIN prior p ON p.worker = r.worker AND p.model = r.model
