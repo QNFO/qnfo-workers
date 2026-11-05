@@ -314,7 +314,7 @@ var worker_default = {
       if (path === "/api/consistency" && method === "GET") return consistencyRoute(request, env, ctx);
       // LIVING-PAPER-1 (2.16.0): a published paper with live equations, explanations and a question box.
       if ((path === "/paper" || path === "/paper/") && method === "GET") return navPage(PAPER_PAGE);
-      var pm = path.match(/^\/paper\/([a-z0-9][a-z0-9_-]{2,200})\/?$/);
+      var pm = path.match(/^\/paper\/([a-z0-9][a-z0-9-]{2,180})\/?$/);
       if (pm && method === "GET") return navPage(PAPER_PAGE.replace('href="https://ask.qwav.tech/paper"', 'href="https://ask.qwav.tech/paper/' + pm[1] + '"'));
       if (path === "/api/paper" && method === "GET") return paperRoute(request, env, ctx);
       if (path === "/api/loop") return loopReport(env);
@@ -833,7 +833,7 @@ route();
 // No new model call path and no new binding: every question goes through /api/ask, so the per-address and daily caps, the sources-only
 // fallback at the spend cap and the crawler gate apply unchanged. The paper text is drawn with textContent only (no HTML from the paper is parsed);
 // math is drawn by KaTeX, loaded from cdnjs with an integrity hash. /api/paper is cached for an hour per slug and rate limits its misses.
-var PAPER_VIEW_PER_IP_HOUR = 60, PAPER_VIEW_GLOBAL_HOUR = 600, PAPER_BODY_CHARS = 300000, PAPER_SLUG_RE = /^[a-z0-9][a-z0-9_-]{2,200}$/;
+var PAPER_VIEW_PER_IP_HOUR = 60, PAPER_VIEW_GLOBAL_HOUR = 600, PAPER_BODY_CHARS = 300000, PAPER_SLUG_RE = /^[a-z0-9][a-z0-9-]{2,180}$/, PAPER_PUBLIC_RE = /^(published|distributed|external_preprint)$/;
 async function viewAdmit(env, request, tag, perIp, perHourAll) {
   try {
     var ip = request.headers.get("CF-Connecting-IP") || "anon";
@@ -851,7 +851,7 @@ async function paperView(env, slug) {
   slug = String(slug || "").trim().toLowerCase();
   if (!PAPER_SLUG_RE.test(slug)) return { status: 400, body: { error: "slug required" } };
   var p = await up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(slug), null, PAPER_DETAIL_TIMEOUT_MS);
-  if (!p || p.slug !== slug || !p.title || String(p.status || "published") !== "published") return { status: 404, body: { error: "No published paper has this address", slug: slug } };
+  if (!p || p.slug !== slug || !p.title || !PAPER_PUBLIC_RE.test(String(p.status || "published"))) return { status: 404, body: { error: "No published paper has this address", slug: slug } };
   var md = String(p.body_md || "").replace(/^---[\s\S]*?\n---\s*\n/, "");
   var prov = p._prov && typeof p._prov === "object" ? String(p._prov.basis || "").slice(0, 200) : "";
   return { status: 200, body: {
@@ -864,18 +864,20 @@ async function paperView(env, slug) {
 }
 async function paperRoute(request, env, ctx) {
   var url = new URL(request.url), slug = String(url.searchParams.get("slug") || "").trim().toLowerCase();
+  if (!PAPER_SLUG_RE.test(slug)) return json({ error: "slug required" }, 400, { "Cache-Control": "no-store" });
   var key = new Request(url.origin + "/api/paper?slug=" + encodeURIComponent(slug), { method: "GET" });
   var hit = await caches.default.match(key);
   if (hit) return hit;
   if (!(await viewAdmit(env, request, "pv", PAPER_VIEW_PER_IP_HOUR, PAPER_VIEW_GLOBAL_HOUR))) return json({ error: "Too many papers opened just now. Try again in a few minutes." }, 429, { "Retry-After": "600", "Cache-Control": "no-store" });
   var r = await paperView(env, slug);
-  var res = json(r.body, r.status, { "Cache-Control": r.status === 200 ? "public, max-age=3600" : "no-store" });
-  if (r.status === 200) ctx.waitUntil(caches.default.put(key, res.clone()));
+  var res = json(r.body, r.status, { "Cache-Control": r.status === 200 ? "public, max-age=3600" : r.status === 404 ? "public, max-age=60" : "no-store" });
+  if (r.status === 200 || r.status === 404) ctx.waitUntil(caches.default.put(key, res.clone()));
   return res;
 }
 var KATEX_CSS_TAG = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.47/katex.min.css" integrity="sha384-nH0MfJ44wi1dd7w6jinlyBgljjS8EJAh2JBoRad8a3VDw2K69vfaaqm4WnR+gXtA" crossorigin="anonymous">';
 var KATEX_JS_TAG = '<script id="katex-js" defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.47/katex.min.js" integrity="sha384-CwjPRVHTvLiMBFjEoij+QZViMV5rhTOIp7CJzl24JEqpRDA1sJFHVXXLURktbYYp" crossorigin="anonymous"></script>';
-var LIVING_CSS = String.raw`.crumb{margin:0 0 6px;font-size:14px;color:var(--muted)}
+var LIVING_CSS = String.raw`[hidden]{display:none!important}
+.crumb{margin:0 0 6px;font-size:14px;color:var(--muted)}
 .doc{font:400 18px/1.65 var(--serif);max-width:68ch}
 .doc p,.doc li{margin:0 0 12px}.doc h2,.doc h3,.doc h4,.doc h5{scroll-margin-top:12px;max-width:68ch}
 .doc pre{overflow:auto;padding:12px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);font:13px/1.45 ui-monospace,Consolas,monospace;margin:0 0 14px}
@@ -911,10 +913,11 @@ var RULES=[
  [/\$\$([\s\S]+?)\$\$/,function(p,m){p.appendChild(mathEl(m[1],true))}],
  [/\$([^\s$](?:[^$\n]*?[^\s$\\])?)\$(?!\d)/,function(p,m){p.appendChild(mathEl(m[1],false))}],
  [/\\\(([\s\S]+?)\\\)/,function(p,m){p.appendChild(mathEl(m[1],false))}],
- [/\*\*([^*\n]+?)\*\*/,function(p,m){var s=el('strong');inline(s,m[1]);p.appendChild(s)}],
+ [/\*\*\*([^*\n]+?)\*\*\*/,function(p,m){var s=el('strong'),e=el('em');inline(e,m[1]);s.appendChild(e);p.appendChild(s)}],
+ [/\*\*((?:[^*\n]|\*(?!\*))+?)\*\*/,function(p,m){var s=el('strong');inline(s,m[1]);p.appendChild(s)}],
  [/\x60([^\x60\n]+?)\x60/,function(p,m){p.appendChild(el('code',null,m[1]))}],
  [/!\[([^\]\n]*)\]\(([^)\s]+)\)/,function(p,m){p.appendChild(el('em',null,'[figure: '+(m[1]||'image')+']'))}],
- [/\[([^\]\n]+?)\]\((https?:\/\/[^\s)]+)\)/,function(p,m){var a=el('a',{href:m[2],rel:'noopener noreferrer'});inline(a,m[1]);p.appendChild(a)}],
+ [/\[([^\]\n]+?)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/,function(p,m){var a=el('a',{href:m[2],rel:'noopener noreferrer'});inline(a,m[1]);p.appendChild(a)}],
  [/\*([^*\s][^*\n]*?)\*/,function(p,m){var s=el('em');inline(s,m[1]);p.appendChild(s)}],
  [/\b_([^_\s][^_\n]*?)_\b/,function(p,m){var s=el('em');inline(s,m[1]);p.appendChild(s)}]
 ];
@@ -981,7 +984,7 @@ var PAPER_PAGE = navHead("Living paper | Ask QWAV", "Read a published QNFO paper
 </main>
 <script>
 (function(){
-` + LIVING_LIB + String.raw`var SLUG=(location.pathname.match(/^\/paper\/([a-z0-9][a-z0-9_-]{2,200})\/?$/)||[])[1]||'';
+` + LIVING_LIB + String.raw`var SLUG=(location.pathname.match(/^\/paper\/([a-z0-9][a-z0-9-]{2,180})\/?$/)||[])[1]||'';
 var slots={ex:null,ask:null},hist=[],body=$('body'),lastSel=null;
 function get(u,cb){fetch(u).then(function(r){return r.json().then(function(j){cb(r.status,j)})}).catch(function(){cb(0,null)})}
 function search(q){
@@ -995,19 +998,21 @@ function search(q){
 }
 function splitRow(line){
   var t=line.trim().replace(/^\|/,'').replace(/\|$/,'');
-  t=t.replace(/\$[^$\n]*\$/g,function(m){return m.replace(/\|/g,'\u0001')});
+  t=t.replace(/\$[^\s$](?:[^$\n]*?[^\s$\\])?\$(?!\d)/g,function(m){return m.replace(/\|/g,'\u0001')});
   return t.split('|').map(function(c){return c.replace(/\u0001/g,'|').trim()})
 }
 function renderDoc(md){
   var lines=String(md).replace(/\r\n?/g,'\n').split('\n'),i=0,para=[],hn=0,toc=[];
   function add(n,src){n.__src=src||n.textContent||'';body.appendChild(n);return n}
   function flush(){if(!para.length)return;var t=para.join(' ').replace(/\s+/g,' ').trim();para=[];if(!t)return;var p=el('p');inline(p,t);add(p,t)}
+  function oddDD(x){return (x.match(/\$\$/g)||[]).length%2===1}
+  function oddD(x){return (x.replace(/\$\$/g,'').match(/\$/g)||[]).length%2===1}
   function display(tex){var d=mathEl(tex.trim(),true);d.setAttribute('role','button');d.setAttribute('tabindex','0');d.setAttribute('aria-label','Explain this equation in plain language');add(d,'$$'+tex.trim()+'$$')}
   while(i<lines.length){
     var ln=lines[i],t=ln.trim(),m;
     if(t===''){flush();i++;continue}
     if(/^\x60{3}/.test(t)){flush();var code=[];i++;while(i<lines.length&&!/^\x60{3}/.test(lines[i].trim())){code.push(lines[i]);i++}i++;var pre=el('pre');pre.appendChild(el('code',null,code.join('\n')));add(pre,code.join(' '));continue}
-    if(/^\$\$/.test(t)||/^\\\[/.test(t)){
+    if((/^\$\$/.test(t)||/^\\\[/.test(t))&&!(para.length&&oddDD(para.join(' ')))){
       flush();var cl=t.slice(0,2)==='$$'?'$$':'\\]',rest=t.slice(2),buf=[],ci=rest.indexOf(cl),tail='',start=i,closed=false;
       i++;
       if(ci>=0){buf.push(rest.slice(0,ci));tail=rest.slice(ci+2).trim();closed=true}
@@ -1029,12 +1034,14 @@ function renderDoc(md){
       var tbd=el('tbody');rows.forEach(function(r){var tr=el('tr');r.forEach(function(c){var x=el('td');inline(x,c);tr.appendChild(x)});tbd.appendChild(tr)});tb.appendChild(tbd);wrap.appendChild(tb);
       add(wrap,rows.reduce(function(a,r){return a.concat(r)},head).join(' | '));continue
     }
-    if((m=/^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(ln))){
-      flush();var list=el(/\d/.test(m[2])?'ol':'ul'),items=[];
+    if((m=/^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(ln))&&!(para.length&&/\d/.test(m[2])&&parseInt(m[2],10)!==1)&&!(para.length&&oddD(para.join(' ')))){
+      flush();var ord=/\d/.test(m[2]),list=el(ord?'ol':'ul'),items=[],first=parseInt(m[2],10);
       while(i<lines.length){var lm=/^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]);
-        if(lm){items.push(lm[3]);i++}
+        if(lm&&/\d/.test(lm[2])===ord){items.push(lm[3]);i++}
+        else if(lines[i].trim()===''){var k=i;while(k<lines.length&&lines[k].trim()==='')k++;var nx=k<lines.length?lines[k]:'',nm=/^\s*([-*+]|\d+[.)])\s+/.exec(nx);if(items.length&&k<lines.length&&((nm&&/\d/.test(nm[1])===ord)||/^\s{2,}\S/.test(nx)))i=k;else break}
         else if(items.length&&/^\s{2,}\S/.test(lines[i])){items[items.length-1]+=' '+lines[i].trim();i++}
         else break}
+      if(ord&&first!==1)list.setAttribute('start',String(first));
       items.forEach(function(x){var li=el('li');inline(li,x);list.appendChild(li)});add(list,items.join(' '));continue
     }
     if(t.charAt(0)==='>'){
@@ -1050,9 +1057,11 @@ function renderDoc(md){
 function topBlock(n){while(n&&n.parentNode&&n.parentNode!==body)n=n.parentNode;return n&&n.parentNode===body?n:null}
 function lastSent(a){a=String(a||'').slice(-300);var j=a.search(/[.!?]\s+\S[^.!?]{39,}$/);return (j>=0?a.slice(j+1):a).trim()}
 function firstSent(b){b=String(b||'').trim();if(!/^(where|with|here|in which|which|and|so|hence|thus|therefore|since|for)\b/i.test(b))return '';var m=/^[\s\S]{30,260}?[.!?](\s|$)/.exec(b);return (m?m[0]:b.slice(0,220)).trim()}
+function sib(n,dir){var x=dir<0?n.previousSibling:n.nextSibling;while(x&&x.__src===undefined)x=dir<0?x.previousSibling:x.nextSibling;return x}
+function inPanel(n){while(n){if(n.nodeType===1&&n.classList&&n.classList.contains('explain'))return true;n=n.parentNode}return false}
 function ctxFor(node){
   var blk=topBlock(node),tex=node.__tex||'',out;
-  if(node.__disp&&blk===node)out=lastSent(blk.previousSibling&&blk.previousSibling.__src)+' $$'+tex.replace(/\s+/g,' ').trim()+'$$ '+firstSent(blk.nextSibling&&blk.nextSibling.__src);
+  if(node.__disp&&blk===node){var pv=sib(blk,-1),nx=sib(blk,1);out=lastSent(pv&&pv.__src)+' $$'+tex.replace(/\s+/g,' ').trim()+'$$ '+firstSent(nx&&nx.__src)}
   else{var s=(blk&&blk.__src)||'',k=s.indexOf(tex);out=s.slice(Math.max(0,k<0?0:k-220),Math.max(0,k<0?0:k-220)+520)}
   return out.replace(/"/g,"'").replace(/\s+/g,' ').trim().slice(0,560)
 }
@@ -1078,14 +1087,14 @@ function run(query,out,keep){
     meta:function(d){if(live())meta=d},
     token:function(d){if(!live())return;raw+=d.t;if(!pend){pend=true;setTimeout(paint,120)}},
     done:function(d){if(live())fups=(d&&d.followups||[]).filter(function(x){return typeof x==='string'}).slice(0,3)},
-    error:function(d){if(!live())return;failed=true;clear(out);out.appendChild(el('p',{'class':'note'},d.error||'The answer could not be written. Try again in a minute.'))},
+    error:function(d){if(!live())return;failed=true;clear(out);out.appendChild(el('p',{'class':'note'},d.error||'The answer could not be written. Try again in a minute.'));if(meta)out.appendChild(sourceLine(meta))},
     end:function(){if(!live()||failed)return;if(raw){paint();if(keep){hist.push({q:query,a:raw.split(/\n\s*\**FOLLOWUPS:?/i)[0].slice(0,1500)});hist=hist.slice(-2)}}else{clear(out);out.appendChild(el('p',{'class':'note'},'No answer came back. Try again in a minute.'))}}
   })
 }
 function explainMath(node){var c=ctxFor(node);if(c.length<12)return;run('Explain in plain language what '+(node.__disp&&topBlock(node)===node?'this equation':'the math in this passage')+' says in words: "'+c+'"',panel(topBlock(node),'In plain language'),false)}
 function grabSel(){
   var sel=window.getSelection();if(!sel||!sel.rangeCount||sel.isCollapsed)return;
-  var rg=sel.getRangeAt(0);if(!body.contains(rg.commonAncestorContainer))return;
+  var rg=sel.getRangeAt(0);if(!body.contains(rg.commonAncestorContainer)||inPanel(rg.commonAncestorContainer))return;
   var d=document.createElement('div');d.appendChild(rg.cloneContents());
   d.querySelectorAll('[data-tex]').forEach(function(n){n.parentNode.replaceChild(document.createTextNode('$'+n.getAttribute('data-tex')+'$'),n)});
   var t=d.textContent.replace(/\s+/g,' ').trim();if(t.length<8)return;

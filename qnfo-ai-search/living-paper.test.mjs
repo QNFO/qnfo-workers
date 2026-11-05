@@ -20,6 +20,9 @@ const cacheMap = new Map();
 const caches = { default: { match: async (r) => { const h = cacheMap.get(r.url); return h ? h.clone() : undefined; }, put: async (r, res) => { cacheMap.set(r.url, res); } } };
 const PAPERS = {
   live: { slug: "live", title: "A Live Paper On Trees", status: "published", abstract: "An abstract.", authors: "[\"A. Author\",\"B. Author\"]", doi: null, version_semver: "1.2.0", first_published_at: "2026-11-04", last_revised_at: "2026-11-05", license: "QNFO-ULA", _prov: { basis: "created by a fleet pipeline; no human review is recorded" }, body_md: "---\ntitle: x\n---\n# A Live Paper On Trees\n\n## Abstract\n\nThe strong triangle inequality\n$$\nd(x,z) \\le \\max\\{d(x,y), d(y,z)\\}\n$$\nholds for the tree distance $d$ and costs $5 and $10 each.\n" },
+  dist: { slug: "dist", title: "A Distributed Paper", status: "distributed", body_md: "# A Distributed Paper\n\nText." },
+  prepr: { slug: "prepr", title: "An External Preprint", status: "external_preprint", body_md: "# An External Preprint\n\nText." },
+  retracted: { slug: "retracted", title: "A Retracted Paper", status: "retracted", body_md: "# A Retracted Paper" },
   draft: { slug: "draft", title: "A Draft", status: "draft", abstract: "x", body_md: "# A Draft" },
   big: { slug: "big", title: "A Big Paper", status: "published", body_md: "x".repeat(400000) },
 };
@@ -58,6 +61,18 @@ const call = (path, headers) => X.worker_default.fetch(new Request("https://ask.
   ok(bad.status === 400 && nf.status === 404 && dr.status === 404, "bad slug 400, unknown 404, unpublished 404", [bad.status, nf.status, dr.status]);
   const big = await (await call("/api/paper?slug=big")).json();
   ok(big.truncated === true && big.body_md.length === X.PAPER_BODY_CHARS, "a very long paper is cut and says so");
+  const dist = await call("/api/paper?slug=dist"), prepr = await call("/api/paper?slug=prepr"), ret = await call("/api/paper?slug=retracted");
+  ok(dist.status === 200 && prepr.status === 200 && ret.status === 404, "distributed papers and external preprints are readable, a retracted paper is not", [dist.status, prepr.status, ret.status]);
+  // a bad slug is refused before the cache and before the counters: it cannot use up the shared hourly budget
+  counters.clear();
+  const upBefore = upstream;
+  for (let i = 0; i < 5; i++) await call("/api/paper?slug=%24%24" + i, { "CF-Connecting-IP": "203.0.113.50" });
+  ok(counters.size === 0 && upstream === upBefore, "a bad slug writes no counter and reads nothing upstream", [counters.size, upstream - upBefore]);
+  await call("/api/paper?slug=unknown-twice");
+  await Promise.all(pending.splice(0));
+  const upMid = upstream;
+  const nf2 = await call("/api/paper?slug=unknown-twice");
+  ok(nf2.status === 404 && upstream === upMid && nf2.headers.get("cache-control") === "public, max-age=60", "an unknown paper is remembered for a minute, so a repeat reads nothing upstream", nf2.headers.get("cache-control"));
   counters.clear();
   let last = 0;
   for (let i = 0; i < X.PAPER_VIEW_PER_IP_HOUR + 1; i++) last = (await call("/api/paper?slug=miss-" + i, { "CF-Connecting-IP": "203.0.113.9" })).status;
@@ -199,6 +214,43 @@ ok(PG && typeof PG.renderDoc === "function", "the page script runs and exposes i
   const seen2 = [];
   await new Promise((res) => PG.streamAsk("q q q", "live", [], { error: (d) => seen2.push(d.error), end: res }));
   ok(seen2.join() === "limit reached", "a JSON error from the route is shown to the reader", seen2);
+}
+// 5. cases an independent reader found: nested emphasis, parenthesised link addresses, loose and numbered lists, hard-wrapped paragraphs, currency in a table, panels between blocks
+{
+  const clearBody = () => { ids.body.children.slice().forEach((c) => ids.body.removeChild(c)); };
+  const render = (md) => { clearBody(); PG.renderDoc(md); return ids.body.children; };
+  let c = render("**bold *and* italic** and ***both*** and [w](https://en.wikipedia.org/wiki/Foo_(bar)) end.");
+  const strongs = c[0].all("strong");
+  ok(c.length === 1 && strongs.length === 2 && strongs[0].all("em").length === 1 && strongs[1].all("em").length === 1, "nested emphasis becomes nested nodes, not stray asterisks", c[0].textContent);
+  ok(c[0].all("a")[0].attrs.href === "https://en.wikipedia.org/wiki/Foo_(bar)" && !/\)\s*end/.test(c[0].textContent) && /end\.$/.test(c[0].textContent), "a link address with parentheses is taken whole", c[0].all("a")[0].attrs.href);
+  c = render("1. one\n\n2. two\n\n3. three");
+  ok(c.length === 1 && c[0].tag === "ol" && c[0].children.length === 3, "a numbered list separated by blank lines is one list", c.map((x) => x.tag));
+  c = render("5. five\n6. six");
+  ok(c[0].attrs.start === "5", "a numbered list that starts at 5 keeps its number");
+  c = render("Let $a\n+ b$ be large");
+  let mm = []; c[0].walk((n) => { if (n.__tex !== undefined) mm.push(n.__tex); });
+  ok(c.length === 1 && c[0].tag === "p" && mm.join() === "a + b", "a plus sign at the start of a wrapped line inside unfinished math stays in the paragraph", [c.map((x) => x.tag), mm]);
+  c = render("The paper appeared in\n2019. It showed");
+  ok(c.length === 1 && c[0].tag === "p", "a year with a full stop at the start of a wrapped line is not a list", c.map((x) => x.tag));
+  c = render("So we get $$a = b\n$$ and more.");
+  mm = []; c[0].walk((n) => { if (n.__tex !== undefined) mm.push(n.__tex.trim()); });
+  ok(c.length === 1 && c[0].tag === "p" && mm.join() === "a = b", "a wrapped display equation inside a sentence closes where it ends", [c.map((x) => x.tag), mm]);
+  c = render("| $5 | $10 |\n|---|---|\n| a | b |");
+  ok(c[0].all("th").length === 2 && c[0].all("td").length === 2, "currency dollars in a table row do not merge its cells", [c[0].all("th").length, c[0].all("td").length]);
+  // a panel between a sentence and its equation does not hide the sentence
+  clearBody();
+  PG.renderDoc("The sentence that introduces the equation is this one here, long enough to count.\n\n$$a=b$$\n\nSecond.");
+  const eqA = ids.body.children[1];
+  ids.body.insertBefore(Object.assign(new FNode("div"), { attrs: { class: "explain" } }), eqA);
+  ok(/The sentence that introduces the equation/.test(PG.ctxFor(eqA)), "an open explanation between a sentence and its equation does not cost the equation its sentence", PG.ctxFor(eqA));
+  ok(/\[hidden\]\{display:none!important\}/.test(X.LIVING_CSS), "the hidden attribute wins over the display rules");
+  // the sources the server shows with a refusal reach the page
+  let seenQuery = null;
+  sb2.fetch = async (u, o) => { seenQuery = JSON.parse(o.body); return new Response("event: meta\ndata: {\"sources\":[{\"n\":1,\"title\":\"A Source\",\"url\":\"https://papers.qnfo.org/papers/a-source\"}]}\n\nevent: error\ndata: {\"error\":\"This address has asked 12 questions this hour.\"}\n\n", { status: 200, headers: { "content-type": "text/event-stream" } }); };
+  PG.explainMath(eqA);
+  await new Promise((r) => setTimeout(r, 400));
+  const shown = ids.body.children.find((x) => /explain/.test(x.attrs.class || "") && x.all("strong").length);
+  ok(shown && /asked 12 questions/.test(shown.textContent) && /Sources: \[1\] A Source/.test(shown.textContent), "a refused answer still shows the sources", shown && shown.textContent.slice(0, 200));
 }
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
