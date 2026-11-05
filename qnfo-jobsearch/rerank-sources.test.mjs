@@ -17,7 +17,9 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 
 // ---- the binding the re-rank needs is declared, with props and no key copy
 ok(/\[\[services\]\][^[]*binding = "QNFO_AI"[^[]*service = "qnfo-ai"[^[]*props = \{ caller = "qnfo-jobsearch" \}/.test(toml), "wrangler.toml declares the QNFO_AI service binding with props caller qnfo-jobsearch");
+ok(/^\[ai\]\s*\nbinding = "AI"/m.test(toml), "wrangler.toml declares the Workers AI binding the re-rank asks first");
 ok(!/env\.AI\.fetch|qnfo-ai\/infer/.test(src), "the dead /infer call is gone");
+ok(src.includes("WORKERS-AI-ATTRIBUTION-1") && src.split('env = __aiAttrEnv(env, "qnfo-jobsearch", "AI", "JOBS_DB");').length - 1 === 2, "both entry handlers count the AI spend under the worker's name");
 ok(src.includes("JOBSEARCH-LLM-RERANK-1") && src.includes("JOBSEARCH-NL-PUBLIC-SECTOR-1") && src.includes("JOBSEARCH-SOURCES-1"), "the issue markers are in the source");
 
 // ---- parseRerank: only a full permutation of 1..n is accepted
@@ -30,6 +32,13 @@ for (const [name, text] of [["duplicate", '{"order":[1,1,2]}'], ["missing", '{"o
 const job = { title: "Senior Policy Researcher", company: "Rijkswaterstaat", location: "Den Haag", desc: "The role needs 5 years of evidence-based policy research. Work with the OECD and ministries.", match: { why: ["title in your lane: policy", "evidence in the posting: federal"] } };
 ok(T.reasonOk("Policy research in a ministry setting matches the title and the federal evidence.", job) !== null, "a grounded reason is shown");
 ok(T.reasonOk("The posting asks for 5 years in the OECD setting.", job) !== null, "a number and an acronym the posting contains are allowed");
+// the posting's own score was given to the model, so repeating it is allowed; another number is still not
+{
+  const scored = { ...job, match: { ...job.match, score: 80 } };
+  ok(T.reasonOk("Ranks first with the highest score of 80 and a policy title with federal evidence.", scored) !== null, "a reason may repeat the posting's own score");
+  ok(T.reasonOk("Ranks first with the highest score of 99 and a policy title with federal evidence.", scored) === null, "a different score is still an invented number");
+  ok(T.reasonOk("Ranks first and the posting asks 12 years of policy research.", scored) === null, "an invented requirement is still rejected");
+}
 for (const [name, r] of [
   ["an invented number", "The posting asks for 12 years of policy research."],
   ["an invented name", "Strong fit for the Google research team."],
@@ -61,7 +70,8 @@ answer.calls = [];
   ok(sent.model === "@cf/zai-org/glm-5.3-flash" && sent.max_tokens <= 2048 && sent.stream === false && sent.temperature === 0 && sent.messages[0].role === "system" && /ONLY reorder/.test(sent.messages[0].content), "a pinned cheap model, deterministic, and the reorder-only instruction", sent.model);
   ok(!/Federal Highway|rwnquni|rowan\.quni|QNFO|ledger/i.test(JSON.stringify(sent.messages)), "no ledger text or personal data is sent to the model");
   const items = JSON.parse(sent.messages[1].content);
-  ok(items.every((x) => x.signals.every((s) => /^(title in your lane|evidence in the posting)/.test(s)) && x.signals.length === 2), "only posting-fit signals are sent", items[0]);
+  ok(items.every((x) => x.signals.every((s) => /^(title in the target lane|evidence in the posting)/.test(s)) && x.signals.length === 2), "only posting-fit signals are sent, without the second person", items[0]);
+  ok(!/\b(you|your)\b/i.test(JSON.stringify(items)) && /third person/.test(sent.messages[0].content), "neither the items nor the instruction invite a second-person reason");
   ok(items.length === 4 && items.map((x) => x.n).join() === "1,2,3,4", "postings are sent as numbered items");
   for (const j of r.kept) {
     const o = before.find((x) => x.id === j.id);
@@ -84,12 +94,38 @@ answer.calls = [];
   answer.calls.length = 0;
   await T.llmRerankRun(answer({ order: [1, 2, 3, 4] }), kept);
   const body = answer.calls[0].init.body;
-  ok(!/you rejected|you liked|not in your CV|past application|seniority/.test(body) && /title in your lane/.test(body) && /evidence in the posting/.test(body), "only posting-fit signals leave the worker", body.slice(0, 300));
+  ok(!/you rejected|you liked|not in your CV|past application|seniority/.test(body) && /title in the target lane/.test(body) && /evidence in the posting/.test(body), "only posting-fit signals leave the worker", body.slice(0, 300));
 }
 // the rank is shown as well, so the owner can see what the AI changed
 {
   const r = await T.llmRerankRun(answer({ order: [2, 1, 3, 4] }), fresh());
   ok(r.kept[0].id === "t:2" && r.kept.every((j) => j.match.why.some((x) => /^LLM: rank \d+ of 4/.test(x))), "each posting carries its AI rank", r.kept.map((j) => j.match.why));
+}
+// the Workers AI binding answers first; the router is the second path
+{
+  const aiCalls = [];
+  const ai = (content, fail) => ({ AI: { run: async (model, input) => { aiCalls.push({ model, input }); if (fail) throw new Error(fail); return { choices: [{ message: { content: typeof content === "string" ? content : JSON.stringify(content) } }] }; } } });
+  answer.calls.length = 0;
+  let r = await T.llmRerankRun({ ...ai({ order: [2, 1, 3, 4], reasons: { 2: "Urban planning and land use are named in the posting." } }), ...answer({ order: [4, 3, 2, 1] }) }, fresh());
+  ok(r.status === "reordered" && r.via === "ai" && r.kept.map((j) => j.id).join() === "t:2,t:1,t:3,t:4", "the AI binding answers and the router is not asked", { status: r.status, via: r.via });
+  ok(answer.calls.length === 0 && aiCalls.length === 1, "one AI call, no router call", { router: answer.calls.length, ai: aiCalls.length });
+  const sent = aiCalls[0];
+  ok(sent.model === "@cf/zai-org/glm-5.3-flash" && sent.input.reasoning_effort === "low" && sent.input.max_tokens <= 2048 && sent.input.temperature === 0 && /ONLY reorder/.test(sent.input.messages[0].content), "a cheap allowed model at low reasoning, deterministic, reorder-only instruction", sent.input);
+  ok(!/Federal Highway|rwnquni|rowan\.quni|QNFO|ledger/i.test(JSON.stringify(sent.input.messages)), "no ledger text or personal data is sent");
+  ok(r.kept.find((j) => j.id === "t:2").match.why.some((x) => /Urban planning and land use/.test(x)), "the grounded reason is shown");
+  // a failing or empty binding falls back to the router; no binding at all and a failing binding report why
+  r = await T.llmRerankRun({ ...ai("", "boom"), ...answer({ order: [3, 2, 1, 4] }) }, fresh());
+  ok(r.status === "reordered" && r.via === "router" && r.kept[0].id === "t:3", "a throwing AI binding falls back to the router", { status: r.status, via: r.via });
+  r = await T.llmRerankRun({ ...ai(""), ...answer({ order: [4, 3, 2, 1] }) }, fresh());
+  ok(r.via === "router" && r.kept[0].id === "t:4", "an empty AI answer falls back to the router");
+  r = await T.llmRerankRun(ai("", "boom"), fresh());
+  ok(r.status === "error" && r.kept.map((j) => j.id).join() === "t:1,t:2,t:3,t:4", "a failing AI binding with no router leaves the order and says error", r.status);
+  r = await T.llmRerankRun(ai("I cannot do that."), fresh());
+  ok(r.status === "bad-answer" && r.via === "ai", "prose from the AI binding leaves the order", r.status);
+  r = await T.llmRerankRun(ai({ order: [1, 1, 2, 3] }), fresh());
+  ok(r.status === "bad-answer", "a repeated number from the AI binding leaves the order");
+  r = await T.llmRerankRun({ AI: { run: async () => ({ response: JSON.stringify({ order: [2, 1, 3, 4] }) }) } }, fresh());
+  ok(r.status === "reordered" && r.via === "ai", "the plain response shape is read too");
 }
 // every failure leaves the deterministic order and says why
 for (const [name, e, expect] of [
@@ -142,8 +178,19 @@ globalThis.fetch = async (u) => {
   ok(db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_status'").get().v === "reordered", "the status is recorded in jobsearch_meta");
   const ops = await T.opsReport(env);
   ok(ops.rerank.status === "reordered" && ops.rerank.binding === true && ops.rerank.at, "GET /api/ops reports the re-rank", ops.rerank);
+  ok(ops.rerank.via === "router", "ops names the way that answered", ops.rerank);
   const ops2 = await T.opsReport({ JOBS_DB: D1, LOOP_TOKEN: "t" });
   ok(ops2.rerank.binding === false, "ops says when the binding is missing");
+  // the same run through the AI binding (the first way), counted under the worker's name
+  db.exec("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER, errors INTEGER, in_chars INTEGER, ms INTEGER, in_tok INTEGER, out_tok INTEGER, neurons REAL, PRIMARY KEY (day, worker, purpose, model))");
+  const aiRuns = [];
+  const env3 = { JOBS_DB: D1, LOOP_TOKEN: "t", AI: { run: async (model, input) => { aiRuns.push(model); return { choices: [{ message: { content: JSON.stringify({ order: [1, 2, 3] }) } }], usage: { prompt_tokens: 900, completion_tokens: 120 } }; } } };
+  const pending3 = []; await w.scheduled({}, env3, { waitUntil: (p) => pending3.push(p) }); await Promise.all(pending3);
+  ok(aiRuns.length === 1 && aiRuns[0] === "@cf/zai-org/glm-5.3-flash", "the scheduled run asks the AI binding once", aiRuns);
+  const via = db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_via'").get();
+  ok(via && via.v === "ai" && db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_status'").get().v === "ok", "the status and the way are recorded", via);
+  const metered = db.prepare("SELECT worker, calls, in_tok FROM ai_call_counters WHERE worker = 'qnfo-jobsearch'").get();
+  ok(metered && metered.calls === 1 && metered.in_tok === 900, "the AI spend is counted under qnfo-jobsearch", metered);
 }
 // ---- JOBSEARCH-RESEARCH-PORTFOLIO-1: the three QNFO papers are added to the owner's bank once, additively, and are the owner's afterwards
 {
@@ -265,6 +312,8 @@ ok(T.titleCandidate("Senior beleidsadviseur mobiliteit") && T.titleCandidate("Pr
   ok(T.feedPrefix("smartrecruiters:oecd") === "sr:oecd:" && T.BOARDS.smartrecruiters.includes("oecd") && T.BOARDS.recruitee.includes("sweco"), "the feeds are registered and expire by prefix");
 }
 globalThis.fetch = realFetch;
+// JS-7: a board that answers 404 on every ATS is retired, not kept to fail 3 runs and turn fm-jobsearch-feed-down red (lever:mistral, 2026-11-05)
+ok(!T.BOARDS.lever.includes("mistral") && T.BOARDS.lever.includes("palantir") && T.BOARDS.lever.length === 8, "the dead lever:mistral board is retired and the others stay", T.BOARDS.lever);
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

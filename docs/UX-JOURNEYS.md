@@ -28,10 +28,15 @@ no key and no account.
 | journey finishes | every step found its button and the expected text appeared, no page exception | `broken` otherwise |
 | taps, typed fields | counted per journey against `budgets.json` | `harder` when over |
 | sideways scroll | page wider than the phone, at 412px and 360px | screen finding |
-| tap targets | buttons and links under 24x24 px (WCAG 2.2 SC 2.5.8; inline links in a sentence exempt) | screen finding |
+| tap targets | buttons and links under 24x24 px (WCAG 2.2 SC 2.5.8; inline links in a sentence exempt). Not counted, because no thumb reaches them (`isTapTarget` in `lib.mjs`, covered by `scripts/ux-journeys.test.mjs`): a control parked off the left or top edge of the page, an anti-bot honeypot (aria-hidden, tabindex -1, 12 px or less), and a checkbox or radio inside a label that is itself 24x24 or more (the label is the target) | screen finding |
 | empty floating bar | a fixed or sticky element with no content (for example a toast whose hide rule lost to an id rule) | screen finding |
 | accessibility | axe-core WCAG 2.0/2.1/2.2 A and AA, serious and critical | screen finding |
 | console errors, 404/5xx | collected during the journey | screen finding |
+
+- **Ask QWAV pages** (`apps/ask-qwav.journeys.mjs`, live only, ask.qwav.tech): `living-paper` (open `/paper/<slug>`, see the title and a drawn equation), `reproduce-record` (open `/reproduce/<slug>`, see the claim rows and the Run button; the button is not pressed because it downloads about 10 MB of Python) and `compute-padic` (open `/compute`, tap Compute, see the valuation table). Added with qnfo-ai-search 2.16.0 to 2.18.0 (roadmap rows 31, 36, 34, 38).
+- **Papers** (`apps/papers.journeys.mjs`, live only): `paper-from-list` (open papers.qnfo.org, tap Read on the first paper, see its title, measure the paper page) and
+  `paper-with-short` (open the page link `/api/paper-videos` hands out, see the embed). A screen finding of the public home pages names the host in its label
+  (`home reading.q08.org`), since 13 hosts were all "home" in UX-SCREENS-1 1001734 and nobody could tell which worker owned a finding.
 
 ## When it runs
 

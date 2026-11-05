@@ -55,8 +55,14 @@ ACTIONS
   gateway-routes         AUTOROUTER-EVAL-1: read-only. Lists the AI Gateway dynamic routes of --gateway (default "default", the gateway
                          qnfo-ai uses) and prints each route id, name and whether it is an Auto Router, plus the HTTP status and the
                          error text when the API refuses. First step of RM-AUTOROUTER-EVAL-1: the shadow replay needs the route id. Reads every page of
-                         data.routes (the live shape) and prints each route's active version and deployment flag.
-  access-probe           Read the Zero Trust organisation, Access apps and identity providers. Reports only provider
+                         data.routes (the live shape) and prints each route's active version and deployment flag. Auto Router itself is the
+                         built-in model `cloudflare/auto` (developers.cloudflare.com/ai-gateway/features/auto-router), not a route: an
+                         auto_router_count of 0 here does not mean it is unavailable; gateway-auto-probe answers that.
+  gateway-auto-probe     AUTOROUTER-EVAL-1: the one action that runs a model. One call of 16 output tokens to `cloudflare/auto` through
+                         the REST route (second path: the gateway compat route on 401/403/404). Prints http status, the model Auto Router
+                         chose (cf-aig-routed-model), cf-aig-routing-reason and token counts, never the answer text, plus the error text
+                         when it refuses. Costs a fraction of a cent; evidence for whether the shadow replay can run on this account.
+  access-probe          Read the Zero Trust organisation, Access apps and identity providers. Reports only provider
                          names/types, Cloudflare account-membership restriction, OAuth client-ID presence and each
                          app's allowed provider IDs; never prints client IDs, secrets, emails or policy contents.
                          OAuth client-secret validity is not asserted.
@@ -172,8 +178,63 @@ def iso(ms_ago: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - ms_ago / 1000))
 
 
+REPO_DIR_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+MARKERS = ("RETIRED", "FOLDED")
+
+
+def repo_dir(name: str, root: str = ".") -> str | None:
+    """ARCHIVE-MARKER-READ-1 (RM-REPO-DEAD-SOURCES-1, agent_issues 1002077): the repository directory of a worker is
+    <root>/<name>, or <root>/archive/<name> once the directory was moved there, or the archive directory whose
+    wrangler.toml declares `name` (archive/skills-discovery declares qnfo-skills-discovery). A top-level directory wins
+    over an archive twin, so an unmarked live directory is never shadowed by a marked archive copy. None when the name is
+    not a plain directory name or no directory exists."""
+    if not REPO_DIR_NAME_RE.match(name or "") or name in (".", ".."):
+        return None
+    top = os.path.join(root, name)
+    if os.path.isdir(top):
+        return top
+    base = os.path.join(root, "archive")
+    direct = os.path.join(base, name)
+    if os.path.isdir(direct):
+        return direct
+    if os.path.isdir(base):
+        pat = re.compile(r'^\s*name\s*=\s*"' + re.escape(name) + '"', re.M)
+        for d in sorted(os.listdir(base)):
+            w = os.path.join(base, d, "wrangler.toml")
+            if os.path.isfile(w) and pat.search(open(w, encoding="utf-8").read()):
+                return os.path.join(base, d)
+    return None
+
+
+def retirement_marker(name: str, root: str = ".") -> str | None:
+    """The RETIRED/FOLDED marker file name of the repo directory repo_dir() resolves for `name`, else None. A directory
+    with no marker anywhere (top level or archive/) returns None, so every refusal that needs a marker still refuses."""
+    d = repo_dir(name, root)
+    return next((m for m in MARKERS if d and os.path.isfile(os.path.join(d, m))), None)
+
+
+def live_repo_dirs(root: str = ".") -> list:
+    """Directories whose wrangler.toml counts as a live declaration: every top-level directory without a RETIRED/FOLDED marker,
+    plus any archive/<dir> that has lost its marker (fail-safe: archive/MANIFEST.md rule 1 forbids it, and an unmarked one
+    must block a database delete rather than vanish from the census). Returns (relative dir name, absolute path) pairs."""
+    out = []
+    for d in sorted(os.listdir(root)):
+        if d == "archive":
+            continue
+        p = os.path.join(root, d)
+        if os.path.isfile(os.path.join(p, "wrangler.toml")) and not any(os.path.isfile(os.path.join(p, m)) for m in MARKERS):
+            out.append((d, p))
+    base = os.path.join(root, "archive")
+    if os.path.isdir(base):
+        for d in sorted(os.listdir(base)):
+            p = os.path.join(base, d)
+            if os.path.isfile(os.path.join(p, "wrangler.toml")) and not any(os.path.isfile(os.path.join(p, m)) for m in MARKERS):
+                out.append(("archive/" + d, p))
+    return out
+
+
 def delete_worker(name: str, acct: str, token: str) -> int:
-    marker = next((m for m in ("RETIRED", "FOLDED") if os.path.isfile(os.path.join(name, m))), None)
+    marker = retirement_marker(name)
     if name in PROTECTED:
         emit({"action": "delete-worker", "worker": name, "ok": False, "refused": "protected"})
         return 3
@@ -391,6 +452,70 @@ def gateway_routes(acct: str, token: str, gateway: str = "default", max_pages: i
     return 0
 
 
+AUTO_PROBE_BODY = {"model": "cloudflare/auto", "max_tokens": 16,
+                   "messages": [{"role": "user", "content": "Reply with the single word ok."}]}
+# The default Auto Router pool holds anthropic, openai and xai models (developers.cloudflare.com/ai-gateway/features/auto-router) and the fleet has
+# no Anthropic or other third-party upstream (owner decision 2026-10-01, NO-CLAUDE-RUNTIME-DEPENDENCY-1), so every call restricts the pool to Workers AI.
+AUTO_PROBE_POOL = {"cf-aig-allowed-providers": "workers-ai"}
+
+
+def raw_post(url: str, headers: dict, body: dict, timeout: int = 60) -> tuple[int, dict, dict]:
+    """AUTOROUTER-EVAL-1: POST that also returns the response headers (lower-cased), which `call` drops. Never raises on an HTTP status."""
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST", headers=dict(headers, **{"Content-Type": "application/json"}))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            hdr = {k.lower(): v for k, v in r.headers.items()}
+            try:
+                return r.status, hdr, json.loads(r.read().decode() or "{}")
+            except Exception:
+                return r.status, hdr, {}
+    except urllib.error.HTTPError as e:
+        hdr = {k.lower(): v for k, v in (e.headers.items() if e.headers else [])}
+        try:
+            return e.code, hdr, json.loads(e.read().decode() or "{}")
+        except Exception:
+            return e.code, hdr, {}
+
+
+def _auto_probe_error(j: dict) -> str:
+    errs = j.get("errors") if isinstance(j, dict) else None
+    if isinstance(errs, list) and errs:
+        return "; ".join(str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in errs)[:300]
+    err = j.get("error") if isinstance(j, dict) else None
+    if isinstance(err, dict):
+        return str(err.get("message") or err)[:300]
+    return str(err or "")[:300]
+
+
+def gateway_auto_probe(acct: str, token: str, gateway: str = "default") -> int:
+    """AUTOROUTER-EVAL-1: does Auto Router (the built-in model `cloudflare/auto`, no route to create) answer on this account? One call of 16 output
+    tokens through the REST route, and on a 401/403/404 once more through the gateway's compat route (two paths, the second named in the output).
+    It prints the status, the model Auto Router chose (cf-aig-routed-model), the reason (cf-aig-routing-reason) and the token counts, never the
+    answer text. The shadow replay (qnfo-ai /internal/eval/autorouter-shadow) is worth wiring to a daily caller only when this answers 200."""
+    gw = gateway or "default"
+    tried = []
+    st, hdr, j = 0, {}, {}
+    for path, url, headers in (
+        ("rest", f"{API}/accounts/{acct}/ai/v1/chat/completions", dict(AUTO_PROBE_POOL, **{"Authorization": "Bearer " + token, "cf-aig-gateway-id": gw})),
+        ("compat", f"https://gateway.ai.cloudflare.com/v1/{acct}/{urllib.parse.quote(gw, safe='')}/compat/chat/completions", dict(AUTO_PROBE_POOL, **{"cf-aig-authorization": "Bearer " + token})),
+    ):
+        st, hdr, j = raw_post(url, headers, AUTO_PROBE_BODY)
+        tried.append({"path": path, "http": st, "error": _auto_probe_error(j) if not 200 <= (st or 0) < 300 else ""})
+        if 200 <= (st or 0) < 300 or st not in (401, 403, 404):
+            break
+    ok = 200 <= (st or 0) < 300
+    usage = j.get("usage") if isinstance(j, dict) and isinstance(j.get("usage"), dict) else {}
+    choice = (j.get("choices") or [{}])[0] if isinstance(j, dict) and isinstance(j.get("choices"), list) and j.get("choices") else {}
+    text = ((choice.get("message") or {}).get("content") or "") if isinstance(choice, dict) else ""
+    answered = ok and bool(text or usage)
+    emit({"action": "gateway-auto-probe", "ok": answered, "gateway": gw, "http": st, "tried": tried,
+          "routed_model": hdr.get("cf-aig-routed-model") or j.get("model"), "routing_reason": hdr.get("cf-aig-routing-reason"),
+          "decision_id": hdr.get("cf-aig-routing-decision-id"), "answered_chars": len(text),
+          "input_tokens": usage.get("prompt_tokens"), "output_tokens": usage.get("completion_tokens"),
+          "error": "" if answered else (tried[-1]["error"] or ("HTTP 200 with no answer text and no usage" if ok else "no error text"))})
+    return 0 if answered else 1
+
+
 def access_probe(acct: str, token: str) -> int:
     st_o, j_o = call("GET", f"/accounts/{acct}/access/organizations", token)
     st_a, j_a = call("GET", f"/accounts/{acct}/access/apps", token)
@@ -483,7 +608,7 @@ def delete_vectorize_index(name: str, acct: str, token: str) -> int:
     if not owner:
         emit({"action": "delete-vectorize-index", "index": name, "ok": False, "refused": "not in VECTORIZE_RETIRED"})
         return 3
-    marker = next((m for m in ("RETIRED", "FOLDED") if os.path.isfile(os.path.join(owner, m))), None)
+    marker = retirement_marker(owner)
     if not marker:
         emit({"action": "delete-vectorize-index", "index": name, "ok": False,
               "refused": "no RETIRED/FOLDED marker in the repo directory " + owner})
@@ -1151,11 +1276,8 @@ def _days_since(iso_ts: str, now: float | None = None) -> int | None:
 def declared_store_bindings(root: str = ".") -> list:
     """(worker, binding, secret_name) for every [[secrets_store_secrets]] block in a live repo directory's wrangler.toml."""
     out = []
-    for d in sorted(os.listdir(root)):
-        w = os.path.join(root, d, "wrangler.toml")
-        if not os.path.isfile(w) or any(os.path.isfile(os.path.join(root, d, m)) for m in ("RETIRED", "FOLDED")):
-            continue
-        text = open(w, encoding="utf-8").read()
+    for d, p in live_repo_dirs(root):
+        text = open(os.path.join(p, "wrangler.toml"), encoding="utf-8").read()
         name = (re.search(r'^\s*name\s*=\s*"([^"]+)"', text, re.M) or [None, d])[1]
         for block in re.split(r"^\s*\[\[secrets_store_secrets\]\]", text, flags=re.M)[1:]:
             body = re.split(r"^\s*\[", block, maxsplit=1, flags=re.M)[0]
@@ -1373,11 +1495,8 @@ def d1_dump(acct: str, token: str, db: str, run=None) -> tuple[str, dict]:
 def wrangler_binders(db_id: str, root: str = ".") -> list:
     """Repo directories whose wrangler.toml names the database id, except RETIRED/FOLDED ones."""
     hits = []
-    for d in sorted(os.listdir(root)):
-        w = os.path.join(root, d, "wrangler.toml")
-        if not os.path.isfile(w) or any(os.path.isfile(os.path.join(root, d, m)) for m in ("RETIRED", "FOLDED")):
-            continue
-        if db_id in open(w, encoding="utf-8").read():
+    for d, p in live_repo_dirs(root):
+        if db_id in open(os.path.join(p, "wrangler.toml"), encoding="utf-8").read():
             hits.append(d)
     return hits
 
@@ -1675,14 +1794,14 @@ def unbind_service(target: str, acct: str, token: str) -> int:
     target_live = False
     if svc:
         s2, _ = call("GET", f"/accounts/{acct}/workers/scripts/{svc}/settings", token)
-        marked = os.path.isdir(svc) and any(os.path.isfile(os.path.join(svc, m)) for m in ("RETIRED", "FOLDED"))
+        marked = retirement_marker(svc) is not None  # ARCHIVE-MARKER-READ-1: archive/<svc>/RETIRED counts
         # UNBIND-BEFORE-DELETE-1 (#1756): delete-worker refuses while a live binder targets the worker (DELETE-AFTER-UNBIND-1),
         # so a target that is still deployed may be unbound when its repo directory is RETIRED or FOLDED (it is on its way
         # out); an unmarked live target is still refused.
         if s2 != 404 and not marked:
             emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target worker still exists (settings HTTP " + str(s2) + ") and its repo directory has no RETIRED/FOLDED marker"})
             return 3
-        if s2 == 404 and os.path.isdir(svc) and not marked:
+        if s2 == 404 and repo_dir(svc) is not None and not marked:
             emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target's repo directory has no RETIRED/FOLDED marker"})
             return 3
         target_live = s2 != 404
@@ -1698,8 +1817,8 @@ def unbind_service(target: str, acct: str, token: str) -> int:
         # The canonical deploy keeps a live binding by (type, name) and only refreshes its props, so the dangling one must
         # go before the declared one can install. Refuse while the declaration still names the dead target, a RETIRED or
         # FOLDED directory, or a worker with no repo directory.
-        if (not declared or declared == svc or not os.path.isdir(declared)
-                or any(os.path.isfile(os.path.join(declared, m)) for m in ("RETIRED", "FOLDED"))):
+        if (not declared or declared == svc or repo_dir(declared) is None
+                or retirement_marker(declared) is not None):
             emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": d + "/wrangler.toml still declares the binding" + (" to " + declared if declared else "")})
             return 3
         repoint = declared
@@ -2042,7 +2161,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "gtg-tag", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling"])
+    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "gateway-auto-probe", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "gtg-tag", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -2118,6 +2237,8 @@ def main() -> int:
         return ai_neurons_hourly(acct, token, a.model) if a.model else ai_neurons(acct, token)
     if a.action == "gateway-routes":
         return gateway_routes(acct, token, a.gateway)
+    if a.action == "gateway-auto-probe":
+        return gateway_auto_probe(acct, token, a.gateway)
     if a.action == "gateway-cost":
         return gateway_cost_daily(acct, token) if a.target == "daily" else gateway_cost(acct, token)
     return access_probe(acct, token)
