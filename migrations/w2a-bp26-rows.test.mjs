@@ -31,11 +31,11 @@ CREATE TABLE slo_budget_state (surface TEXT PRIMARY KEY, evaluated_at TEXT, stat
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT);
 `;
-const ROWS = [1390, 1391, 1393, 1394, 1397, 1401, 1407, 1408, 1412, 1413, 1414, 1419, 1706, 1710];
+const ROWS = [1390, 1391, 1393, 1394, 1397, 1400, 1401, 1407, 1408, 1412, 1413, 1414, 1419, 1706, 1710];
 function world(statuses) {
   const w = new DatabaseSync(":memory:");
   w.exec(SCHEMA);
-  for (const id of ROWS) w.prepare("INSERT INTO roadmap_implementation (id, item, source, title, artifact_type, status, evidence) VALUES (?, ?, 'x', 't', 'code', ?, 'old')").run(id, "item-" + id, (statuses && statuses[id]) || (id === 1710 ? "built" : id === 1706 ? "in_progress" : "planned"));
+  for (const id of ROWS) w.prepare("INSERT INTO roadmap_implementation (id, item, source, title, artifact_type, status, evidence) VALUES (?, ?, 'x', 't', 'code', ?, 'old')").run(id, "item-" + id, (statuses && statuses[id]) || (id === 1710 ? "built" : id === 1400 ? "partial" : id === 1706 ? "in_progress" : "planned"));
   return w;
 }
 function freshSurfaces(w, hoursAgo) {
@@ -49,6 +49,7 @@ w.exec(sql);
 const st = (id) => w.prepare("SELECT status s, evidence e FROM roadmap_implementation WHERE id = ?").get(id);
 ok(["1390", "1391", "1393", "1394", "1397", "1401", "1407", "1408", "1412", "1414", "1419", "1706"].every((id) => st(id).s === "partial" && st(id).e !== "old"), "twelve rows are partial with evidence");
 ok(st(1413).s === "built" && st(1710).s === "built", "row 1413 is built and row 1710 stays built");
+ok(st(1400).s === "partial" && /Verified live 2026-11-05, after the merge/.test(st(1400).e) && st(1400).e.startsWith("old"), "row 1400 keeps its status and gains the live verification once");
 ok(!w.prepare("SELECT 1 FROM roadmap_implementation WHERE status IN ('verified', 'closed') OR verified_at IS NOT NULL").get(), "nothing is verified by this file");
 ok(w.prepare("SELECT COUNT(*) n FROM remediation_contracts WHERE class IN ('rm-1413', 'rm-1710') AND status = 'active' AND module = 'roadmap-dod-v1' AND verify_transport = 'd1-query'").get().n === 2, "both rm- contracts are active d1-query contracts of the roadmap-dod-v1 module");
 const probe = (cls) => w.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = ?").get(cls).p;
@@ -76,6 +77,7 @@ ok(w.prepare("SELECT COUNT(*) n FROM decision_log WHERE actor = 'session-w2a'").
 // replay: nothing twice, a later status is not reset
 w.exec("UPDATE roadmap_implementation SET status = 'verified' WHERE id = 1413");
 w.exec(sql);
+ok((st(1400).e.match(/Verified live 2026-11-05, after the merge/g) || []).length === 1, "the verification text is appended once");
 ok(w.prepare("SELECT COUNT(*) n FROM agent_issues").get().n === 2 && w.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 1 && w.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 2, "a replay inserts nothing twice");
 ok(st(1413).s === "verified", "a row already past built is not reset");
 

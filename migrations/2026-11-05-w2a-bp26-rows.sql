@@ -1,6 +1,7 @@
--- W2A-BP26-ROWS-1 (2026-11-05, charter pillars security, research, autonomy; roadmap_implementation rows 1390, 1391, 1393, 1394, 1397, 1401, 1407, 1408, 1412, 1413, 1414, 1419, 1706).
+-- W2A-BP26-ROWS-1 (2026-11-05, charter pillars security, research, autonomy; roadmap_implementation rows 1390, 1391, 1393, 1394, 1397, 1400, 1401, 1407, 1408, 1412, 1413, 1414, 1419, 1706).
 -- Thirteen rows of the BP26 catalogue were still `planned` (or in_progress) although most of their clauses had shipped. Each row gets the state read on 2026-11-05 (live reads, D1 reads, the
 -- PRs on main), the clause that is still open, and its doer. Nothing is closed to lower a count: a row whose clauses are not all met is `partial`; row 1413 is `built` and verifies from rm-1413.
+-- Row 1400 (PR 7656, merged and applied) only gets its live verification appended: the consumer's first run wrote the dry-run note of all 19 policies and the counts equal records_past_retention.
 -- Read live for this file:
 --   * secure headers: 17 public hosts answered 200/401/404 with HSTS max-age 31536000, nosniff, a referrer policy and X-Frame-Options or CSP frame-ancestors (an independent GET of each host);
 --     security_headers_pass 1, turnstile_on_public_forms 13 of 13 forms on 16 pages; q08.org /health still says turnstile widget-only.
@@ -16,7 +17,9 @@
 -- CAUSE-MAPPED: registers no metric_registry row.
 
 CREATE TABLE IF NOT EXISTS bak_20261105_w2a_bp26_rows AS
-SELECT id, status, evidence, verified_at FROM roadmap_implementation WHERE id IN (1390, 1391, 1393, 1394, 1397, 1401, 1407, 1408, 1412, 1413, 1414, 1419, 1706);
+SELECT id, status, evidence, verified_at FROM roadmap_implementation WHERE id IN (1390, 1391, 1393, 1394, 1397, 1400, 1401, 1407, 1408, 1412, 1413, 1414, 1419, 1706);
+
+UPDATE roadmap_implementation SET evidence = evidence || ' Verified live 2026-11-05, after the merge: the first consumer run wrote the dry-run note of all 19 policies into retention_policy.note and the counts equal past_retention: emails_bodies_30d 740, email_raw_archive_30d 53, email_loop_quarantine_30d 105, subscribers_pending_30d 2, ipatent_analytics_90d 41, ipatent_sessions_90d 11, ipatent_submission_ip_90d 52 (total 1004, the value of records_past_retention); ops_config retention_enforce reads off, card 189 is open, nothing was blanked or deleted.' WHERE id = 1400 AND status = 'partial' AND instr(evidence, 'Verified live 2026-11-05, after the merge') = 0;
 
 UPDATE roadmap_implementation SET status = 'partial', evidence = 'Read 2026-11-05. Built and live: q08.org serves /api/corrections (JSON with type and original_url) and /corrections; reading.q08.org serves /api/retractions (74 rows). Open: papers.qnfo.org/api/corrections and /corrections answer 404 (agent_issues 1001982, code-task on qnfo-gateway, waiting behind a live code-loop claim on that file); reading.q08.org rows carry no COPE type or original link and there is no /corrections alias (1001983). correction_latency_p95_h reads 321.99 against a target of 24, so the feed alone does not meet the item: the latency is the next measurement to read after the papers feed ships.', verified_at = NULL WHERE id = 1390 AND status = 'planned';
 
