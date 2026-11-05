@@ -44,16 +44,16 @@ d.exec(sql);
 
 // ---- roadmap rows
 const status = Object.fromEntries(rows(d, "SELECT id, status FROM roadmap_implementation").map((r) => [r.id, r.status]));
-for (const id of [72, 74, 82, 98, 99, 100, 61, 7]) ok(status[id] === "built", "row " + id + " is built", status[id]);
-for (const id of [88, 102]) ok(status[id] === "enforced-partial", "row " + id + " (local by nature) is enforced-partial", status[id]);
+for (const id of [72, 74, 82, 88, 98, 99, 100, 61, 7]) ok(status[id] === "built", "row " + id + " is built", status[id]);
+ok(status[102] === "enforced-partial", "row 102 (in-session by nature) is enforced-partial", status[102]);
 ok(status[124] === "verified" && one(d, "SELECT verified_at v FROM roadmap_implementation WHERE id = 124").v !== null, "row 124 is verified with a verified_at");
 ok(rows(d, "SELECT id FROM roadmap_implementation WHERE evidence NOT LIKE '%C4-GATES 2026-11-05%'").length === 0, "every touched row carries the C4-GATES evidence");
 ok(one(d, "SELECT evidence e FROM roadmap_implementation WHERE id = 72").e.startsWith("seed | "), "evidence is appended, not replaced");
 
 // ---- closing probes of the built rows
 const contracts = rows(d, "SELECT class, verify_transport t, status, module, issue_id FROM remediation_contracts WHERE module = 'roadmap-dod-v1'");
-ok(contracts.length === 8 && contracts.every((c) => c.status === "active" && c.issue_id === null), "eight active rm- contracts of module roadmap-dod-v1", contracts);
-for (const id of [72, 74, 82, 98, 99, 100]) {
+ok(contracts.length === 9 && contracts.every((c) => c.status === "active" && c.issue_id === null), "nine active rm- contracts of module roadmap-dod-v1", contracts);
+for (const id of [72, 74, 82, 88, 98, 99, 100]) {
   const c = probe(d, "rm-" + id);
   const spec = JSON.parse(c.p);
   const text = readFileSync(join(repo, spec.paths[0]), "utf8");

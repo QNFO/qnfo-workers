@@ -19,10 +19,11 @@ const OPS = "docs/ops-governance/scripts";
 // the real checkout is clean, with one status line per gate
 const real = run(repo);
 ok(real.status === 0 && !/VIOLATION/.test(real.stdout), "this checkout passes every gate", real.stdout);
-for (const g of ["C1", "C3", "D4", "H1", "H2", "H3"]) ok(new RegExp("FLEET-LESSONS-GATES " + g + " ok").test(real.stdout), "gate " + g + " reports ok on this checkout", real.stdout);
+for (const g of ["C1", "C3", "D4", "E2", "H1", "H2", "H3"]) ok(new RegExp("FLEET-LESSONS-GATES " + g + " ok").test(real.stdout), "gate " + g + " reports ok on this checkout", real.stdout);
 
 const FILES = ["model_guard.py", "ops-settings-guard.py", "sync_system_prompt.py", "local-config-selfheal.py", "customPrompts-canonical.json", "chatbox-providers-canonical.json",
-  "backup_agentdb_chunked.py", "purge-agent-snapshots.py", "skill_pull.py", "chatbox-prompt-guard.py", "chatbox-system-prompt-canonical.txt"].map((f) => OPS + "/" + f);
+  "backup_agentdb_chunked.py", "purge-agent-snapshots.py", "skill_pull.py", "chatbox-prompt-guard.py", "chatbox-system-prompt-canonical.txt",
+  "dr_validate_schema.py", "fleet-manifest-sweep.py", "fleet-wiring-sweep.py", "stale-binding-guard.py", "report-card-autonomy.py", "buffer_post.py"].map((f) => OPS + "/" + f);
 const STUBS = {
   "qnfo-ops/worker.js": 'var OPS_PUBLIC_MODEL = "ops";\nvar OPS_PUBLIC_ALIAS = { "ops": 1, "ops-exec": 1 };\n',
   "qnfo-ai/worker.js": 'data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat"] }]\n',
@@ -116,6 +117,21 @@ try {
   put(base, "scripts/launch.mjs", 'import { spawnSync } from "node:child_process";\nspawnSync("npm", ["test"], { shell: process.platform === "win32" });\n');
   ok(run(base, "D4").status === 0, "D4: a node script with win32 handling passes");
   rmSync(join(base, "scripts/launch.mjs"));
+
+  // ---- E2: secrets are read from their file stores ----------------------------------------------------------------------------------------
+  put(base, OPS + "/probe_env.py", 'import os\nTOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "")\nif not TOKEN:\n    print("missing")\n');
+  r = run(base, "E2");
+  ok(r.status === 1 && gate(r, "E2").some((l) => /probe_env\.py: reads CLOUDFLARE_API_TOKEN from the process environment only/.test(l)), "E2: an env-only read of a credential is reported with its name", r.stdout);
+  put(base, OPS + "/probe_env.py", 'import os\nA = os.environ["GH_TOKEN"]\nB = os.getenv("SERVICE_API_KEY")\nC = os.environ.get("APP_SECRET")\nD = os.environ.get("DB_PASSWORD")\n');
+  r = run(base, "E2");
+  ok(gate(r, "E2").some((l) => ["GH_TOKEN", "SERVICE_API_KEY", "APP_SECRET", "DB_PASSWORD"].every((n) => l.includes(n))), "E2: subscript, getenv and get reads of *TOKEN, *_KEY, *SECRET and *PASSWORD all count", r.stdout);
+  put(base, OPS + "/probe_env.py", 'import os\nA = os.environ.get("TEMP")\nB = os.environ.get("BACKUP_CHUNK_BYTES")\nC = os.environ.get("CF_ACCOUNT_ID")\nD = os.environ.get("QNFO_WORKERS_DIR")\n');
+  ok(run(base, "E2").status === 0, "E2: variables that are not credentials are not flagged");
+  for (const store of ['os.path.expanduser("~/.env")', 'r"C:\\Users\\X\\tokens\\cloudflare"', 'os.path.join(HOME, ".qnfo", "t")', 'r"C:/Users/X/.deepchat/secrets/t.txt"']) {
+    put(base, OPS + "/probe_env.py", 'import os\nTOKEN = os.environ.get("CLOUDFLARE_API_TOKEN")\nP = ' + store + '\n');
+    ok(run(base, "E2").status === 0, "E2: a script that also names the file store " + store.slice(0, 40) + " passes");
+  }
+  rmSync(join(base, OPS, "probe_env.py"));
 
   // ---- H1: independent purge sweeps for backup orphans -----------------------------------------------------------------------------------
   edit(base, OPS + "/backup_agentdb_chunked.py", (t) => t.replace("    purge_orphan_snapshots()  # RM-GATE-H1", "    pass  # RM-GATE-H1"));

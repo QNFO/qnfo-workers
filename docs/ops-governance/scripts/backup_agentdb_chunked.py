@@ -14,7 +14,25 @@ LIVE DB never modified. Canonical: QNFO/qnfo-ops/scripts/backup_agentdb_chunked.
 """
 import os, sys, json, time, hashlib, sqlite3, urllib.request, urllib.error
 
-TOKEN = os.environ.get('CLOUDFLARE_API_TOKEN', '')
+
+def secret(name, default=''):
+    """RM-GATE-E2 (fleet-lessons E2): a key is missing only when neither the process environment nor the ~/.env file store holds it (a session once judged
+    'missing credential' from the environment alone while the key sat in the file). scripts/fleet_lessons_gates.py gate E2 fails an env-only read."""
+    v = os.environ.get(name)
+    if v:
+        return v
+    try:
+        with open(os.path.expanduser('~/.env'), encoding='utf-8', errors='ignore') as fh:
+            for ln in fh:
+                ln = ln.strip()
+                if ln.startswith(name + '='):
+                    return ln.split('=', 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return default
+
+
+TOKEN = secret('CLOUDFLARE_API_TOKEN')
 ACCT = 'edb167b78c9fb901ea5bca3ce58ccc4b'
 BUCKET = 'qnfo-backups'
 ROAM = r'C:/Users/LENOVO/AppData/Roaming/DeepChat'
@@ -240,7 +258,7 @@ def upload_object(path, key):
 
 def main():
     if not TOKEN:
-        print('ERROR: CLOUDFLARE_API_TOKEN missing'); return 1
+        print('ERROR: CLOUDFLARE_API_TOKEN is in neither the environment nor ~/.env'); return 1
     db_src = os.path.join(ROAM, 'app_db', 'agent.db')
     purge_orphan_snapshots()  # RM-GATE-H1: before the free-space gate below, so freed orphans count toward it
     # DEEP-CLEANUP-2026-09-30: pre-flight free-space gate - never start a multi-GB snapshot

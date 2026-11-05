@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""fleet_lessons_gates.py -- FLEET-LESSONS-GATES-1 (charter pillar: autonomy; roadmap rows RM-GATE-C1, C3, D4, H1, H2, H3).
+"""fleet_lessons_gates.py -- FLEET-LESSONS-GATES-1 (charter pillar: autonomy; roadmap rows RM-GATE-C1, C3, D4, E2, H1, H2, H3).
 
 WHY   The "quniverse-fleet-lessons" failure ledger (docs/QUNIVERSE-BACKLOG.md section 3) names, for each failure, a remedy that became a
       standing gate. Eight of them were audited 2026-09-30 as `local-only`: the guard that enforces them (docs/ops-governance/scripts,
@@ -17,6 +17,9 @@ WHY   The "quniverse-fleet-lessons" failure ledger (docs/QUNIVERSE-BACKLOG.md se
           runtime worker advertises (qnfo-ops OPS_PUBLIC_MODEL, the qnfo-ai and personal-api /v1/models entry) and must be listed under that
           provider in chatbox-providers-canonical.json; the default key's provider must be one of the pinned providers (the superseded
           AI-GATEWAY/openai/gpt-4.1 default named a provider the client never registered: 0 of 77).
+      E2  Secrets are read from their file stores. A script that runs on the owner's machine and reads a credential (a variable named *TOKEN, *_KEY,
+          *SECRET, *PASSWORD) from the process environment also consults the file store (~/.env, ~/.qnfo, .deepchat/secrets, ~/tokens) before it
+          reports the key missing: a session once judged "missing credential" from the environment while the key sat in the file.
       D4  A wrapper uses the platform-correct command form. Node tools (npx, npm, wrangler ...) are .cmd shims on Windows: a process argv that
           starts with the bare name raises WinError 2 before the guard ever runs. A script that builds one needs a resolver in the same file
           (shutil.which, a .cmd literal, an os.name / sys.platform branch, shell=True), the pattern of scripts/deploy_gate.py.
@@ -28,16 +31,16 @@ WHY   The "quniverse-fleet-lessons" failure ledger (docs/QUNIVERSE-BACKLOG.md se
       H3  A junction/hardlink probe comes before any dedupe deletion. In the owner-machine scripts a directory-tree deletion
           (shutil.rmtree, os.rmdir, os.removedirs), and any file deletion inside a dedupe/duplicate function, needs a link probe in the same
           function (islink, isjunction, samefile, lstat, st_nlink, realpath ...), or a `link-probe-exempt: <reason>` comment on or above the call.
-      Not here, and why: RM-GATE-E2 (secrets read from their file stores) and RM-GATE-H5 (runtime state reconciled in-session) are behaviours of
-      a session on the owner's machine (which store holds a key, whether the running app re-read its file). They stay local-only; the cloud keeps
-      them visible through the blocker_redteam ledger / metric unverified_blocker_claims and the fm-owner-restart-handoff detector
+      Not here, and why: RM-GATE-H5 (runtime state reconciled in-session) is a behaviour of a session on the owner's machine (whether the running
+      app re-read its file). It stays local-only; the cloud keeps it visible through the fm-h5-owner-restart-handoff detector, and the session half of
+      E2 (which store a session looked in) through the blocker_redteam ledger, metric unverified_blocker_claims and fm-e2-credential-missing-claim
       (migrations/2026-11-04-c4-gates-roadmap-closeout.sql).
 
 WHAT  Pure standard library, no network, about 1 s. Reads only files under the root. A missing input is a finding (fail closed).
       One line per finding, without line numbers, so scripts/regression_gate.py compares runs by text:
           VIOLATION <gate> <path>: <message>
       and one `FLEET-LESSONS-GATES <gate> ok|<n> finding(s)` line per gate.
-USAGE python3 scripts/fleet_lessons_gates.py [--root DIR] [--only C1,C3,D4,H1,H2,H3] [--list]
+USAGE python3 scripts/fleet_lessons_gates.py [--root DIR] [--only C1,C3,D4,E2,H1,H2,H3] [--list]
       FLEET_LESSONS_ROOT overrides the root (the offline suite scripts/fleet-lessons-gates.test.mjs builds fixture trees).
 EXIT  0 no finding; 1 at least one finding.
 """
@@ -59,6 +62,10 @@ RESOLVER = re.compile(r"shutil\.which\(|\.cmd[\"']|\bos\.name\b|sys\.platform|pl
 NODE_QUOTED = re.compile(r"""["'](?:%s)["']""" % "|".join(sorted(NODE_TOOLS)))
 JS_SPAWN = re.compile(r"""\b(?:spawn|spawnSync|execFile|execFileSync)\(\s*(["'`])(%s)\1""" % "|".join(sorted(NODE_TOOLS)))
 JS_RESOLVER = re.compile(r"win32|\.cmd[\"'`]|shell\s*:\s*true|process\.platform")
+
+# E2 --------------------------------------------------------------------------------------------------------------------------------------
+SECRET_NAME = re.compile(r"(?:TOKEN|_KEY|SECRET|PASSWORD|PASS)$")
+FILE_STORE = re.compile(r"~/\.env|\.env[\"']|(?:[\\/]|[\"'])\.qnfo|deepchat[\\/]+secrets|[\"']\.deepchat[\"']\s*,\s*[\"']secrets|[\\/]tokens[\\/]|[\"']tokens[\"']")
 
 # H3 --------------------------------------------------------------------------------------------------------------------------------------
 LINK_PROBE = re.compile(r"is_?link|is_?junction|is_symlink|link_probe|samefile|st_nlink|\blstat\b|readlink|realpath|S_ISLNK|REPARSE_POINT")
@@ -269,6 +276,45 @@ def check_d4(root, f):
             f.add("D4", rel, "spawns the bare command %r with no win32 / .cmd / shell handling in the file" % m.group(2))
 
 
+# E2 --------------------------------------------------------------------------------------------------------------------------------------
+def is_environ(node):
+    return isinstance(node, ast.Attribute) and node.attr == "environ" and isinstance(node.value, ast.Name) and node.value.id == "os"
+
+
+def env_secret_reads(tree):
+    """Credential-like names (*TOKEN, *_KEY, *SECRET, *PASSWORD) the module reads from the process environment by a literal name."""
+    names = set()
+    for n in ast.walk(tree):
+        name = None
+        if isinstance(n, ast.Call) and n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str):
+            fn = n.func
+            if isinstance(fn, ast.Attribute) and ((fn.attr == "get" and is_environ(fn.value)) or (fn.attr == "getenv" and isinstance(fn.value, ast.Name) and fn.value.id == "os")):
+                name = n.args[0].value
+        elif isinstance(n, ast.Subscript) and is_environ(n.value):
+            key = n.slice
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                name = key.value
+        if name and SECRET_NAME.search(name):
+            names.add(name)
+    return sorted(names)
+
+
+def check_e2(root, f):
+    for d, fn in py_scan_files(root):
+        if not d.startswith(OPS):
+            continue
+        rel = d + "/" + fn
+        text = read(root, rel)
+        if text is None or "environ" not in text and "getenv" not in text:
+            continue
+        tree = parse(text)
+        if tree is None:
+            continue
+        names = env_secret_reads(tree)
+        if names and not FILE_STORE.search(text):
+            f.add("E2", rel, "reads %s from the process environment only and never consults a file store (~/.env, ~/.qnfo, .deepchat/secrets), so a key held there is reported missing" % ", ".join(names))
+
+
 # H1 --------------------------------------------------------------------------------------------------------------------------------------
 def call_name(node):
     fn = node.func
@@ -378,7 +424,7 @@ def check_h3(root, f):
             f.add("H3", rel, "%s in %s deletes without a junction/hardlink probe (islink, isjunction, samefile, lstat, st_nlink) and carries no `link-probe-exempt: <reason>`" % (name, where))
 
 
-GATES = [("C1", None), ("C3", None), ("D4", check_d4), ("H1", check_h1), ("H2", check_h2), ("H3", check_h3)]  # C1 and C3 share the parsed guard values (see run)
+GATES = [("C1", None), ("C3", None), ("D4", check_d4), ("E2", check_e2), ("H1", check_h1), ("H2", check_h2), ("H3", check_h3)]  # C1 and C3 share the parsed guard values (see run)
 
 
 def run(root, only=None):
