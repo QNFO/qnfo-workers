@@ -43,7 +43,8 @@ ok(split.lede.split(/\s+/).length <= 110 && split.body_md.indexOf("## One") > 0,
 // ---- EK-1: the lede a reader is shown
 ok(AF.afShownLede({ lede: " Stored lede. ", body_md: "First body paragraph." }) === "Stored lede.", "a stored lede is shown as stored");
 ok(AF.afShownLede({ lede: "", body_md: "The first paragraph of the body is the lede.\n\nSecond paragraph." }) === "The first paragraph of the body is the lede.", "a lost lede is read from the first prose paragraph of the body");
-ok(AF.afShownLede({ lede: "", body_md: "## Heading first\n\nThe paragraph under the heading.\n\nMore." }) === "The paragraph under the heading.", "a body that opens on a heading yields the first prose paragraph after it");
+ok(AF.afShownLede({ lede: "", body_md: "## Heading first\n\nThe paragraph under the heading.\n\nMore." }) === "", "a body that opens on a heading yields none: the paragraph under it is a lead-in and would show twice");
+ok(AF.afShownLede({ lede: "", body_md: "\n\n  The body opens on prose.\n\n## Then a heading" }) === "The body opens on prose.", "leading blank lines are ignored"); 
 ok(AF.afShownLede({ lede: "", body_md: "## Only headings\n\n- a list item\n\n> a quote" }) === "", "no prose paragraph, no lede");
 const longBody = Array.from({ length: 14 }, (_, i) => "Clause number " + i + " has " + "word ".repeat(12).trim() + ".").join(" ") + "\n\nSecond.";
 ok(AF.afShownLede({ lede: "", body_md: longBody }).split(/\s+/).length <= 110, "a derived lede longer than the limit is cut at a sentence boundary");
@@ -92,6 +93,7 @@ ok(AF.afSourcesFooter([]) === "" && AF.afSourcesFooterFromJson("not json") === "
 ok(/Corlea/.test(AF.afSourcesFooterFromJson(JSON.stringify({ refs: ["https://en.wikipedia.org/wiki/Corlea_Trackway"] }))), "the footer reads anchor_json");
 ok(!/<script/.test(AF.afSourcesFooter(["https://example.org/a?x=<script>"])), "references are escaped");
 ok(AF.afSourceProfile("https://en.wikipedia.org/wiki/X").label === "Wikipedia" && AF.afSourceProfile("https://hansard.parliament.uk/x").country === "GB" && AF.afSourceProfile("https://globalvoices.org/x").country === "NL", "host profiles carry label and country");
+ok(AF.afSourceProfile("https://www.gov.uk/government/speeches/x").viewpoint === "uk-government" && AF.afSourceLabel("https://www.gov.uk/government/speeches/x") === "GOV.UK", "GOV.UK is a registered host with its own standpoint");
 ok(AF.afSourceProfile("https://notwikipedia.org/x") === null && AF.afSourceProfile("https://evilhansard.parliament.uk.example.com/") === null, "a look-alike host does not match a profile");
 ok(AF.afSourceProfile("https://hansard.parliament.uk/x").viewpoint === "uk-parliament" && AF.afSourceProfile("https://en.wikipedia.org/wiki/X").viewpoint === "", "viewpoint labels are standpoints; an encyclopedia has none");
 
