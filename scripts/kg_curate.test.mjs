@@ -77,7 +77,8 @@ L.db.exec("UPDATE papers SET r2_key = 'papers/x.json' WHERE slug = 'alpha-1'");
 const N = (id, label, name, props = "{}") => G.db.exec("INSERT INTO nodes (id, label, name, properties) VALUES (" + [id, label, name, props].map(K.lit).join(",") + ")");
 const E = (id, s, t, r) => G.db.exec("INSERT INTO edges (id, source_id, target_id, relationship_type) VALUES (" + [id, s, t, r].map(K.lit).join(",") + ")");
 for (let i = 1; i <= 3; i++) N("paper:alpha-" + i, "Paper", "ALPHA-" + i); // legacy nodes, no edges
-N("paper:quar-1", "Paper", "Quarantined"); N("paper:ghost", "Paper", "Ghost paper with no living row");
+N("paper:quar-1", "Paper", "Quarantined"); N("paper:ghost", "Paper", "Ghost paper with no living row"); N("paper:ghost-old", "Paper", "An older ghost");
+G.db.exec("UPDATE nodes SET updated_at = '2025-01-01 00:00:00', created_at = '2025-01-01 00:00:00' WHERE id = 'paper:ghost-old'");
 N("archive-record-1", "Paper", "https://papers.qnfo.org/papers", '{"type":"archive"}'); N("archive-record-2", "Paper", "https://papers.qnfo.org/papers", '{"type":"archive"}');
 N("note-1", "Note", "A note"); N("note-2", "Note", "Another note"); E("e-n", "note-1", "note-2", "CONTAINS");
 N("task-1", "Task", "M-001: wire the graph", '{"detail":"needs qnfo-ops and qnfo-memory-mcp changes"}');
@@ -158,6 +159,7 @@ assert.equal(cnt("SELECT COUNT(*) AS n FROM nodes WHERE id = 'goal:g2'"), 0, "re
 assert.equal(cnt("SELECT COUNT(*) AS n FROM nodes WHERE id IN ('issue:4', 'failure-mode:fm-lonely')"), 0, "an audit entity with nothing to link to is not made a node (the curator must not create orphans)");
 assert.equal(cnt("SELECT COUNT(*) AS n FROM edges WHERE source_id = 'issue:5' AND target_id = 'worker:qnfo-workers'"), 0, "the monorepo's own name is not a worker mention");
 assert.equal(cnt("SELECT COUNT(*) AS n FROM edges WHERE source_id = 'issue:5' AND target_id = 'worker:qnfo-ops'"), 1);
+assert.equal(cnt("SELECT COUNT(*) AS n FROM nodes WHERE id = 'paper:ghost-old' AND status = 'ghost'"), 1, "marking a ghost starts its 30 days: an old node is not deleted in the run that marks it");
 assert.equal(G.one("SELECT status FROM nodes WHERE id = 'paper:ghost'").status, "ghost", "a paper node living-paper does not know and no authored edge touches is a ghost");
 assert.equal(cnt("SELECT COUNT(*) AS n FROM edges WHERE relationship_type = 'HAS_ARTIFACT' AND source_id = 'paper:alpha-1' AND target_id = 'r2object-1'"), 1, "an R2Object is linked to its paper by r2_key");
 assert.equal(cnt("SELECT COUNT(*) AS n FROM edges WHERE relationship_type = 'HAS_ARTIFACT' AND source_id = 'paper:alpha-2' AND target_id = 'r2object-2'"), 1, "or by identifier when the key differs");
@@ -237,6 +239,47 @@ assert.ok(G.one("SELECT COUNT(*) AS n FROM kg_tombstone WHERE kind = 'edge' AND 
   const rep = await K.runCurate({ graph: G2, living: L2, audit: A2, embed: async (texts) => texts.map(() => Array.from({ length: 16 }, (_, i) => (i === 0 ? 1 : 0.01 * i))), now: "2026-11-05T10:00:00.000Z", force: true, owner: "t2" });
   assert.equal(rep.phases.semantic.edges.inserted, 0, "twelve identical vectors produce no edge at all");
   assert.ok(rep.phases.semantic.degenerateGroups >= 12);
+}
+
+// ---- review fixes ----------------------------------------------------------------------------------------------------------------
+// an issue that closes, comes back, and the last open issue closing
+{
+  A.db.exec("UPDATE agent_issues SET status = 'closed' WHERE id IN (1, 3, 5)");
+  const r = await K.runCurate({ ...base, now: "2026-11-25T01:00:00.000Z" });
+  assert.equal(r.ok, true);
+  assert.equal(G.one("SELECT status FROM nodes WHERE id = 'issue:1'").status, "closed", "with no open issue left the last issue nodes close (an empty source still sweeps)");
+  assert.ok(cnt("SELECT COUNT(*) AS n FROM edges WHERE source = 'kg:audit-issue' AND status = 'stale'") >= 2, "and their edges go stale");
+  A.db.exec("UPDATE agent_issues SET status = 'open' WHERE id = 1");
+  await K.runCurate({ ...base, now: "2026-11-25T02:00:00.000Z" });
+  assert.equal(G.one("SELECT status FROM nodes WHERE id = 'issue:1'").status, null, "a reopened issue is an active node again");
+  assert.equal(cnt("SELECT COUNT(*) AS n FROM edges WHERE source_id = 'issue:1' AND status = 'active'"), 1, "with its edge active again");
+}
+// the ghost waits 30 days, then goes with a tombstone
+{
+  const r = await K.runCurate({ ...base, now: "2026-12-10T00:00:00.000Z" });
+  assert.equal(cnt("SELECT COUNT(*) AS n FROM nodes WHERE id IN ('paper:ghost', 'paper:ghost-old')"), 0, "ghosts older than 30 days with no link are deleted");
+  assert.equal(cnt("SELECT COUNT(*) AS n FROM kg_tombstone WHERE kind = 'node' AND key = 'paper:ghost-old'"), 1);
+  assert.ok(r.phases.prune.ghosts >= 2);
+}
+// a node is not deleted when an edge has reached it since the graph was read
+{
+  N("race-1", "Project", "Raced Project"); N("race-2", "Project", "Other Project");
+  const ctx = await K.loadContext({ ...base, maxWrites: 1e6, maxDeletes: 100, stats: { writes: 0, deletes: 0 }, phases: {}, warnings: [] });
+  E("e-race", "race-2", "race-1", "RELATES_TO");
+  await K.deleteRows(ctx, "node", ["race-1"], "test race");
+  assert.equal(cnt("SELECT COUNT(*) AS n FROM nodes WHERE id = 'race-1'"), 1, "the database refuses the delete while an edge touches the node");
+  assert.equal(cnt("SELECT COUNT(*) AS n FROM kg_tombstone WHERE key = 'race-1'"), 0, "and nothing is tombstoned for a delete that did not happen");
+}
+// a dry run does not call the paid embedder
+{
+  let calls = 0;
+  await K.runCurate({ ...base, dryRun: true, embed: async (x) => { calls++; return fakeEmbed(x); }, now: "2026-12-11T00:00:00.000Z" });
+  assert.equal(calls, 0, "no embedding call in a dry run");
+}
+// statements are measured in bytes
+{
+  const parts = K.insertBatches("INSERT INTO t VALUES ", Array.from({ length: 800 }, () => "('" + "é".repeat(120) + "')"));
+  assert.ok(parts.every((x) => Buffer.byteLength(x) < 60400), "multi-byte tuples stay under the byte limit");
 }
 
 // ---- dry run changes nothing once the schema exists --------------------------------------------------------------------------

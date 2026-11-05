@@ -26,7 +26,7 @@
 //        complete pass no longer derives, delete stale rows after 14 days with a tombstone copy) instead of a write-only
 //        pile; sweeps refuse to run when a source shrinks by more than 20% or would invalidate more than 10% in one run; nothing
 //        inferred is used as input to inference (phases read tables and the legacy graph, never `kg:` edges, except analytics);
-//        a legacy edge (source IS NULL) is never modified, only read.
+//        a legacy edge (source IS NULL) is never modified, only read (the one exception is a self-loop or dangling edge, tombstoned first).
 // WHERE  Run by scripts/fleet_graph.mjs after the fleet graph (same workflow, same two triggers: push to main and the
 //        qnfo-cloud-ops repository_dispatch), or alone: node scripts/kg_curate.mjs [--dry-run] [--force].
 //        Reads CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. No Claude call anywhere; the only paid call is Workers AI
@@ -88,8 +88,9 @@ const round = (x, d = 4) => Math.round(x * 10 ** d) / 10 ** d;
 export function insertBatches(head, tuples, tail = "", maxLen = 60000, maxRows = 250) {
   const out = []; let cur = []; let size = 0;
   for (const t of tuples) {
-    if (cur.length && (size + t.length > maxLen || cur.length >= maxRows)) { out.push(head + cur.join(", ") + tail); cur = []; size = 0; }
-    cur.push(t); size += t.length + 2;
+    const len = Buffer.byteLength(t); // D1 limits a statement in bytes, and names are not all ASCII
+    if (cur.length && (size + len > maxLen || cur.length >= maxRows)) { out.push(head + cur.join(", ") + tail); cur = []; size = 0; }
+    cur.push(t); size += len + 2;
   }
   if (cur.length) out.push(head + cur.join(", ") + tail);
   return out;
@@ -188,28 +189,32 @@ async function setState(ctx, k, v) {
 const getState = (ctx, k, dflt) => { try { return ctx.state.has(k) ? JSON.parse(ctx.state.get(k)) : dflt; } catch (e) { return dflt; } };
 const NODE_COLS = "id, label, name, properties, created_at, updated_at, status, source, last_seen, h";
 
-// Nodes owned by a source: insert the missing, update the changed (by content hash `h`), never touch a node another writer owns.
+// Nodes owned by a source: insert the missing, update the changed (by content hash `h`, or by a status that differs: a node that came back
+// is no longer closed or stale), never touch a node another writer owns. The in-memory map follows the database only after the statements ran.
 export async function putNodes(ctx, source, nodes, opts = {}) {
   const rep = { inserted: 0, updated: 0, kept: 0, foreign: 0, closed: 0 };
-  const tuples = [], upserts = [], seen = new Set();
+  const tuples = [], upserts = [], seen = new Set(), apply = [];
   for (const n of nodes) {
     if (!n.id || seen.has(n.id)) continue; seen.add(n.id);
     const props = JSON.stringify(n.props || {}), h = sha([n.label, n.name, n.status || "", props].join(EK)).slice(0, 12), ex = ctx.nodes.get(n.id);
     const status = n.status === undefined ? null : n.status;
     const tuple = "(" + [n.id, n.label, String(n.name || n.id).slice(0, 300), props, ctx.now, ctx.now, status, source, ctx.now, h].map(lit).join(", ") + ")";
-    if (!ex) { tuples.push(tuple); rep.inserted++; ctx.nodes.set(n.id, { id: n.id, label: n.label, name: n.name, status, source, h, canonical_id: null, created_at: ctx.now, updated_at: ctx.now }); }
+    if (!ex) { tuples.push(tuple); rep.inserted++; apply.push(() => ctx.nodes.set(n.id, { id: n.id, label: n.label, name: n.name, status, source, h, canonical_id: null, created_at: ctx.now, updated_at: ctx.now })); }
     else if (ex.source !== source) rep.foreign++;
-    else if (ex.h !== h) { upserts.push(tuple); rep.updated++; Object.assign(ex, { label: n.label, name: n.name, status, h, updated_at: ctx.now }); }
+    else if (ex.h !== h || (ex.status || null) !== status) { upserts.push(tuple); rep.updated++; apply.push(() => Object.assign(ex, { label: n.label, name: n.name, status, h, updated_at: ctx.now })); }
     else rep.kept++;
   }
   bump(ctx, rep.inserted + rep.updated); // the cap is checked before the first statement runs
   for (const s of insertBatches("INSERT OR IGNORE INTO nodes (" + NODE_COLS + ") VALUES ", tuples)) await w(ctx, s, 0);
   for (const s of insertBatches("INSERT INTO nodes (" + NODE_COLS + ") VALUES ", upserts, " ON CONFLICT(id) DO UPDATE SET label = excluded.label, name = excluded.name, properties = excluded.properties, status = excluded.status, h = excluded.h, last_seen = excluded.last_seen, updated_at = excluded.updated_at")) await w(ctx, s, 0);
+  for (const f of apply) f();
   if (opts.close) {
     const keep = new Set(nodes.map((n) => n.id)), gone = [];
     for (const n of ctx.nodes.values()) if (n.source === source && !keep.has(n.id) && n.status !== opts.close) gone.push(n.id);
-    for (const c of chunks(gone, 150)) await w(ctx, "UPDATE nodes SET status = " + lit(opts.close) + ", updated_at = " + lit(ctx.now) + " WHERE source = " + lit(source) + " AND id IN (" + inList(c) + ")", c.length);
-    for (const id of gone) ctx.nodes.get(id).status = opts.close;
+    for (const c of chunks(gone, 150)) {
+      await w(ctx, "UPDATE nodes SET status = " + lit(opts.close) + ", updated_at = " + lit(ctx.now) + " WHERE source = " + lit(source) + " AND id IN (" + inList(c) + ")", c.length);
+      for (const id of c) { const n = ctx.nodes.get(id); n.status = opts.close; n.updated_at = ctx.now; }
+    }
     rep.closed = gone.length;
   }
   return rep;
@@ -226,19 +231,20 @@ export async function reconcileEdges(ctx, source, desired, opts = {}) {
   rep.desired = want.size;
   const mine = []; for (const e of ctx.edges.values()) if (e.source === source) mine.push(e);
   const priorActive = mine.filter(isActiveEdge).length;
-  const ins = [], upd = [];
+  const ins = [], upd = [], apply = [];
   const cols = "id, source_id, target_id, relationship_type, properties, created_at, updated_at, source, confidence, weight, status, evidence, last_seen";
   for (const [k, d] of want) {
     const ex = ctx.edges.get(k);
     const wv = d.w == null ? null : round(d.w), cv = d.c == null ? null : round(d.c), ev = d.ev ? JSON.stringify(d.ev) : null;
     const tuple = "(" + [edgeId(d.s, d.r, d.t), d.s, d.t, d.r, "{}", ctx.now, ctx.now, source, cv, wv, "active", ev, ctx.now].map(lit).join(", ") + ")";
-    if (!ex) { ins.push(tuple); ctx.edges.set(k, { id: edgeId(d.s, d.r, d.t), s: d.s, t: d.t, r: d.r, source, c: cv, w: wv, status: "active", inv: null, seen: ctx.now }); rep.inserted++; }
+    if (!ex) { ins.push(tuple); apply.push(() => ctx.edges.set(k, { id: edgeId(d.s, d.r, d.t), s: d.s, t: d.t, r: d.r, source, c: cv, w: wv, status: "active", inv: null, seen: ctx.now })); rep.inserted++; }
     else if (ex.source !== source) rep.collisions++;
-    else if (!isActiveEdge(ex) || Math.abs((ex.w || 0) - (wv || 0)) > 0.002 || Math.abs((ex.c || 0) - (cv || 0)) > 0.002) { upd.push(tuple); Object.assign(ex, { w: wv, c: cv, status: "active", inv: null, seen: ctx.now }); rep.updated++; }
+    else if (!isActiveEdge(ex) || Math.abs((ex.w || 0) - (wv || 0)) > 0.002 || Math.abs((ex.c || 0) - (cv || 0)) > 0.002) { upd.push(tuple); apply.push(() => Object.assign(ex, { w: wv, c: cv, status: "active", inv: null, seen: ctx.now })); rep.updated++; }
   }
   bump(ctx, rep.inserted + rep.updated);
   for (const s of insertBatches("INSERT OR IGNORE INTO edges (" + cols + ") VALUES ", ins)) await w(ctx, s, 0);
   for (const s of insertBatches("INSERT INTO edges (" + cols + ") VALUES ", upd, " ON CONFLICT(id) DO UPDATE SET confidence = excluded.confidence, weight = excluded.weight, status = 'active', invalidated_at = NULL, evidence = excluded.evidence, last_seen = excluded.last_seen, updated_at = excluded.updated_at")) await w(ctx, s, 0);
+  for (const f of apply) f();
   if (opts.sweep !== false) {
     const gone = mine.filter((e) => isActiveEdge(e) && !want.has(ekey(e.s, e.r, e.t)));
     const shrinkKey = "shrink:" + source, shrinks = getState(ctx, shrinkKey, 0), shrank = priorActive >= (ctx.sweepMinSet == null ? 20 : ctx.sweepMinSet) && want.size < SWEEP_MIN_KEEP * priorActive;
@@ -257,23 +263,26 @@ export async function reconcileEdges(ctx, source, desired, opts = {}) {
   return rep;
 }
 
-// Delete rows after copying them whole into kg_tombstone (restorable with one INSERT ... SELECT json_extract).
+// Delete rows after copying them whole into kg_tombstone (restorable with one INSERT ... SELECT json_extract). A node is only deleted while
+// no edge of any kind touches it, checked by the database in the same statement, so an edge another writer added a moment ago keeps its node.
 export async function deleteRows(ctx, kind, ids, reason) {
   if (!ids.length) return 0;
   const room = ctx.maxDeletes - ctx.stats.deletes;
   ids = ids.slice(0, Math.max(0, room));
+  const table = kind === "edge" ? "edges" : "nodes";
+  const guard = kind === "edge" ? "" : " AND NOT EXISTS (SELECT 1 FROM edges x WHERE x.source_id = nodes.id OR x.target_id = nodes.id)";
+  const obj = kind === "edge"
+    ? "json_object('id', id, 'source_id', source_id, 'target_id', target_id, 'relationship_type', relationship_type, 'properties', properties, 'created_at', created_at, 'updated_at', updated_at, 'source', source, 'confidence', confidence, 'weight', weight, 'status', status, 'evidence', evidence, 'last_seen', last_seen, 'invalidated_at', invalidated_at)"
+    : "json_object('id', id, 'label', label, 'name', name, 'properties', properties, 'created_at', created_at, 'updated_at', updated_at, 'status', status, 'source', source, 'canonical_id', canonical_id, 'last_seen', last_seen, 'h', h)";
   for (const c of chunks(ids, 100)) {
     const list = inList(c);
-    const obj = kind === "edge"
-      ? "json_object('id', id, 'source_id', source_id, 'target_id', target_id, 'relationship_type', relationship_type, 'properties', properties, 'created_at', created_at, 'updated_at', updated_at, 'source', source, 'confidence', confidence, 'weight', weight, 'status', status, 'evidence', evidence, 'last_seen', last_seen, 'invalidated_at', invalidated_at)"
-      : "json_object('id', id, 'label', label, 'name', name, 'properties', properties, 'created_at', created_at, 'updated_at', updated_at, 'status', status, 'source', source, 'canonical_id', canonical_id, 'last_seen', last_seen, 'h', h)";
-    await w(ctx, "INSERT INTO kg_tombstone (kind, key, row, reason, deleted_at) SELECT " + lit(kind) + ", id, " + obj + ", " + lit(reason) + ", " + lit(ctx.now) + " FROM " + (kind === "edge" ? "edges" : "nodes") + " WHERE id IN (" + list + ")", c.length);
-    await w(ctx, "DELETE FROM " + (kind === "edge" ? "edges" : "nodes") + " WHERE id IN (" + list + ")", 0);
+    await w(ctx, "INSERT INTO kg_tombstone (kind, key, row, reason, deleted_at) SELECT " + lit(kind) + ", id, " + obj + ", " + lit(reason) + ", " + lit(ctx.now) + " FROM " + table + " WHERE id IN (" + list + ")" + guard, c.length);
+    await w(ctx, "DELETE FROM " + table + " WHERE id IN (" + list + ")" + guard, 0);
     ctx.stats.deletes += c.length;
+    const gone = new Set(c);
+    if (kind === "edge") { for (const [k, e] of ctx.edges) if (gone.has(e.id)) ctx.edges.delete(k); }
+    else for (const id of c) ctx.nodes.delete(id);
   }
-  const gone = new Set(ids);
-  if (kind === "edge") { for (const [k, e] of ctx.edges) if (gone.has(e.id)) ctx.edges.delete(k); }
-  else for (const id of ids) ctx.nodes.delete(id);
   return ids.length;
 }
 
@@ -284,7 +293,9 @@ const paperNodeId = (slug) => "paper:" + slug;
 
 async function loadLiving(ctx) {
   if (ctx.lp) return ctx.lp;
-  const papers = await ctx.living.all("SELECT slug, identifier, r2_key, title, status, doi FROM papers WHERE slug IS NOT NULL AND slug <> ''");
+  // papers.slug has no index and sits after the large body columns of each row: this is the one scan of the table per run; every other read of
+  // paper text goes by the primary key (identifier).
+  const papers = await ctx.living.all("SELECT slug, identifier, r2_key, title, status, doi, updated_at, version FROM papers WHERE slug IS NOT NULL AND slug <> ''");
   const status = new Map(papers.map((p) => [p.slug, p.status]));
   const lp = { papers, status, tags: [], cats: [], cites: [] };
   lp.tags = await ctx.living.all("SELECT slug, tag, rank FROM paper_tag");
@@ -309,13 +320,13 @@ export async function phaseLifecycle(ctx) {
     if (LP_STATUS_NODE.has(st) && n.status !== st) { if (!byStatus.has(st)) byStatus.set(st, []); byStatus.get(st).push(n.id); }
     else if (ACTIVE_LP.has(st) && n.status && LP_STATUS_NODE.has(n.status)) clear.push(n.id);
   }
-  for (const [st, ids] of byStatus) for (const c of chunks(ids, 150)) { await w(ctx, "UPDATE nodes SET status = " + lit(st) + ", updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) ctx.nodes.get(id).status = st; rep.set += c.length; }
-  for (const c of chunks(clear, 150)) { await w(ctx, "UPDATE nodes SET status = NULL, updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) ctx.nodes.get(id).status = null; rep.cleared += c.length; }
+  for (const [st, ids] of byStatus) for (const c of chunks(ids, 150)) { await w(ctx, "UPDATE nodes SET status = " + lit(st) + ", updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) { const n = ctx.nodes.get(id); n.status = st; n.updated_at = ctx.now; } rep.set += c.length; }
+  for (const c of chunks(clear, 150)) { await w(ctx, "UPDATE nodes SET status = NULL, updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) { const n = ctx.nodes.get(id); n.status = null; n.updated_at = ctx.now; } rep.cleared += c.length; }
   // Legacy lifecycle markers: a node its own properties call ARCHIVED / DEPRECATED / RETIRED, and the *_DEPRECATED labels.
-  const arch = await ctx.graph.all("SELECT id FROM nodes WHERE status IS NULL AND json_valid(properties) AND upper(COALESCE(json_extract(properties, '$.status'), '')) IN ('ARCHIVED', 'DEPRECATED', 'RETIRED')");
-  for (const c of chunks(arch.map((r) => r.id), 150)) { await w(ctx, "UPDATE nodes SET status = 'archived', updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) if (ctx.nodes.has(id)) ctx.nodes.get(id).status = "archived"; rep.archived += c.length; }
+  const arch = await ctx.graph.all("SELECT id FROM nodes WHERE status IS NULL AND CASE WHEN json_valid(properties) THEN upper(COALESCE(json_extract(properties, '$.status'), '')) ELSE '' END IN ('ARCHIVED', 'DEPRECATED', 'RETIRED')");
+  for (const c of chunks(arch.map((r) => r.id), 150)) { await w(ctx, "UPDATE nodes SET status = 'archived', updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) if (ctx.nodes.has(id)) { const n = ctx.nodes.get(id); n.status = "archived"; n.updated_at = ctx.now; } rep.archived += c.length; }
   const dep = [...ctx.nodes.values()].filter((n) => n.status == null && /_DEPRECATED$/.test(n.label)).map((n) => n.id);
-  for (const c of chunks(dep, 150)) { await w(ctx, "UPDATE nodes SET status = 'deprecated', updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) ctx.nodes.get(id).status = "deprecated"; rep.deprecated += c.length; }
+  for (const c of chunks(dep, 150)) { await w(ctx, "UPDATE nodes SET status = 'deprecated', updated_at = " + lit(ctx.now) + " WHERE id IN (" + inList(c) + ")", c.length); for (const id of c) { const n = ctx.nodes.get(id); n.status = "deprecated"; n.updated_at = ctx.now; } rep.deprecated += c.length; }
   return rep;
 }
 
@@ -356,7 +367,7 @@ export async function phaseLiving(ctx) {
       if (ctx.nodes.has(to) && ctx.nodes.get(to).status == null) citeEdges.push({ s: from, t: to, r: "CITES", w: 1, c: 1, ev: { internal: true } });
     } else if (r.cited_id && r.cited_kind) {
       const wid = "work:" + String(r.cited_kind).toLowerCase() + ":" + String(r.cited_id).toLowerCase();
-      workNodes.set(wid, { id: wid, label: "ExternalWork", name: (r.cited_title || r.cited_id).slice(0, 200), props: { kind: r.cited_kind, id: r.cited_id, url: r.cited_url || "" } });
+      workNodes.set(wid, { id: wid, label: "ExternalWork", name: String(r.cited_title || r.cited_id).slice(0, 200), props: { kind: String(r.cited_kind).slice(0, 40), id: String(r.cited_id).slice(0, 200), url: String(r.cited_url || "").slice(0, 400) } });
       citeEdges.push({ s: from, t: wid, r: "CITES", w: 1, c: 1, ev: { kind: r.cited_kind } });
     }
   }
@@ -424,6 +435,8 @@ const METRIC_TOKEN = /[a-z][a-z0-9]*_[a-z0-9_]{5,}/g;
 export async function phaseAudit(ctx) {
   const idx = workerIndex(ctx), rep = {}, sets = {};
   const S = (src) => (sets[src] = sets[src] || { nodes: [], edges: [] });
+  // A source whose query succeeded gets its set even when the result is empty: the last open issue closing must close its node and sweep its edge.
+  const rows = async (src, sql) => { const r = await ctx.audit.all(sql); S(src); return r; };
   let metricKeys = new Set();
   const link = (src, from, text, rel, strongOnly, metricRel) => {
     const out = S(src).edges, t = String(text || "").replace(/repo=[\w-]+/g, " ");
@@ -431,12 +444,12 @@ export async function phaseAudit(ctx) {
     if (metricRel) { const seen = new Set(); for (const m of t.match(METRIC_TOKEN) || []) if (metricKeys.has(m) && !seen.has(m) && seen.size < 3) { seen.add(m); out.push({ s: from, t: "metric:" + m, r: metricRel, w: 0.7, c: 0.7 }); } }
   };
   try {
-    const metrics = await ctx.audit.all("SELECT metric, layer, kind, owner FROM metric_registry");
+    const metrics = await rows(SOURCES.auditMetric, "SELECT metric, layer, kind, owner FROM metric_registry");
     metricKeys = new Set(metrics.map((m) => m.metric));
     const trig = await ctx.audit.all("SELECT metric_key, substr(action, 1, 1800) AS a FROM analytics_metric_triggers WHERE enabled = 1");
     for (const m of metrics) { S(SOURCES.auditMetric).nodes.push({ id: "metric:" + m.metric, label: "Metric", name: m.metric, props: { layer: m.layer, kind: m.kind, owner: m.owner || "" } }); link(SOURCES.auditMetric, "metric:" + m.metric, m.owner, "OWNED_BY", false); }
     for (const t of trig) { const mm = CODE_TASK_DIR.exec(t.a || ""); if (mm && idx.names.has(mm[1]) && !AMBIENT_WORKERS.has(mm[1]) && metricKeys.has(t.metric_key)) S(SOURCES.auditMetric).edges.push({ s: "metric:" + t.metric_key, t: "worker:" + mm[1], r: "LEVER_IN", w: 1, c: 1 }); }
-    const prog = await ctx.audit.all("SELECT program_code, objective, primary_metric, guard_metrics, paths FROM program_charters");
+    const prog = await rows(SOURCES.auditProgram, "SELECT program_code, objective, primary_metric, guard_metrics, paths FROM program_charters");
     for (const p of prog) {
       const pid = "program:" + p.program_code, P = S(SOURCES.auditProgram);
       P.nodes.push({ id: pid, label: "Program", name: p.program_code, props: { objective: String(p.objective || "").slice(0, 300) } });
@@ -444,17 +457,17 @@ export async function phaseAudit(ctx) {
       for (const g of String(p.guard_metrics || "").split(/[,;\s]+/).filter((x) => metricKeys.has(x)).slice(0, 8)) P.edges.push({ s: pid, t: "metric:" + g, r: "GUARDED_BY", w: 1, c: 1 });
       link(SOURCES.auditProgram, pid, p.paths, "OWNS_PATH", true);
     }
-    const goals = await ctx.audit.all("SELECT goal_key, substr(statement, 1, 240) AS st, program_code, status FROM goals WHERE COALESCE(status, '') NOT IN ('retired', 'completed', 'closed')");
+    const goals = await rows(SOURCES.auditGoal, "SELECT goal_key, substr(statement, 1, 240) AS st, program_code, status FROM goals WHERE COALESCE(status, '') NOT IN ('retired', 'completed', 'closed')");
     for (const g of goals) { const G = S(SOURCES.auditGoal); G.nodes.push({ id: "goal:" + g.goal_key, label: "Goal", name: g.st || g.goal_key, props: { key: g.goal_key, status: g.status || "" } }); if (g.program_code) G.edges.push({ s: "goal:" + g.goal_key, t: "program:" + g.program_code, r: "PART_OF", w: 1, c: 1 }); }
   } catch (e) { rep.metricsError = String(e.message || e).slice(0, 200); }
   try {
-    for (const f of await ctx.audit.all("SELECT fm_key, substr(failure_mode, 1, 300) AS fm, substr(COALESCE(blast_radius, ''), 1, 500) AS br, substr(COALESCE(remediation, ''), 1, 500) AS rem FROM failure_modes")) {
+    for (const f of await rows(SOURCES.auditFm, "SELECT fm_key, substr(failure_mode, 1, 300) AS fm, substr(COALESCE(blast_radius, ''), 1, 500) AS br, substr(COALESCE(remediation, ''), 1, 500) AS rem FROM failure_modes")) {
       S(SOURCES.auditFm).nodes.push({ id: "failure-mode:" + f.fm_key, label: "FailureMode", name: f.fm || f.fm_key, props: { key: f.fm_key } });
       link(SOURCES.auditFm, "failure-mode:" + f.fm_key, f.fm + " " + f.br + " " + f.rem, "AFFECTS", false, "ABOUT");
     }
   } catch (e) { rep.fmError = String(e.message || e).slice(0, 200); }
   try {
-    for (const i of await ctx.audit.all("SELECT id, substr(title, 1, 240) AS title, priority, category, substr(COALESCE(description, ''), 1, 1600) AS d FROM agent_issues WHERE status = 'open'")) {
+    for (const i of await rows(SOURCES.auditIssue, "SELECT id, substr(title, 1, 240) AS title, priority, category, substr(COALESCE(description, ''), 1, 1600) AS d FROM agent_issues WHERE status = 'open'")) {
       const id = "issue:" + i.id, I = S(SOURCES.auditIssue), before = I.edges.length, mm = CODE_TASK_DIR.exec(i.d);
       I.nodes.push({ id, label: "Issue", name: i.title, props: { id: i.id, priority: i.priority || "", category: i.category || "" } });
       if (mm && idx.names.has(mm[1]) && !AMBIENT_WORKERS.has(mm[1])) I.edges.push({ s: id, t: "worker:" + mm[1], r: "AFFECTS", w: 1, c: 1 });
@@ -463,11 +476,11 @@ export async function phaseAudit(ctx) {
     }
   } catch (e) { rep.issueError = String(e.message || e).slice(0, 200); }
   try {
-    for (const d of await ctx.audit.all("SELECT id, substr(COALESCE(action, ''), 1, 200) AS action, substr(COALESCE(blast_radius, ''), 1, 500) AS br, ts FROM decision_log ORDER BY id DESC LIMIT 300")) {
+    for (const d of await rows(SOURCES.auditDecision, "SELECT id, substr(COALESCE(action, ''), 1, 200) AS action, substr(COALESCE(blast_radius, ''), 1, 500) AS br, ts FROM decision_log ORDER BY id DESC LIMIT 300")) {
       S(SOURCES.auditDecision).nodes.push({ id: "decisionlog:" + d.id, label: "Decision", name: d.action || ("decision " + d.id), props: { id: d.id, ts: d.ts || "" } });
       link(SOURCES.auditDecision, "decisionlog:" + d.id, d.action + " " + d.br, "AFFECTS", false, "ABOUT");
     }
-    for (const c of await ctx.audit.all("SELECT capability, substr(COALESCE(provenance, ''), 1, 500) AS pr, substr(COALESCE(evidence, ''), 1, 500) AS ev FROM capability_ledger")) {
+    for (const c of await rows(SOURCES.auditCap, "SELECT capability, substr(COALESCE(provenance, ''), 1, 500) AS pr, substr(COALESCE(evidence, ''), 1, 500) AS ev FROM capability_ledger")) {
       S(SOURCES.auditCap).nodes.push({ id: "capability:" + c.capability, label: "Capability", name: c.capability, props: {} });
       link(SOURCES.auditCap, "capability:" + c.capability, c.pr + " " + c.ev, "PROVIDED_BY", false);
     }
@@ -487,7 +500,7 @@ export async function phaseAudit(ctx) {
 // identifier (arxiv_id, the 16-hex hash in papers.identifier): a deterministic link, by key first.
 export async function phaseArtifacts(ctx) {
   const lp = await loadLiving(ctx), byKey = new Map(lp.papers.filter((p) => p.r2_key).map((p) => [p.r2_key, p.slug])), byId = new Map(lp.papers.filter((p) => p.identifier).map((p) => [p.identifier, p.slug]));
-  const rows = await ctx.graph.all("SELECT id, json_extract(properties, '$.r2_key') AS k, json_extract(properties, '$.arxiv_id') AS aid FROM nodes WHERE label = 'R2Object' AND status IS NULL AND json_valid(properties)");
+  const rows = await ctx.graph.all("SELECT id, CASE WHEN json_valid(properties) THEN json_extract(properties, '$.r2_key') END AS k, CASE WHEN json_valid(properties) THEN json_extract(properties, '$.arxiv_id') END AS aid FROM nodes WHERE label = 'R2Object' AND status IS NULL");
   const edges = [];
   for (const r of rows) { const slug = byKey.get(r.k) || byId.get(r.aid); if (slug && lpActive(lp, slug)) edges.push({ s: paperNodeId(slug), t: r.id, r: "HAS_ARTIFACT", w: 1, c: 1, ev: { via: byKey.get(r.k) ? "r2_key" : "identifier" } }); }
   return { objects: rows.length, edges: await reconcileEdges(ctx, SOURCES.artifact, edges) };
@@ -505,10 +518,11 @@ export async function phasePaperConcepts(ctx) {
   }
   const anchors = [...alias.entries()].filter(([, ids]) => ids.size === 1).map(([a, ids]) => [" " + a + " ", [...ids][0], a]);
   const active = lp.papers.filter((p) => ACTIVE_LP.has(p.status) && ctx.nodes.has(paperNodeId(p.slug)) && ctx.nodes.get(paperNodeId(p.slug)).status == null);
-  const found = new Map();
+  const found = new Map(), idToSlug = new Map(lp.papers.map((p) => [p.identifier, p.slug]));
   for (const group of chunks(active, 200)) {
-    const rows = await ctx.living.all("SELECT slug, title, substr(COALESCE(abstract, ''), 1, 1800) AS ab FROM papers WHERE slug IN (" + inList(group.map((p) => p.slug)) + ")");
+    const rows = await ctx.living.all("SELECT identifier, title, substr(COALESCE(abstract, ''), 1, 1800) AS ab FROM papers WHERE identifier IN (" + inList(group.map((p) => p.identifier)) + ")");
     for (const r of rows) {
+      r.slug = idToSlug.get(r.identifier);
       const text = " " + normName(r.title + " " + cleanForEmbedding(r.ab)) + " ";
       for (const [a, id, raw] of anchors) if (text.includes(a)) { if (!found.has(id)) found.set(id, []); found.get(id).push({ s: paperNodeId(r.slug), alias: raw }); }
     }
@@ -587,16 +601,17 @@ export async function phaseCoupling(ctx) {
 // -- semantic similarity ---------------------------------------------------------------------------------------------------
 export async function phaseSemantic(ctx) {
   if (!ctx.embed) return { skipped: "no embedder (no Workers AI access in this run)" };
+  if (ctx.dryRun) return { skipped: "a dry run does not embed (nothing would be stored)" };
   const lp = await loadLiving(ctx), rep = {};
   const eligible = lp.papers.filter((p) => ACTIVE_LP.has(p.status) && ctx.nodes.has(paperNodeId(p.slug)) && ctx.nodes.get(paperNodeId(p.slug)).status == null);
-  const meta = new Map((await ctx.living.all("SELECT slug, title, updated_at, version FROM papers WHERE status IN ('published', 'distributed', 'external_preprint', 'kg-backfill')")).map((r) => [r.slug, r]));
+  const meta = new Map(lp.papers.map((r) => [r.slug, r])), idToSlug = new Map(lp.papers.map((p) => [p.identifier, p.slug]));
   const stored = new Map((await ctx.graph.all("SELECT slug, h FROM kg_embed WHERE model = " + lit(EMBED_MODEL))).map((r) => [r.slug, r.h]));
   const noTextMap = getState(ctx, "noText", {}), recent = new Date(Date.parse(ctx.now) - 7 * 86400000).toISOString().slice(0, 10); // a paper with no usable text is retried after a week
-  const todo = eligible.filter((p) => { const m = meta.get(p.slug); return m && stored.get(p.slug) !== sha(EMBED_MODEL + "|" + (m.updated_at || "") + "|" + (m.version || "")).slice(0, 12) && !(noTextMap[p.slug] && noTextMap[p.slug] > recent); });
+  const todo = eligible.filter((p) => { const m = meta.get(p.slug); return m && p.identifier && stored.get(p.slug) !== sha(EMBED_MODEL + "|" + (m.updated_at || "") + "|" + (m.version || "")).slice(0, 12) && !(noTextMap[p.slug] && noTextMap[p.slug] > recent); });
   const batchCap = ctx.maxEmbed;
   let embedded = 0, noText = 0;
   for (const group of chunks(todo.slice(0, batchCap), 25)) {
-    const rows = await ctx.living.all("SELECT slug, title, substr(abstract, 1, 3500) AS ab, CASE WHEN length(COALESCE(abstract, '')) < 400 THEN substr(body_md, 1, 3500) END AS body FROM papers WHERE slug IN (" + inList(group.map((p) => p.slug)) + ")");
+    const rows = (await ctx.living.all("SELECT identifier, title, substr(abstract, 1, 3500) AS ab, CASE WHEN length(COALESCE(abstract, '')) < 400 THEN substr(body_md, 1, 3500) END AS body FROM papers WHERE identifier IN (" + inList(group.map((p) => p.identifier)) + ")")).map((r) => Object.assign(r, { slug: idToSlug.get(r.identifier) }));
     const texts = [], slugs = [];
     for (const r of rows) { const t = embeddingText(r.title, r.ab, r.body); if (!t) { noTextMap[r.slug] = ctx.now.slice(0, 10); noText++; } else { texts.push(t); slugs.push(r.slug); } }
     if (!texts.length) continue;
@@ -844,16 +859,16 @@ export async function phaseAnalytics(ctx) {
   for (const c of chunks(gone, 150)) await w(ctx, "DELETE FROM kg_node_stats WHERE node_id IN (" + inList(c) + ")", c.length);
   // Gaps: papers that relate to nothing, bridges between communities, and link candidates (Adamic-Adar over paper neighbours).
   const gaps = new Map(), gid = (k, s) => k + ":" + s;
-  for (const [x, i] of papers) if (!g.sem[i].some((e) => CONTENT_RELS.has(e.r))) gaps.set(gid("isolated-paper", x.id), { kind: "isolated-paper", subject: x.id, score: 1, detail: { name: x.name } });
+  for (const [x, i] of papers) if (!g.sem[i].some((e) => CONTENT_RELS.has(e.r))) gaps.set(gid("isolated-paper", x.id), { kind: "isolated-paper", subject: x.id, score: 1, detail: { name: String(x.name).slice(0, 120) } });
   const pn = (i) => g.sem[i].filter((e) => CONTENT_RELS.has(e.r) && g.act[e.n].label === "Paper").map((e) => e.n);
   const bridges = [];
   for (const [x, i] of papers) { const cs2 = new Set(pn(i).map((j) => commLabel.get(j)).filter(Boolean)); if (cs2.size >= 3) bridges.push({ x, c: cs2.size, p: pr[i] }); }
-  bridges.sort((a, b) => b.c - a.c || b.p - a.p); for (const b of bridges.slice(0, 25)) gaps.set(gid("bridge-paper", b.x.id), { kind: "bridge-paper", subject: b.x.id, score: b.c, detail: { name: b.x.name, communities: b.c } });
+  bridges.sort((a, b) => b.c - a.c || b.p - a.p); for (const b of bridges.slice(0, 25)) gaps.set(gid("bridge-paper", b.x.id), { kind: "bridge-paper", subject: b.x.id, score: b.c, detail: { name: String(b.x.name).slice(0, 120), communities: b.c } });
   const aa = new Map();
   for (const [, i] of papers) { const nb = pn(i); if (nb.length < 2 || nb.length > 15) continue; const wgt = 1 / Math.log(2 + nb.length); for (let a = 0; a < nb.length; a++) for (let b = a + 1; b < nb.length; b++) { const lo = Math.min(nb[a], nb[b]), hi = Math.max(nb[a], nb[b]), k = lo + "," + hi; aa.set(k, (aa.get(k) || 0) + wgt); } }
   const linked = new Set(); for (const [, i] of papers) for (const j of pn(i)) linked.add(Math.min(i, j) + "," + Math.max(i, j));
   const cand = [...aa.entries()].filter(([k]) => !linked.has(k)).sort((a, b) => b[1] - a[1]).slice(0, 40);
-  for (const [k, sc] of cand) { const [a, b] = k.split(",").map(Number); gaps.set(gid("link-candidate", g.act[a].id + "|" + g.act[b].id), { kind: "link-candidate", subject: g.act[a].id + "|" + g.act[b].id, score: round(sc, 3), detail: { a: g.act[a].name, b: g.act[b].name } }); }
+  for (const [k, sc] of cand) { const [a, b] = k.split(",").map(Number); gaps.set(gid("link-candidate", g.act[a].id + "|" + g.act[b].id), { kind: "link-candidate", subject: g.act[a].id + "|" + g.act[b].id, score: round(sc, 3), detail: { a: String(g.act[a].name).slice(0, 100), b: String(g.act[b].name).slice(0, 100) } }); }
   const oldGaps = new Map((await ctx.graph.all("SELECT id, status, first_seen FROM kg_gap")).map((r) => [r.id, r]));
   const gt = [];
   for (const [id, v] of gaps) { const o = oldGaps.get(id); gt.push("(" + [id, v.kind, v.subject, JSON.stringify(v.detail).slice(0, 400), v.score, "open", o ? o.first_seen : ctx.now, ctx.now].map(lit).join(", ") + ")"); }
@@ -918,18 +933,23 @@ export async function runCurate(opts) {
   const ctx = await loadContext(o);
   const last = getState(ctx, "lastRun", null);
   if (!o.force && last && last.ok && Date.parse(now) - Date.parse(last.at) < o.minIntervalMin * 60000) { report.skipped = "last ok run " + Math.round((Date.parse(now) - Date.parse(last.at)) / 60000) + " min ago (< " + o.minIntervalMin + ")"; report.ok = true; return report; }
-  const lease = getState(ctx, "lease", null);
-  if (!o.dryRun && lease && Date.parse(lease.until) > Date.parse(now) && lease.owner !== o.owner) { report.skipped = "another curator holds the lease until " + lease.until; report.ok = true; return report; }
-  if (!o.dryRun) await setState(ctx, "lease", { owner: o.owner || "kg-curate", until: new Date(Date.parse(now) + 15 * 60000).toISOString() });
+  const held = getState(ctx, "lease", null);
+  if (!o.dryRun && held && Date.parse(held.until) > Date.parse(now) && held.owner !== o.owner) { report.skipped = "another curator holds the lease until " + held.until; report.ok = true; return report; }
+  // A short lease renewed before every phase: a run cancelled by the next push (fleet-graph.yml cancels in progress) blocks the next run for
+  // at most six minutes, not fifteen.
+  const lease = async () => { if (!o.dryRun) await setState(ctx, "lease", { owner: o.owner || "kg-curate", until: new Date(Date.parse(now) + (Date.now() - t0) + 6 * 60000).toISOString() }); };
+  await lease();
   report.before = { nodes: ctx.nodes.size, edges: ctx.edges.size };
   let failed = 0;
   for (const [name, fn] of PHASES) {
     const p0 = Date.now();
+    await lease();
     try { ctx.phases[name] = await fn(ctx); }
     catch (e) { failed++; ctx.phases[name] = { error: String(e && e.message || e).slice(0, 300) }; if (/write cap/.test(String(e.message))) break; }
     ctx.phases[name].ms = Date.now() - p0;
   }
   const ok = failed === 0;
+  if (!ctx.health && !o.dryRun && o.audit) { try { await o.audit.run("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('kg-curate', " + lit(VERSION) + ", " + lit(now) + ", 0) ON CONFLICT(worker) DO UPDATE SET version = excluded.version, ts = excluded.ts, ok = 0"); } catch (e) { ctx.warnings.push("heartbeat: " + String(e.message || e).slice(0, 100)); } }
   try { ctx.phases.publish = await phasePublish(ctx, ok, JSON.stringify({ version: VERSION, failed, writes: ctx.stats.writes, health: ctx.health && { orphan_share: ctx.health.orphan_share, density: ctx.health.edge_density, giant: ctx.health.giant_component_share } })); }
   catch (e) { ctx.phases.publish = { error: String(e.message || e).slice(0, 300) }; }
   if (!o.dryRun) { await setState(ctx, "lastRun", { at: now, ok }); await setState(ctx, "lease", { owner: o.owner || "kg-curate", until: now }); }
