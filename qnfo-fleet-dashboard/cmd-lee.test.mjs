@@ -1,4 +1,4 @@
-// RM-LEE-CMD-1 (qnfo-fleet-dashboard 1.93.0): Lee, the Cloudflare-account assistant, in the fleet command line (GitHub 5482). Proves: the verb parser keeps ordinary lines ordinary ("Lee is
+// RM-LEE-CMD-1 (qnfo-fleet-dashboard 1.95.0): Lee, the Cloudflare-account assistant, in the fleet command line (GitHub 5482). Proves: the verb parser keeps ordinary lines ordinary ("Lee is
 // not a person", "cf cache"), every tool validates its arguments and only reads (no write call is ever issued, even when the model asks for one), a missing token permission is
 // reported as a permission, the route needs the owner session and honours ops_config cmd_lee, the model loop runs as a polled job, and /api/cmd/lee/health reports booleans only.
 // Run: node qnfo-fleet-dashboard/cmd-lee.test.mjs
