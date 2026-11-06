@@ -29,4 +29,6 @@ assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about
 const gen=classify([{bucket:"b",key:"zbw-p5-capstone/paper.md",size:1}],"mentions paper.md somewhere");
 assert.equal(gen[0].orphan,true,"generic name alone does not count as implemented");
 assert.equal(classify([{bucket:"b",key:"zbw-p5-capstone/paper.md",size:1}],"loads zbw-p5-capstone/paper.md")[0].orphan,false,"full key counts");
+assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about: the empty state of the front end page\n", files: ["a.mjs"] }).ok, false, "gap with no fix or issue fails");
+assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about: empty state of the page, fixed with a default row\n", files: ["a.mjs"] }).ok, true, "natural wording fixed passes");
 console.log("r2_doc_audit + self_audit_pr tests passed");

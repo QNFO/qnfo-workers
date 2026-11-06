@@ -17,7 +17,7 @@ export function checkPr({ body = "", files = [] }) {
   if (!section) f.push("missing a 'Self-audit' section");
   if (section && !/real output[:\s]/i.test(s)) f.push("Self-audit has no 'Real output:' line (what the live route, CI run or row actually showed)");
   if (section && !/not thinking about:[ \t]*[^\n]{12,}/i.test(s)) f.push("Self-audit has no 'Not thinking about:' line naming a concrete gap");
-  if (section && !/(fixed in this PR|issue\s*#\d+|code-task:)/i.test(s)) f.push("the named gap has no fix in this PR, issue number or code-task: line");
+  if (section && !/\b(fixed|filed|issue\s*#\d+|code-task:)/i.test(s)) f.push("the named gap has no fix in this PR, issue number or code-task: line");
   const code = files.filter((x) => CODE.test(x));
   const docs = files.filter((x) => DOC.test(x));
   if (docs.length && !code.length) f.push(`docs-only PR (${docs.length} doc files, no code): a document ships with its code`);
