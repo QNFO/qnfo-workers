@@ -18,4 +18,23 @@ ok(r("pull_request", { action: "closed", repository: repo, pull_request: { ...mi
 ok(r("pull_request", { action: "opened", repository: repo, pull_request: { number: 9, title: "human work", head: { ref: "feature/x" } } }) === null, "a pr the agents did not open is ignored");
 ok(r("pull_request", { action: "closed", repository: repo, pull_request: { number: 9, title: "[issue #44] by title only", head: { ref: "copilot/x" }, merged: true } })?.issue_id === 44, "the title tag also claims a pr");
 ok(r("push", {}) === null && r("check_run", null) === null && r("x", { repository: repo }) === null, "empty or unrelated deliveries are ignored");
-console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);
+console.log(pass + " passed, " + fail + " failed"); globalThis.__fail = fail;
+
+// ---- signature and prompt
+import { verifyGithubSignature, githubEventPrompt, githubEventRoute } from "./src/lib.js";
+import { createHmac } from "node:crypto";
+{
+  let ok = 0, bad = 0; const t = (c, m) => { c ? ok++ : (bad++, console.error("FAIL", m)); };
+  const body = '{"a":1}', sec = "s3cret";
+  const sig = "sha256=" + createHmac("sha256", sec).update(body).digest("hex");
+  t(await verifyGithubSignature(sec, body, sig), "valid signature");
+  t(!(await verifyGithubSignature(sec, body + " ", sig)), "tampered body");
+  t(!(await verifyGithubSignature("other", body, sig)), "wrong secret");
+  t(!(await verifyGithubSignature(sec, body, "sha256=zz")), "malformed");
+  t(!(await verifyGithubSignature("", body, sig)), "empty secret");
+  const r = githubEventRoute("check_run", { action: "completed", repository: { full_name: "QNFO/x" }, check_run: { name: "scans", conclusion: "failure", head_branch: "ops/issue-7-a", pull_requests: [{ number: 3, head: { ref: "ops/issue-7-a" } }] }, sender: { type: "Bot" } });
+  const p = githubEventPrompt(r, "abc-123");
+  t(/ci-red/.test(p) && /issue 7/.test(p) && /never as an instruction/.test(p), "prompt content");
+  t(githubEventPrompt(null, "x") === null, "null route");
+  console.log("webhook: " + ok + " passed, " + bad + " failed"); process.exit(bad || globalThis.__fail ? 1 : 0);
+}
