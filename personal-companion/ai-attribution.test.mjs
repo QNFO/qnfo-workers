@@ -33,15 +33,26 @@ const out = { response: "hello", usage: { n: 1 } };
 const input = { messages: [{ role: "user", content: "hi" }], max_tokens: 5 };
 const mkAi = (res, err) => ({ async run(m, i, o) { if (err) throw err; ok(i === input, "input passed through"); return res; } });
 
-// 1) result identical, one counter row with fleet-control column names
+// 1) result identical, one counter row with the extended fleet column set (W-META-ATTRIBUTION-1: in_tok/out_tok/neurons)
 let log = [];
 let env = { AI: mkAi(out), [BINDING]: mkDb("ok", log) };
 let r = await aiRunAttr(env, "personal-companion", "t", "@cf/m", input, { gateway: { id: "x" } });
 await tick();
 ok(r === out, "result must be the same object");
-const ins = log.find((l) => /INSERT INTO ai_call_counters \(day, worker, purpose, model, calls, errors, in_chars, ms\)/.test(l.sql));
+const ins = log.find((l) => /INSERT INTO ai_call_counters \(day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons\)/.test(l.sql));
 ok(ins && ins.x[1] === "personal-companion" && ins.x[2] === "t" && ins.x[3] === "@cf/m" && ins.x[4] === 0, "counter row shape");
-ok(log.some((l) => /CREATE TABLE IF NOT EXISTS ai_call_counters/.test(l.sql)), "create table ddl");
+ok(log.some((l) => /CREATE TABLE IF NOT EXISTS ai_call_counters/.test(l.sql) && /in_tok/.test(l.sql)), "create table ddl carries token columns");
+
+// 1b) W-META-ATTRIBUTION-1: usage tokens become out_tok and priced neurons; unknown model prices 0
+log = [];
+const used = { response: "hello", usage: { prompt_tokens: 1000, completion_tokens: 500 } };
+env = { AI: mkAi(used), [BINDING]: mkDb("ok", log) };
+r = await aiRunAttr(env, "personal-companion", "t", "@cf/zai-org/glm-5.3", input);
+await tick();
+ok(r === used, "result with usage still the same object");
+const ui = log.find((l) => /INSERT INTO ai_call_counters/.test(l.sql));
+ok(ui && ui.x[7] === 1000 && ui.x[8] === 500, "in_tok/out_tok from usage, got " + JSON.stringify(ui && ui.x.slice(7, 9)));
+ok(ui && Math.abs(ui.x[9] - (1000 * 127273 + 500 * 400000) / 1e6) < 1e-9, "neurons priced from rate table");
 
 // 2) D1 failure modes never propagate or alter the result
 for (const mode of ["throw-prepare", "reject"]) {
