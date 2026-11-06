@@ -74,3 +74,8 @@ ok(true, "prep page script parses");
 const home = await (await worker.fetch(new Request("https://x/"), env, { waitUntil() {} })).text();
 ok(home.includes('href="/prep"'), "main page links to /prep");
 console.log(`jobs-judge-pdf (with page): ${pass} checks passed`);
+{ // scorecard attributes: the interview brief names what interviewers will rate and the story that proves each
+  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const ok = src.includes("scorecard_attributes") && src.includes("What interviewers will likely rate");
+  console.log(ok ? "ok scorecard attributes in brief and page" : "FAIL scorecard attributes missing"); if (!ok) process.exitCode = 1;
+}
