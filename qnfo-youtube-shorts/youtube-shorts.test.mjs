@@ -273,3 +273,15 @@ test("script audit flags stock openers, hype, double 'this paper' and a self-wri
   assert.ok(scriptIssues("This paper asks. This paper says so.").some((x) => /this paper/.test(x)));
   assert.ok(scriptIssues("A fact is here. Read the full article in the description.").some((x) => /sign-off/.test(x)));
 });
+
+// YT-AUDIT-1b (0.8.2): found by reading the real scripts of Shorts 23 to 25
+import { beatIssues as bi082, scriptIssues as si082 } from "./worker.js";
+test("storyboard audit flags repeated kinds and low variety", () => {
+  assert.ok(bi082([{ kind: "hook" }, { kind: "flow" }, { kind: "flow" }]).length === 1);
+  assert.ok(bi082([{ kind: "hook" }, { kind: "flow" }, { kind: "list" }, { kind: "flow" }, { kind: "hook" }]).some((x) => /fewer than four/.test(x)));
+  assert.deepEqual(bi082([{ kind: "hook" }, { kind: "flow" }, { kind: "versus" }, { kind: "list" }, { kind: "bignum" }]), []);
+});
+test("script audit flags the stock pivot and a generic closing question", () => {
+  assert.ok(si082("A fact. But here is the catch: it is assumed.").some((x) => /stock pivot/.test(x)));
+  assert.ok(si082("A fact is given. What will you write first?").some((x) => /generic question/.test(x)));
+});
