@@ -1,0 +1,4 @@
+NOTE the margin depends on N: 7 named levers clear the floor of 10 while N <= 70; at N = 51 the margin over ceil(10 percent) is 1, at N = 50 it is 2 (the live count moves with every refresh)
+NOTE if all three fixed breaches recover the share is 8.3 (4 of 48): each lever that lands needs the next breach to name its doer
+NOTE 1 anchor(s) written by migrations before 2026-10-19-breach-code-task-anchors.sql do not occur exactly once on this checkout (not judged from the repository; repoint by migration while the trigger is in breach): metric:owner_signal_share_30d idea-hub/worker.js x0
+code-anchor-once: 154 pass, 0 fail

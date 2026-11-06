@@ -1,0 +1,35 @@
+PR-FAST-GUARDS: base f220af485d6d335359b3fcaa5f58bbae720320a3; running narrative-prompt-guard, worker-load-gate, metric-cause, code-anchor-once, d1-like-limit, workers-standards-guard, kaizen-gates
+::group::narrative-prompt-guard (exit 0)
+NARRATIVE-PROMPT-GUARD-1 PASS: 157 narrative source(s) clean + 1 anchor set(s) present
+REGRESSION-GATE pass {"name": "narrative-prompt-guard"}
+::endgroup::
+::group::worker-load-gate (exit 0)
+MERGE-BOUNDARY-GATE-1 worker load gate: 79 of 79 worker entries load, 0 failed (every worker directory)
+REGRESSION-GATE pass {"name": "worker-load-gate"}
+::endgroup::
+::group::metric-cause (exit 0)
+53 passed, 0 failed
+REGRESSION-GATE pass {"name": "metric-cause"}
+::endgroup::
+::group::code-anchor-once (exit 0)
+NOTE the margin depends on N: 7 named levers clear the floor of 10 while N <= 70; at N = 51 the margin over ceil(10 percent) is 1, at N = 50 it is 2 (the live count moves with every refresh)
+NOTE if all three fixed breaches recover the share is 8.3 (4 of 48): each lever that lands needs the next breach to name its doer
+NOTE 1 anchor(s) written by migrations before 2026-10-19-breach-code-task-anchors.sql do not occur exactly once on this checkout (not judged from the repository; repoint by migration while the trigger is in breach): metric:owner_signal_share_30d idea-hub/worker.js x0
+code-anchor-once: 155 pass, 0 fail
+REGRESSION-GATE pass {"name": "code-anchor-once"}
+::endgroup::
+::group::d1-like-limit (exit 0)
+D1-LIKE-LIMIT-GUARD-1: 0 violation(s) added
+REGRESSION-GATE pass {"name": "d1-like-limit"}
+::endgroup::
+::group::workers-standards-guard (exit 0)
+SPOF-REVIEW-GATE-1: ok (the change adds no cron, D1 trigger, external host or credential)
+WORKERS-STANDARDS-GUARD-1: ok (2 changed files checked against 515c1da2065d95c0379a6ed69b9af98ec188b05f)
+REGRESSION-GATE pass {"name": "workers-standards-guard"}
+::endgroup::
+::group::kaizen-gates (exit 0)
+KAIZEN-GATES: 6 gate(s), 0 violation(s)
+REGRESSION-GATE pass {"name": "kaizen-gates"}
+::endgroup::
+PR-FAST-GUARDS: 7 guard(s), 0 blocked
+pr_fast_guards exit 0

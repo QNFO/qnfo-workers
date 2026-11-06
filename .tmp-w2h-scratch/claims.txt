@@ -1,0 +1,5 @@
+{"key":"file:qnfo-ai/worker.js","acquired":true,"token":"zjkglnwkv8ks25a9","holder":"W2-H-3257","expires_at":"2026-11-05T05:33:14.612Z","in_flight":[],"fence":71}
+{"key":"file:qnfo-ai/deployed-current.worker.js","acquired":true,"token":"cq67yfu7crhr5z4i","holder":"W2-H-3257","expires_at":"2026-11-05T05:33:15.097Z","in_flight":[],"fence":9}
+{"key":"file:qnfo-ai/wrangler.toml","acquired":true,"token":"sggulx3zezmjtncl","holder":"W2-H-3257","expires_at":"2026-11-05T05:33:15.493Z","in_flight":[],"fence":2}
+{"key":"file:qnfo-ai/probes.json","acquired":true,"token":"u6ctkqdwnrd3rypz","holder":"W2-H-3257","expires_at":"2026-11-05T05:33:16.020Z","in_flight":[],"fence":1}
+{"key":"file:migrations/2026-11-05-bs-qsmall-cascade-shadow.sql","acquired":true,"token":"h5psyr5cc9olg4oh","holder":"W2-H-3257","expires_at":"2026-11-05T05:33:16.625Z","in_flight":[],"fence":1}

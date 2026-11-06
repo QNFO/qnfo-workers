@@ -1,0 +1,104 @@
+name = "qnfo-fleet-dashboard"
+main = "worker.js"
+account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
+compatibility_date = "2026-10-10"
+workers_dev = true
+
+# Bindings mirror the live worker (verified 2026-10-17 via /settings).
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[ai]
+binding = "AI"
+
+[vars]
+SOCIAL_WEEKLY_CAP = "21"
+SOCIAL_ALLOW_Q08 = "1"
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[d1_databases]]
+binding = "GRAPH"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[d1_databases]]
+binding = "IDENTITY"
+database_name = "qnfo-identity"
+database_id = "6c26125a-908a-4774-9812-f1f0e60afc5f"
+
+[[d1_databases]]
+binding = "LIVING"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[d1_databases]]
+binding = "OUTREACH"
+database_name = "qnfo-outreach"
+database_id = "d5077252-8187-41b2-a44e-f84f8724ee36"
+
+[[d1_databases]]
+binding = "Q08"
+database_name = "q08-signal"
+database_id = "10fd74b7-c4b3-43c7-9ca5-855213f44a69"
+
+[[kv_namespaces]]
+binding = "FLEET_CFG"
+id = "d3768b93a76640be83151b00a8b42717"
+
+[[services]]
+binding = "SVC_PERSONAL_API"
+service = "personal-api"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_CLOUD_OPS"
+service = "qnfo-cloud-ops"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_FLEET_CONTROL"
+service = "qnfo-fleet-control"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_IPATENT"
+service = "qnfo-ipatent"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_OPS"
+service = "qnfo-ops"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_PAPER_REVISER"
+service = "qnfo-research-exec"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_RESEARCH_EXEC"
+service = "qnfo-research-exec"
+environment = "production"
+
+[[send_email]]
+name = "SEND_EMAIL"
+allowed_destination_addresses = ["rwnquni@outlook.com"]
+
+[triggers]
+crons = ["*/15 * * * *"]

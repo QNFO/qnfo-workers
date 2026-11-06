@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "idea-hub" generated at 2026-10-17T14:25:13.046Z.

@@ -1,0 +1,456 @@
+4980	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000539] CODE-LOOP-EXHAUSTED-1: ct_im99906 qnfo-fleet-dashboard/worker.js
+4975	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000538] PAPER-LEARN-1: apply universal-ignorance-audit to the fleet
+4972	2026-10-26	2026-10-26	fleet-issue,program:research,kind:research	[#1000537] VERIFY-AUTOCORRECT-PRECISION-1: the verify autocorrection replaces a stated result by the script va
+4971	2026-10-26	2026-10-26	fleet-issue,program:research,kind:research	[#1000536] REVIEW-TRIAGE-CLAIM-1: review triage demotes every HARD finding as drift because it looks for quote
+4970	2026-10-26	2026-10-26	fleet-issue,program:research,kind:research	[#1000535] DEGENERATE-TEXT-PRODUCER-1: qnfo-research-exec keeps a model loop as the paper, has no repetition g
+4967	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000534] METRIC-UNMEASURED-1: qnfo-gateway has metrics with no value
+4962	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000533] METRIC-TRIGGER-14527-TURNSTILE-ON-PUBLIC-FORMS: BP26 turnstile_on_public_forms off target
+4961	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000532] METRIC-TRIGGER-14526-SECURITY-HEADERS-PASS: BP26 security_headers_pass off target
+4960	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000531] METRIC-TRIGGER-14517-DEPLOYS-VIA-GRADUAL: BP26 deploys_via_gradual off target
+4959	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000530] METRIC-TRIGGER-14516-AI-CACHE-HIT-RATE: BP26 ai_cache_hit_rate off target
+4958	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000529] METRIC-TRIGGER-14515-GATEWAY-COVERAGE: BP26 gateway_coverage off target
+4957	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000528] METRIC-TRIGGER-14514-KV-USED-FOR-LOCKING: BP26 kv_used_for_locking off target
+4956	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000527] METRIC-TRIGGER-14513-PRE-MIGRATION-BOOKMARK-RECORDED: BP26 pre_migration_bookmark_recorded off targ
+4955	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000526] METRIC-TRIGGER-14510-WORKERS-WITH-SOURCE-MAPS: BP26 workers_with_source_maps off target
+4954	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000525] METRIC-TRIGGER-14507-RFC8058-HEADERS-PRESENT: BP26 rfc8058_headers_present off target
+4953	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000524] METRIC-TRIGGER-14506-DMARC-ALIGNED-PASS-RATE: BP26 dmarc_aligned_pass_rate off target
+4952	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000523] METRIC-TRIGGER-14505-THIRD-PARTY-TRACKERS: BP26 third_party_trackers off target
+4951	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000522] METRIC-TRIGGER-14504-NON-ESSENTIAL-COOKIES-SET: BP26 non_essential_cookies_set off target
+4950	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000521] METRIC-TRIGGER-14498-AI-INTERACTION-DISCLOSURE: BP26 ai_interaction_disclosure off target
+4949	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000520] METRIC-TRIGGER-14497-AI-LABEL-COVERAGE: BP26 ai_label_coverage off target
+4948	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000519] METRIC-TRIGGER-14495-SOCIAL-BOT-LABEL-ENABLED: BP26 social_bot_label_enabled off target
+4947	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000518] METRIC-TRIGGER-14494-A11Y-VIOLATIONS-SERIOUS: BP26 a11y_violations_serious off target
+4946	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000517] METRIC-TRIGGER-14489-STRUCTURED-DATA-VALID: BP26 structured_data_valid off target
+4939	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000516] IL-TRIGGER-AWARE-1: IMPROVEMENT-LOOP-1 files a METRIC-REGRESSION-1 ticket for a metric whose enable
+4938	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000515] IL-OWNER-OUTCOME-1: IMPROVEMENT-LOOP-1 files METRIC-REGRESSION-1 and METRIC-FIX-RELAPSED-1 tickets 
+4934	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000514] PR-SLA-METRIC-CADENCE-1: pr_open_over_10m is written every 50 minutes by its trigger throttle while
+4933	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000513] BREACH-UNMAPPED-1: breaching metrics with no metric_breach_cause row, so the breach view and the gu
+4932	2026-10-26	2026-10-26	fleet-issue,program:reach,kind:enhancement	[#1000512] Q08-FORECAST-LEDGER-1: forecast ground = the source essay + a research ledger of verbatim sentences
+4931	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000511] STALE-PR-CHECK-REPAIR-1 PR 4899: guard failing on a green, quiet session pull request
+4929	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000509] NOTICE-REPAIR-STALE-METRIC-1: register the age of the oldest retracted owner paper that has a full 
+4928	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000508] TERMINAL-RESOLVE-PARKED-POISON-1: the generic closing probe of a RESEARCH-TERMINAL issue does not r
+4927	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000507] PROBE-SEMICOLON-LINT-1: scripts/apply_migrations.py --check does not refuse a semicolon inside a d1
+4926	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000506] WORKERS-STANDARDS-200-ONLY-1: qnfo-ops/worker.js github_pr_close accepts only HTTP 200 after a PATC
+4911	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000505] PAPER-LEARN-1: apply ignorance-ai-pipeline-synthesis to the fleet
+4909	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000503] CHAOS-DRILL-FAILED-1: control:loop-owned-contract-park
+4908	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:owner	[#1000502] OWNER-TASK-op-mvpomml8efa6: Implement agent issue 100596: fetch the issue's full requirements from 
+4907	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000501] TP-2.5-FLEET-EXEC-SINGLE-DISPATCHER-1: fleet-exec */10 becomes the single dispatcher for every sche
+4889	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000500] FIRST-PASS-CLOSE-2: qnfo-fleet-control remediationContractsTick writes the pass row before it stamp
+4888	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000499] LOOP-BREAKER-1: qnfo-ops: github_issue_get: repo (owner/name) and number required
+4881	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000495] METRIC-TRIGGER-14830-EVOLVE-PARSE-PASS-PCT-7D: Autonomy gap: evolve proposals die at the parse step
+4880	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000494] EVAPI-5XX-RETRY-1: evApi logs an error group for a transient GitHub 502 and returns no body
+4879	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000493] JOURNEY-CLOSE-CONTRACT-AWARE-1: jrnIssue tries to close a journey issue the close trigger refuses, 
+4878	2026-10-26	2026-10-26	fleet-issue,program:reach,kind:enhancement	[#1000492] EMAIL-OWNER-CODE-VIOLATION-NOISE-1: all 22 unresolved consent-violation rows are the owner's own si
+4877	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000491] CODE-ORCH-WALL-STALL-1: qnfo-code-orchestrator scheduled invocations stall at the 15 minute wall li
+4876	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000490] OWNER-LOCAL-CLIENT-TAG-1: owner-local desktop spend (242.43 USD in 30 days) cannot be split by clie
+4824	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000486] METRIC-TRIGGER-14503-PII-IN-LOGS: BP26 pii_in_logs off target
+4822	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000484] METRIC-REGRESSION-1: ask_error_rate_7d
+4808	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000482] METRIC-TRIGGER-14534-AGENT-TOOL-CALLS-OUTSIDE-ALLOWLIST: BP26 agent_tool_calls_outside_allowlist of
+4807	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000481] METRIC-TRIGGER-14502-RECORDS-PAST-RETENTION: BP26 records_past_retention off target
+4788	2026-10-26	2026-10-26	fleet-issue,program:research,kind:research	[#1000477] PAPER-AUDIENCES-1: the paper writer prompt never asks for the general, cross-disciplinary relevance
+4787	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000476] PLAIN-STANDARD-1: 348 of 704 published plain-language summaries are above grade 9 and 224 above gra
+4786	2026-10-26	2026-10-26	fleet-issue,program:research,kind:research	[#1000475] CLAIM-ERRATA-SHARE-1: claimNew never claims an errata remediation row while any proposal or resumab
+4785	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:research	[#1000474] RB-ERRATA-SHARE-1: 174 never-claimed errata remediation rows fill the whole research ready queue (c
+4784	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000473] METRIC-UNMEASURED-1: qnfo-ai-search has metrics with no value
+4772	2026-10-26	2026-10-26	fleet-issue,program:research,kind:research	[#1000472] RESEARCH-ERRATA-CLAIM-1: none of the 233 errata remediation rows has ever been claimed (0 in 8 days
+4733	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000467] METRIC-FIX-RELAPSED-1: papers_live_failing_release_gate
+4724	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000463] VERIFICATION-DEFERRED-7D-1: goal-TP-9-DEPLOY-PATH-NO-LOCKOUT-1
+4712	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000459] TRIGGER-FLAP-1: METRIC-TRIGGER tickets close and reopen in a loop (167 reopens on 44 tickets in 7 d
+4709	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000458] ATTENTION-UNMEASURED-1: the attention scorecard counts unmeasured posts as items with zero engageme
+4694	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000450] LOOP-BREAKER-1: qnfo-code-orchestrator: fleet_tick_heavy: D_ERROR: triggers nested too deep: SQLITE
+4693	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000449] LOOP-BREAKER-1: qnfo-code-orchestrator: fleet_tick: D_ERROR: triggers nested too deep: SQLITE_ERROR
+4659	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000443] TOOL-FAILURE: web_search [error]
+4642	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000434] METRIC-TRIGGER-14730-ORPHAN-ISSUES-NO-LIVE-PATH: Open issues have no live closing path
+4639	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000433] BREACH-DOCTOR-1: PN-R2 qnfo-fleet-control
+4637	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000431] BREACH-DOCTOR-1: MD-P1c qnfo-fleet-control a recovered trigger issue closes after 3 refresh cadence
+4636	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000430] BREACH-DOCTOR-1: MD-P1b qnfo-fleet-control an operator outside gt, gte, lt, lte, eq is unreadable, 
+4635	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000429] BREACH-DOCTOR-1: MD-P1a qnfo-fleet-control evaluateMetricTriggers dedupes a trigger issue by trigge
+4633	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000427] BREACH-DOCTOR-1: TD-D1Q-REJECT qnfo-ops
+4629	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000425] BREACH-DOCTOR-PHASE-B-1: v_issue_age_ladder counts a live breach doctor lease as a doer
+4598	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000416] METRIC-TRIGGER-14350-POST-DEPLOY-ERROR-WORKERS: A worker's errors tripled after its latest deploy o
+4569	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000404] METRIC-TRIGGER-14603-BREACHES-AUTO-REMEDIATED-24H: The doctor verified fewer than 12 remediations i
+4568	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000403] METRIC-TRIGGER-14602-BREACHES-UNDIAGNOSED-OVER-60M: Open issues with no doer wait without a diagnos
+4565	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000399] BREACH-DOCTOR-RETIRE-1: retire the two older writers the doctor replaces (deploy_merge_age_tick and
+4557	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000394] TOOL-MISS-NOT-FAILURE-1 (b): logToolEvent records a not_found tool result as status ok
+4536	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000391] METRIC-TRIGGER-14558-METRICS-WORSENING-7D: Metrics in breach that have not improved in 7 days
+4534	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000389] METRIC-UNMEASURED-1: qnfo-social has metrics with no value
+4533	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000388] METRIC-UNMEASURED-1: qnfo-paper-indexer has metrics with no value
+4531	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000386] METRIC-UNMEASURED-1: q08-signal-engine has metrics with no value
+4529	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000384] METRIC-UNMEASURED-1: personal-companion has metrics with no value
+4514	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000375] LOOP-BREAKER-1: qnfo-ops: upstream 429 at callDeepSeekStream (deep
+4485	2026-10-26	2026-10-26	roadmap,program:ops,kind:enhancement	[RM-1419] GL-BP26-CATALOGUE: BP26 best-practice catalogue implemented fleet-wide (30 practices, 56 metrics)
+4480	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000364] METRIC-TRIGGER-14542-BP26-ISSUES-OPEN: BP26 catalogue practices not yet implemented
+4479	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000363] METRIC-TRIGGER-14541-BP26-METRICS-UNMEASURED: BP26 catalogue metrics still unmeasured
+4457	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000361] BP26-LEASES-KILLSWITCH-1: Concurrency control: Durable Object leases with fencing tokens, per-itera
+4456	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000360] BP26-EVALS-1: Golden-set evaluations with seeded false claims as canaries; evals gate prompt, model
+4455	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000359] BP26-PROMPT-INJECTION-1: Prompt-injection and goal-hijack defences for agents that read email, web 
+4454	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000358] BP26-AGENT-CHANGE-GATES-1: Change management for agent-authored code: required gates, dependency al
+4453	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000357] BP26-SLO-ERROR-BUDGETS-1: SLOs and error budgets per user-facing surface with automatic blameless p
+4452	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000356] BP26-EDGE-SECURITY-1: Edge security baseline: secure headers on every public host, Turnstile on pub
+4450	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000354] BP26-OBSERVABILITY-1: Workers Logs and Traces on every Worker with structured logs; re-baseline log
+4428	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000352] BP26-GRADUAL-DEPLOYS-1: Versions, health-gated gradual deployments and automatic rollback on error-
+4427	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000351] BP26-AI-GATEWAY-BUDGETS-1: Every model call through AI Gateway with caching, rate limits, spend lim
+4426	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000350] BP26-R2-KV-USAGE-1: R2 as source of truth for artifacts, KV only for eventually-consistent config a
+4425	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000349] BP26-D1-DISCIPLINE-1: D1 discipline: indexed hot queries, batched transactional writes, Sessions AP
+4424	2026-10-26	2026-10-26	fleet-issue,program:infra,kind:enhancement	[#1000348] BP26-WORKERS-BP-LINT-1: Cloudflare Workers Best Practices as the fleet CI lint baseline
+4423	2026-10-26	2026-10-26	fleet-issue,program:reach,kind:enhancement	[#1000347] BP26-EMAIL-AUTH-1: Email sending: SPF, DKIM and aligned DMARC on every sending domain, RFC 8058 one
+4422	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000346] BP26-AI-ACT-ARTICLE4-1: EU AI Act Article 4 AI literacy evidence and provider/deployer classificati
+4421	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000345] BP26-NO-TRACKING-1: Cookies and tracking: strictly necessary cookies only, cookieless aggregate ana
+4420	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000344] BP26-RETENTION-1: Data minimisation and retention: TTL sweeps, payload logging off for mail, no raw
+4417	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000341] BP26-AI-ACT-ART50-1: EU AI Act Article 50: visible AI labels on all AI-generated public content and
+4416	2026-10-26	2026-10-26	fleet-issue,program:reach,kind:enhancement	[#1000340] BP26-SOCIAL-AUTOMATION-1: Automated social posting within platform rules: bot labels, official APIs
+4415	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000339] BP26-WCAG22-1: Accessibility: WCAG 2.2 AA on every public template, checked by axe-core in CI
+4414	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000338] BP26-PAPER-PIDS-1: Reproducible living papers: immutable version URLs, content hashes, CITATION.cff
+4413	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000337] BP26-FORECAST-HYGIENE-1: Forecast hygiene: complete resolution criteria, immutable timestamps, upda
+4412	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000336] BP26-STRUCTURED-DATA-1: Structured data and authorship signals without fakery (schema.org Article/S
+4411	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000335] BP26-PROVENANCE-MARKING-1: Machine-readable AI-provenance marking (C2PA manifests for PDFs and imag
+4410	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000334] BP26-CORRECTIONS-FEED-1: Public corrections and retractions feed per property following COPE Retrac
+4409	2026-10-26	2026-10-26	fleet-issue,program:research,kind:enhancement	[#1000333] BP26-CLAIM-LEDGER-1: Claim-level provenance ledger with a dual-verifier gate for every published fa
+4395	2026-10-26	2026-10-26	ci-watchdog	[ci-watchdog] action-result: github-settings-actions delete-stuck-runs live
+4378	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000321] LOOP-BREAKER-1: qnfo-ops: workspace_grep: pattern required
+4376	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:research	[#1000319] PUB-ARTIFACT-LEFTOVERS-1: 38 published papers still carry the leaked Appendix A and B (owner papers
+4374	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:research	[#1000317] PAPER-LEDGER-ATTRIBUTION-2: research-exec and errata writers set change_actor and change_reason on 
+4372	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:research	[#1000316] RESEARCH-PROVENANCE-LIVE-1: three consolidated deposits in research_run_ledger and no deposit failu
+4371	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:research	[#1000315] ENSEMBLE-REPO-ARCHIVED-1: QNFO/qnfo-ensemble-research archived after its history is linked into qnf
+4366	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000310] ROOT-CAUSE-1: PORTFOLIO-GAP keeps recurring
+4365	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000309] ROOT-CAUSE-1: METRIC-TRIGGER-8888 keeps recurring
+4364	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000308] ROOT-CAUSE-1: METRIC-TRIGGER-8581 keeps recurring
+4363	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000307] ROOT-CAUSE-1: METRIC-TRIGGER-8559 keeps recurring
+4362	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000306] ROOT-CAUSE-1: METRIC-TRIGGER-5182 keeps recurring
+4361	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000305] ROOT-CAUSE-1: METRIC-REGRESSION-1 keeps recurring
+4360	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000304] ROOT-CAUSE-1: METRIC-REGISTRY-STALENESS-1 keeps recurring
+4359	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000303] ROOT-CAUSE-1: LOOP-BREAKER-1 keeps recurring
+4358	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000302] ROOT-CAUSE-1: FLEET-JOURNEY-FAILED-1 keeps recurring
+4357	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000301] ROOT-CAUSE-1: CF-OBS-ISSUE-1 keeps recurring
+4340	2026-10-26	2026-10-26	fleet-issue,program:research,kind:fix	[#1000290] METRIC-TRIGGER-14426-GOLDEN-RUN-COMPLEMENT-SHARE-30D: Golden-run evaluation reports one quantity tw
+4339	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000289] METRIC-TRIGGER-14424-PAPERS-WITH-OPEN-HIGH-ERRATA-PCT: Published papers carry known defects: over a
+4330	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000286] METRIC-REGRESSION-1: blocker_survival_rate_7d
+4304	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000275] GITHUB-STUCK-RUNS-1: six workflow runs are wedged inside GitHub and cannot be cancelled or deleted 
+4301	2026-10-26	2026-10-26	fleet-issue,program:research,kind:fix	[#1000274] METRIC-TRIGGER-14349-PUBLISH-RATE-RATIO-24H: Publishing fell under 40% of its 7-day rate
+4291	2026-10-26	2026-10-26	fleet-issue,program:reach,kind:enhancement	[#1000268] Q08-FORECAST-RESEARCH-1: forecast mode cannot produce researched forecasts by construction (single-
+4289	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000266] BREACH-DOCTOR-1: the fleet does not diagnose and remediate its own unowned breaches (owner directiv
+4266	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000257] BREACH-SELFHEAL-ROLLBACK-1: post-deploy error spike detected but no automatic rollback path
+4246	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000248] CODE-LOOP-EXHAUSTED-1: ct_im100625 qnfo-research-exec/worker.js
+4243	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000247] DOCTRINE-AUDIT-2026-W44
+4241	2026-10-26	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#1000245] METRIC-REGRESSION-1: driver_drain_24h
+4153	2026-10-25	2026-10-25	fleet-issue,program:ops,kind:fix	[#1000216] METRIC-TRIGGER-14017-PRD-FUNNEL-MISSING-TRANSITIONS: PRD-FUNNEL-TRANSITION-1: publication evidence 
+4120	2026-10-25	2026-10-25		Restore the reading sitemap endpoint
+4060	2026-10-25	2026-10-25	fleet-issue,program:ops,kind:enhancement	[#1000193] AUTONOMY-FIRST-REROUTE-1: Portfolio: AI spend above the A9 ceiling
+4059	2026-10-25	2026-10-25	fleet-issue,program:ops,kind:enhancement	[#1000192] fleet_budget caps breached: workers 35>30, d1 11>10, ai_spend:workers-ai 787.72>95; cost sources di
+4001	2026-10-25	2026-10-26	fleet-issue,program:infra,kind:fix	[#1000144] CF-OBS-ISSUE-1: qnfo-ai: HttpServerError · HTTP 502
+3989	2026-10-25	2026-10-25	fleet-issue,program:ops,kind:fix	[#1000156] CENSUS-TOMBSTONE-1: a retired 410 stub is registered state=live, and retiring it naively breaks wor
+3981	2026-10-25	2026-10-25	fleet-issue,program:ops,kind:owner	[#1000152] qnfo-skill-sync: R2 prompts/skills/ mirror stale (2026-08-31) vs cloudflare/skills HEAD 86505e4
+3961	2026-10-25	2026-10-25	fleet-issue,program:ops,kind:enhancement	[#1000140] AGENT-WS-REACTIVATION-1: resolve the consumer and fleet-cap prerequisites before reactivating qnfo-
+3951	2026-10-25	2026-10-25	roadmap,program:infra,kind:fix	Actions cost optimization: fleet-wide backlog (incl. ops endpoint)
+3946	2026-10-25	2026-10-25		ACTIONS-COST-1: finish Actions cost remediation (mind wrangler observability, worktree rebase, root-cause audi
+3867	2026-10-24	2026-10-26	fleet-issue,program:ops,kind:fix	[#1000067] WORKFLOW-FAILED-1: fleet-autodeploy
+3819	2026-10-24	2026-10-24	fleet-issue,program:ops,kind:fix	[#1000038] METRIC-TARGET-UNREACHABLE-1: breach_code_task_pct target 30 is not honest — 53 of 62 breaching trig
+3812	2026-10-24	2026-10-24	fleet-issue,program:research,kind:enhancement	[#1000031] COST-LEVER-1: qnfo-research-exec is 73.6% of Workers AI spend (19.35M/26.34M neurons per 30d); bulk
+3785	2026-10-24	2026-10-24	fleet-issue,program:reach,kind:research	[#1000005] RESEARCH-DRAIN-STALL-1: watchdog reaps active rows to stage=ground; 194-row queue head 40 days old,
+3782	2026-10-24	2026-10-24	fleet-issue,program:ops,kind:enhancement	[#1000002] Integration chain "Errata watch -> respond -> publish" backpressured: 12 waiting (pending <= 10)
+3772	2026-10-24	2026-10-24	fleet-issue,program:research,kind:fix	[#100629] research throughput capped by single-flight lease; parallelism knobs are inert
+3766	2026-10-24	2026-10-24	fleet-issue,program:research,kind:research	[#100625] PARK-REARM-1 leaves rows in an unclaimable orphan state (status=queued + stage=revise, claimed_at NU
+3765	2026-10-24	2026-10-24	fleet-issue,program:research,kind:research	[#100624] research_queue.revise_count is a dead column: max=0 across 1,362 rows, retry ceiling can never fire
+3763	2026-10-24	2026-10-24	fleet-issue,program:research,kind:research	[#100622] COST-SUSTAIN-1 pace gate hard-stops the entire research pipeline (front-load then multi-hour idle)
+3756	2026-10-24	2026-10-24	fleet-issue,program:research,kind:enhancement	[#100615] REVISE-NOOP-LIVELOCK-1: revise stage re-queues on applied=0, 1282 noop rounds over 257 rows
+3744	2026-10-24	2026-10-26	fleet-issue,program:reach,kind:fix	[#100607] Q08-PUBLISH-STALL-AUTO-1: q08-signal-engine published nothing in the last 3 runs and 8h since the la
+3701	2026-10-24	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#100574] METRIC-REGRESSION-1: human_wait_oldest_min
+3700	2026-10-24	2026-10-24	fleet-issue,program:ops,kind:enhancement	[#100573] METRIC-REGRESSION-1: fleet_journeys_failing
+3699	2026-10-24	2026-10-24	fleet-issue,program:ops,kind:enhancement	[#100572] METRIC-REGRESSION-1: improvement_rate_7d
+3693	2026-10-23	2026-10-24	fleet-issue,program:reach,kind:fix	[#1893] METRIC-TRIGGER-786-Q08-VERIFIED-VOTES-7D: q08 gets under 5 reader votes a week, so the verdict loop ca
+3650	2026-10-23	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#100542] METRIC-REGRESSION-1: human_actions_open
+3621	2026-10-22	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#100518] METRIC-REGRESSION-1: q08_hours_since_last_piece
+3567	2026-10-22	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#100496] METRIC-REGRESSION-1: ops_tool_budget_bail_7d
+3566	2026-10-22	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#100495] METRIC-REGRESSION-1: metric_regressions_7d
+3565	2026-10-22	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#100494] METRIC-REGRESSION-1: gateway_cap_30d_usd
+3558	2026-10-21	2026-10-21	fleet-issue,program:ops,kind:owner	[#100488] OWNER-TASK-op-mvihv5rr376f: Owner goal: secure the first attested credibility event (or first new co
+3541	2026-10-21	2026-10-26	fleet-issue,program:ops,kind:fix	[#2670] METRIC-TRIGGER-361-GUARD-RCS: Security gap: a deploy or model guard exited non-zero
+3521	2026-10-21	2026-10-21	fleet-issue,program:research,kind:fix	[#100464] METRIC-TRIGGER-10931-RESEARCH-NEURONS-PER-PUBLICATION-7D: Cost: research neurons per published versi
+3513	2026-10-21	2026-10-21	fleet-issue,program:ops,kind:fix	[#100460] METRIC-TRIGGER-10908-FLEET-AUTHORED-PR-SHARE-7D: Autonomy gap: the fleet authors under half of its o
+3509	2026-10-21	2026-10-21	fleet-issue,program:ops,kind:fix	[#100456] content_items_over_stage_sla 1601 = 3 stalled loops (errata 882, revision 486, research-queued 198),
+3487	2026-10-21	2026-10-26	fleet-issue,program:reach,kind:enhancement	[#100439] Q08-GATE-ECONOMICS: gate_pass_rate_7d 0.032 drives 27.7x neuron overrun and a stalled publication ca
+3485	2026-10-21	2026-10-26	fleet-issue,program:ops,kind:enhancement	[#100437] TOOL-FAILURE: github_issue_get [error]
+3477	2026-10-21	2026-10-21	fleet-issue,program:infra,kind:enhancement	[#100430] PAPER-ASK-CITED-DEFS-1: ASK says "not elaborated" when the definition lives in the cited reference
+3453	2026-10-21	2026-10-21	fleet-issue,program:ops,kind:enhancement	[#100419] CLOSE-CHANNEL-REQUIRED-1: 449/900 issue closes in 7d have NULL close_channel
+3433	2026-10-21	2026-10-21	fleet-issue,program:research,kind:enhancement	[#100408] COST-SUSTAIN-1: research pipeline spend to <=$300/mo all-in without quality loss
+3422	2026-10-21	2026-10-26	fleet-issue,program:ops,kind:fix	[#100401] METRIC-TRIGGER-9263-CF-OBS-REOPEN-CHURN-24H: A CF-OBS-ISSUE-1 issue was reopened three or more times
+3365	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100366] TP-2.3-ONE-PROBE-PASS-1: One probe pass: fleet-control's */20 tick probes every live worker once int
+3357	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100362] TP-LEVER-STALLED-1: TP-5.12-ORPHAN-ISSUE-GUARD-1 has not landed in 14 days
+3273	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100318] TP-1.17-STAGED-ROLLOUT-AI-GATEWAY-1: Staged rollout for qnfo-ai and qnfo-gateway, then both leave th
+3272	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100317] TP-1.7-EVOLVE-PARSE-GATE-1: A candidate that does not parse is re-asked once with the parse error; e
+3264	2026-10-20	2026-10-20	roadmap,program:ops,kind:enhancement	[RM-934] GL-OWNER-PAPERS-THIN-GATE-1: The 131 published owner-authored papers that score quality:thin on the a
+3262	2026-10-20	2026-10-20	roadmap,program:ops,kind:enhancement	[RM-932] GL-GH-APP-FLEET-2-CONVERSIONS-0: Convert the 13 GitHub-token workers to the qnfo-fleet App token brok
+3261	2026-10-20	2026-10-25	roadmap,program:infra,kind:enhancement	[RM-931] GL-GH-WEBHOOK-REGISTER-1: Register the QNFO/qnfo-workers GitHub webhook (pull_request, check_suite, p
+3260	2026-10-20	2026-10-20	roadmap,program:ops,kind:enhancement	[RM-930] GL-WORKERS-STANDARDS-ADVISORY-0: Workers best-practice audit reads 0 fail and 0 advisory findings: a 
+3253	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100310] TP-LEVER-STALLED-1: TP-1.5-CONTAINER-VERIFIER-1 has not landed in 14 days
+3250	2026-10-20	2026-10-20	roadmap,program:ops,kind:enhancement	[RM-923] MODEL-@​cf/google/gemma-4-26b-a4b-it: Adopt @​cf/google/gemma-4-26b-a4b-it in the chat lane
+3237	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100304] METRIC-REGRESSION-1: outreach_reply_rate_30d
+3228	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:fix	[#100301] METRIC-TRIGGER-9901-ISSUES-OVER-24H-NO-DOER: Open issues older than 24 h with no doer
+3227	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:fix	[#100300] METRIC-TRIGGER-9899-CODE-PR-MERGE-SHARE-7D: Code-loop pull requests that never merge
+3224	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100299] ISSUE-AGE-24H-1: every open issue is closed, or has a live code task, within 24 hours of opening, au
+3210	2026-10-20	2026-10-21	fleet-issue,program:ops,kind:enhancement	[#100294] ISSUE-THROUGHPUT-FAMILIES-1: three issue families open faster than they close (RESEARCH-TERMINAL, PA
+3209	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100293] MERGE-LANE-THROUGHPUT-1: code-task lane merges 44% of tasks in 7 days; code-task-merge 288 min vs 12
+3194	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:fix	[#2684] METRIC-TRIGGER-2038-RUNTIME-VERIFIED-SHARE-24H: Verification monoculture: under 10% of the last day's 
+3192	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100286] METRIC-FIX-RELAPSED-1: attention_decision_efficacy_30d
+3191	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100285] METRIC-FIX-RELAPSED-1: social_engagement_rate_30d
+3184	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100282] METRIC-FIX-RELAPSED-1: outreach_reply_rate_30d
+3183	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100281] METRIC-FIX-RELAPSED-1: subscribers_growth_monthly
+3181	2026-10-20	2026-10-20	fleet-issue,program:ops,kind:enhancement	[#100279] TP-1.23-CODE-LOOP-CONTROL-PLANE-1: CODE-LOOP-CONTROL-PLANE-1: once CONTROL-PLANE-SELF-MERGE-1 has me
+3033	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:fix	[#100226] METRIC-TRIGGER-354-WORKERS-AI-COST-30D-USD: Cost gap: Workers AI cost over $95/30d (target $78 = 2.5
+3021	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:fix	[#100222] METRIC-TRIGGER-1519-EXTERNAL-IMPACT-PER-DOLLAR: Cost gap: AI cost per unit of external impact above 
+2994	2026-10-19	2026-10-21	fleet-issue,program:research,kind:enhancement	[#100211] RESEARCH-MODEL-COST-1: qnfo-research-exec spends 78 percent of Workers AI neurons on gpt-oss-120b; t
+2962	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:enhancement	[#100190] SOCIAL-YIELD-ATTENTION-2: the attention verdict holds bluesky, the best human-click channel, at shar
+2931	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:fix	[#100168] security issue (details kept in qnfo-audit)
+2911	2026-10-19	2026-10-26	fleet-issue,program:ops,kind:fix	[#100166] FLEET-JOURNEY-FAILED-1: binding-census (1 of 1 steps failing)
+2897	2026-10-19	2026-10-26	fleet-issue,program:reach,kind:fix	[#2607] METRIC-TRIGGER-1820-EXTERNAL-REFERRED-PAGEVIEWS-7D: Reach gap: fewer than 50 human page loads a week a
+2836	2026-10-19	2026-10-19	fleet-issue,program:research,kind:fix	[#100138] METRIC-TRIGGER-8558-IDEA-TO-PUBLISH-H-P50-7D: Idea to publication median above 100 hours
+2792	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:fix	[#100122] METRIC-TRIGGER-9-OPS-AGENT-EMPTY-ANSWERS-7D: OPS-AGENT-STREAM-EMPTY regression: empty agent-tools an
+2790	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:enhancement	[#100120] CLOSEOUT-HANDOFF-20261019: 30 unfinished plans in docs/handoff/2026-10-19-closeout.md; this tracker 
+2736	2026-10-19	2026-10-26	fleet-issue,program:ops,kind:fix	[#100088] METRIC-TRIGGER-8888-BREACHES-WITHOUT-TICKET: A live metric breach has no open ticket: the reopener h
+2714	2026-10-19	2026-10-19	fleet-issue,program:ops,kind:fix	[#100084] METRIC-TRIGGER-9262-FLEET-GRAPH-FINDINGS-WARN: FLEET-GRAPH-FINDINGS-1: the fleet graph reports warn-
+2673	2026-10-19	2026-10-25	fleet-issue,program:personal,kind:fix	[#100064] reliability issue (details kept in qnfo-audit)
+2635	2026-10-19	2026-10-25	fleet-issue,program:ops,kind:fix	[#2376] METRIC-TRIGGER-3529-OWNER-DISPATCHED-ITEMS-7D: Dispatch gap: fleet work reached the owner's queue
+2623	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-677] GL-IPATENT-BENCHMARK-1: Measure what an AI-drafted provisional actually secures: 30 issued US utility
+2622	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-676] GL-PORTFOLIO-COMPAT-DOER-1: Give portfolio upgrade-compat gaps a doer: the fix is a reviewed `# compa
+2621	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-675] GL-PROMPT-COST-MODEL-ATTRACTOR-1: Build and evaluate a cost model for prompt engineering based on att
+2620	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-674] GL-PAPER-TO-FLEET-ATTRACTOR-1: Map the findings of the published QNFO paper attractor-calculus-a-form
+2619	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-673] GL-ATTENTION-EFFICACY-SAMPLE-1: ATTENTION-EFFICACY-SAMPLE-1: accumulate >=20 judged attention decisio
+2618	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-672] GL-OWNER-OUTCOME-REACH-1: OWNER-OUTCOME-REACH-1: track the owner-outcome reach metrics the fleet cann
+2617	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-671] GL-PRG-QNFO-PERSONAL-DEFECTS-0: PRG-QNFO-PERSONAL-DEFECTS-0: Personal Twin runs with no open defect (
+2616	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-670] GL-PRG-QNFO-REACH-DEFECTS-0: PRG-QNFO-REACH-DEFECTS-0: Reach & Distribution runs with no open defect 
+2615	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-669] GL-PRG-QNFO-OPS-DEFECTS-0: PRG-QNFO-OPS-DEFECTS-0: Operations & Governance runs with no open defect (
+2614	2026-10-19	2026-10-20	roadmap,program:ops,kind:enhancement	[RM-668] GL-PRG-QNFO-INFRA-DEFECTS-0: PRG-QNFO-INFRA-DEFECTS-0: Cloudflare Infrastructure runs with no open de
+2613	2026-10-19	2026-10-19	roadmap,program:ops,kind:enhancement	[RM-667] GL-PRG-QNFO-RSCH-DEFECTS-0: PRG-QNFO-RSCH-DEFECTS-0: Research & Publications runs with no open defect
+2575	2026-10-19	2026-10-19	fleet-issue,program:reach,kind:fix	[#100019] METRIC-TRIGGER-1867-ATTENTION-CHANNELS-STOPPED: Guard: more than one social channel stopped by the a
+2426	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-614] NEXT-QNFO.INFRA.R2: Next deliverable for R2 Object Storage (QNFO.INFRA.R2)
+2425	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-613] NEXT-QNFO.INFRA.D1: Next deliverable for D1 Database Operations (QNFO.INFRA.D1)
+2424	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-612] NEXT-QNFO.INFRA.DNS: Next deliverable for DNS & Domain Management (QNFO.INFRA.DNS)
+2423	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-611] NEXT-QNFO.INFRA.PAGE: Next deliverable for Pages Site Management (QNFO.INFRA.PAGE)
+2422	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-610] NEXT-QNFO.INFRA.WORK: Next deliverable for Worker Development & Deployment (QNFO.INFRA.WORK)
+2407	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-583] MODEL-@​cf/cloudflare/clef-flash: Adopt @​cf/cloudflare/clef-flash in the decision lane
+2377	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99950] METRIC-TRIGGER-5929-SLA-BREACHES-OVER-120M: SLA breach: items past 120 minutes (10-minute resolution)
+2375	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99948] METRIC-TRIGGER-5915-CONTENT-ITEMS-OVER-STAGE-SLA: Content pipeline: items are past their stage SLA
+2372	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99945] METRIC-TRIGGER-5795-ISSUE-AUTO-CLOSE-2H-SHARE-24H: Issue SLA: open issues are not closed server-side 
+2371	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99944] METRIC-TRIGGER-5708-ISSUE-DRAIN-RATIO-24H: Issue backlog: issues are not resolved at 1.5x their accum
+2370	2026-10-18	2026-10-25	fleet-issue,program:reach,kind:fix	[#99943] METRIC-TRIGGER-5394-RESEARCH-DEFERRED-POOL: Research intake outruns throughput: the deferred pool is 
+2368	2026-10-18	2026-10-26	fleet-issue,program:ops,kind:fix	[#99941] METRIC-TRIGGER-4991-ROSTER-MEMBERS-DEGRADED: Executor roster: a worker or model route is degraded
+2367	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99940] METRIC-TRIGGER-4982-FALSE-STOPS-7D: Kernel recognition: fleet agents emit conditional offers, menus o
+2366	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99939] METRIC-TRIGGER-4650-CODE-GOAL-SUCCESS-RATE-30D: Deploy success: under 90% of code-loop goals ship
+2365	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99938] METRIC-TRIGGER-3689-MONTHLY-COST-RUN-RATE-USD: Cost: all-billing 7-day run rate over 650/30d
+2341	2026-10-18	2026-10-26	fleet-issue,program:ops,kind:fix	[#99936] METRIC-TRIGGER-3528-TICK-SLOT-COVERAGE-24H: Heartbeat gap: 10-minute fleet ticks are missing
+2340	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99935] METRIC-TRIGGER-3464-MTTR-H-7D: Doctrine breach: issues take more than a day to close on average
+2339	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99934] METRIC-TRIGGER-3454-OWNER-DISPATCH-7D: Owner dispatch: more than 5 cards in 7 days asked the owner to
+2338	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99933] METRIC-TRIGGER-3077-SPOFS-TOTAL: Single points of failure remain registered
+2335	2026-10-18	2026-10-22	fleet-issue,program:reach,kind:fix	[#99930] METRIC-TRIGGER-538-Q08-NEURONS-PER-PUBLISHED-PIECE-7D: q08 compose cost per published piece regressed
+2334	2026-10-18	2026-10-18	fleet-issue,program:reach,kind:fix	[#99929] METRIC-TRIGGER-537-Q08-GATE-PASS-RATE-7D: q08 quality gate rejects most drafts (7d pass rate under 50
+2332	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99927] METRIC-TRIGGER-388-FIX-HOLD-RATE-30D: Fix durability gap: metric issues are closing but the metrics r
+2328	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99923] METRIC-TRIGGER-344-WORKER-COUNT: Core gap: live worker count above the hard cap of 30
+2327	2026-10-18	2026-10-26	fleet-issue,program:ops,kind:fix	[#99921] METRIC-TRIGGER-8559-TRACKER-DRIFT: Tracker drift: D1 issues/code tasks disagree with GitHub
+2326	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99920] METRIC-TRIGGER-5937-ISSUES-OPEN-OVER-120M: SLA breach: open issues older than 120 minutes
+2283	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#99916] METRIC-TRIGGER-2934-SESSION-DEPENDENT-ISSUES-OPEN: Autonomy-first gap: open issues still wait on a Cl
+2277	2026-10-18	2026-10-18	fleet-issue,program:ops,kind:fix	[#99909] METRIC-TRIGGER-357-WATCHMAKER-INDEX: Autonomy gap: recurring operations still need a person or a stal
+2181	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-381] GL-TWIN-NATIVE-TOOLS-1: TWIN-NATIVE-TOOLS-1: twin tool use through native function calling instead of
+2180	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-380] GL-CONNECTION-ENGAGEMENT-1: CONNECTION-ENGAGEMENT-1: measure whether owner questions get answered
+2165	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-379] GL-RADAR-TASTE-LEARN-1: RADAR-TASTE-LEARN-1: feedback does not change what the radar suggests
+2164	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-378] GL-CONNECTION-LEDGER-1: CONNECTION-LEDGER-1: a went answer should become a Ledger person and a due fo
+2161	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-375] GL-Q08-REVIEW-2026-10-31: Q08-REVIEW-2026-10-31: decide q08 on bot-filtered human reads
+2160	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-374] GL-TP-9-DEPLOY-PATH-NO-LOCKOUT-1: TP-9-DEPLOY-PATH-NO-LOCKOUT-1: retiring a worker can never make ano
+2159	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-373] GL-TP-7-REACH-SURVIVES-REVIEW-GATE-1: TP-7-REACH-SURVIVES-REVIEW-GATE-1: subscribe path, Scholar cove
+2158	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-372] GL-TP-6-DURABLE-EXECUTION-1: TP-6-DURABLE-EXECUTION-1: ops agent, research pipeline, code tasks and m
+2157	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-371] GL-TP-5-MEASURE-TO-ACT-1: TP-5-MEASURE-TO-ACT-1: every breach reaches a doer and every contract has a
+2156	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-370] GL-TP-4-COST-FLEET-UNDER-40-1: TP-4-COST-FLEET-UNDER-40-1: the fleet runs on <= $40 a month and the b
+2155	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-369] GL-TP-3-FOOTPRINT-TEARDOWN-1: TP-3-FOOTPRINT-TEARDOWN-1: 42 -> 24 workers, 10 -> 8 databases, 80 -> 2
+2154	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-368] GL-TP-1-AUTONOMY-ENGINE-1: TP-1-AUTONOMY-ENGINE-1: the code loop becomes the builder; sessions the ex
+2153	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-367] GL-lrev-return-on-spend-v3-17f8ssu: Revise terminal objective return-on-spend v3: 5 of its 10 graded 
+2152	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-366] GL-vrev-gmw8u0d2y: Decrease the weight of autonomy from 0.20 to 0.15 and increase the weight of self_
+2151	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-365] GL-vrev-g16eyz4j2k: Add a constraint to limit the UNMANAGED direct-provider spend to 50% of the total
+2141	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-364] GL-gyt1wnr5h: Explore the application of quantum coherence to enhance the efficiency of thermodynamic
+2140	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-363] GL-cost-routing-stack-l0l7: Implement and maintain the L0-L7 cost-optimized routing stack fleetwide (
+2139	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-362] GL-vrev-external-impact-term-20260926: Add an external-impact term to the terminal objective function
+2138	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-361] GL-external-impact-per-dollar: Establish and grow a MEASURED external-impact surface at minimum cost-
+2137	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-360] GL-g1yb1ijg3i: Develop a subsystem self-correction method for the GKP qubit to improve its reliabilit
+2136	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-359] GL-gzdxbdv4j: Develop a quantum-inspired, neuromorphic computing architecture to achieve superconduct
+2135	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-358] GL-gui7fhk3x: Derive a projective representation of the braid group from a microscopic Kitaev-chain m
+2134	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-357] GL-g129n9s24y: The autonomy gap in self-healing and backpressure flap issues is reduced by 50% within
+2133	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-356] GL-g1ckvmn670: A hybrid quantum-classical computing architecture is designed and simulated to leverag
+2132	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-355] GL-vrev-g15hdh4s30: Add a new constraint: 'energy_efficiency >= 0.8', to ensure the fleet prioritizes
+2131	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-354] GL-gjyfc7j56: The fleet will re-evaluate its terminal objectives to consider the potential inherent l
+2130	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-353] GL-grcmugh6e: By the end of the year, the fleet will develop and integrate a hybrid quantum-classical
+2129	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-352] GL-gptdbqy4m: By the end of the next quarter, the fleet's autonomy score will increase by 10% through
+2128	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-351] GL-fleet-loop-actuation-gap: The fleet self-improvement loop DETECTS but does not REMEDIATE (root cau
+2127	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-350] GL-ops-model-toolcall-crisis: Restore tool-calling on ops.qnfo.org: chat-canary AGENTIC-CANARY-1 show
+2125	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#3003] METRIC-TRIGGER-6050-CADENCE-OVERDUE-OVER-120M: SLA breach: a producer is more than 120 minutes past it
+2124	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#3002] METRIC-TRIGGER-3072-FAILURE-MODES-RECURRING: A known failure mode recurred or its detector stopped run
+2123	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#3001] METRIC-TRIGGER-3061-UNVERIFIED-BLOCKER-CLAIMS: Red team: blocker claims nobody has tested adversariall
+2116	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2522] METRIC-TRIGGER-3060-ISSUES-UNPROBED-60M: Issue SLA breach: open issues not probed in the last 60 minut
+2110	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-349] GL-skill-sync-esm-ai-deploy-path: Fix qnfo-skill-sync deploy path: cf_worker_deploy uploads as non-mo
+2109	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-348] GL-kaizen-anchor-parity-2-150: Fix QNFO/qnfo-skills kaizen/SKILL.md anchor drift: frontmatter 2.150 b
+2108	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-347] GL-custom-prompts-template-parity: Fix QNFO/qnfo-skills prompt-stores/customPrompts.json canonical sc
+2107	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-346] GL-skill-sync-public-route-404: Fix qnfo-skill-sync public route exposure mismatch: service binding /
+2106	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-345] GL-skill-sync-r2-repo-sync-route: Implement a real qnfo-skill-sync repo-to-R2 sync route/cron: copy Q
+2105	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-344] GL-g1amqy545x: Explore the application of quantum-inspired, neuromorphic computing architectures to a
+2104	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-343] GL-g1ungpzy41: Implement a flap-guard and velocity or age metric to replace raw depth in issue-filing
+2103	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-342] GL-g1l3bf463d: Implement a self-healing mechanism for the backpressure flap issue, reducing re-file r
+2102	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-341] GL-gencief5r: Design a hybrid quantum-classical computing architecture that leverages quantum coheren
+2101	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-340] GL-g1qwxzxr3s: Develop a subsystem self-correction protocol for the GKP qubit, enabling robust and re
+2100	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-339] GL-gtd12cb6l: Investigate the bulk-boundary correspondence between anyon condensation in a parent top
+2099	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-338] GL-gox58xc61: Develop a quantum-inspired, neuromorphic computing architecture that achieves supercond
+2098	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-337] GL-self-heal-tool-list-correction: Fix self-heal tool-health check flagging non-native/invalid tools 
+2097	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-336] GL-ops-exec-loop-parse-guard: Fix ops-exec agent-loop ok=0 misclassification: (a) guard the truncated
+2096	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-335] GL-gqpxw2t3g: The p-Adic Temperley-Lieb Parameter can be used to predict the behavior of quantum syst
+2068	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-334] GL-research-exec-newversion-draft-cleanup: Fix research-exec publishV2 stuck-newversion handling: whe
+2067	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-333] GL-wrangler-deploy-fleet-control: Make qnfo-fleet-control wrangler-deployable: export FleetAdvisor DO
+2066	2026-10-18	2026-10-25	roadmap,program:infra,kind:enhancement	[RM-332] GL-repo-mirror-drift-closeout: Close qnfo-workers local mirror drift vs deployed workers
+2065	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-331] GL-deploy-fleet-control-agent: Deploy FleetControlAgent DO (fleet agents expansion P3)
+2064	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-330] GL-deploy-signal-loop-agent: Deploy SignalLoopAgent DO (fleet agents expansion P2)
+2063	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-329] GL-deploy-intent-orchestrator-agent: Deploy IntentOrchestratorAgent DO (fleet agents expansion P1)
+2062	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-328] GL-g17yzs6q5x: The modular data of the edge excitations of a 2D chiral topological superconductor sat
+2061	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-327] GL-g2tlz1q6c: The complete taxonomy of exchange statistics can be derived as the unique projective un
+2060	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-326] GL-gk6onqx5h: A quantum-inspired, thermodynamically-informed optimization algorithm can minimize ener
+2059	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-325] GL-gt3ezl03t: A holographic QEC model based on AdS/CFT RG Flow on Bruhat–Tits Trees can achieve a qua
+2058	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-324] GL-g1g9sux175: The braid-group representation for Majorana zero modes in a 1D topological superconduc
+2057	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-323] GL-g6n7l416l: Design a quantum-inspired, neuromorphic computing architecture that leverages non-equil
+2056	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-322] GL-g2x7lh66r: Derive a complete taxonomy of exchange statistics from the topology of configuration sp
+2054	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-321] GL-g14964ea62: Develop a quantum-inspired, non-equilibrium thermodynamic model of computation that pr
+2051	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2971] METRIC-TRIGGER-3059-STUCK-ITEMS-OVER-SLA: Queue SLA breach: an item is stuck past its SLA (minutes)
+2017	2026-10-18	2026-10-26	fleet-issue,program:ops,kind:fix	[#2875] METRIC-TRIGGER-3452-TICK-COMPLETION-24H: Heartbeat gap: under 95% of ten-minute slots in 24h carry a f
+1965	2026-10-18	2026-10-21	fleet-issue,program:ops,kind:fix	[#2954] VERIFICATION-DEFERRAL-STALL-1: 431 contracts defer forever with no escalation and no owner
+1918	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#2924] INTEG-GSC-1: Search Console + Bing Webmaster ingestion
+1833	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-137] RM-MATH-RESIDUE-2: Paper pages typeset the pseudo-math the render guard counts (MATH-RESIDUE-2, gatew
+1832	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-136] RM-ASK-CORPUS-FEEDER: Ask finds recent papers: BM25 catalog leg in retrieve() (ASK-LEXICAL-CATALOG-1)
+1831	2026-10-18	2026-10-18	roadmap,program:reach,kind:enhancement	[RM-135] RM-IDEA-DIVERSITY-CAP: Idea triage holds a generated ACCEPT while its topic cluster would exceed half
+1830	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-134] RM-TP-9-DEPLOY-NO-LOCKOUT: T9 A deploy path that cannot lock itself out: delete-after-unbind, 10143 p
+1829	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-133] RM-TP-8-TRUST-BOUNDARY: T8 The trust boundary: memory-mcp auth, containers token or Access, Access on
+1828	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-132] RM-TP-7-REACH-REVIEW-GATE: T7 Reach that survives the review gate: subscribe box on every public page
+1827	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-131] RM-TP-6-DURABLE-EXECUTION: T6 Durable execution: ops agent, research pipeline, code tasks and metric 
+1826	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-130] RM-TP-5-MEASURE-TO-ACT: T5 Measurement to actuation: code-task lines on every single-file trigger, a 
+1825	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-129] RM-TP-4-COST-FLEET-40: T4 Cost: fleet run-rate <= $40 and the building metered (fleet/session/owner l
+1824	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-128] RM-TP-3-FOOTPRINT-TEARDOWN: T3 Footprint teardown: 42 -> 24 workers, 10 -> 8 D1, 80 -> 25 workflows, 
+1823	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-127] RM-TP-2-ONE-KERNEL: T2 One kernel, one dispatcher, heartbeats instead of probes: governance 11 -> 4 w
+1822	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-126] RM-TP-1-AUTONOMY-ENGINE: T1 Autonomy engine: the code loop becomes the builder (rebase, anchor repair
+1817	2026-10-18	2026-10-26	fleet-issue,program:ops,kind:fix	[#2861] METRIC-TRIGGER-4989-TICK-SEQUENCE-COMPLETION-24H: Tick sequence: hours in which a section 1 step left 
+1812	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#2852] OBJECTIVE-CONSTRAINT-BREACH-1: capability_contract_conformance
+1800	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-125] RM-NO-CLAUDE-RUNTIME-1: No Claude dependency at runtime: every recurring operation, owner document, d
+1799	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-124] RM-PORTFOLIO-HYGIENE-1: Portfolio hygiene >= 0.9: PORTFOLIO-HYGIENE-1 in qnfo-fleet-control repairs l
+1798	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-123] RM-OWNER-DOCS-PRIVATE-STORE-1: Owner documents in a private plane: move qnfo-audit.owner_docs (key id
+1797	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-122] RM-COST-FLOOR-40-1: Cost floor: AI burn <= $40/month with direct-key (BYOK) spend visible alongside u
+1796	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-121] RM-AGENT-WS-DECISION-1: qnfo-agent-ws (agent websocket workspace) exists in the repo but not in the l
+1795	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-120] RM-SELF-KNOWLEDGE-VIEWS-1: One open-work surface: revive integration_state (#1617), unify the three o
+1794	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-119] RM-D1-RETENTION-1: Retention policy for qnfo-audit (~296 tables, duplicate families, date-stamped sna
+1793	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-118] RM-EDGE-CACHE-PAPERS-1: Workers Cache in front of papers.qnfo.org (504s) and AI Gateway fallback rout
+1792	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-117] RM-PAGES-DEPLOY-PATH-1: Repo-driven Pages deploys (archive.qnfo.org / qnfo-publications is manual and
+1791	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-116] RM-CF-ONE-EMAIL-DLP-1: Cloudflare One: email security retro scan, DLP, GitHub Enterprise Cloud config
+1790	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-115] RM-ADR-013-014-ENFORCEMENT-1: Enforce the accepted legal-immutability and authorship ADRs (append-onl
+1789	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-114] RM-QOKI-OPEN-MIRROR-1: QOKI: IPFS/Filecoin mirror of the paper corpus with DOI->slug->CID provenance 
+1788	2026-10-18	2026-10-18	roadmap,program:reach,kind:enhancement	[RM-113] RM-IDEA-STREAM-UI-1: Public read-only real-time idea stream UI (QNFO idea/chat development) linked fr
+1787	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-112] RM-GATE-I10: Repository state verified through the uncached API
+1786	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-111] RM-GATE-I9: Idempotent patching with marker-count sweep
+1776	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2827] DOD-CHECKABLE-1: 32 process contracts still define done as intent, and code-task-merge breaches its ow
+1775	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2826] PATHS-UNTESTED-1: 21 of 58 controls declare an alternate path that has never been exercised
+1765	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-110] RM-GATE-I8: Versions fill only missing values, live health first, semver gate
+1764	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-108] RM-GATE-I6: Scoped routes above module-wide gates
+1763	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-107] RM-GATE-I5: Exact-value secret writes
+1762	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-105] RM-GATE-I3: Get-then-put full-object config updates
+1761	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-104] RM-GATE-I2: Effective answer caps floored in chat and workflow paths
+1760	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-103] RM-GATE-I1: Model references provider-qualified and route-checked
+1759	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-102] RM-GATE-H5: Runtime state reconciled in-session
+1758	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-101] RM-GATE-H4: Parity audits read the last occurrence
+1757	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-100] RM-GATE-H3: Junction/hardlink probe before any dedupe deletion
+1756	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-99] RM-GATE-H2: Skill registry membership verified before reliance
+1755	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-98] RM-GATE-H1: Independent purge sweeps for backup orphans
+1754	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-94] RM-GATE-G1: Closure carries a passing re-probe or owned deferral
+1753	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-93] RM-GATE-F3: Consolidate toward a verified core
+1752	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-90] RM-GATE-E4: Counts cross-checked against a live call
+1751	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-89] RM-GATE-E3: Auth-gated probes carry credentials
+1747	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2805] PROMPT-STORE-CONCURRENT-CLOBBER-1: a canonical prompt sync silently reverted a live system-prompt edit
+1729	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-88] RM-GATE-E2: Secrets read from their file stores
+1728	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-87] RM-GATE-E1: Blockers must survive a credentialed falsification
+1727	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-86] RM-GATE-D8: Re-probe after delay before declaring a broken index
+1726	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-84] RM-GATE-D6: Storage type read from the live namespace before deploy
+1725	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-83] RM-GATE-D5: Symbol-closure check before deploy
+1724	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-82] RM-GATE-D4: Platform-correct command form in wrappers
+1723	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-81] RM-GATE-D3: Distributed deploy lock; content-marker clobber detection
+1722	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-77] RM-GATE-C6: Version and model list reconciled together from the live endpoint
+1721	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-74] RM-GATE-C3: Client default model must resolve in the runtime registry
+1720	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-73] RM-GATE-C2: Retired identifiers swept across every enforcing surface
+1719	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-72] RM-GATE-C1: Client-state changes mirrored into the enforcing guard
+1718	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-69] RM-GATE-B3: Per-day estimates re-derived before compliance breach
+1717	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-64] RM-GATE-A1: Transcript sweep before publish; fixes ship as new Zenodo versions
+1716	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-63] RM-KAIZEN-SCHEDULED-1: Execute the scheduled kaizen items: errata publish flip, outreach cap misclassi
+1715	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-62] RM-KAIZEN-GATE-CANDIDATES-1: Codify the 12 proposed kaizen gates as machine-enforced checks (RED-INVEN
+1692	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-61] RM-ADOPTED-GOALS-CLOSEOUT-1: Verify and close or retire the adopted fleet goals: ops-model-toolcall-cr
+1691	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-60] RM-GATE-DEFINITIONS-OWNER-1: Owner decisions before 2026-10-25: impressions gate definition (frozen 5,
+1690	2026-10-18	2026-10-18	roadmap,program:reach,kind:enhancement	[RM-59] RM-OWNER-EMAIL-VERBS-1: Owner email surface: ratify/kill/status verbs, DMARC-gated owner auth (live 20
+1689	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-58] RM-DO-AGENTS-DECISION-1: Re-decide the adopted DO agents (FleetControlAgent, SignalLoopAgent, IntentOr
+1688	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-57] RM-CAPABILITY-PRODUCT-LOOP-1: Cloudflare product loop: discover -> score -> propose -> adopt (AI Searc
+1687	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-56] RM-ANALYTICS-ENGINE-METERS-1: Workers Analytics Engine meters per AI call and per task outcome (attrib
+1686	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-55] RM-TAIL-WORKERS-1: Tail Worker for unsampled exception capture across the fleet
+1685	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-54] RM-DEEPCHAT-DB-ENCRYPTION-1: Encrypt the 1.3 GB local DeepChat database
+1684	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-53] RM-MCP-OAUTH-1: Cloudflare MCP OAuth (identity-bound) for agent clients
+1683	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-52] RM-WAF-RATE-LIMIT-1: WAF and rate-limit rules on public worker endpoints (ops, containers, idea form, 
+1682	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-51] RM-SECRETS-STORE-1: Secrets Store for API keys with scripted rotation across workers, GitHub secrets a
+1681	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-50] RM-R2-PUBLIC-DATASETS-1: R2 public custom domain for datasets (license-gated) and Cloudflare Stream ad
+1680	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-49] RM-UNBOUND-R2-DISPOSITION-1: Decide purpose/ownership of the 8 unbound-but-populated resources (R2 dee
+1679	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-48] RM-REPO-HYGIENE-1: LICENSE files on the 8 artifact repos, repo topics/descriptions, releases/changelog
+1678	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-47] RM-ARCHIVE-MIGRATION-1: R2 archive migration of ARCHIVED projects and the Obsidian vault mapping, with
+1675	2026-10-18	2026-10-23	fleet-issue,program:ops,kind:fix	[#2754] DEPLOY-NON-CANONICAL-DEPLOY: fleet
+1666	2026-10-18	2026-10-22	fleet-issue,program:reach,kind:enhancement	[#2722] LEARNER-ARMS-2: 50 of 61 learner rows are not-arm (3-topic matcher, null link_slug on channel posts), 
+1659	2026-10-18	2026-10-20	fleet-issue,program:ops,kind:fix	[#2679] FLEET-JOURNEY-FAILED-1: loop-heartbeats (1 of 7 steps failing)
+1656	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-46] RM-DNS-REDIRECTS-HEADERS-1: Complete the DNS redirect chain to canonical destinations, security header
+1655	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-45] RM-PAGES-SITES-MIGRATION-1: Migrate the 9 QWAV research sites to Cloudflare Pages (laws, paradigm, hie
+1654	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-44] RM-ADAPTIVE-SUGGESTIONS-1: Adaptive suggestion engine wave 1: suggestion-event logging + bandit (await
+1653	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-43] RM-RADAR-WORKFLOWS-PILOT-1: Workflows pilot on conference-radar / research-daily-brief
+1652	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-42] RM-RESEARCH-BROWSER-QUEUES-1: Research pipeline v0.1 on Queues + Browser Run (rendered-source groundin
+1651	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-41] RM-QUALITY-REVISION-WAVE-1: Revise/expand all research papers with ensembles, iterations and feedback 
+1650	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-40] RM-VISION-UNIFIED-PLATFORM-1: qnfo.org as the unified AI-native research platform integrating the 11 v
+1649	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-39] RM-VISION-AGENT-SWARM-1: Agent swarm: Explorer/Synthesizer/Verifier/Publisher/Curator role agents runn
+1648	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-38] RM-VISION-COMPUTE-CLOUD-1: QWAV compute cloud: browser-run ultrametric embeddings, p-adic valuations, 
+1647	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-37] RM-VISION-AUTO-PEER-REVIEW-1: Automated peer review as a pre-submission service (review stage exists i
+1646	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-36] RM-VISION-REPRODUCE-BUTTON-1: Reproducibility as code: a Reproduce button per computational claim via 
+1645	2026-10-18	2026-10-18	roadmap,program:infra,kind:enhancement	[RM-35] RM-VISION-CONCEPT-GRAPH-1: Concept graph navigator over the 8,349-node KG (Durable Objects + interacti
+1644	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-34] RM-VISION-ULTRAMETRIC-PLAYGROUND-1: Ultrametric playground web app (ultrametric geometry, p-adic valua
+1643	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-33] RM-VISION-CONSISTENCY-ENGINE-1: Cross-paper consistency engine: contradictions, redundancies, missing 
+1642	2026-10-18	2026-10-18	roadmap,program:research,kind:enhancement	[RM-32] RM-VISION-QWAV-SCAN-1: QWAV-SCAN: arXiv scraper + classifier + daily digest (radar family dormant 20-2
+1630	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2596] GH-APP-FLEET-2: move the other GitHub-token workers onto the qnfo-fleet App token
+1627	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2582] GH-WEBHOOK-INTAKE-1: receive GitHub pull_request, check_suite and push events in a fleet worker instea
+1616	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-31] RM-VISION-LIVING-PAPER-1: Living Paper: interactive publications (clickable equations, AI chat, parame
+1615	2026-10-18	2026-10-22	roadmap,program:infra,kind:enhancement	[RM-30] RM-VISION-ASK-QWAV-1: Ask QWAV: public natural-language research oracle (RAG over the 34,657-vector re
+1614	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-29] RM-CITATION-TRACKING-ALL-DOIS-1: Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs fee
+1613	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-27] RM-BUFFER-MULTICHANNEL-1: Decide multi-channel distribution (LinkedIn/X/Mastodon via Buffer, BUFFER_TO
+1612	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-26] RM-BESPOKE-REPORTS-1: Bespoke research reports offered through warm outreach replies (12 replied)
+1611	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-25] RM-IPATENT-B2B-1: ipatent.me patent analytics B2B pilot with 5 users
+1610	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-24] RM-PREMIUM-DIGEST-1: Premium research digest ($10/mo) product line (depends on NO-PAYMENT-RAIL-1 #1616
+1609	2026-10-18	2026-10-18	roadmap,program:reach,kind:enhancement	[RM-23] RM-SUBSCRIBE-CTA-1: Subscribe CTA and landing on papers.qnfo.org and qnfo.org wired to double opt-in
+1608	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-22] RM-FUNNEL-E2E-MONITOR-1: End-to-end funnel monitor: publication -> deposit -> page -> social -> pagevi
+1607	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-21] RM-REPO-DEAD-SOURCES-1: Archive the 65 never-deployed or retired worker directories under archive/ wit
+1606	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-20] RM-DEAD-PROBES-VERIFY-1: Close the dead-probe deletions (size-semantics-probe-a/b, qnfo-egress-probe, 
+1605	2026-10-18	2026-10-22	roadmap,program:infra,kind:enhancement	[RM-19] RM-FLEET-BUDGET-WAVES-1: Fleet budget waves W1-W4: MCP 4->1 (qnfo-mcp), watchtower 5->2, verify-then-r
+1604	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-18] RM-CONSOLIDATION-WAVE-B-1: Finish consolidation: 7 QUEUED merges due 2026-10-04 (observability, dashbo
+1603	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-17] RM-COST-FREE-FIRST-PARITY-1: Audit every AI-calling worker for one cost policy per path (streaming vs 
+1602	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-16] RM-COST-UNIFIED-SPEND-1: One unified monthly cost_usd: gateway unified billing + BYOK providers + Work
+1597	2026-10-18	2026-10-26	fleet-issue,program:ops,kind:fix	[#2562] FLEET-JOURNEY-FAILED-1: traffic-health (2 of 8 steps failing)
+1592	2026-10-18	2026-10-22	fleet-issue,program:reach,kind:research	[#2521] ACCURACY-FLEET-2d: replace the remaining hard-coded topic keyword lists with data-derived ones (idea-h
+1581	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-15] RM-COST-PER-TASK-ALL-PATHS-1: Cost per successful task by class across every AI path (research ensembl
+1580	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-14] RM-COST-PREFIX-CACHE-1: Realize provider prompt/prefix caching (cache_read_tokens is 0 today)
+1579	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-13] RM-COST-L6-DRAFT-VERIFY-1: L6 formal draft-verify pipeline (free draft, paid verify/repair) beyond the
+1578	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-12] RM-COST-L5-DISTILLATION-1: L5 distillation: exemplar bank / Workers AI LoRA for recurring task classes
+1577	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-11] RM-CODE-ORCHESTRATOR-1: Autonomous self-verifying cloud code agent: plan -> branch edit -> container v
+1576	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-10] RM-DURABLE-AGENT-EXECUTION-1: Durable multi-step agent execution on Workflows with checkpointed contin
+1575	2026-10-18	2026-10-18	roadmap,program:ops,kind:enhancement	[RM-9] RM-WATCHMAKER-INDEX-1: Publish a daily watchmaker index (count of recurring operations that still need 
+1574	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-8] RM-NOVEL-FAILURE-REPAIR-1: Scripted repair for novel failure classes: failure-class -> remediation_modu
+1573	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-7] RM-S5-RATIFICATION-SURFACE-1: Owner ratification surface (email verb and dashboard) for the 7 pending o
+1572	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-6] RM-S4-BENCHMARK-1: S4 intelligence battery from n=8 to a SWE-bench Pro / Terminal-Bench subset, scored 
+1571	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-5] RM-S1-REDUNDANCY-1: S1 redundancy: failover host and read-only degraded mode for the single ops gateway
+1570	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-4] RM-MONITOR-THE-MONITORS-1: Monitor the monitors: every monitor and cron writes a heartbeat; a meta-watc
+1569	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-3] RM-PROBE-VERIFIED-COVERAGE-1: Verified probe coverage: content assertions (not only HTTP 200) for all 3
+1568	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-2] RM-OODA-DEPLOY-LATENCY-1: Deploy-class act latency days -> minutes: canonical deploy on merge is live; 
+1566	2026-10-18	2026-10-22	roadmap,program:ops,kind:enhancement	[RM-1] RM-S2-EVENT-DRIVEN-1: Event-driven coordination: Queues-based producer->consumer chaining (research, ve
+1554	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#2447] METRIC-TRIGGER-4992-ROSTER-CAPABILITIES-SINGLE-EXECUTOR: Executor roster: a new capability has a singl
+1547	2026-10-18	2026-10-22	fleet-issue,program:research,kind:research	[#2402] PAPER-CONTRACT-1: plan-first paper contract and section-wise drafting in qnfo-research-exec
+1540	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#2373] EMAIL-VOICE-DRAFTER-1: qnfo-email drafts and sends replies as Rowan in his voice, tiered by commitment
+1537	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#2323] METRIC-REGRESSION-1: metrics_in_breach
+1503	2026-10-18	2026-10-25	fleet-issue,program:ops,kind:enhancement	[#2192] METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence
+1468	2026-10-18	2026-10-26		[fleet] qnfo-ai · worker-observability: HttpServerError · HTTP 502
+1463	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:enhancement	[#2008] TP-1d-CONTAINER-VERIFIER-EVERY-TASK-1: every code task runs the worker suites and the deploy gate in t
+1456	2026-10-18	2026-10-22	fleet-issue,program:ops,kind:fix	[#1838] METRIC-TRIGGER-413-CREDIBILITY-EVENTS-90D: Reach gap: fewer than 2 credibility events in 90 days (revi
+1454	2026-10-18	2026-10-24	fleet-issue,program:ops,kind:fix	[#1798] METRIC-TRIGGER-362-OPEN-AGENT-ISSUES: Autonomy gap: more than 20 open agent issues
