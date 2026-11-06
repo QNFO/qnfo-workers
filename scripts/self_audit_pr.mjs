@@ -2,6 +2,7 @@
 // output and must name one gap the author was not thinking about, with a doer or a filed issue. The text rule in
 // CLAUDE.md is not enforced by prose; this check is. Also rejects a docs-only PR (NO-STANDALONE-DOCS-1).
 //   node scripts/self_audit_pr.mjs --body body.txt --files files.txt
+// pr-checks.yml skips bot authors (Copilot, Dependabot) before calling this.
 import { readFileSync } from "node:fs";
 
 const CODE = /\.(js|mjs|py|sql|ya?ml|toml|sh)$/;
