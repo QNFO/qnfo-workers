@@ -236,3 +236,21 @@ test("YT-DIRECTOR-RETRY-1: a director with no valid beats asks the next source o
   assert.ok(/aiJson\(env, directorPrompt\(\), text\.slice\(0, 9000\), 3500, 0\.7, 1\)/.test(src));
   assert.ok(src.includes("state = 'rejected' AND created_at >= ?1 AND attempts < 3"));
 });
+
+// YT-PACE-1 / YT-META-1 / YT-LINKEDIN-1 (0.8.0)
+import { buildSocialCopy, dailyAllows, uploadCooldownUntil, buildMetadata as bm080 } from "./worker.js";
+test("daily cap spaces uploads", () => { assert.equal(dailyAllows(3), true); assert.equal(dailyAllows(4), false); });
+test("upload-limit cooldown note parses", () => {
+  assert.equal(uploadCooldownUntil("yt-upload-limit-until:2026-11-07T00:00:00.000Z x"), "2026-11-07T00:00:00.000Z");
+  assert.equal(uploadCooldownUntil("rendered: other"), null);
+});
+test("description leads with the article summary and tags links", () => {
+  const m = bm080({ title: "T", short: "A first sentence. A second sentence." }, "slug-1", "Hook", 40);
+  assert.ok(m.description.startsWith("A first sentence."));
+  assert.match(m.description, /utm_source=youtube/);
+});
+test("social copy is built from the article only and fits the limits", () => {
+  const c = buildSocialCopy({ title: "T", short: "x".repeat(900) }, "slug-1", "Hook", "abc123");
+  assert.ok(c.linkedin.length <= 1200 && c.x.length <= 280);
+  assert.match(c.linkedin, /https:\/\/youtu\.be\/abc123/);
+});
