@@ -6,7 +6,7 @@ var PROTOCOL_VERSION = "2024-11-05";
 var SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18"];
 var NL = String.fromCharCode(10);
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.11.2";
+var VERSION = "2.11.3-codeagent";
 /* 2.7.2: Batch semantic memory D1 enrichment to one query per search. */ /* 2.7.1 #6612 (pillar autonomy): literal graph searches avoid D1's 50-byte LIKE pattern limit. */ /* 2.7.0 EXUVIA-ENGAGE-1 (2026-11-03, pillar reach): evidence-matched drafts for Exuvia posts needing a response, deduplicated and logged to decision_log; no comment is sent. */ /* 2.5.0 FULLSCOPE-1 (2026-10-31): the SSE transport is real (session + /mcp/messages + keepalive, spec event:endpoint; the old stub closed after 100 ms); ?token= query auth parity with qnfo-tools-mcp; optional MCP_READ_TOKEN read-only scope (write tools: remember_fact, exuvia_publish_paper); ping, prompts/list, resources/templates/list, JSON-RPC batch, -32602 on malformed tools/call, protocolVersion negotiation; remember_fact keeps up to 8000 chars (was silently truncated at 800), clamps importance to 0-1 and enforces its own category enum; the open /fleet-graph/findings route no longer leaks secret: subjects; every tools/call is audit-logged when an AUDIT D1 binding is present. */ /* 2.4.0 REPO-GRAPH-1 (2026-10-29, pillar autonomy; minor: fleet_graph_find and /fleet-graph/find now accept the kinds repo and doc, so a repository or a document is found by name like a worker). */ // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -366,7 +366,79 @@ async function tool_memory_tiering_metrics(args, env) {
   return { content: [{ type: "text", text: JSON.stringify(out) }] };
 }
 __name(tool_memory_tiering_metrics, "tool_memory_tiering_metrics");
-// Hourly: one snapshot of the tier counts into qnfo-audit.memory_tier_counts, so the counts have a history (v_memory_tier_latest, v_memory_tiering) next to the
+ // Hourly: one snapshot of the tier counts into qnfo-audit.memory_tier_counts, so the counts have a history (v_memory_tier_latest, v_memory_tiering) next to the
+ // Bounded consolidation step: each run processes at most 20 episodic memories older than 7 days,
+ // grouped by category, converting them to semantic tier rows. This runs hourly alongside the snapshot.
+ async function hourlyConsolidateOldEpisodic(env) {
+   if (!env.AUDIT) return { skipped: "AUDIT binding absent" };
+   try {
+     const cutoff = new Date(Date.now() - 7 * 864e5).toISOString();
+     // Select up to 20 episodic rows older than 7 days, ordered by category to achieve grouping.
+     const rows = await env.GRAPH_DB.prepare(
+       `SELECT id, category, content, summary, importance, session_id, created_at,
+               CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.role') END AS role
+        FROM agent_memories
+        WHERE json_valid(metadata_json)
+          AND json_extract(metadata_json, '$.tier') = 'episodic'
+          AND created_at < ?
+        ORDER BY category, created_at
+        LIMIT 20`
+     ).bind(cutoff).all();
+ 
+     if (!rows.results || rows.results.length === 0) {
+       return { skipped: "no eligible episodic rows" };
+     }
+ 
+     let episodicCount = 0;
+     let semanticCount = 0;
+ 
+     for (const r of rows.results) {
+       // Create a new semantic memory entry based on the episodic one.
+       const ts = Date.now();
+       const newId = "mem:semantic:" + ts + ":" + (await sha256hex(r.content || "").slice(0, 8));
+       const created_at = new Date().toISOString();
+       const provenance = "consolidated from " + r.id;
+       const metadata_json = JSON.stringify({
+         source: "qnfo-memory-mcp",
+         timestamp: created_at,
+         tier: "semantic",
+         role: r.role || "agent",
+         provenance
+       });
+ 
+       // Insert the new semantic row.
+       await env.GRAPH_DB.prepare(
+         "INSERT OR REPLACE INTO agent_memories (id, category, content, summary, importance, session_id, created_at, expires_at, metadata_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)"
+       ).bind(newId, r.category, r.content, r.summary, r.importance, r.session_id, created_at, metadata_json).run();
+ 
+       // Upsert the vector for the new semantic row.
+       const vec = await embed(env, r.content);
+       await env.PAPER_VZ.upsert([{
+         id: newId,
+         values: vec,
+         metadata: { kind: "memory", category: r.category, content: (r.content || "").slice(0, 800) }
+       }]);
+ 
+       // Delete the original episodic row.
+       await env.GRAPH_DB.prepare("DELETE FROM agent_memories WHERE id = ?1").bind(r.id).run();
+ 
+       episodicCount += 1;
+       semanticCount += 1;
+     }
+ 
+     // Record the consolidation run.
+     const runTs = new Date().toISOString();
+     await env.AUDIT.prepare(
+       "INSERT INTO memory_consolidation_runs (ts, episodic_in, semantic_out) VALUES (?1, ?2, ?3)"
+     ).bind(runTs, episodicCount, semanticCount).run();
+ 
+     return { processed: episodicCount, created_semantic: semanticCount, ts: runTs };
+   } catch (e) {
+     const err = String(e && e.message || e).slice(0, 200);
+     console.error(JSON.stringify({ worker: SERVER_NAME, where: "hourly-consolidation", error: err }));
+     return { error: err };
+   }
+ }
 // outcome hit rates. A failed snapshot is logged and never stops the Exuvia tick that shares the cron.
 async function memoryTierSnapshot(env) {
   if (!env.AUDIT) return { skipped: "AUDIT binding absent" };
