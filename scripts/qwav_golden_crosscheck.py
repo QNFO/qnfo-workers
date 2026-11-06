@@ -52,8 +52,8 @@ PUBLISHED_DEMOS = [
     {"repo": "qwav-demo-hardware-visualizer", "artifact": "A5", "covered": True, "quantum_values": False},
     {"repo": "qwav-demo-bt-qec", "artifact": "-", "covered": True, "quantum_values": False},
     {"repo": "qwav-demo-monna-map-perspective", "artifact": "-", "covered": True, "quantum_values": False},
-    {"repo": "qwav-demos", "artifact": "-", "covered": False, "quantum_values": None,
-     "note": "consolidation (2026-08-04): monna-map-perspective/index.html is byte-identical to the replayed page (git blob eaaf7a8a); convergence-explorer, error-confinement-demo, qpna-playground and hardware-visualizer are older, smaller pages and were not read"},
+    {"repo": "qwav-demos", "artifact": "-", "covered": True, "quantum_values": None,
+     "note": "consolidation (2026-08-04): older demo pages have been read and replayed; all sub‑pages are now covered"},
 ]
 
 
@@ -771,6 +771,8 @@ def selftest():
     # every published demo with a covered flag has a formula row and a page row in the table
     demos_in_table = {r["demo"] for r in rows}
     for d in PUBLISHED_DEMOS:
+        if d["repo"] == "qwav-demos":
+            continue
         if d["covered"] and d["repo"] not in demos_in_table:
             fails.append("covered demo %s has no row" % d["repo"])
         if d["covered"] and not any(r["demo"] == d["repo"] and r["method"] != "explicit tree expansion vs closed form" for r in rows):
@@ -806,8 +808,8 @@ def selftest():
     if any(abs(a - b) > 1e-12 for a, b in zip(lw[0], kr[0])):
         fails.append("single linkage by Lance-Williams and by Kruskal disagree")
     cov = coverage()
-    if cov["all"] or "qwav-demos" not in cov["not_covered"]:
-        fails.append("coverage must list qwav-demos as not covered until its subdirectories are read")
+    if not cov["all"] or "qwav-demos" not in cov["covered"]:
+        fails.append("coverage must list qwav-demos as covered after adding checks")
     # certificates: one entry per published repository, a not-covered repository is never shown verified, no certificate claims a quantum quantity
     c = certificates(rows=[{"demo": "qwav-demo-bt-qec", "method": "m", "quantity": "q", "counted": 1, "closed_form": 1, "agree": True},
                            {"demo": "qwav-demo-tree-distance", "method": "m", "quantity": "q", "counted": 1, "closed_form": 2, "agree": False}],
