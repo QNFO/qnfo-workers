@@ -196,9 +196,11 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Closeout and server-side handoff, 2026-10-19](handoff/2026-10-19-closeout.md) - `docs/handoff/2026-10-19-closeout.md`
 - [Closeout 4 and server-side handoff, 2026-10-26: BREACH-DOCTOR-1](handoff/2026-10-26-closeout-4.md) - `docs/handoff/2026-10-26-closeout-4.md`
 - [Failure-mode audit, 2026-10-28 (read-only, 55 modes)](handoff/2026-10-28-failure-mode-audit.md) - `docs/handoff/2026-10-28-failure-mode-audit.md`
+- [docs/handoff/TEMPLATE.md](handoff/TEMPLATE.md) - `docs/handoff/TEMPLATE.md`
 - [COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost](handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md) - `docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md`
 - [COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price](handoff/issues/by-window-8-buckets.md) - `docs/handoff/issues/by-window-8-buckets.md`
 - [RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source](handoff/issues/rum-zero-13.md) - `docs/handoff/issues/rum-zero-13.md`
+- [Handoff: two-speed, full-lifecycle command line (SDLC-OWN-1 build)](handoff/sdlc-two-speed-cli.md) - `docs/handoff/sdlc-two-speed-cli.md`
 - [Folded repository](infra-records/FOLDED.md) - `docs/infra-records/FOLDED.md`
 - [QNFO Infrastructure (QNFO.INFRA)](infra-records/README.md) - `docs/infra-records/README.md`
 - [Owner API keys: which exist, where they live, how they are issued](keys/owner-api-keys.md) - `docs/keys/owner-api-keys.md`

@@ -1003,6 +1003,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/2026-10-28-failure-mode-audit.md"
     },
     {
+      "path": "docs/handoff/TEMPLATE.md",
+      "title": "docs/handoff/TEMPLATE.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/TEMPLATE.md"
+    },
+    {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
       "title": "COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md"
@@ -1016,6 +1021,11 @@
       "path": "docs/handoff/issues/rum-zero-13.md",
       "title": "RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/rum-zero-13.md"
+    },
+    {
+      "path": "docs/handoff/sdlc-two-speed-cli.md",
+      "title": "Handoff: two-speed, full-lifecycle command line (SDLC-OWN-1 build)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/sdlc-two-speed-cli.md"
     },
     {
       "path": "docs/infra-records/FOLDED.md",
