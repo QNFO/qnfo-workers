@@ -10,6 +10,11 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Anticipate the owner's next question and answer it first. Do every chore a tool can do; hand the owner only what no tool can do (a sign-in code, their own accounts), once, in one line, and keep working on the rest.
 - Run independent work in parallel sessions or subagents and keep going on your own piece. Waiting on a session is not a reason to idle. This moves no limit: the interrupt gate, harness permission checks, the secret lock and live work claims keep their precedence.
 
+## Own the whole SDLC (SDLC-OWNERSHIP-1, owner preference 2026-11-06)
+- A session owns research, design, back end, front end, deploy and verification without being asked: quick, token-friendly first reply, then the homework; act as product manager;
+  coordinate front and back end in one change. When usage is limited, ship draft PRs with a HANDOFF file and a follow-up issue carrying `code-task:` lines so any code agent can finish.
+  Honest limits are stated with evidence; a goal that cannot be guaranteed is turned into the measurable levers that move it.
+
 ## Large worker files: read one function, not the file (WORKER-OUTLINE-1)
 - `qnfo-research-exec/worker.js` is 1.6 MB, `qnfo-fleet-dashboard` 1.4 MB, `qnfo-fleet-control` 1.3 MB, `qnfo-ops` 0.8 MB. Opening one whole costs
   200k-400k tokens before the first edit (the owner's "millions of tokens to change code", 2026-11-04), and a Grep hit on a long line prints thousands of characters.

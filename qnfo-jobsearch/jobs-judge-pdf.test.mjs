@@ -61,3 +61,16 @@ let bad = false; try { await T.calibrate(env, { owner: "maybe" }); } catch (e) {
 ok(bad, "bad verdict is a 400");
 
 console.log(`jobs-judge-pdf: ${pass} checks passed`);
+
+// 7. the /prep page is served, links resolve, and its script parses
+import vm from "node:vm";
+const res = await worker.fetch(new Request("https://x/prep"), env, { waitUntil() {} });
+const page = await res.text();
+ok(res.status === 200 && /Check fit/.test(page) && /Draft answers/.test(page) && /Build interview brief/.test(page), "prep page served with its three screens");
+const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+ok(scripts.length === 1, "one inline script");
+new vm.Script(scripts[0]);
+ok(true, "prep page script parses");
+const home = await (await worker.fetch(new Request("https://x/"), env, { waitUntil() {} })).text();
+ok(home.includes('href="/prep"'), "main page links to /prep");
+console.log(`jobs-judge-pdf (with page): ${pass} checks passed`);

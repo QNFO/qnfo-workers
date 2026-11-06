@@ -2168,7 +2168,7 @@ const INDEX = {
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
     "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
-    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
+    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
   },
   policy: "nothing is sent; approval is a status change only",
 };
@@ -2237,6 +2237,7 @@ const handler = {
       } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
+    if (p === "/prep" && m === "GET") return new Response(PREP_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/cv" && m === "GET") return new Response(CV_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api/cv" || p.startsWith("/api/cv/")) {
       if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
@@ -2399,7 +2400,7 @@ details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:
 <header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
 <div class="bar"><select id="tier"><option value="">All tiers</option><option value="A">A</option><option value="B">B</option><option value="C">C: stretch</option></select>
 <select id="status"><option value="">Active (hides rejected)</option><option value="all">All, including rejected</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
-<input id="q" placeholder="Search title, company, place" size="26"><button id="ready">Ready to apply</button><button id="run" class="p">Run now</button><a href="/cv"><b>My CV</b></a> <a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
+<input id="q" placeholder="Search title, company, place" size="26"><button id="ready">Ready to apply</button><button id="run" class="p">Run now</button><a href="/cv"><b>My CV</b></a> <a href="/prep"><b>Apply and prepare</b></a> <a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
 <main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="fillsetup"><summary>One-click apply: set up once</summary><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="p" style="padding:6px 10px;border-radius:6px;background:var(--acc);color:#fff;text-decoration:none">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></details><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
 <details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="follow"></div><div id="list"></div></main>
 <script>
@@ -2467,6 +2468,82 @@ load();who();loadPrefs();
 </script></body></html>`;
 
 // ------------------------------------------------------------------ CV page (JOBSEARCH-CV-1): interview, review, edit, resume per job, history. Plain JS, talks only to /api/cv* and /api/analyze.
+// JOBSEARCH-PREP-UI-1: three tabs on one phone page (check fit, answers, interview prep) over the 1.9.0 routes.
+const PREP_UI = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apply and prepare</title>
+<style>
+:root{--bg:#f6f8fb;--ink:#16202e;--mut:#4f5b6b;--line:#e3e8ef;--brand:#2457d6;--ok:#16794c;--warn:#8a4b00;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg)}
+header{background:#fff;border-bottom:1px solid var(--line);padding:8px 14px;position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0 0 4px}header a{color:var(--brand);margin-right:14px;display:inline-block;padding:6px 0}
+nav{display:flex;gap:6px;flex-wrap:wrap}nav button{flex:1;min-width:96px;min-height:44px;border:1px solid var(--line);background:#fff;border-radius:10px;font:inherit;font-weight:600;color:var(--mut)}
+nav button.on{color:#fff;background:var(--brand);border-color:var(--brand)}
+main{padding:12px 14px 40px;max-width:720px;margin:0 auto}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+textarea{width:100%;min-height:96px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px}
+button.b{min-height:44px;padding:0 16px;border:1px solid var(--line);background:#fff;border-radius:10px;font:inherit;font-weight:600;margin:4px 6px 4px 0}
+button.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+.mut{color:var(--mut)}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.hide{display:none}
+h2{font-size:17px;margin:0 0 6px}h3{font-size:15px;margin:10px 0 4px}ul{margin:4px 0 4px 18px;padding:0}
+input{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;width:9em}
+.big{font-size:28px;font-weight:700}
+</style></head><body>
+<header><h1>Apply and prepare</h1><a href="/">Matches</a><a href="/cv">Your CV</a>
+<nav id="nav"><button data-t="check" class="on">Check fit</button><button data-t="answers">Answers</button><button data-t="prep">Interview prep</button></nav></header>
+<main>
+<div id="signbox" class="hide"></div>
+<div class="card"><h2>The job</h2><p class="mut">Paste the job link, or the posting text.</p><textarea id="job" placeholder="https://... or paste the posting"></textarea></div>
+<section id="t-check"><div class="card"><button class="b pri" id="go-check">Check fit</button><div id="out-check" class="mut">Nothing checked yet.</div></div></section>
+<section id="t-answers" class="hide"><div class="card"><h2>Application questions</h2><p class="mut">One question per line. Pay, work authorization and demographic questions are always left to you.</p><textarea id="qs" placeholder="Why do you want this role?"></textarea><button class="b pri" id="go-answers">Draft answers</button><div id="out-answers" class="mut"></div></div></section>
+<section id="t-prep" class="hide"><div class="card"><button class="b pri" id="go-prep">Build interview brief</button><div id="out-prep" class="mut">No brief yet.</div></div>
+<div class="card hide" id="quiz"><h2>Quiz me</h2><div id="qtext" class="big" style="font-size:18px"></div><textarea id="qans" placeholder="Answer out loud first, then type or dictate it here"></textarea><button class="b pri" id="go-fb">Get feedback</button><button class="b" id="go-next">Next question</button><div id="out-fb"></div></div></section>
+</main>
+<script>
+var $=function(s){return document.querySelector(s)};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+async function api(p,b){var r=await fetch(p,b===undefined?{}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});var j=await r.json().catch(function(){return {}});if(!r.ok)throw new Error(j.error||r.status);return j}
+function signIn(){return new Promise(async function(res){var r;try{r=await api('/api/auth/request',{})}catch(e){if(!/limit/.test(e.message)){alert(e.message);return res(false)}r={sent:false,note:e.message}}
+ var box=$('#signbox');box.className='card';
+ box.innerHTML='<b>Sign in</b><div>'+esc(r.sent===false?r.note+' A code sent earlier still works.':'A 6-digit code was e-mailed to '+r.to+'.')+'</div><div style="margin-top:8px"><input id="scode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="6-digit code"> <button class="b pri" id="sgo">Sign in</button><button class="b" id="scancel">Cancel</button></div><div id="smsg" class="mut"></div>';
+ function done(v){box.className='hide';box.innerHTML='';res(v)}
+ $('#scancel').onclick=function(){done(false)};
+ async function go(){try{await api('/api/auth/verify',{code:$('#scode').value.trim()});done(true)}catch(e){$('#smsg').textContent=e.message}}
+ $('#sgo').onclick=go;$('#scode').onkeydown=function(e){if(e.key==='Enter')go()};$('#scode').focus()})}
+async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
+function job(){var v=$('#job').value.trim();if(!v)throw new Error('Paste the job link or the posting text first.');return v}
+function busy(el,t){el.className='mut';el.textContent=t}
+function fail(el,e){el.className='bad';el.textContent=e.message}
+function list(a){return a&&a.length?'<ul>'+a.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul>':'<span class="mut"> none</span>'}
+document.querySelectorAll('#nav button').forEach(function(b){b.onclick=function(){document.querySelectorAll('#nav button').forEach(function(x){x.className=x===b?'on':''});['check','answers','prep'].forEach(function(t){$('#t-'+t).className=t===b.dataset.t?'':'hide'})}});
+var last=null;
+$('#go-check').onclick=async function(){var o=$('#out-check');try{var v=job();busy(o,'Reading the posting and your record...');var d=await authed(function(){return api('/api/analyze',{input:v})});last=d;
+ var j=d.judge,h='<h2>'+esc(d.title)+' <span class="mut">'+esc(d.company)+'</span></h2><div class="big">'+esc(d.verdict)+' <span class="mut" style="font-size:16px">rubric '+esc(d.fit_score)+(j?' | model '+esc(j.fit):'')+'</span></div><p class="mut">'+esc(d.second_opinion)+'</p>';
+ if(j){h+='<h3>Why the model reads it this way</h3>'+list(j.reasons)+'<h3>Gaps</h3>'+list(j.gaps)}
+ h+='<h3>Your strengths for this role</h3>'+list((d.strengths||[]).map(function(s){return s.text}));
+ if(d.flags&&d.flags.length)h+='<h3>Check before applying</h3>'+list(d.flags);
+ h+='<h3>Which is right?</h3><button class="b" data-v="qualified">I am qualified</button><button class="b" data-v="stretch">A stretch</button><button class="b" data-v="not_qualified">Not qualified</button><div id="cal" class="mut"></div>';
+ if(d.apply&&d.apply.resume_pdf_b64)h+='<h3>Resume</h3><button class="b pri" id="dl-pdf">Download resume PDF</button>';
+ o.className='';o.innerHTML=h;
+ o.querySelectorAll('button[data-v]').forEach(function(b){b.onclick=async function(){try{await authed(function(){return api('/api/calibrate',{owner:b.dataset.v,title:d.title,company:d.company,rubric_fit:d.fit_score,judge_fit:j?j.fit:null})});$('#cal').textContent='Saved. Thank you: this is how the scoring learns.'}catch(e){$('#cal').textContent=e.message}}});
+ var dl=$('#dl-pdf');if(dl)dl.onclick=function(){var bin=atob(d.apply.resume_pdf_b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=d.apply.resume_pdf_file||'resume.pdf';a.click()}
+}catch(e){fail(o,e)}};
+$('#go-answers').onclick=async function(){var o=$('#out-answers');try{var v=job(),qs=$('#qs').value.split('\n').map(function(x){return x.trim()}).filter(Boolean);if(!qs.length)throw new Error('Add at least one question.');busy(o,'Drafting from your record...');
+ var d=await authed(function(){return api('/api/answers',{input:v,questions:qs})});o.className='';
+ o.innerHTML=d.answers.map(function(a,i){var st=a.status==='draft'?'<span class="ok">Draft</span>':a.status==='owner_only'?'<span class="warn">Yours to answer</span>':a.status==='needs_review'?'<span class="warn">Needs your review</span>':'<span class="bad">Unavailable, try again</span>';
+  return '<div class="card"><b>'+esc(a.question)+'</b><div>'+st+'</div>'+(a.answer?'<p id="a'+i+'">'+esc(a.answer)+'</p><button class="b" data-c="'+i+'">Copy answer</button>':'<p class="mut">'+esc(a.note||'')+'</p>')+(a.problems&&a.problems.length?'<div class="warn">'+list(a.problems)+'</div>':'')+'</div>'}).join('');
+ o.querySelectorAll('button[data-c]').forEach(function(b){b.onclick=function(){navigator.clipboard.writeText($('#a'+b.dataset.c).textContent);b.textContent='Copied'}})
+}catch(e){fail(o,e)}};
+var brief=null,qi=0;
+function showQ(){var q=brief.likely_questions[qi%brief.likely_questions.length];$('#qtext').textContent=q.q;$('#qans').value='';$('#out-fb').innerHTML='<p class="mut">'+esc(q.type)+': '+esc(q.angle)+'</p>'}
+$('#go-prep').onclick=async function(){var o=$('#out-prep');try{var v=job();busy(o,'Building your brief...');brief=await authed(function(){return api('/api/prep',{input:v})});o.className='';
+ o.innerHTML='<h2>'+esc(brief.title)+' <span class="mut">'+esc(brief.company)+'</span></h2><p>'+esc(brief.role_summary)+'</p><h3>What they need</h3>'+list(brief.what_they_need)+'<h3>What you offer</h3>'+list(brief.what_you_offer.map(function(x){return x.point}))+'<h3>Gaps and how to frame them</h3>'+list(brief.gaps.map(function(g){return g.gap+': '+g.honest_framing}))+'<h3>Your stories</h3>'+list(brief.stories.map(function(s){return s.theme+': '+s.outline}))+'<h3>Questions to ask them</h3>'+list(brief.questions_to_ask);
+ if(brief.likely_questions.length){qi=0;$('#quiz').className='card';showQ()}
+}catch(e){fail(o,e)}};
+$('#go-next').onclick=function(){if(brief){qi++;showQ()}};
+$('#go-fb').onclick=async function(){var o=$('#out-fb');try{var a=$('#qans').value.trim();if(!a)throw new Error('Type or dictate your answer first.');busy(o,'Reading your answer...');var q=brief.likely_questions[qi%brief.likely_questions.length];
+ var f=await authed(function(){return api('/api/prep/quiz',{question:q.q,answer:a,role:brief.title+' at '+brief.company})});o.className='';
+ o.innerHTML='<div class="big">'+esc(f.score)+' / 5</div><h3>Worked</h3>'+list(f.strengths)+'<h3>Fix</h3>'+list(f.fixes)+(f.unsupported_claims.length?'<h3 class="warn">Not backed by your record</h3>'+list(f.unsupported_claims):'')+'<h3>Stronger version</h3><p>'+esc(f.stronger_outline)+'</p><h3>Likely follow-up</h3><p>'+esc(f.follow_up)+'</p>'
+}catch(e){fail(o,e)}};
+</script></body></html>`;
 const CV_UI = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your CV</title>
 <style>
 :root{--bg:#f6f8fb;--ink:#16202e;--mut:#5b6778;--line:#e3e8ef;--brand:#2457d6;--ok:#16794c;--warn:#a65b00;--bad:#b3261e}
