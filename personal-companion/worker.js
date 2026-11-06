@@ -6550,7 +6550,7 @@ function noteReviewerNoVerdict(env, modelId) {
     var db = env && (env.AUDIT || env.AUDIT_DB);
     if (!db) return;
     var day = new Date().toISOString().slice(0, 10);
-    var pr = db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,'personal-companion','factcheck',?2,0,1,0,0) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET errors = errors + 1").bind(day, String(modelId)).run();
+    var pr = db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,'personal-companion','factcheck',?2,0,1,0,0,0,0,0) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET errors = errors + 1").bind(day, String(modelId)).run();
     if (pr && typeof pr.catch === "function") pr.catch(function (e) { console.error("COST-COMPANION-1 note failed: " + String(e && e.message || e).slice(0, 160)); });
   } catch (e2) { console.error("COST-COMPANION-1 note threw: " + String(e2 && e2.message || e2).slice(0, 160)); }
 }
