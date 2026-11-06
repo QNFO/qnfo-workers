@@ -380,3 +380,34 @@ export function stepUsageStatements(runId, day, modelId, rows, nowMs) {
   const sql = "INSERT OR REPLACE INTO cf_agent_step_usage (run_id, step, day, model, input_tokens, cached_tokens, output_tokens, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)";
   return (Array.isArray(rows) ? rows : []).slice(0, 40).map((r) => ({ sql, binds: [String(runId).slice(0, 80), r.step, String(day).slice(0, 10), String(modelId).slice(0, 120), r.i, r.c, r.o, nowMs] }));
 }
+
+// CODE-AGENT-UX-1 slice 3 (agent_issues 1002218): route a GitHub webhook delivery to the pull request it is about, so the code session that
+// opened the PR (ship_change, qnfo-ops 2.69.0) can read red CI, a review or the merge and act without being asked. Pure: no network, no secret.
+// A delivery that is not about a pull request this fleet's agents opened (branch ops/issue-<id>-... or a "[issue #<id>]" title) returns null.
+export function githubEventRoute(eventName, payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const repo = String(p.repository && p.repository.full_name || "");
+  const run = p.check_run || p.check_suite || null;
+  const pr = p.pull_request || (p.issue && p.issue.pull_request ? p.issue : null) || (run && Array.isArray(run.pull_requests) && run.pull_requests[0]) || null;
+  const number = pr && Number(pr.number);
+  if (!repo || !Number.isInteger(number) || number <= 0) return null;
+  const branch = String(pr.head && pr.head.ref || run && run.head_branch || "");
+  const title = String(pr.title || "");
+  const byBranch = /^ops\/issue-(\d{1,9})-/.exec(branch);
+  const byTitle = /\[issue #(\d{1,9})\]/i.exec(title);
+  const issueId = byBranch ? Number(byBranch[1]) : byTitle ? Number(byTitle[1]) : null;
+  if (issueId == null) return null;
+  let kind = null;
+  if ((eventName === "check_run" || eventName === "check_suite") && p.action === "completed" && run) {
+    kind = ["failure", "timed_out", "action_required", "startup_failure"].indexOf(String(run.conclusion)) >= 0 ? "ci-red" : String(run.conclusion) === "success" ? "ci-green" : null;
+  } else if (eventName === "pull_request_review" && p.action === "submitted") {
+    kind = "review";
+  } else if (eventName === "issue_comment" && p.action === "created") {
+    kind = "comment";
+  } else if (eventName === "pull_request" && p.action === "closed") {
+    kind = pr.merged ? "merged" : "closed";
+  }
+  if (!kind) return null;
+  const sender = p.sender || p.comment && p.comment.user || p.review && p.review.user || {};
+  return { kind, repo, pr: number, branch, issue_id: issueId, bot: String(sender.type || "") === "Bot", check: run ? String(run.name || "") : null };
+}
