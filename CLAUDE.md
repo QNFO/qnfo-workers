@@ -17,6 +17,11 @@ because each one was broken at least once; the linked issue holds the evidence.
 - `scripts/doc_audit.py` lists docs no source file references; `scripts/doc_audit.test.mjs` fails a PR that adds one (allowlist `scripts/doc-orphans-allowlist.txt`, shrink-only).
   Roadmap items and follow-up issues carry `code-task:` lines, never prose alone. The allowlisted docs are a backlog: each gets code that uses it or is deleted.
 
+## Audit your own work (SELF-AUDIT-1, owner directive 2026-11-06)
+- Before and after delivering, check the work against real output (a live route, a CI result, a D1 row, a rendered page), never against your own description of it. Ask what you are not
+  thinking about; each answer becomes a fix in the same PR or an `agent_issues` row with a `code-task:` line and a closing probe. There is always room to improve: a delivery with no
+  open improvement filed is unfinished. A failing check on your own PR is read, fixed and re-verified in the same turn, not noted.
+
 ## Own the whole SDLC (SDLC-OWNERSHIP-1, owner preference 2026-11-06)
 - A session owns research, design, back end, front end, deploy and verification without being asked: quick, token-friendly first reply, then the homework; act as product manager;
   coordinate front and back end in one change. When usage is limited, ship draft PRs with a HANDOFF file and a follow-up issue carrying `code-task:` lines so any code agent can finish.
