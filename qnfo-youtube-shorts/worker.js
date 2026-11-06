@@ -1,4 +1,4 @@
-var VERSION = "0.8.0-reach";
+var VERSION = "0.8.1-quality";
 /* 0.4.1: new Shorts descriptions include the QNFO channel context. */ /* #5479, pillar reach: authenticated re-consent and code exchange with the stored OAuth client. */ /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -298,15 +298,36 @@ async function aiJson(env, system, user, maxTokens, temp, skip) {
   }
   throw new Error("director: " + notes.join(" | ").slice(0, 700));
 }
-var CTA_LINES = ["Want the full story, in plain language? It is free, and the link is in the description.", "There is more to this than fits in a minute. The whole article is free, linked in the description.", "If that got you curious, the plain-language version is free, and the link is below."];
-function ctaBeat(slug) {
+var CTA_LINES = ["That was a QNFO paper called {t}. The free plain-language version is linked below.", "That came from a QNFO paper called {t}. The whole article is free, and the link is below.", "The paper behind this is called {t}. Read the plain-language version free, linked below."];
+// YT-QUALITY-2 (2026-11-06, owner: the ending was kludgy and never said what the paper is): the closing line names the paper in speakable words and is the only sign-off; the director no longer writes one.
+function spokenTitle(title) {
+  var t = String(title || "").replace(/[*_`#"“”]/g, "").replace(/\s+/g, " ").trim().replace(/[.:;,!?\s]+$/, "");
+  if (t.length > 90) t = t.slice(0, 90).replace(/\s+\S*$/, "");
+  return t;
+}
+function ctaBeat(slug, paperTitle) {
   var h = 0, t = String(slug || "");
   for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
-  return { kind: "cta", narr: CTA_LINES[h % CTA_LINES.length], title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." };
+  var name = spokenTitle(paperTitle), line = CTA_LINES[h % CTA_LINES.length];
+  return { kind: "cta", narr: name ? line.replace("{t}", name) : line.replace(" called {t}", ""), title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." };
+}
+// YT-AUDIT-1: deterministic checks on the director's script, so a defect found by reading real output is caught on every later run. Returns the list of problems (empty when clean).
+function scriptIssues(script) {
+  var s = String(script || "").trim(), out = [];
+  if (!s) return ["no script"];
+  var words = s.split(/\s+/).length;
+  if (words > 110) out.push("over 110 words (" + words + ")");
+  if (/^(imagine|what if|did you know|have you ever|picture this)\b/i.test(s)) out.push("stock opener");
+  if (/\b(in this video|let'?s dive|buckle up|game.?changer|groundbreaking|revolutionary|mind.?blowing|fascinating|delve)\b/i.test(s)) out.push("filler or hype phrase");
+  if ((s.match(/\bthis (paper|study|research)\b/gi) || []).length > 1) out.push("says 'this paper' more than once instead of saying what the work is");
+  if (/(link|description|below|subscribe|read the (full|whole))/i.test(s.split(/(?<=[.!?])\s+/).slice(-1)[0] || "")) out.push("writes its own sign-off; the closing line is added after it");
+  var starts = s.split(/(?<=[.!?])\s+/).map(function (x) { return (x.split(/\s+/)[0] || "").toLowerCase(); });
+  for (var i = 2; i < starts.length; i++) if (starts[i] && starts[i] === starts[i - 1] && starts[i] === starts[i - 2]) { out.push("three sentences in a row start with '" + starts[i] + "'"); break; }
+  return out;
 }
 function directorPrompt() {
   return "You write a 35-45 second vertical video for people who have never heard of this paper, from its plain-language article. Think like a good science storyteller, not a slide reader. Output JSON only: {\"title\":\"<=70 chars, plain\",\"script\":\"the whole voice-over, 85-110 words, never more than 110\",\"beats\":[...]}.\n" +
-    "STEP 1, the script. Write the complete voice-over FIRST, as one piece of natural speech with an arc: (1) HOOK, one concrete question or surprising claim from the article, under 12 words, no greeting; (2) STAKES, why a curious person should care, in everyday words; (3) the IDEA, explained step by step, with at most one everyday comparison introduced by 'think of it like' or 'imagine' that adds no factual claim; (4) a TURN, a spoken pivot such as 'But here is the catch' or 'So what does that mean?' that carries the article's caveat (assumed, modelled, does not show); (5) PAYOFF, what changes in how we should see the world, in one plain sentence; (6) a closing question or teaser that makes the listener want the article. Count the words: the first live Short ran 160 words and 59 seconds, and shorter holds attention better. Write for the ear: full, grammatical sentences, contractions, sentences of 4 to 16 words with deliberate variety (a short one after a long one), questions and commas where a speaker's pitch moves, numbers spelled as words, no URLs, no brackets, no jargon without a plain gloss, never read a list aloud. Talk to one person ('you'). The voice must sound like someone explaining this to a friend. Open on the single most concrete, surprising fact in the article, never on 'Imagine', 'What if' or 'Did you know'; prefer concrete nouns and verbs over abstractions; do not say 'this paper', 'researchers' or 'scientists' more than once; vary the rhythm so no three sentences start alike; end on an open loop that the free article closes.\n" +
+    "STEP 1, the script. Write the complete voice-over FIRST, as one piece of natural speech with an arc: (1) HOOK, one concrete question or surprising claim from the article, under 12 words, no greeting; (2) STAKES, why a curious person should care, in everyday words; (3) the IDEA, explained step by step, with at most one everyday comparison introduced by 'think of it like' or 'imagine' that adds no factual claim; (4) a TURN, a spoken pivot such as 'But here is the catch' or 'So what does that mean?' that carries the article's caveat (assumed, modelled, does not show); (5) PAYOFF, what changes in how we should see the world, in one plain sentence; (6) a closing question or teaser that makes the listener want the article, in one sentence, with no mention of links, descriptions, subscribing or 'the full article' (a closing line naming the paper and the free article is added after your script). Count the words: the first live Short ran 160 words and 59 seconds, and shorter holds attention better. Write for the ear: full, grammatical sentences, contractions, sentences of 4 to 16 words with deliberate variety (a short one after a long one), questions and commas where a speaker's pitch moves, numbers spelled as words, no URLs, no brackets, no jargon without a plain gloss, never read a list aloud. Talk to one person ('you'). The voice must sound like someone explaining this to a friend. Open on the single most concrete, surprising fact in the article, never on 'Imagine', 'What if' or 'Did you know'; prefer concrete nouns and verbs over abstractions; within the first two sentences say in plain words what this work is (its subject and what kind of work it is: a model, a measurement, an argument, a method), so a listener who has never heard of it knows what they are hearing about; then do not say 'this paper', 'researchers' or 'scientists' more than once; vary the rhythm so no three sentences start alike; end on an open loop that the free article closes.\n" +
     "STEP 2, the storyboard. Cut the script into 5 to 7 beats in order; each beat's narr is the exact consecutive piece of the script it covers (1 to 3 sentences) and together they are the whole script. Give each beat a picture that ILLUSTRATES what is said and never repeats it: on-screen text is two to five words, a label or a number, never the sentence being spoken. Beat fields: {\"kind\":K,\"narr\":\"...\", ...fields}. Kinds:\n" +
     "hook {lines:[<=5 short lines shown big, each <=16 chars], hi:[indexes of lines to highlight]} (beat 1, and optionally the last beat to show the closing question as big text)\n" +
     "flow {nodes:[2-4 labels, each <=22 chars]} (a process or chain: A leads to B leads to C)\n" +
@@ -333,6 +354,14 @@ async function stageDirect(env, row) {
       if (pre2.kept.length > pre.kept.length) { dj = dj2; spec = dj2.json; pre = pre2; }
     } catch (e) { await logEvent(env, "youtube.director_retry", String(e && e.message || e).slice(0, 200), null, "warn"); }
   }
+  var issues = scriptIssues(spec.script); // YT-AUDIT-1: one self-correcting pass when the script breaks a house rule
+  if (issues.length && pre.kept.length) {
+    try {
+      var dj3 = await aiJson(env, directorPrompt(), text.slice(0, 9000) + "\n\nREVISE: your previous script had these problems: " + issues.join("; ") + ". Write the whole JSON again with them fixed, keeping every claim supported by the article.", 3500, 0.7);
+      var pre3 = validateBeats(dj3.json.beats, article, []);
+      if (pre3.kept.length >= MIN_CONTENT_BEATS && scriptIssues(dj3.json.script).length < issues.length) { dj = dj3; spec = dj3.json; pre = pre3; issues = scriptIssues(spec.script); }
+    } catch (e) { await logEvent(env, "youtube.script_audit", String(e && e.message || e).slice(0, 200), null, "warn"); }
+  }
   var unsupported = [];
   if (pre.kept.length) {
     var chk = await env.AI.run(CHECK_MODEL, {
@@ -346,12 +375,12 @@ async function stageDirect(env, row) {
     unsupported = (Array.isArray(cj.unsupported) ? cj.unsupported : []).map(Number);
   }
   var v = validateBeats(spec.beats, article, unsupported);
-  await env.MEDIA.put("youtube/" + row.id + "/beats.json", JSON.stringify({ title: spec.title, script: spec.script, raw: v.kept.length < MIN_CONTENT_BEATS ? JSON.stringify(spec.beats || []).slice(0, 6000) : undefined, source: dj.source, kept: v.kept, dropped: v.dropped, checker_unsupported: unsupported }), { httpMetadata: { contentType: "application/json" } });
+  await env.MEDIA.put("youtube/" + row.id + "/beats.json", JSON.stringify({ title: spec.title, script: spec.script, raw: v.kept.length < MIN_CONTENT_BEATS ? JSON.stringify(spec.beats || []).slice(0, 6000) : undefined, source: dj.source, kept: v.kept, dropped: v.dropped, checker_unsupported: unsupported, script_issues: issues }), { httpMetadata: { contentType: "application/json" } });
   if (v.kept.length < MIN_CONTENT_BEATS) {
     await setState(env, row.id, "rejected", { note: "director left " + v.kept.length + " supported beats; dropped " + JSON.stringify(v.dropped).slice(0, 600) });
     return null;
   }
-  var cta = ctaBeat(row.slug);
+  var cta = ctaBeat(row.slug, article.title);
   var beats = v.kept.concat([cta]);
   await setState(env, row.id, "directed", { title: String(spec.title || article.title).slice(0, 80), note: "beats " + beats.length + ", dropped " + v.dropped.length });
   return beats;
@@ -555,7 +584,7 @@ async function advance(env, row, deadline) {
       if (row.state === "queued") { if (!(await stageDirect(env, row))) return row.id; }
       else if (row.state === "directed") {
         var bo = await env.MEDIA.get("youtube/" + row.id + "/beats.json");
-        var beats = JSON.parse(await bo.text()).kept.concat([ctaBeat(row.slug)]);
+        var beats = JSON.parse(await bo.text()).kept.concat([ctaBeat(row.slug, (await loadArticle(env, row.slug)).title)]);
         await stageAudio(env, row, beats);
       }
       else if (row.state === "audio") await stageSubmit(env, row);
@@ -796,5 +825,5 @@ var worker_default = {
     ctx.waitUntil(runTick(env, {}).then(function (r) { return logEvent(env, "youtube.tick", JSON.stringify(r), r, "ok"); }).catch(function (e) { console.error(JSON.stringify({ worker: WORKER, where: "scheduled", error: String(e && e.message || e) })); return logEvent(env, "youtube.tick", String(e && e.message || e), null, "error"); }));
   }
 };
-export { buildSocialCopy, dailyAllows, uploadCooldownUntil, RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION, parseRetentionReport, parseVideoStats, retentionDue, retentionFailure, readRetention, storeProvenance, stagePoll, sha256Hex };
+export { scriptIssues, spokenTitle, buildSocialCopy, dailyAllows, uploadCooldownUntil, RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION, parseRetentionReport, parseVideoStats, retentionDue, retentionFailure, readRetention, storeProvenance, stagePoll, sha256Hex };
 export default worker_default;

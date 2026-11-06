@@ -254,3 +254,22 @@ test("social copy is built from the article only and fits the limits", () => {
   assert.ok(c.linkedin.length <= 1200 && c.x.length <= 280);
   assert.match(c.linkedin, /https:\/\/youtu\.be\/abc123/);
 });
+
+// YT-QUALITY-2 / YT-AUDIT-1 (0.8.1)
+import { scriptIssues, spokenTitle, ctaBeat as cta081 } from "./worker.js";
+test("the closing line names the paper and speaks no URL", () => {
+  const c = cta081("p1", "**Entropic Operational Paradigm:** A Study.");
+  assert.match(c.narr, /Entropic Operational Paradigm: A Study|Entropic Operational Paradigm/);
+  assert.ok(!/\*|http|qnfo\.org/i.test(c.narr));
+  assert.ok(!/called \{t\}|\{t\}/.test(cta081("p1").narr));
+});
+test("spokenTitle trims long titles at a word", () => {
+  assert.ok(spokenTitle("word ".repeat(40)).length <= 90);
+});
+test("script audit flags stock openers, hype, double 'this paper' and a self-written sign-off", () => {
+  assert.deepEqual(scriptIssues("A tree grows slowly. It needs light. The result is plain."), []);
+  assert.ok(scriptIssues("Imagine a world. Then it ends.").includes("stock opener"));
+  assert.ok(scriptIssues("A fact. This groundbreaking idea matters.").some((x) => /hype/.test(x)));
+  assert.ok(scriptIssues("This paper asks. This paper says so.").some((x) => /this paper/.test(x)));
+  assert.ok(scriptIssues("A fact is here. Read the full article in the description.").some((x) => /sign-off/.test(x)));
+});
