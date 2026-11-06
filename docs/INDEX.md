@@ -103,6 +103,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [HANDOFF — 2026-10-19 (handoff backlog + R2 Basin Catalog + red drain)](HANDOFF-2026-10-19-red-drain.md) - `docs/HANDOFF-2026-10-19-red-drain.md`
 - [Infrastructure and AI-spend audit, 2026-11-04 (pillar: cost)](INFRA-AUDIT-2026-11-04.md) - `docs/INFRA-AUDIT-2026-11-04.md`
 - [JOBSEARCH-APPLY-1: one-click apply (qnfo-jobsearch 1.7.0, jobs.q08.org)](JOBS-APPLY.md) - `docs/JOBS-APPLY.md`
+- [Jobs agent: research basis and design (JOBSEARCH-JUDGE-1, 2026-11-06)](JOBSEARCH-RESEARCH-2026-11.md) - `docs/JOBSEARCH-RESEARCH-2026-11.md`
 - [Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)](KILL-SWITCH-DRILL.md) - `docs/KILL-SWITCH-DRILL.md`
 - [KG-CURATE-1: the content knowledge graph, curated by the fleet](KNOWLEDGE-GRAPH.md) - `docs/KNOWLEDGE-GRAPH.md`
 - [Leases, fencing tokens, caps, breakers and the kill switch (BP26-LEASES-KILLSWITCH-1)](LEASES-FENCING.md) - `docs/LEASES-FENCING.md`
@@ -380,6 +381,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-github-steward](../qnfo-github-steward/README.md) - `qnfo-github-steward/README.md`
 - [qnfo-intent-orchestrator](../qnfo-intent-orchestrator/README.md) - `qnfo-intent-orchestrator/README.md`
 - [qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)](../qnfo-ipatent/README.md) - `qnfo-ipatent/README.md`
+- [qnfo-jobsearch handoff (fail-safe for a session that stops mid-work)](../qnfo-jobsearch/HANDOFF.md) - `qnfo-jobsearch/HANDOFF.md`
 - [qnfo-kaizen](../qnfo-kaizen/README.md) - `qnfo-kaizen/README.md`
 - [qnfo-model-eval](../qnfo-model-eval/README.md) - `qnfo-model-eval/README.md`
 - [qnfo-observability](../qnfo-observability/README.md) - `qnfo-observability/README.md`

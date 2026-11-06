@@ -536,6 +536,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/JOBS-APPLY.md"
     },
     {
+      "path": "docs/JOBSEARCH-RESEARCH-2026-11.md",
+      "title": "Jobs agent: research basis and design (JOBSEARCH-JUDGE-1, 2026-11-06)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/JOBSEARCH-RESEARCH-2026-11.md"
+    },
+    {
       "path": "docs/KILL-SWITCH-DRILL.md",
       "title": "Kill-switch drill protocol (BP26-LEASES-KILLSWITCH-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/KILL-SWITCH-DRILL.md"
@@ -1847,6 +1852,11 @@
       "path": "qnfo-ipatent/README.md",
       "title": "qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ipatent/README.md"
+    },
+    {
+      "path": "qnfo-jobsearch/HANDOFF.md",
+      "title": "qnfo-jobsearch handoff (fail-safe for a session that stops mid-work)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-jobsearch/HANDOFF.md"
     },
     {
       "path": "qnfo-kaizen/README.md",
