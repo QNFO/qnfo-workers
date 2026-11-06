@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.8.3-codeagent";
+var VERSION = "1.9.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -351,6 +351,7 @@ const DDL = [
   "CREATE TABLE IF NOT EXISTS jobsearch_bank (k TEXT PRIMARY KEY, v TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0, updated_at TEXT)",
   "CREATE TABLE IF NOT EXISTS jobsearch_bank_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, rev INTEGER NOT NULL, v TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS jobsearch_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, url TEXT, fit INTEGER, verdict TEXT, resume_md TEXT, note_md TEXT)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_calib (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, rubric_fit INTEGER, judge_fit INTEGER, owner TEXT NOT NULL)",
 ];
 let ensured = false;
 async function ensure(env) {
@@ -1445,6 +1446,7 @@ async function analyzeJob(env, body) {
   const draft = bad.length ? { blocked: bad.join("; ") } : { resume: stripTags(res), note: stripTags(note) };
   const kit = bad.length ? null : applyKit(job, stripTags(res), stripTags(note), sc.flags);
   const keywords = keywordReport(job, res);
+  let judge = null; try { judge = await judgeJob(env, job); } catch (e) { logErr("judge", e); }   // JOBSEARCH-JUDGE-1: fail-soft, the rubric answer stands without it
   try { await saveHistory(env, { title: job.title, company: job.company, url: job.url, fit: sc.fit, verdict, resume: draft.resume, note: draft.note }); } catch (e) { logErr("history", e); }
   return {
     title: job.title, company: job.company, location: job.location || "(not found; judged on the text)", url: job.url, cv_gaps: cvGaps,
@@ -1452,8 +1454,164 @@ async function analyzeJob(env, body) {
     would_appear_in_your_search: sc.drops.length ? false : sc.tier !== "C" || sc.score >= 25,
     why_not_in_search: sc.drops.length ? sc.drops : sc.tier === "C" ? ["score below the cut after location and level adjustments"] : [],
     why: sc.why, flags: sc.flags, strengths, gaps: gapsFor(job.desc),
-    draft, keywords, apply: kit,
+    draft, keywords, apply: kit, judge,
+    second_opinion: judge ? (Math.abs(judge.fit - sc.fit) >= 25 ? "the model reading and the rubric disagree by 25 points or more: tell /api/calibrate which one is right" : "the model reading and the rubric agree") : "model reading unavailable; rubric only",
   };
+}
+// ------------------------------------------------------------------ JOBSEARCH-JUDGE-1 / PDF-1 / ANSWERS-1 / PREP-1 (1.9.0)
+// Owner brief 2026-11-06: matches the owner is qualified for scored "weak" (the keyword rubric knows title lists, not the record), no free-response
+// help, no PDF, no interview preparation. Research basis: docs/JOBSEARCH-RESEARCH-2026-11.md. Every AI answer here is fail-soft: the rubric,
+// the verified resume and the existing routes keep working when the model is unavailable.
+const PROTECTED_Q = /(work authori[sz]ation|authori[sz]ed to work|right to work|sponsor|visa|salary|compensation|pay expectation|expected pay|desired pay|gender|race|ethnic|disabilit|veteran|pronoun|date of birth|criminal|conviction|background check|security clearance|citizenship|marital|religio)/i;
+const bankDigest = () => {
+  const b = BANK;
+  const roles = (b.roles || []).map((r) => `${r.title}, ${r.org} (${rolePeriod(r)})`).join("; ");
+  const facts = (LEDGER.facts || []).slice(0, 45).map((f) => `[${f.id}] ${f.text}`).join("\n");
+  const pubs = (b.publications || []).slice(0, 10).map((p) => pubLine(p)).join("\n");
+  const skills = (b.skills || []).map((s) => s.name).join(", ");
+  return `NAME: ${P.name}\nLOCATION: ${P.location}\nSUMMARY: ${((b.summaries || [])[0] || {}).text || ""}\nROLES: ${roles}\nFACTS:\n${facts}\nWORK:\n${pubs}\nSKILLS: ${skills}\nEDUCATION: ${(b.education || []).join("; ")}`;
+};
+const jsonLoose = (t) => {
+  const s = String(t || ""), a = s.indexOf("{"), z = s.lastIndexOf("}");
+  if (a < 0 || z <= a) return null;
+  try { return JSON.parse(s.slice(a, z + 1)); } catch (e) { logErr("json-loose", e); return null; }
+};
+async function postingFrom(env, body) {
+  let p = { title: body.title || "", company: body.company || "", location: body.location || "", desc: "", url: "" };
+  const input = String(body.input || body.text || body.url || "").trim();
+  if (!input) throw Object.assign(new Error("paste a job link or the posting text"), { status: 400 });
+  if (/^https?:\/\/\S+$/.test(input)) { p = { ...p, ...(await fetchPosting(input)) }; if (body.title) p.title = body.title; if (body.company) p.company = body.company; }
+  else { p.desc = input.slice(0, 40000); if (!p.title) p.title = (input.split("\n").find((l) => l.trim()) || "").trim().slice(0, 120); }
+  if (!p.desc && !p.title) throw Object.assign(new Error("could not read the posting"), { status: 422 });
+  return p;
+}
+const askModel = async (env, system, user, tokens = 1800) => {
+  const r = await rerankAsk(env, [{ role: "system", content: system }, { role: "user", content: user.slice(0, 16000) }]);
+  return r.text;
+};
+// JOBSEARCH-JUDGE-1: an LLM reads the whole posting against the whole record; the rubric score stays beside it so disagreement is visible and measurable.
+const JUDGE_SYSTEM = "You judge how well one candidate fits one job posting. Use ONLY the candidate record given; never assume a skill, employer, degree or number that is not in it. Weigh transferable evidence (a title absent from the record is not a gap when the work is there). Location: the candidate lives in Amsterdam and can take Netherlands, remote-in-Europe or remote-worldwide roles. Reply with one JSON object and nothing else: {\"fit\":0-100,\"verdict\":\"strong|good|possible|weak\",\"reasons\":[up to 4 short strings],\"gaps\":[up to 4 short strings],\"matched_fact_ids\":[ids from the record],\"location_ok\":true|false}.";
+async function judgeJob(env, job) {
+  const txt = await askModel(env, JUDGE_SYSTEM, `CANDIDATE RECORD\n${bankDigest()}\n\nPOSTING\nTitle: ${job.title}\nCompany: ${job.company}\nLocation: ${job.location}\n${String(job.desc || "").slice(0, 7000)}`);
+  const j = jsonLoose(txt);
+  if (!j || !Number.isFinite(+j.fit)) return null;
+  const known = new Set((LEDGER.facts || []).map((f) => f.id));
+  return { fit: Math.max(0, Math.min(100, Math.round(+j.fit))), verdict: String(j.verdict || ""), reasons: (j.reasons || []).slice(0, 4).map(String), gaps: (j.gaps || []).slice(0, 4).map(String), matched_fact_ids: (j.matched_fact_ids || []).filter((x) => known.has(x)), location_ok: j.location_ok !== false };
+}
+// JOBSEARCH-ANSWERS-1: free-response drafts built from the record only; protected questions are left to the owner; every number and tool name is re-checked.
+const ANSWER_SYSTEM = "You draft one answer to a job application question for the candidate, in first person, plain and specific. Rules: use ONLY facts in the candidate record; no invented numbers, employers, tools or dates; answer the question in the first sentence, then give one or two concrete pieces of evidence that match what the posting asks for; never write 'see resume'; no filler praise of the employer; respect any word or character limit in the question, otherwise 90 to 160 words. Reply with the answer text only.";
+function checkAnswer(text, job) {
+  const problems = [];
+  const allowed = new Set([...nums(JSON.stringify(BANK)), ...nums(job.title), ...nums(job.company), ...nums(job.desc || "")]);
+  const trim = new Set([...allowed].map((x) => x.replace(/[.,]+$/, "")));
+  for (const n of nums(text)) if (!trim.has(n.replace(/[.,]+$/, "")) && !allowed.has(n)) problems.push("number not in your record: " + n);
+  const low = String(text).toLowerCase(), rec = LEDGER_LOW + " " + String(job.desc || "").toLowerCase();
+  for (const f of FORBIDDEN) if (kwRe(f).test(low) && !rec.includes(f)) problems.push("tool or claim not in your record: " + f);
+  if (/see (my )?(resume|cv)/i.test(text)) problems.push("answer refers to the resume instead of answering");
+  return problems;
+}
+async function draftAnswers(env, body) {
+  await loadCtx(env);
+  const job = await postingFrom(env, body), qs = (Array.isArray(body.questions) ? body.questions : [body.question]).map((q) => String(q || "").trim()).filter(Boolean).slice(0, 12);
+  if (!qs.length) throw Object.assign(new Error("send questions: [\"...\"]"), { status: 400 });
+  const out = [];
+  for (const q of qs) {
+    if (PROTECTED_Q.test(q)) { out.push({ question: q, status: "owner_only", answer: null, note: "work authorization, pay, demographic and legal questions are answered by you, never drafted" }); continue; }
+    try {
+      const text = (await askModel(env, ANSWER_SYSTEM, `CANDIDATE RECORD\n${bankDigest()}\n\nPOSTING\n${job.title} at ${job.company}\n${String(job.desc || "").slice(0, 5000)}\n\nQUESTION\n${q}`)).trim();
+      if (!text) { out.push({ question: q, status: "model_empty", answer: null }); continue; }
+      const problems = checkAnswer(text, job);
+      out.push({ question: q, status: problems.length ? "needs_review" : "draft", answer: text, problems });
+    } catch (e) { logErr("answers", e); out.push({ question: q, status: "model_unavailable", answer: null }); }
+  }
+  return { title: job.title, company: job.company, answers: out };
+}
+// JOBSEARCH-PREP-1: role brief, story picks and a question bank for one posting, then answer-by-answer feedback.
+const PREP_SYSTEM = "You prepare one candidate for an interview. Use ONLY the candidate record given; never invent an achievement. Reply with one JSON object and nothing else: {\"role_summary\":\"two sentences\",\"what_they_need\":[up to 6 strings],\"what_you_offer\":[{\"point\":\"string\",\"fact_ids\":[record ids]}],\"gaps\":[{\"gap\":\"string\",\"honest_framing\":\"string\"}],\"stories\":[{\"theme\":\"string\",\"fact_ids\":[ids],\"outline\":\"situation, task, action, result as one short paragraph using only record facts\"}],\"likely_questions\":[{\"q\":\"string\",\"type\":\"behavioral|motivational|role|curveball\",\"angle\":\"string\"}],\"questions_to_ask\":[up to 4 strings]}. Give 5 to 6 stories and 10 to 12 likely questions.";
+async function prepBrief(env, body) {
+  await loadCtx(env);
+  const job = await postingFrom(env, body);
+  const j = jsonLoose(await askModel(env, PREP_SYSTEM, `CANDIDATE RECORD\n${bankDigest()}\n\nPOSTING\n${job.title} at ${job.company}\n${job.location || ""}\n${String(job.desc || "").slice(0, 7000)}`, 2600));
+  if (!j) throw Object.assign(new Error("the model gave no usable brief; try again"), { status: 502 });
+  const known = new Set((LEDGER.facts || []).map((f) => f.id)), keep = (a) => (a || []).filter((x) => known.has(x));
+  return { title: job.title, company: job.company, role_summary: String(j.role_summary || ""), what_they_need: (j.what_they_need || []).slice(0, 6).map(String),
+    what_you_offer: (j.what_you_offer || []).slice(0, 8).map((o) => ({ point: String(o.point || ""), fact_ids: keep(o.fact_ids) })),
+    gaps: (j.gaps || []).slice(0, 6).map((g) => ({ gap: String(g.gap || ""), honest_framing: String(g.honest_framing || "") })),
+    stories: (j.stories || []).slice(0, 6).map((s) => ({ theme: String(s.theme || ""), fact_ids: keep(s.fact_ids), outline: String(s.outline || "") })),
+    likely_questions: (j.likely_questions || []).slice(0, 12).map((q) => ({ q: String(q.q || ""), type: String(q.type || ""), angle: String(q.angle || "") })),
+    questions_to_ask: (j.questions_to_ask || []).slice(0, 4).map(String) };
+}
+const QUIZ_SYSTEM = "You are a strict, kind interview coach. Score the candidate's spoken answer to the question from 1 to 5 for relevance, evidence, structure and length (60 to 120 seconds spoken). Use the candidate record to point out stronger true evidence they left out, and flag any claim in the answer that the record does not support. Reply with one JSON object and nothing else: {\"score\":1-5,\"strengths\":[up to 3],\"fixes\":[up to 4],\"unsupported_claims\":[strings],\"stronger_outline\":\"2 to 4 sentences using only record facts\",\"follow_up\":\"the likely follow-up question\"}.";
+async function quizFeedback(env, body) {
+  await loadCtx(env);
+  const q = String(body.question || "").trim(), a = String(body.answer || "").trim();
+  if (!q || !a) throw Object.assign(new Error("send question and answer"), { status: 400 });
+  const j = jsonLoose(await askModel(env, QUIZ_SYSTEM, `CANDIDATE RECORD\n${bankDigest()}\n\nROLE\n${String(body.role || "").slice(0, 300)}\n\nQUESTION\n${q}\n\nANSWER\n${a.slice(0, 4000)}`));
+  if (!j || !Number.isFinite(+j.score)) throw Object.assign(new Error("the model gave no usable feedback; try again"), { status: 502 });
+  return { score: Math.max(1, Math.min(5, Math.round(+j.score))), strengths: (j.strengths || []).slice(0, 3).map(String), fixes: (j.fixes || []).slice(0, 4).map(String), unsupported_claims: (j.unsupported_claims || []).map(String), stronger_outline: String(j.stronger_outline || ""), follow_up: String(j.follow_up || "") };
+}
+// JOBSEARCH-CALIBRATE-1: the owner's verdict on a posting (qualified / stretch / not_qualified) is stored beside the rubric score and the judge score, so agreement is measured, not argued.
+async function calibrate(env, b) {
+  const v = String(b.owner || ""); if (!["qualified", "stretch", "not_qualified"].includes(v)) throw Object.assign(new Error("owner must be qualified, stretch or not_qualified"), { status: 400 });
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_calib (ts, title, company, rubric_fit, judge_fit, owner) VALUES (?1,?2,?3,?4,?5,?6)").bind(new Date().toISOString(), String(b.title || "").slice(0, 200), String(b.company || "").slice(0, 120), Number.isFinite(+b.rubric_fit) ? +b.rubric_fit : null, Number.isFinite(+b.judge_fit) ? +b.judge_fit : null, v).run();
+  return { ok: true };
+}
+async function calibration(env) {
+  const rows = (await env.JOBS_DB.prepare("SELECT title, company, rubric_fit, judge_fit, owner, ts FROM jobsearch_calib ORDER BY id DESC LIMIT 500").all()).results;
+  const want = (r) => (r.owner === "qualified" ? 1 : r.owner === "stretch" ? 0.5 : 0), got = (f) => (f >= 60 ? 1 : f >= 40 ? 0.5 : 0);
+  const rate = (k) => { const l = rows.filter((r) => r[k] !== null); return l.length ? Math.round((100 * l.filter((r) => got(r[k]) === want(r)).length) / l.length) : null; };
+  return { n: rows.length, rubric_agreement_pct: rate("rubric_fit"), judge_agreement_pct: rate("judge_fit"), misses: rows.filter((r) => r.rubric_fit !== null && got(r.rubric_fit) < want(r)).slice(0, 20) };
+}
+// JOBSEARCH-PDF-1: a text PDF written directly (one column, real selectable text, standard Helvetica, no images, tables or text boxes), the layout ATS parsers read reliably.
+const HELV = [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584];
+function pdfClean(s) {
+  return String(s || "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/•/g, "-").replace(/ /g, " ").replace(/…/g, "...")
+    .replace(/[^\x00-\xff]/g, (c) => { const d = c.normalize("NFD").replace(/[̀-ͯ]/g, ""); return /^[\x20-\x7e]+$/.test(d) ? d : "?"; });
+}
+const pdfW = (s, size, bold) => { let w = 0; for (const ch of s) { const c = ch.charCodeAt(0); w += (c >= 32 && c <= 126 ? HELV[c - 32] : 556); } return (w * size * (bold ? 1.06 : 1)) / 1000; };
+function pdfWrap(text, size, bold, width) {
+  const out = []; let line = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const t = line ? line + " " + word : word;
+    if (line && pdfW(t, size, bold) > width) { out.push(line); line = word; } else line = t;
+  }
+  if (line) out.push(line);
+  return out.length ? out : [""];
+}
+function pdfOf(md, title) {
+  const W = 595.28, H = 841.89, M = 54, TW = W - 2 * M, pages = [[]];
+  let y = H - M;
+  const esc = (s) => pdfClean(s).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const cur = () => pages[pages.length - 1];
+  const need = (h) => { if (y - h < M) { pages.push([]); y = H - M; } };
+  const text = (s, x, size, bold) => { cur().push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td (${esc(s)}) Tj ET`); };
+  for (const raw of plainOfKeepBold(md).split("\n")) {
+    const l = pdfClean(raw.trimEnd()).replace(/\*\*/g, "");
+    if (!l.trim()) { y -= 4; continue; }
+    if (l.startsWith("# ")) { need(30); y -= 20; text(l.slice(2), M, 20, true); y -= 6; continue; }
+    if (l.startsWith("## ")) { need(30); y -= 10; text(l.slice(3).toUpperCase(), M, 11, true); y -= 4; cur().push(`0.5 w ${M} ${(y).toFixed(2)} m ${(W - M).toFixed(2)} ${y.toFixed(2)} l S`); y -= 10; continue; }
+    const bullet = l.startsWith("- "), body = bullet ? l.slice(2) : l, indent = bullet ? 14 : 0, size = 10, lead = 13;
+    const strong = !bullet && /^\*\*/.test(raw.trim());   // a role line is set in bold
+    const lines = pdfWrap(body, size, strong, TW - indent);
+    need(lead * Math.min(lines.length, 2));
+    lines.forEach((ln, i) => { need(lead); y -= lead; if (bullet && i === 0) text("-", M + 2, size, false); text(ln, M + indent, size, strong); });
+  }
+  const objs = [], add = (s) => { objs.push(s); return objs.length; };
+  const catalog = add(""), pagesObj = add(""), f1 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"), f2 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const kids = [];
+  for (const pg of pages) {
+    const content = pg.join("\n"), c = add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${c} 0 R >>`));
+  }
+  objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
+  objs[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map((k) => k + " 0 R").join(" ")}] /Count ${kids.length} >>`;
+  const info = add(`<< /Title (${esc(title || "Resume")}) /Author (${esc(P.name)}) /Producer (qnfo-jobsearch) >>`);
+  let out = "%PDF-1.4\n"; const offs = [];
+  objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => String(o).padStart(10, "0") + " 00000 n \n").join("") + `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const u8 = new Uint8Array(out.length); for (let i = 0; i < out.length; i++) u8[i] = out.charCodeAt(i) & 255;
+  return u8;
 }
 // ------------------------------------------------------------------ one-click apply (JOBSEARCH-APPLY-1, 1.7.0)
 // Research basis (docs/JOBS-APPLY.md): ATS parsers read single-column text with standard headings and read .docx or text PDF; the resume must echo the
@@ -1583,7 +1741,7 @@ function applyKit(job, resumeMd, noteMd, flags) {
   return {
     id: job.id || "", title: job.title, company: job.company, ats: a.ats, apply_url: a.apply_url, can_fill: a.fill,
     fields: { first_name: parts[0], last_name: parts[parts.length - 1], full_name: P.name, email: P.email, location: P.location, linkedin: (P.links || {}).linkedin || "", website: (P.links || {}).site || "" },
-    resume_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.docx`, resume_docx_b64: b64(docx), note: plainOf(noteMd),
+    resume_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.docx`, resume_docx_b64: b64(docx), resume_pdf_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.pdf`, resume_pdf_b64: b64(pdfOf(resumeMd, `${P.name}: resume for ${job.company}`)), note: plainOf(noteMd),
     left_for_you: ["work authorization and sponsorship", "salary expectations", "demographic and equal-opportunity questions", "any question about a skill your CV does not back"].concat((flags || []).filter((f) => /^(AUTH|LANGUAGE|DEGREE|YEARS)/.test(f))),
   };
 }
@@ -1610,6 +1768,7 @@ const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingm
 function fileResponse(kind, row) {
   const base = fileSlug(P.name) + "_Resume_" + fileSlug(row.company), cors = { "access-control-allow-origin": "*", "cache-control": "no-store" };
   if (kind === "resume.docx") return new Response(docxOf(row.resume_md), { headers: { ...cors, "content-type": DOCX_TYPE, "content-disposition": `attachment; filename="${base}.docx"` } });
+  if (kind === "resume.pdf") return new Response(pdfOf(row.resume_md, `${P.name}: resume for ${row.company}`), { headers: { ...cors, "content-type": "application/pdf", "content-disposition": `attachment; filename="${base}.pdf"` } });
   if (kind === "resume.html") return new Response(resumeHtml(row.resume_md, `${P.name}: resume for ${row.company}`), { headers: { ...cors, "content-type": "text/html; charset=utf-8" } });
   if (kind === "resume.md") return new Response(row.resume_md, { headers: { ...cors, "content-type": "text/markdown; charset=utf-8" } });
   if (kind === "note.txt") return new Response(plainOf(row.note_md), { headers: { ...cors, "content-type": "text/plain; charset=utf-8" } });
@@ -2009,7 +2168,7 @@ const INDEX = {
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
     "GET /api/runs": "recent pipeline runs", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
-    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "GET /health": "version", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
+    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
   },
   policy: "nothing is sent; approval is a status change only",
 };
@@ -2066,6 +2225,18 @@ const handler = {
       let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
       try { return J(await analyzeJob(env, b)); } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
+    if ((p === "/api/answers" || p === "/api/prep" || p === "/api/prep/quiz" || p === "/api/calibrate") && m === "POST") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      let b = {}; try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); }
+      try {
+        await ensure(env);
+        if (p === "/api/answers") return J(await draftAnswers(env, b));
+        if (p === "/api/prep") return J(await prepBrief(env, b));
+        if (p === "/api/prep/quiz") return J(await quizFeedback(env, b));
+        return J(await calibrate(env, b));
+      } catch (e) { return J({ error: e.message }, e.status || 422); }
+    }
+    if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
     if (p === "/cv" && m === "GET") return new Response(CV_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api/cv" || p.startsWith("/api/cv/")) {
       if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
@@ -2117,7 +2288,7 @@ const handler = {
       if (q) rows = rows.filter((x) => (x.title + " " + x.company + " " + x.location).toLowerCase().includes(q));
       return J({ count: rows.length, matches: rows.slice(0, lim) });
     }
-    const ax = p.match(/^\/api\/matches\/(.+?)\/(resume\.docx|resume\.html|resume\.txt|resume\.md|note\.txt|kit)$/);
+    const ax = p.match(/^\/api\/matches\/(.+?)\/(resume\.docx|resume\.pdf|resume\.html|resume\.txt|resume\.md|note\.txt|kit)$/);
     if (ax && m === "GET") {
       const row = await env.JOBS_DB.prepare("SELECT * FROM jobsearch_matches WHERE id=?").bind(decodeURIComponent(ax[1])).first();
       if (!row) return J({ error: "not found" }, 404);
@@ -2166,7 +2337,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -2241,7 +2412,7 @@ async function load(){
   $('#list').innerHTML=m.matches.map(x=>'<div class="card" id="c-'+esc(x.id)+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span><span class="t">'+esc(x.title)+'</span><span class="mute">'+esc(x.company)+' | '+esc(x.location||'n/a')+(via(x.id)?' | via '+esc(via(x.id)):'')+'</span><span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span></div>'
    +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(f=>'<div class="flag">Check: '+esc(f)+'</div>').join('')
    +(x.verified?'':'<div class="flag">Blocked by verifier: '+esc(x.blocked_reason)+'</div>')
-   +'<div class="acts">'+(x.verified?'<button class="p ap" data-id="'+esc(x.id)+'">Apply</button>':'')+'<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button onclick="show(\\''+esc(x.id)+'\\')">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')+''
+   +'<div class="acts">'+(x.verified?'<button class="p ap" data-id="'+esc(x.id)+'">Apply</button>':'')+'<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button onclick="show(\\''+esc(x.id)+'\\')">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume .pdf</button></a>'+'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')+''
    +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="reject(\\''+esc(x.id)+'\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button>'+[['replied','Got a reply'],['interview','Interview'],['offer','Offer']].map(o=>'<button onclick="decide(\\''+esc(x.id)+'\\',\\''+o[0]+'\\')">'+o[1]+'</button>').join('')+'</div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
