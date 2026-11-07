@@ -2,6 +2,7 @@
 -- DB: qnfo-audit
 -- BACKUP: bak_20261107_personal_replies_before_retention
 -- Rollback: DROP TRIGGER IF EXISTS personal_replies_retention_sweep; INSERT INTO personal_replies SELECT * FROM bak_20261107_personal_replies_before_retention WHERE reply_id NOT IN (SELECT reply_id FROM personal_replies);
+-- SPOF: personal_replies_retention_sweep trigger has no alternate path - it's the single automatic cleanup for unbounded growth. A failed trigger means rows accumulate forever, detected by table-size monitoring. Manual cleanup is the alternate (DELETE FROM personal_replies WHERE replied_at < datetime('now', '-30 days')).
 --
 -- KERNEL-EVERYWHERE-1 follow-up: bound personal_replies growth (#8474)
 --

@@ -11,8 +11,12 @@
 --
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: none (INSERT OR IGNORE into ledger only)
+-- BACKUP: bak_20261107_migration_runs_before_reconcile
 -- Rollback: DELETE FROM migration_runs WHERE migration_file = 'migrations/2026-11-06-kernel-everywhere.sql' AND run_by = 'manual-reconciliation';
+
+-- Backup migration_runs before reconciliation
+CREATE TABLE IF NOT EXISTS bak_20261107_migration_runs_before_reconcile AS 
+SELECT * FROM migration_runs;
 
 -- Record the manually-applied migration as successful
 -- Use INSERT OR REPLACE since migration_file is the PRIMARY KEY and a failed record already exists
