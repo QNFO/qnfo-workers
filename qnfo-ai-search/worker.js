@@ -2899,7 +2899,6 @@ async function loopReport(env) {
 // BEGIN TURNSTILE-EDGE-1
 var TURNSTILE_SITEKEY_DEFAULT = "0x4AAAAAAFpf2WdSG4-h5mu_";
 var TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
-var CANONICAL_HOST = "https://ask.qwav.org";
 function turnstileWidget(env, action) {
   var key = (env && env.TURNSTILE_SITEKEY) || TURNSTILE_SITEKEY_DEFAULT;
   return '<div class="cf-turnstile" data-sitekey="' + key + '" data-action="' + String(action || "form").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) + '" data-appearance="interaction-only" data-theme="auto"></div>';
@@ -2921,6 +2920,7 @@ async function turnstileVerify(env, token, ip, action) {
   }
 }
 // END TURNSTILE-EDGE-1
+var CANONICAL_HOST = "https://ask.qwav.org";
 var PAGE = `<!DOCTYPE html>
 <html lang="en">
 <head>
