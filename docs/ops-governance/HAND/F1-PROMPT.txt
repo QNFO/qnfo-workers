@@ -1,0 +1,75 @@
+TASK: Repoint all Fleet AI consumers to Cloudflare AI Gateway dynamic routes
+
+CONTEXT
+Our AI cost audit (Oct 2026) found Workers AI spend of about $215/month, driven
+mainly by the qnfo-agents worker calling @cf/moonshotai/kimi-k2.7-code directly
+in tight loops (64k+ requests/month, 16k-34k input tokens each). To fix this,
+three dynamic routes were deployed and verified ACTIVE on the "default" AI
+Gateway. Your job: migrate every consumer from hardcoded model IDs to these
+routes.
+
+ENVIRONMENT FACTS (do not re-discover, use as-is)
+- Cloudflare account: quniverse (ID: edb167b78c9fb901ea5bca3ce58ccc4b)
+- Gateway ID: default
+- Gateway endpoint (OpenAI-compatible):
+  https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions
+- From inside a Worker, use the AI binding:
+  env.AI.run("dynamic/<route>", { messages }, { gateway: { id: "default" } })
+
+THE ROUTES (already live -- do NOT create or modify them)
+1. dynamic/value
+   Chain: glm-4.7-flash -> qwen3-30b-a3b -> llama-3.2-3b
+   Cost: $0.06 input / $0.40 output per 1M tokens
+   Use for: bulk tasks, summaries, classification, glue work
+2. dynamic/standard
+   Chain: deepseek-v4.1-flash-1017 -> gemma-4-26b -> gpt-oss-120b
+   Cost: $0.30 input / $1.20 output per 1M tokens
+   Use for: DEFAULT for all general workloads
+3. dynamic/premium
+   Chain: kimi-k2.6 -> glm-5.2 -> anthropic/claude-sonnet-5.5
+   Cost: $0.95 input / $4.00 output per 1M tokens
+   Use for: hard reasoning/coding ONLY
+
+Routes accept the OpenAI chat completions request shape only. The response
+headers cf-aig-model and cf-aig-provider tell you which model actually served
+the request.
+
+SCOPE OF WORK
+1. Search the codebase(s) for direct model references, including but not
+   limited to:
+   - @cf/moonshotai/kimi-k2.7-code, @cf/moonshotai/kimi-k2.6
+   - @cf/zai-org/glm-5.3, @cf/zai-org/glm-5.2,
+     @cf/deepseek-ai/deepseek-v4-pro-0813
+   - any model: / model = / env var (e.g. MODEL, AI_MODEL) holding a direct
+     model ID
+2. Apply this mapping unless a call site is explicitly documented as
+   premium-critical:
+   - Default replacement: dynamic/standard
+   - Background/batch/cleanup/summary/health-check workloads: dynamic/value
+   - Multi-step agentic coding or complex reasoning: dynamic/premium
+3. The qnfo-agents worker is the top priority -- it must default to
+   dynamic/standard.
+4. Keep provider/base-URL configuration pointing at the gateway; only model
+   strings change.
+5. If a consumer hardcodes fallback logic of its own, remove it -- the routes
+   handle fallback server-side now.
+6. Add a short note to each touched README/config header: "models routed via
+   AI Gateway dynamic routes -- see qnfo-ops issue #7".
+
+CONSTRAINTS
+- Do not change gateway configuration, spend limits, or the routes themselves.
+- Do not introduce new dependencies; use existing AI binding / fetch patterns.
+- Preserve request/response handling -- dynamic routes answer in
+  chat-completions format.
+- Do not touch Anthropic-specific client code paths beyond pointing them at
+  dynamic/premium (tracked separately in qnfo-ops issue #8).
+
+ACCEPTANCE CRITERIA
+1. grep -r "kimi-k2.7-code" . returns nothing outside docs/changelog
+2. qnfo-agents worker defaults to dynamic/standard
+3. Bulk/background jobs use dynamic/value
+4. All touched services pass existing tests / smoke checks
+5. A summary table of old model -> new route per call site is included in the
+   PR
+
+Reference: QNFO/qnfo-ops issue #7. Estimated savings: $150-190/month.
