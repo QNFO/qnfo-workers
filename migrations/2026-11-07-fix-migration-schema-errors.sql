@@ -1,6 +1,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM remediation_contracts WHERE class IN ('issue-8495-runtime', 'issue-8495-code'); UPDATE remediation_contracts SET status = 'active' WHERE class = 'rt-live-voice-stt'; DELETE FROM metric_registry WHERE metric = 'research_deferred_pool_pct'; DROP TRIGGER IF EXISTS retention_personal_replies_tick_v1;
+-- BACKUP: bak_20261107_remediation_contracts_companion_ui
 -- CAUSE-MAPPED: research_deferred_pool_pct breach cause mapped as 'research-pipeline' below
 
 -- FIX-MIGRATION-SCHEMA-ERRORS-1: Fix 4 failing migrations from PR #8506
@@ -14,8 +15,6 @@
 -- 4. voice-stt-probe-remove.sql: BACKUP table 'none'
 --
 -- This migration applies the corrected versions of those 4 migrations.
-
--- No BACKUP table needed - this migration only adds/fixes rows, doesn't delete anything
 
 -- ============================================================================
 -- FIX 1: companion-ui-regression-guard.sql (COMPANION-UI-REGRESSION-GUARD-1)
