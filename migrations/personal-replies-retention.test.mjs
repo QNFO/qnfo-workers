@@ -42,7 +42,14 @@ assert.equal(oldCount, 3, 'Should have 3 old rows (>30 days)');
 const migrationSQL = readFileSync('migrations/2026-11-07-personal-replies-retention.sql', 'utf8');
 db.exec(migrationSQL);
 
-// Verify trigger was created
+// Test 1: Backup table was created
+const backupExists = db.prepare(`
+  SELECT COUNT(*) as cnt FROM sqlite_master 
+  WHERE type='table' AND name='bak_20261107_personal_replies_before_retention'
+`).get().cnt;
+assert.equal(backupExists, 1, 'Backup table should exist');
+
+// Test 2: Verify trigger was created
 const triggerExists = db.prepare(`
   SELECT COUNT(*) as cnt FROM sqlite_master 
   WHERE type='trigger' AND name='personal_replies_retention_sweep'
@@ -69,4 +76,4 @@ db.exec(`
 const afterTrigger = db.prepare('SELECT COUNT(*) as cnt FROM personal_replies').get().cnt;
 assert.equal(afterTrigger, 2, 'Trigger should have deleted the newly inserted old row');
 
-console.log('✓ All 5 assertions passed: retention sweep trigger works correctly');
+console.log('✓ All 6 assertions passed: retention sweep trigger works correctly (backup table + trigger creation + immediate cleanup + old row deletion + trigger firing + final count)');

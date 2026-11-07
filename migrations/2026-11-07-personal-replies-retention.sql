@@ -1,13 +1,17 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: none (deletes old rows only, no schema change)
--- Rollback: none (deletions are intentional hygiene, not recoverable)
+-- BACKUP: bak_20261107_personal_replies_before_retention
+-- Rollback: DROP TRIGGER IF EXISTS personal_replies_retention_sweep; INSERT INTO personal_replies SELECT * FROM bak_20261107_personal_replies_before_retention WHERE reply_id NOT IN (SELECT reply_id FROM personal_replies);
 --
 -- KERNEL-EVERYWHERE-1 follow-up: bound personal_replies growth (#8474)
 --
 -- personal_replies mirrors every personal-api twin reply for false-stop scanning.
 -- It was unbounded (one row per reply, kept forever). This adds a 30-day retention
 -- sweep so the table stays bounded while preserving the 7-day false_stops_7d window.
+
+-- Backup existing rows before adding retention sweep
+CREATE TABLE IF NOT EXISTS bak_20261107_personal_replies_before_retention AS 
+SELECT * FROM personal_replies;
 
 -- Scheduled cleanup: delete personal_replies rows older than 30 days.
 -- Runs every 10 minutes off the fleet heartbeat.

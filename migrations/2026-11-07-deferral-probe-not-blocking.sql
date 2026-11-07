@@ -44,6 +44,7 @@
 -- DB: qnfo-audit
 -- BACKUP: bak_20261107_close_probe_circular_trigger
 -- Rollback: Execute the CREATE TRIGGER statement from bak_20261107_close_probe_circular_trigger WHERE name='issue_close_evidence_required';
+-- SPOF: issue_close_evidence_required trigger has no alternate path by design - single enforcement point for evidence-based closure. Redundancy is in the contracts that feed it (d1-query, runner-https, code-read transports). A failed trigger means issues close without evidence, detected by issue_wontfix_share_7d guard metric.
 --
 -- Verify after apply (also added as test in migrations/deferral-probes-not-blocking.test.mjs):
 --   SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name='issue_close_evidence_required';  -- 1
