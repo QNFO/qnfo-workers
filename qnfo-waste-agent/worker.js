@@ -2,6 +2,12 @@
 var VERSION = "1.0.1";
 // spof-review: AUDIT is the existing telemetry store; a failed sweep logs its
 // failure and the next hourly run retries. Authenticated /run is the alternate.
+import { timingSafeEqual } from "node:crypto";
+function validRunKey(value, expected) {
+  if (!value || !expected) return false;
+  const a = new TextEncoder().encode(value), b = new TextEncoder().encode(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 const NEURON_USD = 0.011 / 1000;
 const MAX_NEW_ISSUES = 5;
 const CLEAN_RUNS_TO_CLOSE = 3;
@@ -95,7 +101,7 @@ export default {
   async fetch(request, env) {
     const u = new URL(request.url);
     if (u.pathname === "/health") return Response.json({ ok: true, worker: "qnfo-waste-agent", version: VERSION });
-    if (u.pathname === "/run" && request.method === "POST" && request.headers.get("x-run-key") === env.RUN_KEY) return new Response(JSON.stringify(await run(env)), { headers: { "content-type": "application/json" } });
+    if (u.pathname === "/run" && request.method === "POST" && validRunKey(request.headers.get("x-run-key"), env.RUN_KEY)) return new Response(JSON.stringify(await run(env)), { headers: { "content-type": "application/json" } });
     return new Response("not found", { status: 404 });
   },
 };
