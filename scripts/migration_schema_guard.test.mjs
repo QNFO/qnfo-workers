@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Test migration schema guard against known failures
+ * MIGRATION-SCHEMA-GUARD-1 regression test suite
  * 
- * REGRESSION TEST: migrations/2026-11-07-research-pipeline-drain-deferred-pool.sql
- * Used 'metric_key' for metric_registry, should be 'metric'
+ * Tests the schema validation guard against the exact production failure from PR #8490:
+ * migrations/2026-11-07-research-pipeline-drain-deferred-pool.sql used 'metric_key'
+ * for metric_registry (should be 'metric'), failed in production, partial D1 state.
  */
 
 import { execSync } from 'child_process';
