@@ -121,6 +121,8 @@ def main():
     
     If arguments are provided, validates only those files.
     Otherwise validates all migrations in migrations/ directory.
+    
+    CI integration: pr-checks.yml passes only changed migrations via git diff.
     """
     repo_root = Path(__file__).parent.parent
     migrations_dir = repo_root / 'migrations'
