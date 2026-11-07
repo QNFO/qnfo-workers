@@ -9,10 +9,10 @@ FAILURE MODE: migrations/2026-11-07-research-pipeline-drain-deferred-pool.sql
 - Merged to main, failed in production at statement 2
 - Partial state left in D1, required corrective migration
 
-ROOT CAUSE: No pre-merge validation of column names against actual schemas
+ROOT CAUSE: No pre-merge validation of column names against actual schemas.
 
 INTEGRATION: Called by .github/workflows/pr-checks.yml with changed migration files.
-When regression_gate checks the base tree, files may not exist - guard exits 0.
+When regression_gate checks the base tree with files that don't exist, guard exits 0.
 """
 
 import re
