@@ -143,11 +143,21 @@ def main():
         files_to_check = sorted(migrations_dir.glob('*.sql'))
         print(f"Validating all {len(files_to_check)} migrations in {migrations_dir}")
     
+    # Filter to existing files
+    existing_files = [f for f in files_to_check if f.exists()]
+    skipped = len(files_to_check) - len(existing_files)
+    
+    if skipped > 0:
+        print(f"WARNING: {skipped} file(s) not found, skipping")
+    
+    # If specific files were requested but NONE exist, exit success
+    # (This happens when regression_gate checks base for new migrations)
+    if len(sys.argv) > 1 and not existing_files:
+        print("No migrations to validate (files don't exist in this tree)")
+        return 0
+    
     all_errors = []
-    for filepath in files_to_check:
-        if not filepath.exists():
-            print(f"WARNING: {filepath} not found, skipping")
-            continue
+    for filepath in existing_files:
         errors = validate_migration(filepath)
         all_errors.extend(errors)
     
