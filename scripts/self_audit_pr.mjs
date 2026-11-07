@@ -28,17 +28,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const a = (n) => { const i = process.argv.indexOf(n); return i > -1 ? process.argv[i + 1] : null; };
   const body = readFileSync(a("--body"), "utf8");
   const files = readFileSync(a("--files"), "utf8").split("\n").filter(Boolean);
-  
-  // Debug: show what we're testing
-  const parts = body.split(/^#{1,4}[ \t]*/m);
-  const hit = parts.find((p) => /^self-audit[ \t]*(\r?\n|$)/i.test(p));
-  if (hit) {
-    console.log(`DEBUG: Self-audit section found, length=${hit.length}`);
-    console.log(`DEBUG: Section content:`, JSON.stringify(hit.substring(0, 200)));
-  } else {
-    console.log(`DEBUG: No self-audit section found. Parts count: ${parts.length}`);
-  }
-  
   const r = checkPr({ body, files });
   for (const x of r.failures) console.log("FAIL SELF-AUDIT-1: " + x);
   console.log(`self-audit-pr: ${r.ok ? "passed" : "FAILED"}`);
