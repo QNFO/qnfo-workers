@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 
 const mig = readFileSync(new URL("../migrations/2026-11-06-kernel-everywhere.sql", import.meta.url), "utf8");
+const privacy = readFileSync(new URL("../migrations/2026-11-07-kernel-personal-privacy.sql", import.meta.url), "utf8");
 const personalApi = readFileSync(new URL("../personal-api/worker.js", import.meta.url), "utf8");
 const companion = readFileSync(new URL("../personal-companion/worker.js", import.meta.url), "utf8");
 const ask = readFileSync(new URL("../qnfo-ai-search/worker.js", import.meta.url), "utf8");
@@ -24,7 +25,11 @@ need("migration", mig, [
   "'personal_replies' AS source",
   "CREATE VIEW v_false_stop_candidates",
 ]);
-need("personal-api", personalApi, ["KERNEL-EVERYWHERE-1", "personal_replies"]);
+need("personal-api", personalApi, ["KERNEL-EVERYWHERE-1", "KERNEL-PERSONAL-PRIVACY-1", "recordPersonalKernelTelemetry", "personal-api.kernel"]);
+need("privacy migration", privacy, ["CREATE VIEW v_agent_replies", "CREATE VIEW v_false_stop_candidates"]);
+if (/INSERT[^;]*INTO personal_replies/.test(personalApi) || /FROM personal_replies/.test(privacy)) {
+  console.log("FAIL personal reply text escaped the PERSONAL plane"); fail++;
+}
 need("personal-companion", companion, ["KERNEL-REPLY-4", "KERNEL-EVERYWHERE-1"]);
 need("qnfo-ai-search", ask, ["KERNEL-REPLY-4", "KERNEL-EVERYWHERE-1"]);
 need("qnfo-research-exec", research, ["KERNEL-PRODUCE-1", "KERNEL-EVERYWHERE-1"]);
