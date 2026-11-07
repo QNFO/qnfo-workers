@@ -40,7 +40,7 @@ jobs:
       IN_BUCKETS: ${{ github.event.inputs.buckets }}
       IN_MAX: ${{ github.event.inputs.max_issues }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da764b90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: List document keys
         run: |
