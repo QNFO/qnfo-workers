@@ -108,6 +108,26 @@ commit(clone, "bump keeping the same trailing comment");
 gr = sh([PY, join(here, "version-bump-guard.py"), "HEAD~1", "HEAD"], clone);
 ok(gr.status === 0 && !/version-line-notes/.test(gr.stdout), "an unchanged trailing comment is not flagged", gr.stdout);
 
+// Package-sourced bundles must survive rebuilding; a failed build is atomic.
+put(clone, "qnfo-agents/package.json", JSON.stringify({ version: "1.2.8", type: "module" }));
+put(clone, "qnfo-agents/worker.js", worker("1.2.7", ""));
+put(clone, "qnfo-agents/deployed-current.worker.js", worker("1.2.7", ""));
+put(clone, "qnfo-agents/build.mjs", `import {readFileSync,writeFileSync,copyFileSync} from 'node:fs';
+const v=JSON.parse(readFileSync('package.json','utf8')).version;
+writeFileSync('worker.js', 'var VERSION = "'+v+'";\\nexport default {};\\n');
+copyFileSync('worker.js','deployed-current.worker.js');`);
+const oldPackage = get("qnfo-agents/package.json");
+r = run("bump", "qnfo-agents", "--note", "package release", "--dry-run");
+ok(r.status === 0 && /package.json version to 1\.2\.9/.test(r.stdout) && get("qnfo-agents/package.json") === oldPackage, "package dry run reports source change without writes", r);
+r = run("bump", "qnfo-agents", "--note", "package release");
+ok(r.status === 0 && JSON.parse(get("qnfo-agents/package.json")).version === "1.2.9" && get("qnfo-agents/worker.js").includes('"1.2.9"') && get("qnfo-agents/worker.js") === get("qnfo-agents/deployed-current.worker.js"), "package version drives rebuilt source and mirror", r);
+put(clone, "qnfo-agents/build.mjs", "import {writeFileSync} from 'node:fs'; writeFileSync('worker.js','partial build'); process.exit(1);");
+const beforeFailure = ["package.json", "worker.js", "deployed-current.worker.js"].map(p => get("qnfo-agents/" + p));
+r = run("bump", "qnfo-agents", "--note", "failing build");
+ok(r.status === 1 && /rolled back/.test(r.stderr) && ["package.json", "worker.js", "deployed-current.worker.js"].every((p,i) => get("qnfo-agents/" + p) === beforeFailure[i]) && !existsSync(join(clone,"qnfo-agents/releases/1.2.10.md")), "failed build restores all release inputs and artifacts", r);
+r = run("bump", "qnfo-agents", "--note", "invalid suffix", "--suffix", "-codeagent");
+ok(r.status === 2 && /must be x.y.z/.test(r.stderr), "package build rejects unsupported suffix before writing", r);
+
 rmSync(root, { recursive: true, force: true });
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

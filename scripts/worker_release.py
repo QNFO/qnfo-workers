@@ -160,8 +160,16 @@ def cmd_bump(args):
         return 1
     held = claims(worker, opt("--prs-file"))
     held["file"] = current
+    package_path = os.path.join(ROOT, worker, "package.json") if worker == "qnfo-agents" else None
+    if package_path:
+        with open(package_path, encoding="utf-8") as fh:
+            package = json.load(fh)
+        held["package"] = package["version"]
     suffix = opt("--suffix", core_of(current)[1])
     new = next_version(held.values(), level, opt("--to"), suffix)
+    if package_path and not re.fullmatch(r"\d+\.\d+\.\d+", new):
+        print("qnfo-agents package.json version must be x.y.z", file=sys.stderr)
+        return 2
     if "--no-split" in args:
         new_text, moved = DECL.sub(lambda m: '%s"%s"%s' % (m.group(1), new, m.group(3)), text, count=1), 0
     else:
@@ -176,10 +184,41 @@ def cmd_bump(args):
     body = "# %s %s (%s)\n\n%s%s\n" % (worker, new, datetime.date.today().isoformat(), ("%s: " % opt("--name")) if opt("--name") else "", note.strip())
     if "--dry-run" in args:
         print("\n".join(report))
+        if package_path:
+            print("would update qnfo-agents/package.json version to %s and run node build.mjs (including mirror)" % new)
         print("would write %s" % os.path.relpath(frag, ROOT))
         return 0
-    with open(path, "w", encoding="utf-8", newline="") as fh:
-        fh.write(new_text)
+    if package_path:
+        # The bundle is generated: change the version source and rebuild rather
+        # than patching a VERSION that the next build would overwrite.
+        snapshots = {}
+        for target in (package_path, path, os.path.join(ROOT, worker, "deployed-current.worker.js")):
+            snapshots[target] = open(target, "rb").read() if os.path.isfile(target) else None
+        try:
+            package["version"] = new
+            with open(package_path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(json.dumps(package, indent=2) + "\n")
+            build = subprocess.run(["node", "build.mjs"], cwd=os.path.dirname(package_path), capture_output=True, text=True)
+            if build.returncode:
+                raise ValueError("build failed: " + (build.stderr or build.stdout)[:500])
+            with open(path, encoding="utf-8") as fh:
+                built = fh.read()
+            mirror_path = os.path.join(ROOT, worker, "deployed-current.worker.js")
+            if version_in(built) != new or open(path, "rb").read() != open(mirror_path, "rb").read():
+                raise ValueError("build did not produce the requested VERSION and identical mirror")
+        except (OSError, ValueError) as exc:
+            for target, previous in snapshots.items():
+                if previous is not None:
+                    with open(target, "wb") as fh:
+                        fh.write(previous)
+                elif os.path.exists(target):
+                    os.remove(target)
+            print("qnfo-agents release rolled back: %s" % exc, file=sys.stderr)
+            return 1
+        report.append("updated package.json and rebuilt worker.js and mirror")
+    else:
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(new_text)
     os.makedirs(os.path.dirname(frag), exist_ok=True)
     with open(frag, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)
