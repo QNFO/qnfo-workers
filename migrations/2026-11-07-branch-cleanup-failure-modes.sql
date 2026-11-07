@@ -111,48 +111,51 @@ INSERT INTO metric_registry (
 -- Remediation contracts for each failure mode
 INSERT INTO remediation_contracts (
   class,
-  title,
-  probe,
   verify_transport,
-  cadence_minutes,
-  state
+  verify_probe,
+  expected_cadence_h,
+  precondition,
+  action,
+  max_attempts,
+  escalate_to,
+  status
 ) VALUES
 (
   'fm-branch-cleanup-no-merge-check',
-  'Verify safe_branch_cleanup.py exists and checks merge status',
-  jsonb_build_object(
-    'paths', jsonb_build_array('scripts/safe_branch_cleanup.py'),
-    'contains', 'def check_unmerged_commits'
-  ),
   'code-read',
-  60,
+  '{"paths": ["scripts/safe_branch_cleanup.py"], "contains": "def check_unmerged_commits"}',
+  1,
+  'TRUE',
+  'file_issue',
+  3,
+  'code-loop',
   'active'
 ),
 (
   'fm-branch-cleanup-no-dry-run',
-  'Verify safe_branch_cleanup.py has dry-run mode',
-  jsonb_build_object(
-    'paths', jsonb_build_array('scripts/safe_branch_cleanup.py'),
-    'contains', 'dry_run: bool = True'
-  ),
   'code-read',
-  60,
+  '{"paths": ["scripts/safe_branch_cleanup.py"], "contains": "dry_run: bool = True"}',
+  1,
+  'TRUE',
+  'file_issue',
+  3,
+  'code-loop',
   'active'
 ),
 (
   'fm-branch-cleanup-no-dangling-check',
-  'Verify safe_branch_cleanup.py checks for dangling commits',
-  jsonb_build_object(
-    'paths', jsonb_build_array('scripts/safe_branch_cleanup.py'),
-    'contains', 'git fsck --lost-found'
-  ),
   'code-read',
-  60,
+  '{"paths": ["scripts/safe_branch_cleanup.py"], "contains": "git fsck --lost-found"}',
+  1,
+  'TRUE',
+  'file_issue',
+  3,
+  'code-loop',
   'active'
 )
 ON CONFLICT (class) DO UPDATE SET
-  probe = EXCLUDED.probe,
-  updated_at = CURRENT_TIMESTAMP;
+  verify_probe = EXCLUDED.verify_probe,
+  status = EXCLUDED.status;
 
 -- Create audit table for branch deletions
 CREATE TABLE IF NOT EXISTS branch_deletion_audit (
