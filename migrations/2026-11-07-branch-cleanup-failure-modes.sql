@@ -75,27 +75,38 @@ VALUES (
   remediation = EXCLUDED.remediation;
 
 -- Metric: Branches with unmerged commits that exist for >30 days
+-- Note: metric_registry.metric is the key; there is no metric_name column
 INSERT INTO metric_registry (
   metric,
-  metric_name,
-  query,
-  target_value,
-  comparison,
+  layer,
+  kind,
+  formula,
+  source_of_truth,
+  baseline,
+  target,
+  owner,
+  disposition_actor,
+  refresh_cadence,
   state,
-  created_at,
-  updated_at
+  refresh_class
 ) VALUES (
   'branches_unmerged_over_30d',
-  'Branches with unmerged commits older than 30 days',
-  'SELECT COUNT(*) FROM (SELECT 1) WHERE 1=0', -- Placeholder; actual check via git
-  10,
-  '<=',
+  'repository',
+  'guard',
+  'COUNT of branches with commits not in main that are older than 30 days; checked via git log main..branch',
+  'git log origin/main..origin/<branch> (daily workflow)',
+  'new 2026-11-07',
+  '<= 10',
+  'scripts/safe_branch_cleanup.py',
+  'fm-branch-cleanup-no-merge-check: scripts/safe_branch_cleanup.py with merge verification',
+  'daily',
   'active',
-  CURRENT_TIMESTAMP,
-  CURRENT_TIMESTAMP
+  'daily'
 ) ON CONFLICT (metric) DO UPDATE SET
-  metric_name = EXCLUDED.metric_name,
-  updated_at = CURRENT_TIMESTAMP;
+  formula = EXCLUDED.formula,
+  target = EXCLUDED.target,
+  disposition_actor = EXCLUDED.disposition_actor,
+  state = EXCLUDED.state;
 
 -- Remediation contracts for each failure mode
 INSERT INTO remediation_contracts (
