@@ -211,3 +211,91 @@ export function setupTestDatabase(db, tables) {
     db.exec(schema);
   }
 }
+
+/**
+ * Extract BACKUP header value from migration file lines.
+ * 
+ * @param {string[]} lines - Migration file lines
+ * @returns {string|null} - Backup table name or null if no BACKUP header
+ * 
+ * Example:
+ *   const lines = migrationContent.split('\n');
+ *   const backupTable = extractBackupHeader(lines);
+ */
+export function extractBackupHeader(lines) {
+  const backupLine = lines.find(l => /^-- BACKUP: /.test(l));
+  if (!backupLine) return null;
+  const value = backupLine.replace(/^-- BACKUP: /, '').trim();
+  return value === 'none' ? null : value;
+}
+
+/**
+ * Check if migration has destructive statements that delete rows.
+ * 
+ * Per BACKUP-SCHEMA-ONLY-1: Only migrations with DELETE FROM or DROP TABLE
+ * require non-empty backup tables. DROP TRIGGER/INDEX/VIEW lose no rows.
+ * 
+ * @param {string} sql - Migration SQL content
+ * @returns {boolean} - True if migration deletes rows
+ */
+export function hasRowDestructiveStatements(sql) {
+  // Remove comments and string literals to avoid false positives
+  const cleaned = sql
+    .split('\n')
+    .filter(l => !l.trim().startsWith('--'))
+    .join('\n')
+    .replace(/'[^']*'/g, "''");  // Remove string contents
+  
+  return /\bDELETE\s+FROM\b/i.test(cleaned) || /\bDROP\s+TABLE\b/i.test(cleaned);
+}
+
+/**
+ * Validate BACKUP table exists and is non-empty (mirrors apply_migrations.py logic).
+ * 
+ * This function implements the same validation as scripts/apply_migrations.py
+ * backup_missing() function (lines 1230-1242):
+ * 
+ * 1. Check BACKUP table exists in sqlite_master
+ * 2. Check SELECT COUNT(*) FROM backup_table returns > 0 (if migration deletes rows)
+ * 
+ * Per BACKUP-SCHEMA-ONLY-1: Empty backup tables are allowed for migrations that
+ * only DROP TRIGGER/INDEX/VIEW (they lose no rows).
+ * 
+ * @param {Database} db - SQLite database instance
+ * @param {string} backupTable - Name of backup table to validate
+ * @param {boolean} hasRowDestructive - Whether migration has DELETE/DROP TABLE
+ * @returns {{valid: boolean, error: string|null}}
+ * 
+ * Example:
+ *   const result = validateBackupTable(db, 'bak_20261107_test', true);
+ *   if (!result.valid) {
+ *     throw new Error(result.error);
+ *   }
+ */
+export function validateBackupTable(db, backupTable, hasRowDestructive) {
+  // Check table exists
+  const exists = db.prepare(
+    "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?"
+  ).get(backupTable);
+  
+  if (!exists || exists.n === 0) {
+    return {
+      valid: false,
+      error: `BACKUP table ${backupTable} does not exist`
+    };
+  }
+  
+  // Check table is non-empty (only for row-destructive migrations)
+  if (hasRowDestructive) {
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM "${backupTable}"`).get();
+    
+    if (!count || count.n === 0) {
+      return {
+        valid: false,
+        error: `BACKUP table ${backupTable} is empty (checked before row-destructive statements)`
+      };
+    }
+  }
+  
+  return { valid: true, error: null };
+}

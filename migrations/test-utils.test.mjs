@@ -5,7 +5,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { PRODUCTION_SCHEMAS, validateColumnReferences, setupTestDatabase } from './test-utils.mjs';
+import { 
+  PRODUCTION_SCHEMAS, 
+  validateColumnReferences, 
+  setupTestDatabase,
+  extractBackupHeader,
+  hasRowDestructiveStatements,
+  validateBackupTable
+} from './test-utils.mjs';
 
 describe('PRODUCTION_SCHEMAS', () => {
   it('contains remediation_contracts schema', () => {
@@ -117,5 +124,113 @@ describe('regression tests for PR #8560 failures', () => {
     const result = validateColumnReferences(badSql, 'metric_registry');
     assert.equal(result.valid, false);
     assert.ok(result.errors.some(e => e.includes('metric_name')));
+  });
+});
+
+describe('BACKUP validation (MIGRATION-TEST-BACKUP-CHECK-1)', () => {
+  describe('extractBackupHeader', () => {
+    it('finds BACKUP header in migration', () => {
+      const lines = ['-- APPLY-BY: ci', '-- BACKUP: bak_test_table', 'INSERT INTO test'];
+      const backup = extractBackupHeader(lines);
+      assert.equal(backup, 'bak_test_table');
+    });
+
+    it('returns null for BACKUP: none', () => {
+      const lines = ['-- APPLY-BY: ci', '-- BACKUP: none', 'DROP TRIGGER test'];
+      const backup = extractBackupHeader(lines);
+      assert.equal(backup, null);
+    });
+
+    it('returns null when no BACKUP header', () => {
+      const lines = ['-- APPLY-BY: ci', 'INSERT INTO test'];
+      const backup = extractBackupHeader(lines);
+      assert.equal(backup, null);
+    });
+  });
+
+  describe('hasRowDestructiveStatements', () => {
+    it('detects DELETE FROM as row-destructive', () => {
+      const sql = 'DELETE FROM agent_issues WHERE status = "closed"';
+      assert.equal(hasRowDestructiveStatements(sql), true);
+    });
+
+    it('detects DROP TABLE as row-destructive', () => {
+      const sql = 'DROP TABLE old_table';
+      assert.equal(hasRowDestructiveStatements(sql), true);
+    });
+
+    it('DROP TRIGGER is not row-destructive', () => {
+      const sql = 'DROP TRIGGER IF EXISTS test_trigger';
+      assert.equal(hasRowDestructiveStatements(sql), false);
+    });
+
+    it('DROP INDEX is not row-destructive', () => {
+      const sql = 'DROP INDEX IF EXISTS test_index';
+      assert.equal(hasRowDestructiveStatements(sql), false);
+    });
+
+    it('DROP VIEW is not row-destructive', () => {
+      const sql = 'DROP VIEW IF EXISTS test_view';
+      assert.equal(hasRowDestructiveStatements(sql), false);
+    });
+
+    it('ignores DELETE in comments', () => {
+      const sql = `-- Comment: DELETE FROM should be ignored
+        UPDATE test SET status = 'deleted'`;
+      assert.equal(hasRowDestructiveStatements(sql), false);
+    });
+
+    it('ignores DELETE in string literals', () => {
+      const sql = "INSERT INTO log (msg) VALUES ('DELETE FROM happened')";
+      assert.equal(hasRowDestructiveStatements(sql), false);
+    });
+  });
+
+  describe('validateBackupTable', () => {
+    it('fails when backup table does not exist', () => {
+      const db = new DatabaseSync(':memory:');
+      const result = validateBackupTable(db, 'nonexistent_table', true);
+      assert.equal(result.valid, false);
+      assert.ok(result.error.includes('does not exist'));
+    });
+
+    it('fails for empty backup with row-destructive migration', () => {
+      const db = new DatabaseSync(':memory:');
+      db.exec('CREATE TABLE bak_empty (id INTEGER)');
+      const result = validateBackupTable(db, 'bak_empty', true);
+      assert.equal(result.valid, false);
+      assert.ok(result.error.includes('is empty'));
+    });
+
+    it('passes for empty backup with non-row-destructive migration (DROP TRIGGER)', () => {
+      const db = new DatabaseSync(':memory:');
+      db.exec('CREATE TABLE bak_trigger_backup (name TEXT, sql TEXT)');
+      const result = validateBackupTable(db, 'bak_trigger_backup', false);
+      assert.equal(result.valid, true);
+      assert.equal(result.error, null);
+    });
+
+    it('passes for non-empty backup with row-destructive migration', () => {
+      const db = new DatabaseSync(':memory:');
+      db.exec('CREATE TABLE bak_good (id INTEGER)');
+      db.exec('INSERT INTO bak_good (id) VALUES (1), (2), (3)');
+      const result = validateBackupTable(db, 'bak_good', true);
+      assert.equal(result.valid, true);
+      assert.equal(result.error, null);
+    });
+
+    it('regression: catches PR #8537 empty backup scenario', () => {
+      const db = new DatabaseSync(':memory:');
+      db.exec('CREATE TABLE remediation_contracts (class TEXT, status TEXT)');
+      // Create empty backup (simulating PR #8537 mistake)
+      db.exec(`CREATE TABLE bak_20261107_test AS 
+        SELECT * FROM remediation_contracts 
+        WHERE class IN ('issue-8495-runtime', 'issue-8495-code')`);
+      
+      // This migration would DELETE rows, so requires non-empty backup
+      const result = validateBackupTable(db, 'bak_20261107_test', true);
+      assert.equal(result.valid, false);
+      assert.ok(result.error.includes('is empty'));
+    });
   });
 });
