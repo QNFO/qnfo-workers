@@ -8,7 +8,9 @@ import { DatabaseSync } from "node:sqlite";
 import vm from "node:vm";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const a = src.indexOf("async function aiRunAttr(env, worker, purpose, model, input, opts) {");
+// W-META-1: the slice must include the top-level __AI_ATTR_RATES table aiRunAttr now reads.
+const a = Math.min(
+  ...["var __AI_ATTR_RATES", "async function aiRunAttr(env, worker, purpose, model, input, opts) {"].map((m) => { const i = src.indexOf(m); if (i < 0) throw new Error(m + " not found"); return i; }));
 const b = src.indexOf('__name(aiCacheRow, "aiCacheRow");');
 if (a < 0 || b < 0) throw new Error("aiRunAttr / aiCacheRow block not found");
 const sandbox = { __name: (f) => f };
@@ -21,7 +23,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 
 function d1() {
   const db = new DatabaseSync(":memory:");
-  db.exec("CREATE TABLE ai_cache_counters (day TEXT, worker TEXT, model TEXT, calls INTEGER DEFAULT 0, cached_calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, cached_tok INTEGER DEFAULT 0, PRIMARY KEY (day, worker, model))");
+  db.exec("CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model)); CREATE TABLE ai_cache_counters (day TEXT, worker TEXT, model TEXT, calls INTEGER DEFAULT 0, cached_calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, cached_tok INTEGER DEFAULT 0, PRIMARY KEY (day, worker, model))");
   const shim = { raw: db, prepare(sql) { let args = []; const st = { bind(...x) { args = x; return st; }, async run() { db.prepare(sql).run(...args); return { success: true }; } }; return st; } };
   return shim;
 }
