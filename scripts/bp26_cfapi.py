@@ -309,6 +309,10 @@ def collect_ai_gateway(ctx):
     f = gateway_figures(g, i)
     rows = [(p, 1, "%d gateway requests in 7 days" % n) for p, n in sorted(f["by_provider"].items(), key=lambda kv: -kv[1])]
     rows.append(("workers-ai-inferences", None, "%d Workers AI inferences in 7 days, %d of them not through the gateway" % (f["infer"], f["direct"])))
+    # Emit per‑model breakdown of direct (non‑gateway) AI inferences
+    for model_id, total_infer in f.get("bypass_by_model", []):
+        # bypass_by_model already contains (model, direct_count) sorted descending
+        rows.append(("direct:" + model_id, None, f"{total_infer} direct inference(s) for model {model_id} in 7 days (bypassing the AI Gateway)"))
     out = []
     all_routes = ("%d cached of %d AI Gateway requests on all routes" % (f["cached"], f["total"])) if f["total"] else "no gateway request"
     rows.append(("all-routes", None, all_routes + " (not the metric: most are generation calls whose prompt never repeats)"))
