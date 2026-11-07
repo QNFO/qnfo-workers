@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-Migration schema guard: validates INSERT column names against known schemas.
-Prevents production failures from column name mismatches.
+"""MIGRATION-SCHEMA-GUARD-1: Validates INSERT column names against known schemas.
+
+Prevents production failures from column name mismatches before merge.
 
 FAILURE MODE: migrations/2026-11-07-research-pipeline-drain-deferred-pool.sql
 - Used 'metric_key' for metric_registry (WRONG - uses 'metric')
@@ -9,6 +9,9 @@ FAILURE MODE: migrations/2026-11-07-research-pipeline-drain-deferred-pool.sql
 - Partial state left in D1, required corrective migration
 
 ROOT CAUSE: No pre-merge validation of column names against actual schemas
+
+INTEGRATION: Called by .github/workflows/pr-checks.yml with changed migration files.
+When regression_gate checks the base tree, files may not exist - guard exits 0.
 """
 
 import re
