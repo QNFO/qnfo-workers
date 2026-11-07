@@ -13,7 +13,7 @@ var jnlWatchMod = (function() {
   var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
   var COMMUNITY = "";
   var CURSOR_KEY = "cursor:lastModified";
-  var VERSION = "0.1.13-wmeta-tokens";
+  var VERSION = "0.1.13-doi-scrub";
   var PAGE_SIZE = 25;
   var MAX_PAGES = 40;
   var UA = "jnl-watch/0.1.9 (QNFO AI-referee overlay for an external record community)";
@@ -1408,9 +1408,10 @@ var worker_default = {
 // per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
 // Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
 // Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
+// W-META-FLEET-1 (0.1.13, agent_issues #8368/#8366 class, fleet-wide): in_tok/out_tok/neurons now recorded from the
+// response usage at Cloudflare's per-model neuron rates (same columns and rate table as the fleet __aiAttrEnv helper).
 var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
-// W-META-1 (agent_issues 1002314-1002318 class, 2026-11-06): record in_tok/out_tok/neurons per purpose from the response usage and the published per-model rates, so cost and output are attributable; calls and errors unchanged.
-var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+var AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1, res;
   try { res = await env.AI.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
@@ -1422,14 +1423,15 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
         var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
         var day = new Date().toISOString().slice(0, 10);
         var ms = Date.now() - t0;
-        var uT = res && typeof res === "object" && res.usage || {};
-        var inT = Number(uT.prompt_tokens || uT.input_tokens || 0) || Math.round(ic / 4);
-        var outT = Number(uT.completion_tokens || uT.output_tokens || 0) || 0;
-        var rT = __AI_ATTR_RATES[String(model)] || [0, 0];
-        var neT = (inT * rT[0] + outT * rT[1]) / 1e6;
+        var u = (ok && res && typeof res === "object" && res.usage) || {};
+        var isEmbed = /bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model));
+        var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || (isEmbed ? 0 : Math.round(ic / 4));
+        var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+        var r = AI_ATTR_RATES[String(model)] || [0, 0];
+        var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
         var wr = (async function() {
           await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
-          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?3,?4,1,?5,?6,?7,?8,?9,?10) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms, inT, outT, neT).run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?3,?4,1,?5,?6,?7,?8,?9,?10) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7, in_tok=in_tok+?8, out_tok=out_tok+?9, neurons=neurons+?10").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms, inTok, outTok, neurons).run();
         })();
         wr.catch(function() {});
       }

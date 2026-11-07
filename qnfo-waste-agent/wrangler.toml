@@ -1,11 +1,20 @@
+# charter-pillar: cost
+# spof-review: existing AUDIT telemetry store; failed runs retry hourly, /run is the authenticated alternate.
 name = "qnfo-waste-agent"
 account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
 main = "worker.js"
 compatibility_date = "2026-10-10"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-# charter-pillar: cost
-#
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
 # WASTE-AGENT-SOURCE-1 (2026-11-06, agent_issues 1002331 CRON-FAULT-1 + 1002323/1002324
 # PORTFOLIO-GAP deploy-unrecorded/project-stale-deploy): this worker ran live with NO tracked
 # source and a "* * * * *" cron off the 5-minute grid (CRON-GRID-1). Source materialized from the
@@ -15,18 +24,6 @@ workers_dev = true
 
 [triggers]
 crons = ["5 * * * *"]
-
-[observability]
-enabled = true
-head_sampling_rate = 1
-
-[observability.logs]
-enabled = true
-head_sampling_rate = 1
-
-[observability.traces]
-enabled = true
-head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1
 
 [[d1_databases]]
 binding = "AUDIT"
