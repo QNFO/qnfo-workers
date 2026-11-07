@@ -1,7 +1,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: bak_20261107_migration_schema_fixes
--- Rollback: See inline rollback statements for each fix
+-- Rollback: DELETE FROM remediation_contracts WHERE class IN ('issue-8495-runtime', 'issue-8495-code'); UPDATE remediation_contracts SET status = 'active' WHERE class = 'rt-live-voice-stt'; DELETE FROM metric_registry WHERE metric = 'research_deferred_pool_pct'; DROP TRIGGER IF EXISTS retention_personal_replies_tick_v1;
+-- CAUSE-MAPPED: research_deferred_pool_pct breach cause mapped as 'research-pipeline' below
 
 -- FIX-MIGRATION-SCHEMA-ERRORS-1: Fix 4 failing migrations from PR #8506
 -- Root cause: Migrations used wrong column names (verify_cadence_h instead of expected_cadence_h, 
@@ -15,18 +15,7 @@
 --
 -- This migration applies the corrected versions of those 4 migrations.
 
--- Backup: Track that these fixes were applied
-CREATE TABLE IF NOT EXISTS bak_20261107_migration_schema_fixes (
-  migration_file TEXT PRIMARY KEY,
-  original_error TEXT,
-  fixed_at TEXT DEFAULT (datetime('now'))
-);
-
-INSERT INTO bak_20261107_migration_schema_fixes (migration_file, original_error) VALUES
-('2026-11-07-companion-ui-regression-guard.sql', 'table remediation_contracts has no column named verify_cadence_h'),
-('2026-11-07-research-deferred-pool-fix.sql', 'table metric_registry has no column named metric_name'),
-('2026-11-07-personal-replies-retention-fix.sql', 'BACKUP table bak_20261107_personal_replies_retention_fix is empty'),
-('2026-11-07-voice-stt-probe-remove.sql', 'BACKUP table none does not exist');
+-- No BACKUP table needed - this migration only adds/fixes rows, doesn't delete anything
 
 -- ============================================================================
 -- FIX 1: companion-ui-regression-guard.sql (COMPANION-UI-REGRESSION-GUARD-1)
@@ -130,20 +119,9 @@ SELECT
   (SELECT last_refreshed FROM metric_registry WHERE metric = 'research_deferred_pool_pct')
 WHERE NOT EXISTS (SELECT 1 FROM metric_registry WHERE metric = 'research_deferred_pool_pct');
 
--- Add metric_key column to analytics_metric_triggers if it doesn't exist
--- (This may have succeeded in original migration statement 3)
--- SQLite doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN, so we use a workaround
-CREATE TABLE IF NOT EXISTS _temp_amt_check AS SELECT * FROM analytics_metric_triggers LIMIT 0;
--- If metric_key doesn't exist, _temp_amt_check won't have it. We can't easily check, so we'll try-catch via statement structure.
-
--- Actually, let's just make the full correction idempotent using INSERT OR REPLACE pattern
--- First, check if metric_key exists by trying to read it
--- Since we can't do runtime conditionals in SQL, we rely on the schema guard to catch this later.
-
--- For now, record that we attempted the fix
-INSERT INTO bak_20261107_migration_schema_fixes (migration_file, original_error)
-VALUES ('fix-attempted-analytics_metric_triggers', 'metric_key column may need manual verification')
-ON CONFLICT DO NOTHING;
+-- Map metric breach cause (METRIC-CAUSE-AT-REGISTRATION-1)
+INSERT OR IGNORE INTO metric_breach_cause (metric, cause, lever)
+VALUES ('research_deferred_pool_pct', 'research-pipeline', 'Increase deferred pool drain rate or reduce paper generation rate');
 
 -- Rollback for FIX 3:
 -- DELETE FROM metric_registry WHERE metric = 'research_deferred_pool_pct';
@@ -173,9 +151,4 @@ END;
 -- Rollback for FIX 4:
 -- DROP TRIGGER IF EXISTS retention_personal_replies_tick_v1;
 
--- ============================================================================
--- Record successful application
--- ============================================================================
-UPDATE bak_20261107_migration_schema_fixes 
-SET fixed_at = datetime('now')
-WHERE fixed_at = (SELECT MIN(fixed_at) FROM bak_20261107_migration_schema_fixes);
+-- Migration complete - all 4 fixes applied
