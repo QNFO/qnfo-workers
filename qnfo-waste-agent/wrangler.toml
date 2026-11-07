@@ -4,6 +4,8 @@ main = "worker.js"
 compatibility_date = "2026-10-10"
 workers_dev = true
 
+# charter-pillar: cost
+#
 # WASTE-AGENT-SOURCE-1 (2026-11-06, agent_issues 1002331 CRON-FAULT-1 + 1002323/1002324
 # PORTFOLIO-GAP deploy-unrecorded/project-stale-deploy): this worker ran live with NO tracked
 # source and a "* * * * *" cron off the 5-minute grid (CRON-GRID-1). Source materialized from the
