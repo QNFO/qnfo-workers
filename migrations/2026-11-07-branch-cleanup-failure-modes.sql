@@ -1,7 +1,8 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM failure_modes WHERE fm_key LIKE 'fm-branch-cleanup-%'; DELETE FROM metric_registry WHERE metric_key LIKE '%branch_cleanup%';
--- BACKUP: N/A
+-- Rollback: DELETE FROM failure_modes WHERE fm_key LIKE 'fm-branch-cleanup-%'; DELETE FROM metric_registry WHERE metric_key LIKE '%branch_cleanup%'; DROP TABLE IF EXISTS branch_deletion_audit;
+-- BACKUP: failure_modes
+-- CAUSE-MAPPED: All metrics are guards without breach triggers (metric-family-guard)
 
 -- BRANCH-CLEANUP-FAILURE-MODES-1: Record failure modes from the careless branch cleanup incident
 -- Root cause: Rushed execution without verification of merge status
