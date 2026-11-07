@@ -2,7 +2,9 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261107_kernel_public_views
--- Rollback: keep these privacy-safe views and redeploy personal-api 4.36.2 (before the mirror); never restore personal-text mirroring.
+-- Rollback: SELECT 1;
+-- Rollback intentionally retains the privacy-safe views. The worker can revert to
+-- personal-api 4.36.2 (before mirroring); never restore personal-text mirroring.
 -- The earlier migration was applied live before review. Replace its shared personal
 -- text branch; the new writer classifies locally and emits only allowlisted categories
 -- to false_stop_hits, preserving the existing metric and remediation consumers.

@@ -89,5 +89,16 @@ assert.deepEqual(logs, [["personal-api kernel telemetry unavailable"]]);
 audit.exec("INSERT OR IGNORE INTO false_stop_hits (source, reply_id, reply_ts, pattern_key, phrase, excerpt) SELECT source, reply_id, reply_ts, pattern_key, phrase, excerpt FROM v_false_stop_candidates");
 assert.equal(rows().length, before + 2);
 assert.ok(!JSON.stringify(rows()).includes(privateMarker));
+// All existing registry categories survive the privacy boundary, including later additions.
+for (const category of ["narration", "sole-safeguard", "text-as-output", "you-as-actor"]) {
+  const phrase = category + " signature";
+  audit.prepare("INSERT INTO false_stop_phrases VALUES (?, ?, 'reply')").run(phrase, category);
+  await module.recordPersonalKernelTelemetry(env, privateMarker + " " + phrase, "personal-twin-chat", now);
+  assert.equal(rows().at(-1).pattern_key, category);
+}
+assert.equal(rows().length, before + 6);
+assert.ok(!JSON.stringify(auditCalls).includes(privateMarker));
+audit.exec(/^-- Rollback: (.+)$/m.exec(correction)[1]);
+assert.equal(audit.prepare("SELECT COUNT(*) n FROM v_agent_replies WHERE source='personal_replies'").get().n, 0);
 personal.close(); audit.close();
 console.log("kernel-privacy: passed (local scan, category-only telemetry, caller boundary, exclusions, fail-soft logs, corrective migration replay)");
