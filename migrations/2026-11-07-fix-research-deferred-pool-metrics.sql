@@ -14,7 +14,7 @@ CREATE VIEW v_research_deferred_analysis AS
 SELECT 
   COUNT(*) as total_deferred,
   COUNT(CASE WHEN recover_count >= 2 THEN 1 END) as terminal_recovery,
-  MIN(queued_at) as oldest_queued
+  MIN(created_at) as oldest_created
 FROM research_queue
 WHERE status = 'deferred';
 
