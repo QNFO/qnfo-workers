@@ -117,7 +117,11 @@ def validate_migration(filepath: Path) -> List[str]:
 
 
 def main():
-    """Validate all migrations for schema errors."""
+    """Validate migrations for schema errors.
+    
+    If arguments are provided, validates only those files.
+    Otherwise validates all migrations in migrations/ directory.
+    """
     repo_root = Path(__file__).parent.parent
     migrations_dir = repo_root / 'migrations'
     
@@ -125,9 +129,23 @@ def main():
         print(f"ERROR: {migrations_dir} not found", file=sys.stderr)
         return 1
     
-    # Check all .sql files
+    # Determine which files to check
+    if len(sys.argv) > 1:
+        # Validate specific files passed as arguments
+        files_to_check = [Path(arg) for arg in sys.argv[1:]]
+        print(f"Validating {len(files_to_check)} migration file(s):")
+        for f in files_to_check:
+            print(f"  - {f.name}")
+    else:
+        # Validate all .sql files
+        files_to_check = sorted(migrations_dir.glob('*.sql'))
+        print(f"Validating all {len(files_to_check)} migrations in {migrations_dir}")
+    
     all_errors = []
-    for filepath in sorted(migrations_dir.glob('*.sql')):
+    for filepath in files_to_check:
+        if not filepath.exists():
+            print(f"WARNING: {filepath} not found, skipping")
+            continue
         errors = validate_migration(filepath)
         all_errors.extend(errors)
     

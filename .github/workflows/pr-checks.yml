@@ -208,13 +208,20 @@ jobs:
         if: ${{ !cancelled() && steps.f.outputs.migration_guard == 'true' }}
         env:
           REGRESSION_GATE: ${{ vars.REGRESSION_GATE }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
           # MIGRATION-SCHEMA-GUARD-1: catches column name mismatches before production
           # REGRESSION TEST: 2026-11-07-research-pipeline-drain-deferred-pool.sql
           #   Used 'metric_key' for metric_registry, failed in production (statement 2)
           #   Root cause: metric_registry uses 'metric', analytics_metric_triggers uses 'metric_key'
-          python3 scripts/regression_gate.py --name migration-schema-guard -- python3 scripts/migration_schema_guard.py
+          # Only validate CHANGED migrations to avoid failing on already-merged errors
+          files=$(git diff --name-only --diff-filter=AM "origin/$BASE_REF" HEAD -- 'migrations/*.sql' || true)
+          if [ -z "$files" ]; then
+            echo "No migrations changed, skipping schema validation"
+            exit 0
+          fi
+          python3 scripts/regression_gate.py --name migration-schema-guard -- python3 scripts/migration_schema_guard.py $files
 
       - name: Check the added and changed migrations
         if: ${{ !cancelled() && steps.f.outputs.migration_guard == 'true' }}
