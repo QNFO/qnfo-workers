@@ -15,7 +15,8 @@ INSERT INTO remediation_contracts (
     owner,
     closes_issue_id,
     note
-) VALUES (
+)
+SELECT 
     'issue-8495-runtime',
     'runner-https',
     '{"url": "https://me.q08.org/companion", "status": 200, "absent": "For the Quniverse"}',
@@ -23,6 +24,8 @@ INSERT INTO remediation_contracts (
     'qnfo-cloud-ops',
     8495,
     'COMPANION-UI-REGRESSION-GUARD-1: runtime check that fleet asks UI clutter does not return to personal companion Today tab'
+WHERE NOT EXISTS (
+    SELECT 1 FROM remediation_contracts WHERE class = 'issue-8495-runtime'
 );
 
 -- Code probe: detects if fleetAsks() function is reintroduced to personal-api
@@ -34,7 +37,8 @@ INSERT INTO remediation_contracts (
     owner,
     closes_issue_id,
     note
-) VALUES (
+)
+SELECT 
     'issue-8495-code',
     'code-read',
     '{"paths": ["personal-api/worker.js"], "absent": "function fleetAsks"}',
@@ -42,4 +46,6 @@ INSERT INTO remediation_contracts (
     'qnfo-cloud-ops',
     8495,
     'COMPANION-UI-REGRESSION-GUARD-1: code check that fleetAsks function does not return to personal-api'
+WHERE NOT EXISTS (
+    SELECT 1 FROM remediation_contracts WHERE class = 'issue-8495-code'
 );
