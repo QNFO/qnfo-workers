@@ -531,7 +531,7 @@ jobs:
           set -euo pipefail
           node scripts/r2_doc_audit.test.mjs
           if [ "$PR_USER_TYPE" = "Bot" ]; then echo "self-audit: bot author, skipped"; exit 0; fi
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body' > pr-body.txt
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" | jq -r '.body' > pr-body.txt
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' > pr-files.txt
           node scripts/self_audit_pr.mjs --body pr-body.txt --files pr-files.txt
 
@@ -576,6 +576,26 @@ jobs:
       - name: Bluesky profile sync offline suite (qnfo-social)
         if: ${{ !cancelled() }}
         run: node qnfo-social/profile-sync.test.mjs
+
+      # ---- domain-separation-guard: DOMAIN-PLANE-1 enforcement ----
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: ${{ !cancelled() }}
+        with:
+          python-version: "3.11"
+
+      - name: Domain separation guard (DOMAIN-PLANE-1)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          # DOMAIN-PLANE-1: personal=q08.org, fleet=qnfo.org, quantum=qwav.org
+          # Prevents personal workers from containing fleet code and vice versa
+          files=$(git diff --name-only --diff-filter=AM HEAD^1 HEAD -- '*/worker.js' '*/worker.mjs' || true)
+          if [ -z "$files" ]; then
+            echo "No worker files changed, skipping domain separation check"
+            exit 0
+          fi
+          echo "$files" > changed-workers.txt
+          python3 scripts/deploy-gate-domain-separation.py --files changed-workers.txt
 
       # ---- adversarial-workers-guard: steps of .github/workflows/adversarial-workers-guard.yml ----
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
