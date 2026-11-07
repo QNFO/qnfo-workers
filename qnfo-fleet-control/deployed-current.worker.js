@@ -15547,12 +15547,12 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
       if (db) {
         var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:aiRunAttr:caught", error: String(e2 && e2.message) })); }
         var day = new Date().toISOString().slice(0, 10);
-        await db.prepare("        var uT = res && typeof res === "object" && res.usage || {};
+        var uT = res && typeof res === "object" && res.usage || {};
         var inT = Number(uT.prompt_tokens || uT.input_tokens || 0) || Math.round(ic / 4);
         var outT = Number(uT.completion_tokens || uT.output_tokens || 0) || 0;
         var rT = __AI_ATTR_RATES[String(model)] || [0, 0];
         var neT = (inT * rT[0] + outT * rT[1]) / 1e6;
-CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+        await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
         await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?3,?4,1,?5,?6,?7,?8,?9,?10) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, Date.now() - t0, inT, outT, neT).run();
         // PROMPT-CACHE-COUNT-4 (issue 2115): the same ai_cache_counters row the other fleet wrappers write (qnfo-ops form).
         var ac = aiCacheRow(model, res);
