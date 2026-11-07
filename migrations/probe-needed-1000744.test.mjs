@@ -5,9 +5,14 @@ import { DatabaseSync } from "node:sqlite";
 const migration = readFileSync(new URL("./2026-11-03-probe-needed-1000744.sql", import.meta.url), "utf8");
 const rollback = /^-- Rollback: (.*)$/m.exec(migration)[1];
 const body = migration.split("\n").filter((line) => !line.startsWith("--")).join("\n");
+const NOW = "2026-11-03T12:00:00Z";
+const clock = new DatabaseSync(":memory:");
 
 function build() {
   const db = new DatabaseSync(":memory:");
+  db.function("datetime", { varargs: true }, (...args) => clock.prepare(
+    `SELECT datetime(${args.map(() => "?").join(",")}) AS value`
+  ).get(...args.map((arg) => arg === "now" ? NOW : arg)).value);
   db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, status TEXT);
     CREATE TABLE remediation_contracts (
       class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT,
@@ -40,7 +45,9 @@ assert.equal(target().last_verdict, null);
 assert.equal(target().attempts, 0);
 assert.equal(target().deferred_since, null);
 assert.equal(target().last_attempt_at, null);
-assert.ok(Date.parse(target().next_due_at) > Date.now() - 60_000);
+// SQLite emits UTC without a suffix; Date.parse would interpret it in the
+// machine's local timezone. Compare the exact frozen SQLite UTC value instead.
+assert.equal(target().next_due_at, "2026-11-03 12:00:00");
 assert.match(target().verify_probe, /monitoring-pass@%/);
 assert.match(target().verify_probe, /-55 minutes/);
 assert.match(target().verify_probe, /a\.id <> 1000744/);

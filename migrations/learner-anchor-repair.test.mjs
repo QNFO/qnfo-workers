@@ -28,10 +28,17 @@ function tidOf(ms, clock) {
 }
 const uriOf = (key) => "at://did:plc:vad2yeqflg5uznmp557zge5c/app.bsky.feed.post/" + key;
 const DAY = 864e5, HOUR = 36e5;
-const NOW = Date.now();
+// Replay the migration's authored snapshot: the real October post must remain
+// later than the fixture's announcement, regardless of when this suite runs.
+const NOW = Date.UTC(2026, 9, 26, 18, 0, 0);
 const iso = (ms) => new Date(ms).toISOString();
 
 const w = new DatabaseSync(":memory:");
+const clock = new DatabaseSync(":memory:");
+// Keep SQLite's real formatting/epoch conversion, freezing only its clock input.
+w.function("strftime", { varargs: true }, (...args) => clock.prepare(
+  `SELECT strftime(${args.map(() => "?").join(",")}) AS value`
+).get(...args.map((arg) => arg === "now" ? iso(NOW) : arg)).value);
 w.exec(`CREATE TABLE social_learner_posts (post_key TEXT PRIMARY KEY, slug TEXT, bsky_uri TEXT, link_slug TEXT, topic TEXT, format TEXT, slot TEXT, n_posts INTEGER, posted_at TEXT, chosen_by TEXT, decision TEXT, status TEXT, engagement REAL, visits REAL, reward REAL, reward_detail TEXT, credited_at TEXT, created_at TEXT, channel TEXT, buffer_id TEXT);
 CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, mode TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);`);

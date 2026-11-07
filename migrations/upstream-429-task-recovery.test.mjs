@@ -165,7 +165,9 @@ const work = mkdtempSync(join(tmpdir(), "upstream-429-recovery-"));
 try {
   mkdirSync(join(work, "qnfo-ops"));
   for (const file of ["worker.js", "deployed-current.worker.js"]) writeFileSync(join(work, "qnfo-ops", file), base);
-  execFileSync("git", ["apply", "-"], { cwd: work, input: patch });
+  // The fixture is LF bytes, independent of a developer's global autocrlf.
+  // Preserve the exact round-trip assertion instead of normalizing its output.
+  execFileSync("git", ["-c", "core.autocrlf=false", "apply", "-"], { cwd: work, input: patch });
   for (const file of ["worker.js", "deployed-current.worker.js"]) {
     assert.equal(readFileSync(join(work, "qnfo-ops", file), "utf8"), proposal(base));
   }
