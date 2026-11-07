@@ -1,4 +1,7 @@
 
+var VERSION = "1.0.1";
+// spof-review: AUDIT is the existing telemetry store; a failed sweep logs its
+// failure and the next hourly run retries. Authenticated /run is the alternate.
 const NEURON_USD = 0.011 / 1000;
 const MAX_NEW_ISSUES = 5;
 const CLEAN_RUNS_TO_CLOSE = 3;
@@ -84,14 +87,14 @@ async function run(env) {
     const w = await first(db, "SELECT ROUND(SUM(wasted_neurons) * " + NEURON_USD + ", 2) AS usd FROM waste_ledger WHERE day >= date('now','-7 day')");
     const o = await first(db, "SELECT COUNT(*) AS n FROM waste_findings WHERE status = 'open'");
     await db.prepare("INSERT OR REPLACE INTO waste_runs (ts, wasted_usd_7d, spend_usd_7d, published_7d, usd_per_published, findings_open, issues_filed, issues_closed, error) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind(now, Number(w && w.usd || 0), Number(f.cur.usd || 0), Number(f.cur.pub || 0), f.cpp, Number(o && o.n || 0), filed, closed, err).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-waste-agent", event: "waste-run-ledger-failed", error: String(e && e.message || e).slice(0, 300) })); }
   return { filed, closed, err };
 }
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); },
   async fetch(request, env) {
     const u = new URL(request.url);
-    if (u.pathname === "/health") return new Response("ok");
+    if (u.pathname === "/health") return Response.json({ ok: true, worker: "qnfo-waste-agent", version: VERSION });
     if (u.pathname === "/run" && request.method === "POST" && request.headers.get("x-run-key") === env.RUN_KEY) return new Response(JSON.stringify(await run(env)), { headers: { "content-type": "application/json" } });
     return new Response("not found", { status: 404 });
   },
