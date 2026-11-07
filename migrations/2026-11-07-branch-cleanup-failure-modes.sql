@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM failure_modes WHERE fm_key LIKE 'fm-branch-cleanup-%'; DELETE FROM metric_registry WHERE metric_key LIKE '%branch_cleanup%'; DROP TABLE IF EXISTS branch_deletion_audit;
+-- Rollback: DELETE FROM failure_modes WHERE fm_key LIKE 'fm-branch-cleanup-%'; DELETE FROM metric_registry WHERE metric LIKE '%branches_unmerged%'; DROP TABLE IF EXISTS branch_deletion_audit;
 -- BACKUP: failure_modes
 -- CAUSE-MAPPED: All metrics are guards without breach triggers (metric-family-guard)
 
@@ -75,73 +75,75 @@ VALUES (
   remediation = EXCLUDED.remediation;
 
 -- Metric: Branches with unmerged commits that exist for >30 days
+-- Note: metric_registry.metric is the key; there is no metric_name column
 INSERT INTO metric_registry (
-  metric_key,
-  title,
-  query,
-  unit,
-  target_value,
-  target_operator,
-  collection_cadence,
-  state
+  metric,
+  layer,
+  kind,
+  formula,
+  source_of_truth,
+  baseline,
+  target,
+  owner,
+  disposition_actor,
+  refresh_cadence,
+  state,
+  refresh_class
 ) VALUES (
   'branches_unmerged_over_30d',
-  'Branches with unmerged commits older than 30 days',
-  'SELECT COUNT(*) FROM (SELECT 1) WHERE 1=0', -- Placeholder; actual check via git
-  'count',
-  10,
-  '<=',
+  'repository',
+  'guard',
+  'COUNT of branches with commits not in main that are older than 30 days; checked via git log main..branch',
+  'git log origin/main..origin/<branch> (daily workflow)',
+  'new 2026-11-07',
+  '<= 10',
+  'scripts/safe_branch_cleanup.py',
+  'fm-branch-cleanup-no-merge-check: scripts/safe_branch_cleanup.py with merge verification',
   'daily',
-  'active'
-) ON CONFLICT (metric_key) DO UPDATE SET
-  title = EXCLUDED.title,
-  updated_at = CURRENT_TIMESTAMP;
+  'active',
+  'daily'
+) ON CONFLICT (metric) DO UPDATE SET
+  formula = EXCLUDED.formula,
+  target = EXCLUDED.target,
+  disposition_actor = EXCLUDED.disposition_actor,
+  state = EXCLUDED.state;
 
 -- Remediation contracts for each failure mode
 INSERT INTO remediation_contracts (
   class,
-  title,
-  probe,
   verify_transport,
-  cadence_minutes,
-  state
+  verify_probe,
+  expected_cadence_h,
+  hit_action,
+  description
 ) VALUES
 (
   'fm-branch-cleanup-no-merge-check',
-  'Verify safe_branch_cleanup.py exists and checks merge status',
-  jsonb_build_object(
-    'paths', jsonb_build_array('scripts/safe_branch_cleanup.py'),
-    'contains', 'def check_unmerged_commits'
-  ),
   'code-read',
-  60,
-  'active'
+  '{"paths": ["scripts/safe_branch_cleanup.py"], "contains": "def check_unmerged_commits"}',
+  1,
+  'code',
+  'Verify safe_branch_cleanup.py exists and checks merge status'
 ),
 (
   'fm-branch-cleanup-no-dry-run',
-  'Verify safe_branch_cleanup.py has dry-run mode',
-  jsonb_build_object(
-    'paths', jsonb_build_array('scripts/safe_branch_cleanup.py'),
-    'contains', 'dry_run: bool = True'
-  ),
   'code-read',
-  60,
-  'active'
+  '{"paths": ["scripts/safe_branch_cleanup.py"], "contains": "dry_run: bool = True"}',
+  1,
+  'code',
+  'Verify safe_branch_cleanup.py has dry-run mode'
 ),
 (
   'fm-branch-cleanup-no-dangling-check',
-  'Verify safe_branch_cleanup.py checks for dangling commits',
-  jsonb_build_object(
-    'paths', jsonb_build_array('scripts/safe_branch_cleanup.py'),
-    'contains', 'git fsck --lost-found'
-  ),
   'code-read',
-  60,
-  'active'
+  '{"paths": ["scripts/safe_branch_cleanup.py"], "contains": "git fsck --lost-found"}',
+  1,
+  'code',
+  'Verify safe_branch_cleanup.py checks for dangling commits'
 )
 ON CONFLICT (class) DO UPDATE SET
-  probe = EXCLUDED.probe,
-  updated_at = CURRENT_TIMESTAMP;
+  verify_probe = EXCLUDED.verify_probe,
+  description = EXCLUDED.description;
 
 -- Create audit table for branch deletions
 CREATE TABLE IF NOT EXISTS branch_deletion_audit (
