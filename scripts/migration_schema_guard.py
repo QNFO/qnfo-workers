@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""MIGRATION-SCHEMA-GUARD-1: Validates INSERT column names against known schemas.
+"""
+MIGRATION-SCHEMA-GUARD-1: Pre-merge validation of INSERT column names.
 
 Prevents production failures from column name mismatches before merge.
 
