@@ -79,7 +79,7 @@ INSERT INTO metric_registry (
 );
 
 INSERT INTO analytics_metric_triggers (
-  metric,
+  metric_key,
   threshold,
   severity,
   owner,
@@ -91,23 +91,9 @@ INSERT INTO analytics_metric_triggers (
   100,
   'high',
   'qnfo-research-exec',
-  'RESEARCH-DEFERRED-POOL-DRAIN-1: Deferred pool has grown beyond sustainable size. The research tick processes only status=''queued'', leaving deferred items stranded.
-
-Current state: SELECT * FROM v_research_deferred_analysis;
-Sample deferred items: SELECT id, source, source_id, error, terminal_rearms, created_at FROM research_queue WHERE status=''deferred'' ORDER BY created_at ASC LIMIT 20;
-
-ROOT CAUSE: laneStatusFor (line 1105) returns ''deferred'' after TERMINAL_RECOVERY_MAX (=2) cycles. These items never automatically return to ''queued''.
-
-CONCRETE LEVER: Add deferred pool draining to researchTick (after processing queued items):
-1. SELECT oldest N deferred items (N=10 per tick to start)
-2. UPDATE research_queue SET status=''queued'', stage=''ground'', recover_count=0, terminal_rearms=terminal_rearms, claimed_at=NULL WHERE id IN (...)
-3. Log drain count to lane-heartbeat event
-4. Monitor research_deferred_pool_size metric for sustained decrease
-
-DEFINITION OF DONE: research_deferred_pool_size < 100 sustained for 7 days, with pool shrinking weekly.
-
-code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js
-code-anchor: async function researchTick(env) {',
+  'RESEARCH-DEFERRED-POOL-DRAIN-1: Deferred pool >100. ROOT CAUSE: status=''deferred'' after TERMINAL_RECOVERY_MAX (2) never returns to ''queued''. Research tick only processes WHERE status=''queued''. CONCRETE LEVER: Add deferred drain to claimErrataFair: SELECT oldest N=10 deferred WHERE recover_count < terminal_rearms, UPDATE to status=''queued'' with stage=''ground''. DEFINITION OF DONE: research_deferred_pool_size < 100 sustained 7 days.' || char(10) ||
+    'code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js' || char(10) ||
+    'code-anchor: async function claimErrataFair(env, nowMs) {',
   'active',
   datetime('now')
 );
@@ -134,7 +120,7 @@ INSERT INTO metric_registry (
 );
 
 INSERT INTO analytics_metric_triggers (
-  metric,
+  metric_key,
   threshold,
   severity,
   owner,
@@ -146,18 +132,9 @@ INSERT INTO analytics_metric_triggers (
   0,
   'medium',
   'qnfo-research-exec',
-  'RESEARCH-DEFERRED-POOL-DRAIN-1: Legacy parked rows detected. These should be swept by legacyParkedSweep at LEGACY_PARKED_PER_RUN (10/hour).
-
-Sample legacy rows: SELECT id, error, recover_count, terminal_rearms, created_at FROM research_queue WHERE stage=''parked'' ORDER BY created_at ASC LIMIT 20;
-
-ROOT CAUSE: stage=''parked'' was removed in v0.54.0 with SINGLE-LANE-1. Any remaining rows are from pre-0.54.0 releases, qnfo-fleet-control POOL-BOUND-1, or missed migrations.
-
-CONCRETE LEVER: legacyParkedSweep (lines 3562-3574) already sweeps these at 10/hour through laneReenter. If count > 100, increase LEGACY_PARKED_PER_RUN temporarily.
-
-DEFINITION OF DONE: research_legacy_parked_count = 0 sustained for 24 hours.
-
-code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js
-code-anchor: async function legacyParkedSweep(env) {',
+  'RESEARCH-LEGACY-PARKED-SWEEP-1: Legacy stage=''parked'' rows from pre-v0.54.0. Modern pipeline (SINGLE-LANE-1) uses laneReenter - NO MORE PARKING. ROOT CAUSE: stage=''parked'' removed in v0.54.0. Remaining rows are pre-0.54.0 artifacts. CONCRETE LEVER: legacyParkedSweep already sweeps at 10/hour. If count > 100, increase LEGACY_PARKED_PER_RUN temporarily. DEFINITION OF DONE: research_legacy_parked_count = 0 sustained for 24 hours.' || char(10) ||
+    'code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js' || char(10) ||
+    'code-anchor: async function legacyParkedSweep(env) {',
   'active',
   datetime('now')
 );
