@@ -11,7 +11,7 @@ db.exec(`
     id INTEGER PRIMARY KEY,
     status TEXT,
     stage TEXT,
-    recovery_count INTEGER,
+    recover_count INTEGER,
     created_at TEXT
   );
   
@@ -29,7 +29,8 @@ db.exec(`
   );
   
   CREATE TABLE analytics_metric_triggers (
-    metric TEXT PRIMARY KEY,
+    metric TEXT,
+    metric_key TEXT PRIMARY KEY,
     threshold INTEGER,
     severity TEXT,
     action TEXT,

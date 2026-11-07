@@ -23,8 +23,8 @@ SELECT
   status,
   stage,
   COUNT(*) as count,
-  AVG(recovery_count) as avg_recovery_count,
-  MAX(recovery_count) as max_recovery_count,
+  AVG(recover_count) as avg_recovery_count,
+  MAX(recover_count) as max_recovery_count,
   MIN(created_at) as oldest_created,
   MAX(created_at) as newest_created
 FROM research_queue
@@ -59,15 +59,17 @@ INSERT OR IGNORE INTO metric_registry (
 -- Trigger for metric 1
 INSERT OR IGNORE INTO analytics_metric_triggers (
   metric,
+  metric_key,
   threshold,
   severity,
   action,
   owner
 ) VALUES (
   'research_deferred_pool_size',
+  'research_deferred_pool_size',
   100,
   'high',
-  'RESEARCH-DEFERRED-POOL-DRAIN-1: The deferred pool has grown past threshold. Most deferred items can be automatically drained by re-queueing them after their error cause is fixed. Implementation: qnfo-research-exec should add a deferred pool drain that runs every N minutes and re-queues deferred items with recovery_count reset to 0, logging the drain action.
+  'RESEARCH-DEFERRED-POOL-DRAIN-1: The deferred pool has grown past threshold. Most deferred items can be automatically drained by re-queueing them after their error cause is fixed. Implementation: qnfo-research-exec should add a deferred pool drain that runs every N minutes and re-queues deferred items with recover_count reset to 0, logging the drain action.
 
 code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js
 code-anchor: async function tick(env) {',
@@ -102,11 +104,13 @@ INSERT OR IGNORE INTO metric_registry (
 -- Trigger for metric 2
 INSERT OR IGNORE INTO analytics_metric_triggers (
   metric,
+  metric_key,
   threshold,
   severity,
   action,
   owner
 ) VALUES (
+  'research_legacy_parked_count',
   'research_legacy_parked_count',
   0,
   'medium',
