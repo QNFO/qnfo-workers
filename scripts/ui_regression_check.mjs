@@ -131,7 +131,7 @@ async function checkUIRegression({ files, base, head }) {
     }
     
     try {
-      headHTML = readFileSync(workerFile, 'utf8');
+      headHTML = await exec('git', ['show', `${head}:${workerFile}`]);
     } catch (e) {
       console.log(`  Head version not found, skipping`);
       continue;
