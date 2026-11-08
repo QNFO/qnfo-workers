@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+
+const sql = readFileSync(new URL('../migrations/2026-11-07-research-pipeline-drain-deferred-pool.sql', import.meta.url), 'utf8');
+const db = new DatabaseSync(':memory:');
+db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY,status TEXT,source TEXT,stage TEXT,created_at TEXT,terminal_rearms INTEGER);
+CREATE TABLE metric_registry(metric TEXT PRIMARY KEY,layer TEXT NOT NULL,kind TEXT NOT NULL,formula TEXT,source_of_truth TEXT,target TEXT,owner TEXT,disposition_actor TEXT,refresh_cadence TEXT,state TEXT,refresh_class TEXT,last_value TEXT);
+CREATE TRIGGER metric_integrity BEFORE INSERT ON metric_registry WHEN NEW.source_of_truth IS NULL OR NEW.disposition_actor IS NULL OR NEW.refresh_cadence IS NULL BEGIN SELECT RAISE(ABORT,'METRIC-INTEGRITY-1'); END;
+CREATE TABLE analytics_metric_triggers(id INTEGER PRIMARY KEY,metric_key TEXT UNIQUE,title TEXT,source_table TEXT,operator TEXT,threshold REAL,priority INTEGER,action TEXT,owner TEXT,queue_target TEXT,cooldown_hours INTEGER,enabled INTEGER,notes TEXT,created_at TEXT);
+CREATE TABLE metric_breach_cause(metric_key TEXT PRIMARY KEY,cause_key TEXT NOT NULL,note TEXT);`);
+db.exec(sql);
+assert.equal(db.prepare('SELECT count(*) n FROM metric_registry').get().n, 2);
+assert.equal(db.prepare('SELECT count(*) n FROM analytics_metric_triggers WHERE enabled=1 AND source_table=\'registry\' AND operator=\'gt\'').get().n, 2);
+assert.equal(db.prepare('SELECT count(*) n FROM metric_breach_cause').get().n, 2);
+db.exec("UPDATE metric_registry SET last_value='17',state='MEASURED'");
+db.exec(sql);
+assert.equal(db.prepare("SELECT count(*) n FROM metric_registry WHERE last_value='17' AND state='MEASURED'").get().n, 2);
+assert.equal(db.prepare('SELECT count(*) n FROM analytics_metric_triggers').get().n, 2);
+db.exec("INSERT INTO research_queue VALUES('sample','deferred','test',NULL,'2026-11-01',2)");
+assert.equal(db.prepare('SELECT count FROM v_research_deferred_analysis').get().count, 1);
+console.log('PASS full deferred-pool migration executes on live schemas and replays without losing measurements or duplicating triggers');
