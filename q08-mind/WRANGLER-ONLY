@@ -1,1 +1,7 @@
-multi-module worker: worker.js imports ./data/entries-a.json and ./data/entries-b.json, and the canonical POST /ops/deploy PUTs worker.js alone (CF API 400 10021 "No such module data/entries-a.json", canonical-deploy run 40176768374). Ship with wrangler deploy from q08-mind/, which bundles the JSON modules; the canonical path skips this directory while this marker exists.
+MIND-MODULES-1 (2026-11-08): q08-mind imports local JSON data modules.
+The canonical /ops/deploy path fetches worker.js from GitHub and PUTs it through
+PUT /accounts/{account}/workers/scripts/{name}/content, which does not bundle
+JSON modules; the upload fails with "No such module" or error 10162
+("unsupported Content-Type application/json"). The dedicated mind-deploy.yml
+workflow bundles these JSON modules with pinned Wrangler before uploading, so
+q08-mind ships through that workflow instead of canonical-deploy.yml.
