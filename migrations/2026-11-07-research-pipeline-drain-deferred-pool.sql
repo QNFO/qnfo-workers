@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP VIEW IF EXISTS v_research_deferred_analysis; DELETE FROM metric_registry WHERE metric_key IN ('research_deferred_pool_size','research_legacy_parked_count'); DELETE FROM analytics_metric_triggers WHERE metric IN ('research_deferred_pool_size','research_legacy_parked_count'); DELETE FROM metric_breach_cause WHERE cause_key = 'research-deferred-drain';
+-- Rollback: DROP VIEW IF EXISTS v_research_deferred_analysis; DELETE FROM metric_registry WHERE metric IN ('research_deferred_pool_size','research_legacy_parked_count'); DELETE FROM analytics_metric_triggers WHERE metric_key IN ('research_deferred_pool_size','research_legacy_parked_count'); DELETE FROM metric_breach_cause WHERE cause_key = 'research-deferred-drain';
 -- BACKUP: analytics_metric_triggers
 
 /*
@@ -58,101 +58,75 @@ GROUP BY status, source
 ORDER BY count DESC;
 
 -- Metric 1: Deferred pool size (the main problem)
-INSERT INTO metric_registry (
-  metric_key,
-  metric_name,
-  query,
-  target_value,
-  comparison,
-  state,
-  source_of_truth,
-  disposition_actor,
-  refresh_cadence,
-  created_at,
-  updated_at
+INSERT OR IGNORE INTO metric_registry (
+  metric, layer, kind, formula, source_of_truth, target, owner,
+  disposition_actor, refresh_cadence, state, refresh_class
 ) VALUES (
-  'research_deferred_pool_size',
-  'Research Deferred Pool Size',
-  'SELECT COUNT(*) as value FROM research_queue WHERE status = ''deferred''',
-  100,
-  '<',
-  'active',
-  'research_pipeline',
-  'qnfo-research-exec',
-  'daily',
-  datetime('now'),
-  datetime('now')
+  'research_deferred_pool_size', 'operational', 'leading', 'SELECT COUNT(*) as value FROM research_queue WHERE status = ''deferred''',
+  'qnfo-audit.research_queue', '< 100', 'qnfo-research-exec',
+  'analytics_metric_triggers research_deferred_pool_size -> agent_issues', 'daily', 'PENDING', 'computed'
 );
 
-INSERT INTO analytics_metric_triggers (
+INSERT OR IGNORE INTO analytics_metric_triggers (
   metric_key,
   threshold,
-  severity,
+  priority,
   owner,
   action,
-  state,
+  enabled,
+  operator,
+  source_table,
   created_at
 ) VALUES (
   'research_deferred_pool_size',
   100,
-  'high',
+  2,
   'qnfo-research-exec',
   'RESEARCH-DEFERRED-POOL-DRAIN-1: Deferred pool >100. ROOT CAUSE: status=''deferred'' after TERMINAL_RECOVERY_MAX (2) never returns to ''queued''. Research tick only processes WHERE status=''queued''. CONCRETE LEVER: Add deferred drain to claimErrataFair: SELECT oldest N=10 deferred WHERE recover_count < terminal_rearms, UPDATE to status=''queued'' with stage=''ground''. DEFINITION OF DONE: research_deferred_pool_size < 100 sustained 7 days.' || char(10) ||
     'code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js' || char(10) ||
     'code-anchor: async function claimErrataFair(env, nowMs) {',
-  'active',
+  1,
+  'gt',
+  'registry',
   datetime('now')
 );
 
 -- Metric 2: Legacy parked count (should be zero, swept at 10/hour)
-INSERT INTO metric_registry (
-  metric_key,
-  metric_name,
-  query,
-  target_value,
-  comparison,
-  state,
-  source_of_truth,
-  disposition_actor,
-  refresh_cadence,
-  created_at,
-  updated_at
+INSERT OR IGNORE INTO metric_registry (
+  metric, layer, kind, formula, source_of_truth, target, owner,
+  disposition_actor, refresh_cadence, state, refresh_class
 ) VALUES (
-  'research_legacy_parked_count',
-  'Research Legacy Parked Count',
-  'SELECT COUNT(*) as value FROM research_queue WHERE stage = ''parked''',
-  0,
-  '=',
-  'active',
-  'research_pipeline',
-  'qnfo-research-exec',
-  'daily',
-  datetime('now'),
-  datetime('now')
+  'research_legacy_parked_count', 'operational', 'leading', 'SELECT COUNT(*) as value FROM research_queue WHERE stage = ''parked''',
+  'qnfo-audit.research_queue', '= 0', 'qnfo-research-exec',
+  'analytics_metric_triggers research_legacy_parked_count -> agent_issues', 'daily', 'PENDING', 'computed'
 );
 
-INSERT INTO analytics_metric_triggers (
+INSERT OR IGNORE INTO analytics_metric_triggers (
   metric_key,
   threshold,
-  severity,
+  priority,
   owner,
   action,
-  state,
+  enabled,
+  operator,
+  source_table,
   created_at
 ) VALUES (
   'research_legacy_parked_count',
   0,
-  'medium',
+  5,
   'qnfo-research-exec',
   'RESEARCH-LEGACY-PARKED-SWEEP-1: Legacy stage=''parked'' rows from pre-v0.54.0. Modern pipeline (SINGLE-LANE-1) uses laneReenter - NO MORE PARKING. ROOT CAUSE: stage=''parked'' removed in v0.54.0. Remaining rows are pre-0.54.0 artifacts. CONCRETE LEVER: legacyParkedSweep already sweeps at 10/hour. If count > 100, increase LEGACY_PARKED_PER_RUN temporarily. DEFINITION OF DONE: research_legacy_parked_count = 0 sustained for 24 hours.' || char(10) ||
     'code-task: repo=qnfo-workers path=qnfo-research-exec/worker.js' || char(10) ||
     'code-anchor: async function legacyParkedSweep(env) {',
-  'active',
+  1,
+  'gt',
+  'registry',
   datetime('now')
 );
 
 -- Map both metrics to research-deferred-drain cause
-INSERT INTO metric_breach_cause (metric, cause_key, note, created_at)
+INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note)
 VALUES 
-  ('research_deferred_pool_size', 'research-deferred-drain', 'Deferred pool accumulation requiring drain logic', datetime('now')),
-  ('research_legacy_parked_count', 'research-deferred-drain', 'Legacy parked rows requiring sweep completion', datetime('now'));
+  ('research_deferred_pool_size', 'research-deferred-drain', 'Deferred pool accumulation requiring drain logic'),
+  ('research_legacy_parked_count', 'research-deferred-drain', 'Legacy parked rows requiring sweep completion');
