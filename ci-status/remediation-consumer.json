@@ -2,11 +2,11 @@
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
  "verifier": "remediation-consumer@2374507a17e6",
- "due": 680,
- "pass": 435,
- "fail": 223,
- "skipped": 22,
- "deferred": 21,
+ "due": 760,
+ "pass": 528,
+ "fail": 230,
+ "skipped": 2,
+ "deferred": 2,
  "contracts": [
   {
    "class": "rt-fleet-dashboard",
@@ -17,7 +17,7 @@
    "written": true
   },
   {
-   "class": "rt-personal-api",
+   "class": "rt-live-qnfo-ai-calibration",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -49,19 +49,19 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-ai-calibration",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-1002145",
    "issue_id": 1002145,
    "verdict": "fail",
    "expected": "ok",
    "observed": "status=503",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -161,6 +161,14 @@
    "written": true
   },
   {
+   "class": "fm-zaraz-autoinject-worker-html",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "rt-live-qnfo-social",
    "issue_id": null,
    "verdict": "pass",
@@ -170,14 +178,6 @@
   },
   {
    "class": "rt-live-qnfo-subscribers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-zaraz-autoinject-worker-html",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -209,22 +209,6 @@
    "written": true
   },
   {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-subscribe",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-page-ask-robots",
    "issue_id": null,
    "verdict": "pass",
@@ -241,7 +225,15 @@
    "written": true
   },
   {
-   "class": "rt-live-ai-models",
+   "class": "issue-1001982",
+   "issue_id": 1001982,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "status=404",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -249,11 +241,19 @@
    "written": true
   },
   {
-   "class": "issue-1001982",
-   "issue_id": 1001982,
-   "verdict": "fail",
+   "class": "rt-page-subscribe",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "status=404",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-ai-models",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -281,14 +281,6 @@
    "written": true
   },
   {
-   "class": "issue-1002147",
-   "issue_id": 1002147,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
    "class": "rt-live-qnfo-fleet-control",
    "issue_id": null,
    "verdict": "pass",
@@ -313,6 +305,14 @@
    "written": true
   },
   {
+   "class": "issue-1002147",
+   "issue_id": 1002147,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
    "class": "issue-1002220",
    "issue_id": 1002220,
    "verdict": "fail",
@@ -330,6 +330,14 @@
   },
   {
    "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-github-steward",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -377,14 +385,6 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-github-steward",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-live-radar-hub",
    "issue_id": null,
    "verdict": "pass",
@@ -421,4 +421,4 @@
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
-   "observed": "o
+   "observed": "ok"
