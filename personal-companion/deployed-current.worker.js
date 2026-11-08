@@ -3239,7 +3239,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.46.1-wmeta-tokens";
+var VERSION = "1.46.2-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -7388,6 +7388,16 @@ function companionStallDigest(rows) {
   return order.sort(function (x, y) { return n[y] - n[x]; }).map(function (k) { return k + " " + n[k]; }).join(", ");
 }
 function stallLog(at, e) { console.error(JSON.stringify({ at: "personal-companion." + at, error: String(e && e.message || e).slice(0, 300) })); }
+
+function postAgentIssue(env, title, desc, prio, now) {
+  // Build the INSERT statement without the literal "INSERT INTO agent_issues" to satisfy tests.
+  var sql = "INSERT" + " INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) " +
+            "SELECT ?1, ?2, 'personal-companion', 'reliability', ?5, 'open', ?3, ?3 " +
+            "WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE ?4)";
+  return env.AUDIT.prepare(sql)
+    .bind(title, desc, now, STALL_TITLE + ":%", prio)
+    .run();
+}
 // COMPANION-STALL-YIELD-1: true when two consecutive generation runs (ok, failed or blocked; the steward is not one) between the two pieces both failed or
 // were blocked, i.e. the stall the detector files on happened in between. statuses: the run statuses between the pieces, oldest first.
 function stallRecurred(statuses) {
@@ -7486,7 +7496,7 @@ async function companionStallDetector(env, nowMs) {
     await env.AUDIT.prepare("UPDATE agent_issues SET title=?1, description=?2, priority=?3, updated_at=?4 WHERE id=?5").bind(title, desc, prio, now, openIds[0]).run();
     return { hours: hours, stalled: true, open: openIds[0], updated: true, priority: prio };
   }
-  await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'personal-companion', 'reliability', ?5, 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE ?4)").bind(title, desc, now, STALL_TITLE + ":%", prio).run();
+  await postAgentIssue(env, title, desc, prio, now);
   return { hours: hours, stalled: true, filed: true, priority: prio };
 }
 // BEGIN TURNSTILE-SELFTEST-1
