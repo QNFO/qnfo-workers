@@ -55,6 +55,7 @@ import re
 import sys
 import time
 import urllib.parse
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bp26_producers import Collector, Resp, Result  # noqa: E402
@@ -152,6 +153,22 @@ def has_visible_disclosure(page):
         if len(s) <= 400 and DISCLOSURE_RX.search(s):
             return s[:80]
     return None
+
+
+def ask_disclosure_rows(ctx):
+    """Fetch the Ask QWAV question box and return an AI‑interaction‑disclosure row if a visible disclosure is found."""
+    url = "https://ask.qwav.tech/"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            charset = resp.headers.get_content_charset() or "utf-8"
+            page = resp.read().decode(charset, errors="replace")
+    except Exception:
+        return []  # network or decode error – no row added
+
+    if has_visible_disclosure(page):
+        # Subject must match the wording used elsewhere for consistency.
+        return [Result("ai_interaction_disclosure", "ask.qwav.tech question box", 1)]
+    return []
 
 
 def jsonld_items(page):
