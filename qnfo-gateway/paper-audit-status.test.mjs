@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+const source = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+const start = source.indexOf('function provOf(row) {');
+const end = source.indexOf('async function provStatement(', start);
+const context = vm.createContext({ console, Date, esc: value => String(value).replaceAll('<', '&lt;').replaceAll('>', '&gt;') });
+vm.runInContext(source.slice(start, end), context);
+let reads = 0;
+const env = { AUDIT: { prepare(sql) {
+  assert.match(sql, /COUNT\(\*\)/);
+  assert.doesNotMatch(sql, /claim_text|evidence/);
+  return { bind(slug) { assert.equal(slug, 'paper-1'); return this; }, async first() { reads++; return { total: 5, open: 2, answered: 3 }; } };
+} } };
+const counts = await context.paperAuditStatus(env, 'paper-1');
+await context.paperAuditStatus(env, 'paper-1');
+assert.equal(reads, 1, 'counts cached for repeated requests');
+const html = context.paperAuditHtml({ _audit: counts });
+assert.match(html, /data-audit-status/);
+assert.match(html, /2 open findings; 3 answered findings/);
+assert.match(html, /no human review is recorded/);
+assert.match(html, /data\/ai-science-failures/);
+assert.match(html, /rep-d/);
+const reviewed = context.paperAuditHtml({ _audit: counts, _prov: context.provOf({ provenance: 'ai-assisted-human-reviewed', reviewed_by: '<Reviewer>' }) });
+assert.match(reviewed, /&lt;Reviewer&gt;/);
+const unavailable = await context.paperAuditStatus({ AUDIT: { prepare() { throw new Error('offline'); } } }, 'paper-1');
+assert.equal(unavailable, null);
+assert.match(context.paperAuditHtml({ _audit: unavailable }), /temporarily unavailable/);
+assert.match(source, /provVisibleHtml\(paper\._prov \|\| provOf\(null\)\) \+ paperAuditHtml\(paper\)/);
+assert.ok(source.indexOf('if (!paper) return notFoundPage', source.indexOf('async function handlePaperDetail')) < source.indexOf('paper._audit = await paperAuditStatus'));
+console.log('paper-audit-status: counts, cache, provenance, escaping, unavailable state and page wiring passed');
