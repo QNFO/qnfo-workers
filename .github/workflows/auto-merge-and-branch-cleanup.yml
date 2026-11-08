@@ -1,0 +1,95 @@
+name: Auto-merge and stale branch cleanup
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  schedule:
+    # 04:17 UTC daily (offset from on-the-hour to avoid GitHub scheduler noise)
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-auto-merge:
+    name: Enable squash auto-merge on new PRs
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --auto --squash --repo "${{ github.repository }}"
+
+  cleanup-stale-branches:
+    name: Delete stale feature branches
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clean up stale branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REPO="${{ github.repository }}"
+
+          # Collect branch lists.  Always preserve main, release-* and the CI artifact branch.
+          mapfile -t all_branches < <(gh api "repos/$REPO/branches?per_page=100" --paginate -q '.[].name')
+          mapfile -t open_pr_branches < <(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate -q '.[].head.ref')
+          mapfile -t merged_pr_branches < <(gh api "repos/$REPO/pulls?state=closed&per_page=100" --paginate -q '.[] | select(.merged_at != null) | .head.ref')
+          mapfile -t closed_pr_branches < <(gh api "repos/$REPO/pulls?state=closed&per_page=100" --paginate -q '.[] | select(.merged_at == null) | .head.ref')
+
+          is_in() {
+            local needle="$1"; shift
+            printf '%s\n' "$@" | grep -qx "$needle"
+          }
+
+          for branch in "${all_branches[@]}"; do
+            # Protected / reserved namespaces
+            if [[ "$branch" == "main" ]] || [[ "$branch" == release-* ]] || [[ "$branch" == "fleet-artifacts" ]]; then
+              continue
+            fi
+
+            # Branches with open PRs are still live
+            if is_in "$branch" "${open_pr_branches[@]}"; then
+              continue
+            fi
+
+            # Branches whose PRs merged should already be gone via delete_branch_on_merge,
+            # but clean up any that survived (e.g. merged before the setting was on).
+            if is_in "$branch" "${merged_pr_branches[@]}"; then
+              echo "Deleting merged PR branch: $branch"
+              gh api --method DELETE "repos/$REPO/git/refs/heads/$branch" || true
+              continue
+            fi
+
+            # Closed-unmerged PRs are explicitly abandoned; delete their feature branches.
+            if is_in "$branch" "${closed_pr_branches[@]}"; then
+              if [[ "$branch" == codeagent-* ]] || [[ "$branch" == agent-* ]] || [[ "$branch" == copilot/* ]]; then
+                echo "Deleting closed-unmerged feature branch: $branch"
+                gh api --method DELETE "repos/$REPO/git/refs/heads/$branch" || true
+              fi
+              continue
+            fi
+
+            # Orphan feature branches: only delete if they add no unique commits vs main.
+            if [[ "$branch" == codeagent-* ]] || [[ "$branch" == agent-* ]] || [[ "$branch" == copilot/* ]]; then
+              ahead_by=$(gh api "repos/$REPO/compare/main...$branch" -q '.ahead_by')
+              if [[ "$ahead_by" == "0" ]]; then
+                echo "Deleting orphan branch with no unique commits: $branch"
+                gh api --method DELETE "repos/$REPO/git/refs/heads/$branch" || true
+              fi
+            fi
+          done
