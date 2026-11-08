@@ -97,6 +97,17 @@ jobs:
         if: ${{ env.DO_REVIEW == 'true' && steps.primary.outcome != 'success' && steps.fallback.outcome != 'success' }}
         run: echo "::warning::the automated review could not be requested on pull request ${PR_NUMBER} with either credential; the merge is not blocked (REQUEST-COPILOT-REVIEW-1)"
 
+      # AUTO-MERGE-1: enable GitHub's native auto-merge so ready PRs merge without a person.
+      # The stale-PR lane below also merges; auto-merge is a redundant, GitHub-native path.
+      - name: Enable auto-merge
+        if: ${{ env.DO_REVIEW == 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --squash \
+            || echo "::notice::auto-merge could not be enabled on pull request ${PR_NUMBER}"
+
       - name: Poke the merge lane once
         if: ${{ env.DO_POKE == 'true' }}
         continue-on-error: true
