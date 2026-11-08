@@ -2,23 +2,15 @@
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
  "verifier": "remediation-consumer@04d55ef8aaaf",
- "due": 960,
- "pass": 538,
- "fail": 395,
- "skipped": 27,
- "deferred": 26,
+ "due": 880,
+ "pass": 619,
+ "fail": 243,
+ "skipped": 18,
+ "deferred": 17,
  "contracts": [
   {
    "class": "issue-8495-runtime",
    "issue_id": 8495,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-deploy-guard",
-   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -33,7 +25,7 @@
    "written": true
   },
   {
-   "class": "rt-personal-api",
+   "class": "rt-live-qnfo-ai-calibration",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -41,7 +33,7 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-ai-calibration",
+   "class": "rt-live-qnfo-deploy-guard",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -70,6 +62,14 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "status=503",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -201,14 +201,6 @@
    "written": true
   },
   {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-page-subscribe",
    "issue_id": null,
    "verdict": "pass",
@@ -262,6 +254,14 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -417,8 +417,8 @@
    "written": true
   },
   {
-   "class": "rt-page-papers-index",
+   "class": "rt-page-papers-sitemap",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
-   "observed": "ok"
+   "observed": "o
