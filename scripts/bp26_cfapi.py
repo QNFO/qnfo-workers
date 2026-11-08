@@ -214,8 +214,8 @@ def collect_deploys(ctx):
         return [Result(m, None, "no deployment recorded in the window", rows) for m in ("deploys_via_gradual", "change_failure_rate", "mttr_rollback_min_p95")]
     incidents = []
     try:
-        for r in ctx.d1("SELECT title, created_at FROM agent_issues WHERE title LIKE 'CONTROL-PLANE-REVERTED-1%' AND created_at >= ?1", [int((ctx.now - WINDOW_DAYS * 86400) * 1000)]):
-            m = re.search(r"reverted,\s+([a-z0-9][a-z0-9_-]*)", str(r["title"]))
+        for r in ctx.d1("SELECT title, created_at FROM agent_issues WHERE (title LIKE 'CONTROL-PLANE-REVERTED-1%' OR title LIKE 'DEPLOY-PROBE-REVERTED-1%' OR title LIKE 'CONTROL-PLANE-CANARY-FAILED-1%' OR title LIKE 'DEPLOY-PROBE-CANARY-FAILED%') AND created_at >= ?1", [int((ctx.now - WINDOW_DAYS * 86400) * 1000)]):
+            m = re.search(r"(?:reverted|failed),\s+([a-z0-9][a-z0-9_-]*)", str(r["title"]), re.IGNORECASE)
             if m:
                 incidents.append((m.group(1), int(r["created_at"]) // 1000))
     except Exception as e:  # noqa: BLE001

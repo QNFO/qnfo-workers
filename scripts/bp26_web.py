@@ -55,6 +55,7 @@ import re
 import sys
 import time
 import urllib.parse
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bp26_producers import Collector, Resp, Result  # noqa: E402
@@ -152,6 +153,22 @@ def has_visible_disclosure(page):
         if len(s) <= 400 and DISCLOSURE_RX.search(s):
             return s[:80]
     return None
+
+
+def ask_disclosure_rows(ctx):
+    """Fetch the Ask QWAV question box and return an AI‑interaction‑disclosure row if a visible disclosure is found."""
+    url = "https://ask.qwav.tech/"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            charset = resp.headers.get_content_charset() or "utf-8"
+            page = resp.read().decode(charset, errors="replace")
+    except Exception:
+        return []  # network or decode error – no row added
+
+    if has_visible_disclosure(page):
+        # Subject must match the wording used elsewhere for consistency.
+        return [Result("ai_interaction_disclosure", "ask.qwav.tech question box", 1)]
+    return []
 
 
 def jsonld_items(page):
@@ -585,6 +602,13 @@ def freshness_row(ctx):
 
 
 # ---------------------------------------------------------------- the collector
+def availability_response(ctx, host, homes):
+    """Measure fleet data availability while keeping HTML samples for page checks."""
+    if host == "fleet.qnfo.org":
+        return ctx.http("https://fleet.qnfo.org/api/v3/now")
+    return homes[host]
+
+
 def collect_web(ctx):
     homes = fetch_many(ctx, ["https://%s/" % h for h in HTML_HOSTS])
     homes = {h: homes["https://%s/" % h] for h in HTML_HOSTS}
@@ -626,7 +650,7 @@ def collect_web(ctx):
     hist = slo_history(ctx)
     avail_rows, per_host = [], {}
     for h in HTML_HOSTS:
-        r = homes[h]
+        r = availability_response(ctx, h, homes)
         if r.error == "budget-exhausted":
             # SLO-PROBE-BUDGET-1 (#7170, #7119, #7132, #7153): the producers run under one wall-clock budget (BP26_BUDGET_S); when it is spent, Ctx.http answers
             # Resp(0 ..., "budget-exhausted") WITHOUT sending a request. That is the prober running out of time, not the host failing to answer, yet it was recorded
@@ -640,7 +664,7 @@ def collect_web(ctx):
             up = 0
             detail = "down: %s" % (r.error or "no status")
         else:
-            up = 1 if ((200 <= r.status < 400) or r.status in (401, 403)) and r.ms < SLO_MAX_MS else 0
+            up = 1 if (r.status == 200 if h == "fleet.qnfo.org" else ((200 <= r.status < 400) or r.status in (401, 403))) and r.ms < SLO_MAX_MS else 0
             detail = "status %s in %d ms" % (r.status, r.ms)
         avail_rows.append(("avail:" + h, up, detail))
         g, n, first = (hist or {}).get(h, (0, 0, None))

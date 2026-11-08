@@ -82,7 +82,7 @@ def collect_modules(path, src, read=None):
         for ref in refs:
             if not ref.startswith(("./", "../")):
                 continue
-            target = os.path.normpath(os.path.join(os.path.dirname(parent), ref))
+            target = os.path.normpath(os.path.join(os.path.dirname(parent), ref)).replace("\\", "/")
             absolute = os.path.abspath(target)
             if os.path.commonpath((root, absolute)) != root:
                 raise ValueError("relative module import escapes the repository: " + ref)
@@ -94,8 +94,14 @@ def collect_modules(path, src, read=None):
                 raise ValueError("unsupported relative module import: " + ref)
             seen.add(name)
             content = read(target)
-            modules.append((name, content, MODULE_TYPES[suffix]))
-            visit(target, content)
+            if suffix == ".json":
+                # The Workers upload API accepts JavaScript modules, not JSON MIME parts.
+                # Keep the import name and expose the parsed JSON as its default export.
+                content = "export default " + json.dumps(json.loads(content), ensure_ascii=True) + ";\n"
+                modules.append((name, content, MODULE_TYPES[".js"]))
+            else:
+                modules.append((name, content, MODULE_TYPES[suffix]))
+                visit(target, content)
 
     visit(path, src)
     return modules
@@ -239,6 +245,12 @@ def main(argv=None, call=cf, read=None):
 
 
 def selftest():
+    json_files = {"m/data.json": '{"text": "import \\\"./missing.js\\\"", "items": [1, true, null]}'}
+    json_modules = collect_modules("m/worker.js", 'import data from "./data.json";', json_files.__getitem__)
+    assert len(json_modules) == 1
+    name, content, mime = json_modules[0]
+    assert name == "data.json" and mime == "application/javascript+module"
+    assert json.loads(content.removeprefix("export default ").rstrip(";\n")) == json.loads(json_files["m/data.json"])
     calls = []
     files = {"w/wrangler.toml": 'name = "w"', "w/worker.js": 'var VERSION = "1.2.3";\nexport default { fetch() {} };\n',
              "c/wrangler.toml": "[[containers]]\n", "c/worker.js": "x",

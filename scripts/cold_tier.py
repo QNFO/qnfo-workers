@@ -80,6 +80,10 @@ TIERS = [
      "ok": None, "ok_sql": "status = 'recovered'", "fail_sql": "status = 'fired'", "num": "metric_value", "newer": "id", "space_ts": True, "roll_days": 70, "chunk": 800},
     # BLOB-TIER-1: the row stays, base and patch go to R2 (see the docstring). keep_days 0.25: a row is only here once code_tasks.ctx no longer holds the text (slimmed = 1).
     {"table": "code_task_ctx_archive", "ts": "archived_at", "keep_days": 0.25, "mode": "blob", "cols": ("base", "patch"), "where": "slimmed = 1", "chunk": 16, "chunks": 12},
+    # COLD-TIER-3: archive old cloud_ops_events rows using timestamp ordering (id is TEXT, not time-ordered).
+    # keep_days set to 90 (matching retention for non-housekeeping kinds). Uses a timestamp cursor rather than id ordering.
+    {"table": "cloud_ops_events", "ts": "ts", "keep_days": 90, "mode": "delete", "latest": None, "dims": ("kind", "status"),
+     "ok": None, "num": None, "roll_days": 0, "chunk": 2000, "ts_cursor": True},
 ]
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -206,6 +210,11 @@ def _chunk_rows(d1, t, now=None):
     mode copy: rows older than keep_days after the last archived id."""
     tab, ts = t["table"], t["ts"]
     cutoff = _cutoff(t, now)
+    if t.get("ts_cursor"):
+        # Use timestamp ordering instead of id ordering.
+        cutoff = _cutoff(t, now)
+        tab, ts = t["table"], t["ts"]
+        return d1('SELECT * FROM "%s" WHERE "%s" < ?1 ORDER BY "%s" LIMIT %d' % (tab, ts, ts, t["chunk"]), [cutoff])
     if t["mode"] == "blob":
         has = " OR ".join('"%s" IS NOT NULL' % c for c in t["cols"])
         return d1('SELECT rowid AS _rid, * FROM "%s" WHERE %s AND (%s) AND "%s" < ?1 ORDER BY rowid LIMIT %d' % (tab, t["where"], has, ts, t["chunk"]), [cutoff])
