@@ -585,6 +585,13 @@ def freshness_row(ctx):
 
 
 # ---------------------------------------------------------------- the collector
+def availability_response(ctx, host, homes):
+    """Measure fleet data availability while keeping HTML samples for page checks."""
+    if host == "fleet.qnfo.org":
+        return ctx.http("https://fleet.qnfo.org/api/v3/now")
+    return homes[host]
+
+
 def collect_web(ctx):
     homes = fetch_many(ctx, ["https://%s/" % h for h in HTML_HOSTS])
     homes = {h: homes["https://%s/" % h] for h in HTML_HOSTS}
@@ -626,7 +633,7 @@ def collect_web(ctx):
     hist = slo_history(ctx)
     avail_rows, per_host = [], {}
     for h in HTML_HOSTS:
-        r = homes[h]
+        r = availability_response(ctx, h, homes)
         if r.error == "budget-exhausted":
             # SLO-PROBE-BUDGET-1 (#7170, #7119, #7132, #7153): the producers run under one wall-clock budget (BP26_BUDGET_S); when it is spent, Ctx.http answers
             # Resp(0 ..., "budget-exhausted") WITHOUT sending a request. That is the prober running out of time, not the host failing to answer, yet it was recorded
@@ -640,7 +647,7 @@ def collect_web(ctx):
             up = 0
             detail = "down: %s" % (r.error or "no status")
         else:
-            up = 1 if ((200 <= r.status < 400) or r.status in (401, 403)) and r.ms < SLO_MAX_MS else 0
+            up = 1 if (r.status == 200 if h == "fleet.qnfo.org" else ((200 <= r.status < 400) or r.status in (401, 403))) and r.ms < SLO_MAX_MS else 0
             detail = "status %s in %d ms" % (r.status, r.ms)
         avail_rows.append(("avail:" + h, up, detail))
         g, n, first = (hist or {}).get(h, (0, 0, None))
@@ -825,13 +832,6 @@ def collect_web(ctx):
         results.append(Result("ai_interaction_disclosure", round(d_ok / float(d_total), 4), "%d of %d interactive AI surfaces carry the AI disclosure on their first screen or first reply (ipatent and the twin live, the e-mail agent by code state)" % (d_ok, d_total), d_rows))
     else:
         results.append(Result("ai_interaction_disclosure", None, "only %d surfaces could be judged" % d_total, d_rows))
-    # --- data path availability sample
-    try:
-        r_now = ctx.http("https://fleet.qnfo.org/api/v3/now")
-        ok_now = (r_now.status == 200 and getattr(r_now, "elapsed", 0) <= SLO_MAX_MS)
-    except Exception:
-        ok_now = False
-    results.append(Result("slo_data_path", 1 if ok_now else 0, "availability of fleet.qnfo.org/api/v3/now (200 OK within SLO_MAX_MS)", []))
     return results
 
 
