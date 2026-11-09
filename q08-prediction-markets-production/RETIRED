@@ -1,0 +1,6 @@
+q08-prediction-markets-production is retired (PM-CONSOLIDATE-1, 2026-11-09, charter pillar personal, owner standing grant OWNER-STANDING-GRANT-1).
+
+Why: it was a byte-near copy of q08-prediction-markets deployed under a second name for markets.q08.org, with no D1, KV or AI binding, so every route that touched storage failed. Two scripts, two route sets and two cron sets ran one idea; SIGNALS_DB and TRADES_DB also held the identical schema.
+Replacement: q08-prediction-markets (directory of the same name) now carries the source, one D1 (TRADES_DB) and one */5 cron, and serves markets.q08.org.
+Dependency check: no repository file, binding or service_registry entry references the -production script; its only consumer was the markets.q08.org route, repointed in the same change.
+Recovery: the removed bundle is not kept in this repository; the live script is deleted with cf-ops-actions delete-worker after this file is on main.

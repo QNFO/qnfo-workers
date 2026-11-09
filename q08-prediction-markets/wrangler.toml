@@ -1,0 +1,20 @@
+name = "q08-prediction-markets"
+main = "worker.js"
+# charter-pillar: personal
+compatibility_date = "2026-11-07"
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[observability.traces]
+enabled = true
+
+# PM-CONSOLIDATE-1: one D1 (TRADES_DB). SIGNALS_DB held the identical schema and is no longer bound.
+[[d1_databases]]
+binding = "TRADES_DB"
+database_name = "q08-trades"
+database_id = "5f43fb60-01cf-4d1f-842e-1b634f6ccc81"
+
+[triggers]
+crons = ["*/5 * * * *"]
