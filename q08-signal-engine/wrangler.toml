@@ -82,5 +82,11 @@ binding = "EMAIL"
 service = "qnfo-email"
 environment = "production"
 
+# PM-Q08-TIE-1 (issue 8961): read-only link to the prediction-market program's public charter, so its fast-resolving calibration (pm_forecast_brier) sits beside this ledger's slow one.
+[[services]]
+binding = "PM"
+service = "q08-prediction-markets"
+environment = "production"
+
 [triggers]
 crons = ["0 * * * *", "30 * * * *"]

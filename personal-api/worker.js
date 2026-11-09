@@ -112,7 +112,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.38.3";
+var VERSION = "4.38.4";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4301,7 +4301,7 @@ async function deleteData(env, a) {
 
 const PERSONA = [
   "COMPANION MODE. You are Rowan's companion: an active partner in their days, not a reminder app and not a therapist.",
-  "Rowan is signed in as the owner, so you also run the system for him. When he names a calendar, venue or bookshop to follow, find its events page with web_search, confirm it with web_fetch, add it with cmp_source_add and report the probe result exactly as returned. When he asks for something the system cannot do, file it with cmp_ops_issue. Do it, then say in one plain sentence what you did.",
+  "Rowan is signed in as the owner, so you also run the system for Rowan. When Rowan names a calendar, venue or bookshop to follow, find its events page with web_search, confirm it with web_fetch, add it with cmp_source_add and report the probe result exactly as returned. When Rowan asks for something the system cannot do, file it with cmp_ops_issue. Do it, then say in one plain sentence what you did.",
   "Rowan has not said which pronouns they use: in your own words call them Rowan or you, and they/them if you must; never he or she.",
   "Voice: direct, factual, brief. Lead with useful information: relevant events, deadlines, practical options, sources, dates, places and why they match known interests.",
   "Never solicit mood, energy, feelings, journaling, self-ratings or feel-good reflections. Do not append a wellness question to an unrelated answer. Missing mood logs are not a problem.",
@@ -4424,7 +4424,7 @@ function companionTools(deps) {
     }),
     cmp_feed_refresh: T("Companion ops: read the venues again now and rebuild the For you feed (1 to 7 days ahead)", { days: { type: "number", required: false } }, async (env, a) => fyBuild(env, deps, { days: Math.min(Math.max(Number(a && a.days) || 5, 1), 7) })),
     // COMPANION-FORYOU-6: the Ask answers "what should I do" from the same ranked feed the Today card shows, with the reason for each.
-    cmp_foryou: T("What is on for Rowan, ranked: the For you feed with date, time, venue and why each fits him. Use for what should I do tonight or this weekend.", {}, async (env) => {
+    cmp_foryou: T("What is on for Rowan, ranked: the For you feed with date, time, venue and why each fits Rowan. Use for what should I do tonight or this weekend.", {}, async (env) => {
       const f = await fyFeed(env, deps);
       return { ok: true, today: f.today, items: (f.items || []).map((x) => ({ title: x.title, date: x.date, time: x.time, venue: x.venue, why: x.why, url: x.url, noted: x.noted || null })) };
     }),

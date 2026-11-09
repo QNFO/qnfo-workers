@@ -129,10 +129,12 @@ function fakeIdb() {
 }
 
 console.log("\n[the service worker keeps the shell, not the data]");
+// COMPANION-TESTS-1: the shell cache name is read from the worker, so a version bump does not break the suite.
+const SHELL_NAME = (C.SW_JS.match(/SHELL = '([^']+)'/) || [])[1];
 function makeSw(opts) {
   const o = opts || {};
   const handlers = {}, cache = new Map(), cachesMap = new Map([["cmp-shell-v0", new Map()], ["other-app", new Map()]]);
-  cachesMap.set("cmp-shell-v1", cache);
+  cachesMap.set(SHELL_NAME, cache);
   const fetched = [];
   const fakeCaches = {
     async open(n) { if (!cachesMap.has(n)) cachesMap.set(n, new Map()); const m = cachesMap.get(n); return { async put(u, r) { m.set(typeof u === "string" ? u : new URL(u.url).pathname, r); } }; },
@@ -158,7 +160,7 @@ function makeSw(opts) {
   ok("install fetched only those three, none of them an API route", sw.fetched.length === 3 && sw.fetched.every((u) => !u.includes("/api/")), sw.fetched);
   ok("the new worker takes over at once", sw.self.skipped === true);
   sw.handlers.activate({ waitUntil(x) { p = x; } }); await p;
-  ok("activate removes older shell caches and leaves other caches alone", !sw.cachesMap.has("cmp-shell-v0") && sw.cachesMap.has("other-app") && sw.cachesMap.has("cmp-shell-v1"));
+  ok("activate removes older shell caches and leaves other caches alone", !sw.cachesMap.has("cmp-shell-v0") && sw.cachesMap.has("other-app") && sw.cachesMap.has(SHELL_NAME));
 }
 {
   const sw = makeSw({ status: 500 });
@@ -240,7 +242,7 @@ console.log("\n[worker.js parity]");
 {
   const w = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
   ok("worker.js carries COMPANION-OFFLINE-1 (the issue's closing probe)", w.includes("COMPANION-OFFLINE-1"));
-  ok("worker.js carries the queue core and the shell cache", w.includes("var CMPQ=(function(){") && w.includes("const SHELL = 'cmp-shell-v1';"));
+  ok("worker.js carries the queue core and the shell cache", w.includes("var CMPQ=(function(){") && w.includes("const SHELL = '" + SHELL_NAME + "';"));
 }
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

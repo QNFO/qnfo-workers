@@ -49,4 +49,18 @@ check("temperature knob clamps and defaults", pt(null) === 0.65 && pt("") === 0.
 const hsf = new Function(src.slice(src.indexOf("function hoursSince"), src.indexOf("async function writeOwnMetrics")) + "; return hoursSince;")();
 const T = Date.parse("2026-10-06T12:00:00Z");
 check("hoursSince", hsf("2026-10-06T09:30:00Z", T) === 2.5 && hsf(T - 26 * 3600e3, T) === 26 && hsf(null, T) === null && hsf("nope", T) === null && hsf("2026-10-07T00:00:00Z", T) === null, [hsf("2026-10-06T09:30:00Z", T), hsf(T - 26 * 3600e3, T)]);
+// PM-Q08-TIE-1 (issue 8961): the prediction-market program's fast calibration is read through the PM service binding; the Brier score is withheld under 30 resolved forecasts, and an unbound or failing link is null, never an error.
+const pmEnv = (charter, ok = true) => ({ ...env, PM: { fetch: async () => (ok ? new Response(JSON.stringify(charter), { status: 200 }) : new Response("x", { status: 503 })) } });
+const metricsWith = async (e) => (await (await w.fetch(new Request("https://q08.org/api/metrics"), e, ctx)).json()).windows["7d"];
+const few = await metricsWith(pmEnv({ calibration: { n: 12, brier_model: 0.2, brier_market: 0.21 } }));
+check("under 30 resolved: the count is shown, the Brier score is withheld", few.pm_forecast_resolved === 12 && few.pm_forecast_brier === null, [few.pm_forecast_resolved, few.pm_forecast_brier]);
+const enough = await metricsWith(pmEnv({ calibration: { n: 40, brier_model: 0.1812, brier_market: 0.19 } }));
+check("30 or more resolved: pm_forecast_brier is the model's Brier score", enough.pm_forecast_resolved === 40 && enough.pm_forecast_brier === 0.1812, [enough.pm_forecast_resolved, enough.pm_forecast_brier]);
+const unbound = await metricsWith(env);
+check("without the PM binding the metric is null", unbound.pm_forecast_brier === null && unbound.pm_forecast_resolved === null);
+const down = await metricsWith(pmEnv({}, false));
+check("a failing PM service is null, not an error", down.pm_forecast_brier === null && down.pm_forecast_resolved === null);
+writes.length = 0; const pmWaits = [];
+await w.scheduled({ cron: "0 */2 * * *" }, pmEnv({ calibration: { n: 40, brier_model: 0.1812, brier_market: 0.19 } }), { waitUntil: (p) => pmWaits.push(p) }); await Promise.all(pmWaits);
+check("the registry value is written under the metric name", writes.includes("pm_forecast_brier=0.1812"), writes);
 console.log(fails ? fails + " FAILED" : "ALL PASSED"); process.exit(fails ? 1 : 0);

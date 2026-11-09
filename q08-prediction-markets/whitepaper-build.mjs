@@ -1,0 +1,72 @@
+// Renders the white paper (papers/pm-information-edge-2026-11-09/*.md) to HTML and embeds the page in worker.js between the WHITEPAPER markers, so GET /whitepaper
+// serves exactly what the repository holds. `node q08-prediction-markets/whitepaper-build.mjs` writes; `--check` fails when either copy has drifted.
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+export const PAPER_DIR = resolve(HERE, "../papers/pm-information-edge-2026-11-09");
+export const PAPER_MD = resolve(PAPER_DIR, "pm-information-edge-2026-11-09.md");
+export const PAPER_HTML = resolve(PAPER_DIR, "pm-information-edge-2026-11-09.html");
+const WORKER = resolve(HERE, "worker.js"), MIRROR = resolve(HERE, "deployed-current.worker.js");
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+export function inline(text) {
+  let t = esc(text);
+  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, a, u) => '<a href="' + u.replace(/"/g, "&quot;") + '">' + a + "</a>");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>");
+  return t;
+}
+export function renderMarkdown(md) {
+  const lines = md.replace(/\r/g, "").split("\n"), out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim()) { i++; continue; }
+    let m;
+    if ((m = l.match(/^(#{1,3}) (.+)$/))) {
+      const n = m[1].length, id = m[2].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      out.push("<h" + n + ' id="' + id + '">' + inline(m[2]) + "</h" + n + ">"); i++; continue;
+    }
+    if (l.startsWith("|")) {
+      const rows = []; while (i < lines.length && lines[i].startsWith("|")) rows.push(lines[i++]);
+      const cells = (r) => r.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const head = cells(rows[0]), body = rows.slice(2).map(cells);
+      out.push('<div class="t"><table><thead><tr>' + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>" + body.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>");
+      continue;
+    }
+    if (/^\d+\. /.test(l)) { const it = []; while (i < lines.length && /^\d+\. /.test(lines[i])) it.push(lines[i++].replace(/^\d+\. /, "")); out.push("<ol>" + it.map((x) => "<li>" + inline(x) + "</li>").join("") + "</ol>"); continue; }
+    if (/^- /.test(l)) { const it = []; while (i < lines.length && /^- /.test(lines[i])) it.push(lines[i++].slice(2)); out.push("<ul>" + it.map((x) => "<li>" + inline(x) + "</li>").join("") + "</ul>"); continue; }
+    const para = []; while (i < lines.length && lines[i].trim() && !/^(#{1,3} |\||\d+\. |- )/.test(lines[i])) para.push(lines[i++]);
+    out.push("<p>" + inline(para.join(" ")) + "</p>");
+  }
+  return out.join("\n");
+}
+const CSS = ":root{color-scheme:light dark;--bg:#fff;--fg:#1a1a1a;--mut:#555;--line:#8884;--acc:#0b57d0}@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e8e8e8;--mut:#aaa;--acc:#8ab4f8}}body{background:var(--bg);color:var(--fg);font:17px/1.6 Georgia,'Times New Roman',serif;max-width:46rem;margin:0 auto;padding:16px}nav{font:14px system-ui;color:var(--mut);display:flex;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:10px}a{color:var(--acc)}h1{font-size:1.7rem;line-height:1.25}h2{font-size:1.3rem;margin-top:2rem}h3{font-size:1.1rem}.t{overflow-x:auto}table{border-collapse:collapse;font:14px/1.45 system-ui;margin:1rem 0}td,th{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}th{background:#8881}code{font:0.9em ui-monospace,monospace;background:#8882;padding:0 3px;border-radius:3px}footer{font:13px system-ui;color:var(--mut);border-top:1px solid var(--line);margin-top:2rem;padding-top:10px}";
+export function buildPage(md) {
+  const title = (md.match(/^# (.+)$/m) || [, "White paper"])[1];
+  return "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>" + esc(title) + "</title><meta name=description content=\"Evidence on where language-model forecasters may beat prediction markets, a pre-registered test, and the Q08 proving ground.\"><style>" + CSS + "</style></head><body>"
+    + "<nav><a href=\"/\">Dashboard</a><a href=\"/api/charter\">Live evidence</a><a href=\"/api/track-record\">Track record</a><a href=\"https://github.com/QNFO/qnfo-workers/tree/main/papers/pm-information-edge-2026-11-09\">Source</a></nav>\n"
+    + renderMarkdown(md) + "\n<footer>Paper money only. Nothing here is investment advice, and no real order is placed by this program. Charter PM-CHARTER-1.</footer></body></html>\n";
+}
+const BEGIN = "// WHITEPAPER-BEGIN (generated by q08-prediction-markets/whitepaper-build.mjs; do not edit by hand)\n", END = "\n// WHITEPAPER-END";
+export function embed(workerSrc, html) {
+  const a = workerSrc.indexOf(BEGIN), b = workerSrc.indexOf(END);
+  if (a < 0 || b < a) throw new Error("WHITEPAPER markers missing in worker.js");
+  return workerSrc.slice(0, a + BEGIN.length) + "const WHITEPAPER_HTML = " + JSON.stringify(html) + ";" + workerSrc.slice(b);
+}
+export const embedded = (workerSrc) => { const a = workerSrc.indexOf(BEGIN), b = workerSrc.indexOf(END); return JSON.parse(workerSrc.slice(a + BEGIN.length + "const WHITEPAPER_HTML = ".length, b - 1)); };
+
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  const html = buildPage(readFileSync(PAPER_MD, "utf8")), src = readFileSync(WORKER, "utf8"), next = embed(src, html);
+  if (process.argv.includes("--check")) {
+    const bad = [];
+    if (next !== src) bad.push("worker.js embeds a stale white paper");
+    if (readFileSync(MIRROR, "utf8") !== src) bad.push("deployed-current.worker.js differs from worker.js");
+    try { if (readFileSync(PAPER_HTML, "utf8") !== html) bad.push("the .html copy is stale"); } catch { bad.push("the .html copy is missing"); }
+    if (bad.length) { console.error("whitepaper-build --check: " + bad.join("; ") + " (run node q08-prediction-markets/whitepaper-build.mjs)"); process.exit(1); }
+    console.log("whitepaper-build --check: ok");
+  } else { writeFileSync(PAPER_HTML, html); writeFileSync(WORKER, next); writeFileSync(MIRROR, next); console.log("white paper embedded: " + html.length + " bytes"); }
+}
