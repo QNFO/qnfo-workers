@@ -190,3 +190,23 @@ test("a failed mirror write is kept and retried first thing on the next tick", a
   assert.equal(puts[0][0], "papers/m.md");
   assert.match(puts[0][1], /^# Mirror Paper\n\n## Abstract/);
 });
+
+test("a rewrite the living-paper floor trigger refuses is a refusal, not a logged exception (PAPER-FORMAT-FLOOR-REFUSED-1)", async () => {
+  const living = new DatabaseSync(":memory:");
+  const audit = new DatabaseSync(":memory:");
+  living.exec(SCHEMA);
+  audit.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY,value TEXT);");
+  living.exec("CREATE TRIGGER floor BEFORE UPDATE ON papers BEGIN SELECT RAISE(ABORT, 'PUBLISH-FLOOR-BLOCKED MIN-PAPER-LENGTH-4 (update): a published paper cannot be cut'); END;");
+  const old = "# Broken\nTitle\n\n**Author:** Writer\n\n### ABSTRACT\n\nA complete real abstract about a scientific result.\n\n## 1. Introduction\n\nBody with $x^2$.\n";
+  living.prepare("INSERT INTO papers (slug,title,abstract,body_md,version,status) VALUES ('p','Broken Title','wrong',?,'2.1','published')").run(old);
+  const logged = [];
+  const orig = console.error;
+  console.error = (...a) => { logged.push(a.join(" ")); };
+  let r;
+  try { r = await paperFormatTick({ LIVING_PAPER: d1(living), QNFO_AUDIT: d1(audit) }, { batch: 5 }); } finally { console.error = orig; }
+  assert.equal(r.errors.length, 0, "no error is recorded");
+  assert.equal(r.refused, 1);
+  assert.equal(logged.filter((l) => /paper-format/.test(l)).length, 0, "nothing is logged to Workers Logs as an exception");
+  assert.equal(living.prepare("SELECT body_md FROM papers WHERE slug='p'").get().body_md, old);
+  assert.match(JSON.parse(audit.prepare("SELECT value FROM ops_config").get().value).refusedList[0].why, /floor/);
+});
