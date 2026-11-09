@@ -56,7 +56,8 @@ const ADOPTERS = [
   { dir: "q08-prediction-markets", path: "/", env: () => ({}) },
   { dir: "qnfo-jobsearch", path: "/", env: () => ({}) },
   { dir: "qnfo-jobsearch", path: "/cv", env: () => ({}) },
-  { dir: "qnfo-jobsearch", path: "/prep", env: () => ({}) }
+  { dir: "qnfo-jobsearch", path: "/prep", env: () => ({}) },
+  { dir: "personal-api", path: "/companion", env: () => ({}) }
 ];
 for (const a of ADOPTERS) {
   for (const f of ["worker.js", "deployed-current.worker.js"]) {
