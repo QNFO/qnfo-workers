@@ -376,6 +376,9 @@ def main(argv: list[str] | None = None) -> int:
         for step in res.get("log") or []:
             if isinstance(step, dict) and step.get("step") in ("crons", "workers_dev", "verify", "lock"):
                 print(f"    log.{step.get('step')}: {json.dumps(step)[:300]}")
+            if isinstance(step, dict) and step.get("step") == "deploy" and step.get("binding_install") == "skipped":
+                # BINDING-INSTALL-FETCH-1: the declared bindings were not installed; the deploy is not a clean OK
+                print(f"    ::warning::binding_install=skipped: {str(step.get('binding_install_note'))[:200]}")
         if isinstance(res.get("log"), list) and not any(isinstance(x, dict) and x.get("step") == "crons" for x in res["log"]):
             print("    ::warning::route log has no 'crons' step - declared wrangler.toml config was not evaluated")
 
