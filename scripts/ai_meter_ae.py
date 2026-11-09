@@ -92,8 +92,32 @@ def upsert_statements(rows, now_iso):
     return out
 
 
+def reconcile_row(day, ae_calls, ledger_calls, now_iso):
+    """AI-METER-AE-3: the ai_meter_reconcile_daily row for one day, or None when the Analytics Engine holds no calls for it."""
+    ae = int(round(float(ae_calls or 0)))
+    led = int(round(float(ledger_calls or 0)))
+    if ae <= 0:
+        return None
+    missed = ae - led
+    return (day, ae, led, missed, round(missed / float(ae), 4), now_iso)
+
+
+def reconcile(day, d1, now_iso):
+    """AI-METER-AE-3: for the previous complete UTC day read the sums from v_ai_meter_ae_vs_ledger and write one row (day PRIMARY KEY)
+    to ai_meter_reconcile_daily. A day with no AE rows writes nothing. Returns the row or None."""
+    rows = d1("SELECT SUM(ae_calls) AS ae_calls, SUM(ledger_calls) AS ledger_calls, SUM(ledger_missed_calls) AS missed FROM v_ai_meter_ae_vs_ledger WHERE day = ?1", [day])
+    r = rows[0] if rows else {}
+    row = reconcile_row(day, r.get("ae_calls"), r.get("ledger_calls"), now_iso)
+    if row:
+        d1("INSERT INTO ai_meter_reconcile_daily (day, ae_calls, ledger_calls, missed_calls, missed_share, checked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) "
+           "ON CONFLICT(day) DO UPDATE SET ae_calls = excluded.ae_calls, ledger_calls = excluded.ledger_calls, missed_calls = excluded.missed_calls, "
+           "missed_share = excluded.missed_share, checked_at = excluded.checked_at", list(row))
+    return row
+
+
 def run(dry=False, query=None, d1=None, now=None):
-    now_iso = (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%d %H:%M:%S")
+    now_dt = now or dt.datetime.now(dt.timezone.utc)
+    now_iso = now_dt.strftime("%Y-%m-%d %H:%M:%S")
     res = {"read": 0, "written": 0, "skipped": None}
     try:
         data = (query or ae_query)(ae_sql(LOOKBACK_DAYS))
@@ -110,6 +134,12 @@ def run(dry=False, query=None, d1=None, now=None):
             res["written"] += len(params) // 12
     except Exception as e:  # noqa: BLE001 - a missing table (the migration has not applied yet) is logged, not fatal
         res["skipped"] = "write: %s" % str(e)[:240]
+        return res
+    try:  # AI-METER-AE-3: the daily reconcile never fails the job
+        day = (now_dt - dt.timedelta(days=1)).strftime("%Y-%m-%d")
+        res["reconciled"] = reconcile(day, d1 or RC.d1, now_iso)
+    except Exception as e:  # noqa: BLE001
+        res["reconcile_skipped"] = str(e)[:240]
     return res
 
 
@@ -128,7 +158,7 @@ def selftest():
     assert all(len(p) < 100 for _, p in st) and "?96" in st[0][0] and "?97" not in st[0][0]
     seen = []
     res = run(query=lambda s: [good, {"day": "x"}], d1=lambda s, p=None: seen.append((s, p)) or [])
-    assert res == {"read": 1, "written": 1, "skipped": None} and len(seen) == 1, res
+    assert res["read"] == 1 and res["written"] == 1 and res["skipped"] is None and res["reconciled"] is None and len(seen) == 2, res
     dry = run(dry=True, query=lambda s: [good], d1=lambda *a: (_ for _ in ()).throw(AssertionError("dry run wrote")))
     assert dry["read"] == 1 and dry["written"] == 0, dry
 
@@ -141,6 +171,17 @@ def selftest():
         raise RuntimeError("d1 error: no such table: ai_meter_ae_daily")
     r3 = run(query=lambda s: [good], d1=nodb)
     assert r3["written"] == 0 and r3["skipped"].startswith("write:"), r3
+    # AI-METER-AE-3: ae 100 / ledger 90 -> missed 10, share 0.1; no AE rows -> nothing written
+    assert reconcile_row("2026-11-06", 100, 90, "t") == ("2026-11-06", 100, 90, 10, 0.1, "t")
+    assert reconcile_row("2026-11-06", 0, 0, "t") is None
+    wrote = []
+
+    def fake(sql, p=None):
+        wrote.append(sql)
+        return [{"ae_calls": 100, "ledger_calls": 90, "missed": 10}] if sql.startswith("SELECT") else []
+    assert reconcile("2026-11-06", fake, "t") == ("2026-11-06", 100, 90, 10, 0.1, "t") and len(wrote) == 2
+    wrote.clear()
+    assert reconcile("2026-11-06", lambda s, p=None: wrote.append(s) or [{"ae_calls": None}], "t") is None and len(wrote) == 1
     print("ai_meter_ae selftest ok")
 
 
