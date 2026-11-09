@@ -1,7 +1,7 @@
 {
  "mode": "local",
- "at": "2026-11-07T07:38:47.099Z",
- "sha": "c94d4e2597b2259114fa45f4dea09e4765b5ed52",
+ "at": "2026-11-09T15:14:52.460Z",
+ "sha": "4b92bd5577c238d41d3ce738a29b538c7a907c24",
  "apps": [
   {
    "app": "companion",
@@ -26,195 +26,150 @@
        "smallTargets": [],
        "narrowOverflowPx": 0,
        "axe": []
-      },
-      {
-       "label": "today",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": []
       }
      ],
      "consoleErrors": [],
      "pageErrors": [],
      "badResponses": [],
-     "ok": true,
-     "error": null,
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:42097/",
      "attempts": 1,
-     "ms": 9414,
+     "ms": 15174,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:42097/"
+      ]
      }
     },
     {
      "app": "companion",
      "id": "one-thing-now",
      "title": "Bored or stuck: get one thing to do and start it",
-     "taps": 2,
+     "taps": 0,
      "typing": 0,
-     "steps": [
-      "tap Give me one thing",
-      "tap Yes — start"
+     "steps": [],
+     "screens": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
      ],
-     "screens": [
-      {
-       "label": "focus",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": []
-      }
-     ],
-     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
+     "badResponses": [
+      "500 http://127.0.0.1:43787/companion/api/insights?days=60"
+     ],
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:43787/",
      "attempts": 1,
-     "ms": 2589,
+     "ms": 7091,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:43787/"
+      ]
      }
     },
     {
      "app": "companion",
      "id": "mark-done",
      "title": "Tick off a next action",
-     "taps": 2,
+     "taps": 0,
      "typing": 0,
-     "steps": [
-      "tap Do",
-      "tap locator('#v-do .item').filter({ hasText: 'Call the dentist' }).getByRole('button', { name: 'Done' })"
+     "steps": [],
+     "screens": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
      ],
-     "screens": [
-      {
-       "label": "do",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": []
-      }
-     ],
-     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
+     "badResponses": [
+      "500 http://127.0.0.1:39743/companion/api/insights?days=60"
+     ],
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:39743/",
      "attempts": 1,
-     "ms": 3077,
+     "ms": 7081,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:39743/"
+      ]
      }
     },
     {
      "app": "companion",
      "id": "journal-one-tap",
      "title": "Write a journal line without typing",
-     "taps": 3,
+     "taps": 0,
      "typing": 0,
-     "steps": [
-      "tap More",
-      "tap Journal",
-      "tap Went outside"
+     "steps": [],
+     "screens": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
      ],
-     "screens": [
-      {
-       "label": "journal",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": []
-      }
-     ],
-     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
+     "badResponses": [
+      "500 http://127.0.0.1:45807/companion/api/insights?days=60"
+     ],
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:45807/",
      "attempts": 1,
-     "ms": 2675,
+     "ms": 7074,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:45807/"
+      ]
      }
     },
     {
      "app": "companion",
      "id": "dictate-and-talk",
      "title": "Say something to the companion and get an answer",
-     "taps": 4,
+     "taps": 0,
      "typing": 0,
-     "steps": [
-      "tap Talk",
-      "tap Dictate",
-      "tap Stop",
-      "tap Send"
+     "steps": [],
+     "screens": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
      ],
-     "screens": [
-      {
-       "label": "talk",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": []
-      }
-     ],
-     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
+     "badResponses": [
+      "500 http://127.0.0.1:38253/companion/api/insights?days=60"
+     ],
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:38253/",
      "attempts": 1,
-     "ms": 6069,
+     "ms": 7075,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:38253/"
+      ]
      }
     },
     {
      "app": "companion",
      "id": "checkin-from-notification",
      "title": "Tap a check-in notification and answer how I feel",
-     "taps": 1,
+     "taps": 0,
      "typing": 0,
-     "steps": [
-      "tap locator('#mood-card button').visible().nth(2)"
+     "steps": [],
+     "screens": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
      ],
-     "screens": [
-      {
-       "label": "mood",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": [
-        {
-         "id": "color-contrast",
-         "impact": "serious",
-         "nodes": 1,
-         "help": "Elements must meet minimum color contrast ratio thresholds"
-        }
-       ]
-      }
-     ],
-     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
+     "badResponses": [
+      "500 http://127.0.0.1:35839/companion/api/moments"
+     ],
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:35839/companion",
      "attempts": 1,
-     "ms": 2165,
+     "ms": 7068,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:35839/companion"
+      ]
      }
     },
     {
@@ -225,21 +180,38 @@
      "typing": 0,
      "steps": [],
      "screens": [],
-     "consoleErrors": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+     ],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
+     "badResponses": [
+      "500 http://127.0.0.1:44873/companion/api/insights?days=60"
+     ],
+     "ok": false,
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:44873/",
      "attempts": 1,
-     "ms": 1096,
+     "ms": 7069,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:44873/"
+      ]
      }
     }
    ],
    "screenFindings": [
-    "mood: accessibility serious color-contrast (1x): Elements must meet minimum color contrast ratio thresholds"
+    "console error in one-thing-now: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "HTTP 500 http://127.0.0.1:43787/companion/api/insights?days=60 during one-thing-now",
+    "console error in mark-done: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "HTTP 500 http://127.0.0.1:39743/companion/api/insights?days=60 during mark-done",
+    "console error in journal-one-tap: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "HTTP 500 http://127.0.0.1:45807/companion/api/insights?days=60 during journal-one-tap",
+    "console error in dictate-and-talk: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "HTTP 500 http://127.0.0.1:38253/companion/api/insights?days=60 during dictate-and-talk",
+    "console error in checkin-from-notification: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "HTTP 500 http://127.0.0.1:35839/companion/api/moments during checkin-from-notification",
+    "console error in reading-pick: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "HTTP 500 http://127.0.0.1:44873/companion/api/insights?days=60 during reading-pick"
    ]
   },
   {
@@ -275,7 +247,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2625,
+     "ms": 2549,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -310,7 +282,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3892,
+     "ms": 3817,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -334,7 +306,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2094,
+     "ms": 2100,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -374,7 +346,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1366,
+     "ms": 1254,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -396,7 +368,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2895,
+     "ms": 2884,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -418,7 +390,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2889,
+     "ms": 2887,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -449,7 +421,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3244,
+     "ms": 3176,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -481,7 +453,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 852,
+     "ms": 753,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -512,7 +484,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1258,
+     "ms": 1152,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -544,7 +516,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2560,
+     "ms": 2482,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -579,7 +551,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2917,
+     "ms": 2832,
      "grade": {
       "status": "ok",
       "reasons": []
