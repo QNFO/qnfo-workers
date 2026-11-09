@@ -15,5 +15,12 @@ for (const k of keys) {
     texts[k.key] = await r.text();
   } catch { failed++; }
 }
-console.error(JSON.stringify({ texts: { requested: keys.length, read: Object.keys(texts).length, failed } }));
+// owner_docs rows in the audit D1 (key, body_md) count as document text too (issue 8765)
+let ownerDocs = 0;
+try {
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/d1/database/${process.env.AUDIT_D1_ID || "35e2e573-92f3-46ac-83c6-22f6429fc5e5"}/query`, { method: "POST", headers: { authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ sql: "SELECT key, body_md FROM owner_docs WHERE body_md IS NOT NULL LIMIT 500" }) });
+  const j = await r.json();
+  for (const row of j.result?.[0]?.results || []) { texts[row.key] = row.body_md; ownerDocs++; }
+} catch { /* owner_docs is optional: a failure is visible as owner_docs 0 below */ }
+console.error(JSON.stringify({ texts: { requested: keys.length, read: Object.keys(texts).length - ownerDocs, owner_docs: ownerDocs, failed } }));
 console.log(JSON.stringify(texts));

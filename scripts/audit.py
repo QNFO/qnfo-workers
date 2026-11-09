@@ -59,6 +59,27 @@ def gh_json(args):
     return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else []
 
 
+DEFAULT_REPOS = ["QNFO/qnfo-workers", "QNFO/qnfo-research", "QNFO/.github", "QNFO/qnfo-fleet-issues", "rwnq8/qnfo-fleet-dashboard", "rwnq8/ipatent", "rwnq8/rwnq8"]
+
+
+def tag(findings, repo, hub):
+    """Findings from a repo other than the hub carry the repo in key and title so the hub issue says where to look."""
+    for f in findings:
+        f["repo"] = repo
+        if repo != hub:
+            f["key"] = f"{repo}{f['key']}" if f["key"].startswith(("#", "PR#")) else f["key"]
+            f["title"] = f["title"].replace("FLEET-AUDIT ", f"FLEET-AUDIT [{repo}] ", 1)
+            f["probe"] = f["probe"].replace("gh issue view", f"gh issue view --repo {repo}").replace("gh pr view", f"gh pr view --repo {repo}")
+    return findings
+
+
+def repo_findings(repo, hub):
+    """Loop and PR checks for any repo the token can read; (findings, reachable)."""
+    issues = gh_json([f"repos/{repo}/issues?labels=loop&state=open&per_page=100"])
+    prs = gh_json([f"repos/{repo}/pulls?state=open&per_page=100"])
+    return tag(loop_findings(issues) + pr_findings(prs), repo, hub)
+
+
 def collect(root="."):
     files = {}
     for pat in ("AGENTS.md", "CLAUDE.md", "docs/handoff/*.md"):
@@ -66,8 +87,10 @@ def collect(root="."):
             files[os.path.relpath(p, root)] = open(p, encoding="utf-8", errors="replace").read()
     findings = claim_findings(files, lambda c: os.path.exists(os.path.join(root, c)))
     repo = os.environ.get("GITHUB_REPOSITORY", "QNFO/qnfo-workers")
-    findings += loop_findings(gh_json([f"repos/{repo}/issues?labels=loop&state=open&per_page=100"]))
-    findings += pr_findings(gh_json([f"repos/{repo}/pulls?state=open&per_page=100"]))
+    tag(findings, repo, repo)
+    repos = [r for r in os.environ.get("AUDIT_REPOS", " ".join(DEFAULT_REPOS)).split() if r]
+    for r in repos:
+        findings += repo_findings(r, repo)
     return findings, repo
 
 
