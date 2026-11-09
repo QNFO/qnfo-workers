@@ -5,11 +5,12 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261109_companion_guard_gaps
--- Rollback: DELETE FROM project_ledger WHERE task_id LIKE 'record:companion-guard-%'; DELETE FROM deployment_history WHERE resource_name = 'qnfo-companion-guard' AND deployed_by = 'session:companion-guard-record-1'; UPDATE portfolio_gaps SET status = 'open', resolved_at = NULL WHERE id IN (SELECT id FROM bak_20261109_companion_guard_gaps WHERE status = 'open')
+-- Rollback: DELETE FROM project_ledger WHERE task_id LIKE 'record:companion-guard-%'; DELETE FROM deployment_history WHERE resource_name = 'qnfo-companion-guard' AND deployed_by = 'session:companion-guard-record-1'; UPDATE portfolio_gaps SET status = 'open', resolved_at = NULL WHERE rowid IN (SELECT id FROM bak_20261109_companion_guard_gaps WHERE status = 'open')
+-- Fix 2026-11-09 (issue 9764): portfolio_gaps has no id column in production (D1 7500 'no such column: id'); the backup selects rowid AS id.
 -- CAUSE-MAPPED: registers no metric_registry row.
 
 CREATE TABLE IF NOT EXISTS bak_20261109_companion_guard_gaps AS
-SELECT id, kind, entity, status FROM portfolio_gaps WHERE entity IN ('qnfo-companion-guard', 'W.qnfo-companion-guard');
+SELECT rowid AS id, kind, entity, status FROM portfolio_gaps WHERE entity IN ('qnfo-companion-guard', 'W.qnfo-companion-guard');
 
 INSERT INTO deployment_history (resource_type, resource_name, action, version_id, deployed_by, deployed_at, status, notes)
 SELECT 'worker', 'qnfo-companion-guard', 'deployed', '1.1.0', 'session:companion-guard-record-1', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'success',
