@@ -8,6 +8,13 @@
       "contains": [
         "\"worker\":\"personal-api\""
       ]
+    },
+    {
+      "url": "https://personal.qnfo.org/companion",
+      "contains": [
+        "Check in where you are",
+        "Ask me"
+      ]
     }
   ]
 }
