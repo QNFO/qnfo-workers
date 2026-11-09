@@ -1021,6 +1021,13 @@ export function planNudge(st) {
   if (st.weekReady && h >= 18 && h < 21.5 && !kindsToday.has("cmp-week") && !retired.has("cmp-week")) {
     return mk("cmp-week", TEXTS.week[0], 2, 30 * 60, "week-lookback " + st.weekReady);
   }
+  // COMPANION-DOCTOR-PREP-1: the day before a GP or therapist visit, one push opens the summary. A visit that is
+  // already on today blocks everything above anyway; here only a visit still ahead (between 6 and 48 hours out,
+  // so this fires on the day before, not on the morning of) prepares it, once a day, daytime only.
+  const docVisit = (events || []).filter((e) => !e.allDay && typeof e.startMs === "number" && e.startMs > nowMs && e.startMs - nowMs > 6 * 3600000 && e.startMs - nowMs <= 48 * 3600000 && DOCTOR_RE.test(String(e.title || ""))).sort((a, b) => a.startMs - b.startMs)[0];
+  if (docVisit && h >= 10 && h < 20 && !kindsToday.has("cmp-doctor") && !retired.has("cmp-doctor")) {
+    return mk("cmp-doctor", doctorSummary(st, docVisit), 2, 600, "doctor-prep " + String(docVisit.title).slice(0, 60), { event_title: String(docVisit.title).slice(0, 80) });
+  }
   if (h >= 19.5 && h < 21.75 && !st.journalToday && !st.reviewToday && !kindsToday.has("cmp-reflect") && !retired.has("cmp-reflect")) {
     return mk("cmp-reflect", pickLru(TEXTS.reflect, recentAsks), 3, 240, "evening-no-journal");
   }
@@ -1059,6 +1066,32 @@ export function planNudge(st) {
   return { skip: "nothing-useful" };
 }
 
+// COMPANION-DOCTOR-PREP-1 (agent_issues 1002241): a GP or therapist visit on the calendar gets one push the day
+// before, carrying a plain, printable summary of the recent weeks (check-in lifts and drags with their log counts,
+// sleep, movement, social pairings, loved places). Plain words only, no diagnosis, and nothing is sent or shared
+// anywhere by the companion: the summary lives on the personal plane and is his own note for his own visit.
+const DOCTOR_RE = /doctor|huisarts|\bgp\b|general practitioner|therap|psycholog|psychiatri/i;
+// Builds the summary text. Everything is read defensively: a field the state does not carry is simply left out,
+// so the summary never breaks a day where the logs are thin.
+export function doctorSummary(st, ev) {
+  const s = st || {};
+  const parts = [];
+  const lifts = Array.isArray(s.lifts) ? s.lifts.filter((x) => x !== null && x !== undefined && x !== "") : [];
+  const drags = Array.isArray(s.drags) ? s.drags.filter((x) => x !== null && x !== undefined && x !== "") : [];
+  if (lifts.length) parts.push("What helped (" + lifts.length + " check-ins): " + lifts.slice(-3).join("; ") + ".");
+  if (drags.length) parts.push("What was hard (" + drags.length + " check-ins): " + drags.slice(-3).join("; ") + ".");
+  if (s.sleepSummary) parts.push("Sleep: " + s.sleepSummary + ".");
+  if (s.movementSummary) parts.push("Movement: " + s.movementSummary + ".");
+  if (s.socialSummary) parts.push("People: " + s.socialSummary + ".");
+  if (s.lovedPlaces) parts.push("Places that do you good: " + s.lovedPlaces + ".");
+  if (!parts.length) parts.push("Quiet weeks, nothing sharp to point at.");
+  let head = "Open summary. ";
+  if (ev && typeof ev.startMs === "number" && isFinite(ev.startMs)) {
+    const when = new Intl.DateTimeFormat("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(ev.startMs));
+    head = "Open summary. " + String(ev.title || "The visit").slice(0, 60) + " on " + when + ". ";
+  }
+  return head + parts.join(" ") + " Plain words, no diagnosis. Print it or keep it; nothing is sent or shared.";
+}
 // ---------------------------------------------------------------- Web Push (RFC 8291 aes128gcm + RFC 8292 VAPID)
 
 export function b64u(buf) {

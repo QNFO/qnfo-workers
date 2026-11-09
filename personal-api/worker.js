@@ -112,7 +112,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.38.6";
+var VERSION = "4.38.7";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -2645,6 +2645,13 @@ function planNudge(st) {
   if (st.weekReady && h >= 18 && h < 21.5 && !kindsToday.has("cmp-week") && !retired.has("cmp-week")) {
     return mk("cmp-week", TEXTS.week[0], 2, 30 * 60, "week-lookback " + st.weekReady);
   }
+  // COMPANION-DOCTOR-PREP-1: the day before a GP or therapist visit, one push opens the summary. A visit that is
+  // already on today blocks everything above anyway; here only a visit still ahead (between 6 and 48 hours out,
+  // so this fires on the day before, not on the morning of) prepares it, once a day, daytime only.
+  const docVisit = (events || []).filter((e) => !e.allDay && typeof e.startMs === "number" && e.startMs > nowMs && e.startMs - nowMs > 6 * 3600000 && e.startMs - nowMs <= 48 * 3600000 && DOCTOR_RE.test(String(e.title || ""))).sort((a, b) => a.startMs - b.startMs)[0];
+  if (docVisit && h >= 10 && h < 20 && !kindsToday.has("cmp-doctor") && !retired.has("cmp-doctor")) {
+    return mk("cmp-doctor", doctorSummary(st, docVisit), 2, 600, "doctor-prep " + String(docVisit.title).slice(0, 60), { event_title: String(docVisit.title).slice(0, 80) });
+  }
   if (h >= 19.5 && h < 21.75 && !st.journalToday && !st.reviewToday && !kindsToday.has("cmp-reflect") && !retired.has("cmp-reflect")) {
     return mk("cmp-reflect", pickLru(TEXTS.reflect, recentAsks), 3, 240, "evening-no-journal");
   }
@@ -2683,6 +2690,32 @@ function planNudge(st) {
   return { skip: "nothing-useful" };
 }
 
+// COMPANION-DOCTOR-PREP-1 (agent_issues 1002241): a GP or therapist visit on the calendar gets one push the day
+// before, carrying a plain, printable summary of the recent weeks (check-in lifts and drags with their log counts,
+// sleep, movement, social pairings, loved places). Plain words only, no diagnosis, and nothing is sent or shared
+// anywhere by the companion: the summary lives on the personal plane and is his own note for his own visit.
+const DOCTOR_RE = /doctor|huisarts|\bgp\b|general practitioner|therap|psycholog|psychiatri/i;
+// Builds the summary text. Everything is read defensively: a field the state does not carry is simply left out,
+// so the summary never breaks a day where the logs are thin.
+function doctorSummary(st, ev) {
+  const s = st || {};
+  const parts = [];
+  const lifts = Array.isArray(s.lifts) ? s.lifts.filter((x) => x !== null && x !== undefined && x !== "") : [];
+  const drags = Array.isArray(s.drags) ? s.drags.filter((x) => x !== null && x !== undefined && x !== "") : [];
+  if (lifts.length) parts.push("What helped (" + lifts.length + " check-ins): " + lifts.slice(-3).join("; ") + ".");
+  if (drags.length) parts.push("What was hard (" + drags.length + " check-ins): " + drags.slice(-3).join("; ") + ".");
+  if (s.sleepSummary) parts.push("Sleep: " + s.sleepSummary + ".");
+  if (s.movementSummary) parts.push("Movement: " + s.movementSummary + ".");
+  if (s.socialSummary) parts.push("People: " + s.socialSummary + ".");
+  if (s.lovedPlaces) parts.push("Places that do you good: " + s.lovedPlaces + ".");
+  if (!parts.length) parts.push("Quiet weeks, nothing sharp to point at.");
+  let head = "Open summary. ";
+  if (ev && typeof ev.startMs === "number" && isFinite(ev.startMs)) {
+    const when = new Intl.DateTimeFormat("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(ev.startMs));
+    head = "Open summary. " + String(ev.title || "The visit").slice(0, 60) + " on " + when + ". ";
+  }
+  return head + parts.join(" ") + " Plain words, no diagnosis. Print it or keep it; nothing is sent or shared.";
+}
 // ---------------------------------------------------------------- Web Push (RFC 8291 aes128gcm + RFC 8292 VAPID)
 
 function b64u(buf) {
@@ -5312,7 +5345,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, doctorSummary, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
