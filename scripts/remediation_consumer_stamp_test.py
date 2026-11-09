@@ -34,7 +34,7 @@ def check(cond, msg, extra=None):
 
 
 db = sqlite3.connect(":memory:")
-db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT)")
+db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, escalate_to TEXT)")
 stamps = []
 
 

@@ -12,7 +12,7 @@ compatibility_date = "2026-11-04"
 # metric workers_bp_findings_open = 1. One rename plus this block clears all three.
 [observability]
 enabled = true
-head_sampling_rate = 0.1
+head_sampling_rate = 1
 
 # Explicitly disable traces to satisfy the workers_bp anti-pattern check.
 # Traces are free until 2026-12-01; this declaration keeps the lint green
