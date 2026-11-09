@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.10.4-codeagent";
+var VERSION = "1.10.5-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -358,7 +358,7 @@ async function ensure(env) {
   if (ensured) return;
   for (const q of DDL) await env.JOBS_DB.prepare(q).run();
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // why a posting was rejected: the search learns from it
-  ensured = true; await generateWeeklyDossier(env);
+  ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
 }
 // REACH-FOCUS-1.7: weekly dossier of five named people/organizations
 async function generateWeeklyDossier(env) {
@@ -367,7 +367,7 @@ async function generateWeeklyDossier(env) {
   if (now.getUTCDay() !== 1) return;
   // Select up to five distinct employers from recent non‑stretch matches
   const rows = await env.JOBS_DB.prepare(
-    "SELECT DISTINCT employer FROM jobsearch_matches WHERE employer IS NOT NULL AND tier <> 'C' ORDER BY last_seen DESC LIMIT 5"
+    "SELECT DISTINCT company AS employer FROM jobsearch_matches WHERE company IS NOT NULL AND tier <> 'C' ORDER BY last_seen DESC LIMIT 5"
   ).all();
   const dossier = (rows.results || []).map(r => r.employer).filter(Boolean);
   if (dossier.length) await setMeta(env, "weekly_dossier", JSON.stringify(dossier));
@@ -1072,15 +1072,19 @@ function jobTerms(job, clusters, n = 2) {
 }
 // Resume: summary, every recent role with the achievements that fit the posting (at most 3 per role, 9 in all), older roles on one line each,
 // the publications that fit, education, certifications, skills. Each line is tagged with the bank record it is copied from.
-function buildResume(job, m) {
+function buildResume(job, m) {   // m: { clusters, judge? }
   const cl = new Set(m.clusters), b = BANK, roles = [...(b.roles || [])].sort(byRecency);
   const jobTags = new Set(Object.entries(TAG_TO_CLUSTERS).filter(([, cs]) => cs.some((c) => cl.has(c))).map(([t]) => t));
   const per = {}, chosen = [];
   // ATS keyword echo (JOBSEARCH-APPLY-1): among the facts that fit the posting, those that use the posting's own terms come first
-  const hot = postingTerms(job).filter((t) => t.kind !== "tool" || kwRe(t.term).test(cvCorpus())).map((t) => kwRe(t.term));
-  const hits = (f) => { const low = f.text.toLowerCase(); return hot.filter((re) => re.test(low)).length; };
-  const ordered = pickFacts(m.clusters, 30).map((f, i) => [hits(f), i, f]).sort((x, y) => y[0] - x[0] || x[1] - y[1]).map((x) => x[2]);
-  for (const f of ordered) { const k = f.role || "-"; per[k] = (per[k] || 0) + 1; if (per[k] > 3) continue; chosen.push(f); if (chosen.length >= 9) break; }
+  // JOBSEARCH-TAILOR-1: every verified fact is ranked against this posting, not only those in its clusters: the model judge's matched facts first,
+  // then the posting's own terms (weighted by how often the posting repeats them), then cluster fit, then recency. Nothing is written that the bank does not hold.
+  const hot = postingTerms(job).filter((t) => t.kind !== "tool" || kwRe(t.term).test(cvCorpus())).map((t) => ({ re: kwRe(t.term), w: Math.min(3, t.count) }));
+  const jm = new Set(((m.judge || {}).matched_fact_ids) || []);
+  const score = (f, i) => { const low = f.text.toLowerCase(); return (jm.has(f.id) ? 100 : 0) + hot.reduce((a, t) => a + (t.re.test(low) ? t.w * 4 : 0), 0) + f.cluster.filter((c) => cl.has(c)).length * 3 - i * 0.01; };
+  const ordered = LEDGER.facts.map((f, i) => [score(f, i), f]).sort((x, y) => y[0] - x[0]).map((x) => x[1]);
+  const strong = {}; for (const f of ordered) if (jm.has(f.id) || hot.some((t) => t.re.test(f.text.toLowerCase()))) strong[f.role || "-"] = (strong[f.role || "-"] || 0) + 1;
+  for (const f of ordered) { const k = f.role || "-"; per[k] = (per[k] || 0) + 1; if (per[k] > ((strong[k] || 0) >= 4 ? 4 : 3)) continue; chosen.push(f); if (chosen.length >= 12) break; }
   const byRole = {};
   for (const f of chosen) (byRole[f.role] = byRole[f.role] || []).push(f);
   const summaries = (b.summaries || []).map((s) => [(s.tags || []).filter((t) => jobTags.has(t)).length, s]).sort((x, y) => y[0] - x[0]);
@@ -1448,13 +1452,13 @@ async function analyzeJob(env, body) {
   const sc = scoreJob(job, ctx, "analyze");
   const verdict = sc.fit >= 70 ? "strong fit" : sc.fit >= 45 ? "good fit" : sc.fit >= 35 ? "possible fit" : "weak fit";
   const strengths = pickFacts(sc.clusters, 5).map((f) => ({ id: f.id, text: f.text }));
-  const m = { clusters: sc.clusters };
+  let judge = null; try { judge = await judgeJob(env, job); } catch (e) { logErr("judge", e); }   // JOBSEARCH-JUDGE-1: fail-soft, the rubric answer stands without it
+  const m = { clusters: sc.clusters, judge };
   const res = buildResume(job, m), note = buildNote(job, m), bad = verify(res, job).concat(verify(note, job));
   const cvGaps = sc.clusters.filter((c) => !OWNED.has(c)).map((c) => ({ cluster: c, questions: QUESTIONS.filter((q) => clustersOf(q.tags).includes(c)).slice(0, 4).map((q) => ({ id: q.id, ask: q.ask })) }));
   const draft = bad.length ? { blocked: bad.join("; ") } : { resume: stripTags(res), note: stripTags(note) };
   const kit = bad.length ? null : applyKit(job, stripTags(res), stripTags(note), sc.flags);
   const keywords = keywordReport(job, res);
-  let judge = null; try { judge = await judgeJob(env, job); } catch (e) { logErr("judge", e); }   // JOBSEARCH-JUDGE-1: fail-soft, the rubric answer stands without it
   try { await saveHistory(env, { title: job.title, company: job.company, url: job.url, fit: sc.fit, verdict, resume: draft.resume, note: draft.note }); } catch (e) { logErr("history", e); }
   return {
     title: job.title, company: job.company, location: job.location || "(not found; judged on the text)", url: job.url, cv_gaps: cvGaps,
@@ -1777,7 +1781,8 @@ async function matchKit(env, row) {
     const got = await fetchPosting(row.url);
     job.desc = got.desc || "";
     if (job.desc) {
-      const sc = scoreJob(job, ctx, "analyze"), res = buildResume(job, { clusters: sc.clusters }), nt = buildNote(job, { clusters: sc.clusters });
+      let judge = null; try { judge = await judgeJob(env, job); } catch (e) { logErr("judge", e); }
+      const sc = scoreJob(job, ctx, "analyze"), res = buildResume(job, { clusters: sc.clusters, judge }), nt = buildNote(job, { clusters: sc.clusters });
       flags = sc.flags;
       keywords = keywordReport(job, res);
       if (!verify(res, job).concat(verify(nt, job)).length) { resume = stripTags(res); note = stripTags(nt); fresh = true; }
@@ -2363,7 +2368,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
