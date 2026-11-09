@@ -108,7 +108,7 @@ def repo_findings(repo, hub):
     heads = {(p.get("head") or {}).get("ref") for p in prs}
     cands = [b for b in gh_json([f"repos/{repo}/branches?per_page=100"]) if AGENT_BRANCH.match(b.get("name", "")) and b["name"] not in heads]
     dated = []
-    for b in cands[:30]:
+    for b in cands:
         c = gh_json([f"repos/{repo}/commits/{b['commit']['sha']}"])
         dated.append({"name": b["name"], "date": (((c or {}).get("commit") or {}).get("committer") or {}).get("date")} if isinstance(c, dict) else {"name": b["name"]})
     return tag(loop_findings(issues) + pr_findings(prs) + branch_findings(dated, heads), repo, hub)
