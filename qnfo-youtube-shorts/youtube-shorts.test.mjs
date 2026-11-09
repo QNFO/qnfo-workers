@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { artRequest, artPrompt, ART_STYLES, ART_MOTIFS, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION } from "./worker.js";
+import { artRequest, artPrompt, ART_STYLES, ART_MOTIFS, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, pickTheme, kindMix, sameMixIssues, capBackdrops, THEME_NAMES, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION } from "./worker.js";
 
 const article = {
   title: "Why scientists stop testing ideas", short: "Safe stories pay better than risky guesses.",
@@ -195,11 +195,34 @@ test("YT-3: the hourly worker wires eligible articles through server-side render
   assert.match(source, /setState\(env, row\.id, "uploaded", \{ video_id: uj\.id/);
 });
 
-test("YT-VOICE-1: the first attempt uses Kokoro, a retry re-voices with Aura", () => {
-  assert.equal(ttsEngine(0), "kokoro");
+test("YT-VOICE-RETRY-1: Aura only after a Kokoro failure in the audio or rendering stage", () => {
+  assert.equal(ttsEngine({ attempts: 0 }), "kokoro");
   assert.equal(ttsEngine(undefined), "kokoro");
-  assert.equal(ttsEngine(1), "aura");
-  assert.equal(ttsEngine(3), "aura");
+  assert.equal(ttsEngine({ attempts: 1, note: "queued: director returned no JSON" }), "kokoro");
+  assert.equal(ttsEngine({ attempts: 1, note: "rendered: upload 500" }), "kokoro");
+  assert.equal(ttsEngine({ attempts: 1, note: "rendering: render error: manim" }), "aura");
+  assert.equal(ttsEngine({ attempts: 1, note: "audio: TTS failed" }), "aura");
+});
+
+test("YT-STOCK-HYBRID-1: theme avoids the previous Short's, same kind mix is flagged", () => {
+  for (const slug of ["a", "b", "c", "d", "e", "f", "g"]) {
+    const t = pickTheme(slug, null);
+    assert.ok(THEME_NAMES.includes(t));
+    assert.notEqual(pickTheme(slug, t), t);
+  }
+  const b1 = [{ kind: "hook" }, { kind: "stat" }, { kind: "hook" }];
+  assert.equal(kindMix(b1), "hook,stat");
+  assert.equal(sameMixIssues([{ kind: "stat" }, { kind: "hook" }], b1).length, 1);
+  assert.equal(sameMixIssues([{ kind: "stat" }, { kind: "list" }], b1).length, 0);
+  assert.equal(sameMixIssues(b1, null).length, 0);
+});
+
+test("YT-ART-SIZE-1: backdrops are capped to a byte budget, later beats lose theirs first", () => {
+  const job = { id: "1", beats: [{ bg_b64: "x".repeat(10) }, { bg_b64: "y".repeat(10) }, { narr: "n" }] };
+  const c = capBackdrops(job, 15);
+  assert.ok(c.beats[0].bg_b64 && !c.beats[1].bg_b64);
+  assert.ok(job.beats[1].bg_b64, "input untouched");
+  assert.ok(!capBackdrops(job, 0).beats[0].bg_b64);
 });
 
 test("YT-SCRIPT-1: the director writes the whole script first, with an arc, and data kinds only for real figures", () => {
