@@ -53,6 +53,7 @@ const env = () => ({
     async run(model, input, opts) {
       calls.push({ model, input, opts });
       if (failAutoRouter && model === "cloudflare/auto") throw new Error("provider details not returned");
+      if (model === "@cf/zai-org/glm-5.3-flash") return { response: "B", usage: { prompt_tokens: 10, completion_tokens: 1 } };
       return {
         model: "openai/gpt-5-mini",
         response: "A comparable evaluation response",
@@ -79,11 +80,12 @@ try {
   await Promise.all(waits);
   ok(r.status === 200 && r.json.sampled === 5 && r.json.results.length === 5, "a requested limit above five is capped at five", r.json);
   ok(calls.filter((c) => c.model === "cloudflare/auto").length === 5, "only Auto Router is called for sampled records", calls.map((c) => c.model));
-  ok(calls.every((c) => c.model === "cloudflare/auto" && c.opts.gateway.id === "default" && c.opts.gateway.cacheTtl === 0), "replays use uncached Cloudflare Auto Router on the existing gateway", calls.map((c) => c.opts));
+  ok(calls.filter((c) => c.model === "cloudflare/auto").every((c) => c.opts.gateway.id === "default" && c.opts.gateway.cacheTtl === 0), "replays use uncached Cloudflare Auto Router on the existing gateway", calls.map((c) => c.opts));
   ok(calls.every((c) => c.input.messages.length === 1 && !/user@example.org/.test(JSON.stringify(c.input))), "obvious email addresses are excluded and each replay is bounded to one logged prompt");
   ok(events.length === 5 && events.every((e) => e.args[2].indexOf("A safe evaluation prompt") < 0 && !e.args[3].includes("Historical answer")), "event records contain hashes and metrics, not prompts or responses", events);
-  ok(r.json.results.every((x) => x.quality_verdict === "unjudged" && x.exact_match === false && x.auto_cost_estimate_usd > 0 && x.cost_delta_usd === Math.round((x.auto_cost_estimate_usd - x.baseline_cost_usd) * 1e6) / 1e6), "quality is not overstated and known model costs are compared with the historical ladder cost", r.json.results);
-  ok(r.json.quality_comparison.includes("proxies only"), "quality proxy fields are explicitly labeled", r.json.quality_comparison);
+  ok(r.json.results.every((x) => x.quality_verdict === "auto_better" && x.quality_judge_model === "@cf/zai-org/glm-5.3-flash" && x.exact_match === false && x.auto_cost_estimate_usd > 0 && x.cost_delta_usd === Math.round((x.auto_cost_estimate_usd - x.baseline_cost_usd) * 1e6) / 1e6), "each replay is judged pairwise by a disjoint-family model and known model costs are compared with the historical ladder cost", r.json.results);
+  ok(calls.filter((c) => c.model === "@cf/zai-org/glm-5.3-flash").length === 5, "a disjoint-family judge scores every successful replay", calls.map((c) => c.model));
+  ok(r.json.quality_comparison.includes("disjoint"), "the recorded quality comparison states how it was judged", r.json.quality_comparison);
 
   rows.splice(0, rows.length, { ...rows[1], id: "failed-sample" });
   calls.length = 0;
