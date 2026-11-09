@@ -196,6 +196,10 @@
   "paper-dashboard": {
    "taps": 1,
    "typing": 0
+  },
+  "order-form": {
+   "taps": 0,
+   "typing": 0
   }
  },
  "signal": {

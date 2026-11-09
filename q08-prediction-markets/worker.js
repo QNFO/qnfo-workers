@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.2.5";
+var VERSION = "1.3.0";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -218,23 +218,24 @@ async function state(env) {
 
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
 const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Q08 Markets (paper)</title>
-<style>:root{color-scheme:light dark}body{font:15px system-ui;max-width:860px;margin:0 auto;padding:16px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #8884;text-align:left}.n{text-align:right}button{padding:8px 12px;font:inherit}.b{background:#fc03;padding:8px;border-radius:6px}</style>
+<style>:root{color-scheme:light dark}body{font:15px system-ui;max-width:860px;margin:0 auto;padding:16px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #8884;text-align:left;overflow-wrap:anywhere}button{padding:8px 10px}.n{text-align:right}button{font:inherit}.b{background:#fc03;padding:8px;border-radius:6px}</style>
 <h1>Q08 Markets <small>paper trading</small></h1><div class=b>Simulated money only. No real orders.</div><p id=s>Loading...</p>
-<button id=t>Run tick now</button><p id=x></p><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
+<button id=t>Run tick now</button><p id=x></p><p><label>Order size $ <input id=amt type=number value=100 min=1 step=1></label> <span id=msg role=status></span></p><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
 <script>const f=n=>(+n).toFixed(2);async function L(){const d=await (await fetch('/api/state')).json();
 s.textContent='Equity $'+f(d.equity)+' ('+f(d.return_pct)+'%) | cash $'+f(d.cash)+' | closed '+d.trades_closed+' | win rate '+(d.win_rate==null?'n/a':f(d.win_rate*100)+'%');
 x.textContent='Max drawdown '+f(d.stats.max_drawdown_pct)+'% | '+Object.entries(d.stats.by_strategy).map(([k,v])=>k+': '+v.trades+' trades, P&L $'+f(v.pnl)).join(' | ');
 const E=v=>String(v).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');const r=(a,k)=>'<tr>'+k.map(x=>'<td>'+E(x)+'</td>').join('')+'</tr>';
 o.innerHTML='<tr><th>Market<th>Side<th class=n>Entry<th class=n>Mark<th class=n>P&L</tr>'+d.open.map(p=>r(0,[p.title,p.side,f(p.entry),f(p.mark),f(p.unrealized)])).join('');
 c.innerHTML='<tr><th>Market<th>Side<th>Reason<th class=n>P&L</tr>'+d.closed.map(p=>r(0,[p.title,p.side,p.reason,f(p.pnl)])).join('');
-m.innerHTML='<tr><th>Market<th class=n>Yes<th class=n>Move<th>Feed</tr>'+d.markets.map(p=>r(0,[p.title,f(p.yes),f(p.move),p.source])).join('')}
+m.innerHTML='<tr><th>Market<th class=n>Yes<th class=n>Move<th>Paper order</tr>'+d.markets.map(p=>'<tr><td>'+E(p.title)+'<td>'+f(p.yes)+'<td>'+f(p.move)+'<td><button data-s="'+E(p.slug)+'" data-d=yes>Buy YES</button> <button data-s="'+E(p.slug)+'" data-d=no>Buy NO</button></tr>').join('')}
+m.onclick=async e=>{const b=e.target.closest('button');if(!b||!b.dataset.s)return;const q=await fetch('/api/order',{method:'POST',body:JSON.stringify({slug:b.dataset.s,side:b.dataset.d,usd:+amt.value})});const j=await q.json();msg.textContent=j.error?('Not placed: '+j.error):('Filled at '+f(j.fill)+' for '+f(j.qty)+' shares');L()};
 t.onclick=async()=>{t.disabled=1;await fetch('/api/tick',{method:'POST'});t.disabled=0;L()};L();setInterval(L,30000)</script>`;
 
 export default {
   async fetch(req, env) {
     const u = new URL(req.url), p = u.pathname;
     try {
-      if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, features: ["paper-trading", "momentum", "fade", "stats"] });
+      if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, features: ["paper-trading", "momentum", "fade", "stats", "order-form"] });
       if (p === "/api/state") return json(await state(env));
       if (p === "/api/markets") return json((await state(env)).markets);
       if (p === "/api/tick" && req.method === "POST") { const r = await tick(env); return json(r, r.busy ? 409 : 200); }

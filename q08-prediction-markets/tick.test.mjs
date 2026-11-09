@@ -103,3 +103,9 @@ test("a manual order on a quote older than 15 minutes is refused, a fresh one is
   await env.TRADES_DB.prepare("UPDATE pt_market SET updated_at=? WHERE slug=?").bind(new Date(Date.now() - 60000).toISOString(), "m").run();
   assert.equal((await order()).status, 200);
 });
+
+test("the dashboard has an order form that posts to /api/order and shows the returned error", async () => {
+  const html = await (await worker.fetch(new Request("https://x/"), {})).text();
+  assert.match(html, /Buy YES/); assert.match(html, /Buy NO/); assert.match(html, /id=amt/);
+  assert.match(html, /fetch\('\/api\/order'/); assert.match(html, /Not placed: /);
+});
