@@ -1,6 +1,21 @@
-var VERSION = "1.0.2";
+var VERSION = "1.1.0";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
+const ACCOUNT="edb167b78c9fb901ea5bca3ce58ccc4b", SERVED_BY="personal-api";
+// COMPANION-GUARD-ROLLBACK-1 (issue 8888): two failed probes in a row roll the serving worker back to its previous deployment.
+async function rollback(env){
+  const tok=env.CF_API_TOKEN||env.CLOUDFLARE_API_TOKEN;
+  if(!tok) return "rollback unavailable: no API token bound to the guard";
+  const base="https://api.cloudflare.com/client/v4/accounts/"+ACCOUNT+"/workers/scripts/"+SERVED_BY+"/deployments";
+  const h={Authorization:"Bearer "+tok,"content-type":"application/json"};
+  const j=await (await fetch(base,{headers:h})).json();
+  const dl=(j.result&&j.result.deployments)||[];
+  if(dl.length<2) return "rollback unavailable: fewer than two deployments";
+  const prev=dl[1], vs=(prev.versions||[]).map(function(v){return {version_id:v.version_id,percentage:v.percentage};});
+  if(!vs.length) return "rollback unavailable: previous deployment lists no versions";
+  const r=await fetch(base,{method:"POST",headers:h,body:JSON.stringify({strategy:"percentage",versions:vs,annotations:{"workers/message":"COMPANION-GUARD-ROLLBACK-1: probe failed twice"}})});
+  return r.ok?"rolled back "+SERVED_BY+" to deployment "+prev.id:"rollback failed: HTTP "+r.status;
+}
 async function q(env,sql,params){
   for(let t=0;t<3;t++){
     try{ const st=env.DB.prepare(sql); const r=await (params&&params.length?st.bind(...params):st).all(); return r.results||[]; }
@@ -42,9 +57,20 @@ async function probe(env){
         await q(env,"UPDATE companion_baseline SET texts=?1 WHERE url=?2",[JSON.stringify(mt),url]);
       }
     }
+    if(status===200&&/<nav[^>]*class="tabs"/.test(html)) reasons.push("tab-based UI present (COMPANION-UI-REGRESSION)");
+    const secN=(html.match(/<section/g)||[]).length;
+    if(status===200&&secN>5) reasons.push("companion_ui_section_count "+secN+" > 5");
     const ok=reasons.length===0?1:0;
     await q(env,"INSERT INTO companion_probe_runs (ts,url,status,len,title,ids_total,ids_missing,ok,reason) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",[now,url,status,html.length,title,ids.length,missing.length,ok,reasons.join("; ")]);
     if(!ok){
+      const last=await q(env,"SELECT ok,reason FROM companion_probe_runs WHERE url=?1 ORDER BY id DESC LIMIT 3",[url]);
+      const twice=last.length>=2&&last[0].ok===0&&last[1].ok===0;
+      const done=await q(env,"SELECT id FROM companion_probe_runs WHERE url=?1 AND reason LIKE 'ROLLBACK:%' AND ts>?2 LIMIT 1",[url,new Date(Date.now()-3600000).toISOString()]);
+      if(twice&&!done.length){
+        let note; try{ note=await rollback(env); }catch(e){ note="rollback error: "+String(e).slice(0,100); }
+        await q(env,"INSERT INTO companion_probe_runs (ts,url,status,len,title,ids_total,ids_missing,ok,reason) VALUES (?1,?2,?3,0,'',0,0,0,?4)",[new Date().toISOString(),url,status,"ROLLBACK: "+note]);
+        reasons.push(note);
+      }
       const pid="COMPANION-REGRESSION-"+now.slice(0,13).replace(/[-T]/g,"");
       const ex=await q(env,"SELECT id FROM agent_issues WHERE predicate_id=?1 LIMIT 1",[pid]);
       if(!ex.length) await q(env,"INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at,predicate_id) VALUES (?1,?2,'companion-guard','code-change','high','open',?3,?3,?4)",[pid+": "+url+" failed the regression probe","COMPANION-REGRESSION-GATE-1 (qnfo-companion-guard): "+reasons.join("; ")+". Compare companion_probe_runs and companion_baseline in qnfo-audit D1, restore the previous worker version if the UI regressed, then ship a fix with a test that covers it.",Date.now(),pid]);
