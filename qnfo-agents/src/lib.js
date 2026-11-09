@@ -49,6 +49,13 @@ export function stagedActionArgs(args) {
 
 // One cf_agent_approvals row per (run, action): the lifecycle awaiting -> approved|rejected -> executed|failed. next() refuses a step backwards.
 export const APPROVAL_STATES = ["awaiting", "approved", "rejected", "executed", "failed"];
+// APPROVAL-EXPIRY-1 (issue 9761): the card says "rejected after 24 h"; the sweep enforces it. Rows still awaiting past the cutoff are answered as rejected.
+export const APPROVAL_EXPIRY_MS = 24 * 3600 * 1000;
+export const APPROVAL_EXPIRY_NOTE = "default rejected after 24h";
+export function approvalExpired(row, now) {
+  return !!row && row.status === "awaiting" && Number(row.created_ms) > 0 && Number(now) - Number(row.created_ms) >= APPROVAL_EXPIRY_MS;
+}
+
 export function approvalNext(from, to) {
   const order = { awaiting: 0, approved: 1, rejected: 1, executed: 2, failed: 2 };
   if (!(from in order) || !(to in order)) return false;

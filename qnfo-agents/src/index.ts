@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
+import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
 
@@ -605,10 +605,10 @@ export class FleetCodeAgent extends Agent<Env, State> {
         .bind(spec.slug, spec.title, spec.why, spec.default_in_effect, spec.action).run();
     } catch (e) { logErr("approval-card", e); }
   }
-  private async resolveApprovalCard(runId: string) {
+  private async resolveApprovalCard(runId: string, resolution = "answered") {
     try {
-      await this.env.AUDIT_DB.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = 'answered' WHERE slug = ?1 AND source = 'qnfo-agents' AND status = 'open'")
-        .bind("approval-" + runId).run();
+      await this.env.AUDIT_DB.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?2 WHERE slug = ?1 AND source = 'qnfo-agents' AND status = 'open'")
+        .bind("approval-" + runId, resolution).run();
     } catch (e) { logErr("approval-card-resolve", e); }
   }
 
@@ -659,7 +659,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
     };
   }
 
-  async respondToApproval(id: string, callId: string, caller: string, approved: boolean, decidedBy?: string) {
+  async respondToApproval(id: string, callId: string, caller: string, approved: boolean, decidedBy?: string, expiry = false) {
     const row = this.row(id);
     if (!row || row.scope !== "write" || row.caller !== caller) return { ok: false, error: "no such pending approval" };
     const workspace = await this.computerWorkspace();
@@ -670,8 +670,8 @@ export class FleetCodeAgent extends Agent<Env, State> {
     this.sql`UPDATE runs SET status = 'running' WHERE id = ${id} AND status = 'awaiting_approval'`;
     await this.env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'running' WHERE id = ?1 AND caller = ?2 AND status = 'awaiting_approval'")
       .bind(id, caller).run();
-    await this.recordApproval(id, action, approved ? "approved" : "rejected", { decidedBy: decidedBy || caller });
-    await this.resolveApprovalCard(id);
+    await this.recordApproval(id, action, approved ? "approved" : "rejected", { decidedBy: decidedBy || caller, note: expiry ? APPROVAL_EXPIRY_NOTE : undefined });
+    await this.resolveApprovalCard(id, expiry ? APPROVAL_EXPIRY_NOTE : "answered");
     try {
       await workspace.runtime.respond(call.id, call.callId, { approved });
     } catch (e) {
@@ -687,6 +687,11 @@ export class FleetCodeAgent extends Agent<Env, State> {
         .bind(id, caller, now, why).run();
     }
     return { ok: true, run_id: id, action, status: approved ? "resuming" : "rejected" };
+  }
+
+  // APPROVAL-EXPIRY-1: the sweep's answer for an approval left awaiting 24 h; the same path as an owner's rejection, so the run ends with the rejection recorded.
+  async expireApproval(id: string, callId: string, caller: string) {
+    return this.respondToApproval(id, callId, caller, false, "expiry-sweep", true);
   }
 
   // RM-DURABLE-INTERRUPT-1 selftest, step 1: a write-scoped run that stages one irreversible step and pauses at the interrupt. No model is called and nothing is sent.
@@ -1367,6 +1372,21 @@ function selfDoc(caller: string, scope: Scope) {
   };
 }
 
+// APPROVAL-EXPIRY-1 (issue 9761): rejects every cf_agent_approvals row awaiting for 24 h (default rejected after 24h); idempotent, because an answered row is no longer awaiting.
+async function expireApprovals(env: Env) {
+  const rows: any = await env.AUDIT_DB.prepare("SELECT run_id, instance, caller, call_id, status, created_ms FROM cf_agent_approvals WHERE status = 'awaiting' AND created_ms < ?1 ORDER BY created_ms LIMIT 20").bind(Date.now() - APPROVAL_EXPIRY_MS).all();
+  const out = { expired: 0, failed: 0 };
+  for (const r of (rows.results || [])) {
+    if (!approvalExpired(r, Date.now()) || !r.call_id || !r.instance) continue;
+    try {
+      const stub: any = await getAgentByName(env.FleetCodeAgent as any, String(r.instance));
+      const res: any = await stub.expireApproval(String(r.run_id), String(r.call_id), String(r.caller));
+      if (res && res.ok) out.expired++; else out.failed++;
+    } catch (e) { out.failed++; logErr("approval-expiry", e); }
+  }
+  return out;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -1480,6 +1500,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     // CRON-HEARTBEAT-1: v_cron_activity reads fleet_heartbeat, so a tick that runs (or fails) is visible (metric crons_unobserved).
     const beat = (ok: number) => env.AUDIT_DB.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4)").bind(WORKER, VERSION, new Date().toISOString(), ok).run().catch((e) => logErr("heartbeat", e));
+    ctx.waitUntil(expireApprovals(env).then((r) => { if (r.expired || r.failed) console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "approval-expiry", ...r })); }).catch((e) => logErr("approval-expiry", e)));
     ctx.waitUntil(drainRequests(env).then((r) => { console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r })); return beat(1); }).catch((e) => { logErr("drain", e); return beat(0); }));
   }
 };
