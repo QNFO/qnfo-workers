@@ -5,8 +5,6 @@
 -- BACKUP: analytics_metric_triggers
 
 DROP TRIGGER IF EXISTS ai_waste_governor_tick; DROP TRIGGER IF EXISTS ai_waste_governor_tick_2; DROP VIEW IF EXISTS v_ai_waste_headline; DROP VIEW IF EXISTS v_ai_waste_by_purpose_7d
--- BACKUP: analytics_metric_triggers
-
 DROP TRIGGER IF EXISTS ai_waste_governor_tick_2;
 DROP VIEW IF EXISTS v_ai_waste_headline;
 DROP VIEW IF EXISTS v_ai_waste_by_purpose_7d;
