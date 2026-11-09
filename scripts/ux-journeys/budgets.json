@@ -220,6 +220,10 @@
   "apply-and-prepare-screens": {
    "taps": 2,
    "typing": 0
+  },
+  "recall-card-is-quiet-when-signed-out": {
+   "taps": 0,
+   "typing": 0
   }
  }
 }

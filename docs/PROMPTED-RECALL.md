@@ -36,5 +36,6 @@ personal companion." Every surface the owner uses asks, and the questions meet i
 - **Companion** (me.q08.org, Today, "Quick question"): its own questions live in `personal-life.cmp_asks` (venues and interests that feed For
   You, a weekly "did this help"), and the same card shows and answers the fleet questions. Personal answers never leave personal-life.
 - **Jobs** (jobs.q08.org): the per-application recall above.
+- **Fleet dashboard overview** (RECALL-CARD-1, qnfo-fleet-dashboard): the most-asked jobs question for the signed-in owner, Yes / No / Not sure, then how involved; reached through the `SVC_JOBSEARCH` service binding with the loop token after the dashboard's own owner-session check (`GET` and `POST /api/recall`, owner only).
 - A new surface adds a producer (rows in `owner_asks`, or its own plane table for personal data) and a trigger or handler that applies the
   answer. Ask often: a surface that learns nothing from the owner for 14 days is a gap to fill, not a quiet success.

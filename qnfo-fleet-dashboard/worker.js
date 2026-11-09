@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.104.0";
+var VERSION = "1.105.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -4334,6 +4334,18 @@ if (path === "/health") {
     const rowsGsc = await d1all(env.AUDIT, "SELECT id, ts, status, text FROM cloud_ops_events WHERE kind = 'gsc-ingest' ORDER BY id DESC LIMIT 7").catch(function() { return []; });
     const saKey = ga4ParseKey(env.GA4_SA_KEY);
     return rtRead(request, url, { ok: true, version: VERSION, key_present: !!env.GA4_SA_KEY, sa_email: saKey ? saKey.email : null, runs: rowsG, gsc_runs: rowsGsc }, { schema: "ga4/v1" });
+  }
+  // RECALL-CARD-1: owner session only; the jobs app is reached through a service binding, never the public host
+  if (path === "/api/recall" && (request.method === "GET" || request.method === "POST")) {
+    if (!(owner && owner.authed)) return json({ error: "owner session required" }, 401);
+    let b = null;
+    if (request.method === "POST") {
+      b = await request.json().catch(function() { return null; });
+      if (!b || typeof b.key !== "string" || !/^(yes|no|unsure)$/.test(String(b.answer))) return json({ error: "send key and answer yes, no or unsure" }, 400);
+      b = { key: b.key.slice(0, 100), answer: b.answer, role: String(b.role || "").slice(0, 20), depth: String(b.depth || "").slice(0, 20) };
+    }
+    const r = await recallForward(env, request.method, b);
+    return json(r.body, r.status);
   }
   // PORTFOLIO-STRATEGIC-1 routes (2026-10-25): manual trigger for the strategic review (loop-token gated
   // when LOOP_TOKEN is set) and a public read of the latest review notes + runs.
@@ -12036,6 +12048,21 @@ function changelogHtml(v, holder) {
   return fleetHead("Fleet changelog") + css + fleetTop("changelog", false, holder) + '<main class="wrap fl" style="max-width:980px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Changelog</h1><p class="meta" style="margin:0 0 18px;max-width:90ch">What the fleet has shipped for itself: new capabilities (a major or minor version), new workers, and changes to public sites. Fixes and small improvements (patch versions) are counted, not listed' + (v.patches_30d != null ? ': ' + v.patches_30d + ' in the last 30 days' : '') + '. Updated every 15 minutes from the canonical deploy ledger. JSON: <a href="/api/changelog">/api/changelog</a>.</p><div class="fl-kpis cl-kpis" style="display:grid;gap:12px;margin:0 0 22px">' + kpi(c.releases_7d, "Releases, 7 days") + kpi(c.releases_30d, "Releases, 30 days") + kpi(c.autonomy_30d, "Autonomy releases, 30 days") + kpi(c.public_30d, "Public-facing, 30 days") + kpi(c.new_workers_30d, "New workers, 30 days") + '</div><section class="card" style="margin-bottom:22px"><h3 style="font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Is the fleet getting more autonomous?</h3>' + trendRows + '</section><div class="cl-chips" role="group" aria-label="Filter releases">' + chips + '</div>' + (items || '<div class="card empty"><b>No releases recorded yet.</b> The first sync after this deploy reads the deploy ledger.</div>') + '<p class="fl-foot">' + esc(v.rule) + '</p></main>' + js + FLEET_SHELL_JS + '</body></html>';
 }
 // ---- FLEET-CHANGELOG-1:END ----
+/* RECALL-CARD-1 (owner 2026-11-09: "virtuous feedback loops ... in the fleet dashboard, the jobs, everywhere"; shape from docs/PROMPTED-RECALL.md, PROMPTED-RECALL-1).
+   qnfo-jobsearch keeps the questions: what the open shortlist asks for that the CV cannot yet back, each with the posting's own sentence. This card shows the
+   most-asked one to the signed-in owner: Yes / No / Not sure, then how involved (each button shows the exact line a yes adds, so nothing is typed). A yes goes to the
+   CV and the next resume; the search re-runs. Both routes (/api/recall) need the owner session and call qnfo-jobsearch through the SVC_JOBSEARCH binding with the
+   loop token, so the question, which names shortlisted employers, is never public. Text is written with textContent, never as markup. */
+var RECALL_CARD_HTML = '<section id="fl-recall" class="card" aria-live="polite" hidden><p class="q-eyebrow" id="rc-n"></p><h2 class="fl-h" id="rc-q" style="margin:4px 0"></h2><p id="rc-cue" class="mute"></p><div id="rc-b"><button class="btn" data-a="yes">Yes</button> <button class="btn" data-a="no">No</button> <button class="btn" data-a="unsure">Not sure</button></div><div id="rc-d" hidden><p class="mute">Where?</p><div id="rc-r"></div><p class="mute">How involved?</p><div id="rc-l"></div></div><p id="rc-m" class="mute" role="status"></p></section>';
+var RECALL_JS = "<script>(function(){var box=document.getElementById('fl-recall');if(!box||!window.fetch)return;var H={'Content-Type':'application/json','x-fleet-ui':'1'},Q=null,role='';function g(i){return document.getElementById(i)}function T(i,t){g(i).textContent=t}function btn(label,fn,cls){var b=document.createElement('button');b.className='btn'+(cls?' '+cls:'');b.type='button';b.textContent=label;b.addEventListener('click',fn);return b}function show(d){var q=d&&d.questions&&d.questions[0];if(!q){box.hidden=true;return}Q=q;role=q.roles&&q.roles[0]?q.roles[0].id:'';T('rc-n','One quick question'+(d.total>1?' ('+d.total+' waiting)':''));T('rc-q',q.ask);T('rc-cue',q.cue||'');T('rc-m','');g('rc-b').hidden=false;g('rc-d').hidden=true;box.hidden=false}function load(){fetch('/api/recall',{headers:H,credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(show).catch(function(){box.hidden=true})}function send(a,depth){fetch('/api/recall',{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify({key:Q.key,answer:a,role:role,depth:depth||''})}).then(function(r){return r.json()}).then(function(r){if(r.error){T('rc-m','Could not save: '+r.error);return}g('rc-b').hidden=true;g('rc-d').hidden=true;T('rc-m',a==='yes'&&r.added?'Added to your resume: '+r.added:a==='no'?'Noted. I will not ask again.':'Okay, I will ask again in two weeks.');setTimeout(load,a==='yes'?4000:900)}).catch(function(){T('rc-m','Could not save right now.')})}g('rc-b').addEventListener('click',function(e){var a=e.target&&e.target.getAttribute&&e.target.getAttribute('data-a');if(!a)return;if(a!=='yes'){send(a);return}g('rc-b').hidden=true;var R=g('rc-r'),L=g('rc-l');R.textContent='';L.textContent='';(Q.roles||[]).forEach(function(x,i){R.appendChild(btn(x.label,function(){role=x.id;Array.prototype.forEach.call(R.children,function(c){c.setAttribute('aria-pressed',c===this?'true':'false')},this)},i===0?'on':''))});(Q.depths||[]).forEach(function(x){L.appendChild(btn(x.draft,function(){send('yes',x.id)}))});g('rc-d').hidden=false});load()})()</script>";
+function recallForward(env, method, body) {
+  if (!env.SVC_JOBSEARCH || !env.LOOP_TOKEN) return Promise.resolve({ status: 503, body: { error: "recall is not connected" } });
+  const init = { method: method, headers: { "x-loop-token": env.LOOP_TOKEN, "content-type": "application/json" } };
+  if (body) init.body = JSON.stringify(body);
+  return env.SVC_JOBSEARCH.fetch("https://qnfo-jobsearch/api/recall" + (method === "GET" ? "?limit=1" : "/answer"), init).then(function(r) {
+    return r.json().catch(function() { return { error: "bad answer from the jobs app" }; }).then(function(j) { return { status: r.status, body: j }; });
+  }).catch(function() { return { status: 502, body: { error: "the jobs app did not answer" } }; });
+}
 // ==== AREA-MAP platform: overview page wrapper: humanHtml and its 15 s refresh ====
 function humanHtml(v) {
   const o = [];
@@ -12045,6 +12072,7 @@ function humanHtml(v) {
   o.push('<main class="wrap fl">');
   o.push(cmdPanelHtml(holder, "", ""));
   o.push('<section id="since" class="card since" aria-live="polite" hidden></section>');
+  if (holder) o.push(RECALL_CARD_HTML + RECALL_JS);   // RECALL-CARD-1
   o.push('<div id="live">' + humanFragment(v) + "</div>" + CHANGES_JS);
   // Real-time: re-fetch the server-rendered fragment every 15s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
@@ -13600,7 +13628,7 @@ var MAIL_DRAFT_RX = /\b(draft|compose|write|prepare|redo|rewrite)\b[\s\S]{0,40}\
 var MAIL_SEND_DRAFT_RX = /^\s*(?:(?:ok(?:ay)?|yes|good|great|looks good|perfect)[,.!]?\s*)?send(?: it| this| that| the (?:draft|reply|draft reply|email))?(?: now| as is)?[.!]?\s*$/i;
 var OWNER_SIGN_NAME = "Rowan Quni"; // the owner's public name (qnfo-gateway Person alternateName); nothing is ever added to it
 // The qnfo.org Person record (qnfo-gateway): the public facts the fleet already publishes about the owner.
-var OWNER_PUBLIC_FACTS = "Name: Rowan Brad Quni-Gudzinas, signs as Rowan Quni (also known as Brad Gudzinas). Public description on qnfo.org: systems researcher studying autonomous AI systems (not a software engineer). Affiliation: QNFO (qnfo.org). ORCID: 0009-0002-4317-5604. Email: rowan.quni@qnfo.org. He owns the QNFO GitHub organisation and directs the QNFO/qnfo-workers repository (the QNFO Cloudflare Workers fleet); who authored a given commit is what REPO_FACTS says.";
+var OWNER_PUBLIC_FACTS = "Name: Rowan Brad Quni-Gudzinas, signs as Rowan Quni (also known as Brad Gudzinas). Public description on qnfo.org: systems researcher studying autonomous AI systems (not a software engineer). Career arc: began modelling transportation networks (Delaware Valley Regional Planning Commission, IBI Group), led technical components of the national tour-based travel model at the Federal Highway Administration, then analytics and machine learning, and now studies and runs autonomous AI systems at QNFO; describe him as a systems researcher. Affiliation: QNFO (qnfo.org). ORCID: 0009-0002-4317-5604. Email: rowan.quni@qnfo.org. He owns the QNFO GitHub organisation and directs the QNFO/qnfo-workers repository (the QNFO Cloudflare Workers fleet); who authored a given commit is what REPO_FACTS says.";
 var MAIL_DRAFT_REPO = "QNFO/qnfo-workers";
 var MAIL_DRAFT_FACTS_MS = 5e3;
 var MAIL_DRAFT_MODEL_MS = 2e4; // facts + model stay under the 30 s waitUntil limit (CMD-ASK-BUDGET-1)
