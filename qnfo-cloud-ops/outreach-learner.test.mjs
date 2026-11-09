@@ -19,7 +19,7 @@ if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: updat
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
   "\nexport { jobOutreach as __jobOutreach, jobOutreachLearner as __tick, learnerTopic as __topic, learnerRtype as __rtype, learnerAddr as __addr," +
   " learnerClassify as __classify, learnerPlan as __plan, learnerBeta as __beta, LEARNER_RNG as __RNG, sentAsYouDigest as __digest," +
-  " jobEmailTriage as __triage, OUTREACH_OPT_OUT as __OPT_OUT, CRON_COMPANIONS as __COMP, JOBS as __JOBS, LEARNER_METRICS as __METRICS, LEARNER_METRIC_ACTOR as __ACTOR, pivotAllows as __pivotAllows };\n";
+  " jobEmailTriage as __triage, OUTREACH_OPT_OUT as __OPT_OUT, CRON_COMPANIONS as __COMP, JOBS as __JOBS, LEARNER_METRICS as __METRICS, LEARNER_METRIC_ACTOR as __ACTOR, pivotAllows as __pivotAllows, pivotAcademic as __pivotAcademic };\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
@@ -376,6 +376,7 @@ ok(mod.__COMP.engagement && mod.__COMP.engagement.includes("outreach-learner") &
 ok(!/"outreach-learner":\s*\{\s*times/.test(src), "no AMS_SCHEDULE entry (no new cron) for the learner");
 
 // 10. OUTREACH-PIVOT-1: cold email goes only to AI autonomous-systems authors; the rest is held, reversibly
+ok(["x@uni-a.edu","x@iphy.ac.cn","x@mail.nankai.edu.cn","x@tcd.ie","x@oeaw.ac.at","x@kit.edu"].every(mod.__pivotAcademic) && !["x@geeqchiqtech.com","x@gmail.com","x@acme-agents.com","x@fireworks.ai",""].some(mod.__pivotAcademic), "university and institute domains are academic; companies, webmail and empty are not");
 ok(mod.__pivotAllows("arxiv-radar widened: Oversight of Autonomous LLM Agents in Long-Horizon Operations") === true, "an autonomous-agent oversight paper is allowed");
 ok(mod.__pivotAllows("Scalable Oversight and Reward Hacking in Agentic Systems") === true && mod.__pivotAllows("Corrigibility in Self-Improving AI") === true, "alignment and self-improvement papers are allowed");
 ok(mod.__pivotAllows("arxiv-radar widened: Dissipative Quantum Battery from Many-Body Scars") === false && mod.__pivotAllows("Threshold Behavior of ZX Surface Codes") === false && mod.__pivotAllows("") === false, "quantum battery, surface-code and empty reasons are not");
@@ -384,16 +385,18 @@ ok(mod.__pivotAllows("arxiv-radar widened: Dissipative Quantum Battery from Many
   await ensureTables(t);
   t.queue("q1@uni-a.edu", "arxiv-radar widened: Threshold Behavior of ZX Surface Codes", "pending", 300);
   t.queue("q2@uni-b.edu", "arxiv-radar widened: Dissipative Quantum Battery", "needs-email", 200);
-  t.queue("a1@uni-c.edu", "arxiv-radar widened: Oversight of Autonomous LLM Agents", "pending", 100);
+  t.queue("a1@acme-agents.com", "arxiv-radar widened: Oversight of Autonomous LLM Agents", "pending", 100);
+  t.queue("a2@uni-d.edu", "arxiv-radar widened: Oversight of Autonomous LLM Agents", "pending", 90);
   t.uncfg("outreach_pivot_autonomy");
   const r = await mod.__jobOutreach(t.env);
-  ok(r.notes && r.notes.pivot && r.notes.pivot.on === true && r.notes.pivot.held === 2, "pivot absent = on: the two quantum rows are held (" + JSON.stringify(r.notes && r.notes.pivot) + ")");
+  ok(r.notes && r.notes.pivot && r.notes.pivot.on === true && r.notes.pivot.held === 3, "pivot absent = on: the two quantum rows and the academic autonomy row are held (" + JSON.stringify(r.notes && r.notes.pivot) + ")");
   ok(t.qs("q1@uni-a.edu") === "held-pivot-quantum" && t.qs("q2@uni-b.edu") === "held-pivot-quantum", "held rows carry the pivot status");
-  ok(t.qs("a1@uni-c.edu") !== "held-pivot-quantum", "the autonomy row stays in the drain");
+  ok(t.qs("a1@acme-agents.com") !== "held-pivot-quantum", "the autonomy row to a company address stays in the drain");
+  ok(t.qs("a2@uni-d.edu") === "held-pivot-quantum", "an autonomy row to a university address is held");
   ok(/from=pending/.test(t.audit.prepare("SELECT error FROM outreach_queue WHERE email = 'q1@uni-a.edu'").get().error) && /from=needs-email/.test(t.audit.prepare("SELECT error FROM outreach_queue WHERE email = 'q2@uni-b.edu'").get().error), "the prior status is recorded");
   t.cfg("outreach_pivot_autonomy", "off");
   const r2 = await mod.__jobOutreach(t.env);
-  ok(r2.notes.pivot.on === false && r2.notes.pivot.released === 2, "switch off releases both rows (" + JSON.stringify(r2.notes && r2.notes.pivot) + ")");
+  ok(r2.notes.pivot.on === false && r2.notes.pivot.released === 3, "switch off releases all held rows (" + JSON.stringify(r2.notes && r2.notes.pivot) + ")");
   ok(!t.audit.prepare("SELECT 1 FROM outreach_queue WHERE status = 'held-pivot-quantum'").get(), "nothing stays held after release");
 }
 

@@ -121,7 +121,7 @@ the funding strategy's own "volume trap" warning applies.
 ## 3. Audiences and what each should do
 | Audience | Where they are | What we want them to do | Lead content |
 |---|---|---|---|
-| AI autonomous-systems, agent-reliability and AI-safety researchers (the lead audience) | arXiv, Bluesky, LinkedIn, LessWrong, workshops | read, cite, collaborate, invite a talk | works 7, 5, 6, 4 |
+| Practitioners who build, run or evaluate autonomous AI systems: agent-platform and tooling companies, AI-evaluation and safety organisations, AI-for-science startups, Amsterdam founders and communities (the lead audience; no cold email to universities or research institutes since 2026-11-09) | their own public contact routes, LinkedIn, Bluesky, local meetups, inbound work-with-me | a conversation or meeting, a pilot, an introduction, a role | works 7, 5, 6, 4 |
 | Quantum-computing researchers and engineers (no cold email since 2026-11-09; they find the work through search and citations) | arXiv, conferences | cite JPCUB, contribute measurements | works 1-3 |
 | AI-for-science / metascience researchers | Bluesky, LinkedIn, LessWrong, workshops | use the ignorance audit, cite, collaborate | works 5-6 |
 | Engineering leaders and practitioners | LinkedIn, Hacker News | follow, subscribe, commission an assessment | works 4 and 7 |

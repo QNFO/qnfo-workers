@@ -51,3 +51,38 @@ SELECT 'AUTONOMY-PIVOT-1.3: point the arXiv radar seeds at autonomous-AI-systems
  'closing probe: SELECT 0 WHERE (SELECT COUNT(*) FROM outreach_queue WHERE status = ''pending'' AND created_at > datetime(''now'', ''-7 days'')) > 0 AND (SELECT COUNT(*) FROM outreach_queue WHERE status = ''held-pivot-quantum'' AND created_at > datetime(''now'', ''-7 days'')) > 10 * (SELECT COUNT(*) FROM outreach_queue WHERE status = ''pending'' AND created_at > datetime(''now'', ''-7 days''))',
  'session:autonomy-pivot', 'feature', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'AUTONOMY-PIVOT-1.3%');
+
+-- AUTONOMY-PIVOT-1.4 (owner, same day: academics "could give a shit"; reach practitioners who can advance the autonomous-systems work): audiences ranked from the signals in
+-- qnfo-audit on 2026-11-09. Evidence read: outreach_learner_sends (4 positive of 113 first contacts: Nankai, TCD, a company, a gmail author; the company, geeqchiqtech.com, offered a
+-- meeting for mid-November on 2026-10-27 and outreach_log shows the thread as replied and records no owner answer), inbound mail (an agent-research venue, Exuvia, invited the research agent via work-with-me on 2026-10-19;
+-- a Claude for Scientists application answered; an Amsterdam AI founders community mailing), and docs/CAREER-VISIBILITY.md section 5. The table is read by planners and the weekly dossier; nothing sends from it.
+CREATE TABLE IF NOT EXISTS outreach_audiences (
+  audience TEXT PRIMARY KEY,
+  rank INTEGER NOT NULL,
+  who TEXT NOT NULL,
+  why TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  first_step TEXT NOT NULL,
+  evidence TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO outreach_audiences (audience, rank, who, why, channel, first_step, evidence) VALUES
+ ('warm-replies', 1, 'People who already answered: the company contact who offered a meeting (geeqchiqtech.com) and any inbound work-with-me sender', 'A reply is the strongest signal there is; 1 of 4 positives came from a company and said yes to a meeting', 'email reply on the existing thread', 'Answer the mid-November meeting offer now and say the focus has moved to autonomous systems', 'outreach_learner_sends positives; emails 2026-10-27'),
+ ('agent-research-venues', 2, 'Venues and communities where autonomous agents and their operators publish and review (Exuvia invited the research agent on 2026-10-19; agent preprint servers)', 'They invited the work unprompted and it is the exact subject', 'their own submission or invitation route, work-with-me replies', 'Accept the Exuvia invitation with one narrow methodological question from the fleet failure ledger', 'emails 2026-10-19 [work-with-me:research]'),
+ ('ai-eval-safety-orgs', 3, 'AI evaluation, safety and governance organisations (non-university): METR, Epoch AI, UK AI Security Institute, EU AI Office', 'The audit method and the fleet failure ledger are evidence they use; roles and collaborations are practitioner-led', 'a named person with a public contact route, one concrete artefact (the failure ledger)', 'One-to-one message that opens with the artefact, never a broadcast', 'docs/CAREER-VISIBILITY.md section 5 class 1'),
+ ('agent-platforms', 4, 'Agent and developer platforms whose product the fleet runs on: Cloudflare, Vercel, Modal, Fireworks', 'A large autonomous agent system on their platform is a case study they want; developer-relations and solutions teams answer', 'developer relations contacts and public programmes', 'Offer the fleet as a case study with its failure ledger', 'CAREER-VISIBILITY class 3; Fireworks and Cloudflare mail in the inbox'),
+ ('amsterdam-founders', 5, 'AI founders and builders in Amsterdam', 'Meetings are possible in person; an Amsterdam AI founders community already mails the owner', 'meetups and community introductions', 'Attend or speak at one local AI meetup and ask three founders for a coffee', 'emails 2026-10-18 (founders in Amsterdam)'),
+ ('funders', 6, 'Funders of independent AI-safety and autonomy research (NLnet, Emergent Ventures, Foresight, LTFF, Schmidt Sciences)', 'They fund independent researchers; the dossier already names them', 'applications and referrals', 'One application with the failure ledger as evidence', 'docs/STRATEGY.md section 3'),
+ ('academics', 99, 'University and research-institute authors of preprints', '2 positive replies from university addresses among 94 institutional first contacts, no collaboration; paused by OUTREACH-PIVOT-1 on 2026-11-09', 'none by cold email', 'None; inbound and citations only', 'outreach_learner_sends by segment');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'AUTONOMY-PIVOT-1.4: build the practitioner target feed (named people at companies and organisations in outreach_audiences ranks 2 to 5) and answer the warm replies',
+ 'Charter pillar reach. Owner 2026-11-09: academics are not the audience; find people who can advance the autonomous-systems work and who see the background.' || char(10) ||
+ 'Evidence and ranking: outreach_audiences (this migration). The queue today is arXiv authors, mostly universities, now held by OUTREACH-PIVOT-1.' || char(10) ||
+ 'Doer: the code loop with qnfo-jobsearch generateWeeklyDossier (REACH-FOCUS-1.7) as the pattern. Each week research five named people at organisations in ranks 2 to 5 from public pages only (never guess an address; a role mailbox is refused by the learner), write the reason each is a fit from verified facts in jobsearch/facts.json, and queue one message per person with the opt-out line, within the 8/day and 3/day-per-domain caps and suppression.' || char(10) ||
+ 'First action (rank 1): the geeqchiqtech.com contact offered a meeting for mid-November on 2026-10-27 and no owner answer is recorded; a reply draft sits in the owner mailbox. Sending in the owner name stays an owner step.' || char(10) ||
+ 'IDENTITY-BOUND: sending a message and committing to a meeting in the owner name; the fleet prepares the draft and the calendar slot.' || char(10) ||
+ 'closing probe: SELECT 0 WHERE (SELECT COUNT(*) FROM outreach_log WHERE sent_at > datetime(''now'',''-14 days'') AND email NOT LIKE ''%.edu'' AND email NOT LIKE ''%.ac.%'') = 0',
+ 'session:autonomy-pivot', 'feature', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'AUTONOMY-PIVOT-1.4%');

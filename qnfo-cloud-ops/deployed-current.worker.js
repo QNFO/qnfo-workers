@@ -1988,6 +1988,12 @@ async function jobOutreach(env) {
         }
         await env.AUDIT.prepare("UPDATE outreach_queue SET email=?1, attempts=0, error=NULL WHERE id=?2").bind(email, r.id).run();
       }
+      if (pcfg.on && !pcfg.error && pivotAcademic(email)) {
+        /* OUTREACH-PIVOT-1: an address found by the lookup in this run is checked before it is mailed. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status = ?2, error = ?3 WHERE id = ?1").bind(r.id, PIVOT_HELD, PIVOT_FROM + "pending").run();
+        out.pivot_held_academic = (out.pivot_held_academic || 0) + 1;
+        continue;
+      }
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) {
         out.skipped_dupe++;
@@ -2210,7 +2216,8 @@ __name(jobOutreachLookup, "jobOutreachLookup");
 // OUTREACH-PIVOT-1 begin
 /* OUTREACH-PIVOT-1 (2026-11-09, pillar: reach; owner directive 2026-11-09): quantum-computing cold email to academics drew
    almost only declines and no collaboration, so first-contact mail now goes only to authors of AI autonomous-systems work
-   (agents, oversight, alignment, autonomous operation). Rows about any other topic are held as 'held-pivot-quantum' with their
+   (agents, oversight, alignment, autonomous operation), and never to a university or research-institute address (pivotAcademic).
+   Rows about any other topic, or to an academic address, are held as 'held-pivot-quantum' with their
    prior status in outreach_queue.error (reversible), and follow-ups to earlier first contacts are skipped. Switch:
    ops_config 'outreach_pivot_autonomy' (absent = on; 0/off/false restores the previous queue and releases the held rows).
    It changes who is mailed, never the 8/day, 3/day-per-domain, suppression or dedupe caps. */
@@ -2219,6 +2226,13 @@ var PIVOT_HELD = "held-pivot-quantum";
 var PIVOT_FROM = "OUTREACH-PIVOT-1 from=";
 var PIVOT_SCAN_ROWS = 400;
 var PIVOT_AUTONOMY_RX = /autonom|agentic|\bagents?\b|multi-?agent|ai[- ]safety|\balignment\b|oversight|corrigib|self-(improv|evolv|modif)|human[- ]in[- ]the[- ]loop|reward hacking|specification gaming|tool[- ]use|\bllm\b.*\b(operat|deploy|reliab)|ai governance|agent(ic)? (reliab|failure|collapse)/i;
+/* Academic recipients (owner directive 2026-11-09: "academics could give a shit"): a university or research-institute address is held
+   whatever the topic. A heuristic on the domain, not a lookup: edu/ac TLD forms, university/institute words and a few known hosts. */
+var PIVOT_ACADEMIC_RX = /(^|\.)(edu|ac)(\.[a-z]{2,3})?$|universit|(^|[.-])uni-|univ-|institut|college|polytech|hochschule|(^|\.)(cnrs|inria|mpg|epfl|ethz|cern)\.|(^|\.)tcd\.ie$/i;
+function pivotAcademic(email) {
+  const dom = String(email || "").trim().toLowerCase().split("@").pop() || "";
+  return !!dom && dom !== String(email || "").trim().toLowerCase() && PIVOT_ACADEMIC_RX.test(dom);
+}
 function pivotAllows(reason) {
   const t = String(reason || "").replace(/^\s*arxiv-radar widened:\s*/i, "");
   return PIVOT_AUTONOMY_RX.test(t);
@@ -2239,9 +2253,9 @@ async function pivotApply(env, on) {
   const out = { held: 0, released: 0 };
   try {
     if (on) {
-      const r = await env.AUDIT.prepare("SELECT id, reason, status FROM outreach_queue WHERE status IN ('pending','needs-email','needs-contact') ORDER BY created_at ASC LIMIT ?1").bind(PIVOT_SCAN_ROWS).all();
+      const r = await env.AUDIT.prepare("SELECT id, reason, status, email FROM outreach_queue WHERE status IN ('pending','needs-email','needs-contact') ORDER BY created_at ASC LIMIT ?1").bind(PIVOT_SCAN_ROWS).all();
       for (const row of r.results || []) {
-        if (pivotAllows(row.reason)) continue;
+        if (pivotAllows(row.reason) && !pivotAcademic(row.email)) continue;
         const u = await env.AUDIT.prepare("UPDATE outreach_queue SET status = ?2, error = ?3 WHERE id = ?1 AND status IN ('pending','needs-email','needs-contact')").bind(row.id, PIVOT_HELD, PIVOT_FROM + row.status).run();
         if (u && u.meta && Number(u.meta.changes) > 0) out.held++;
       }
