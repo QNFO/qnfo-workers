@@ -506,3 +506,18 @@ export function searchSkills(items, q, limit) {
   });
   return (toks.length ? rows.filter((r) => r.score > 0) : rows).sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name))).slice(0, cap);
 }
+
+// ROADMAP-1 approval-card (issue 7975): the owner card for one paused identity-bound step; its why carries the IDENTITY-BOUND line with the payload hash.
+export function approvalCardSpec(runId, action, callId, payloadJson) {
+  let h = 5381;
+  const t = String(payloadJson || "");
+  for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+  const hash = h.toString(16).padStart(8, "0");
+  return {
+    slug: "approval-" + runId,
+    title: "Approve " + action + " for run " + runId,
+    why: "IDENTITY-BOUND: " + action + " from qnfo-agents run " + runId + " (call " + callId + ", payload hash " + hash + ") is paused until the owner answers in /cmd (POST /approvals/" + runId + "/" + callId + ").",
+    default_in_effect: "rejected after 24 h",
+    action: "Answer the pending approval in /cmd"
+  };
+}
