@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.10.5-codeagent";
+var VERSION = "1.11.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1351,6 +1351,23 @@ async function llmRerank(env, kept) {
     return r.kept;
   } catch (e) { logErr("llm-rerank", e); return kept; }   // any failure: the deterministic order stands
 }
+// JOBSEARCH-TAILOR-2: the model judge reads the top postings of each run. Its matched facts tailor the stored resume, and a backed reading
+// (two or more matched facts, fit 60+) lifts a posting the title rubric capped at 49, so a role in your lane under a generic title is not buried.
+async function judgeTop(env, kept, n = 8) {
+  const out = kept.slice();
+  let done = 0, lifted = false;
+  for (const j of out) {
+    if (done >= n) break;
+    if (!j.desc || j.match.tier === "C") continue;
+    done++;
+    let r = null; try { r = await judgeJob(env, j); } catch (e) { logErr("judge-run", e); }
+    if (!r) continue;
+    j.match.judge = r;
+    j.match.why = (j.match.why || []).concat(["AI read: fit " + r.fit + " (" + r.matched_fact_ids.length + " of your facts match)"]);
+    if (r.fit >= 60 && r.matched_fact_ids.length >= 2 && j.match.score < r.fit) { j.match.score = Math.min(r.fit, 69); lifted = true; if (j.match.tier === "C") j.match.tier = "B"; }
+  }
+  return lifted ? out.sort((a, b) => b.match.score - a.match.score) : out;   // the AI reorder stands unless a posting was lifted
+}
 function artifactsFor(j) {
   const res = buildResume(j, j.match), note = buildNote(j, j.match);
   const v = verify(res, j).concat(verify(note, j));
@@ -1842,6 +1859,7 @@ async function run(env) {
     });
     if (suppressed) excl["already decided or already listed"] = suppressed;
     kept = await llmRerank(env, kept);   // reorder-only AI pass over the top 25, before the per-company cap
+    kept = await judgeTop(env, kept);
     const per = {}, seen = new Set(), picked = [], pickedStretch = [];
     for (const j of kept) {
       const dk = dedupeKey(j);
@@ -2368,7 +2386,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
