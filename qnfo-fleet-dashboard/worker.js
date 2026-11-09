@@ -4016,6 +4016,89 @@ function v3Html(env, pub) {
     '<div id="cbar"><form id="cf"><textarea id="ci" placeholder="Tell it what to do. It runs in a small container on Cloudflare." disabled></textarea><button class="pri" type="submit">Run</button></form></div>' +
     '<nav><a id="n-now" href="#now">Now</a><a id="n-readers" href="#readers">Readers</a><a id="n-code" href="#code">Code</a></nav>' + TURNSTILE_SCRIPT + '<script>' + V3_JS + '</script></body></html>';
 }
+// ==== RECALL-LOOP-1 (2026-11-09): the owner's research focus, asked by tap and shown as the fleet's focus ====
+// Owner 2026-11-09: "Even research, I could tell you by now what research is working and what's not ... we need to be much clearer on what we're
+// focusing our attention on ... you're not asking me for enough feedback. And that needs to be done via existing interfaces."
+// /focus shows the next question in qnfo-audit.owner_asks (one at a time, 2 to 4 buttons plus Not sure, no typing, no script: plain form buttons) and
+// the focus each answer set (v_owner_focus). The effect of an answer is in D1 triggers (migrations/2026-11-09-recall-loop.sql): a paused line's ideas
+// leave the research queue, a pushed line moves to the front. The companion (me.q08.org Today) shows the same questions. GET /api/focus is the open read.
+var FOCUS_STANCE = { push: "Do more", keep: "Keep as is", pause: "Paused" };
+async function focusState(env) {
+  const out = { schema_version: "owner-focus/v1", lines: [], open_asks: 0, answered_14d: 0, recent: [], unavailable: [] };
+  try { out.lines = await d1all(env.AUDIT, "SELECT line, label, stance, stance_at, waiting, paused_by_owner, published_30d, open_asks FROM v_owner_focus ORDER BY CASE stance WHEN 'push' THEN 0 WHEN 'keep' THEN 1 WHEN 'pause' THEN 3 ELSE 2 END, sort", []); } catch (e) { out.unavailable.push("v_owner_focus"); }
+  try {
+    const c = await d1all(env.AUDIT, "SELECT SUM(CASE WHEN answered_at IS NULL THEN 1 ELSE 0 END) AS open_n, SUM(CASE WHEN answered_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days') THEN 1 ELSE 0 END) AS answered_n FROM owner_asks WHERE plane != 'personal'", []);
+    out.open_asks = Number(c[0] && c[0].open_n || 0); out.answered_14d = Number(c[0] && c[0].answered_n || 0);
+    out.recent = await d1all(env.AUDIT, "SELECT question, answer_label, answered_at, answered_via FROM owner_asks WHERE answered_at IS NOT NULL AND plane != 'personal' ORDER BY answered_at DESC LIMIT 8", []);
+  } catch (e) { out.unavailable.push("owner_asks"); }
+  return out;
+}
+async function focusNextAsk(env) {
+  const r = await d1all(env.AUDIT, "SELECT id, plane, kind, question, cue, options_json FROM owner_asks WHERE answered_at IS NULL AND plane != 'personal' ORDER BY priority, id LIMIT 1", []);
+  if (!r[0]) return null;
+  let options = [];
+  try { options = JSON.parse(r[0].options_json || "[]"); } catch (e) { options = []; }
+  return Object.assign({}, r[0], { options });
+}
+// Records one tap. Returns {ok, label} or {ok:false, error}. Shared by the form post here; the companion writes the same row the same way.
+async function focusAnswer(env, id, key, via) {
+  const row = (await d1all(env.AUDIT, "SELECT id, options_json, answered_at FROM owner_asks WHERE id = ?1", [Number(id) || 0]))[0];
+  if (!row) return { ok: false, error: "That question is gone." };
+  let options = [];
+  try { options = JSON.parse(row.options_json || "[]"); } catch (e) { options = []; }
+  const opt = options.find(function(o) { return o && o.key === key; });
+  if (!opt) return { ok: false, error: "Pick one of the buttons." };
+  await env.AUDIT.prepare("UPDATE owner_asks SET answer = ?1, answer_label = ?2, answered_at = ?3, answered_via = ?4 WHERE id = ?5").bind(opt.key, opt.label, new Date().toISOString(), via, row.id).run();
+  return { ok: true, label: opt.label };
+}
+function focusPage(state, ask, authed, notice) {
+  const e = ownerEsc;
+  const o = ['<main style="max-width:680px;margin:0 auto;padding:18px 16px 48px"><h1>Research focus</h1><p class="mut">What the fleet works on next follows your answers. A paused line stops getting new papers; a line you push goes first. Every answer can be changed by the next one.</p>'];
+  if (notice) o.push("<p><strong>" + e(notice) + "</strong></p>");
+  if (ask) {
+    o.push('<section style="border:1px solid #CBD5DE;border-radius:14px;padding:16px;margin:16px 0"><p style="font-size:1.15rem;font-weight:650;margin:0 0 6px">' + e(ask.question) + "</p>" + (ask.cue ? '<p class="mut" style="margin:0 0 12px">' + e(ask.cue) + "</p>" : ""));
+    if (authed) {
+      o.push('<form method="post" action="/focus" style="display:flex;flex-wrap:wrap;gap:8px"><input type="hidden" name="id" value="' + e(String(ask.id)) + '">');
+      ask.options.forEach(function(op) { o.push('<button name="key" value="' + e(op.key) + '" style="font:inherit;padding:12px 16px;min-height:48px;border-radius:12px;border:1px solid #14213A;' + (op.key === "unsure" ? "background:transparent;color:inherit" : "background:#14213A;color:#fff") + '">' + e(op.label) + "</button>"); });
+      o.push("</form>");
+      if (state.open_asks > 1) o.push('<p class="mut" style="margin-top:8px">' + (state.open_asks - 1) + " more after this.</p>");
+    } else o.push('<p>Answer it on your phone: <a href="https://me.q08.org/companion">me.q08.org</a>, Today, Quick question. Or sign in here from <a href="/cmd">the command line</a>.</p>');
+    o.push("</section>");
+  } else o.push('<p class="mut">No questions waiting. The next ones come within a day.</p>');
+  o.push('<h2>Where attention goes now</h2><table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">Line</th><th style="text-align:left">Your call</th><th>Waiting</th><th>Held</th><th>Published 30 d</th></tr>');
+  state.lines.forEach(function(l) {
+    o.push('<tr style="border-top:1px solid #CBD5DE"><td>' + e(l.label) + "</td><td>" + (l.stance ? "<strong>" + e(FOCUS_STANCE[l.stance] || l.stance) + "</strong>" : '<span class="mut">not asked yet</span>') + '</td><td style="text-align:center">' + e(String(l.waiting)) + '</td><td style="text-align:center">' + e(String(l.paused_by_owner)) + '</td><td style="text-align:center">' + e(String(l.published_30d)) + "</td></tr>");
+  });
+  o.push("</table>");
+  if (state.recent.length) {
+    o.push("<h2>Your last answers</h2><ul>");
+    state.recent.forEach(function(r) { o.push("<li>" + e(r.question) + " <strong>" + e(r.answer_label || "") + '</strong> <span class="mut">' + e(String(r.answered_at || "").slice(0, 10)) + (r.answered_via ? ", " + e(r.answered_via) : "") + "</span></li>"); });
+    o.push("</ul>");
+  }
+  if (state.unavailable.length) o.push('<p class="mut">Not readable right now: ' + e(state.unavailable.join(", ")) + ".</p>");
+  o.push('<p class="mut"><a href="/api/focus">JSON</a></p></main>');
+  return o.join("");
+}
+async function focusRoute(request, env, path, owner) {
+  if (path !== "/focus" && path !== "/focus/" && path !== "/api/focus") return null;
+  if (!env.AUDIT) return json({ ok: false, error: "AUDIT binding absent" }, 503);
+  if (path === "/api/focus") return json(Object.assign({ ok: true }, await focusState(env)));
+  const authed = !!(owner && (owner.authed || owner.loop));
+  let notice = "";
+  if (request.method === "POST") {
+    if (!authed) return ownerHtml("Research focus", '<main style="max-width:680px;margin:0 auto;padding:18px 16px"><p>Sign in first.</p><p><a href="/focus">Back</a></p></main>', 401);
+    let form = null;
+    try { form = new URLSearchParams((await request.text()).slice(0, 2000)); } catch (e) { form = new URLSearchParams(); }
+    const res = await focusAnswer(env, form.get("id"), String(form.get("key") || ""), "fleet.qnfo.org/focus");
+    return new Response(null, { status: 303, headers: { Location: "/focus?done=" + encodeURIComponent(res.ok ? "Saved: " + res.label : res.error), "Cache-Control": "no-store" } });
+  }
+  if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
+  const u = new URL(request.url);
+  notice = String(u.searchParams.get("done") || "").slice(0, 120);
+  let ask = null;
+  try { ask = await focusNextAsk(env); } catch (e) { ask = null; }
+  return ownerHtml("Research focus", focusPage(await focusState(env), ask, authed, notice));
+}
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -4026,6 +4109,8 @@ async function handleRequest(request, env, ctx) {
   if (v3res) return v3res;
   if (path === "/ctl.js" || path === "/cmd" || path === "/cmd/" || path.indexOf("/api/cmd") === 0) return await cmdRoutes(request, env, ctx, path, owner);
   if (path.indexOf("/api/owner/") === 0) return await ownerRoutes(request, env, ctx, path, owner);
+  // RECALL-LOOP-1: the owner's research focus (tap questions and the focus they set).
+  if (path === "/focus" || path === "/focus/" || path === "/api/focus") return await focusRoute(request, env, path, owner);
   // OWNER-PAGE-1 (2026-10-01): private owner page. Reconciled with OWNER-RESPOND-1: the owner cookie OR LOOP_TOKEN opens it.
   // OWNER-EDIT-1 (2026-10-01, CLOUDFLARE-ONLY-HOST-1): /owner/edit/<key> is the owner's editor for owner_docs, so the Identity
   // doc is read AND changed on Cloudflare; its claude.ai copy is retired.
