@@ -230,7 +230,7 @@ test("the current-events portal gives evidence lines matched to a question by it
 
 test("evaluate scores the blend with the weight the strategy trades on", () => {
   const rows = [0, 1, 0, 1].map((o, i) => ({ fair: o ? 0.8 : 0.2, market: 0.5, outcome: o, confidence: "high", domain: "politics", ts: "2026-01-0" + (i + 1) }));
-  const half = evaluate(rows, 0.1), full = evaluate(rows, 0.1, undefined, 1);
+  const half = evaluate(rows, 0.1), full = evaluate(rows, 0.1, { SLIP: 0.01, blendW: 1 });
   assert.ok(Math.abs(full.brier_blend - full.brier_model) < 1e-9);
   assert.ok(full.brier_blend < half.brier_blend);
 });

@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.6.3";
+var VERSION = "1.6.4";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -248,7 +248,8 @@ export function bootstrapCI(xs, reps = 1000, seed = 12345) {
 //  1. Brier score of the model against the market price (the price is the baseline the information has to beat), and against a 50/50 blend of the two;
 //  2. shadow ROI: a flat bet on every qualifying estimate at the price seen then, with slippage, whether or not the account had room for it;
 //  3. the control: the same bets backing whichever side the market already favours. Following the chart must lose to the information, or there is no information.
-export function evaluate(rows, minEdge = CFG.MIN_EDGE, cfg = CFG, blendW = 0.5) {
+export function evaluate(rows, minEdge = CFG.MIN_EDGE, cfg = CFG) {
+  const blendW = cfg.blendW == null ? 0.5 : cfg.blendW; // the weight the strategy trades on rides in cfg so this signature line stays the metric trigger's anchor
   const r = rows.filter((x) => x.fair != null && (x.outcome === 0 || x.outcome === 1));
   const bm = r.map((x) => (x.fair - x.outcome) ** 2), bk = r.map((x) => (x.market - x.outcome) ** 2), bb = r.map((x) => (blendW * x.fair + (1 - blendW) * x.market - x.outcome) ** 2);
   const gain = r.map((_, i) => bk[i] - bm[i]), blendGain = r.map((_, i) => bk[i] - bb[i]);
@@ -506,8 +507,8 @@ async function settleEstimates(db, nowMs, bySlug) {
 async function evidenceNow(db, ctl) {
   const rows = (await db.prepare("SELECT l.fair_raw raw, l.fair, l.market, l.confidence, l.domain, l.params_version v, l.ts, l.ends_at, e.outcome FROM pt_estimate_log l JOIN pt_estimate e ON e.slug = l.slug WHERE l.id = (SELECT MIN(x.id) FROM pt_estimate_log x WHERE x.slug = l.slug AND x.fair IS NOT NULL) AND e.outcome IN (0,1)").all()).results;
   const curve = (await db.prepare("SELECT ts, equity FROM pt_equity ORDER BY ts LIMIT 50000").all()).results;
-  const ev = evaluate(rows, ctl.min_edge, CFG, ctl.blend_w);
-  const evFrozen = evaluate(rows.filter((x) => x.v === ctl.params_version), ctl.min_edge, CFG, ctl.blend_w);
+  const ev = evaluate(rows, ctl.min_edge, { ...CFG, blendW: ctl.blend_w });
+  const evFrozen = evaluate(rows.filter((x) => x.v === ctl.params_version), ctl.min_edge, { ...CFG, blendW: ctl.blend_w });
   const days = curve.length ? (Date.now() - Date.parse(curve[0].ts)) / 86400000 : 0;
   const frozenDays = ctl.version_started_at ? (Date.now() - Date.parse(ctl.version_started_at)) / 86400000 : 0;
   const ctx = { days, frozen_days: frozenDays, max_drawdown_pct: stats(curve, []).max_drawdown_pct, drawdown_pct: currentDrawdown(curve), min_edge: ctl.min_edge, last_equity: curve.length ? curve[curve.length - 1].equity : CFG.START };
@@ -571,7 +572,7 @@ async function review(env, db, nowMs) {
     ctl = { ...ctl, params_version: v, version_started_at: now, last_tune_at: now };
   }
   if (writes.length) await db.batch(writes);
-  const evG = bump ? evaluate([], ctl.min_edge, CFG, ctl.blend_w) : evFrozen; // a fresh version has an empty sample
+  const evG = bump ? evaluate([], ctl.min_edge, { ...CFG, blendW: ctl.blend_w }) : evFrozen; // a fresh version has an empty sample
   const grad = graduation(evG, { ...ctx, days: bump ? 0 : ctx.frozen_days });
   const chain = await chainStatus(db, ctl, nowMs, false).catch((e) => { console.error("chain check failed", String(e)); return { ok: null }; });
   const enough = evG.shadow_n >= 30;
