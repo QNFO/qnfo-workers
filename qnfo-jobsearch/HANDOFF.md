@@ -12,3 +12,6 @@ Order of work still open (each is a code change, not a report):
 7. Paste parsing: take the title from the page's `<h1>` or JSON-LD, not the first line.
 
 Rules: bump with `python scripts/worker_release.py bump qnfo-jobsearch`, keep the mirror identical, run `python scripts/narrative-prompt-guard.py`, never merge a draft the owner has not released.
+
+## JOBSEARCH-AUTONOMY-1 (1.13.0, 2026-11-09)
+The owner now targets autonomous and AI systems research; quantum is no longer a target. Positioning and wording come from `docs/BRAND.md` in rwnq8/resume. What changed: `fam_autonomy` (on by default), `fam_quantum` off by default, clusters `autonomous_systems` and `systems_modeling`, quantum feeds dropped, research headline H2 for AI postings, and the one-time live-bank migration `ensureAutonomyBrand` (meta key `autonomy_brand_v1`). Verify: `node qnfo-jobsearch/autonomy.test.mjs`; live, `GET /api/ledger` shows the new H2 and `GET /api/prefs` lists `fam_autonomy`.
