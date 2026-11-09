@@ -244,5 +244,9 @@ ok(C.D1_OBSERVE_DAYS == 0, "owner directive: no observation window")
 ok(C.delete_d1("jnl-audit", "a", "t") == 0 and emitted[-1]["ok"] and state["deleted"] == 1 and emitted[-1]["backup_id"] == 7, "deletes when every check passes", emitted[-1])
 ok(C.delete_d1("jnl-audit", "a", "t") == 0 and emitted[-1].get("already_absent") and state["deleted"] == 1, "a second run is a no-op")
 
+# PM-CONSOLIDATE-2 (issue 8798): the empty duplicate market-signals database is listed so its binding on q08-prediction-markets can be unbound
+ok(C.D1_RETIRE.get("q08-market-signals") == "55bd01c1-6acd-474a-913c-6490f18c315a", "q08-market-signals is on D1_RETIRE with its database id")
+ok(len(C.D1_RETIRE) == 2 and "jnl-audit" in C.D1_RETIRE, "the retire list holds exactly the two reviewed databases")
+
 print("%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

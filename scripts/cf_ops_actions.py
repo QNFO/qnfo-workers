@@ -1394,7 +1394,10 @@ def d1q(acct: str, token: str, sql: str, params: list, db: str = LIVING_PAPER_DB
     return True, res[0].get("results") or []
 
 
-D1_RETIRE = {"jnl-audit": "8be80cdb-979d-401f-b3ab-6a16869473ec"}
+# PM-CONSOLIDATE-2 (issue 8798): q08-market-signals held the same schema as q08-trades and is empty (0 market_signals, 0 trades, 0 whale_wallets on 2026-11-09);
+# the fleet graph (impact on binding:q08-prediction-markets.SIGNALS_DB) lists q08-prediction-markets as its only binder. Listed so unbind-d1 can drop that binding;
+# a delete-d1 still needs a d1-backup first.
+D1_RETIRE = {"jnl-audit": "8be80cdb-979d-401f-b3ab-6a16869473ec", "q08-market-signals": "55bd01c1-6acd-474a-913c-6490f18c315a"}
 AUDIT_DB = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 D1_PIECE = 16000
 # Owner directive 2026-10-05 ~18:15Z ("delete jnl-audit now, no 7-day wait"): no observation window. The backup must still be
