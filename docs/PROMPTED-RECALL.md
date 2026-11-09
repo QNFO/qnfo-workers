@@ -24,7 +24,18 @@ open-ended one. Reference implementation: `qnfo-jobsearch/worker.js` (`recallQue
 - Each answer changes behavior right away: a yes adds the fact and re-runs the search, so the next ranking and the
   next resume use it. A surface that asks and changes nothing is a defect.
 
-## Surfaces
-
-- Jobs app (qnfo-jobsearch): Apply shows the job's questions; "Questions about you" opens the queue.
-- Fleet dashboard overview (qnfo-fleet-dashboard RECALL-CARD-1): the most-asked question for the signed-in owner, Yes / No / Not sure, then how involved. Reached through the `SVC_JOBSEARCH` service binding with the loop token after the dashboard's own owner-session check; `GET /api/recall` and `POST /api/recall` on the dashboard are owner-only.
+## Surfaces and the shared queue (RECALL-LOOP-1, 2026-11-09)
+Owner: "you're not asking me for enough feedback. And that needs to be done via existing interfaces ... like with the jobs or like with the
+personal companion." Every surface the owner uses asks, and the questions meet in one place he already opens daily.
+- **Fleet questions** go into `qnfo-audit.owner_asks` (plane `research` | `jobs` | `fleet`; 2 to 4 options plus Not sure in `options_json`;
+  `UNIQUE(kind, ref)` so a producer can re-run). An answer is an `UPDATE owner_asks SET answer ...`; its effect is a D1 trigger, so every
+  surface that records the tap gets the same effect (migrations/2026-11-09-recall-loop.sql, tested by migrations/recall-loop.test.mjs).
+- **Research focus**: one question per research line (`research_lines`, `research_line_terms`) every 14 days, and weekly "which line matters
+  most". `owner_focus` holds the stance; pause holds the line's ideas out of the research queue (`owner_paused`), push lifts them to score 0.95,
+  keep releases them. fleet.qnfo.org/focus shows the questions and the focus they set; `GET /api/focus` is the open read.
+- **Companion** (me.q08.org, Today, "Quick question"): its own questions live in `personal-life.cmp_asks` (venues and interests that feed For
+  You, a weekly "did this help"), and the same card shows and answers the fleet questions. Personal answers never leave personal-life.
+- **Jobs** (jobs.q08.org): the per-application recall above.
+- **Fleet dashboard overview** (RECALL-CARD-1, qnfo-fleet-dashboard): the most-asked jobs question for the signed-in owner, Yes / No / Not sure, then how involved; reached through the `SVC_JOBSEARCH` service binding with the loop token after the dashboard's own owner-session check (`GET` and `POST /api/recall`, owner only).
+- A new surface adds a producer (rows in `owner_asks`, or its own plane table for personal data) and a trigger or handler that applies the
+  answer. Ask often: a surface that learns nothing from the owner for 14 days is a gap to fill, not a quiet success.
