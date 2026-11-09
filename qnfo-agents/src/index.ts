@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE } from "./lib.js";
+import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
@@ -347,7 +347,33 @@ async function codeModeTool(c: ToolCtx, direct: Record<string, any>) {
   return createCodeTool({ tools: fns as any, executor, description: "Run JavaScript in an isolated sandbox. Inside it, every fleet tool is an async function on `codemode` (codemode.repo_read_file, codemode.fleet_sql, codemode.ops_<qnfo-ops tool>, ...). Use it to chain several calls, loop over results or compute; return the value you want back." } as any);
 }
 
+// CMDLINE-HOOKS-1: cmd_hooks rows (qnfo-audit) are checked around every tool call, outside the model. A pre_tool block answers the call with a refusal naming the hook;
+// a notify hook records the call in cmd_hook_events. No table, no rows or a read failure means no hooks: a hook never fails a turn.
 async function allTools(c: ToolCtx) {
+  const tools = await allToolsRaw(c);
+  let hooks: any[] = [];
+  try { hooks = ((await c.env.AUDIT_DB.prepare("SELECT id, event, matcher, action, note FROM cmd_hooks WHERE enabled = 1 LIMIT 50").all()).results || []) as any[]; } catch (e) { return tools; }
+  if (!hooks.length) return tools;
+  const out: Record<string, any> = {};
+  for (const name of Object.keys(tools)) {
+    const t = tools[name];
+    if (!t || typeof t.execute !== "function") { out[name] = t; continue; }
+    out[name] = Object.assign({}, t, {
+      execute: async (...a: any[]) => {
+        const b = hookBlock(hooks, name);
+        const note = (event: string, h: any, detail: string) => c.env.AUDIT_DB.prepare("INSERT INTO cmd_hook_events (hook_id, event, tool, detail, created_ms) VALUES (?1, ?2, ?3, ?4, ?5)").bind(h.id, event, name, detail.slice(0, 300), Date.now()).run().catch((e: any) => logErr("hook-event", e));
+        if (b.blocked) { for (const h of hooksFor(hooks, "pre_tool", name)) if (h.id === b.hook) void note("pre_tool", h, "blocked"); return { ok: false, error: b.error }; }
+        for (const h of hooksFor(hooks, "pre_tool", name)) if (h.action === "notify") void note("pre_tool", h, "called");
+        const res = await t.execute(...a);
+        for (const h of hooksFor(hooks, "post_tool", name)) if (h.action === "notify") void note("post_tool", h, "done");
+        return res;
+      }
+    });
+  }
+  return out;
+}
+
+async function allToolsRaw(c: ToolCtx) {
   const direct = directTools(c);
   const tools: Record<string, any> = Object.assign({}, direct);
   if (c.lean) return tools;
