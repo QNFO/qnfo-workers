@@ -29,3 +29,8 @@ test("TRACKER-D1-CANON-2: the state sync no longer skips age-policy closes, and 
   assert.doesNotMatch(view, /age-policy/);
   assert.match(view, /'issue-state'/);
 });
+
+test("TRACKER-D1-CANON-2: a mirror that lost its label is still ours by its [#id] title prefix", () => {
+  assert.equal(agePolicyClosed({ ...aged, title: "[#1234] some issue", labels: [] }, now), false);
+  assert.equal(agePolicyClosed({ ...aged, title: "plain issue", labels: [] }, now), true);
+});

@@ -128,7 +128,7 @@ function issueCodeDelivery(body) {
 function agePolicyClosed(issue, nowMs) {
   var created = Date.parse(issue && issue.created_at);
   /* TRACKER-D1-CANON-1: a fleet-issue mirror is ours and D1 is canonical; the age policy no longer closes mirrors, so a mirror closed that way is reopened. */
-  if (issue && (issue.labels || []).some(function (label) { return String(label && label.name || label) === "fleet-issue"; })) return false;
+  if (issue && (((issue.labels || []).some(function (label) { return String(label && label.name || label) === "fleet-issue"; })) || /^\[#\d+\]/.test(String(issue.title || "")))) return false;
   return !!issue && !issue.pull_request && issue.state === "closed" && issue.state_reason === "not_planned"
     && Number.isFinite(created) && nowMs - created > 7 * 24 * 60 * 60000;
 }
