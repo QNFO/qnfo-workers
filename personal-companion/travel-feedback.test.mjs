@@ -69,6 +69,7 @@ console.log("\n[reasons]");
   ok("a reason counts once", (await addReason(db, h.feedback_id, "too_touristy", NOW)).changed === false && raw.prepare("SELECT weight FROM travel_taste WHERE tag = 'touristy'").get().weight === after);
   const l = await applyTap(db, { target_type: "pick", target_id: PK1, signal: "love" }, NOW);
   ok("a reason does not go with a love", (await addReason(db, l.feedback_id, "too_far", NOW)).ok === false);
+  ok("not my vibe lowers vibe tags and too far lowers areas", reasonDeltas("not_my_vibe", ["cozy", "bistro", "area:x"]).cozy === -1 && reasonDeltas("too_far", ["cozy", "area:x"])["area:x"] === -1 && !("cozy" in reasonDeltas("too_far", ["cozy"])));
   ok("reasonDeltas never touches unrelated tags", Object.keys(reasonDeltas("too_pricey", ["cozy"])).join() === "pricey");
 }
 
@@ -174,6 +175,7 @@ console.log("\n[client script]");
     ok("page script has no template-literal hazards", !/\$\{/.test(js[1]));
     let err = null; try { new Function(js[1]); } catch (e) { err = String(e); }
     ok("page script parses", err === null, err);
+    ok("something else asks for fresh picks and undo survives a refresh", /signal === "instead"\) api\("\/travel\/api\/picks"/.test(js[1]) && /let lastShift/.test(js[1]));
     ok("page script posts every tap route", ["/travel/api/tap", "/travel/api/tap-reason", "/travel/api/taste-pair", "/travel/api/shift"].every((p) => js[1].includes(p)));
   }
   ok("routes exist for tap, reason, pair, shift and the bearer today card", ["/travel/api/tap", "/travel/api/tap-reason", "/travel/api/taste-pair", "/travel/api/shift", "/api/travel/today"].every((p) => src.includes(p)));

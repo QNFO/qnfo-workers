@@ -2436,15 +2436,21 @@ function tapRow(type, id, done) {
   TAP_BUTTONS.forEach((x) => row.appendChild(btn(x[0], () => tap(x[1], x[0]), "small")));
   return row;
 }
+let lastShift = null;
 function renderBanner(t) {
   const b = $("#banner"); b.innerHTML = "";
+  if (lastShift) {
+    const u = el("div", "card"); u.appendChild(el("div", "", "Plan moved by " + lastShift.d + " days."));
+    u.appendChild(btn("Undo", async () => { const z = lastShift; lastShift = null; await api("/travel/api/shift", { days: z.undo }); loadTrip(); }, "small"));
+    b.appendChild(u);
+  }
   if (!t.banner) return;
   const c = el("div", "card warn"); c.appendChild(el("strong", "", "Plan not booked"));
   c.appendChild(el("div", "", t.banner.text));
   const row = el("div", "row");
   for (const d of t.banner.shifts) row.appendChild(btn("Move plan later by " + (d === 7 ? "1 week" : d === 14 ? "2 weeks" : "1 month"), async () => {
     const r = await api("/travel/api/shift", { days: d });
-    if (r && r.ok) { b.innerHTML = ""; const u = el("div", "card"); u.appendChild(el("div", "", "Plan moved by " + d + " days.")); u.appendChild(btn("Undo", async () => { await api("/travel/api/shift", { days: r.undo_days }); loadTrip(); }, "small")); b.appendChild(u); loadTrip(); }
+    if (r && r.ok) { lastShift = { d: d, undo: r.undo_days }; loadTrip(); }
     else row.appendChild(el("span", "flag", (r && r.error) || "Could not move the plan."));
   }, "small"));
   c.appendChild(row); b.appendChild(c);
@@ -2487,7 +2493,7 @@ function pickRow(label, list, p, q) {
       if (x.area) li.appendChild(el("span", "muted", " · " + x.area));
       if (x.why) li.appendChild(el("div", "muted", x.why));
       if (x.why_rank) li.appendChild(el("div", x.wildcard ? "wild" : "muted", x.why_rank));
-      li.appendChild(tapRow("pick", x.id, (signal) => { if (signal === "hate" || signal === "instead") li.remove(); }));
+      li.appendChild(tapRow("pick", x.id, (signal) => { if (signal === "hate" || signal === "instead") li.remove(); if (signal === "instead") api("/travel/api/picks", { stop: p.id }).then(function (z) { if (z && z.ok) loadTrip(); }).catch(function (e) { console.error("tap-instead", e && e.message); }); }));
       ul.appendChild(li);
     }
     r.appendChild(ul);
@@ -3426,8 +3432,8 @@ function reasonDeltas(reason, tags) {
   const d = {};
   if (reason === "too_touristy") d.touristy = -1.5;
   else if (reason === "too_pricey") d.pricey = -1.5;
-  else if (reason === "too_far") for (const t of tags || []) if (t.startsWith("area:")) d[t] = -1;
-  else if (reason === "not_my_vibe") for (const t of tags || []) if (Object.prototype.hasOwnProperty.call(VIBE_LEXICON, t) && t !== "touristy" && t !== "pricey") d[t] = -1;
+  else if (reason === "too_far") { for (const t of tags || []) if (t.startsWith("area:")) d[t] = -1; }
+  else if (reason === "not_my_vibe") { for (const t of tags || []) if (Object.prototype.hasOwnProperty.call(VIBE_LEXICON, t) && t !== "touristy" && t !== "pricey") d[t] = -1; }
   return d;
 }
 

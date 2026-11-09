@@ -3649,7 +3649,7 @@ async function tripCard(db, day) {
   const cur = stops.find((x) => x.start_date <= day && day < x.end_date) || null, next = stops.find((x) => x.start_date > day) || null, stop = cur || next;
   if (!stop) return null;
   const nights = Math.max(0, Math.round((Date.parse(stop.end_date) - Date.parse(stop.start_date)) / 86400000));
-  const lodging = await one(db, "SELECT COUNT(*) AS n FROM events WHERE category = 'lodging' AND start_date < ? AND end_date > ?", stop.end_date, stop.start_date).catch(() => null);
+  const lodging = await one(db, "SELECT COUNT(*) AS n FROM events WHERE category = 'lodging' AND lower(COALESCE(city, '')) = lower(?) AND start_date < ? AND end_date > ?", stop.city, stop.end_date, stop.start_date).catch(() => null);
   const booked = lodging ? Number(lodging.n) > 0 : false;
   const toStart = Math.round((Date.parse(stop.start_date) - Date.parse(day)) / 86400000);
   return {

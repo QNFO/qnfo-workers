@@ -15,13 +15,16 @@ const D = wrap(db);
 
 ok((await tripCard(D, "2026-11-09").catch(() => "threw")) === "threw", "a missing table throws, which today() turns into a null card");
 db.exec("CREATE TABLE travel_stops (id TEXT PRIMARY KEY, trip TEXT, city TEXT, country TEXT, start_date TEXT, end_date TEXT)");
-db.exec("CREATE TABLE events (id TEXT PRIMARY KEY, category TEXT, title TEXT, start_date TEXT, end_date TEXT)");
+db.exec("CREATE TABLE events (id TEXT PRIMARY KEY, category TEXT, title TEXT, city TEXT, start_date TEXT, end_date TEXT)");
 ok((await tripCard(D, "2026-11-09")) === null, "no stops means no card");
 db.prepare("INSERT INTO travel_stops VALUES ('s1','next','Delhi','IN','2026-11-12','2026-11-16')").run();
 db.prepare("INSERT INTO travel_stops VALUES ('s2','next','Pokhara','NP','2026-11-16','2026-11-22')").run();
 let c = await tripCard(D, "2026-11-09");
 ok(c && c.mode === "countdown" && c.days_to_start === 3 && c.city === "Delhi" && c.booked === false && /No stay booked yet/.test(c.line), "countdown with nothing booked", c);
-db.prepare("INSERT INTO events VALUES ('e1','lodging','Hotel','2026-11-12','2026-11-16')").run();
+db.prepare("INSERT INTO events VALUES ('e0','lodging','Hotel','London','2026-11-12','2026-11-16')").run();
+c = await tripCard(D, "2026-11-09");
+ok(c.booked === false, "a stay in another city does not mark the stop booked", c);
+db.prepare("INSERT INTO events VALUES ('e1','lodging','Hotel','delhi','2026-11-12','2026-11-16')").run();
 c = await tripCard(D, "2026-11-09");
 ok(c.booked === true && !/No stay booked/.test(c.line), "a covering lodging row marks it booked", c);
 c = await tripCard(D, "2026-11-17");
