@@ -35,6 +35,16 @@ const rate = W.__AI_ATTR_RATES["@cf/meta/llama-3.3-70b-instruct-fp8-fast"];
 ok(llama && llama.calls === 2 && llama.out_tok === 500, "both llama calls are counted; the streamed one adds no output tokens");
 ok(llama && Math.abs(llama.neurons - ((1000 * rate[0] + 500 * rate[1]) / 1e6 + (llama.in_tok - 1000) * rate[0] / 1e6)) < 1e-6, "neurons follow the published per-model rates");
 ok(boom && boom.calls === 1 && boom.errors === 1, "a failed call is counted as an error");
+// AI-METER-STREAM-1: a fake stream of known length books the expected out_tok and neurons as one 'binding-stream' row.
+{
+  const W2 = vm.runInContext(src.slice(a, e + 2) + "\n;({ __aiStreamOutBook });", vm.createContext({ Proxy, Reflect, Object, JSON, Date, Number, String, Math, console }));
+  const m = "@cf/deepseek-ai/deepseek-v4-flash-0731", rt = W.__AI_ATTR_RATES[m];
+  const booked = await W2.__aiStreamOutBook({ QNFO_AUDIT: shim }, "qnfo-ai-search", m, "x".repeat(400));
+  const row = db.prepare("SELECT calls, in_tok, out_tok, neurons FROM ai_call_counters WHERE purpose = 'binding-stream' AND model = ?").get(m);
+  ok(booked === 100 && row && row.out_tok === 100 && row.calls === 0 && row.in_tok === 0 && Math.abs(row.neurons - 100 * rt[1] / 1e6) < 1e-9, "400 streamed chars book 100 out_tok and the model output-rate neurons");
+  ok(await W2.__aiStreamOutBook({ QNFO_AUDIT: shim }, "qnfo-ai-search", m, "") === 0 && await W2.__aiStreamOutBook({}, "w", m, "abc") === 0, "empty text or no db books nothing and never throws");
+}
+ok(/__aiStreamOutBook\(env, "qnfo-ai-search", model, text\)/.test(src), "ask() books the streamed output after the stream is read");
 ok((src.match(/__aiAttrEnv\(env, "qnfo-ai-search", "AI", "QNFO_AUDIT"\)/g) || []).length === 2, "fetch and scheduled both wrap env at the entry");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
