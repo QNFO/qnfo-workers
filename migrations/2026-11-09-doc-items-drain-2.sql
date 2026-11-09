@@ -29,4 +29,4 @@ FROM agent_issues a WHERE a.id IN (1002688,1002687,1002650,1002649,1002639,10026
 ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence;
 UPDATE agent_issues SET status='closed', close_channel='session:doc-items-sweep', updated_at=CAST(strftime('%s','now') AS INTEGER)*1000
 WHERE id IN (1002688,1002687,1002650,1002649,1002639,1002638,1002636,1002635,1002634,1002633,1002632,1002631,1002620,1002619,1002618,1002617,1002616,1002614,1002613,1002611,1002602,1002601,1002600,1002597,1002595,1002594,1002544,1002543,1002593,1002615,1002612) AND status='open';
-UPDATE roadmap_implementation SET status='verified', verified_at=datetime('now') WHERE id IN (5263,4130) AND status<>'verified';
+UPDATE roadmap_implementation SET status='verified', verified_at=datetime('now'), artifact_ref='migrations/2026-11-09-doc-items-drain-2.sql', evidence='DOC-ITEMS-SWEEP-2 (2026-11-09): items read against the code and closed in this migration; see the migration header' WHERE id IN (5263,4130) AND status<>'verified';

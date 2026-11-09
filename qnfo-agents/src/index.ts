@@ -36,10 +36,10 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills } from "./lib.js";
+import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
-import { withLifecycle, sessionBudgetStep, sessionTurnRoute, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
+import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
 declare var VERSION: string;
@@ -613,6 +613,21 @@ export class FleetCodeAgent extends Agent<Env, State> {
     await this.env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'awaiting_approval' WHERE id = ?1 AND caller = ?2 AND status = 'running'")
       .bind(row.id, row.caller).run();
     await this.recordApproval(row.id, String(input.action), "awaiting", { callId: String(call.callId || "") });
+    await this.approvalCard(approvalCardSpec(row.id, String(input.action), String(call.callId || ""), JSON.stringify(input)));
+  }
+
+  // ROADMAP-1 approval-card (issue 7975): a paused approval raises its IDENTITY-BOUND owner card; respondToApproval resolves it.
+  private async approvalCard(spec: any) {
+    try {
+      await this.env.AUDIT_DB.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, source) VALUES (?1, ?2, ?3, ?4, ?5, '/cmd', 'normal', 'qnfo-agents')")
+        .bind(spec.slug, spec.title, spec.why, spec.default_in_effect, spec.action).run();
+    } catch (e) { logErr("approval-card", e); }
+  }
+  private async resolveApprovalCard(runId: string) {
+    try {
+      await this.env.AUDIT_DB.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = 'answered' WHERE slug = ?1 AND source = 'qnfo-agents' AND status = 'open'")
+        .bind("approval-" + runId).run();
+    } catch (e) { logErr("approval-card-resolve", e); }
   }
 
   private async finishApproved(id: string, action: string, row: any, result: any) {
@@ -674,6 +689,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
     await this.env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'running' WHERE id = ?1 AND caller = ?2 AND status = 'awaiting_approval'")
       .bind(id, caller).run();
     await this.recordApproval(id, action, approved ? "approved" : "rejected", { decidedBy: decidedBy || caller });
+    await this.resolveApprovalCard(id);
     try {
       await workspace.runtime.respond(call.id, call.callId, { approved });
     } catch (e) {
@@ -1056,23 +1072,39 @@ export class CodeSession extends Agent<Env, State> {
       const model = routed.model;
       this.event("budget", { turn, state: step.state, neurons_used: Number(session.neurons_used) || 0, neuron_budget: Number(session.neuron_budget) || 0, route: routeId, max_steps: step.maxSteps, escalated: Number(row.escalate) === 1 && routeId !== DEFAULT_MODEL });
       const tools = await allTools({ env: this.env, scope: session.scope, caller: session.caller, agent: null, proposals: [], gate });
-      const out: any = streamText({
-        model, system: gate ? CODE_SESSION_SYSTEM + "\n" + SANDBOX_NOTE : CODE_SESSION_SYSTEM, prompt, tools, stopWhen: stepCountIs(step.maxSteps),
-        prepareStep: ({ messages }: any) => ({ messages: compactMessages(messages, step.stubChars) }),
-        timeout: { totalMs: TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS }
-      } as any);
-      for await (const part of out.fullStream) {
-        if (part.type === "text-delta") {
-          answer += String(part.delta || "");
-          this.event("text", { turn, delta: String(part.delta || "") });
-        } else if (part.type === "tool-input-available") {
-          steps++;
-          this.event("tool", { turn, phase: "call", name: part.toolName, input: clip(part.input, 1600) });
-        } else if (part.type === "tool-result") {
-          this.event("tool", { turn, phase: "result", name: part.toolName, output: clip(part.output, 2600) });
-        } else if (part.type === "tool-error") {
-          this.event("tool", { turn, phase: "error", name: part.toolName, error: errText(part.error) });
+      const runStream = async (m: any) => {
+        answer = "";
+        const out: any = streamText({
+          model: m, system: gate ? CODE_SESSION_SYSTEM + "\n" + SANDBOX_NOTE : CODE_SESSION_SYSTEM, prompt, tools, stopWhen: stepCountIs(step.maxSteps),
+          prepareStep: ({ messages }: any) => ({ messages: compactMessages(messages, step.stubChars) }),
+          timeout: { totalMs: TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS }
+        } as any);
+        for await (const part of out.fullStream) {
+          if (part.type === "text-delta") {
+            answer += String(part.delta || "");
+            this.event("text", { turn, delta: String(part.delta || "") });
+          } else if (part.type === "tool-input-available") {
+            steps++;
+            this.event("tool", { turn, phase: "call", name: part.toolName, input: clip(part.input, 1600) });
+          } else if (part.type === "tool-result") {
+            this.event("tool", { turn, phase: "result", name: part.toolName, output: clip(part.output, 2600) });
+          } else if (part.type === "tool-error") {
+            this.event("tool", { turn, phase: "error", name: part.toolName, error: errText(part.error) });
+          }
         }
+        return out;
+      };
+      let out: any = await runStream(model);
+      // ROADMAP-1 code-session-escalate (issue 7976): a turn that ends unanswered escalates once to the premium route while the budget is ok.
+      if (shouldEscalateUnanswered(pickAnswer(answer, await out.steps).answered, Number(row.escalate) === 1, step)) {
+        try {
+          const u1 = await out.totalUsage;
+          await meter(this.env, routeId, { i: Number(u1 && u1.inputTokens) || 0, o: Number(u1 && u1.outputTokens) || 0, n: steps, c: 0 });
+          const r2 = await modelFor(this.env, "code-session", this.name + "-t" + turn + "-esc", CODE_SESSION_ROUTE_ESCALATE);
+          this.event("escalate", { turn, reason: "unanswered", from: routeId, to: r2.id });
+          routeId = r2.id; modelId = routeId;
+          out = await runStream(r2.model);
+        } catch (e) { logErr("escalate-unanswered", e); }
       }
       const usage = await out.totalUsage;
       // RM-DSH-CACHE-1: per-step cache telemetry for a CodeSession too (cf_agent_step_usage, keyed by session and turn).
