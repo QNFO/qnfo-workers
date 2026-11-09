@@ -171,6 +171,15 @@ export function workflowPushPaths(root) {
   const dir = join(root, ".github", "workflows");
   const out = [];
   if (!existsSync(dir)) return out;
+  const artifactFile = join(root, "scripts", "push_artifact.sh");
+  const headFile = join(root, "scripts", "push_head.sh");
+  const executable = (p) => existsSync(p) ? readFileSync(p, "utf8").split("\n").filter(l => !/^\s*#/.test(l)).join("\n") : "";
+  const artifact = executable(artifactFile), head = executable(headFile);
+  const artifactMode = /\n\s*artifact\)([\s\S]*?)\n\s*code\)/.exec(head)?.[1] || "";
+  const artifactPushes = artifactMode.split("\n").filter(l => /\bgit\s+push\b/.test(l));
+  const safeArtifact = /exec bash "\$\(dirname "\$0"\)\/push_head\.sh" artifact "\$@"/.test(artifact)
+    && !/\bgit\s+push\b/.test(artifact) && artifactPushes.length > 0
+    && artifactPushes.every(l => /HEAD:refs\/heads\/fleet-artifacts\s*$/.test(l));
   for (const f of readdirSync(dir).filter((x) => /\.ya?ml$/.test(x)).sort()) {
     const lines = readFileSync(join(dir, f), "utf8").split("\n");
     for (let i = 0; i < lines.length; i++) {
@@ -183,7 +192,10 @@ export function workflowPushPaths(root) {
       }
       // MAIN-RULESET-STAGE0-1 (issue 100168): canonical-deploy status commits and the automatic canary revert push through these
       // scripts, so a workflow that never writes `git push ... main` itself still pushes to main as github-actions[bot].
-      if (/(push_artifact\.sh|canary_revert\.py)/.test(line)) {
+      const artifactCall = /push_artifact\.sh/.test(line);
+      const canaryCall = /canary_revert\.py/.test(line);
+      // Only supported, explicit modes are exempt. Unknown helper routes remain blocking.
+      if ((artifactCall && !safeArtifact) || (canaryCall && !/--(?:selftest|pr-only)\b/.test(line))) {
         out.push({ workflow: f, line: i + 1, snippet: line.trim() });
       }
     }

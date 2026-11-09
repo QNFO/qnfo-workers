@@ -211,7 +211,7 @@ const pp = workflowPushPaths(pushRoot);
 ok(pp.length === 1 && pp[0].workflow === "p.yml" && pp[0].line === 9 && /^git push origin HEAD:main$/.test(pp[0].snippet), "only the real push to main is a push path; comment lines (also indented and inside a run block) and a push to another branch are not", pp);
 rmSync(pushRoot, { recursive: true, force: true });
 const realPaths = workflowPushPaths(repoRoot);
-ok(realPaths.length > 0 && realPaths.every((x) => !/^\s*#/.test(x.snippet)), "on this repository no listed push path is a comment line", realPaths.filter((x) => /^\s*#/.test(x.snippet)));
+ok(realPaths.length === 0, "verified artifact routes and PR-only canaries do not push to main", realPaths);
 
 // ---- refusals ----
 g = fakeGitHub({ admin403: true });

@@ -207,7 +207,7 @@ jobs:
           git config user.email "bot@qnfo.org"
           MODE=""
           if [ "${EVENT_NAME}" != "push" ]; then MODE="--no-revert"; echo "dispatched deploy, verify-only canary"; fi
-          python3 scripts/canary_revert.py --targets /tmp/canary-targets.txt --pushed "$GITHUB_SHA" --canary-min 6 --poll-sec 20 $MODE
+          python3 scripts/canary_revert.py --pr-only --targets /tmp/canary-targets.txt --pushed "$GITHUB_SHA" --canary-min 6 --poll-sec 20 $MODE
 
       - name: Record the deploy in D1 cloud_ops_events
         if: always()

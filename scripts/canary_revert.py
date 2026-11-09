@@ -390,24 +390,25 @@ def revert_via_pr(sha, title, body, bumped, refusal):
     ok, url = create_pr(branch, title, body + "\n\nOpened by scripts/canary_revert.py because a direct push to main was refused (" + refusal.splitlines()[0][:120] + "). The lane merges it when its checks are green; the push to main that merge makes deploys the reverted code.")
     if not ok:
         return {"error": "revert pull request not opened: " + url, "sha": sha, "branch": branch}
-    return {"pr": url, "branch": branch, "sha": sha, "bumped": bumped, "title": title, "via": "pull request (direct push refused)"}
+    via = "pull request (PR-only policy)" if refusal == "PR-only release policy" else "pull request (direct push refused)"
+    return {"pr": url, "branch": branch, "sha": sha, "bumped": bumped, "title": title, "via": via}
 
 
-def revert_push(pushed, failed, dry, why=None, bystanders=None):
+def revert_push(pushed, failed, dry, why=None, bystanders=None, pr_only=False):
     """failed: [(worker, dir, bad_version)]. Reverts the pushed commit on the current checkout, re-bumps each failed worker's
-    VERSION above the bad one, mirrors it, commits, pushes to main and dispatches the redeploy. Returns a dict with sha or
+    VERSION above the bad one, mirrors it and commits. PR-only mode publishes a revert PR; legacy mode tries main and dispatches the redeploy. Returns a dict with sha or
     refused/error; a git failure (a conflict, a lost remote) is an error, never an exception, so the issue is still filed.
     bystanders: {worker: dir} of the other workers in the push; those whose files the revert changed are redeployed too (DEPLOY-PROBES-1:
     a revert of a multi-worker pull request used to leave the unfailed workers live on code that main no longer carries)."""
     try:
-        return _revert_push(pushed, failed, dry, why, bystanders)
+        return _revert_push(pushed, failed, dry, why, bystanders, pr_only)
     except (subprocess.CalledProcessError, OSError) as e:
         git(["revert", "--abort"], check=False)
         err = getattr(e, "stderr", None) or getattr(e, "stdout", None) or str(e)
         return {"error": "git failed: " + str(err).strip()[:300]}
 
 
-def _revert_push(pushed, failed, dry, why=None, bystanders=None):
+def _revert_push(pushed, failed, dry, why=None, bystanders=None, pr_only=False):
     message = git(["log", "-1", "--format=%B", pushed])
     if is_revert_commit(message):
         return {"refused": "the pushed commit is itself a revert; one level only"}
@@ -447,6 +448,8 @@ def _revert_push(pushed, failed, dry, why=None, bystanders=None):
     body = "\n".join(revert_line(b, (why or {}).get(b[0])) for b in bumped)
     git(["commit", "-q", "-m", title + "\n\n" + body + "\n\nAutomatic revert by canonical-deploy.yml (scripts/canary_revert.py). The failed pull request stays as it is; its author fixes it in a new pull request."])
     sha = git(["rev-parse", "HEAD"]).strip()
+    if pr_only:
+        return revert_via_pr(sha, title, body, bumped, "PR-only release policy")
     last = None
     for attempt in range(3):
         try:
@@ -693,6 +696,7 @@ def main(argv=None):
     ap.add_argument("--canary-min", type=int, default=8)
     ap.add_argument("--poll-sec", type=int, default=20)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--pr-only", action="store_true", help="publish a revert PR without attempting a direct push to main")
     ap.add_argument("--no-revert", action="store_true", help="verify only: file the issue on a miss, never revert (the dispatched redeploy of a revert runs this way)")
     ap.add_argument("--functional", choices=["revert", "observe", "off"], default=None, help="what a failed functional step does (default revert; $CANARY_FUNCTIONAL overrides)")
     ap.add_argument("--functional-tries", type=int, default=4)
@@ -865,7 +869,8 @@ def run(a):
     if a.no_revert:
         outcome = {"refused": "verify-only run (workflow_dispatch): the canary files what it saw and reverts nothing"}
     else:
-        outcome = revert_push(a.pushed, failed, a.dry_run, why, {w: p.split("/")[0] for w, p in targets if w not in [f[0] for f in failed]})
+        options = {"pr_only": True} if getattr(a, "pr_only", False) else {}
+        outcome = revert_push(a.pushed, failed, a.dry_run, why, {w: p.split("/")[0] for w, p in targets if w not in [f[0] for f in failed]}, **options)
     emit("::warning::canary: " + ", ".join(w for w, _, _ in failed) + " did not arrive or failed the functional step; revert outcome " + json.dumps(outcome)[:300])
     if a.dry_run:
         return 0

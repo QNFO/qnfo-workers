@@ -302,7 +302,7 @@ jobs:
           if [ "${EVENT_NAME}" != "push" ]; then MODE="--no-revert"; echo "dispatched deploy: verify-only canary"; fi
           # DEPLOY-PROBES-1: --baseline-file is what the step before the deploy measured; the canary now checks every worker in the push that declares
           # <worker>/probes.json (HTTP routes and D1 statements), not only the control plane.
-          python3 scripts/canary_revert.py --targets /tmp/targets.txt --pushed "$GITHUB_SHA" --canary-min 8 --poll-sec 20 --baseline-file /tmp/probe_baseline.json $MODE
+          python3 scripts/canary_revert.py --pr-only --targets /tmp/targets.txt --pushed "$GITHUB_SHA" --canary-min 8 --poll-sec 20 --baseline-file /tmp/probe_baseline.json $MODE
 
       # COMPAT-VERIFY-RUNNER-1: a compatibility date that did not verify and could not be put back leaves a worker at an
       # unverified date (qnfo-ops files COMPAT-RESTORE-FAILED-1 when its restore upload failed); that, and only that, fails the
