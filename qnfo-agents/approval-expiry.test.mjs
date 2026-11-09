@@ -21,4 +21,5 @@ test("the sweep answers through respondToApproval as rejected and resolves the c
   assert.match(src, /resolveApprovalCard\(id, expiry \? APPROVAL_EXPIRY_NOTE : "answered"\)/);
   assert.match(src, /WHERE status = 'awaiting' AND created_ms < \?1/);
   assert.match(src, /ctx\.waitUntil\(expireApprovals\(env\)/);
+  assert.ok(src.includes("default rejected after 24h"), "issue 9761 code-probe literal stays in src/index.ts");
 });
