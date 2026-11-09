@@ -22,6 +22,18 @@
         "\"mode\":\"paper\"",
         "\"graduation\""
       ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/whitepaper",
+      "contains": [
+        "Where Do LLM Forecasters Have an Edge Over Prediction Markets?"
+      ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/api/track-record",
+      "contains": [
+        "how_to_verify"
+      ]
     }
   ]
 }
