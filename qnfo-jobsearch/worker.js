@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.12.5-codeagent";
+var VERSION = "1.13.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -357,7 +357,8 @@ let ensured = false;
 async function ensure(env) {
   if (ensured) return;
   for (const q of DDL) await env.JOBS_DB.prepare(q).run();
-  try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // why a posting was rejected: the search learns from it
+  try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
+  try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_matches ADD COLUMN gaps_json TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // PROMPTED-RECALL-1: what the posting asks for that the CV cannot back   // why a posting was rejected: the search learns from it
   ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
 }
 // REACH-FOCUS-1.7: weekly dossier of five named people/organizations
@@ -1902,10 +1903,10 @@ async function run(env) {
       const a = artifactsFor(j);
       if (!a.verified) blocked++;
       stmts.push(env.JOBS_DB.prepare(
-        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status)
-         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval')
-         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7`
-      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note));
+        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json)
+         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16)
+         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7, gaps_json=?16`
+      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note, JSON.stringify(recallGaps(j))));
     }
     // feed health: success resets the streak, failure extends it (detector fm-jobsearch-feed-down reads 3 in a row)
     for (const f of feedResults) {
@@ -2096,6 +2097,125 @@ async function cvState(env) {
     questions: QUESTIONS.map((q) => { const a = (b.answers || {})[q.id]; return { ...q, answer: a ? a.answer : null, facts: a ? a.facts.map((i) => byId[i]).filter(Boolean) : [] }; }),
   };
 }
+// ------------------------------------------------------------------ PROMPTED-RECALL-1 (owner directive 2026-11-09)
+// Owner: "If you want to know if I've done something, ask me. And if I say I have, put it in my resume. Don't make me type." Prompted recall runs before
+// every application: each requirement a posting names that the CV cannot back becomes a yes / no / not sure question with a concrete cue (the posting's
+// own sentence), then two taps (where, how involved). A yes becomes a verified fact in the owner's own words-by-choice: the exact sentence is shown on the
+// button before it is tapped, so nothing reaches a resume that the owner did not confirm. A no is never asked again; not sure comes back after 14 days.
+// Answers live in the CV bank (b.recall), so they are versioned with it (jobsearch_bank_history) and every later resume uses them.
+// The pattern every fleet surface reuses (question shape, storage, loop) is docs/PROMPTED-RECALL.md.
+const RECALL_UNSURE_DAYS = 14;
+const RECALL_SEED = [
+  { id: "network_model", what: "transportation network models (roads or transit as nodes and links, with traffic or riders assigned to them)", cue: "Think of regional travel models, scenario runs for a long-range plan, or the national Tour-Based Model.", roles: ["R10", "R09", "R08"], tags: ["transport", "numerics"] },
+  { id: "simulation", what: "simulating how a system behaves over time (traffic microsimulation, Monte Carlo runs or agent-based models)", cue: "Any run where you changed an input and watched how the whole system responded.", roles: ["R08", "R09", "R10"], tags: ["numerics", "statistics"] },
+  { id: "forecasting", what: "forecasts that drove a public investment or policy decision", cue: "Travel forecasts for a project, demand forecasts for a plan, projections in a policy report.", roles: ["R08", "R09", "R05"], tags: ["statistics", "transport", "policy"] },
+  { id: "optimization", what: "optimization or routing problems (shortest paths, scheduling or allocating limited resources)", cue: "Path building in a network model, choosing projects under a budget, scheduling work.", roles: ["R10", "R09", "R08"], tags: ["numerics"] },
+  { id: "decision_data", what: "data products leaders used to make decisions (indices, dashboards or scorecards)", cue: "The Livability Index, product metrics at Epsilon or iManage, agency performance measures.", roles: ["R05", "R04", "R03"], tags: ["product", "data_eng", "policy"] },
+  { id: "ml_models", what: "predictive or machine-learning models trained on real data", cue: "Risk or propensity scores, classification models, anything fitted and then used to predict.", roles: ["R06", "R07", "R04"], tags: ["ml", "statistics"] },
+  { id: "model_validation", what: "checking model quality against observed data (validation, error metrics or back-testing)", cue: "Comparing modeled traffic counts with real counts, holdout tests, calibration reports.", roles: ["R08", "R06", "R10"], tags: ["statistics", "research_integrity"] },
+  { id: "agent_fleet", what: "a fleet of autonomous AI agents that plan, act and check their own work with little human input", cue: "The QNFO agent fleet: loops that file issues, open pull requests and verify their own deploys.", roles: ["R01"], tags: ["llm", "research_integrity"] },
+  { id: "agent_guardrails", what: "guardrails for autonomous AI systems (approval gates, audit trails and automatic rollback when a change fails)", cue: "The interrupt gate, the claim ledger, deploy probes that revert a bad release.", roles: ["R01"], tags: ["llm", "research_integrity"] },
+  { id: "llm_evaluation", what: "evaluating large language model output (scoring answers, calibrating a model's judgment against a person's)", cue: "Model evals, judge-versus-owner calibration, checking generated text against a source.", roles: ["R01", "R02"], tags: ["llm", "research_integrity"] },
+  { id: "human_in_loop", what: "human-in-the-loop workflows where people approve or correct what an automated system proposes", cue: "Owner approval cards, review queues, a person signing off before anything is sent.", roles: ["R01", "R05", "R03"], tags: ["llm", "product"] },
+  { id: "feedback_loops", what: "systems with feedback loops, where measured results automatically change what the system does next", cue: "Metrics that re-rank work, self-tuning limits, a model re-run after new counts arrive.", roles: ["R01", "R08"], tags: ["llm", "numerics"] },
+  { id: "explain_models", what: "explaining technical models to non-technical decision makers (agency leaders, legislators or executives)", cue: "Briefings for FHWA leadership, AARP policy staff, client executives at Deloitte.", roles: ["R08", "R05", "R07"], tags: ["writing", "policy"] },
+];
+const RECALL_DEPTHS = [["led", "I led it", "Led work on "], ["hands", "I did it hands-on", "Hands-on work on "], ["team", "I was on the team", "Contributed to team work on "]];
+const RECALL_CASE = { "power bi": "Power BI", dbt: "dbt", "scikit-learn": "scikit-learn", pytorch: "PyTorch", tensorflow: "TensorFlow", javascript: "JavaScript", typescript: "TypeScript", github: "GitHub", postgresql: "PostgreSQL", mysql: "MySQL", arcgis: "ArcGIS", qgis: "QGIS" };
+const recallShow = (term, kind) => (kind !== "tool" ? term : RECALL_CASE[term] || (term.length <= 4 && !/\s/.test(term) ? term.toUpperCase() : term.replace(/\b[a-z]/g, (c) => c.toUpperCase())));
+function recallTermTags(term, kind) {
+  const cls = new Set();
+  for (const [cl, kws] of Object.entries(CLUSTER_KW)) if (kws.some((k) => k.replace(/\*$/, "").trim() === term)) cls.add(cl);
+  const tags = Object.keys(TAG_TO_CLUSTERS).filter((t) => TAG_TO_CLUSTERS[t].some((c) => cls.has(c)));
+  return tags.length ? tags : kind === "tool" ? ["data_eng"] : [];
+}
+function recallCue(text, term) {
+  const re = kwRe(term);
+  const s = String(text || "").split(/(?<=[.!?])\s+|\n+/).find((x) => re.test(x.toLowerCase()));
+  return s ? clean(s, 220) : "";
+}
+// what this posting asks for that the CV cannot back yet (stored per match at run time, re-checked against the CV at read time)
+function recallGaps(job, n = 6) {
+  const cv = cvCorpus(), out = [];
+  for (const t of postingTerms(job)) {
+    if (kwRe(t.term).test(cv)) continue;
+    const cue = recallCue(job.desc, t.term);
+    if (!cue) continue;   // a word only in the title is not a requirement to ask about
+    out.push({ term: t.term, kind: t.kind, cue });
+    if (out.length >= n) break;
+  }
+  return out;
+}
+function recallRoles(ids, tags) {
+  const roles = BANK.roles || [], want = new Set(tags || []);
+  const picked = (ids || []).map((id) => roles.find((r) => r.id === id)).filter(Boolean);
+  if (!picked.length) picked.push(...roles.map((r) => [(r.tags || []).filter((t) => want.has(t)).length, r]).sort((a, b) => b[0] - a[0] || byRecency(a[1], b[1])).slice(0, 3).map((x) => x[1]));
+  return picked.slice(0, 3).map((r) => ({ id: r.id, label: r.title + ", " + String(r.org).split(/[(,]/)[0].trim() }));
+}
+function recallQuestion(key, extra = {}) {
+  let what, ask, cue = extra.cue || "", tags, roles, kind = "topic";
+  const seed = key.startsWith("seed:") && RECALL_SEED.find((s) => "seed:" + s.id === key);
+  if (seed) { what = seed.what; ask = "Have you worked on " + seed.what + "?"; cue = seed.cue; tags = seed.tags; roles = recallRoles(seed.roles, seed.tags); }
+  else if (key.startsWith("term:")) {
+    const term = clean(key.slice(5), 80).toLowerCase();
+    if (!term || !vocabulary().has(term)) return null;
+    kind = vocabulary().get(term); what = recallShow(term, kind); tags = recallTermTags(term, kind); roles = recallRoles(null, tags);
+    ask = kind === "tool" ? "Have you ever used " + what + "?" : "Have you done work involving " + what + "?";
+  } else return null;
+  const drafts = Object.fromEntries(RECALL_DEPTHS.map(([d, , lead]) => [d, lead + what + "."]));
+  return { key, ask, cue, what, kind, tags, roles, depths: RECALL_DEPTHS.map(([id, label]) => ({ id, label, draft: drafts[id] })), drafts, ...(extra.count ? { count: extra.count, example: extra.example } : {}) };
+}
+function recallOpen(key) {
+  const a = (BANK.recall || {})[key];
+  if (!a) return true;
+  return a.answer === "unsure" && Date.now() - Date.parse(a.at || 0) > RECALL_UNSURE_DAYS * 86400000;
+}
+const parseGaps = (s) => { try { const g = JSON.parse(s || "[]"); return Array.isArray(g) ? g : []; } catch (e) { return []; } };
+function openGaps(gaps, cv) { return gaps.filter((g) => g && g.term && recallOpen("term:" + g.term) && !kwRe(g.term).test(cv)); }
+// GET /api/recall?match=<id>: the questions to answer before applying to this job. Without match: the queue across the open matches, most-asked first.
+async function recallQueue(env, matchId, limit = 12) {
+  await loadBank(env);
+  const cv = cvCorpus();
+  if (matchId) {
+    const row = await env.JOBS_DB.prepare("SELECT id, title, company, gaps_json FROM jobsearch_matches WHERE id=?").bind(matchId).first();
+    if (!row) throw Object.assign(new Error("unknown match"), { status: 404 });
+    const qs = openGaps(parseGaps(row.gaps_json), cv).map((g) => recallQuestion("term:" + g.term, { cue: g.cue ? "The posting says: “" + g.cue + "”" : "" })).filter(Boolean);
+    return { match: { id: row.id, title: row.title, company: row.company }, questions: qs.slice(0, limit) };
+  }
+  const rows = (await env.JOBS_DB.prepare("SELECT title, company, gaps_json FROM jobsearch_matches WHERE status='pending_owner_approval' ORDER BY tier ASC, score DESC LIMIT 200").all()).results;
+  const agg = new Map();
+  for (const r of rows) for (const g of openGaps(parseGaps(r.gaps_json), cv)) {
+    const a = agg.get(g.term) || { n: 0, example: r.title + " at " + r.company };
+    a.n++; agg.set(g.term, a);
+  }
+  const terms = [...agg.entries()].sort((a, b) => b[1].n - a[1].n).map(([t, a]) => recallQuestion("term:" + t, { count: a.n, example: a.example, cue: "Asked for by " + a.n + " of your open matches, for example " + a.example + "." })).filter(Boolean);
+  const seeds = RECALL_SEED.map((s) => "seed:" + s.id).filter(recallOpen).map((k) => recallQuestion(k));
+  const all = seeds.concat(terms);
+  return { questions: all.slice(0, limit), total: all.length };
+}
+// POST /api/recall/answer {key, answer: yes|no|unsure, role, depth}: a yes adds the exact sentence the owner tapped as a verified fact (and a skill for a tool)
+function recallAnswer(b, d) {
+  const prev = BANK; BANK = b;   // recallQuestion reads roles and vocabulary from the bank being edited
+  let q; try { q = recallQuestion(String(d.key || "")); } finally { BANK = prev; }
+  if (!q) throw bad400("unknown question");
+  if (!["yes", "no", "unsure"].includes(d.answer)) throw bad400("answer is yes, no or unsure");
+  b.recall = b.recall || {};
+  const old = b.recall[q.key];
+  if (old && old.fact) b.facts = b.facts.filter((f) => f.id !== old.fact);
+  if (old && old.skill) b.skills = (b.skills || []).filter((s) => s.name !== old.skill);
+  const rec = { answer: d.answer, at: new Date().toISOString() };
+  if (d.answer === "yes") {
+    const depth = q.drafts[d.depth] ? d.depth : "hands";
+    const role = roleOk(b, d.role);
+    const roleTags = role ? ((b.roles.find((r) => r.id === role) || {}).tags || []) : [];
+    const tags = tagsOk([...new Set([...q.tags, ...(q.tags.length ? [] : roleTags)])]);
+    const id = nextFactId(b);
+    b.facts.push({ id, role, text: q.drafts[depth], tags, source: "recall:" + q.key, status: "verified" });
+    Object.assign(rec, { role, depth, fact: id });
+    if (q.kind !== "topic" && !(b.skills || []).some((s) => s.name.toLowerCase() === q.what.toLowerCase())) { (b.skills = b.skills || []).push({ name: q.what, tags }); rec.skill = q.what; }
+  }
+  b.recall[q.key] = rec;
+}
 async function saveHistory(env, d) {
   await env.JOBS_DB.batch([
     env.JOBS_DB.prepare("INSERT INTO jobsearch_history (ts, title, company, url, fit, verdict, resume_md, note_md) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(iso(Date.now()), d.title, d.company, d.url || "", d.fit, d.verdict, d.resume || null, d.note || null),
@@ -2251,10 +2371,10 @@ async function opsReport(env) {
 const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
-    "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
+    "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts; default lists only undecided ones, status=mine lists your applications, status=all everything", "GET /api/matches/:id": "one match with resume_md and note_md",
     "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
     "GET /api/referrals": "the best open matches with a referral kit link each", "GET /api/matches/:id/referral": "people-search links and a verified-facts message to ask someone you know for a referral (owner session)", "POST /api/matches/:id/stage": "record an interview stage {stage: recruiter_screen|hiring_manager|technical|take_home|panel|final|reference_check, note} (owner session)",
-    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
+    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs", "GET /api/recall?match=": "prompted recall: yes/no/not sure questions about what a posting asks for and the CV cannot back yet (owner session); without match, the queue across open matches", "POST /api/recall/answer": "{key, answer: yes|no|unsure, role, depth: led|hands|team} -> a yes adds the shown sentence to the CV as a verified fact (owner session)",
   },
   policy: "nothing is sent; approval is a status change only",
 };
@@ -2323,6 +2443,24 @@ const handler = {
       } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
+    if (p === "/api/recall" || p === "/api/recall/answer") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      try {
+        await ensure(env);
+        if (p === "/api/recall" && m === "GET") return J(await recallQueue(env, url.searchParams.get("match"), Math.min(40, +url.searchParams.get("limit") || 12)));
+        if (p === "/api/recall/answer" && m === "POST") {
+          let b; try { b = await request.json(); } catch (e) { return J({ error: "send a JSON body" }, 400); }
+          const bank = await mutateBank(env, (bk) => recallAnswer(bk, b));
+          const rec = (bank.recall || {})[b.key] || {};
+          const fact = rec.fact ? bank.facts.find((f) => f.id === rec.fact) : null;
+          // the search follows the answers: a yes adds evidence for that field, so matches there rank higher on the next run (at most one run in 10 minutes)
+          const last = await env.JOBS_DB.prepare("SELECT started_at FROM jobsearch_runs ORDER BY id DESC LIMIT 1").first();
+          if (rec.answer === "yes" && (!last || Date.now() - Date.parse(last.started_at) > 10 * 60 * 1000)) ctx.waitUntil(run(env).catch((e) => logErr("rerun-after-recall", e)));
+          return J({ ok: true, rev: BANK_REV, answer: rec.answer, added: fact ? fact.text : null, skill: rec.skill || null });
+        }
+      } catch (e) { return J({ error: e.message }, e.status || 500); }
+      return J({ error: "not found", see: "/api" }, 404);
+    }
     if (p === "/prep" && m === "GET") return new Response(PREP_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/cv" && m === "GET") return new Response(CV_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api/cv" || p.startsWith("/api/cv/")) {
@@ -2364,14 +2502,19 @@ const handler = {
     }
     if (p === "/api/matches" && m === "GET") {
       const tier = url.searchParams.get("tier"), status = url.searchParams.get("status"), q = (url.searchParams.get("q") || "").toLowerCase();
-      const HIDDEN = ["rejected", "expired", "no_reply"];   // a rejected match stays gone unless asked for with status=all
+      // PROMPTED-RECALL-1 / JOBSEARCH-NEW-ONLY-1 (owner 2026-11-09: "if I've already applied to something, why are you still showing it to me?"): the default list is
+      // only what is still undecided; status=mine is the applications (approved, applied, replied, interview, offer); status=all is everything.
+      const MINE = ["approved", "applied", "replied", "interview", "offer"];
       const lim = Math.min(200, +url.searchParams.get("limit") || 100);
       // filter in SQL before the window: rejected and expired rows used to fill the 500-row window and push live matches out of it
       const where = [], args = [];
-      if (status && status !== "all") { where.push("status = ?"); args.push(status); } else if (!status) where.push("status NOT IN (" + HIDDEN.map((x) => "'" + x + "'").join(",") + ")");
+      if (status === "mine") where.push("status IN (" + MINE.map((x) => "'" + x + "'").join(",") + ")");
+      else if (status && status !== "all") { where.push("status = ?"); args.push(status); } else if (!status) where.push("status = 'pending_owner_approval'");
       if (tier) { where.push("tier = ?"); args.push(tier); }
-      const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at FROM jobsearch_matches" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY tier ASC, score DESC, last_seen DESC LIMIT 500").bind(...args).all();   // A, then B, then the stretch matches, each by score
-      let rows = r.results.map(parseRow);
+      await ensure(env); await loadBank(env);
+      const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at, gaps_json FROM jobsearch_matches" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY tier ASC, score DESC, last_seen DESC LIMIT 500").bind(...args).all();   // A, then B, then the stretch matches, each by score
+      const cv = cvCorpus();
+      let rows = r.results.map((x) => { const o = parseRow(x); o.recall_open = openGaps(parseGaps(x.gaps_json), cv).length; delete o.gaps_json; return o; });
       if (q) rows = rows.filter((x) => (x.title + " " + x.company + " " + x.location).toLowerCase().includes(q));
       return J({ count: rows.length, matches: rows.slice(0, lim) });
     }
@@ -2442,7 +2585,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -2482,6 +2625,62 @@ function bookmarkHref(){return 'javascript:'+encodeURIComponent('('+FILL.toStrin
 `;
 
 // ------------------------------------------------------------------ web UI (light theme, plain JS, talks only to the API above)
+const RECALL_UI_JS = String.raw`
+// PROMPTED-RECALL-1 front end: simple cards (Apply, Not for me, Open posting, More) and yes / no / not sure questions before every application.
+var LASTV=(function(){try{var v=localStorage.getItem('jobs_last_visit')||'';localStorage.setItem('jobs_last_visit',new Date().toISOString());return v}catch(e){return ''}})();
+var MINE_STEPS=[['replied','Got a reply'],['interview','Interview'],['offer','Offer'],['no_reply','No reply']];
+function cardHtml(x){
+ var id=esc(x.id),mine=['approved','applied','replied','interview','offer'].indexOf(x.status)>=0,nq=x.recall_open||0;
+ var h='<div class="card" id="c-'+id+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span>'+(LASTV&&x.first_seen>LASTV?'<span class="badge new">New</span>':'')+'<span class="t">'+esc(x.title)+'</span></div>'
+  +'<div class="mute">'+esc(x.company)+' | '+esc(x.location||'n/a')+(via(x.id)?' | via '+esc(via(x.id)):'')+(mine||x.status!=='pending_owner_approval'?' | <span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span>':'')+'</div>'
+  +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(function(f){return '<div class="flag">Check: '+esc(f)+'</div>'}).join('')
+  +(x.verified?'':'<div class="flag">Draft blocked by the checker: '+esc(x.blocked_reason)+'</div>');
+ h+='<div class="acts big">';
+ if(mine){h+=MINE_STEPS.map(function(o){return '<button data-do="decide" data-s="'+o[0]+'">'+o[1]+'</button>'}).join('')}
+ else{h+=(x.verified?'<button class="p ap" data-id="'+id+'" data-q="'+nq+'">'+(nq?'Apply ('+nq+' quick question'+(nq>1?'s':'')+' first)':'Apply')+'</button>':'')+'<button data-do="reject">Not for me</button>'}
+ h+='<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button data-do="more">More</button></div>';
+ h+='<div class="acts more"><button data-do="show">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume .pdf</button></a><a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')
+  +(mine?'':'<button data-do="decide" data-s="approved">Save for later</button><button data-do="decide" data-s="applied">I already applied</button>')
+  +'<button data-do="referral">Referral</button><select data-do="stage"><option value="">Interview stage</option>'+['recruiter_screen','hiring_manager','technical','take_home','panel','final','reference_check'].map(function(t){return '<option>'+t+'</option>'}).join('')+'</select></div><div class="art"></div></div>';
+ return h}
+function emptyHtml(){var s=$('#status').value;return '<p class="mute">'+(s==='mine'?'No applications yet. Jobs you apply to move here and leave the new list.':s?'Nothing with this status.':'No new jobs right now. Jobs you applied to or turned down never come back.')+'</p>'}
+$('#list').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-do]');if(!b||b.tagName==='SELECT')return;var card=b.closest('.card'),id=card.id.slice(2),d=b.dataset.do;
+ if(d==='more')card.querySelector('.more').classList.toggle('on');else if(d==='reject')reject(id);else if(d==='decide')decide(id,b.dataset.s);else if(d==='show')show(id);else if(d==='referral')referral(id)});
+$('#list').addEventListener('change',function(e){var s=e.target.closest&&e.target.closest('select[data-do="stage"]');if(s)stage(s.closest('.card').id.slice(2),s)});
+// one question at a time: Yes -> where -> how involved (each button shows the exact sentence it adds); No and Not sure move on
+function runRecall(box,qs,done){var i=0,added=[];
+ function post(q,body){return authed(function(){return api('/api/recall/answer',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({key:q.key},body))})})}
+ function next(){if(i>=qs.length){done(added);return}var q=qs[i];
+  box.innerHTML='<div class="rq"><div class="mute">Question '+(i+1)+' of '+qs.length+'</div><div class="t">'+esc(q.ask)+'</div>'+(q.cue?'<div class="mute cue">'+esc(q.cue)+'</div>':'')
+   +'<div class="acts big"><button class="p" data-a="yes">Yes</button><button data-a="no">No</button><button data-a="unsure">Not sure</button></div><div class="rstep"></div><div class="rmsg mute"></div></div>';
+  var step=box.querySelector('.rstep'),msg=box.querySelector('.rmsg');
+  function save(body){msg.textContent='Saving...';post(q,body).then(function(r){if(r.added)added.push(r.added);msg.textContent=r.added?'Added to your CV: “'+r.added+'”':'Noted.';i++;setTimeout(next,r.added?1100:250)}).catch(function(err){msg.textContent=err.message})}
+  box.querySelector('[data-a="no"]').onclick=function(){save({answer:'no'})};
+  box.querySelector('[data-a="unsure"]').onclick=function(){save({answer:'unsure'})};
+  box.querySelector('[data-a="yes"]').onclick=function(){
+   step.innerHTML='<h4>Where?</h4><div class="acts big">'+q.roles.map(function(r){return '<button data-r="'+esc(r.id)+'">'+esc(r.label)+'</button>'}).join('')+'<button data-r="">Somewhere else</button></div>';
+   step.querySelectorAll('[data-r]').forEach(function(rb){rb.onclick=function(){var role=rb.dataset.r;
+    step.innerHTML='<h4>How involved were you?</h4><div class="acts big col">'+q.depths.map(function(d){return '<button data-d="'+d.id+'"><b>'+esc(d.label)+'</b><br><span class="mute">Adds: “'+esc(d.draft)+'”</span></button>'}).join('')+'</div>';
+    step.querySelectorAll('[data-d]').forEach(function(db){db.onclick=function(){save({answer:'yes',role:role,depth:db.dataset.d})}})}})}}
+ next()}
+// before every application: the questions for this job, then the kit is rebuilt with the new lines
+async function recallGate(card,id,el){var d;el.innerHTML='<div class="mute">Checking what this job asks for that your CV does not show yet...</div>';
+ try{d=await authed(function(){return api('/api/recall?match='+encodeURIComponent(id))})}catch(err){el.innerHTML='<div class="flag">'+esc(err.message)+'</div>';return false}
+ if(!d.questions.length){card.dataset.recalled='1';el.innerHTML='';return true}
+ el.innerHTML='<div class="note"><b>Before you apply:</b> this job asks for things your CV does not show yet. Tap an answer; a yes goes onto your CV and into this resume.</div><div class="rbox"></div>';
+ runRecall(el.querySelector('.rbox'),d.questions,function(added){card.dataset.recalled='1';delete KITS[id];delete KREADY[id];
+  var ap=card.querySelector('.ap');if(ap)ap.textContent='Apply';
+  el.innerHTML='<div class="note">'+(added.length?'<b>Added '+added.length+' line'+(added.length>1?'s':'')+' to your CV.</b> This resume now includes '+(added.length>1?'them':'it')+'.':'<b>Done.</b> Nothing new to add for this job.')+'</div><div class="acts big"><button class="p ap" data-id="'+esc(id)+'">Build my application</button></div>'});
+ return false}
+// "Questions about you": the queue across all open jobs, most-asked first, plus questions about the work that leads to autonomous systems research
+async function openRecall(){var p=$('#recallpanel');p.style.display='';p.innerHTML='<div class="mute">Loading questions...</div>';var d;
+ try{d=await authed(function(){return api('/api/recall?limit=15')})}catch(err){p.innerHTML='<div class="flag">'+esc(err.message)+'</div>';return}
+ if(!d.questions.length){p.innerHTML='<div class="note">No open questions. New ones appear when new jobs ask for something your CV does not show.</div>';return}
+ p.innerHTML='<div class="note"><b>Questions about you</b> ('+d.total+' open). Yes / no / not sure; nothing to type. A yes adds the line shown on the button to your CV.</div><div class="rbox"></div>';
+ runRecall(p.querySelector('.rbox'),d.questions,function(added){p.innerHTML='<div class="note"><b>Thanks.</b> '+added.length+' new line'+(added.length===1?'':'s')+' on your CV. <button id="rmore">More questions</button> <button id="rclose">Close</button></div>';$('#rmore').onclick=openRecall;$('#rclose').onclick=function(){p.style.display='none'};load()})}
+$('#recallbtn').onclick=openRecall;
+$('#vnew').onclick=function(){$('#status').value='';load()};$('#vmine').onclick=function(){$('#status').value='mine';load()};
+`;
 const UI = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job matches: verified claims only</title>
 <style>
 :root{--bg:#f7f7f4;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e2e2dc;--a:#1a7f4b;--b:#a06a00;--bad:#b3261e;--acc:#1f4fd8}
@@ -2499,13 +2698,13 @@ main{max-width:900px;margin:0 auto;padding:16px}
 .st{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:1px 8px}.st.approved{border-color:var(--a);color:var(--a)}.st.rejected{border-color:var(--bad);color:var(--bad)}
 pre{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}a{color:var(--acc)}
-details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px}summary{cursor:pointer;font-weight:600}.q{padding:4px 0;border-top:1px solid var(--line)}.q label{margin-left:10px;white-space:nowrap}h4{margin:10px 0 4px}textarea{font:inherit;border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:8px}.note{background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px}.acts.big button{min-height:44px;padding:8px 16px;font-weight:600}.acts.col{flex-direction:column;align-items:stretch}.acts.col button{text-align:left;font-weight:400}.more{display:none}.more.on{display:flex}.badge.new{background:var(--acc)}.rq{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;background:#fbfcff}.rq .t{margin:4px 0}.cue{font-style:italic}.rmsg{margin-top:6px}@media(max-width:640px){header{position:static}}summary{cursor:pointer;font-weight:600}.q{padding:4px 0;border-top:1px solid var(--line)}.q label{margin-left:10px;white-space:nowrap}h4{margin:10px 0 4px}textarea{font:inherit;border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:8px}.note{background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
 </style></head><body>
 <header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
 <div class="bar"><select id="tier"><option value="">All tiers</option><option value="A">A</option><option value="B">B</option><option value="C">C: stretch</option></select>
-<select id="status"><option value="">Active (hides rejected)</option><option value="all">All, including rejected</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
+<button id="vnew" class="p">New jobs</button><button id="vmine">My applications</button><button id="recallbtn">Questions about you</button><select id="status"><option value="">New jobs only</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
 <input id="q" placeholder="Search title, company, place" size="26"><button id="ready">Ready to apply</button><button id="run" class="p">Run now</button><a href="/cv"><b>My CV</b></a> <a href="/prep"><b>Apply and prepare</b></a> <a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
-<main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="fillsetup"><summary>One-click apply: set up once</summary><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="p" style="padding:6px 10px;border-radius:6px;background:var(--acc);color:#fff;text-decoration:none">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></details><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
+<main><div id="recallpanel" class="card" style="display:none"></div><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="fillsetup"><summary>One-click apply: set up once</summary><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="p" style="padding:6px 10px;border-radius:6px;background:var(--acc);color:#fff;text-decoration:none">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></details><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
 <details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="follow"></div><div id="list"></div></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -2514,11 +2713,7 @@ async function load(){
   const q=new URLSearchParams();for(const k of['tier','status','q']){const v=$('#'+k).value;if(v)q.set(k,v)}
   const [m,r,oc]=await Promise.all([api('/api/matches?'+q),api('/api/runs'),api('/api/outcomes')]);
   const last=r.runs[0];$('#meta').textContent=last?('Last run '+last.started_at+' | '+last.fetched+' postings from '+last.feeds+' feeds | '+last.passed+' passed gates | '+last.blocked+' blocked by verifier'+(last.errors.length?' | feed errors: '+last.errors.length:'')):'No run yet. Press Run now.';$('#meta').textContent+=' | Applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview+' | reply rate '+(oc.reply_rate_90d===null?'unknown ('+oc.reading+')':Math.round(oc.reply_rate_90d*100)+'%');
-  $('#list').innerHTML=m.matches.map(x=>'<div class="card" id="c-'+esc(x.id)+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span><span class="t">'+esc(x.title)+'</span><span class="mute">'+esc(x.company)+' | '+esc(x.location||'n/a')+(via(x.id)?' | via '+esc(via(x.id)):'')+'</span><span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span></div>'
-   +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(f=>'<div class="flag">Check: '+esc(f)+'</div>').join('')
-   +(x.verified?'':'<div class="flag">Blocked by verifier: '+esc(x.blocked_reason)+'</div>')
-   +'<div class="acts">'+(x.verified?'<button class="p ap" data-id="'+esc(x.id)+'">Apply</button>':'')+'<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button onclick="show(\\''+esc(x.id)+'\\')">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume .pdf</button></a>'+'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')+''
-   +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="reject(\\''+esc(x.id)+'\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button>'+[['replied','Got a reply'],['interview','Interview'],['offer','Offer']].map(o=>'<button onclick="decide(\\''+esc(x.id)+'\\',\\''+o[0]+'\\')">'+o[1]+'</button>').join('')+'<button onclick="referral(\\''+esc(x.id)+'\\')">Referral</button><select onchange="stage(\\''+esc(x.id)+'\\',this)"><option value="">Interview stage</option>'+['recruiter_screen','hiring_manager','technical','take_home','panel','final','reference_check'].map(function(t){return '<option>'+t+'</option>'}).join('')+'</select>'+'</div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
+  $('#list').innerHTML=m.matches.map(cardHtml).join('')||emptyHtml();
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
@@ -2557,11 +2752,13 @@ function kitPanel(el,id,k){
  el.innerHTML='<div class="note"><b>Application kit for '+esc(k.company)+'</b> ('+esc(k.ats)+(k.fresh?', rebuilt from the posting as it reads now':', draft from match time')+'). Press <b>Open application and copy kit</b>: the resume downloads, the kit is copied and the application opens. There click your <b>Fill application</b> bookmark, check everything and submit.</div>'
   +kwHtml(k.keywords)+'<h4>Left for you</h4>'+li(k.left_for_you)
   +'<div class="acts"><button class="p" data-act="open">Open application and copy kit</button><button data-act="copy">Copy kit again</button><button data-act="dl">Download resume .docx</button><a href="/api/matches/'+encodeURIComponent(id)+'/resume.html" target="_blank" rel="noopener"><button>Resume as PDF (print)</button></a><button data-act="done">I submitted it</button></div>'}
-$('#list').addEventListener('mouseover',function(e){var b=e.target.closest&&e.target.closest('.ap');if(b)warm(b.dataset.id)});
+$('#list').addEventListener('mouseover',function(e){var b=e.target.closest&&e.target.closest('.ap');if(b&&(b.dataset.q==='0'||b.closest('.card').dataset.recalled))warm(b.dataset.id)});
 $('#list').addEventListener('click',async function(e){
  var b=e.target.closest&&e.target.closest('.ap,[data-act]');if(!b)return;
  var card=b.closest('.card'),id=card.id.slice(2),el=card.querySelector('.art'),k=KREADY[id];
  if(b.classList.contains('ap')){
+  if(!card.dataset.recalled&&!(await recallGate(card,id,el)))return;
+  k=KREADY[id];
   if(k){fireKit(k);kitPanel(el,id,k);return}
   el.innerHTML='<div class="mute">Building the kit from the posting and your CV...</div>';
   try{k=await authed(function(){return warm(id)});kitPanel(el,id,k)}catch(err){el.innerHTML='<div class="flag">'+esc(err.message)+'</div>'}
@@ -2571,7 +2768,8 @@ $('#list').addEventListener('click',async function(e){
 $('#bm').setAttribute('href',bookmarkHref());$('#bm').onclick=function(e){e.preventDefault();alert('Drag this button to your bookmarks bar. Do not click it here.')};
 api('/api/followups').then(function(f){if(!f.count)return;window.FU=f.items;$('#follow').innerHTML='<div class="note"><b>'+f.count+' application(s) with no reply after 7 days.</b> '+f.items.map(function(x,i){return esc(x.title)+' at '+esc(x.company)+' ('+x.days_waiting+' days) <button data-fu="'+i+'">Copy follow-up</button>'}).join(' | ')+'</div>'}).catch(function(e){console.warn('followups: '+e.message)});
 $('#follow').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-fu]');if(b)navigator.clipboard.writeText(window.FU[+b.dataset.fu].note)});
-$('#ready').onclick=function(){$('#tier').value='A';$('#status').value='pending_owner_approval';load()};
+$('#ready').onclick=function(){$('#tier').value='A';$('#status').value='';load()};
+${RECALL_UI_JS}
 load();who();loadPrefs();
 </script></body></html>`;
 
