@@ -5,7 +5,7 @@ main = "worker.js"
 # net-zero rule: this worker funds the retirement of qnfo-ipatent (same class, reach: a standalone publishing surface whose reads fold into qnfo-gateway);
 # the dependency check (fleet-graph impact worker:qnfo-ipatent: 28 dependents on 2026-10-27) is the first step of that retirement and is filed as an issue, not done here.
 # YT-SERVER-1 (2026-10-27, owner directive: "all of this needs to run 100% server-side on Cloudflare Quniverse"; USD 50 a month cap all-in).
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 workers_dev = true
 

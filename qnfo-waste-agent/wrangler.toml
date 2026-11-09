@@ -3,7 +3,7 @@
 name = "qnfo-waste-agent"
 account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
 main = "worker.js"
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
