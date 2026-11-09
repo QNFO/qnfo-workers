@@ -1,13 +1,13 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM metric_registry WHERE metric = 'issues_without_draft_pr'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'issues_without_draft_pr'; DELETE FROM metric_breach_cause WHERE metric = 'issues_without_draft_pr'; DELETE FROM ops_config WHERE key = 'OWNER_DIRECTIVE_2026_11_09_DRAFT_PR_PER_ISSUE_1';
+-- Rollback: DELETE FROM metric_registry WHERE metric = 'issues_without_draft_pr'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'issues_without_draft_pr'; DELETE FROM metric_breach_cause WHERE metric_key = 'issues_without_draft_pr'; DELETE FROM ops_config WHERE key = 'OWNER_DIRECTIVE_2026_11_09_DRAFT_PR_PER_ISSUE_1';
 -- DRAFT-PR-PER-ISSUE-1 (owner directive 2026-11-09): every open fleet-issue gets a draft PR; qnfo-github-steward 0.18.0 creates them (4 per tick).
 -- spof-review: no new cron, binding, host or credential; the steward tick it rides already exists.
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class)
 VALUES ('issues_without_draft_pr', 'operational', 'lagging', 'open fleet-issue GitHub issues that no open PR names, after each steward tracker tick', 'qnfo-github-steward tsDraftPrs', '675 on 2026-11-09 (0 open PRs)', '0', 'qnfo-github-steward', 'analytics_metric_triggers issues_without_draft_pr -> agent_issues', '10m', '> 40', '> 300', 'PENDING', 'computed');
 
-INSERT OR IGNORE INTO metric_breach_cause (metric, cause)
-VALUES ('issues_without_draft_pr', 'issue-backlog');
+INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note)
+VALUES ('issues_without_draft_pr', 'issue-backlog', 'METRIC-CAUSE-AT-REGISTRATION-1 2026-11-09: open issues without a draft PR are backlog the steward has not yet shelled.');
 
 INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 VALUES ('issues_without_draft_pr', 'Open issues without a draft PR', 'registry', 'gt', 40, 2,
