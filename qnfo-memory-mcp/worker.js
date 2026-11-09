@@ -6,7 +6,7 @@ var PROTOCOL_VERSION = "2024-11-05";
 var SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18"];
 var NL = String.fromCharCode(10);
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.11.5-codeagent";
+var VERSION = "2.11.6-codeagent";
 /* 2.7.2: Batch semantic memory D1 enrichment to one query per search. */ /* 2.7.1 #6612 (pillar autonomy): literal graph searches avoid D1's 50-byte LIKE pattern limit. */ /* 2.7.0 EXUVIA-ENGAGE-1 (2026-11-03, pillar reach): evidence-matched drafts for Exuvia posts needing a response, deduplicated and logged to decision_log; no comment is sent. */ /* 2.5.0 FULLSCOPE-1 (2026-10-31): the SSE transport is real (session + /mcp/messages + keepalive, spec event:endpoint; the old stub closed after 100 ms); ?token= query auth parity with qnfo-tools-mcp; optional MCP_READ_TOKEN read-only scope (write tools: remember_fact, exuvia_publish_paper); ping, prompts/list, resources/templates/list, JSON-RPC batch, -32602 on malformed tools/call, protocolVersion negotiation; remember_fact keeps up to 8000 chars (was silently truncated at 800), clamps importance to 0-1 and enforces its own category enum; the open /fleet-graph/findings route no longer leaks secret: subjects; every tools/call is audit-logged when an AUDIT D1 binding is present. */ /* 2.4.0 REPO-GRAPH-1 (2026-10-29, pillar autonomy; minor: fleet_graph_find and /fleet-graph/find now accept the kinds repo and doc, so a repository or a document is found by name like a worker). */ // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -224,13 +224,24 @@ async function tool_search_memories(args, env) {
   const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 5, 50), returnMetadata: "all", returnValues: false });
   let matches = (res.matches || []).filter((m) => m.id.startsWith("mem:"));
   if (category) matches = matches.filter((m) => m.id.startsWith("mem:" + category + ":"));
-  const pool = weighted ? matches : matches.slice(0, limit);
+  let pool = matches;
   const records = new Map();
   if (pool.length) {
     const rec = await env.GRAPH_DB.prepare(
       "SELECT id, category, content, summary, importance, session_id, created_at, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.tier') END AS tier, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.role') END AS role, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.consolidated_into') END AS consolidated_into, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.consolidated_at') END AS consolidated_at FROM agent_memories WHERE id IN (SELECT value FROM json_each(?1))"
     ).bind(JSON.stringify(pool.map((m) => m.id))).all().catch(() => ({ results: [] }));
     for (const row of rec.results || []) records.set(row.id, row);
+  // MEMORY-CONSOLIDATION-1: episodic rows consolidated 30 days or more ago are left out of search_memories
+  // unless include_consolidated is asked for: a filter only, nothing is ever deleted.
+  const include_consolidated = args.include_consolidated === true;
+  const decayCutoff = Date.now() - 30 * 864e5;
+  pool = include_consolidated ? pool : pool.filter((m) => {
+    const r = records.get(m.id);
+    if (!r || !r.consolidated_at) return true;
+    const t = Date.parse(r.consolidated_at);
+    return !Number.isFinite(t) || t >= decayCutoff;
+  });
+  if (!weighted) pool = pool.slice(0, limit);
   }
   let ranked = pool.map((m) => ({ m }));
   if (weighted && pool.length) {
@@ -382,90 +393,83 @@ async function memoryTierSnapshot(env) {
         .run();
     }
 
-    // --- bounded consolidation step (new) ---
-    // Process at most 20 episodic memories older than 7 days, grouped by category.
+    // --- bounded consolidation step (MEMORY-CONSOLIDATION-1) ---
+    // At most 20 episodic rows older than 7 days per run, grouped by category and session_id,
+    // at least 3 rows per group; one AI summary row per group; sources are marked, never deleted.
     const cutoff = new Date(Date.now() - 7 * 864e5).toISOString();
-    const consolidRows = await env.GRAPH_DB.prepare(
-      `SELECT id, category, content, summary, importance, session_id, created_at,
-              CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.role') END AS role
-       FROM agent_memories
-       WHERE json_valid(metadata_json)
-         AND json_extract(metadata_json, '$.tier') = 'episodic'
-         AND created_at < ?
-       ORDER BY category, created_at
-       LIMIT 20`
-    )
-      .bind(cutoff)
-      .all();
-
     let episodicCount = 0;
     let semanticCount = 0;
-
-    if (consolidRows.results && consolidRows.results.length) {
-      for (const r of consolidRows.results) {
-        // Create a new semantic memory entry based on the episodic one.
+    try {
+      const groups = await env.GRAPH_DB.prepare(
+        `SELECT category, COALESCE(session_id, '') AS session_id, COUNT(*) AS n
+         FROM agent_memories
+         WHERE json_valid(metadata_json)
+           AND json_extract(metadata_json, '$.tier') = 'episodic'
+           AND json_extract(metadata_json, '$.consolidated_into') IS NULL
+           AND created_at < ?1
+         GROUP BY 1, 2 HAVING COUNT(*) >= 3 LIMIT 3`
+      ).bind(cutoff).all();
+      for (const g of groups.results || []) {
+        if (episodicCount >= 20) break;
+        const src = await env.GRAPH_DB.prepare(
+          `SELECT id, category, content, summary, importance, session_id, created_at FROM agent_memories
+           WHERE json_valid(metadata_json)
+             AND json_extract(metadata_json, '$.tier') = 'episodic'
+             AND json_extract(metadata_json, '$.consolidated_into') IS NULL
+             AND created_at < ?1 AND category = ?2 AND COALESCE(session_id, '') = ?3
+           ORDER BY created_at LIMIT ?4`
+        ).bind(cutoff, g.category, g.session_id, 20 - episodicCount).all();
+        const rows = src.results || [];
+        if (rows.length < 3) continue;
+        const joined = rows.map((r) => "- " + String(r.content || r.summary || "").slice(0, 400)).join("\n");
+        let summaryText = rows.length + " episodic memories in category " + g.category + (g.session_id ? " session " + g.session_id : "") + ": " + joined.slice(0, 1200);
+        try {
+          if (env.AI) {
+            const ai = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+              messages: [
+                { role: "system", content: "Summarize these episodic agent memories into one short semantic fact, at most 3 sentences. Reply with the summary only." },
+                { role: "user", content: joined.slice(0, 6000) }
+              ],
+              max_tokens: 300
+            });
+            const text = ai && (ai.response || ai.result || ai.text);
+            if (text) summaryText = String(text).slice(0, 4000);
+          }
+        } catch (e) {
+          console.error(JSON.stringify({ worker: SERVER_NAME, where: "memory-consolidation-ai", error: String(e && e.message || e).slice(0, 200) }));
+        }
         const nowMs = Date.now();
-        const newId = "mem:semantic:" + nowMs + ":" + (await sha256hex(r.content || "").slice(0, 8));
+        const newId = "mem:semantic:" + nowMs + ":" + (await sha256hex(summaryText)).slice(0, 8);
         const created_at = new Date().toISOString();
-        const provenance = "consolidated from " + r.id;
-        const metadata_json = JSON.stringify({
-          source: "qnfo-memory-mcp",
-          timestamp: created_at,
-          tier: "semantic",
-          role: r.role || "agent",
-          provenance,
-        });
-
-        // Insert the new semantic row.
+        const ids = rows.map((r) => r.id);
+        const metadata_json = JSON.stringify({ source: "qnfo-memory-mcp", timestamp: created_at, tier: "semantic", role: "consolidation", provenance: "consolidated from " + ids.join(",") });
         await env.GRAPH_DB.prepare(
           "INSERT OR REPLACE INTO agent_memories (id, category, content, summary, importance, session_id, created_at, expires_at, metadata_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)"
-        )
-          .bind(newId, r.category, r.content, r.summary, r.importance, r.session_id, created_at, metadata_json)
-          .run();
-
-        // Upsert the vector for the new semantic row.
-        const vec = await embed(env, r.content);
-        await env.PAPER_VZ.upsert([
-          {
-            id: newId,
-            values: vec,
-            metadata: { kind: "memory", category: r.category, content: (r.content || "").slice(0, 800) },
-          },
-        ]);
-
-        // Delete the original episodic row.
-        await env.GRAPH_DB.prepare("DELETE FROM agent_memories WHERE id = ?1").bind(r.id).run();
-
-        episodicCount++;
-        semanticCount++;
+        ).bind(newId, g.category, summaryText, summaryText.slice(0, 200), Math.max(0.7, ...rows.map((r) => Number(r.importance) || 0)), g.session_id || null, created_at, metadata_json).run();
+        const vec = await embed(env, summaryText);
+        await env.PAPER_VZ.upsert([{ id: newId, values: vec, metadata: { kind: "memory", category: g.category, content: summaryText.slice(0, 800) } }]);
+        for (const r of rows) {
+          await env.GRAPH_DB.prepare(
+            "UPDATE agent_memories SET metadata_json = json_set(metadata_json, '$.consolidated_into', ?2, '$.consolidated_at', ?3) WHERE id = ?1"
+          ).bind(r.id, newId, created_at).run();
+        }
+        episodicCount += rows.length;
+        semanticCount += 1;
       }
-
       // Record the consolidation run.
-      const runTs = new Date().toISOString();
       await env.AUDIT.prepare(
         "INSERT INTO memory_consolidation_runs (ts, episodic_in, semantic_out) VALUES (?1, ?2, ?3)"
-      )
-        .bind(runTs, episodicCount, semanticCount)
-        .run();
+      ).bind(new Date().toISOString(), episodicCount, semanticCount).run();
+    } catch (e) {
+      // A failed consolidation step is logged and never stops the snapshot.
+      console.error(JSON.stringify({ worker: SERVER_NAME, where: "memory-consolidation-step", error: String(e && e.message || e).slice(0, 200) }));
     }
-
-    // --- decay stale episodic memories (new) ---
-    // Remove episodic rows older than 30 days that were not consolidated.
-    const decayCutoff = new Date(Date.now() - 30 * 864e5).toISOString();
-    await env.GRAPH_DB.prepare(
-      `DELETE FROM agent_memories
-       WHERE json_valid(metadata_json)
-         AND json_extract(metadata_json, '$.tier') = 'episodic'
-         AND created_at < ?`
-    )
-      .bind(decayCutoff)
-      .run();
 
     // Return snapshot info plus consolidation summary.
     return {
       ts,
       rows: rows.length,
-      consolidation: { processed: episodicCount, created_semantic: semanticCount },
+      consolidation: { episodic_in: episodicCount, semantic_out: semanticCount },
     };
   } catch (e) {
     const error = String(e && e.message || e).slice(0, 200);
