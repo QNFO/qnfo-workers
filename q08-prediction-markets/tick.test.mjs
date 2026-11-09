@@ -92,3 +92,14 @@ test("a held market not refreshed this tick is not exited on its stored price", 
   const r = await tick(env, { source: "test", markets: [{ slug: "other", title: "O", yes: 0.5, vol24: 1, move: 0, closed: 0 }] });
   assert.equal(r.closed, 0);
 });
+
+test("a manual order on a quote older than 15 minutes is refused, a fresh one is accepted", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, { source: "test", markets: [{ slug: "m", title: "M", yes: 0.5, vol24: 1, move: 0, closed: 0 }] });
+  const order = () => worker.fetch(new Request("https://x/api/order", { method: "POST", body: JSON.stringify({ slug: "m", side: "yes", usd: 100 }) }), env);
+  await env.TRADES_DB.prepare("UPDATE pt_market SET updated_at=? WHERE slug=?").bind(new Date(Date.now() - 20 * 60000).toISOString(), "m").run();
+  const stale = await order();
+  assert.equal(stale.status, 400); assert.match((await stale.json()).error, /stale/);
+  await env.TRADES_DB.prepare("UPDATE pt_market SET updated_at=? WHERE slug=?").bind(new Date(Date.now() - 60000).toISOString(), "m").run();
+  assert.equal((await order()).status, 200);
+});
