@@ -68,7 +68,7 @@ const evGet = async (q) => (await (await w.fetch(new Request("https://q08.org/ap
 await evGet("warm the schema");
 db.exec("INSERT INTO q08_forecasts (slug, claim, probability, horizon, resolution, created_at, status) VALUES ('f-ceasefire', 'An Iran Israel ceasefire holds through December', 0.7, '2026-12-31', 'Both governments keep it for 30 days', '2026-11-01T00:00:00Z', 'open'), ('f-chips', 'Export controls on advanced chips are widened', 0.4, '2026-12-01', 'A new rule is published', '2026-11-02T00:00:00Z', 'open'), ('f-done', 'Iran talks resume in October', 0.5, '2026-10-30', 'Talks held', '2026-10-01T00:00:00Z', 'resolved')");
 const ev1 = await evGet("US x Iran Effective Ceasefire by November 22?");
-check("evidence: the question's distinctive words find the open forecast on the same entity", ev1.items.length === 1 && ev1.items[0].slug === "f-ceasefire" && ev1.items[0].probability === 0.7 && /forecasts\/f-ceasefire$/.test(ev1.items[0].url), ev1);
+check("evidence: the question's distinctive words find the open forecast on the same entity", ev1.items.length === 1 && ev1.items[0].slug === "f-ceasefire" && ev1.items[0].probability === 0.7 && /\/p\/f-ceasefire$/.test(ev1.items[0].url) && ev1.items[0].created_at === "2026-11-01T00:00:00Z", ev1);
 check("evidence: stop words are dropped and the words are capped", JSON.stringify(ev1.words) === JSON.stringify(["iran", "effective", "ceasefire", "november"]) || ev1.words.length <= 4, ev1.words);
 const ev2 = await evGet("Will the price of Bitcoin hit 100k?");
 check("evidence: a question about something q08 has not forecast returns nothing", ev2.items.length === 0, ev2);

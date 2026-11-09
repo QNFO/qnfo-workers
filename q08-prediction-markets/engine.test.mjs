@@ -292,6 +292,10 @@ test("q08Lines turns open forecasts into labelled evidence lines and drops malfo
   assert.equal(l.length, 1); assert.equal(l[0].src, "q08"); assert.equal(l[0].date, "20261109"); assert.match(l[0].title, /^q08 forecast: An Iran Israel ceasefire.*\(70% by 2026-12-31; counts as true if: Both governments/);
   assert.deepEqual(q08Lines(null), []); assert.equal(q08Lines(Array.from({ length: 9 }, () => q08items[0])).length, 3);
 });
+test("q08Lines keeps the forecast's own publication day instead of stamping today", () => {
+  const l = q08Lines([{ ...q08items[0], created_at: "2026-11-01 08:00:00" }], Date.parse("2026-11-09T12:00:00Z"));
+  assert.equal(l[0].date, "20261101");
+});
 test("q08Evidence is off unless the flag is on and the binding exists, and a failing service gives nothing", async () => {
   let calls = 0; const Q08 = { fetch: async (u) => { calls++; return new Response(JSON.stringify({ items: q08items }), { status: 200 }); } };
   assert.deepEqual(await q08Evidence({ Q08 }, "Iran ceasefire"), []); assert.deepEqual(await q08Evidence({ Q08_EVIDENCE: "on" }, "Iran ceasefire"), []); assert.equal(calls, 0, "never called while off");
