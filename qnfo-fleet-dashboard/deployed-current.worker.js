@@ -13788,6 +13788,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     try {
       await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'undo', ?3, ?4, ?5, 1, ?6)").bind(traceId, "undo PR " + num, r.ok ? "done" : "failed", r.ok ? r.url : null, r.ok ? null : String(r.error || "").slice(0, 400), r.ms || 0).run();
     } catch (e) {
+      console.error(JSON.stringify({ worker: "qnfo-fleet-dashboard", where: "cmd-undo-log", error: String(e && e.message || e).slice(0, 200) }));
     }
     return ownerJson(r, r.ok ? 200 : 400);
   }
