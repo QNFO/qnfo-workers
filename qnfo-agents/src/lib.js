@@ -568,6 +568,8 @@ export function hooksFor(hooks, event, toolName) {
 export function hookBlock(hooks, toolName) {
   const h = hooksFor(hooks, "pre_tool", toolName).find((x) => x.action === "block");
   return h ? { blocked: true, hook: h.id, error: "blocked by hook " + h.id + (h.note ? ": " + String(h.note).slice(0, 200) : "") } : { blocked: false };
+}
+
 // CODE-AGENT-UX-1.6 (issue 8245): a turn about fleet code or infrastructure gets the head of docs/SYSTEM-MAP.md (the whole system on one page) instead of the agent reading whole worker files.
 export function wantsSystemMap(prompt) {
   return /\b(worker|binding|d1|route|cron|deploy|queue|vectorize|r2|durable object|blast radius|depends on|fleet graph)\b/i.test(String(prompt || "").slice(0, 4000));
