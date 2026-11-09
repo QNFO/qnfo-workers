@@ -7,7 +7,7 @@ main = "worker.js"
 # imports no node: module), 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy keeps the date only
 # when /health answers with the deployed VERSION and otherwise restores the previous date (deployment_history compat-restore).
 # compat-advance: reviewed 2026-10-12
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 # OWNER-CMD-OPS-522-1 (2026-09-30): same-zone subrequests (email handler on qnfo.org -> ops.qnfo.org) only reach
 # another Worker with this flag; without it every owner command 522d (#1472). Applied by the deployers' declared-flag union.
 compatibility_flags = ["global_fetch_strictly_public"]
