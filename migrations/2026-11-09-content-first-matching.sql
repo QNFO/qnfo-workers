@@ -21,3 +21,13 @@ SELECT
   'expected: more postings from employers and fields the old title gate hid. Unproven until the owner decides on them.',
   'qnfo-jobsearch scoreJob, rank, semanticLens, /api/matches'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'JOBSEARCH-CONTENT-FIRST-1:%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'JOBSEARCH-CONTENT-FIRST-1.2: widen the employers searched from the record (transport modelling, simulation, evaluation, forecasting, systems research), not from a curated list of labs',
+ 'Charter pillar personal. Owner 2026-11-09: go in several different directions to find what my experience is. qnfo-jobsearch BOARDS is a curated set of boards (greenhouse, lever, ashby, recruitee, smartrecruiters, public sector); a posting at an employer in none of them is never fetched, however well its text matches the record.' || char(10) ||
+ 'code-task: repo=qnfo-workers path=qnfo-jobsearch/worker.js' || char(10) ||
+ 'code-anchor: // JOBSEARCH-DIRECTIONS-1: queries drawn from the record' || char(10) ||
+ 'Doer: the code loop. Add boards found by probing, for employers whose work matches the record (transportation and mobility planning and modelling firms, simulation and digital-twin companies, AI evaluation and assurance organisations, forecasting and geospatial analytics firms, policy-research institutes): probe each board slug, keep the ones that answer with postings, add them with the probe date as the comment (the style of the existing entries), and add a test that the added feeds are in ACTIVE_FEEDS.' || char(10) ||
+ 'closing probe: SELECT 0 WHERE (SELECT COUNT(DISTINCT company) FROM jobsearch_matches WHERE last_seen > datetime(''now'',''-3 days'')) >= 40',
+ 'session:content-first-matching', 'feature', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'JOBSEARCH-CONTENT-FIRST-1.2%');
