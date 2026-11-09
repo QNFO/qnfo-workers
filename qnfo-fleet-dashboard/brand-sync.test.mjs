@@ -1,4 +1,4 @@
-// BRAND-PROFILE-SYNC-1 offline suite (qnfo-fleet-dashboard 1.103.0). Replays brandProfileSync against a recording D1 and stubbed
+// BRAND-PROFILE-SYNC-1 offline suite (qnfo-fleet-dashboard 1.104.0). Replays brandProfileSync against a recording D1 and stubbed
 // GitHub, ORCID and Scholar, without network. Proves: every owner card is filed IDENTITY-BOUND with its copy text and deep link and is
 // never reopened once resolved; a differing GitHub About is PATCHed and a matching one is left alone; topics are added only when
 // missing; a refused write (bio without user scope) files a card with the exact text; probes close cards when the public record shows

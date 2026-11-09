@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.103.0";
+var VERSION = "1.104.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -7543,7 +7543,7 @@ var SPEND_CAP_USD = 150;
 var HUMAN_SNAPSHOT_MAX_AGE_MS = 5 * 6e4;
 async function ensureHumanTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT)").run();
-  // BRAND-PROFILE-SYNC-1 (1.103.0): copy_text holds the exact text a card asks the owner to paste (the Copy box). Added once per
+  // BRAND-PROFILE-SYNC-1 (1.104.0): copy_text holds the exact text a card asks the owner to paste (the Copy box). Added once per
   // isolate; "duplicate column" is the expected answer on every isolate after the first and is not an error.
   if (!humanCopyColReady) {
     try {
@@ -7555,7 +7555,7 @@ async function ensureHumanTable(env) {
   }
 }
 var humanCopyColReady = false;
-// BRAND-PROFILE-SYNC-1 (1.103.0, owner directive 2026-11-09, Personal Brand project: "update all surfaces ... positioning me ... as a systems
+// BRAND-PROFILE-SYNC-1 (1.104.0, owner directive 2026-11-09, Personal Brand project: "update all surfaces ... positioning me ... as a systems
 // researcher, specifically autonomous systems ... I want all this done by code ... if I need to do something ... I need actions that are
 // linked to my dashboard"). Wording is rwnq8/resume docs/BRAND.md. Three parts, run at most every BRAND_SYNC_EVERY_MS from the cron:
 //  1. GitHub, applied by code with the fleet's GITHUB_TOKEN (classic PAT of rwnq8): each repository's About text, the brand topics on
