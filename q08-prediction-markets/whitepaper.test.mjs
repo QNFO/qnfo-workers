@@ -30,9 +30,9 @@ test("the pre-registered numbers in the paper are the charter's numbers", () => 
 });
 test("every recommendation the paper marks implemented points at something the worker really has", async () => {
   for (const route of ["/api/charter", "/api/track-record", "/whitepaper"]) assert.ok(src.includes('"' + route + '"'), route);
-  for (const sym of ["applyRecal", "fitRecal", "fitBlend", "kellyStake", "chainHash", "verifyChain", "byDomain", "tuneActions", "logLoss", "domainOf", "MAX_SPREAD_MKT", "params_version", "pt_estimate_log", "append-only", "probeVerdict", "probeSampled"]) assert.ok(src.includes(sym), sym);
+  for (const sym of ["applyRecal", "fitRecal", "fitBlend", "kellyStake", "chainHash", "verifyChain", "byDomain", "tuneActions", "logLoss", "domainOf", "MAX_SPREAD_MKT", "params_version", "pt_estimate_log", "append-only", "probeVerdict", "probeSampled", "eventGap", "basketPayoff"]) assert.ok(src.includes(sym), sym);
   const rows = md.split("\n").filter((l) => /^\| R\d+ /.test(l)); assert.equal(rows.length, 14);
-  assert.equal(rows.filter((l) => /Implemented/.test(l)).length, 12); assert.equal(rows.filter((l) => /Filed as issue|not built/.test(l)).length, 2);
+  assert.equal(rows.filter((l) => /Implemented/.test(l)).length, 13); assert.equal(rows.filter((l) => /Filed as issue|not built/.test(l)).length, 1);
 });
 test("the paper makes no claim it cannot back: no guaranteed profit, no proven edge", () => {
   assert.ok(!/guarantee[ds]? (a )?(profit|return)|risk-free|proven edge|we have an edge|beats the market/i.test(md));

@@ -290,3 +290,34 @@ test("an unsampled market is never probed, so the extra calls stay within the sa
   await tick(env, feed([mk(unsampledSlug, 0.55)]), { news, models: ["a", "b", "c"], ask });
   assert.equal(calls, 3); assert.equal(env.TRADES_DB._raw.prepare("SELECT probe FROM pt_estimate WHERE slug=?").get(unsampledSlug).probe, null);
 });
+
+// ---- issue 9106: the arbitrage ledger ----
+const mkEvent = (slug, asks, x = {}) => ({ slug, title: "Event " + slug, negRisk: true, markets: asks.map((a, i) => ({ slug: slug + "-" + i, bestAsk: a, bestBid: a - 0.01, closed: false, active: true })), ...x });
+test("a gap opens one paper basket in its own ledger, is logged once, is not re-opened, and settles as one unit", async () => {
+  const env = { TRADES_DB: fakeD1() }; let events = [mkEvent("gap", [0.2, 0.2, 0.2, 0.2]), mkEvent("fair", [0.25, 0.25, 0.25, 0.25])];
+  const r = await tick(env, feed([]), { ...deps({}), events: async () => events });
+  assert.equal(r.arb.scanned, 2); assert.equal(r.arb.gaps, 1); assert.equal(r.arb.opened, 1);
+  const raw = env.TRADES_DB._raw;
+  assert.equal(raw.prepare("SELECT COUNT(*) n FROM pt_arb_basket WHERE status='open'").get().n, 1);
+  assert.equal(raw.prepare("SELECT cash FROM pt_account").get().cash, 10000, "the paper account is untouched");
+  const r2 = await tick(env, feed([]), { ...deps({}), events: async () => events });
+  assert.equal(r2.arb.scanned, 0, "the scan is throttled"); raw.exec("DELETE FROM pt_control WHERE key='arb_checked_at'");
+  const r3 = await tick(env, feed([]), { ...deps({}), events: async () => events });
+  assert.equal(r3.arb.opened, 0); assert.equal(raw.prepare("SELECT COUNT(*) n FROM pt_arb_gap").get().n, 1, "the same gap is not logged again within hours");
+  assert.throws(() => raw.exec("UPDATE pt_arb_gap SET ret = 0"), /append-only/); assert.throws(() => raw.exec("DELETE FROM pt_arb_gap"), /append-only/);
+  const mid = await get(env, "/api/charter");
+  assert.equal(mid.arbitrage.gaps_seen, 1); assert.equal(mid.arbitrage.baskets_open, 1); assert.equal(mid.arbitrage.baskets_settled, 0);
+  const r4 = await tick(env, feed([]), { ...deps({}), bySlug: async (slugs) => slugs.map((s) => ({ slug: s, yes: s === "gap-1" ? 1 : 0 })) });
+  assert.equal(r4.arb.settled, 1);
+  const c = await get(env, "/api/charter");
+  assert.equal(c.arbitrage.baskets_settled, 1); assert.ok(c.arbitrage.realised_pnl > 100 && c.arbitrage.realised_return > 0.2, "buying every outcome of a set that sums to 0.8 pays 1");
+});
+test("a basket stays open while any leg is undecided, and a failing events fetch never breaks the tick", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([]), { ...deps({}), events: async () => [mkEvent("gap", [0.2, 0.2, 0.2, 0.2])] });
+  const r = await tick(env, feed([]), { ...deps({}), bySlug: async (slugs) => slugs.map((s) => ({ slug: s, yes: s === "gap-1" ? 1 : 0.5 })) });
+  assert.equal(r.arb.settled, 0);
+  env.TRADES_DB._raw.exec("DELETE FROM pt_control WHERE key='arb_checked_at'");
+  const bad = await tick(env, feed([]), { ...deps({}), events: async () => { throw new Error("gamma 503"); } });
+  assert.equal(bad.arb.error, true); assert.equal(bad.ai, "ok");
+});

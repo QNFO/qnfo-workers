@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { CHARTER, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, byConfidence, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
+import { CHARTER, parseEvent, eventGap, basketPayoff, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, byConfidence, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
 
 test("parseMarket reads gamma outcomePrices and the end date", () => {
   const m = parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]', endDate: "2026-11-20T00:00:00Z" });
@@ -262,4 +262,25 @@ test("a position opened by the retired momentum strategy closes at the mark, sig
   const m = [{ slug: "a", yes: 0.6, closed: 0 }, { slug: "b", yes: 0.6, closed: 0 }, { slug: "c", yes: 0.6, closed: 0 }];
   const x = exits([{ id: 1, slug: "a", side: "yes", entry: 0.58, strategy: "momentum" }, { id: 2, slug: "b", side: "yes", entry: 0.58, strategy: "signal", fair: 0.9 }, { id: 3, slug: "c", side: "yes", entry: 0.58, strategy: "manual" }], m);
   assert.deepEqual(x.map((e) => [e.id, e.reason]), [[1, "retired"]]);
+});
+
+// ---- issue 9106: structural arbitrage ----
+const evt = (asks, bids, x = {}) => parseEvent({ slug: "e", title: "E", negRisk: true, markets: asks.map((a, i) => ({ slug: "e" + i, bestAsk: a, bestBid: bids ? bids[i] : a - 0.01, closed: false, active: true })), ...x });
+test("eventGap: a complete exclusive set that costs less than it pays is a signal; incomplete, closed, one-sided and fair sets are not", () => {
+  const g = eventGap(evt([0.2, 0.2, 0.2, 0.2]));
+  assert.equal(g.side, "yes"); assert.equal(g.n, 4); assert.ok(Math.abs(g.cost - 0.8 * 1.01) < 1e-9 && g.gain > 0.19 && g.ret > 0.23);
+  const n = eventGap(evt([0.31, 0.31, 0.31, 0.31], [0.3, 0.3, 0.3, 0.3])); assert.equal(n.side, "no"); assert.equal(n.payoff, 3);
+  assert.equal(eventGap(evt([0.25, 0.25, 0.25, 0.25])), null, "a fair set after slippage is not a gap");
+  assert.equal(eventGap(evt([0.2, 0.2, 0.2, 0.2], null, { negRisk: false })), null, "not mutually exclusive");
+  assert.equal(eventGap(evt([0.2, 0.2, 0.2, 0.2], null, { negRisk: true, negRiskAugmented: true })), null, "an augmented set carries placeholder outcomes");
+  const closed = parseEvent({ slug: "e", negRisk: true, markets: [0.2, 0.2, 0.2, 0.2].map((a, i) => ({ slug: "e" + i, bestAsk: a, bestBid: a - 0.01, closed: i === 2 })) });
+  assert.equal(eventGap(closed), null, "a closed leg means the set is incomplete");
+  assert.equal(eventGap(evt([0.2, 0.2])), null, "fewer than three outcomes");
+  const oneSided = parseEvent({ slug: "e", negRisk: true, markets: [0.2, 0.2, 0.2].map((a, i) => ({ slug: "e" + i, bestAsk: a, bestBid: i ? a - 0.01 : null })) });
+  assert.equal(eventGap(oneSided), null, "a leg with no bid cannot be priced");
+  assert.equal(eventGap(evt([0.26, 0.26, 0.26, 0.26], [0.25, 0.25, 0.25, 0.25])), null, "a set with a one-point spread that sums to about 1 is fair");
+});
+test("basketPayoff: the payoff is known only when every leg has resolved", () => {
+  assert.equal(basketPayoff("yes", 10, [1, 0, 0]), 10); assert.equal(basketPayoff("no", 10, [1, 0, 0]), 20);
+  assert.equal(basketPayoff("yes", 10, [0.6, 0, 0]), null); assert.equal(basketPayoff("yes", 10, []), null);
 });
