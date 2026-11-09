@@ -4290,6 +4290,7 @@ async function autoRouterShadowRun(env, limit) {
       exact_match: null,
       output_length_ratio: null,
       quality_verdict: "unjudged",
+      quality_judge_model: null,
       recorded: false
     };
     const eventId = "autorouter-shadow-" + runId + "-" + sourceHash.slice(0, 12);
@@ -4331,6 +4332,24 @@ async function autoRouterShadowRun(env, limit) {
             result.cost_delta_usd = Math.round((result.auto_cost_estimate_usd - result.baseline_cost_usd) * 1e6) / 1e6;
           }
         }
+        if (text) {
+          // judge while both answers are in memory: pairwise verdict from a family disjoint from both the baseline and cloudflare/auto (ENSEMBLE-POLICY-1)
+          const judgeModel = "@cf/zai-org/glm-5.3-flash";
+          result.quality_judge_model = judgeModel;
+          try {
+            const judged = await aiRunAttr(env, "qnfo-ai", "autorouter-shadow", judgeModel, {
+              messages: [{ role: "user", content: "Two assistants answered the same user prompt. Answer A:\n" + baseline.slice(0, 4000) + "\n\nAnswer B:\n" + text.slice(0, 4000) + "\n\nWhich answer is better for the user? Reply with exactly one word: A, B, or tie." }],
+              max_tokens: 16,
+              temperature: 0
+            });
+            const jt = String(extractWAContent(judged) || "").toLowerCase();
+            if (/\btie\b/.test(jt)) result.quality_verdict = "tie";
+            else if (/\bb\b/.test(jt) && !/\ba\b/.test(jt)) result.quality_verdict = "auto_better";
+            else if (/\ba\b/.test(jt) && !/\bb\b/.test(jt)) result.quality_verdict = "baseline_better";
+          } catch (e) {
+            result.quality_verdict = "judge_error";
+          }
+        }
       }
     } catch (e) {
       result.status = "failed";
@@ -4356,6 +4375,7 @@ async function autoRouterShadowRun(env, limit) {
         exact_match: result.exact_match,
         output_length_ratio: result.output_length_ratio,
         quality_verdict: result.quality_verdict,
+        quality_judge_model: result.quality_judge_model,
         error_type: result.error_type || null
       }), result.status === "ok" ? "ok" : result.status).run();
       result.recorded = true;
@@ -4371,7 +4391,7 @@ async function autoRouterShadowRun(env, limit) {
     requested: limit,
     sampled: results.length,
     ...results.length ? {} : { reason: "no eligible logged prompts in the 7-day window" },
-    quality_comparison: "unjudged; exact-match and output-length fields are descriptive proxies only",
+    quality_comparison: "pairwise verdict per replay from quality_judge_model, a family disjoint from the baseline and cloudflare/auto (ENSEMBLE-POLICY-1); exact-match and output-length fields are descriptive proxies only",
     results
   };
 }
