@@ -34,7 +34,7 @@ export function renderMarkdown(md) {
       const rows = []; while (i < lines.length && lines[i].startsWith("|")) rows.push(lines[i++]);
       const cells = (r) => r.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
       const head = cells(rows[0]), body = rows.slice(2).map(cells);
-      out.push('<div class="t"><table><thead><tr>' + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>" + body.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>");
+      out.push('<div class="t" tabindex="0" role="region" aria-label="Table (scrolls sideways)"><table><thead><tr>' + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>" + body.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>");
       continue;
     }
     if (/^\d+\. /.test(l)) { const it = []; while (i < lines.length && /^\d+\. /.test(lines[i])) it.push(lines[i++].replace(/^\d+\. /, "")); out.push("<ol>" + it.map((x) => "<li>" + inline(x) + "</li>").join("") + "</ol>"); continue; }
