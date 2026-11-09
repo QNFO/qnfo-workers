@@ -368,7 +368,7 @@ def check_config(base, path, added=None):
     return bad
 
 COMPAT_MAX_DAYS = 90
-WORKER_HARD_CAP = 30
+WORKER_HARD_CAP = 40  # owner 2026-11-09: raise from 30 so a tracked worker is not blocked; prefer folding workers over retiring
 
 def compat_age_days(d):
     import datetime

@@ -26,6 +26,10 @@ export function sessionTurnRoute(step, escalate, fallback) {
   if (escalate && step && step.canEscalate) return CODE_SESSION_ROUTE_ESCALATE;
   return fallback;
 }
+// ROADMAP-1 code-session-escalate: an unanswered turn escalates once (not when the owner already escalated it) and only while the budget is ok.
+export function shouldEscalateUnanswered(answered, alreadyEscalated, step) {
+  return !answered && !alreadyEscalated && !!step && step.canEscalate === true;
+}
 export function sessionBudgetFrom(value) {
   const n = Number(value);
   return Number.isFinite(n) && n >= 1000 && n <= 1000000 ? Math.round(n) : CODE_SESSION_BUDGET_DEFAULT;
