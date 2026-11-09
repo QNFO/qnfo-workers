@@ -170,7 +170,7 @@ def redirect_entry():
     """TP-3B-ATTACH-1: the Single Redirect rule. A dynamic redirect takes its target as an expression (static "$uri" text is
     not substituted, so the old form never produced a working 301); the query string is kept by preserve_query_string."""
     return {
-        "name": REDIRECT_RULE_NAME,
+        "ref": REDIRECT_RULE_NAME,  # TP-3B-ATTACH-1: a ruleset rule has no "name" field (Cloudflare answered 400 unknown field "name"); "ref" is its stable key
         "expression": '(http.host eq "%s")' % OLD_HOSTNAME,
         "action": "redirect",
         "action_parameters": {
@@ -192,7 +192,7 @@ def attach_tech_redirect(zone):
     if st == 200 and j.get("success") and j.get("result"):
         ruleset_id = j["result"]["id"]
         for rule in j["result"].get("rules") or []:
-            if rule.get("name") == REDIRECT_RULE_NAME:
+            if rule.get("ref") == REDIRECT_RULE_NAME or rule.get("description") == entry["description"]:
                 RESULT["redirect_rule_id"] = rule.get("id")
                 if rule.get("action_parameters") == entry["action_parameters"] and rule.get("expression") == entry["expression"]:
                     print("redirect rule already present: %s" % rule.get("id"))
