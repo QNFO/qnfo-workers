@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.15.0-codeagent";
+var VERSION = "1.15.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -396,7 +396,7 @@ async function setMeta(env, k, v) {
 // feed key -> id prefix of the postings it produced (a feed that failed this run never expires anything)
 function feedPrefix(feed) {
   const [kind, arg] = feed.split(":");
-  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, recruitee: `rc:${arg}:`, smartrecruiters: `sr:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", remoteok: "rok:", himalayas: "him:", hn: "hn:", publicsector: `ps:${arg}:` }[kind];
+  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, recruitee: `rc:${arg}:`, smartrecruiters: `sr:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", remoteok: "rok:", himalayas: "him:", hn: "hn:", publicsector: `ps:${arg}:`, workable: `wk:${arg}:` }[kind];
 }
 const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -411,7 +411,7 @@ const BOARDS = {
   ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro"],
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
-  remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=autonomous", "q=ai safety", "q=program manager", "q=analyst"],
+  remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=autonomous", "q=ai safety", "q=program manager", "q=analyst", "q=ai governance", "q=ai policy", "q=simulation", "q=decision science"],   // JOBSEARCH-FIT-1: target-role queries
   muse: [],   // JOBSEARCH-MUSE-RETIRED-1 (issue 2562, 2026-11-09): all 8 Muse feeds answered HTTP 404 for 20 runs in a row, so /api/ops stayed degraded (503) and the traffic-health journey counted it as a 5xx; an empty list drops them from ACTIVE_FEEDS and the fetch loop (re-add the combinations when the endpoint answers again)
   jobicy: ["netherlands", "europe", "emea", "tag:research", "tag:data science", "tag:policy", "tag:machine learning"],
   remoteok: [true],
@@ -419,6 +419,16 @@ const BOARDS = {
   hn: [true],
   arbeitnow: true,
   publicsector: ["werkenvoornederland", "academictransfer", "euraxess"],
+};
+// JOBSEARCH-FIT-1 (2026-11-09): employers that post the owner's target roles (AI governance, evaluation and assurance, autonomous-systems research, mobility modelling)
+// and whose roles are often seen only on LinkedIn. These slugs could not be probed from the session (its egress proxy refuses the ATS hosts), so the worker probes
+// them itself: a candidate board that answers is ranked like any board and recorded in jobsearch_feeds; one that answers 404 or fails is skipped silently and never
+// counts as a feed outage. GET /api/ops lists which candidates answered ("candidates_live"); a live one moves into BOARDS by a later change.
+const CANDIDATE_BOARDS = {
+  greenhouse: ["deepmind", "appliedintuition", "aurorainnovation", "motional", "kodiak", "zipline", "credoai", "epochai", "partnershiponai", "isomorphiclabs", "here", "tomtom", "bosch", "arcadis", "thoughtworks", "humanloop", "anthropicpolicy"],
+  lever: ["holisticai", "arthur", "fiddlerai", "farai", "conjecture", "aisafety", "governanceai", "oxa", "einride", "volocopter", "lilium"],
+  ashby: ["patronus-ai", "haize-labs", "grayswan", "apollo-research", "lakera", "transluce", "epoch", "far-ai", "safe-ai", "aisi", "goodfire", "meter", "metr"],
+  workable: ["holistic-ai", "saidot", "trail-ml", "tno", "royal-haskoningdhv", "goudappel", "deltares", "rand-europe", "ada-lovelace-institute", "the-alan-turing-institute", "alan-turing-institute", "turing", "govai", "centre-for-the-governance-of-ai"],
 };
 const ACTIVE_FEEDS = new Set(Object.entries(BOARDS).flatMap(([kind, args]) =>
   kind === "arbeitnow" ? ["arbeitnow"] : args.map((arg) => `${kind}:${arg}`)
@@ -468,6 +478,11 @@ const FETCHERS = {
   async ashby(slug) {
     const d = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
     return (d.jobs || []).filter((j) => j.isListed !== false).map((j) => ({ id: `ab:${slug}:${j.id}`, source: "ashby", company: slug, title: j.title || "", location: (j.location || "") + (j.isRemote ? " (Remote)" : ""), url: j.jobUrl || "", desc: j.descriptionPlain || stripHtml(j.descriptionHtml || "") }));
+  },
+  // JOBSEARCH-FIT-1: Workable public job widget (used by many EU research institutes and AI-governance start-ups); details=true carries the posting text
+  async workable(slug) {
+    const d = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(slug)}?details=true`);
+    return (Array.isArray(d.jobs) ? d.jobs : []).map((j) => ({ id: `wk:${slug}:${j.shortcode || j.id || j.title}`, source: "workable", company: d.name || slug, title: j.title || "", location: [j.city, j.state, j.country].filter(Boolean).join(", ") + (j.telecommuting ? " (Remote)" : ""), url: j.url || j.application_url || `https://apply.workable.com/${slug}/j/${j.shortcode || ""}`, desc: stripHtml((j.description || "") + " " + (j.requirements || "")) }));
   },
   async remotive(cat) {
     const d = await getJson(cat.startsWith("q=") ? `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(cat.slice(2))}&limit=100` : `https://remotive.com/api/remote-jobs?category=${cat}`);
@@ -686,10 +701,11 @@ const SURVEY = [
   ["fam_climate", "Work", "Sustainability, climate and energy-transition roles?", null],
   ["fam_autonomy", "Work", "Autonomous and AI systems research: agentic systems, AI evaluation and assurance, AI oversight and socio-technical systems research?", true],   // JOBSEARCH-AUTONOMY-1 (owner direction 2026-11-09): the lead target
   ["fam_ai", "Work", "AI and machine-learning product, governance, safety and research-integrity roles?", true],
+  ["fam_sysmodel", "Work", "Systems modelling, simulation and decision-science roles (network models, travel-demand models, digital twins, operations research)?", true],   // JOBSEARCH-FIT-1
   ["fam_quantum", "Work", "Quantum computing roles?", false],   // JOBSEARCH-AUTONOMY-1: quantum is no longer a target (owner, 2026-11-09); a yes brings it back
   ["fam_edu", "Work", "Teaching, training and academic roles?", null],
   ["fam_science", "Work", "Research scientist, quantitative and applied-science roles (statistics, modelling, physics)?", true],
-  ["fam_tech", "Work", "Research-engineering roles (research engineer, ML engineer, data engineer) when the posting matches your record?", null],
+  ["fam_tech", "Work", "Hands-on coding roles (research engineer, ML or AI engineer, data engineer, member of technical staff)?", false],   // JOBSEARCH-FIT-1 (owner, 2026-11-09): a systems researcher, not a coder; these roles were the rejections
   ["lvl_manage", "Level", "Roles that manage people?", null],
   ["lvl_mid", "Level", "Roles below senior level (no senior, lead, head, principal or director in the title)?", null],
   ["type_contract", "Contract", "Contract, freelance or interim engagements?", true],
@@ -706,7 +722,7 @@ const FAMILIES = {
   fam_product: ["product manager", "product owner", "head of product", "group product", "product lead", "director of product", "principal product", "product management"],
   fam_program: ["program manager", "programme manager", "project manager", "portfolio manager", "pmo", "delivery manager", "head of programs", "head of programmes", "director of programs", "programme director", "program director", "program lead", "programme lead",
     "programmamanager", "programmaleider", "programmadirecteur", "portfoliomanager", "projectmanager", "projectleider"],
-  fam_research: ["research manager", "research director", "research program", "research programme", "head of research", "director of research", "research operations", "research lead", "grants manager", "research coordinator", "research partnerships", "research strategy", "senior researcher", "principal researcher", "research advisor", "research adviser", "research fellow", "evaluation manager", "monitoring and evaluation",
+  fam_research: ["research manager", "research director", "research program", "research programme", "head of research", "director of research", "research operations", "research lead", "grants manager", "research coordinator", "research partnerships", "research strategy", "senior researcher", "principal researcher", "research advisor", "research adviser", "research fellow", "evaluation manager", "monitoring and evaluation", "research program manager", "research programme manager", "research portfolio", "ai research manager", "head of ai research", "ai research lead", "research partnerships lead",
     "onderzoeker", "onderzoeksleider", "onderzoeksmanager", "onderzoeksadviseur", "hoofd onderzoek", "wetenschappelijk onderzoeker"],
   fam_consult: ["consultant", "engagement manager", "advisory", "associate partner", "management consult*", "strategy consult*"],
   fam_nonprofit: ["executive director", "managing director", "country director", "chief of staff", "director of operations", "foundation"],
@@ -714,9 +730,13 @@ const FAMILIES = {
   fam_contract: ["contracting officer", "contract manager", "contracts manager", "procurement manager", "vendor manager", "sourcing manager"],
   fam_social: ["housing", "social policy", "community development", "ageing", "aging", "livability", "affordable"],
   fam_climate: ["sustainability", "climate", "energy transition", "esg", "net zero", "decarbon"],
-  fam_ai: ["ai governance", "ai policy", "applied ai", "ai product", "ml product", "responsible ai", "ai safety", "trust and safety", "ai evaluation", "ai ethics", "ai strategy", "ai program", "ai programme", "research integrity", "scientific integrity", "open science"],
+  fam_ai: ["ai governance", "ai policy", "applied ai", "ai product", "ml product", "responsible ai", "ai safety", "trust and safety", "ai evaluation", "ai ethics", "ai strategy", "ai program", "ai programme", "research integrity", "scientific integrity", "open science",
+    "ai risk", "model risk", "operational risk", "ai assurance", "ai audit", "algorithmic audit", "ai standards", "ai regulation", "ai act", "ai compliance", "ai policy researcher", "technology policy", "tech policy", "digital policy"],   // JOBSEARCH-FIT-1 (2026-11-09): AI governance, policy, risk and assurance titles
   fam_autonomy: ["autonomous systems", "autonomous system", "autonomy", "agentic", "multi-agent", "ai systems", "systems research", "systems researcher", "ai research", "ai assurance", "ai evaluation", "model evaluation", "evaluations",
-    "ai oversight", "socio-technical", "sociotechnical", "complex systems", "ai safety", "alignment"],
+    "ai oversight", "socio-technical", "sociotechnical", "complex systems", "ai safety", "alignment", "red team", "red teaming", "frontier risk", "safety research", "evals lead", "evaluation lead", "evaluation scientist"],
+  // JOBSEARCH-FIT-1: systems modelling and decision science, the owner's 20-year thread (network models, FHWA tour-based model, simulation) as a role family of its own
+  fam_sysmodel: ["simulation", "network model*", "network modelling", "network modeling", "systems model*", "systems analyst", "systems analysis", "decision science", "decision scientist", "decision analyst", "decision support", "operations research",
+    "transport model*", "transportation model*", "travel demand", "digital twin", "system dynamics", "modelling lead", "modeling lead", "agent-based", "verkeersmodel*", "modelleur"],
   fam_quantum: ["quantum"],
   fam_edu: ["lecturer", "professor", "teaching fellow", "instructor", "trainer", "education manager", "learning manager", "curriculum"],
   fam_science: ["research scientist", "applied scientist", "quantitative researcher", "quantitative analyst", "physicist", "economist", "statistician", "computational scientist", "research associate", "postdoctoral", "principal investigator", "data scientist", "scientist"],
@@ -758,6 +778,7 @@ const MANAGE_RE = /\b(head of|director|manager|lead|chief|vp|vice president)\b/i
 const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect", "counsel", "attorney", "lawyer", "paralegal", "legal", "marketing", "forward deployed", "deployment strategist",
   "sales", "account executive", "account manager", "business development", "recruit", "talent", "payroll", "accountant", "accounting", "treasury", "fp&a", "tax ", "facilities", "warehouse", "driver", "nurse", "technician",
   "customer success", "customer support", "customer service", "support specialist", "financial", "webinar", "solutions", "devops", "site reliability", "designer", "finance", "people partner", "hr ", "receptionist", "assistant",
+  "developer", "programmer", "member of technical staff", "technical staff", "mid level", "mid-level", "software", "full stack", "full-stack", "backend", "frontend", "front-end", "back-end", "mlops", "data entry",
   "stagiair", "stageplaats", "afstudeer", "assistent", "administratief", "secretaresse", "verpleegkundige", "chauffeur", "jurist", "juridisch", "advocaat", "controller", "salaris", "monteur", "schoonmaak", "beveiliger", "handhaver", "toezichthouder", "rechercheur", "boa ", "verpleegkundig", "stage "];   // the Dutch forms of the same noise (JOBSEARCH-NL-PUBLIC-SECTOR-1)
 const TITLE_EXCLUDE_SOFT = ["scientist"];
 const ENGINEERING_WORDS = ["engineer", "architect"];   // excluded unless the title is a research-engineering title and the posting shows evidence of the owner record
@@ -781,7 +802,7 @@ const tokens = (title) => [...new Set(String(title || "").toLowerCase().split(/[
 
 // ctx = what the owner told us. answers: {id: true|false|null}; learned: {boost:Set, block:Set} from likes and dislikes of real postings
 const COMPANY_SUFFIX = /(^|\s)(b\.?v\.?|n\.?v\.?|inc\.?|ltd\.?|llc|gmbh|plc|s\.?a\.?|co\.?)(?=$|\s)/g;
-const OPT_IN_FAMILIES = new Set(["fam_edu"]);
+const OPT_IN_FAMILIES = new Set(["fam_edu", "fam_tech"]);   // JOBSEARCH-FIT-1: coding roles need an explicit yes
 const coKey = (c) => String(c || "").toLowerCase().replace(COMPANY_SUFFIX, " ").replace(/[^a-z0-9]+/g, "");
 function makeCtx(answers, feedback, outcomeWeights = {}, owned = null) {
   const a = {};
@@ -791,7 +812,7 @@ function makeCtx(answers, feedback, outcomeWeights = {}, owned = null) {
   const co = {};
   // what a rejection teaches depends on why: "field" counts double for the title words, "level", "location" and "applied" teach nothing about the words, "company" blocks the employer at once
   for (const f of feedback || []) {
-    const teachesWords = !["level", "location", "applied"].includes(f.reason), w = f.reason === "field" ? 2 : 1;
+    const teachesWords = !["level", "location", "applied"].includes(f.reason), w = f.reason === "field" || f.reason === "coding" ? 2 : 1;
     if (teachesWords) for (const t of tokens(f.title)) { const m = f.verdict === "like" ? like : dis; m[t] = (m[t] || 0) + w; }
     const k = coKey(f.company);
     if (k) { const o = co[k] || (co[k] = { like: 0, dis: 0 }); if (f.verdict === "like") o.like++; else if (f.reason !== "applied") o.dis += f.reason === "company" ? 3 : 1; }
@@ -891,7 +912,64 @@ function locationGate(loc, descHead, ctx = DEFAULT_CTX) {
   }
   return a.loc_world ? ["check", `Elsewhere: you would move; authorized only in NL/US, visa needed (${loc})`] : ["fail", `outside NL, EU and US, not selected: ${loc}`];
 }
+// JOBSEARCH-LINKEDIN-1 (owner, 2026-11-09: "I don't even know what keywords I should be searching for on LinkedIn"). LinkedIn cannot be read by this worker
+// (User Agreement 8.2), so the search hands the owner the exact searches instead: LinkedIn's boolean job search, filtered to senior and director level and the last
+// week, in the places the owner chose; the same query on Google restricted to linkedin.com/jobs, and on Indeed. A posting found there is pasted into "Check a posting".
+const LINKEDIN_SEARCHES = [
+  { id: "ai_gov", label: "AI governance, policy and risk", why: "Your FHWA and AARP program leadership plus your AI audit method", q: '("AI governance" OR "AI policy" OR "responsible AI" OR "AI risk" OR "AI assurance") NOT (engineer OR developer)' },
+  { id: "ai_eval", label: "AI evaluation and assurance research", why: "Your published audit method for autonomous AI systems", q: '("AI evaluation" OR "model evaluation" OR "AI audit" OR "evaluations lead" OR "red teaming") AND (research OR lead OR manager) NOT (engineer OR developer)' },
+  { id: "autonomy", label: "Autonomous and agentic systems research", why: "QNFO: you run an autonomous research system in production", q: '("autonomous systems" OR "agentic" OR "multi-agent" OR "AI systems") AND (researcher OR "research lead" OR "research manager") NOT (engineer OR developer)' },
+  { id: "sysmodel", label: "Systems modelling and simulation", why: "Network models at DVRPC and IBI; the FHWA Tour-Based Model System", q: '("systems modelling" OR "systems modeling" OR "simulation" OR "network modelling" OR "network modeling" OR "digital twin") AND (lead OR senior OR principal) NOT (engineer OR developer)' },
+  { id: "mobility", label: "Transport and mobility AI", why: "20 years of transportation network modelling; co-directed the $10M NHTS", q: '(mobility OR transport OR transportation OR "travel demand") AND (AI OR modelling OR modeling OR analytics) AND (lead OR senior OR principal OR manager) NOT (engineer OR developer)' },
+  { id: "decision", label: "Decision science", why: "AARP Livability Index: decision support built from 50+ data sources", q: '("decision science" OR "decision scientist" OR "decision support" OR "operations research") NOT (engineer OR developer)' },
+  { id: "research_lead", label: "Research program and portfolio leadership", why: "You directed national research programs and contractor teams", q: '("research program manager" OR "research programme manager" OR "head of research" OR "research director" OR "research portfolio" OR "AI research manager")' },
+  { id: "ai_policy_nl", label: "AI policy in Dutch government (in Dutch)", why: "Dutch ministries and regulators post AI governance roles on LinkedIn", q: '("AI" OR "algoritme" OR "algoritmes") AND (beleidsadviseur OR "strategisch adviseur" OR toezicht OR governance)' },
+];
+function linkedinSearches(ctx = DEFAULT_CTX) {
+  const a = ctx.a, places = [];
+  if (a.loc_nl !== false) places.push({ key: "nl", label: "Netherlands", li: "location=Netherlands", indeed: "https://nl.indeed.com/jobs?l=Nederland&fromage=7&q=", google: "Netherlands" });
+  if (a.loc_remote !== false) places.push({ key: "remote", label: "Remote in Europe", li: "location=European%20Union&f_WT=2", indeed: "https://nl.indeed.com/jobs?l=Remote&fromage=7&q=", google: "remote Europe" });
+  if (a.loc_eu) places.push({ key: "eu", label: "Europe", li: "location=European%20Union", indeed: "https://de.indeed.com/jobs?fromage=7&q=", google: "Europe" });
+  if (a.loc_us) places.push({ key: "us", label: "United States", li: "location=United%20States", indeed: "https://www.indeed.com/jobs?fromage=7&q=", google: "United States" });
+  if (!places.length) places.push({ key: "nl", label: "Netherlands", li: "location=Netherlands", indeed: "https://nl.indeed.com/jobs?l=Nederland&fromage=7&q=", google: "Netherlands" });
+  const enc = encodeURIComponent;
+  const plain = (q) => q.replace(/\s+NOT\s+\([^)]*\)/g, "").replace(/\bAND\b/g, " ").replace(/\s+/g, " ").trim();
+  return {
+    how: "Each search opens LinkedIn filtered to mid-senior and director roles posted in the last week. On LinkedIn, switch on Job alert at the top of the results so new roles come to you. Paste any posting you like into Check a posting below: the search scores it against your record and remembers it.",
+    searches: LINKEDIN_SEARCHES.map((x) => ({
+      ...x,
+      links: places.map((pl) => ({
+        place: pl.label,
+        linkedin: `https://www.linkedin.com/jobs/search/?keywords=${enc(x.q)}&${pl.li}&f_E=4%2C5%2C6&f_TPR=r604800&sortBy=DD`,
+        google: `https://www.google.com/search?q=${enc("site:linkedin.com/jobs/view " + plain(x.q) + " " + pl.google)}&tbs=qdr:w`,
+        indeed: pl.indeed + enc(plain(x.q)),
+      })),
+    })),
+  };
+}
 // score the posting against the profile. mode "analyze" never drops a posting: it reports the fit and what the gates would say
+// JOBSEARCH-FIT-1 (owner, 2026-11-09: "I'm applying for jobs and get rejected because you're showing me shitty jobs"). The owner is a systems researcher who directs
+// and evaluates systems, not a coder. Audit of the live record that day: 5 of the 7 roles applied to or approved were hands-on coding or big-lab research-engineering roles
+// (Flexport Applied AI Engineer x2, Tavily Staff Applied AI Researcher, OpenAI Applied AI Engineer, Turing Staff Research Scientist), and 36 of 63 pending matches were
+// engineer, data-engineer or plain data-scientist titles, or outside the places the owner chose. A posting is read for how much hands-on code it asks for; a heavy load drops it.
+const CODING_SIGNALS = [
+  ["production code", /production[- ](?:grade |quality |ready )?code/], ["writing code", /(?:write|writing|ship|shipping) (?:clean |high[- ]quality |production )?code/], ["hands-on coding", /hands[- ]on (?:coding|programming|development)/],
+  ["software engineering experience", /software (?:engineering|development) (?:experience|background|skills)|experience (?:as|in) (?:a )?software (?:engineer|development)/],
+  ["strong programming", /(?:strong|excellent|expert|advanced) (?:programming|coding|software)/], ["programming language proficiency", /(?:proficien\w*|fluen\w*|expert\w*|expertise) (?:in|with) (?:python|java|c\+\+|go|golang|rust|scala|typescript|javascript)\b/],
+  ["deep-learning frameworks", /\b(?:pytorch|tensorflow|jax)\b/], ["GPU and CUDA", /\bcuda\b|\btriton\b|gpu kernels?/], ["infrastructure tooling", /\b(?:kubernetes|terraform|docker)\b/], ["CI/CD", /\bci\/cd\b/],
+  ["code review", /\bcode reviews?\b|pull requests?/], ["backend or full-stack", /\bback[- ]?end\b|\bfull[- ]stack\b|\bmicroservices?\b/], ["distributed systems", /distributed systems/],
+  ["years of coding", /\d+\+? years? (?:of )?(?:professional )?(?:software|programming|coding|engineering) experience/], ["coding interview", /coding (?:interview|challenge|exercise|assessment)|leetcode/],
+  ["model training at scale", /(?:train|training|fine[- ]tun\w*) (?:large )?(?:models|llms) at scale|pre[- ]?training/], ["codebase ownership", /\bcodebase\b|\brepositor(?:y|ies)\b/],
+];
+function codingLoad(desc) {
+  const low = String(desc || "").toLowerCase();
+  const hits = CODING_SIGNALS.filter(([, re]) => re.test(low)).map(([label]) => label);
+  return { n: hits.length, hits };
+}
+const RANK_RULES = "JOBSEARCH-FIT-1";   // part of prefs_hash: a new rule set retires pending matches the new rules no longer list, on the first run after deploy
+const CODING_DROP_AT = 4;   // four or more distinct hands-on-code asks: the role is a coding role whatever its title says
+// role families that are the owner's target (autonomous and AI systems research, AI governance and risk, systems modelling, research leadership)
+const TARGET_FAMILIES = new Set(["fam_autonomy", "fam_ai", "fam_sysmodel", "fam_research"]);
 /* JOBSEARCH-EXPLORE-1 (owner 2026-11-09: "My diverse experience doesn't fit neatly into keywords"). A posting whose title is in no role family used to be
    dropped before its text was read. Now, when the title is at least research- or systems-flavoured (EXPLORE_TITLE_RX is a wide net, not a verdict), the posting text is
    compared with the owner's own record (RECORD_TERMS: distinct words from the verified facts, skills, roles, summaries and publications, minus common business words).
@@ -941,10 +1019,15 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (!famOn.length && !medium.length && !explore) drop("title not in your role families");
   if (!cl) cl = clustersIn(desc, job.title);
   const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000), ctx);
-  if (gate === "fail") drop(locNote, /not selected/.test(locNote));
+  if (gate === "fail") drop(locNote);   // JOBSEARCH-FIT-1: a place the owner said no to is never shown, not even as a stretch (US roles filled the list while loc_us was No)
   if (gate === "check" && locNote === "location missing" && mode !== "analyze") drop("no location in the posting; it cannot be placed against your preferences");
   else if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
   if (!famOn.length && cl.size < 2 && !explore) drop("generic title and thin evidence in the posting");
+  const code = codingLoad(desc);
+  if (ctx.a.fam_tech !== true) {
+    if (code.n >= CODING_DROP_AT) drop("coding-heavy role: the posting asks for " + code.hits.slice(0, 3).join(", "));
+    else if (code.n >= 2) { pen += 6 * code.n; flags.push("CODING: the posting asks for some hands-on code (" + code.hits.join(", ") + ")"); }
+  }
   if (famOn.length && !cl.size) pen += 15;
   const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : explore ? Math.min(30, 10 + 2 * explore.n) : 12;
   const eScore = Math.min(45, 9 * cl.size);
@@ -958,6 +1041,8 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (uniqA) why.push("uncommon intersection: research-program or policy-research management + AI or research-integrity systems");
   else if (uniqB) why.push("uncommon intersection: public-policy or planning expertise + data and analytics");
   let score = tScore + eOwned + (uniqA || uniqB ? 15 : 0);
+  const target = famOn.filter((k) => TARGET_FAMILIES.has(k));
+  if (target.length) { score += 10; why.push("target role for a senior systems researcher: " + target.map((k) => k.replace("fam_", "")).join(", ")); }
   const outcomeDelta = Math.max(-12, Math.min(12, scoreFeatures(famOn, cl).reduce((sum, feature) => {
     const weight = Number(ctx.outcomeWeights && ctx.outcomeWeights[feature]);
     return sum + (Number.isFinite(weight) ? weight : 0);
@@ -1256,11 +1341,22 @@ async function collectAndRank(ctx, onlyGroups) {
       });
     }
   }
+  // candidate boards (JOBSEARCH-FIT-1): fetched once each, never retried, and a failure is silent (see CANDIDATE_BOARDS)
+  const candidatesLive = [];
+  if (!onlyGroups || onlyGroups.includes("candidates")) {
+    for (const [kind, slugs] of Object.entries(CANDIDATE_BOARDS)) for (const a of slugs) {
+      const feed = `${kind}:${a}`;
+      if (ACTIVE_FEEDS.has(feed)) continue;
+      tasks.push(async () => { try { const jobs = await FETCHERS[kind](a); return jobs.length ? { feed, jobs, candidate: true } : { feed, candidate: true, quiet: true }; } catch (e) { return { feed, candidate: true, quiet: true }; } });
+    }
+  }
   const kept = [], errors = [], excl = {}, feedResults = [];
   let fetched = 0;
   // each feed is ranked as soon as it is parsed so only passing jobs stay in memory
   await pool(tasks.map((t) => async () => {
     const r = await t();
+    if (r.quiet) return;
+    if (r.candidate) candidatesLive.push(r.feed);
     if (r.err) { errors.push(r.err); feedResults.push({ feed: r.feed, ok: false, error: r.err }); return; }
     for (const jb of r.jobs) jb.company = DISPLAY[jb.company] || jb.company;
     fetched += r.jobs.length;
@@ -1270,7 +1366,7 @@ async function collectAndRank(ctx, onlyGroups) {
     kept.push(...ok);
   }), 6);
   kept.sort((a, b) => b.match.score - a.match.score);
-  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults };
+  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults, candidatesLive };
 }
 // JOBSEARCH-LLM-RERANK-1: reorder-only re-rank of the top passing postings.
 // The model may only reorder and add one sentence of reason per posting; it never writes resume or note text
@@ -1428,7 +1524,7 @@ async function loadCtx(env) {
   return makeCtx(answers, fb, outcomeScoreWeights(outcomeRows), OWNED);
 }
 async function getMeta(env, k) { const r = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_meta WHERE k=?").bind(k).first(); return r ? r.v : null; }
-const REASONS = ["field", "level", "location", "company", "applied", "other"];
+const REASONS = ["field", "coding", "level", "location", "company", "applied", "other"];   // JOBSEARCH-FIT-1: "coding" = too much hands-on code
 async function addFeedback(env, title, company, verdict, source, reason = null) {
   await env.JOBS_DB.prepare("INSERT INTO jobsearch_feedback (ts, title, company, verdict, source, reason) VALUES (?1,?2,?3,?4,?5,?6)").bind(new Date().toISOString(), String(title || "").slice(0, 200), String(company || "").slice(0, 120), verdict, source, REASONS.includes(reason) ? reason : null).run();
 }
@@ -1900,9 +1996,10 @@ async function run(env) {
     await ensureAutonomyBrand(env).catch((e) => logErr("autonomy-brand", e));
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
-    const prefsHash = await sha256hex(JSON.stringify([ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
+    const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
-    let { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank(ctx);
+    let { kept, errors, excl, fetched, feeds, feedResults, candidatesLive } = await collectAndRank(ctx);
+    await setMeta(env, "candidates_live", JSON.stringify((candidatesLive || []).sort())).catch((e) => logErr("candidates-live", e));
     // what the owner already decided (rejected, applied, approved, got a reply) never comes back, under any id, board or location; and a role already pending under another id is not listed twice
     const decided = await decidedKeys(env);
     const pendingRows = (await env.JOBS_DB.prepare("SELECT id, company, title FROM jobsearch_matches WHERE status='pending_owner_approval' AND last_seen >= ?").bind(iso(t0 - 72 * 3600 * 1000)).all()).results;
@@ -2423,7 +2520,8 @@ async function opsReport(env) {
   const counts = (await db.prepare("SELECT status, COUNT(*) AS n FROM jobsearch_matches GROUP BY status").all()).results;
   const blockedN = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_matches WHERE verified=0 AND status='pending_owner_approval'").first()).n;
   const stalePending = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_matches WHERE status='pending_owner_approval' AND last_seen < ?").bind(iso(now - 72 * 3600000)).first()).n;
-  const rerank = Object.fromEntries(((await db.prepare("SELECT k, v FROM jobsearch_meta WHERE k IN ('rerank_status','rerank_at','rerank_via')").all()).results || []).map((r) => [r.k, r.v]));   // JOBSEARCH-LLM-RERANK-1: what the last run's AI re-rank did
+  const rerank = Object.fromEntries(((await db.prepare("SELECT k, v FROM jobsearch_meta WHERE k IN ('rerank_status','rerank_at','rerank_via')").all()).results || []).map((r) => [r.k, r.v]));
+  let candidatesLive = []; try { candidatesLive = JSON.parse((await db.prepare("SELECT v FROM jobsearch_meta WHERE k='candidates_live'").first() || {}).v || "[]"); } catch (e) { logErr("candidates-live-read", e); }   // JOBSEARCH-LLM-RERANK-1: what the last run's AI re-rank did
   const ageMin = last ? Math.round((now - Date.parse(last.finished_at)) / 60000) : null;
   const ledgerAge = Math.floor((now - Date.parse(LEDGER_VERIFIED_ON)) / 86400000);
   const checks = [
@@ -2436,7 +2534,7 @@ async function opsReport(env) {
     { fm: "jobsearch-intake-collapse", ok: !(recent.length >= 3 && recent.every((r) => Number(r.fetched) < 1000 || Number(r.passed) === 0)), detail: recent.map((r) => `${r.fetched}/${r.passed}`).join(" ") + " (fetched/passed, last 3 runs)" },
     { fm: "jobsearch-auth-unavailable", ok: !!env.EMAIL || !!env.LOOP_TOKEN, detail: `email sign-in ${env.EMAIL ? "bound" : "missing"}, loop token ${env.LOOP_TOKEN ? "set" : "not set"}` },
   ];
-  return { worker: WORKER, version: VERSION, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
+  return { worker: WORKER, version: VERSION, candidates_live: candidatesLive, candidates_probed: Object.values(CANDIDATE_BOARDS).flat().length, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
 }
 const INDEX = {
   worker: WORKER, version: VERSION,
@@ -2465,6 +2563,7 @@ const handler = {
     if (p === "/api/ops" && m === "GET") { const rep = await opsReportCached(env, url.searchParams.get("fresh") === "1"); return J(rep, rep.status === "ok" ? 200 : 503); }
     if ((p === "/api/outcomes" || p === "/api/funnel") && m === "GET") return J(await outcomes(env));
     if (p === "/api/followups" && m === "GET") return J(await followups(env));
+    if (p === "/api/linkedin" && m === "GET") return J(linkedinSearches(await loadCtx(env)));   // JOBSEARCH-LINKEDIN-1
     if (p === "/api/prefs" && m === "GET") {
       const ctx = await loadCtx(env);
       const fb = (await env.JOBS_DB.prepare("SELECT verdict, title FROM jobsearch_feedback ORDER BY id DESC LIMIT 20").all()).results;
@@ -2657,7 +2756,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -2763,6 +2862,7 @@ h1{margin:0 0 4px;font-size:19px}.sub{color:var(--mute);font-size:13px}
 select,input,button{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
 button{cursor:pointer}button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button:disabled{opacity:.5;cursor:default}
 main{max-width:900px;margin:0 auto;padding:16px}
+.lis{border-top:1px solid var(--line);padding:10px 0}.lis:first-of-type{border-top:0}a.lib{display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;border-radius:8px;background:var(--acc);color:#fff;text-decoration:none;font-weight:600}.lis .acts a{align-self:center}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 12px}
 .row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.t{font-weight:600;font-size:16px}
 .badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff}.A{background:var(--a)}.B{background:var(--b)}.C{background:#6b6b66}
@@ -2777,7 +2877,7 @@ details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:
 <button id="vnew" class="p">New jobs</button><button id="vmine">My applications</button><button id="recallbtn">Questions about you</button><select id="status"><option value="">New jobs only</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
 <input id="q" placeholder="Search title, company, place" size="26"><button id="ready">Ready to apply</button><button id="run" class="p">Run now</button><a href="/cv"><b>My CV</b></a> <a href="/prep"><b>Apply and prepare</b></a> <a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
 <main><div id="recallpanel" class="card" style="display:none"></div><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="fillsetup"><summary>One-click apply: set up once</summary><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="p" style="padding:6px 10px;border-radius:6px;background:var(--acc);color:#fff;text-decoration:none">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></details><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
-<details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="follow"></div><div id="list"></div></main>
+<details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><details id="lisearch" open><summary>What to search on LinkedIn (tap to open)</summary><div id="lilist" class="mute">loading</div></details><div id="follow"></div><div id="list"></div></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
@@ -2808,10 +2908,12 @@ $('#run').onclick=async()=>{$('#run').disabled=true;try{await authed(()=>api('/a
 for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
 async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q"><span>'+esc(q.q)+'</span> '+[['true','Yes'],['false','No'],['null','Skip']].map(o=>'<label><input type="radio" name="q_'+q.id+'" value="'+o[0]+'"'+(String(q.answer)===o[0]?' checked':'')+'> '+o[1]+'</label>').join('')+'</div>').join('')).join('')}
 $('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey input:checked').forEach(i=>{a[i.name.slice(2)]=i.value==='true'?true:i.value==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};
-function reject(id){var el=document.getElementById('c-'+id).querySelector('.art');var R=[['field','Wrong field'],['level','Wrong level'],['location','Wrong place'],['company','Not this employer'],['applied','Already handled it'],['other','Other']];el.innerHTML='<div class="note">Why? The search learns from it. '+R.map(function(r){return '<button onclick="rejectWhy(\\''+esc(id)+'\\',\\''+r[0]+'\\')">'+r[1]+'</button>'}).join(' ')+'</div>'}
+function reject(id){var el=document.getElementById('c-'+id).querySelector('.art');var R=[['coding','Too much coding'],['field','Wrong field'],['level','Wrong level'],['location','Wrong place'],['company','Not this employer'],['applied','Already handled it'],['other','Other']];el.innerHTML='<div class="note">Why? The search learns from it. '+R.map(function(r){return '<button onclick="rejectWhy(\\''+esc(id)+'\\',\\''+r[0]+'\\')">'+r[1]+'</button>'}).join(' ')+'</div>'}
 async function rejectWhy(id,reason){const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:'rejected',reason})});try{await authed(call)}catch(e){alert(e.message);return}load()}
 const VIA={rok:'RemoteOK',him:'Himalayas',hn:'Hacker News: Who is hiring',rm:'Remotive',jb:'Jobicy',mu:'The Muse',an:'Arbeitnow',gh:'company board',lv:'company board',ab:'company board',rc:'company board',ps:'public-sector board'};
 function via(id){return VIA[String(id).split(':')[0]]||''}
+async function loadLi(){try{const d=await api('/api/linkedin');$('#lilist').innerHTML='<p class="mute">'+esc(d.how)+'</p>'+d.searches.map(function(x,i){return '<div class="lis"><div class="t">'+esc(x.label)+'</div><div class="mute">Why it fits: '+esc(x.why)+'</div><div class="acts big">'+x.links.map(function(l){return '<a class="lib" href="'+esc(l.linkedin)+'" target="_blank" rel="noopener">LinkedIn: '+esc(l.place)+'</a>'}).join('')+'</div><div class="acts">'+(x.links[0]?'<a href="'+esc(x.links[0].google)+'" target="_blank" rel="noopener">Same search on Google</a><a href="'+esc(x.links[0].indeed)+'" target="_blank" rel="noopener">On Indeed</a>':'')+'<button class="cpy" data-i="'+i+'">Copy search words</button></div></div>'}).join('');$('#lilist').querySelectorAll('.cpy').forEach(function(b){b.onclick=function(){var q=d.searches[+b.dataset.i].q;(navigator.clipboard?navigator.clipboard.writeText(q):Promise.reject()).then(function(){b.textContent='Copied'},function(){prompt('Copy this',q)})}})}catch(e){$('#lilist').textContent='Could not load the searches: '+e.message}}
+loadLi();
 function li(a){return a&&a.length?'<ul>'+a.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<p class="mute">none</p>'}
 $('#jgo').onclick=async()=>{const r=$('#jres');r.textContent='Reading the posting...';try{const d=await authed(()=>api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input:$('#jin').value,title:$('#jtitle').value,company:$('#jco').value})}));window._last=d;
  r.innerHTML='<div class="card"><div class="t">'+esc(d.verdict)+' ('+d.fit_score+')  '+esc(d.title)+'</div><div class="mute">'+esc(d.company)+' | '+esc(d.location)+'</div><div>'+(d.would_appear_in_your_search?'Would appear in your search.':'Would NOT appear in your search: '+esc(d.why_not_in_search.join('; ')))+'</div><h4>Why</h4>'+li(d.why)+'<h4>Your record that fits</h4>'+li(d.strengths.map(x=>x.text))+'<h4>Gaps and checks</h4>'+li(d.gaps.concat(d.flags))+'<div class="acts"><button class="fb" data-v="like">More like this</button><button class="fb" data-v="dislike">Not for me</button></div><span id="fbmsg" class="mute"></span>'+kwHtml(d.keywords)+(d.apply?'<div class="acts"><button class="p" id="japply">Apply: download resume and copy kit</button></div>':'')+(d.draft.resume?'<details><summary>Verified resume and note for this job</summary><pre>'+esc(d.draft.resume)+'</pre><pre>'+esc(d.draft.note)+'</pre></details>':'<p class="flag">Draft blocked: '+esc(d.draft.blocked)+'</p>')+'</div>';
