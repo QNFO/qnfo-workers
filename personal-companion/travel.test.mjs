@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { travelBlock } from "../scripts/inline-companion-travel.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
-  DDL, DEFAULTS, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
+  DDL, DEFAULTS, CALENDAR_SEED, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
   promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile,
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
@@ -592,7 +592,7 @@ console.log("\n[ensure once, TRAVEL-ENSURE-ONCE-1]");
   const first = stmts;
   await ensureTravel(counted);
   await ensureTravel(counted);
-  ok("the second and third ensureTravel on the same handle write nothing", first === DDL.length + Object.keys(DEFAULTS).length && stmts === first, { first, stmts });
+  ok("the second and third ensureTravel on the same handle write nothing", first === DDL.length + Object.keys(DEFAULTS).length + CALENDAR_SEED.length && stmts === first, { first, stmts });
 }
 
 console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
@@ -604,7 +604,7 @@ console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
     async batch(list) { batches++; batchSize = list.length; for (const s of list) await s._st.run(); return []; }
   };
   await ensureTravel(wrapped);
-  ok("ensureTravel on a handle with batch makes one batch call of every statement and runs none one by one", batches === 1 && batchSize === DDL.length + Object.keys(DEFAULTS).length && runs === 0, { batches, batchSize, runs });
+  ok("ensureTravel on a handle with batch makes one batch call of every statement and runs none one by one", batches === 1 && batchSize === DDL.length + Object.keys(DEFAULTS).length + CALENDAR_SEED.length && runs === 0, { batches, batchSize, runs });
   const names = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
   ok("the batch created every table", ["travel_options", "travel_reactions", "travel_notices", "travel_config", "travel_chat", "travel_logins"].every((n) => names.includes(n)), names);
   ok("and the default rows", Number(raw.prepare("SELECT COUNT(*) n FROM travel_config").get().n) === Object.keys(DEFAULTS).length);
@@ -623,7 +623,7 @@ console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
   const log2 = [];
   const spy2 = { prepare(sql) { log2.push(sql); return fresh2.env.PERSONAL.prepare(sql); } };
   await ensureTravelCheap(spy2);
-  ok("with no tables ensureTravelCheap falls back to the full ensure", log2.length === 1 + DDL.length + Object.keys(DEFAULTS).length && Number(fresh2.raw.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'travel_config'").get().n) === 1, log2.length);
+  ok("with no tables ensureTravelCheap falls back to the full ensure", log2.length === 1 + DDL.length + Object.keys(DEFAULTS).length + CALENDAR_SEED.length && Number(fresh2.raw.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'travel_config'").get().n) === 1, log2.length);
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed");
