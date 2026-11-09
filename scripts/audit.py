@@ -54,7 +54,42 @@ def pr_findings(prs):
     return out
 
 
+AGENT_BRANCH = re.compile(r"^(codeagent-|ccr-|claude/|fleet-artifacts)[A-Za-z0-9._/-]*$")  # safe charset: the name is embedded in a probe command
+BRANCH_IDLE_DAYS = 7
+
+
+def branch_findings(branches, pr_heads, now=None):
+    """COMPANION-BRANCHES-1: agent branches that no open PR uses and that sat idle for BRANCH_IDLE_DAYS are deletion decisions.
+    `branches` is [{name, date}] (date = last commit, ISO 8601); `pr_heads` are the head names of open PRs (the allowlist)."""
+    import datetime
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    out = []
+    for b in branches:
+        n = b.get("name", "")
+        if not AGENT_BRANCH.match(n) or n in pr_heads or not b.get("date"):
+            continue
+        age = (now - datetime.datetime.fromisoformat(b["date"].replace("Z", "+00:00"))).days
+        if age >= BRANCH_IDLE_DAYS:
+            out.append({"kind": "stale-branch", "key": f"branch:{n}", "title": f"FLEET-AUDIT stale-branch: {n}",
+                        "detail": f"Agent branch `{n}` has no open PR and has been idle {age} days (COMPANION-BRANCHES-1).",
+                        "probe": f"gh api repos/OWNER/REPO/branches/{n} (404 once the branch is deleted)"})
+    return out
+
+
 UNREACHABLE = []
+
+
+def gh_pages(path, max_pages=10):
+    """All pages of a list endpoint (per_page=100), so an item past the first 100 is not missed."""
+    out = []
+    for n in range(1, max_pages + 1):
+        page = gh_json([f"{path}{'&' if '?' in path else '?'}per_page=100&page={n}"])
+        if not isinstance(page, list):
+            break
+        out += page
+        if len(page) < 100:
+            break
+    return out
 
 
 def gh_json(args):
@@ -83,7 +118,16 @@ def repo_findings(repo, hub):
     """Loop and PR checks for any repo the token can read; (findings, reachable)."""
     issues = gh_json([f"repos/{repo}/issues?labels=loop&state=open&per_page=100"])
     prs = gh_json([f"repos/{repo}/pulls?state=open&per_page=100"])
-    return tag(loop_findings(issues) + pr_findings(prs), repo, hub)
+    heads = {(p.get("head") or {}).get("ref") for p in gh_pages(f"repos/{repo}/pulls?state=open")}
+    cands = [b for b in gh_pages(f"repos/{repo}/branches") if AGENT_BRANCH.match(b.get("name", "")) and b["name"] not in heads]
+    dated = []
+    for b in cands:
+        c = gh_json([f"repos/{repo}/commits/{b['commit']['sha']}"])
+        d = (((c or {}).get("commit") or {}).get("committer") or {}).get("date") if isinstance(c, dict) else None
+        if not d:
+            UNREACHABLE.append(f"repos/{repo}/commits/{b['name']}")  # a failed fetch is reported, not silently skipped
+        dated.append({"name": b["name"], "date": d})
+    return tag(loop_findings(issues) + pr_findings(prs) + branch_findings(dated, heads), repo, hub)
 
 
 def collect(root="."):

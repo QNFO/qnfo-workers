@@ -1,2 +1,3 @@
 # Retired R2 documents (DOC-IS-CODE-1). One line per decision: <bucket>/<key prefix><TAB><reason>.
 # A document under a retired prefix is not reported by scripts/r2_doc_audit.mjs. Add a line in a PR that states why the prefix needs no code.
+qnfo-ddocs/2026-09-04/	Dated workspace snapshot (2026-09-04) kept in R2 as an archive; its documents have no runtime consumer by design.
