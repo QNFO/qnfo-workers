@@ -249,10 +249,10 @@ test("workflow uses trusted default-branch code and independent nonblocking cade
 
 test("TRACKER-D1-CANON-1: a fleet-issue mirror is never closed by the age policy, a plain issue still is", async () => {
   const { result, calls } = await execute({ issues: [
-    issue(11, { labels: [{ name: "fleet-issue" }] }), issue(12, { labels: [{ name: "bug" }] }), issue(13)
+    issue(11, { title: "[#501] mirror", labels: [{ name: "fleet-issue" }] }), issue(12, { labels: [{ name: "bug" }] }), issue(13), issue(14, { title: "hand-labelled", labels: [{ name: "fleet-issue" }] })
   ] });
   assert.deepEqual(result.issues_d1_governed, [11]);
-  assert.deepEqual(result.issues_closed, [12, 13]);
+  assert.deepEqual(result.issues_closed, [12, 13, 14]);
   assert.ok(!calls.some((c) => c.path.endsWith("/issues/11") && c.method !== "GET"), "mirror untouched");
   assert.deepEqual(result.errors, []);
 });
