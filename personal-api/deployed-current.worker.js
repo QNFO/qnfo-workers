@@ -112,7 +112,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.37.9";
+var VERSION = "4.38.0";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4077,6 +4077,24 @@ async function tasteSummary(env) {
   const words = Object.entries(model).filter(([, v]) => v !== 0).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
   return { ok: true, liked: rows.filter((r) => r.vote > 0).slice(0, 100), disliked: rows.filter((r) => r.vote < 0).slice(0, 100), leaning_to: words.filter(([, v]) => v > 0).slice(0, 12).map(([w]) => w), leaning_away_from: words.filter(([, v]) => v < 0).slice(0, 12).map(([w]) => w) };
 }
+// TRAVEL-TRIP-STATE-1 (agent_issues 1002269): the trip as one read-only card on Today. The planner (personal-companion travel.js) owns the
+// tables; this only reads them, so a missing table or an empty plan is a null card and never an error.
+async function tripCard(db, day) {
+  const stops = await all(db, "SELECT id, city, country, start_date, end_date FROM travel_stops WHERE trip = 'next' AND end_date >= ? ORDER BY start_date LIMIT 12", day);
+  if (!stops.length) return null;
+  const cur = stops.find((x) => x.start_date <= day && day < x.end_date) || null, next = stops.find((x) => x.start_date > day) || null, stop = cur || next;
+  if (!stop) return null;
+  const nights = Math.max(0, Math.round((Date.parse(stop.end_date) - Date.parse(stop.start_date)) / 86400000));
+  const lodging = await one(db, "SELECT COUNT(*) AS n FROM events WHERE category = 'lodging' AND lower(COALESCE(city, '')) = lower(?) AND start_date < ? AND end_date > ?", stop.city, stop.end_date, stop.start_date).catch(() => null);
+  const booked = lodging ? Number(lodging.n) > 0 : false;
+  const toStart = Math.round((Date.parse(stop.start_date) - Date.parse(day)) / 86400000);
+  return {
+    mode: cur ? "away" : "countdown", city: stop.city, country: stop.country || "", start_date: stop.start_date, end_date: stop.end_date, nights,
+    days_to_start: cur ? 0 : toStart, booked,
+    line: cur ? "In " + stop.city + " until " + stop.end_date + "." : (toStart <= 0 ? "Starts today in " : "In " + toStart + " day" + (toStart === 1 ? "" : "s") + ": ") + stop.city + ", " + stop.start_date + " to " + stop.end_date + "." + (booked ? "" : " No stay booked yet."),
+    url: "https://travel.q08.org/travel"
+  };
+}
 async function today(env, deps) {
   await ensureSchema(env.PERSONAL);
   const st = await gatherState(env, undefined, deps);
@@ -4095,8 +4113,9 @@ async function today(env, deps) {
   let week = null;
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (st.cfg.wellbeing_prompts === true && wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
+  const trip = await tripCard(db, st.day).catch((e) => { console.error(JSON.stringify({ where: "today-trip-card", error: String(e && e.message || e) })); return null; });
   const res = {
-    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
+    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, trip, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: st.crisisLevel24h >= 2,
     reading: readingLane(st.mood, st.crisisLevel24h >= 1),
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
@@ -5028,6 +5047,7 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  var nowCard=el('div',{cls:'card',id:'now'},[el('h2',{text:'What can I do right now?'}),el('div',{cls:'row'},[el('button',{cls:'p',text:'Give me one thing',onclick:function(){go('focus')}}),el('a',{cls:'btn',href:(t.reading&&t.reading.url)||'https://mind.q08.org/now',text:'Read something'}),el('a',{cls:'btn',href:(t.reading&&t.reading.url)?String(t.reading.url).replace('/now?','/now?kind=video&'):'https://mind.q08.org/now?kind=video',text:'Watch something'}),el('button',{text:'Talk (dictate)',onclick:function(){go('talk')}})])]);v.appendChild(nowCard);
  /* COMPANION-NO-TYPING-1:talk-cost (agent_issues 1001641): when the day's AI use passes $0.10 the number shows here, in plain words, so the cost is never out of sight */
  api('/companion/api/ai-use').then(function(u){if(u&&u.ok&&u.today&&u.today.usd>0.1)nowCard.appendChild(el('div',{cls:'mute',id:'today-ai-use',text:u.line}))}).catch(function(e){console.error(JSON.stringify({where:'today-ai-use',error:String(e&&e.message||e)}))});
+ if(t.trip)v.appendChild(el('div',{cls:'card',id:'trip-card'},[el('h2',{text:'Your trip'}),el('div',{text:t.trip.line}),el('div',{cls:'row',style:'margin-top:8px'},[el('a',{cls:'btn',href:t.trip.url,text:'Open the plan'})])]));
  if(t.travel)v.appendChild(el('div',{cls:'mute',text:'Times follow you: '+t.travel.place+' ('+t.travel.tz.replace('_',' ')+'). Quiet hours and notifications run on local time.',style:'margin:-6px 0 12px'}));
  if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
