@@ -131,3 +131,16 @@ console.log(`jobs-judge-pdf (with page): ${pass} checks passed`);
   const out2 = await T.judgeTop({}, [{ id: "3", company: "C", title: "t", desc: "x", match: { tier: "B", score: 49, why: [] } }]);
   ok(out2[0].match.score === 49, "no binding: fail-soft, order and score unchanged");
 }
+
+// JOBSEARCH-REFERRAL-1 / STAGE-1: referral kit is verified-facts only, links are people searches, stages are counted in the funnel
+{
+  const row = { id: "r1", company: "Acme Labs", title: "Research program manager", location: "Amsterdam", url: "https://boards.greenhouse.io/acme/jobs/1" };
+  const kit = T.referralKit(row, await T.loadCtx(env));
+  ok(kit.message && kit.message.includes("Research program manager") && kit.message.includes("Acme Labs") && !kit.blocked, "referral message names the role and employer and passes verification: " + (kit.blocked || ""));
+  ok(kit.search_urls.length === 2 && kit.search_urls.every((u) => u.url.startsWith("https://www.linkedin.com/search/results/people/?keywords=Acme%20Labs")), "people-search links only, no scraping");
+  ok(kit.left_for_you.length === 2, "the owner chooses the person and sends it");
+  db.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?,?,?,?)").run("r1", "stage:panel", new Date().toISOString(), "");
+  const st = await T.outcomes(env);
+  ok(st.by_stage.panel === 1 && st.by_stage.final === 0, "stage events are counted per stage in the funnel: " + JSON.stringify(st.by_stage));
+  ok(T.STAGES.includes("recruiter_screen") && T.STAGES.length === 7, "seven interview stages");
+}

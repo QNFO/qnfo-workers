@@ -22,7 +22,9 @@
         "/api/answers",
         "/api/prep",
         "resume.pdf",
-        "/api/funnel"
+        "/api/funnel",
+        "/referral",
+        "/stage"
       ]
     },
     {
@@ -35,6 +37,12 @@
       "url": "https://qnfo-jobsearch.q08.workers.dev/api/matches?limit=1",
       "contains": [
         "\"matches\""
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/referrals",
+      "contains": [
+        "\"items\""
       ]
     }
   ]
