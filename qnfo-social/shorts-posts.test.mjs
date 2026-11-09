@@ -81,7 +81,10 @@ ok(th.results.length === 1 && th.results[0].status === "posted" && th.results[0]
 const sm = await e.DB.prepare("SELECT platform, status FROM social_media_posts").all();
 ok(sm.results.length === 1 && sm.results[0].platform === "buffer-mastodon", "Mastodon post is recorded in social_media_posts, so the channel cap counts it", JSON.stringify(sm.results));
 const led = await e.DB.prepare("SELECT platform, state FROM social_video_posts ORDER BY platform").all();
-ok(led.results.length === 2 && led.results.every((x) => x.state === "posted"), "the Short ledger has a posted row per platform", JSON.stringify(led.results));
+const vid = led.results.filter((x) => x.platform !== "linkedin");
+ok(vid.length === 2 && vid.every((x) => x.state === "posted"), "the Short ledger has a posted row per video platform", JSON.stringify(led.results));
+const li = led.results.filter((x) => x.platform === "linkedin");
+ok(li.length <= 1 && li.every((x) => x.state === "held"), "YT-LINKEDIN-POST-1: without a social.json the LinkedIn row is held, never posted", JSON.stringify(led.results));
 
 // ---- second run: nothing left to post, nothing uploaded
 calls = [];
