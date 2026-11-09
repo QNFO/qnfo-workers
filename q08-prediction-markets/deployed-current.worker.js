@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.2.2";
+var VERSION = "1.2.3";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -66,10 +66,11 @@ export function exits(positions, markets, cfg = CFG) {
     const cur = priceOf(p.side, m.yes);
     const r = cur / p.entry - 1;
     let reason = null;
-    if (m.closed || m.yes >= 0.99 || m.yes <= 0.01) reason = "resolved";
+    if (m.yes >= 0.99 || m.yes <= 0.01) reason = "resolved";
+    else if (m.closed) reason = "closed"; // closed without a resolved price: exit at the last mark, never a made-up win or loss
     else if (r <= -cfg.STOP) reason = "stop_loss";
     else if (r >= cfg.TAKE) reason = "take_profit";
-    if (reason) out.push({ id: p.id, exit: reason === "resolved" ? Math.round(cur) : cur * (1 - cfg.SLIP), reason });
+    if (reason) out.push({ id: p.id, exit: reason === "resolved" ? Math.round(cur) : reason === "closed" ? cur : cur * (1 - cfg.SLIP), reason });
   }
   return out;
 }
@@ -178,6 +179,7 @@ export async function manualOrder(env, { slug, side, usd }) {
     if (usd > acct.cash) return { error: "insufficient paper cash" };
     if (usd > eq * CFG.POS_PCT) return { error: `position limit ${(CFG.POS_PCT * 100)}% of equity` };
     const exposure = pos.reduce((t, q) => t + q.qty * q.entry, 0);
+    if (pos.find((q) => q.slug === slug)) return { error: "a position in this market is already open" };
     if (pos.length >= CFG.MAX_OPEN) return { error: `at most ${CFG.MAX_OPEN} open positions` };
     if (exposure + usd > eq * CFG.EXPO_PCT) return { error: `portfolio exposure limit ${(CFG.EXPO_PCT * 100)}% of equity` };
     const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + CFG.SLIP));

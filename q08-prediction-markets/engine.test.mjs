@@ -39,3 +39,8 @@ test("stats: max drawdown and per-strategy pnl", () => {
   const s = stats([{ equity: 100 }, { equity: 120 }, { equity: 90 }, { equity: 130 }], [{ strategy: "a", pnl: 5 }, { strategy: "a", pnl: -2 }]);
   assert.equal(s.max_drawdown_pct, 25); assert.deepEqual(s.by_strategy.a, { trades: 2, wins: 1, pnl: 3 });
 });
+test("a closed market with no resolved price exits at its mark, not at a rounded 0 or 1", () => {
+  const x = exits([{ id: 1, slug: "c", side: "yes", qty: 10, entry: 0.5 }], [{ slug: "c", yes: 0.55, closed: 1 }]);
+  assert.equal(x[0].reason, "closed"); assert.equal(x[0].exit, 0.55);
+  assert.equal(exits([{ id: 2, slug: "r", side: "yes", qty: 1, entry: 0.5 }], [{ slug: "r", yes: 1, closed: 1 }])[0].exit, 1);
+});

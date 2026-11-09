@@ -62,3 +62,11 @@ test("state marks a held market that fell outside the top 100 at its stored pric
   const p = st.open.find((x) => x.slug === "held");
   assert.ok(p && Math.abs(p.mark - 0.7) < 1e-9);
 });
+
+test("a second manual order in the same market is refused", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, { source: "test", markets: [{ slug: "m", title: "M", yes: 0.5, vol24: 1, move: 0, closed: 0 }] });
+  const order = () => worker.fetch(new Request("https://x/api/order", { method: "POST", body: JSON.stringify({ slug: "m", side: "yes", usd: 100 }) }), env);
+  assert.equal((await order()).status, 200);
+  assert.equal((await order()).status, 400);
+});
