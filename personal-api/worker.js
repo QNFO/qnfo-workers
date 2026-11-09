@@ -112,7 +112,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.38.2";
+var VERSION = "4.38.3";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -3970,8 +3970,22 @@ async function companionTick(env, deps, opts) {
   out.processed = (await processInbox(env, deps, 5)).length;
   try { if (await fyDue(env)) out.feed = await fyBuild(env, deps, { days: 5 }); } catch (e) { out.feed_error = String(e && e.message || e).slice(0, 120); }
   try { out.loops = await opsLoops(env); } catch (e) { out.loops_error = String(e && e.message || e).slice(0, 120); }
+  // COMPANION-OBS-1 ring buffer below.
   // COMPANION-OBS-1: the last tick result is kept so Ask status can show it.
   try { await fyEnsure(env); await env.PERSONAL.prepare("INSERT INTO cmp_feed_meta (k, v) VALUES ('last_tick', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(JSON.stringify({ at: now, feed: out.feed || null, feed_error: out.feed_error || null, loops: out.loops || null, loops_error: out.loops_error || null }).slice(0, 2000)).run(); } catch (e) { /* observability must not break the tick */ }
+  // COMPANION-OBS-1: ring buffer of the last 10 ticks; three failures in a row file a fleet issue.
+  try {
+    const prev = await one(env.PERSONAL, "SELECT v FROM cmp_feed_meta WHERE k = 'tick_log'").catch(() => null);
+    let log = []; try { log = JSON.parse((prev && prev.v) || "[]"); } catch (e) { log = []; }
+    log.push({ at: now, ok: !(out.feed_error || out.loops_error), err: out.feed_error || out.loops_error || null });
+    log = log.slice(-10);
+    await env.PERSONAL.prepare("INSERT INTO cmp_feed_meta (k, v) VALUES ('tick_log', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(JSON.stringify(log)).run();
+    if (env.AUDIT && log.length >= 3 && log.slice(-3).every((x) => !x.ok)) {
+      const t = "COMPANION-OBS-1: companion tick failed 3 times in a row";
+      const dup = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ? AND status != 'closed' LIMIT 1").bind(t).first();
+      if (!dup) { const ms = Date.now(); await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)").bind(t, "Last errors: " + JSON.stringify(log.slice(-3)) + "\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {\"paths\": [\"personal-api/companion.js\"], \"contains\": \"COMPANION-OBS-1 ring\"}", "session", "reliability", "high", "open", ms, ms, "COMPANION-OBS-TICK").run(); }
+    }
+  } catch (e) { /* observability must not break the tick */ }
   const exp = await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'expired', closed_at = ? WHERE kind LIKE 'cmp-%' AND state IN ('sent','shown') AND due_at IS NOT NULL AND due_at < ?").bind(now, now).run();
   out.expired = exp.meta ? exp.meta.changes : 0;
   const cfg0 = await loadCfg(env);
@@ -4409,6 +4423,11 @@ function companionTools(deps) {
       return { ok: true, id: add.id, name: add.name, url: add.url, status, days_with_listings: days, active: days > 0, note: days ? "It joins the For you feed the next time Today opens." : "Switched off because the page could not be read or shows no dated listings; tell Rowan and ask for a better page." };
     }),
     cmp_feed_refresh: T("Companion ops: read the venues again now and rebuild the For you feed (1 to 7 days ahead)", { days: { type: "number", required: false } }, async (env, a) => fyBuild(env, deps, { days: Math.min(Math.max(Number(a && a.days) || 5, 1), 7) })),
+    // COMPANION-FORYOU-6: the Ask answers "what should I do" from the same ranked feed the Today card shows, with the reason for each.
+    cmp_foryou: T("What is on for Rowan, ranked: the For you feed with date, time, venue and why each fits him. Use for what should I do tonight or this weekend.", {}, async (env) => {
+      const f = await fyFeed(env, deps);
+      return { ok: true, today: f.today, items: (f.items || []).map((x) => ({ title: x.title, date: x.date, time: x.time, venue: x.venue, why: x.why, url: x.url, noted: x.noted || null })) };
+    }),
     cmp_ops_status: T("Companion ops: system status - version, venue sources and which fail, For you feed size and age, push devices, and the open companion issues in the fleet", {}, async (env) => {
       await fyEnsure(env);
       const src = await all(env.PERSONAL, "SELECT name, enabled, last_status FROM live_sources").catch(() => []);
@@ -4450,7 +4469,7 @@ function companionTools(deps) {
     cmp_helps: T("Companion: what has helped Rowan before, from their own activity ratings, plus their activity bank", {}, async (env) => { await ensureSchema(env.PERSONAL); return Object.assign(await whatHelps(env, 90), { bank: await activityBank(env) }); })
   };
 }
-const TOOL_APPENDIX_LINE = " cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}; cmp_source_add {name,url,kind?}; cmp_feed_refresh {days?}; cmp_ops_status {}; cmp_ops_issue {title,detail,priority?,path?}.";
+const TOOL_APPENDIX_LINE = " cmp_foryou {}; cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}; cmp_source_add {name,url,kind?}; cmp_feed_refresh {days?}; cmp_ops_status {}; cmp_ops_issue {title,detail,priority?,path?}.";
 
 // ---------------------------------------------------------------- Durable Object hooks (PersonalTwinAgent instance "companion")
 
