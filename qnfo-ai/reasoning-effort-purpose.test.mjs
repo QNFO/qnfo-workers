@@ -1,0 +1,21 @@
+// REASONING-EFFORT-BY-PURPOSE-1 (#9793): the purpose table and purposeEffort. Run: node qnfo-ai/reasoning-effort-purpose.test.mjs
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8").split(String.fromCharCode(13)).join("");
+const i = src.indexOf("var REASONING_EFFORT_BY_PURPOSE"), j = src.indexOf("function reasoningEffortFor");
+if (i < 0 || j < i) throw new Error("block not found");
+const sb = { Object, String };
+vm.createContext(sb);
+vm.runInContext(src.slice(i, j) + "\n;__x = { REASONING_EFFORT_BY_PURPOSE, purposeEffort };", sb);
+const X = sb.__x;
+let fail = 0;
+const ok = (c, m) => { if (!c) { fail++; console.log("FAIL " + m); } };
+for (const p of ["triage", "severity", "intent", "factcheck"]) ok(X.REASONING_EFFORT_BY_PURPOSE[p] === "low", p + " is low");
+ok(X.purposeEffort({ purpose: "triage" }) === "low", "body.purpose");
+ok(X.purposeEffort({ metadata: { purpose: "Severity:x" } }) === "low", "metadata.purpose prefix, case-insensitive");
+ok(X.purposeEffort({ purpose: "draft" }) === null, "drafting keeps the model default");
+ok(X.purposeEffort({ purpose: "constructor" }) === null, "no prototype keys");
+ok(X.purposeEffort(null) === null, "null body");
+ok(/_effort \|\| null, !!\(tools/.test(src), "runModelTurn passes the purpose effort to reasoningEffortFor");
+console.log(fail ? fail + " failed" : "all passed");
+process.exit(fail ? 1 : 0);

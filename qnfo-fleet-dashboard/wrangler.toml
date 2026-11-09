@@ -84,6 +84,13 @@ environment = "production"
 props = { caller = "qnfo-fleet-dashboard" }
 
 # IPATENT-USAGE-1 (2026-10-02): iPatent's /api/metrics (page views by source, searches and drafts by topic; no text).
+# LAKE-SPINE-2.2: healthProbes sends each probe row to qnfo-infra /lake/ingest when ops_config lake_spine = dual (ctx.props.caller admits /lake/ingest only).
+[[services]]
+binding = "SVC_QNFO_INFRA"
+service = "qnfo-infra"
+environment = "production"
+props = { caller = "qnfo-fleet-dashboard" }
+
 [[services]]
 binding = "SVC_QNFO_IPATENT"
 service = "qnfo-ipatent"

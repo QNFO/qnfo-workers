@@ -5,7 +5,7 @@
 --   ct_im1002107 personal-api/worker.js         MEMORY-KEYED-1: memory_keyed table, memory_set, owner-only immutable instructions, weekly canary
 --   ct_e6wbg1q46obarm q08-signal-engine         CROSS-LINK-FOLLOWUP-3: family bar and Keep exploring rendered on the server
 --   ct_im1002087 qnfo-gateway/worker.js         moot: ATLAS-GATEWAY-ROUTE-1 (issue 8095) is on main, route, llms.txt and openapi
---   ct_2v6kx6dhn3tuwx qnfo-fleet-dashboard      GOOGLE-HUB-1: /search and /api/gsc/overview (the task was a planner copy of ct_im1001659)
+--   ct_2v6kx6dhn3tuwx qnfo-fleet-dashboard      moot: GOOGLE-HUB-1 (/search, /api/gsc/overview) is on main (dashboard 1.99.0)
 --   ct_bxwyq0agp1na9j qnfo-fleet-control        FLEET-TICK-SECOND-SOURCE-1: a second fleet_tick producer
 --   ct_im1002039 qnfo-cloud-ops/worker.js       PROBE-REVIEW-ROOT-CAUSE-1: probe review skips the root-cause template module
 --   ct_im1002045 q08-signal-engine              EK-6-ADOPT-1: ANALYSIS-FORM-1 block inlined, domainForm uses its rules
@@ -19,11 +19,11 @@
 
 UPDATE code_tasks SET status = 'superseded', lease_until = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   merge_note = 'CODE-EXHAUSTED-A 2026-11-09: moot; the change is on main (cf_ops_actions.py delete_pages_project( commit 1d8003195 PR 9747; fleet_graph.mjs ARCHIVE-MARKER-READ-2; qnfo-gateway ATLAS-GATEWAY-ROUTE-1 issue 8095; q08 Q08-FEDREG-LANE-1 issue 8005)'
-WHERE id IN ('ct_im1001933', 'ct_im1002076', 'ct_im1002087', 'ct_im1001954') AND status NOT IN ('merged', 'superseded');
+WHERE id IN ('ct_im1001933', 'ct_im1002076', 'ct_im1002087', 'ct_im1001954', 'ct_2v6kx6dhn3tuwx') AND status NOT IN ('merged', 'superseded');
 
 UPDATE code_tasks SET status = 'superseded', lease_until = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   merge_note = 'CODE-EXHAUSTED-A 2026-11-09: implemented by hand in the pull request of branch claude/code-exhausted-a (QNFO/qnfo-workers); the code loop must not re-run it'
-WHERE id IN ('ct_im1002107', 'ct_e6wbg1q46obarm', 'ct_2v6kx6dhn3tuwx', 'ct_bxwyq0agp1na9j', 'ct_im1002039', 'ct_im1002045', 'ct_im1002036')
+WHERE id IN ('ct_im1002107', 'ct_e6wbg1q46obarm', 'ct_bxwyq0agp1na9j', 'ct_im1002039', 'ct_im1002045', 'ct_im1002036')
   AND status NOT IN ('merged', 'superseded');
 
 UPDATE remediation_contracts SET status = 'active', last_verdict = 'restored:CODE-EXHAUSTED-A', next_due_at = datetime('now')
