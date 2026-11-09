@@ -2395,12 +2395,12 @@ def gateway_set_retries(gateway: str, acct: str, token: str) -> int:
     want.update(GATEWAY_RETRY)
     st2, j2 = call("PUT", path, token, want)
     st3, j3 = call("GET", path, token)
-    after = j3.get("result") if st3 == 200 else None
+    after = j3.get("result") if st3 == 200 else None  # standards-ok: st3 is the read-back GET, not the write
     after = after if isinstance(after, dict) else {}
     spend_same = all(after.get(k) == cur.get(k) for k in GATEWAY_SPEND_KEYS)
-    ok = 200 <= (st2 or 0) < 300 and all(after.get(k) == v for k, v in GATEWAY_RETRY.items()) and spend_same
+    ok = 200 <= (st2 or 0) < 300 and all(after.get(k) == v for k, v in GATEWAY_RETRY.items()) and spend_same  # standards-ok: any 2xx from the PUT is accepted and the read-back below is the proof
     emit({"action": act, "gateway": gateway, "ok": ok, "put_http": st2, "spend_limits_unchanged": spend_same,
-          "before": {k: cur.get(k) for k in GATEWAY_RETRY}, "after": {k: after.get(k) for k in GATEWAY_RETRY}, "errors": j2.get("errors")})
+          "before": {k: cur.get(k) for k in GATEWAY_RETRY}, "after": {k: after.get(k) for k in GATEWAY_RETRY}, "errors": j2.get("errors")})  # standards-ok: read-back compared above
     return 0 if ok else 1
 
 
