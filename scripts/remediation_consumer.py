@@ -1366,6 +1366,20 @@ def steady_state_cadence(cls, verdict, cadence_h, transport=None):
     return cadence_h
 
 
+def escalation_status(c, verdict):
+    """STAMP-ESCALATE-1 (issue 9762): a contract whose attempt count reaches max_attempts on a failing verdict becomes 'escalated'.
+
+    Returns 'escalated' or None. Standing detectors (fm-/belief-) never escalate in bulk: they stay active at their cadence."""
+    if verdict != "fail" or is_standing_detector(c.get("class")):
+        return None
+    if c.get("status") not in (None, "active", "holding"):
+        return None
+    max_att = max(1, int(c.get("max_attempts") or 3))
+    if int(c.get("attempts") or 0) + 1 >= max_att:
+        return "escalated"
+    return None
+
+
 def consume_one(c, trusted):
     """Probe and stamp one contract with its own counters, so contracts can run in parallel (merge_out folds them)."""
     local = {"pass": 0, "fail": 0, "skipped": 0}
@@ -1416,6 +1430,8 @@ def consume_one(c, trusted):
         except Exception as e2:  # noqa: BLE001
             log("contract %s transient stamp failed: %s" % (cls, e2))
         return rec, local
+    if next_status is None:
+        next_status = escalation_status(c, rec.get("verdict"))
     if cadence is None:
         cadence = c.get("expected_cadence_h") or 1
     steady_backoff = False
@@ -1435,6 +1451,10 @@ def consume_one(c, trusted):
             "next_due_at = datetime('now', ?), status = CASE WHEN status IN ('active', 'holding') THEN COALESCE(?, status) ELSE status END WHERE class = ?",
             [rec["verdict"], next_due_offset(cadence, steady_backoff), next_status, cls],
         )
+        if next_status == "escalated":
+            # STAMP-ESCALATE-1: name who owns an escalated contract; a separate write so the stamp itself stays one statement
+            d1("UPDATE remediation_contracts SET escalate_to = COALESCE(escalate_to, 'fleet:remediation-consumer') "
+               "WHERE class = ? AND status = 'escalated'", [cls])
     except Exception as e:  # noqa: BLE001
         log("contract %s stamp failed: %s" % (cls, e))
     return rec, local
