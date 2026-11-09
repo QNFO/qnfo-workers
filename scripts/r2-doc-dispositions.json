@@ -728,6 +728,258 @@
    "issue": 8812,
    "disposition": "archived",
    "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase4-deep-research/deep-research-cascade.md",
+   "issue": 9095,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase2-experimental-design/experimental-protocol.md",
+   "issue": 9094,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase2-experimental-design/experiment-4-sunburst-protocol.md",
+   "issue": 9093,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase2-experimental-design/OSF-SETUP.md",
+   "issue": 9092,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase2-executable/meta-analysis-results.md",
+   "issue": 9091,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase2-executable/meta-analysis-protocol.md",
+   "issue": 9090,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase1-critical-analysis/WP1.3.2-numeral-taxonomy.md",
+   "issue": 9089,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase1-critical-analysis/WP1.1.3-WP1.3-edge-cases-and-assumptions.md",
+   "issue": 9088,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase1-critical-analysis/DD-LIT-REPORT.md",
+   "issue": 9087,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase0-foundations/WP0.2-distinction-vs-containment.md",
+   "issue": 9086,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase0-foundations/WP0.1-embodied-metaphors.md",
+   "issue": 9085,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/README.md",
+   "issue": 9084,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/PROJECT-PLAN.md",
+   "issue": 9082,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/paper.pdf",
+   "issue": 9080,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/paper.md",
+   "issue": 9079,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/artifacts/literature-triage-phase2.md",
+   "issue": 9078,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/artifacts/due-diligence-phase1.md",
+   "issue": 9077,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/SYNTHESIS.md",
+   "issue": 9076,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/README.md",
+   "issue": 9075,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "measurable-vs-imaginable/PROJECT-PLAN.md",
+   "issue": 9074,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "jpcub-validation/paper.pdf",
+   "issue": 9073,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "jpcub-validation/paper.md",
+   "issue": 9072,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "joules-per-compute-benchmark/artifacts/phase2-literature-review.md",
+   "issue": 9071,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "joules-per-compute-benchmark/artifacts/deep-research-cascade.md",
+   "issue": 9070,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "joules-per-compute-benchmark/README.md",
+   "issue": 9069,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "joules-per-compute-benchmark/PROJECT-PLAN.md",
+   "issue": 9068,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "infographic_era_probs.md",
+   "issue": 9067,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "infographic_controversy.md",
+   "issue": 9066,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "infographic_backcasting.md",
+   "issue": 9065,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "infographic_attack_vectors.md",
+   "issue": 9064,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "huang-2025-audit/v2.4/qc-advantage-keynotes-v2.4.pdf",
+   "issue": 9063,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "huang-2025-audit/v2.4/qc-advantage-keynotes-v2.4.md",
+   "issue": 9062,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "huang-2025-audit/v2.4/obsidian-notes-index-v2.4.md",
+   "issue": 9061,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "huang-2025-audit/v2.4/literature-synthesis-v2.4.md",
+   "issue": 9060,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "hidden-radix-pqc/paper.pdf",
+   "issue": 9059,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "hidden-radix-pqc/paper.md",
+   "issue": 9058,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
   }
  ]
 }
