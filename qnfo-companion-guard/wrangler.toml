@@ -1,0 +1,21 @@
+# charter-pillar: core
+# spof-review: read-only probe of me.q08.org; the second path is companion_probe_runs in qnfo-audit and the hourly fleet probes.
+name = "qnfo-companion-guard"
+account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
+main = "worker.js"
+# WORKER-SOURCE-IN-REPO-1 (issue 9663): worker.js is the deployed script fetched through the Cloudflare API on 2026-11-09, plus a /health route.
+# compat-advance: reviewed 2026-11-09 (compat-risk-scan clean; no COMPAT_FLIPS entry between 2026-10-10 and 2026-11-04)
+compatibility_date = "2026-11-04"
+workers_dev = true
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
