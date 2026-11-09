@@ -78,7 +78,7 @@ db.exec(`
 `);
 
 // Read and apply the migration
-const migration = readFileSync('migrations/2026-11-07-fix-empty-backup-issue.sql', 'utf-8');
+const migration = readFileSync('migrations/retired/2026-11-07-fix-empty-backup-issue.sql.txt', 'utf-8');
 
 // Remove comment lines
 const withoutComments = migration

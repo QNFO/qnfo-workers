@@ -14,6 +14,9 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 600) : "")); } };
 ok(a > 0 && b > a, "the lake block is found between its markers");
 const block = src.slice(a, b);
+// D1-RESULT-CAP-1: the lake read goes through d1ReadAll, which lives above the lake block
+const capI = src.indexOf("var D1_RESULT_NEAR_BYTES"), capJ = src.indexOf("\n", src.indexOf("return out;\n}", capI) + 13);
+const capSrc = src.slice(capI, capJ);
 ok(!/\*\//.test(block), "no comment terminator inside the block");
 ok(/var VERSION = "1\.(1[4-9]|[2-9]\d)\./.test(src), "VERSION is at least 1.14");
 const sched = src.slice(src.indexOf("async function runScheduled"));
@@ -27,7 +30,7 @@ const pyFields = [...py.matchAll(/\("(\w+)", "(?:int64|string)", (?:True|False)\
 const jsFields = (block.match(/fields: \[([^\]]*)\]/) || ["", ""])[1].match(/"(\w+)"/g).map((s) => s.slice(1, -1));
 ok(JSON.stringify(pyFields) === JSON.stringify([...jsFields, "exported_at"]), "scripts/lake_spine.py fields = worker fields + exported_at", { pyFields, jsFields });
 
-const mk = new Function("infraSecret", "fetch", block + "\nreturn { LAKE_BATCH, LAKE_TABLES, lakeMode, lakeSeed, lakeTail, lakeDriftDay, lakeDriftTick, lakeSpineTick, lakeStatus, lakeRoute, lakePause };");
+const mk = new Function("infraSecret", "fetch", "var VERSION = 't';\n" + capSrc + "\n" + block + "\nreturn { LAKE_BATCH, LAKE_TABLES, lakeMode, lakeSeed, lakeTail, lakeDriftDay, lakeDriftTick, lakeSpineTick, lakeStatus, lakeRoute, lakePause };");
 
 const mkdb = () => {
   const db = new DatabaseSync(":memory:");

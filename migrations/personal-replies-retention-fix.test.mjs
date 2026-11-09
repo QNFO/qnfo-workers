@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { deepStrictEqual, ok } from 'node:assert';
 import { readFileSync } from 'node:fs';
 
-const sql = readFileSync(new URL('./2026-11-07-personal-replies-retention-fix.sql', import.meta.url), 'utf8');
+const sql = readFileSync(new URL('./retired/2026-11-07-personal-replies-retention-fix.sql.txt', import.meta.url), 'utf8');
 const db = new DatabaseSync(':memory:');
 
 // Set up minimal schema

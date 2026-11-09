@@ -20,7 +20,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const exportAt = lines.findIndex((l) => l === "export {" || l === "export default {");
   const missing = lines.filter((l, i) => l.trim() && !src.includes(l.trim()) && !l.startsWith("import ") && !l.startsWith("//# sourceMappingURL") && !/^var VERSION = "/.test(l) && !(exportAt >= 0 && i >= exportAt && (l === "export {" || /^\s+\w+ as default$/.test(l) || l === "};" || l === "export default {")));
   ok(missing.length === 0, "every qnfo-model-eval line is in the host except its imports, VERSION line and export", missing.map((l) => l.slice(0, 80)));
-  ok((src.match(/^var VERSION = "/gm) || []).length === 1 && versionAtLeast(mod.__hv, "1.8.0") && mod.__mv === "1.8.4-folded", "host 1.8.0 or later (a later fold bumps the host; the suite asserts a minimum), member 1.8.4-folded, one top-level quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok((src.match(/^var VERSION = "/gm) || []).length === 1 && versionAtLeast(mod.__hv, "1.8.0") && versionAtLeast(String(mod.__mv).replace(/-folded$/, ""), "1.8.4") && /-folded$/.test(mod.__mv), "host 1.8.0 or later (a later fold bumps the host; the suite asserts a minimum), member 1.8.4 or later, -folded, one top-level quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 const W = mod.__wrapped, M = mod.__member, H = W.__foldHost;
 const calls = [];

@@ -8,7 +8,7 @@ export const journeys = [
       await u.see("Simulated money only");
       await u.see("Predictions");
       await u.see("Does the information beat the market?");
-      await u.expect(async () => /Equity \$/.test((await u.page.locator("#s").innerText()) || ""), "the account line shows no equity on " + u.page.url());
+      await u.expect(async () => /Equity\s+\$/.test((await u.page.locator("#s").innerText()) || ""), "the account line shows no equity on " + u.page.url());
       await u.tap("Run tick now", { wait: 1500 });
       await u.see("Open positions");
       await u.screen("paper-dashboard");

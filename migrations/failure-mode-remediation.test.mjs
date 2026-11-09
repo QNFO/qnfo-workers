@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const migrationSQL = readFileSync('migrations/2026-11-07-failure-mode-remediation.sql', 'utf8');
+const migrationSQL = readFileSync('migrations/retired/2026-11-07-failure-mode-remediation.sql.txt', 'utf8');
 
 test('failure-mode-remediation migration', async (t) => {
   await t.test('parks all 6 PROBE-NEEDED issues as monitoring', () => {

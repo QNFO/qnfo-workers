@@ -100,7 +100,7 @@ def gh_json(args):
     return json.loads(r.stdout) if r.stdout.strip() else []
 
 
-DEFAULT_REPOS = ["QNFO/qnfo-workers", "QNFO/qnfo-research", "QNFO/.github", "QNFO/qnfo-fleet-issues", "rwnq8/qnfo-fleet-dashboard", "rwnq8/ipatent", "rwnq8/rwnq8"]
+DEFAULT_REPOS = ["QNFO/qnfo-workers", "QNFO/qnfo-research", "QNFO/.github", "QNFO/qnfo-fleet-issues", "QNFO/qnfo-fleet-dashboard", "rwnq8/ipatent", "rwnq8/rwnq8"]
 
 
 def tag(findings, repo, hub):

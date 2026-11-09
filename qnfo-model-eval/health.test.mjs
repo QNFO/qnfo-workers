@@ -46,6 +46,6 @@ const response = (audit) => handlers.fetch(
   });
 }
 
-assert.match(VERSION, /^1\.8\.4(?:-|$)/);
+{ const [a, b, c] = VERSION.split("-")[0].split(".").map(Number); assert.ok(a > 1 || (a === 1 && (b > 8 || (b === 8 && c >= 4))), "VERSION is at least 1.8.4: " + VERSION); }
 assert.equal(mirror, source);
 console.log("qnfo-model-eval health liveness tests passed");

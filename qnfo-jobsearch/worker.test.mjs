@@ -357,14 +357,15 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   // wider net: stated preferences become a stretch label, hard noise stays out
   const tokyo = { ...JOB, location: "Tokyo, Japan", title: "Senior Policy Advisor" };
   const wideT = T.evaluate(tokyo, T.makeCtx({}), true);
-  ok(T.evaluate(tokyo, T.makeCtx({})).status === "excluded" && wideT.status === "ok" && wideT.tier === "C" && wideT.flags.some((f) => f.startsWith("OUTSIDE YOUR PREFERENCES")), "wide mode keeps a role outside the stated places as a flagged stretch", wideT);
+  // JOBSEARCH-FIT-1 (owner, 2026-11-09): a place the owner said no to is never shown, not even as a stretch; a stated preference such as contract work still is
+  ok(T.evaluate(tokyo, T.makeCtx({})).status === "excluded" && wideT.status === "excluded", "wide mode drops a role outside the stated places", wideT);
   ok(T.evaluate({ ...JOB, title: "Sales Lead, Research", desc: "Sell subscriptions to retail customers. Quarterly quotas and cold calls." }, T.makeCtx({}), true).status === "excluded", "wide mode still drops postings with no sign of the record");
   ok(T.evaluate({ ...JOB, location: "Remote - US only" }, T.makeCtx({}), true).status === "excluded", "wide mode still drops postings that restrict residence");
   const eng = { ...JOB, title: "Research Engineer, Evaluations", desc: JOB.desc };
   ok(T.evaluate(eng, T.makeCtx({}), true).status === "ok" && T.evaluate(eng, T.makeCtx({})).status === "ok", "an engineering title passes when the posting matches the record");
   ok(T.evaluate({ ...eng, desc: "We build code." }, T.makeCtx({}), true).status === "excluded", "an engineering title with no evidence in the posting stays out");
   ok(T.evaluate({ ...JOB, title: "Staff Engineer, Research Platform" }, T.makeCtx({}), true).status === "ok", "an engineer title is not a reason to drop a posting that carries the record");
-  const [kept, ex] = T.rank([tokyo, { ...JOB, id: "t:2", title: "Receptionist" }], T.makeCtx({}), true);
+  const [kept, ex] = T.rank([tokyo, { ...JOB, id: "t:3", title: "Research Program Manager (contract)" }, { ...JOB, id: "t:2", title: "Receptionist" }], T.makeCtx({ type_contract: false }), true);
   ok(kept.length === 1 && kept[0].match.tier === "C", "rank keeps stretch matches in wide mode", { kept: kept.length, ex });
   // evidence the CV lacks counts for less and is named
   const physDesc = JOB.desc + " Theoretical physics, renormalization, effective field theory.";

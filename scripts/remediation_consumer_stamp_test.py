@@ -73,8 +73,9 @@ def fake_https(c, rec, local, trusted):
     return "holding", 1
 
 
-saved = (rc.d1, rc.consume_https)
+saved = (rc.d1, rc.consume_https, rc.fails_since_last_pass)
 rc.d1, rc.consume_https = fake_d1, fake_https
+rc.fails_since_last_pass = lambda cls: 3  # the streak the history would report: every attempt since the last pass failed
 try:
     # a pass moves an active contract to holding; the same pass leaves a contract another writer superseded where it is
     check(run("active")[0] == "holding", "an active contract that passed moves to holding")
@@ -89,13 +90,13 @@ try:
     # STAMP-ESCALATE-1 (issue 9762): the failing stamp that reaches max_attempts escalates; standing detectors and passes do not
     r = run("active", passed=False, attempts=2)
     check(r[0] == "escalated", "attempts + 1 >= max_attempts on a fail escalates an active contract", r)
-    check(db.execute("SELECT escalate_to FROM remediation_contracts WHERE class = 'c1'").fetchone()[0] == "fleet:remediation-consumer", "escalate_to is written")
+    check(db.execute("SELECT escalate_to FROM remediation_contracts WHERE class = 'c1'").fetchone()[0] == rc.ESCALATE_TO_DEFAULT, "escalate_to is written by the stamp itself (one statement)")
     check(run("holding", passed=False, attempts=2)[0] == "escalated", "a holding contract escalates too")
     check(run("superseded", passed=False, attempts=2)[0] == "superseded", "a superseded contract is never escalated")
     check(run("active", passed=True, attempts=2)[0] == "holding", "a pass at the limit does not escalate")
     check(run("active", passed=False, attempts=2, cls="fm-x")[0] == "active", "a standing detector never escalates in bulk")
 finally:
-    rc.d1, rc.consume_https = saved
+    rc.d1, rc.consume_https, rc.fails_since_last_pass = saved
 
 check(len(stamps) >= 12, "every case went through the real stamp statement", len(stamps))
 check(all(re.search(r"status\s*=\s*CASE WHEN status IN \('active', 'holding'\) THEN COALESCE\(\?, status\) ELSE status END", s) for s in stamps),

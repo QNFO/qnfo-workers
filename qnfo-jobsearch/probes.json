@@ -23,8 +23,8 @@
         "/api/prep",
         "resume.pdf",
         "/api/funnel",
-        "/referral",
-        "/stage"
+        "/stage",
+        "/api/linkedin"
       ]
     },
     {
