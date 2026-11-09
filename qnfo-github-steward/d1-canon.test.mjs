@@ -20,3 +20,12 @@ test("the migration removes the critical-only rollup with a backup", () => {
   assert.match(sql, /DELETE FROM ops_config WHERE key = 'gh_individual_priorities'/);
   assert.match(sql, /-- BACKUP: bak_20261106_ops_config_gh_individual/);
 });
+
+test("TRACKER-D1-CANON-2: the state sync no longer skips age-policy closes, and the drift view counts them", () => {
+  const filter = /var mism = links\.filter\([^\n]*\n/.exec(src)[0];
+  assert.doesNotMatch(filter, /age-policy/, "an age-policy close of an open D1 row must be reopened, not skipped");
+  const sql = readFileSync(new URL("../migrations/2026-11-09-tracker-drift-canon2.sql", import.meta.url), "utf8");
+  const view = sql.slice(sql.indexOf("CREATE VIEW v_tracker_drift"));
+  assert.doesNotMatch(view, /age-policy/);
+  assert.match(view, /'issue-state'/);
+});
