@@ -9318,6 +9318,31 @@ async function bindingPropsRestore(env, name, version, H) {
   return res;
 }
 __name(bindingPropsRestore, "bindingPropsRestore");
+// DOC-IS-CODE-1 / SELF-AUDIT-1: GitHub schedule never fires on this repository, so the weekly document sweep and the 6-hourly fleet audit are dispatched from this cron.
+// One cloud_ops_events row per (workflow, period) makes the dispatch idempotent; a failed dispatch is marked error and retried on the next tick of the same period.
+const SWEEP_WORKFLOWS = [{ wf: "r2-doc-audit.yml", period: "week" }, { wf: "fleet-audit.yml", period: "6h" }];
+function sweepPeriodKey(period, d) {
+  if (period === "6h") return d.toISOString().slice(0, 10) + "-" + Math.floor(d.getUTCHours() / 6);
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return t.getUTCFullYear() + "W" + String(Math.ceil(((t - y0) / 86400000 + 1) / 7)).padStart(2, "0");
+}
+async function sweepWorkflowDispatch(env, now) {
+  const out = [];
+  for (const s of SWEEP_WORKFLOWS) {
+    const id = "sweep-dispatch-" + s.wf + "-" + sweepPeriodKey(s.period, now);
+    const prior = await env.QNFO_AUDIT.prepare("SELECT status FROM cloud_ops_events WHERE id = ?1").bind(id).first();
+    if (prior && prior.status === "dispatched") { out.push({ wf: s.wf, skipped: "already dispatched this period" }); continue; }
+    if (!env.GITHUB_TOKEN) { out.push({ wf: s.wf, error: "no GITHUB_TOKEN" }); continue; }
+    const r = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/actions/workflows/" + s.wf + "/dispatches", { method: "POST", headers: { "Accept": "application/vnd.github+json", "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-ops-sweep-dispatch", "Content-Type": "application/json" }, body: JSON.stringify({ ref: "main" }) });
+    const ok = r.status === 204;
+    await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'sweep-dispatch', ?3, ?4, 'qnfo-ops', ?5)").bind(id, now.toISOString(), s.wf + " dispatch HTTP " + r.status, JSON.stringify({ wf: s.wf, http: r.status }), ok ? "dispatched" : "error").run();
+    out.push({ wf: s.wf, dispatched: ok, http: r.status });
+  }
+  return out;
+}
+__name(sweepWorkflowDispatch, "sweepWorkflowDispatch");
 // ---- ERROR-DETAIL-CAPTURE-1:BEGIN (2.38.40, 2026-10-02, pillar core, agent_issues 1826) ----
 // The dashboard counted 33 worker errors in 24h (Cloudflare analytics) while worker_logs held no non-ok row and no
 // exception text for any of them, so no error could be diagnosed from D1. worker_logs is filled from Workers Trace
@@ -11540,6 +11565,13 @@ var worker_default = {
     } catch (e) {
       hbOk = false;
       console.log("secret watch failed:", e && e.message || e);
+    }
+    try {
+      const _sw = await sweepWorkflowDispatch(env, new Date());
+      if (_sw.some((x) => x.error || x.dispatched === false)) { hbOk = false; console.log("sweep dispatch failed:", JSON.stringify(_sw).slice(0, 300)); }
+    } catch (e) {
+      hbOk = false;
+      console.log("sweep dispatch failed:", e && e.message || e);
     }
     try {
       await errorDetailCapture(env);

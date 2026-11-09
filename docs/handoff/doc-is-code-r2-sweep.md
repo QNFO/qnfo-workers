@@ -1,9 +1,15 @@
-# Handoff: R2 document sweep and PR self-audit (DOC-IS-CODE-1, SELF-AUDIT-1)
+# Handoff: R2 document sweep, fleet audit and weekly dispatch (DOC-IS-CODE-1, SELF-AUDIT-1)
+status: in-progress (follow-up PR; PR #8298 merged 2026-11-06 but r2-doc-audit.yml never ran)
 
-State: scripts/r2_doc_audit.mjs, r2_list_keys.mjs, r2_file_issues.mjs, self_audit_pr.mjs, tests, workflow r2-doc-audit.yml and the Self-audit steps in pr-checks.yml (PR-CHECK-CAP-5-1: steps, not a job) are in this PR.
-Sample run (12 of 290 qnfo-projects document keys): 6 orphans. Full run needs the repository Cloudflare token, so dispatch r2-doc-audit.yml after merge.
+State (this PR):
+- qnfo-ops/worker.js `sweepWorkflowDispatch` (cron): dispatches r2-doc-audit.yml once per ISO week and fleet-audit.yml once per 6 hours, idempotent through cloud_ops_events.
+- scripts/r2_fetch_texts.mjs + `--texts` in r2-doc-audit.yml: document text is read so rule ids count.
+- scripts/r2_file_issues.mjs inserts out/roadmap.jsonl into roadmap_implementation (source `doc-orphan`, deduped by item).
+- scripts/audit.py + fleet-audit.yml: AGENTS.md promised both and neither existed. Findings: claims naming missing scripts, loop issues without a closing probe, human PRs without Self-audit.
+- Correction: the earlier handoff named an `owner_documents` table; it does not exist in the audit D1 (the real tables are `owner_docs` and `ddocs_index_state`).
+
 Next (code-task lines):
-- code-task: qnfo-agents weekly CMDLINE-MAINTAIN-1 sweep calls workflow_dispatch of r2-doc-audit.yml
-- code-task: scripts/r2_doc_audit.mjs also read qnfo-ddocs text for rule ids and owner_documents rows (the --texts input)
-- code-task: add roadmap_implementation insert from out/roadmap.jsonl in r2_file_issues.mjs
-Verify: node scripts/r2_doc_audit.test.mjs; gh workflow run r2-doc-audit.yml; the run summary shows orphan and filed counts.
+- code-task: after merge, canonical-deploy qnfo-ops, then gh workflow run r2-doc-audit.yml and fleet-audit.yml once to prove the chain
+- code-task: read owner_docs rows (schema in D1) as an extra text source for r2_doc_audit.mjs
+- code-task: audit.py checks every repo in deploy-targets.txt, not only qnfo-workers
+Verify: node scripts/r2_file_issues.test.mjs; python3 scripts/audit_test.py; after deploy, cloud_ops_events has kind sweep-dispatch rows with status dispatched.
