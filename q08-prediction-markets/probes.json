@@ -3,7 +3,25 @@
   "mode": "revert",
   "health": "https://q08-prediction-markets.q08.workers.dev/health",
   "http": [
-    { "url": "https://q08-prediction-markets.q08.workers.dev/health", "contains": ["\"worker\":\"q08-prediction-markets\"", "\"paper_trading\":true"] },
-    { "url": "https://q08-prediction-markets.q08.workers.dev/api/state", "contains": ["\"paper\":true"] }
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/health",
+      "contains": [
+        "\"worker\":\"q08-prediction-markets\"",
+        "\"paper_trading\":true"
+      ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/api/state",
+      "contains": [
+        "\"paper\":true"
+      ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/api/charter",
+      "contains": [
+        "\"mode\":\"paper\"",
+        "\"graduation\""
+      ]
+    }
   ]
 }
