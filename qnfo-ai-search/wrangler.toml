@@ -6,7 +6,7 @@ main = "worker.js"
 # imports no node: module), 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy keeps the date only
 # when /health answers with the deployed VERSION and otherwise restores the previous date (deployment_history compat-restore).
 # compat-advance: reviewed 2026-10-12
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 workers_dev = true
 # charter-pillar: reach
 # 2.0.0 (ASK-LOOP-1): also serves ask.qwav.tech (folded in from the static Pages project ask-qwav, so the worker count
