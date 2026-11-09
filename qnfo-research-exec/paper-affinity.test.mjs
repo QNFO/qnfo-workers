@@ -14,6 +14,7 @@ const pre = src.slice(src.indexOf("var RESEARCH_SHARED_PREAMBLE = "), src.indexO
 const build = new Function([
   mathRule, varDef("SOURCE_VOICE_RULE"), varDef("EMPIRICAL_ACT_RULE"), varDef("CI_REVIEW_DIMENSION"), pre, varDef("RESEARCH_AFFINITY_TTL_MS"), "var _researchAffinityScope = null; var _researchAffinityAt = 0;",
   cut("function stagePrompt("), cut("function stageContextPrompt("), cut("async function researchAffinityScope("),
+  "var _gwSharePct = null; var _gwShareAt = 0;", cut("async function gatewaySharePct("),
   cut("function paperAffinityKey("), cut("async function aiRunOpts("),
   "return { RESEARCH_SHARED_PREAMBLE, stagePrompt, stageContextPrompt, researchAffinityScope, paperAffinityKey, aiRunOpts, reset: function () { _researchAffinityScope = null; _researchAffinityAt = 0; } };"
 ].join("\n"));
