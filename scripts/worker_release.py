@@ -174,6 +174,10 @@ def cmd_bump(args):
         print("release fragment %s already exists; pick another version" % os.path.relpath(frag, ROOT), file=sys.stderr)
         return 1
     body = "# %s %s (%s)\n\n%s%s\n" % (worker, new, datetime.date.today().isoformat(), ("%s: " % opt("--name")) if opt("--name") else "", note.strip())
+    pkg = os.path.join(ROOT, worker, "package.json")
+    bundled = os.path.isfile(pkg) and os.path.isfile(os.path.join(ROOT, worker, "build.mjs"))
+    if bundled:
+        report.append("package.json version -> %s (build.mjs derives VERSION from it)" % new)
     if "--dry-run" in args:
         print("\n".join(report))
         print("would write %s" % os.path.relpath(frag, ROOT))
@@ -184,6 +188,15 @@ def cmd_bump(args):
     with open(frag, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)
     report.append("wrote %s" % os.path.relpath(frag, ROOT))
+    if bundled:
+        with open(pkg, encoding="utf-8", newline="") as fh:
+            ptxt = fh.read()
+        ptxt = re.sub(r'("version"\s*:\s*")[^"]*(")', lambda m: m.group(1) + new + m.group(2), ptxt, count=1)
+        with open(pkg, "w", encoding="utf-8", newline="") as fh:
+            fh.write(ptxt)
+        if shutil.which("node"):
+            b = subprocess.run(["node", "build.mjs"], cwd=os.path.join(ROOT, worker), capture_output=True, text=True)
+            report.append("node build.mjs ok" if b.returncode == 0 else "node build.mjs FAILED (run npm ci first): " + (b.stderr or "")[:200])
     report.append(sync_mirror(worker))
     if shutil.which("node"):
         chk = subprocess.run(["node", "--check", path], capture_output=True, text=True)
