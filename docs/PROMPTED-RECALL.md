@@ -23,3 +23,8 @@ open-ended one. Reference implementation: `qnfo-jobsearch/worker.js` (`recallQue
 - Ask at the moment of use (before every application), and keep a queue page for idle moments, most-asked first.
 - Each answer changes behavior right away: a yes adds the fact and re-runs the search, so the next ranking and the
   next resume use it. A surface that asks and changes nothing is a defect.
+
+## Surfaces
+
+- Jobs app (qnfo-jobsearch): Apply shows the job's questions; "Questions about you" opens the queue.
+- Fleet dashboard overview (qnfo-fleet-dashboard RECALL-CARD-1): the most-asked question for the signed-in owner, Yes / No / Not sure, then how involved. Reached through the `SVC_JOBSEARCH` service binding with the loop token after the dashboard's own owner-session check; `GET /api/recall` and `POST /api/recall` on the dashboard are owner-only.

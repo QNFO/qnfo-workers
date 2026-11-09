@@ -96,6 +96,12 @@ binding = "SVC_QNFO_IPATENT"
 service = "qnfo-ipatent"
 environment = "production"
 
+# RECALL-CARD-1: the owner overview card asks qnfo-jobsearch for the next recall question (owner session only, loop token).
+[[services]]
+binding = "SVC_JOBSEARCH"
+service = "qnfo-jobsearch"
+environment = "production"
+
 [[services]]
 binding = "SVC_PERSONAL_API"
 service = "personal-api"
