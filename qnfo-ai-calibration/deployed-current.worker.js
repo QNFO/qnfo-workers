@@ -413,7 +413,7 @@ __name(budgetProbeOn, "budgetProbeOn");
 // One budget request straight to the Workers AI binding (messages, then prompt when the model refuses that shape). Shared by the
 // sweep and the prober member so a row both write is judged on one request shape.
 async function probeBudgetDirect(env, cfId) {
-  // BP26-G
+  // BP26-GW-CALIBRATION-1: health probes go through the AI Gateway (skipCache, so a probe is never answered from cache); a gateway-named error retries once on the plain binding.
   const GW_OPTS = {
     gateway: {
       id: "default",
@@ -1195,7 +1195,14 @@ var proberMod = (function() {
     for (let i = 0; i < bodies.length; i++) {
       try {
         const t0 = Date.now();
-        await env.AI.run(m.id, bodies[i]);
+        // BP26-GW-CALIBRATION-1: gateway + skipCache; retry once plain when the error names the gateway (never spend or a limit)
+        try {
+          await env.AI.run(m.id, bodies[i], { gateway: { id: "default", skipCache: true, metadata: { worker: "qnfo-ai-calibration", purpose: "health-ping" } } });
+        } catch (ge) {
+          const gm = String(ge && ge.message || ge);
+          if (/gateway/i.test(gm) && !/spend|limit/i.test(gm)) await env.AI.run(m.id, bodies[i]);
+          else throw ge;
+        }
         return { ok: true, ms: Date.now() - t0 };
       } catch (e) {
         lastErr = String(e && e.message || e).slice(0, 120);
