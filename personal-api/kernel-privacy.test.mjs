@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 
 const source = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const module = await import("data:text/javascript;base64," + Buffer.from(source + "\nexport { logChat, recordPersonalKernelTelemetry };\n").toString("base64"));
-const original = readFileSync(new URL("../migrations/2026-11-06-kernel-everywhere.sql", import.meta.url), "utf8");
+// COMPANION-TESTS-1: the migration became a retirement no-op (RETIREMENT-NOOP-1); the test replays the original schema from a fixture.
+const original = readFileSync(new URL("./fixtures/kernel-everywhere.original.sql", import.meta.url), "utf8");
 const correction = readFileSync(new URL("../migrations/2026-11-07-kernel-personal-privacy.sql", import.meta.url), "utf8");
 const privateMarker = "SYNTHETIC_PRIVATE_HEALTH_LOCATION_8729";
 const now = "2026-11-07T12:00:00Z";

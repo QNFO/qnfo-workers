@@ -14,3 +14,36 @@ import audit
 audit.UNREACHABLE.clear()
 assert audit.gh_json(["repos/QNFO/this-repo-does-not-exist-8885/issues"]) == [] and audit.UNREACHABLE == ["repos/QNFO/this-repo-does-not-exist-8885/issues"]
 print("audit_test ok")
+
+
+def test_branch_findings():
+    import datetime
+    now = datetime.datetime(2026, 11, 9, tzinfo=datetime.timezone.utc)
+    bs = [{"name": "ccr-old", "date": "2026-10-20T00:00:00Z"}, {"name": "ccr-new", "date": "2026-11-08T00:00:00Z"},
+          {"name": "ccr-live", "date": "2026-10-01T00:00:00Z"}, {"name": "feature-x", "date": "2026-01-01T00:00:00Z"}]
+    f = audit.branch_findings(bs, {"ccr-live"}, now)
+    assert [x["key"] for x in f] == ["branch:ccr-old"], f
+
+
+def test_repo_findings_reads_every_candidate_branch():
+    """Review finding on #9333: only the first 30 candidate branches were dated, so a stale 31st was never reported."""
+    branches = [{"name": f"ccr-{i}", "commit": {"sha": f"s{i}"}} for i in range(31)]
+    def fake(args):
+        a = args[0]
+        if "/branches" in a: return branches
+        if "/commits/" in a:
+            sha = a.rsplit("/", 1)[1]
+            return {"commit": {"committer": {"date": "2026-10-01T00:00:00Z" if sha == "s30" else "2099-01-01T00:00:00Z"}}}
+        return []
+    real = audit.gh_json
+    audit.gh_json = fake
+    try:
+        keys = [f["key"] for f in audit.repo_findings("QNFO/x", "QNFO/x")]
+    finally:
+        audit.gh_json = real
+    assert keys == ["branch:ccr-30"], keys
+
+
+test_branch_findings()
+test_repo_findings_reads_every_candidate_branch()
+print("branch_findings ok")
