@@ -65,6 +65,13 @@ assert.equal((await syncProfile(env)).updated, true); assert.equal(putBody.recor
 reset();
 assert.deepEqual(await syncProfile({}), { skipped: "no credentials" }); assert.equal(calls.length, 0);
 
+// 4b. BRAND-AUTONOMY-1: the 2026-10-01 systems-first bio (live until 0.25.0, with its trailing space) is superseded.
+const SYSFIRST = "I build open, auditable AI-assisted research (QNFO). Asking what a correct computation costs in energy. Formerly FHWA and AARP. Some posts are drafted by my research pipeline. ";
+reset(); publicDesc = SYSFIRST; recordValue = { $type: "app.bsky.actor.profile", displayName: "Rowan Brad Quni-Gudzinas", description: SYSFIRST };
+const b4 = await syncProfile(env);
+assert.equal(b4.updated, true); assert.equal(putBody.record.description, PROFILE_DESCRIPTION);
+assert.ok(/^Autonomous AI systems researcher/.test(PROFILE_DESCRIPTION));
+
 // 5. The bio fits Bluesky's 256-grapheme limit.
 assert.ok([...new Intl.Segmenter().segment(PROFILE_DESCRIPTION)].length <= 256);
 console.log("profile-sync: all assertions passed");
