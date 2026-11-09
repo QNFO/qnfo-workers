@@ -2080,7 +2080,7 @@ async function jobOutreach(env) {
       out.errors.push({ id: r.id, error: String(e && e.message || e) });
     }
   }
-  if (sentToday < CAP && !(pcfg.on && !pcfg.error)) {
+  if (sentToday < CAP && !(pcfg.on || pcfg.error)) { // OUTREACH-PIVOT-1: an unreadable ops_config keeps follow-ups skipped (fail-closed)
     try {
       /* OUTREACH-LEARNER-1: with the learner on, a follow-up to a stopped segment is held (the row stays 'sent', so it
          still counts as contacted everywhere) and up to 12 rows are read so held ones cannot starve the 3 follow-ups. */
