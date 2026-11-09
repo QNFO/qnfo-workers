@@ -5,7 +5,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261109_companion_guard_gaps
--- Rollback: DELETE FROM project_ledger WHERE task_id LIKE 'record:companion-guard-%'; DELETE FROM deployment_history WHERE resource_name = 'qnfo-companion-guard' AND deployed_by = 'session:companion-guard-record-1'; UPDATE portfolio_gaps SET status = 'open', resolved_at = NULL WHERE EXISTS (SELECT 1 FROM bak_20261109_companion_guard_gaps b WHERE b.kind = portfolio_gaps.kind AND b.entity = portfolio_gaps.entity AND b.day = portfolio_gaps.day AND b.status = 'open')
+-- Rollback: DELETE FROM project_ledger WHERE task_id LIKE 'record:companion-guard-%'; DELETE FROM deployment_history WHERE resource_name = 'qnfo-companion-guard' AND deployed_by = 'session:companion-guard-record-1'; UPDATE portfolio_gaps SET status = 'open', resolved_at = NULL WHERE status = 'resolved' AND (kind, entity, day) IN (SELECT kind, entity, day FROM bak_20261109_companion_guard_gaps WHERE status = 'open')
 -- CAUSE-MAPPED: registers no metric_registry row.
 
 CREATE TABLE IF NOT EXISTS bak_20261109_companion_guard_gaps AS
