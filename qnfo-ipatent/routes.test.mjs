@@ -33,6 +33,15 @@ for (const p of ["/guide"].concat(slugs.map((s) => "/guide/" + s))) {
 for (const p of ["/sitemap.xml", "/robots.txt", "/llms.txt", "/og.jpg", "/health"]) ok((await get(p)).status === 200, p + " answers 200");
 const sm = (await get("/sitemap.xml")).text;
 for (const p of pages.filter((x) => x === "/" || x === "/guide" || x === "/example" || slugs.includes(x.slice(7)))) ok(sm.includes("https://ipatent.qnfo.org" + (p === "/" ? "/" : p) + "<"), "sitemap lists " + p);
+// REGISTER-3: the defensive-publication guide and the disclosure template exist, cite primary sources and are linked from llms.txt, the sitemap and /register.
+for (const slug of ["defensive-publication", "provisional-patent-disclosure-template"]) {
+  const g = await get("/guide/" + slug);
+  ok(g.status === 200 && /35 U\.S\.C\./.test(g.text), slug + " answers 200 and cites 35 U.S.C.", g.status);
+  ok((await get("/sitemap.xml")).text.includes("/guide/" + slug), slug + " is in the sitemap");
+  ok((await get("/llms.txt")).text.includes("/guide/" + slug), slug + " is in llms.txt");
+}
+ok(/Art\. 54 EPC/.test((await get("/guide/defensive-publication")).text) && /server clock/.test((await get("/guide/defensive-publication")).text), "defensive-publication names Art. 54 EPC and the server-clock limit");
+ok((await get("/register")).text.includes("/guide/defensive-publication"), "/register links the defensive-publication guide");
 ok((await get("/guide/no-such-page")).status === 404, "unknown guide page is 404, not the guide");
 const ver = (src.match(/var VERSION = "([^"]+)"/) || [])[1];
 ok(JSON.parse((await get("/health")).text).version === ver, "/health reports the VERSION constant");
