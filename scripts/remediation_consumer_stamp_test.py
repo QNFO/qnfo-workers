@@ -42,6 +42,9 @@ def fake_d1(sql, params=None):
     s = sql.lstrip()
     if s.startswith("SELECT 'a'"):
         return [{"expected": "a", "observed": "a"}]
+    if s.startswith("UPDATE remediation_contracts SET escalate_to"):
+        db.execute(sql, params or [])
+        return []
     if s.startswith("UPDATE remediation_contracts SET attempts"):
         stamps.append(sql)
         db.execute(sql, params or [])
@@ -49,14 +52,14 @@ def fake_d1(sql, params=None):
     return []
 
 
-def run(status, passed=True, probe=None):
+def run(status, passed=True, probe=None, attempts=None, cls="c1"):
     """consume_one on a contract whose stored status is `status`; returns (status, attempts, verdict) after the stamp."""
     db.execute("DELETE FROM remediation_contracts")
-    db.execute("INSERT INTO remediation_contracts (class, status, attempts) VALUES ('c1', ?, 4)", (status,))
-    c = {"class": "c1", "verify_transport": rc.HTTPS_TRANSPORT, "expected_cadence_h": 1, "max_attempts": 3, "issue_id": None, "status": "active",
+    db.execute("INSERT INTO remediation_contracts (class, status, attempts) VALUES (?, ?, 4)", (cls, status))
+    c = {"class": cls, "attempts": attempts, "status": status, "verify_transport": rc.HTTPS_TRANSPORT, "expected_cadence_h": 1, "max_attempts": 3, "issue_id": None,
          "verify_probe": probe or ("SELECT 'a' AS expected, 'a' AS observed" if passed else "SELECT 'a' AS expected, 'b' AS observed")}
     rc.consume_one(c, {rc.HTTPS_TRANSPORT})
-    return db.execute("SELECT status, attempts, last_verdict FROM remediation_contracts WHERE class = 'c1'").fetchone()
+    return db.execute("SELECT status, attempts, last_verdict FROM remediation_contracts WHERE class = ?", (cls,)).fetchone()
 
 
 def fake_https(c, rec, local, trusted):
@@ -83,10 +86,18 @@ try:
     check(run("holding")[0] == "holding", "a holding contract that passed again stays holding")
     check(run("active", passed=False)[0] == "active", "a failing probe below the retry limit leaves an active contract active")
     check(run("superseded", passed=False)[0] == "superseded", "a failing probe leaves a superseded contract superseded")
+    # STAMP-ESCALATE-1 (issue 9762): the failing stamp that reaches max_attempts escalates; standing detectors and passes do not
+    r = run("active", passed=False, attempts=2)
+    check(r[0] == "escalated", "attempts + 1 >= max_attempts on a fail escalates an active contract", r)
+    check(db.execute("SELECT escalate_to FROM remediation_contracts WHERE class = 'c1'").fetchone()[0] == "fleet:remediation-consumer", "escalate_to is written")
+    check(run("holding", passed=False, attempts=2)[0] == "escalated", "a holding contract escalates too")
+    check(run("superseded", passed=False, attempts=2)[0] == "superseded", "a superseded contract is never escalated")
+    check(run("active", passed=True, attempts=2)[0] == "holding", "a pass at the limit does not escalate")
+    check(run("active", passed=False, attempts=2, cls="fm-x")[0] == "active", "a standing detector never escalates in bulk")
 finally:
     rc.d1, rc.consume_https = saved
 
-check(len(stamps) >= 7, "every case went through the real stamp statement", len(stamps))
+check(len(stamps) >= 12, "every case went through the real stamp statement", len(stamps))
 check(all(re.search(r"status\s*=\s*CASE WHEN status IN \('active', 'holding'\) THEN COALESCE\(\?, status\) ELSE status END", s) for s in stamps),
       "the statement guards the status write", stamps[:1])
 
