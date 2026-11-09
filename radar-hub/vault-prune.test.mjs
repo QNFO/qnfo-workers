@@ -1,0 +1,24 @@
+// RADAR-VAULT-EXPIRY-1 (#9678): vaultPrune deletes notes/v1 date folders older than keepDays and only those. Run: node radar-hub/vault-prune.test.mjs
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8").split(String.fromCharCode(13)).join("");
+const i = src.indexOf("async function vaultPrune"), j = src.indexOf("var hubRun = {");
+if (i < 0 || j < i) throw new Error("block not found");
+const sb = { Date, Promise };
+vm.createContext(sb);
+vm.runInContext(src.slice(i, j) + "\n;__x = { vaultPrune };", sb);
+let fail = 0;
+const ok = (c, m, x) => { if (!c) { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x) : "")); } };
+const day = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+const key = (n, f) => { const d = day(n); return "notes/v1/" + d.slice(0, 4) + "/" + d.slice(5, 7) + "/" + d + "/" + f; };
+const keys = [key(90, "_arxiv-radar.md"), key(61, "_citation-watch.md"), key(59, "_arxiv-radar.md"), key(1, "_arxiv-radar.md"), "notes/v1/readme.md"];
+const deleted = [];
+const VAULT = { async list() { return { objects: keys.map((k) => ({ key: k })), truncated: false }; }, async delete(ks) { deleted.push(...ks); } };
+const r = await sb.__x.vaultPrune({ VAULT }, 60);
+ok(deleted.length === 2 && deleted.includes(keys[0]) && deleted.includes(keys[1]), "only folders older than 60 days are deleted", deleted);
+ok(r.deleted === 2 && r.scanned === 5, "counts reported", r);
+const r2 = await sb.__x.vaultPrune({}, 60);
+ok(r2.deleted === 0 && r2.skipped, "no VAULT binding is a skip");
+ok(/vaultPrune\(env\)\.then/.test(src), "the cron tick calls vaultPrune");
+console.log(fail ? fail + " failed" : "all passed");
+process.exit(fail ? 1 : 0);
