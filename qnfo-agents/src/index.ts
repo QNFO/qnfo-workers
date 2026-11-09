@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE } from "./lib.js";
+import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE, redactSecrets, shareToken, shareTokenOk, renderShareHtml } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
@@ -70,6 +70,8 @@ const REQUEST_STALE_MIN = 30;
 interface Env {
   AI: any;
   AUDIT_DB: D1Database;
+  // SHARE-LINK-1: shared transcripts live under shares/<token>.json.
+  SHARES: R2Bucket;
   LOADER: any;
   OPS: Fetcher;
   FleetCodeAgent: DurableObjectNamespace<FleetCodeAgent>;
@@ -505,9 +507,19 @@ export class FleetCodeAgent extends Agent<Env, State> {
     // CMD-RUN-HEARTBEAT-1: each finished step stamps last_beat_ms and last_tool, so "no progress" means no step, not an old start.
     try { this.sql`ALTER TABLE runs ADD COLUMN last_beat_ms INTEGER`; } catch (e) { /* column exists */ }
     try { this.sql`ALTER TABLE runs ADD COLUMN last_tool TEXT`; } catch (e) { /* column exists */ }
+    try { this.sql`ALTER TABLE runs ADD COLUMN resumed INTEGER DEFAULT 0`; } catch (e) { /* column exists */ }
     const cut = Date.now() - STALE_RUN_MIN * 60000;
-    const stale: any = this.sql`SELECT id, last_tool FROM runs WHERE status IN ('queued', 'running') AND COALESCE(last_beat_ms, created_ms) < ${cut}`;
+    const stale: any = this.sql`SELECT id, last_tool, resumed FROM runs WHERE status IN ('queued', 'running') AND COALESCE(last_beat_ms, created_ms) < ${cut}`;
     for (const x of stale) {
+      // RESUME-ONCE-1: a stalled run is resumed once (resumed once: same prompt, caller and scope; the clock restarts); a second stall fails it below.
+      if (!x.resumed) {
+        const now = Date.now();
+        this.sql`UPDATE runs SET resumed = 1, status = 'queued', last_beat_ms = ${now}, error = NULL WHERE id = ${x.id}`;
+        try { await this.env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'queued', error = NULL, created_ms = ?2 WHERE id = ?1").bind(x.id, now).run(); } catch (e) { logErr("resume-ledger", e); }
+        const rid = String(x.id);
+        void this.runFiber("turn:" + rid, async (fctx: any) => { fctx.stash({ id: rid }); await this.executeRun(rid); }).catch((e) => logErr("fiber-resume", e));
+        continue;
+      }
       const why = "abandoned: no progress for " + STALE_RUN_MIN + " minutes" + (x.last_tool ? " (last tool: " + String(x.last_tool).slice(0, 60) + ")" : "");
       this.sql`UPDATE runs SET status = 'failed', error = ${why}, finished_ms = ${Date.now()} WHERE id = ${x.id}`;
     }
@@ -1582,6 +1594,16 @@ export default {
         if (!dup) await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) VALUES ('github-webhook', 'code_session', ?1, 'high')").bind(prompt).run();
         return json({ ok: true, routed: true, kind: route.kind, issue_id: route.issue_id, duplicate: !!dup });
       }
+      // SHARE-LINK-1: the read-only page of a shared session; the unguessable token is the credential, so no sign-in, and a revoked token is a 404.
+      let shareGet: RegExpExecArray | null;
+      if ((shareGet = /^\/share\/([0-9a-f]{48})$/.exec(path)) && request.method === "GET") {
+        const obj = shareTokenOk(shareGet[1]) ? await env.SHARES.get("shares/" + shareGet[1] + ".json") : null;
+        const hdr = { "x-robots-tag": "noindex, nofollow", "cache-control": "private, no-store" };
+        if (!obj) return new Response("not found", { status: 404, headers: hdr });
+        let doc: any = {};
+        try { doc = await obj.json(); } catch (e) { return new Response("not found", { status: 404, headers: hdr }); }
+        return new Response(renderShareHtml(doc), { headers: { ...hdr, "content-type": "text/html; charset=utf-8" } });
+      }
       if (path === "/mcp") return createMcpHandler(() => mcpServer(env, scope, caller) as any, { route: "/mcp" } as any)(request, env, ctx);
       if (!caller) return json({ ok: false, error: "This route is for the fleet console and the ops endpoint. Use https://fleet.qnfo.org/cmd (cfagent <request>) or https://ops.qnfo.org/v1/agents.", open: ["/", "/health", "/tools", "/mcp"] }, 403);
       if (path.indexOf("/agents/") === 0) return (await routeAgentRequest(request, env)) || json({ ok: false, error: "no such agent" }, 404);
@@ -1602,8 +1624,26 @@ export default {
         return json(await session.startSession({ text, scope, caller, budget: b.budget }), 202);
       }
       let sessionMatch: RegExpExecArray | null;
-      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns|plan|tasks|export|fork))?$/.exec(path))) {
+      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns|plan|tasks|export|fork|share))?$/.exec(path))) {
         const session: any = await getAgentByName(env.CodeSession as any, sessionMatch[1]);
+        if (sessionMatch[2] === "share" && (request.method === "POST" || request.method === "DELETE")) {
+          // SHARE-LINK-1 (issue 9833): the owner publishes the done turns (credentials removed) as a read-only link, and revokes it by token.
+          if (scope !== "write") return json({ ok: false, error: "sharing publishes the session: it needs the write scope (on the console: a fresh code)" }, 403);
+          if (request.method === "DELETE") {
+            const tok = String(url.searchParams.get("token") || b.token || "");
+            const key = "shares/" + tok + ".json";
+            const head = shareTokenOk(tok) ? await env.SHARES.head(key) : null;
+            if (!head || head.customMetadata?.session !== sessionMatch[1] || head.customMetadata?.caller !== caller) return json({ ok: false, error: "no such share" }, 404);
+            await env.SHARES.delete(key);
+            return json({ ok: true, revoked: true });
+          }
+          const ex: any = await session.exportTranscript(caller, 0);
+          if (!ex.ok) return json(ex, 404);
+          const tok = shareToken();
+          const doc = { session_id: sessionMatch[1], shared_at: new Date().toISOString(), turns: ex.turns.map((t: any) => ({ turn: t.turn, prompt: redactSecrets(t.prompt), answer: redactSecrets(t.answer) })) };
+          await env.SHARES.put("shares/" + tok + ".json", JSON.stringify(doc), { httpMetadata: { contentType: "application/json" }, customMetadata: { session: sessionMatch[1], caller } });
+          return json({ ok: true, token: tok, url: new URL("/share/" + tok, request.url).toString(), turns: doc.turns.length }, 201);
+        }
         if (sessionMatch[2] === "events" && request.method === "GET") return codeSessionStream(request, session, caller);
         if (sessionMatch[2] === "tasks" && request.method === "GET") { const tl: any = await session.sessionTasks(caller); return json(tl, tl.ok ? 200 : 404); }
         if (sessionMatch[2] === "export" && request.method === "GET") { const ex: any = await session.exportTranscript(caller, Number(url.searchParams.get("turn")) || 0); return json(ex, ex.ok ? 200 : 404); }

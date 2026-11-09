@@ -581,3 +581,36 @@ export function systemMapNote(text, max) {
   const cap = max || 3500;
   return "\n\nFleet system map (docs/SYSTEM-MAP.md, head; read the file or ops_fleet_graph for more):\n" + (body.length > cap ? body.slice(0, cap) + "\n[map cut]" : body);
 }
+
+// SHARE-LINK-1 (issue 9833): a shared transcript is public, so anything shaped like a credential is replaced before it is written to R2.
+const SHARE_SECRET_PATTERNS = [
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+  /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}/g,
+  /\bsk-[A-Za-z0-9_-]{20,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/g,
+  /\b(authorization|bearer)\b\s*[:=]?\s*[A-Za-z0-9._~+\/=-]{16,}/gi,
+  /\b((?:api[_-]?key|secret|token|password|passwd|x-loop-token)\b["']?\s*[:=]\s*["']?)[^\s"',;]{8,}/gi,
+  /\b[0-9a-f]{40,}\b/gi
+];
+export function redactSecrets(text) {
+  let t = String(text == null ? "" : text);
+  for (const re of SHARE_SECRET_PATTERNS) t = t.replace(re, function (m, g1) { return (typeof g1 === "string" && g1 ? g1 : "") + "[redacted]"; });
+  return t;
+}
+export function shareToken() {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return Array.from(b, function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+}
+export function shareTokenOk(t) { return /^[0-9a-f]{48}$/.test(String(t || "")); }
+function escHtml(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+// The shared page: read-only, no script, noindex (the route also sends the header).
+export function renderShareHtml(doc) {
+  const list = doc && Array.isArray(doc.turns) ? doc.turns : [];
+  const turns = list.map(function (t) {
+    return "<section><h2>Turn " + escHtml(t.turn) + "</h2><h3>Request</h3><pre>" + escHtml(t.prompt) + "</pre><h3>Answer</h3><pre>" + escHtml(t.answer) + "</pre></section>";
+  }).join("");
+  return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Shared code session</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:52rem;margin:0 auto;padding:1rem}pre{white-space:pre-wrap;word-break:break-word;background:#f4f4f4;padding:.75rem;border-radius:6px;color:#111}h2{margin-top:2rem}</style></head><body><h1>Shared code session</h1><p>Read-only copy, " + list.length + " turn(s), shared " + escHtml(doc && doc.shared_at) + ". Credentials are removed.</p>" + turns + "</body></html>";
+}
