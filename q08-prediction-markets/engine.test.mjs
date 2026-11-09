@@ -227,3 +227,26 @@ test("the current-events portal gives evidence lines matched to a question by it
   const hit = ceMatch(lines, "US x Iran Effective Ceasefire by November 22?"); assert.equal(hit.length, 1); assert.equal(hit[0].src, "events"); assert.ok(!("text" in hit[0]));
   assert.deepEqual(ceMatch(lines, "Will the Senate pass the funding bill?"), []); assert.deepEqual(ceMatch([], "anything goes here"), []);
 });
+
+test("evaluate scores the blend with the weight the strategy trades on", () => {
+  const rows = [0, 1, 0, 1].map((o, i) => ({ fair: o ? 0.8 : 0.2, market: 0.5, outcome: o, confidence: "high", domain: "politics", ts: "2026-01-0" + (i + 1) }));
+  const half = evaluate(rows, 0.1), full = evaluate(rows, 0.1, undefined, 1);
+  assert.ok(Math.abs(full.brier_blend - full.brier_model) < 1e-9);
+  assert.ok(full.brier_blend < half.brier_blend);
+});
+test("a lapsed domain pause is renewed only on forecasts made after it lapsed", () => {
+  const bad = (i, ts) => ({ fair: 0.9, market: 0.5, outcome: 0, confidence: "high", domain: "crypto", ts, v: 1 });
+  const old = Array.from({ length: 30 }, (_, i) => bad(i, "2026-01-01T00:00:00Z"));
+  const params = { recal_a: 1, recal_b: 0, blend_w: 0.5, domains_off: { crypto: "2026-02-01T00:00:00Z" }, last_tune_at: null };
+  const now = Date.parse("2026-02-10T00:00:00Z");
+  assert.ok(!tuneActions(old, params, now).some((a) => a.kind === "domain_off"), "old record alone must not renew");
+  const fresh = old.concat(Array.from({ length: 30 }, (_, i) => bad(i, "2026-02-05T00:00:00Z")));
+  assert.ok(tuneActions(fresh, params, now).some((a) => a.kind === "domain_off" && a.domain === "crypto"));
+});
+test("verifyChain carries the last hash across pages", async () => {
+  const mk = async (prev, core) => ({ core, prev_hash: prev, hash: await chainHash(prev, core) });
+  const a = await mk("", "a"), b = await mk(a.hash, "b"), c = await mk(b.hash, "c");
+  const p1 = await verifyChain([a, b]), p2 = await verifyChain([c], p1.head);
+  assert.ok(p1.ok && p2.ok && p2.head === c.hash);
+  assert.equal((await verifyChain([c], "")).ok, false);
+});

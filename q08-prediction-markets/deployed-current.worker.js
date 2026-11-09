@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.6.2";
+var VERSION = "1.6.3";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -174,8 +174,8 @@ export function kellyStake(pWin, price, eq, cfg = CFG) {
 export async function sha256Hex(s) { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join(""); }
 export const chainHash = (prev, core) => sha256Hex(String(prev || "") + "|" + core);
 // rows in id order: {core, prev_hash, hash}. The first row's prev_hash is "". Returns {ok, count, head, bad_id}.
-export async function verifyChain(rows) {
-  let prev = "";
+export async function verifyChain(rows, start = "") {
+  let prev = start;
   for (const r of rows) {
     if ((r.prev_hash || "") !== prev || (await chainHash(prev, r.core)) !== r.hash) return { ok: false, count: rows.length, head: prev, bad_id: r.id ?? null };
     prev = r.hash;
@@ -248,9 +248,9 @@ export function bootstrapCI(xs, reps = 1000, seed = 12345) {
 //  1. Brier score of the model against the market price (the price is the baseline the information has to beat), and against a 50/50 blend of the two;
 //  2. shadow ROI: a flat bet on every qualifying estimate at the price seen then, with slippage, whether or not the account had room for it;
 //  3. the control: the same bets backing whichever side the market already favours. Following the chart must lose to the information, or there is no information.
-export function evaluate(rows, minEdge = CFG.MIN_EDGE, cfg = CFG) {
+export function evaluate(rows, minEdge = CFG.MIN_EDGE, cfg = CFG, blendW = 0.5) {
   const r = rows.filter((x) => x.fair != null && (x.outcome === 0 || x.outcome === 1));
-  const bm = r.map((x) => (x.fair - x.outcome) ** 2), bk = r.map((x) => (x.market - x.outcome) ** 2), bb = r.map((x) => ((x.fair + x.market) / 2 - x.outcome) ** 2);
+  const bm = r.map((x) => (x.fair - x.outcome) ** 2), bk = r.map((x) => (x.market - x.outcome) ** 2), bb = r.map((x) => (blendW * x.fair + (1 - blendW) * x.market - x.outcome) ** 2);
   const gain = r.map((_, i) => bk[i] - bm[i]), blendGain = r.map((_, i) => bk[i] - bb[i]);
   const q = r.filter((x) => x.confidence !== "low" && Math.abs(x.fair - x.market) >= minEdge);
   const ret = (x, side) => { const price = side === "yes" ? x.market : 1 - x.market; const cost = price * (1 + cfg.SLIP); const win = side === "yes" ? x.outcome === 1 : x.outcome === 0; return ((win ? 1 : 0) - cost) / cost; };
@@ -314,8 +314,11 @@ export function tuneActions(rows, params, nowMs, cfg = CFG) {
     if (Math.abs(w - params.blend_w) >= 0.1) acts.push({ kind: "blend", w, reason: "Brier-optimal weight on the model over " + r.length + " resolved forecasts: " + params.blend_w + " -> " + w });
   }
   const off = params.domains_off || {};
-  for (const [d, e] of Object.entries(byDomain(r))) {
-    if (e.n >= cfg.DOMAIN_MIN && e.brier_gain_ci && e.brier_gain_ci.hi < 0 && !(off[d] && Date.parse(off[d]) > nowMs))
+  for (const [d, e0] of Object.entries(byDomain(r))) {
+    // a lapsed pause is renewed only on forecasts made after it lapsed, so the domain has had a chance to recover (and a paused domain's old record cannot re-pause it for ever)
+    const lapsed = off[d] && Date.parse(off[d]) <= nowMs;
+    const e = lapsed ? byDomain(r.filter((x) => x.domain === d && Date.parse(x.ts) > Date.parse(off[d])))[d] || { n: 0 } : e0;
+    if (e.n >= (lapsed ? Math.ceil(cfg.DOMAIN_MIN / 2) : cfg.DOMAIN_MIN) && e.brier_gain_ci && e.brier_gain_ci.hi < 0 && !(off[d] && Date.parse(off[d]) > nowMs))
       acts.push({ kind: "domain_off", domain: d, until: new Date(nowMs + cfg.DOMAIN_OFF_DAYS * 86400000).toISOString(), reason: "in the " + d + " domain the model is significantly worse than the price over " + e.n + " resolved forecasts" });
   }
   return acts;
@@ -503,8 +506,8 @@ async function settleEstimates(db, nowMs, bySlug) {
 async function evidenceNow(db, ctl) {
   const rows = (await db.prepare("SELECT l.fair_raw raw, l.fair, l.market, l.confidence, l.domain, l.params_version v, l.ts, l.ends_at, e.outcome FROM pt_estimate_log l JOIN pt_estimate e ON e.slug = l.slug WHERE l.id = (SELECT MIN(x.id) FROM pt_estimate_log x WHERE x.slug = l.slug AND x.fair IS NOT NULL) AND e.outcome IN (0,1)").all()).results;
   const curve = (await db.prepare("SELECT ts, equity FROM pt_equity ORDER BY ts LIMIT 50000").all()).results;
-  const ev = evaluate(rows, ctl.min_edge);
-  const evFrozen = evaluate(rows.filter((x) => x.v === ctl.params_version), ctl.min_edge);
+  const ev = evaluate(rows, ctl.min_edge, CFG, ctl.blend_w);
+  const evFrozen = evaluate(rows.filter((x) => x.v === ctl.params_version), ctl.min_edge, CFG, ctl.blend_w);
   const days = curve.length ? (Date.now() - Date.parse(curve[0].ts)) / 86400000 : 0;
   const frozenDays = ctl.version_started_at ? (Date.now() - Date.parse(ctl.version_started_at)) / 86400000 : 0;
   const ctx = { days, frozen_days: frozenDays, max_drawdown_pct: stats(curve, []).max_drawdown_pct, drawdown_pct: currentDrawdown(curve), min_edge: ctl.min_edge, last_equity: curve.length ? curve[curve.length - 1].equity : CFG.START };
@@ -513,8 +516,16 @@ async function evidenceNow(db, ctl) {
 // Verify the whole forecast chain at most once an hour; the result is kept in pt_control.
 async function chainStatus(db, ctl, nowMs, force) {
   if (!force && ctl.chain_checked_at && nowMs - Date.parse(ctl.chain_checked_at) < 3600000 && ctl.chain_ok != null) return { ok: ctl.chain_ok, cached: true };
-  const rows = (await db.prepare("SELECT id, core, prev_hash, hash FROM pt_estimate_log ORDER BY id LIMIT 50000").all()).results;
-  const v = await verifyChain(rows);
+  // the whole chain, in bounded pages, carrying the last hash across pages
+  let v = { ok: true, count: 0, head: "", bad_id: null }, after = 0;
+  for (let page = 0; page < 200; page++) {
+    const rows = (await db.prepare("SELECT id, core, prev_hash, hash FROM pt_estimate_log WHERE id > ? ORDER BY id LIMIT 5000").bind(after).all()).results;
+    if (!rows.length) break;
+    const p = await verifyChain(rows, v.head);
+    v = { ok: p.ok, count: v.count + p.count, head: p.head, bad_id: p.bad_id };
+    if (!p.ok) break;
+    after = rows[rows.length - 1].id;
+  }
   const now = new Date(nowMs).toISOString();
   await db.batch([setControl(db, "chain_ok", v.ok ? "1" : "0", now), setControl(db, "chain_checked_at", now, now)]);
   return { ok: v.ok, cached: false, count: v.count, head: v.head, bad_id: v.bad_id };
@@ -560,7 +571,7 @@ async function review(env, db, nowMs) {
     ctl = { ...ctl, params_version: v, version_started_at: now, last_tune_at: now };
   }
   if (writes.length) await db.batch(writes);
-  const evG = bump ? evaluate([], ctl.min_edge) : evFrozen; // a fresh version has an empty sample
+  const evG = bump ? evaluate([], ctl.min_edge, CFG, ctl.blend_w) : evFrozen; // a fresh version has an empty sample
   const grad = graduation(evG, { ...ctx, days: bump ? 0 : ctx.frozen_days });
   const chain = await chainStatus(db, ctl, nowMs, false).catch((e) => { console.error("chain check failed", String(e)); return { ok: null }; });
   const enough = evG.shadow_n >= 30;
