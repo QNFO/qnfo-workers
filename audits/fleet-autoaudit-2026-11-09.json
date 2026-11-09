@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-09 10:08:20",
+  "audited_at": "2026-11-09 10:33:58",
   "d1_write_failures": [],
-  "d1_writes_ok": 4,
+  "d1_writes_ok": 2,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -33,16 +33,6 @@
     "unmanaged_truncated": false,
     "unmanaged_workers": [
       {
-        "http": 200,
-        "version": null,
-        "worker": "qnfo-ai-yield"
-      },
-      {
-        "http": 404,
-        "version": null,
-        "worker": "qnfo-companion-guard"
-      },
-      {
         "http": 404,
         "version": null,
         "worker": "qnfo-doc-gate"
@@ -54,24 +44,8 @@
       }
     ]
   },
-  "purge_error": null,
+  "purge_error": "purge skipped: run classified 2 workers, table held 3; a partial report must not shrink the audit surface",
   "rows": {
-    "qnfo-ai-yield": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "qnfo-ai-yield"
-    },
-    "qnfo-companion-guard": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_NO_HEALTH",
-      "worker": "qnfo-companion-guard"
-    },
     "qnfo-doc-gate": {
       "before": null,
       "http": 404,
@@ -89,5 +63,5 @@
       "worker": "qnfo-workers"
     }
   },
-  "stale_rows_purged": 40
+  "stale_rows_purged": null
 }
