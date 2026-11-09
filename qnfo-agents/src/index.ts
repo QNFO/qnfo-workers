@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
+import { cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
 
@@ -408,6 +408,24 @@ async function meterSteps(env: Env, runId: string, modelId: string, result: any)
   } catch (e) { logErr("meter-steps", e); }
 }
 
+// CF-AGENT-SETUP-1: the Cloudflare skill a prompt calls for, fetched as a raw file and kept in the edge cache for 6 hours (a failure returns "" and never fails a turn).
+async function cfSkillText(prompt: string): Promise<string> {
+  const name = cfSkillFor(prompt);
+  if (!name) return "";
+  try {
+    const url = cfSkillUrl(name);
+    const cache = (caches as any).default;
+    let res = await cache.match(url);
+    if (!res) {
+      res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return "";
+      const copy = new Response(await res.clone().text(), { headers: { "cache-control": "public, max-age=21600" } });
+      await cache.put(url, copy);
+    }
+    return cfSkillNote(name, await res.text());
+  } catch (e) { return ""; }
+}
+
 async function ledger(env: Env, row: Record<string, unknown>) {
   try {
     await env.AUDIT_DB.prepare("INSERT OR REPLACE INTO cf_agent_runs (id, instance, caller, scope, status, model, steps, tools_used, prompt, result, error, created_ms, finished_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
@@ -488,7 +506,8 @@ export class FleetCodeAgent extends Agent<Env, State> {
         try { const lr: any = await this.env.AUDIT_DB.prepare("SELECT value FROM ops_config WHERE key = 'qnfo_agents_lean'").first(); lean = leanConfigOn(lr && lr.value); } catch (e) { lean = true; }
       }
       const tools = await allTools({ env: this.env, scope: r.scope, caller: r.caller, agent: this, runId: id, proposals, lean });
-      const out: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, onStepFinish: (st: any) => { try { const tc = st && st.toolCalls && st.toolCalls.length ? String(st.toolCalls[st.toolCalls.length - 1].toolName) : null; this.sql`UPDATE runs SET last_beat_ms = ${Date.now()}, last_tool = COALESCE(${tc}, last_tool) WHERE id = ${id}`; } catch (e) { /* a heartbeat never fails a run */ } }, stopWhen: stepCountIs(/(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_MAX_STEPS : lean ? LEAN_MAX_STEPS : /(^|:)issue-probe-agent/.test(String(r.caller)) ? PROBE_MAX_STEPS : MAX_STEPS), ...(lean ? { prepareStep: ({ messages }: any) => ({ messages: compactMessages(messages) }) } : {}), timeout: { totalMs: /(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_TURN_TIMEOUT_MS : TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS } } as any);
+      const skillNote = await cfSkillText(r.prompt);
+      const out: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + skillNote + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, onStepFinish: (st: any) => { try { const tc = st && st.toolCalls && st.toolCalls.length ? String(st.toolCalls[st.toolCalls.length - 1].toolName) : null; this.sql`UPDATE runs SET last_beat_ms = ${Date.now()}, last_tool = COALESCE(${tc}, last_tool) WHERE id = ${id}`; } catch (e) { /* a heartbeat never fails a run */ } }, stopWhen: stepCountIs(/(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_MAX_STEPS : lean ? LEAN_MAX_STEPS : /(^|:)issue-probe-agent/.test(String(r.caller)) ? PROBE_MAX_STEPS : MAX_STEPS), ...(lean ? { prepareStep: ({ messages }: any) => ({ messages: compactMessages(messages) }) } : {}), timeout: { totalMs: /(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_TURN_TIMEOUT_MS : TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS } } as any);
       // FINAL-ANSWER-PICK-1: a preface, an empty last step or raw tool-call markup is not an answer (see pickAnswer in lib.js).
       const pick = pickAnswer(out.text, out.steps);
       result = pick.text;
@@ -499,7 +518,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
       // EMPTY-TURN-ANSWER-1 and FINAL-ANSWER-PICK-1: no step wrote an answer, so one more call without tools turns what the tools returned into it.
       if (!pick.answered) {
         try {
-          const fin: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + "\nScope of this turn: " + r.scope + ".", prompt: "Request:\n" + clip(r.prompt, 6000) + "\n\nTool results so far:\n" + (toolTranscript(out.steps, 24000) || "(none)") + "\n\n" + FINAL_ANSWER_ASK, abortSignal: AbortSignal.timeout(FINAL_ANSWER_TIMEOUT_MS) } as any);
+          const fin: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + skillNote + "\nScope of this turn: " + r.scope + ".", prompt: "Request:\n" + clip(r.prompt, 6000) + "\n\nTool results so far:\n" + (toolTranscript(out.steps, 24000) || "(none)") + "\n\n" + FINAL_ANSWER_ASK, abortSignal: AbortSignal.timeout(FINAL_ANSWER_TIMEOUT_MS) } as any);
           const ft = stripToolMarkup(String(fin.text || "").trim());
           await meter(this.env, modelId, usageOf(fin));
           if (ft) { result = ft; used.push("final-answer"); }
