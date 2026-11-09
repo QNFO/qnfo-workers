@@ -54,7 +54,9 @@ ok(DS.dsLint("<body>x</body>").some((p) => /DS_CSS/.test(p)), "dsLint flags a pa
 const root = new URL("../", import.meta.url);
 const ADOPTERS = [
   { dir: "q08-prediction-markets", path: "/", env: () => ({}) },
-  { dir: "qnfo-jobsearch", path: "/", env: () => ({}) }
+  { dir: "qnfo-jobsearch", path: "/", env: () => ({}) },
+  { dir: "qnfo-jobsearch", path: "/cv", env: () => ({}) },
+  { dir: "qnfo-jobsearch", path: "/prep", env: () => ({}) }
 ];
 for (const a of ADOPTERS) {
   for (const f of ["worker.js", "deployed-current.worker.js"]) {

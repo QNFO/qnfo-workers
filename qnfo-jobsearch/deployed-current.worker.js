@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.17.0-codeagent";
+var VERSION = "1.18.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3121,27 +3121,38 @@ load();who();loadPrefs();
 
 // ------------------------------------------------------------------ CV page (JOBSEARCH-CV-1): interview, review, edit, resume per job, history. Plain JS, talks only to /api/cv* and /api/analyze.
 // JOBSEARCH-PREP-UI-1: three tabs on one phone page (check fit, answers, interview prep) over the 1.9.0 routes.
-const PREP_UI = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apply and prepare</title>
-<style>
-:root{--bg:#f6f8fb;--ink:#16202e;--mut:#4f5b6b;--line:#e3e8ef;--brand:#2457d6;--ok:#16794c;--warn:#8a4b00;--bad:#b3261e}
-*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg)}
-header{background:#fff;border-bottom:1px solid var(--line);padding:8px 14px;position:sticky;top:0;z-index:5}
-header h1{font-size:18px;margin:0 0 4px}header a{color:var(--brand);margin-right:14px;display:inline-block;padding:6px 0}
-nav{display:flex;gap:6px;flex-wrap:wrap}nav button{flex:1;min-width:96px;min-height:44px;border:1px solid var(--line);background:#fff;border-radius:10px;font:inherit;font-weight:600;color:var(--mut)}
-nav button.on{color:#fff;background:var(--brand);border-color:var(--brand)}
-main{padding:12px 14px 40px;max-width:720px;margin:0 auto}
-.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
-textarea{width:100%;min-height:96px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px}
-button.b{min-height:44px;padding:0 16px;border:1px solid var(--line);background:#fff;border-radius:10px;font:inherit;font-weight:600;margin:4px 6px 4px 0}
-button.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
-.mut{color:var(--mut)}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.hide{display:none}
-h2{font-size:17px;margin:0 0 6px}h3{font-size:15px;margin:10px 0 4px}ul{margin:4px 0 4px 18px;padding:0}
-input{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;width:9em}
-.big{font-size:28px;font-weight:700}
-</style></head><body>
-<header><h1>Apply and prepare</h1><a href="/">Matches</a><a href="/cv">Your CV</a>
-<nav id="nav"><button data-t="check" class="on">Check fit</button><button data-t="answers">Answers</button><button data-t="prep">Interview prep</button></nav></header>
-<main>
+// JOBS-DESIGN-2 (DESIGN-SYSTEM-2, #9926): /cv and /prep on the shared design system. The CSS maps the classes the two page scripts already
+// emit (card, b, pri, link, row, fact, hint, gap, good, tag, bar, toast) onto the design tokens, so the scripts keep their element ids and logic.
+const JOBS_FORM_CSS = ".ds-seg{margin:0 0 16px}@media (max-width:560px){.ds-seg.ds-seg-row{grid-auto-flow:column;grid-template-columns:none}.ds-seg.ds-seg-scroll{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:max-content;overflow-x:auto;scrollbar-width:none}.ds-seg.ds-seg-scroll button{padding:8px 14px}}.ds-seg button.on{background:var(--ds-surface);color:var(--ds-ink);box-shadow:var(--ds-shadow)}"
+ + ".card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:16px;padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}@media (min-width:720px){.card{padding:24px}}"
+ + ".card h2{margin:0 0 6px;font-size:20px}.card h3{margin:16px 0 6px;font-size:17px}.card>h2:first-child,.card>h3:first-child{margin-top:0}"
+ + ".ds button.b{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:12px;border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer}"
+ + ".ds button.b:hover{background:var(--ds-surface-2)}.ds button.b.pri{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds button.b.pri:hover{background:var(--ds-accent-hover)}"
+ + ".ds button.b.yes{background:var(--ds-good-soft);border-color:var(--ds-good);color:var(--ds-good)}.ds button.b.bad,.ds button.link.bad{color:var(--ds-bad)}"
+ + ".ds button.link{display:inline-flex;align-items:center;min-height:44px;background:none;border:0;color:var(--ds-accent);cursor:pointer;font:600 15px var(--ds-font);padding:10px 14px 10px 0}"
+ + ".mut{color:var(--ds-ink-2)}.ok{color:var(--ds-good)}.warn{color:var(--ds-warn)}.bad{color:var(--ds-bad)}.hide{display:none!important}"
+ + ".ds textarea{min-height:96px;resize:vertical}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:140px}"
+ + ".row input,.fact input:not([type=checkbox]),.fact select,.card select{width:100%}"
+ + ".ds label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px;color:var(--ds-ink-2)}"
+ + ".bar{height:6px;background:var(--ds-surface-2);border-radius:99px;overflow:hidden;margin-bottom:16px}.bar i{display:block;height:100%;background:var(--ds-accent);border-radius:99px}"
+ + ".sec{color:var(--ds-ink-2);font-weight:600;font-size:14px;letter-spacing:.02em}.q{font-size:20px;font-weight:650;margin:8px 0 4px;line-height:1.35}"
+ + ".hint{background:var(--ds-accent-soft);border-radius:12px;padding:12px 14px;font-size:15px;color:var(--ds-ink);margin:12px 0}"
+ + ".fact{border:1px solid var(--ds-line);border-radius:12px;padding:12px 14px;margin:10px 0;background:var(--ds-surface)}"
+ + ".tag{display:inline-block;background:var(--ds-surface-2);border-radius:99px;padding:2px 10px;font-size:13px;margin:4px 4px 0 0;color:var(--ds-ink-2)}"
+ + ".gap{border-left:4px solid var(--ds-warn);background:var(--ds-warn-soft);padding:12px 14px;border-radius:0 12px 12px 0;margin:8px 0}"
+ + ".good{border-left:4px solid var(--ds-good);background:var(--ds-good-soft);padding:12px 14px;border-radius:0 12px 12px 0;margin:8px 0}"
+ + ".signbox{background:var(--ds-warn-soft);border:1px solid var(--ds-line);border-radius:12px;padding:16px;margin-bottom:16px}"
+ + ".toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ds-ink);color:var(--ds-surface);padding:12px 20px;border-radius:12px;z-index:30;font-weight:600}"
+ + ".resume{background:var(--ds-surface);color:var(--ds-ink);border:1px solid var(--ds-line);padding:24px;border-radius:12px;font-family:Georgia,serif;font-size:16px;line-height:1.5;overflow-x:auto}@media (min-width:720px){.resume{padding:36px 44px}}"
+ + ".resume h1{font-size:25px;margin:0 0 2px}.resume h2{font-size:14px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--ds-line-strong);padding-bottom:3px;margin:18px 0 8px}"
+ + ".resume ul{margin:4px 0 8px;padding-left:20px}.resume p{margin:3px 0}.note{white-space:pre-wrap;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:12px;padding:20px;font-family:Georgia,serif}"
+ + ".big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}.card ul{margin:4px 0 8px 20px;padding:0}"
+ + "@media print{.ds-top,.ds-seg,.ds-head,.noprint{display:none!important}body.ds{background:#fff;color:#000}.ds-main{margin:0;max-width:none;padding:0}.resume{border:0;padding:0;background:#fff;color:#000}}";
+const PREP_UI = String.raw`<!doctype html><html lang="en"><head>${dsHead("Apply and prepare", "Check a job's fit, draft the application answers and prepare for the interview, from your own record.", JOBS_FORM_CSS)}</head><body class="ds">
+<a class="ds-skip" href="#main">Skip to content</a>
+<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/">Matches</a><a class="btn btn-quiet" href="/cv">Your CV</a></div></header>
+<main class="ds-main" id="main"><div class="ds-head"><h1>Apply and prepare</h1><p>Paste one job, then check the fit, draft your answers or practise the interview.</p></div>
+<nav id="nav" class="ds-seg ds-seg-row" aria-label="What to do with this job"><button data-t="check" class="on">Check fit</button><button data-t="answers">Answers</button><button data-t="prep">Interview prep</button></nav>
 <div id="signbox" class="hide"></div>
 <div class="card"><h2>The job</h2><p class="mut">Paste the job link, or the posting text.</p><textarea id="job" placeholder="https://... or paste the posting"></textarea></div>
 <section id="t-check"><div class="card"><button class="b pri" id="go-check">Check fit</button><div id="out-check" class="mut">Nothing checked yet.</div></div></section>
@@ -3172,10 +3183,10 @@ $('#go-check').onclick=async function(){var o=$('#out-check');try{var v=job();bu
  if(j){h+='<h3>Why the model reads it this way</h3>'+list(j.reasons)+'<h3>Gaps</h3>'+list(j.gaps)}
  h+='<h3>Your strengths for this role</h3>'+list((d.strengths||[]).map(function(s){return s.text}));
  if(d.flags&&d.flags.length)h+='<h3>Check before applying</h3>'+list(d.flags);
- h+='<h3>Which is right?</h3><button class="b" data-v="qualified">I am qualified</button><button class="b" data-v="stretch">A stretch</button><button class="b" data-v="not_qualified">Not qualified</button><div id="cal" class="mut"></div>';
+ h+='<h3>Which is right?</h3><div class="ds-choices" role="group" aria-label="Your own read of the fit"><button data-v="qualified" aria-pressed="false">Qualified</button><button data-v="stretch" aria-pressed="false">A stretch</button><button data-v="not_qualified" aria-pressed="false">Not qualified</button></div><div id="cal" class="mut"></div>';
  if(d.apply&&d.apply.resume_pdf_b64)h+='<h3>Resume</h3><button class="b pri" id="dl-pdf">Download resume PDF</button>';
  o.className='';o.innerHTML=h;
- o.querySelectorAll('button[data-v]').forEach(function(b){b.onclick=async function(){try{await authed(function(){return api('/api/calibrate',{owner:b.dataset.v,title:d.title,company:d.company,rubric_fit:d.fit_score,judge_fit:j?j.fit:null})});$('#cal').textContent='Saved. Thank you: this is how the scoring learns.'}catch(e){$('#cal').textContent=e.message}}});
+ o.querySelectorAll('button[data-v]').forEach(function(b){b.onclick=async function(){o.querySelectorAll('button[data-v]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});try{await authed(function(){return api('/api/calibrate',{owner:b.dataset.v,title:d.title,company:d.company,rubric_fit:d.fit_score,judge_fit:j?j.fit:null})});$('#cal').textContent='Saved. Thank you: this is how the scoring learns.'}catch(e){$('#cal').textContent=e.message}}});
  var dl=$('#dl-pdf');if(dl)dl.onclick=function(){var bin=atob(d.apply.resume_pdf_b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=d.apply.resume_pdf_file||'resume.pdf';a.click()}
 }catch(e){fail(o,e)}};
 $('#go-answers').onclick=async function(){var o=$('#out-answers');try{var v=job(),qs=$('#qs').value.split('\n').map(function(x){return x.trim()}).filter(Boolean);if(!qs.length)throw new Error('Add at least one question.');busy(o,'Drafting from your record...');
@@ -3196,33 +3207,12 @@ $('#go-fb').onclick=async function(){var o=$('#out-fb');try{var a=$('#qans').val
  o.innerHTML='<div class="big">'+esc(f.score)+' / 5</div><h3>Worked</h3>'+list(f.strengths)+'<h3>Fix</h3>'+list(f.fixes)+(f.unsupported_claims.length?'<h3 class="warn">Not backed by your record</h3>'+list(f.unsupported_claims):'')+'<h3>Stronger version</h3><p>'+esc(f.stronger_outline)+'</p><h3>Likely follow-up</h3><p>'+esc(f.follow_up)+'</p>'
 }catch(e){fail(o,e)}};
 </script></body></html>`;
-const CV_UI = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your CV</title>
-<style>
-:root{--bg:#f6f8fb;--ink:#16202e;--mut:#5b6778;--line:#e3e8ef;--brand:#2457d6;--ok:#16794c;--warn:#a65b00;--bad:#b3261e}
-*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg)}
-header{background:#fff;border-bottom:1px solid var(--line);padding:0 20px;display:flex;align-items:center;gap:24px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
-header h1{font-size:18px;margin:0;padding:14px 0}nav button{background:none;border:0;border-bottom:3px solid transparent;padding:18px 12px 15px;font:inherit;font-weight:600;color:var(--mut);cursor:pointer}
-nav button.on{color:var(--brand);border-color:var(--brand)}header a{color:var(--brand);margin-left:auto}
-main{max-width:880px;margin:24px auto;padding:0 16px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;margin-bottom:16px}
-h2{margin:0 0 6px;font-size:21px}h3{margin:18px 0 6px;font-size:16px}.mut{color:var(--mut)}.sec{color:var(--brand);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
-.q{font-size:21px;font-weight:600;margin:10px 0 20px;line-height:1.35}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:140px}
-button.b{font:inherit;font-weight:700;border-radius:10px;border:1px solid var(--line);background:#fff;padding:11px 22px;cursor:pointer;color:var(--ink)}button.b:hover{border-color:var(--brand)}
-button.yes{background:var(--ok);color:#fff;border-color:var(--ok)}button.pri{background:var(--brand);color:#fff;border-color:var(--brand)}button.bad{color:var(--bad)}
-button.link{background:none;border:0;color:var(--brand);cursor:pointer;font:inherit;padding:4px 8px 4px 0}
-textarea,input,select{width:100%;font:inherit;padding:10px;border:1px solid #c9d2df;border-radius:10px;background:#fff}textarea{min-height:84px;resize:vertical}
-label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px}.bar{height:8px;background:var(--line);border-radius:8px;overflow:hidden;margin-bottom:18px}.bar i{display:block;height:100%;background:var(--brand)}
-.hint{background:#eef3ff;border-radius:10px;padding:12px 14px;font-size:14px;color:#2b3f6b;margin:10px 0}.fact{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
-.tag{display:inline-block;background:#eef1f6;border-radius:99px;padding:1px 9px;font-size:12px;margin:2px 3px 0 0;color:var(--mut)}
-.resume{background:#fff;border:1px solid var(--line);padding:36px 44px;border-radius:6px;font-family:Georgia,serif;font-size:15px;line-height:1.45}
-.resume h1{font-size:25px;margin:0 0 2px}.resume h2{font-size:14px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #999;padding-bottom:3px;margin:18px 0 8px}
-.resume ul{margin:4px 0 8px;padding-left:20px}.resume p{margin:3px 0}.note{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px;font-family:Georgia,serif}
-.gap{border-left:4px solid var(--warn);background:#fff8ee;padding:10px 14px;border-radius:0 10px 10px 0;margin:8px 0}.good{border-left:4px solid var(--ok);background:#effaf4;padding:10px 14px;border-radius:0 10px 10px 0;margin:8px 0}
-.hide{display:none}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#16202e;color:#fff;padding:10px 18px;border-radius:10px;z-index:9}
-.signbox{background:#fff8e1;border:1px solid #f0d98a;border-radius:10px;padding:14px;margin-bottom:16px}
-@media print{header,.noprint{display:none!important}body{background:#fff}main{margin:0;max-width:none;padding:0}.resume{border:0;padding:0}}
-</style></head><body>
-<header><h1>Your CV</h1><nav id="nav"><button data-t="story" class="on">Interview</button><button data-t="review">Review</button><button data-t="cv">Your CV</button><button data-t="resume">Resume for a job</button><button data-t="hist">History</button></nav><a href="/">Job matches</a></header>
-<main><div id="signbox" class="hide"></div><section id="story"></section><section id="review" class="hide"></section><section id="cv" class="hide"></section><section id="resume" class="hide"></section><section id="hist" class="hide"></section></main>
+const CV_UI = String.raw`<!doctype html><html lang="en"><head>${dsHead("Your CV", "Your verified CV: answer short questions, review claims, edit your record and build a resume for one job.", JOBS_FORM_CSS)}</head><body class="ds">
+<a class="ds-skip" href="#main">Skip to content</a>
+<header class="ds-top noprint"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/">Matches</a><a class="btn btn-quiet" href="/prep">Apply and prepare</a></div></header>
+<main class="ds-main" id="main"><div class="ds-head"><h1>Your CV</h1><p>Every resume is built only from what you confirm here.</p></div>
+<nav id="nav" class="ds-seg ds-seg-scroll" aria-label="CV sections"><button data-t="story" class="on">Questions</button><button data-t="review">Review</button><button data-t="cv">Edit CV</button><button data-t="resume">Resume for a job</button><button data-t="hist">History</button></nav>
+<div id="signbox" class="hide"></div><section id="story"></section><section id="review" class="hide"></section><section id="cv" class="hide"></section><section id="resume" class="hide"></section><section id="hist" class="hide"></section></main>
 <div id="toast" class="toast hide"></div>
 <script>
 var S=null,qi=0,draft=[{}],last=null,cur='story';
@@ -3250,7 +3240,7 @@ function rStory(){
  var q=qs[qi];
  if(q.answer=='y'&&q.facts.length&&draft._q!==q.id){draft=q.facts.map(function(f){return {text:f.text,role:f.role}});draft._q=q.id}
  $('#story').innerHTML='<div class="card"><div class="bar"><i style="width:'+(done/qs.length*100)+'%"></i></div><div class="sec">'+esc(q.section)+' · '+(qi+1)+' of '+qs.length+'</div><div class="q">'+esc(q.ask)+'</div>'
-  +'<div class="row"><button class="b yes" onclick="pick(\'y\')">Yes</button><button class="b" onclick="pick(\'n\')">No</button><button class="b" onclick="step(1)">Skip for now</button></div>'
+  +'<div class="ds-choices" role="group" aria-label="Your answer"><button aria-pressed="'+(q.answer=='y')+'" onclick="pick(\'y\')">Yes</button><button aria-pressed="'+(q.answer=='n')+'" onclick="pick(\'n\')">No</button><button aria-pressed="false" onclick="step(1)">Not sure</button></div>'
   +(q.answer?'<p class="mut">Your earlier answer: <b>'+(q.answer=='y'?'Yes':'No')+'</b></p>':'')
   +'<div id="detail" class="'+(q.answer=='y'||draft._open?'':'hide')+'"></div>'
   +'<p style="margin-top:20px"><button class="link" onclick="step(-1)">← Back</button><button class="link" onclick="step(1)">Next →</button></p></div>';
@@ -3272,12 +3262,12 @@ async function rv(id,action){try{await authed(function(){return api('/api/cv/rev
 function rCv(){
  var p=S.person;
  $('#cv').innerHTML='<div class="card"><h2>Your CV</h2><p class="mut">Last confirmed '+esc(S.verified_on||'never')+'. Everything a resume can say about you is here; changes apply to every future resume and re-run the job search.</p>'
-  +'<h3>Summary</h3><textarea id="c_sum" style="min-height:120px">'+esc(S.summary)+'</textarea><p><button class="b pri" onclick="saveSet({summary:$(\'#c_sum\').value})">Save summary</button></p></div>'
-  +'<div class="card"><h3>Contact</h3><div class="row"><div><label>Location</label><input id="p_loc" value="'+esc(p.location)+'"></div><div><label>Email on resumes</label><input id="p_mail" value="'+esc(p.email)+'"></div></div><div class="row"><div><label>LinkedIn</label><input id="p_li" value="'+esc(p.links.linkedin)+'"></div><div><label>Website</label><input id="p_site" value="'+esc(p.links.site)+'"></div></div><p><button class="b pri" onclick="saveSet({person:{location:$(\'#p_loc\').value,email:$(\'#p_mail\').value,links:{linkedin:$(\'#p_li\').value,site:$(\'#p_site\').value}}})">Save contact</button></p></div>'
-  +'<div class="card"><h3>Roles</h3><div id="roles"></div><p><button class="b" onclick="addRole()">+ Add a role</button> <button class="b pri" onclick="saveRoles()">Save roles</button></p></div>'
+  +'<h3>Summary</h3><textarea id="c_sum" style="min-height:120px">'+esc(S.summary)+'</textarea><p><button class="b" onclick="saveSet({summary:$(\'#c_sum\').value})">Save summary</button></p></div>'
+  +'<div class="card"><h3>Contact</h3><div class="row"><div><label>Location</label><input id="p_loc" value="'+esc(p.location)+'"></div><div><label>Email on resumes</label><input id="p_mail" value="'+esc(p.email)+'"></div></div><div class="row"><div><label>LinkedIn</label><input id="p_li" value="'+esc(p.links.linkedin)+'"></div><div><label>Website</label><input id="p_site" value="'+esc(p.links.site)+'"></div></div><p><button class="b" onclick="saveSet({person:{location:$(\'#p_loc\').value,email:$(\'#p_mail\').value,links:{linkedin:$(\'#p_li\').value,site:$(\'#p_site\').value}}})">Save contact</button></p></div>'
+  +'<div class="card"><h3>Roles</h3><div id="roles"></div><p><button class="b" onclick="addRole()">+ Add a role</button> <button class="b" onclick="saveRoles()">Save roles</button></p></div>'
   +'<div class="card"><h3>Achievements ('+S.facts.length+')</h3><p><button class="b" onclick="newFact()">+ Add an achievement</button></p><div id="fedit"></div><div id="facts"></div></div>'
-  +'<div class="card"><h3>Publications</h3><div id="pubs"></div><p><button class="b" onclick="addPub()">+ Add a publication</button> <button class="b pri" onclick="savePubs()">Save publications</button></p></div>'
-  +'<div class="card"><h3>Education (one per line)</h3><textarea id="c_edu">'+esc(S.education.join(String.fromCharCode(10)))+'</textarea><h3>Certifications (one per line)</h3><textarea id="c_cert">'+esc(S.certifications.join(String.fromCharCode(10)))+'</textarea><h3>Skills (comma separated)</h3><textarea id="c_sk">'+esc(S.skills.map(function(s){return s.name}).join(', '))+'</textarea><p><button class="b pri" onclick="saveLists()">Save these lists</button></p></div>'
+  +'<div class="card"><h3>Publications</h3><div id="pubs"></div><p><button class="b" onclick="addPub()">+ Add a publication</button> <button class="b" onclick="savePubs()">Save publications</button></p></div>'
+  +'<div class="card"><h3>Education (one per line)</h3><textarea id="c_edu">'+esc(S.education.join(String.fromCharCode(10)))+'</textarea><h3>Certifications (one per line)</h3><textarea id="c_cert">'+esc(S.certifications.join(String.fromCharCode(10)))+'</textarea><h3>Skills (comma separated)</h3><textarea id="c_sk">'+esc(S.skills.map(function(s){return s.name}).join(', '))+'</textarea><p><button class="b" onclick="saveLists()">Save these lists</button></p></div>'
   +'<div class="card"><h3>Backup</h3><p class="mut">Download your whole CV as a file, or restore one.</p><p><a href="/api/cv/export" download="cv-backup.json"><button class="b">Download backup</button></a> <input type="file" id="imp" accept="application/json" style="width:auto"></p></div>';
  drawRoles();drawFacts();drawPubs();$('#imp').onchange=importFile}
 async function saveSet(d){try{await authed(function(){return api('/api/cv/set',d)});await load();toast('Saved');rCv()}catch(e){alert(e.message)}}
@@ -3311,7 +3301,7 @@ function show(r){
  var gaps=(r.cv_gaps||[]).map(function(g){return '<div class="gap"><b>The posting asks for '+esc(g.cluster.replace(/_/g,' '))+' and your CV does not mention it.</b> Have you done any of this?'+g.questions.map(function(q){return '<div style="margin-top:6px">'+esc(q.ask)+' <button class="link" onclick="jump(\''+esc(q.id)+'\')"><b>Answer →</b></button></div>'}).join('')+'</div>'}).join('');
  var d=r.draft||{};
  $('#out').innerHTML='<div class="card noprint"><h2>'+esc(r.verdict)+' ('+r.fit_score+')</h2><div class="mut">'+esc(r.title)+' · '+esc(r.company)+' · '+esc(r.location)+'</div><p>'+(r.would_appear_in_your_search?'This kind of role is in your job search.':'This role would not show up in your search: '+esc((r.why_not_in_search||[]).join('; ')))+'</p>'
-  +(d.resume?'<div class="row"><button class="b pri" onclick="window.print()">Print or save as PDF</button><button class="b" onclick="cp(last.draft.resume)">Copy resume</button><button class="b" onclick="cp(last.draft.note)">Copy cover note</button>'+(r.apply?'<button class="b" onclick="saveFile(last.apply.resume_file,last.apply.resume_docx_b64)">Download Word (.docx)</button><button class="b pri" onclick="fireKit(last.apply)">Apply</button>':'')+'</div>'+kwHtml(r.keywords):'<div class="gap">Draft blocked: '+esc(d.blocked)+'</div>')+'</div>'
+  +(d.resume?'<div class="row"><button class="b'+(r.apply?'':' pri')+'" onclick="window.print()">Print or save as PDF</button><button class="b" onclick="cp(last.draft.resume)">Copy resume</button><button class="b" onclick="cp(last.draft.note)">Copy cover note</button>'+(r.apply?'<button class="b" onclick="saveFile(last.apply.resume_file,last.apply.resume_docx_b64)">Download Word (.docx)</button><button class="b pri" onclick="fireKit(last.apply)">Apply</button>':'')+'</div>'+kwHtml(r.keywords):'<div class="gap">Draft blocked: '+esc(d.blocked)+'</div>')+'</div>'
   +(d.resume?'<div class="resume">'+md(d.resume)+'</div><h3 class="noprint">Cover note</h3><div class="note noprint">'+esc(d.note)+'</div>':'')
   +'<div class="noprint"><h3>'+((r.cv_gaps||[]).length?'Gaps to close':'No gaps found')+'</h3>'+(gaps||'<div class="good">Everything this posting asks for is covered by your CV.</div>')+'</div>'}
 function cp(t){navigator.clipboard.writeText(t);toast('Copied')}
