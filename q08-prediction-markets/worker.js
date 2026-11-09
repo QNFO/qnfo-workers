@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.9.5";
+var VERSION = "1.9.6";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -1083,7 +1083,7 @@ function whitepaperDs() {
 // MARKETS-DESIGN-1 (DESIGN-SYSTEM-1, owner 2026-11-09): the dashboard on the shared design system. One primary action (Run tick now), the
 // account as stat tiles, the evidence as a verdict card, every list as phone-width rows instead of crushed tables. Also fixes the Predictions
 // list, which never rendered: the old script reused the element id "pr" as a local name for the probes, so pr.innerHTML wrote to that object.
-const PAGE = `<!doctype html><html lang="en"><head>${dsHead("Q08 Markets (paper)", "Paper-trading proving ground: does fresh reporting beat the prediction-market price? Simulated money only.", ".mk-row-acts{display:flex;gap:8px;margin-top:10px}.mk-row-acts .btn{flex:1}.mk-why{font-size:14px;color:var(--ds-ink-2);margin-top:6px}.mk-num{font-variant-numeric:tabular-nums}.mk-verdict{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.mk-need{margin:8px 0 0;padding-left:20px;color:var(--ds-ink-2);font-size:15px}.mk-sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.mk-sec h2{margin-bottom:12px}.mk-foot{margin-top:40px;font-size:14px;color:var(--ds-ink-2);display:flex;gap:16px;flex-wrap:wrap}")}</head>
+const PAGE = `<!doctype html><html lang="en"><head>${dsHead("Q08 Markets (paper)", "Paper-trading proving ground: does fresh reporting beat the prediction-market price? Simulated money only.", ".mk-row-acts{display:flex;gap:8px;margin-top:10px}.mk-row-acts .btn{flex:1}.mk-why{font-size:14px;color:var(--ds-ink-2);margin-top:6px}.mk-num{font-variant-numeric:tabular-nums}.mk-verdict{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.mk-need{margin:8px 0 0;padding-left:20px;color:var(--ds-ink-2);font-size:15px}.mk-sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.mk-sec h2{margin-bottom:12px}.mk-foot{margin-top:40px;font-size:14px;color:var(--ds-ink-2);display:flex;gap:4px 16px;flex-wrap:wrap;align-items:center}.mk-foot a{display:inline-flex;align-items:center;min-height:44px;min-width:44px}")}</head>
 <body class="ds"><a class="ds-skip" href="#main">Skip to content</a>
 <header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Q08 Markets <span class="ds-badge ds-badge-warn">Paper money</span></a><a class="btn btn-quiet ds-hide-sm" href="/whitepaper">White paper</a></div></header>
 <main class="ds-main" id="main">
