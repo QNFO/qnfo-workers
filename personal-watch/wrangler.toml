@@ -6,6 +6,7 @@ main = "worker.js"
 compatibility_date = "2026-11-04"
 compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
+routes = [{ pattern = "watch.q08.org/*", zone_name = "q08.org" }]
 
 [observability]
 enabled = true
