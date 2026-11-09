@@ -30,7 +30,7 @@ anticipate needs. Builds on `docs/CODE-AGENT-UX.md` (slices 1-7) and `docs/CODE-
 | Tools | qnfo-ops 70+ tools, Code Mode, MCP client and server, Cloudflare API MCP | live; owner turns run read scope | write scope for the signed-in owner; 1002216 |
 | Plan and todo | plan gate, `propose_plan`, TaskCreate-like list in session SQLite | plan gate live | persistent task list in the UI; 1002222 |
 | Subagents | child CodeSession with own context | none | Explore child runs; 1002224 |
-| Hooks | gates, review gate, canary, deploy probes | structural hooks live | user-defined hooks table `cmd_hooks`; 1002235 |
+| Hooks | gates, review gate, canary, deploy probes | structural hooks live | user-defined hooks (not built yet; 1002235) |
 | Checkpoints and undo | branch per run, canary revert | no UI | one-tap undo card; 1002222 |
 | Delivery | `ship_change`, ISSUE-PER-PR-1, branch `ops/issue-N-*`, lane merge | live (qnfo-ops 2.69.1) | |
 | Feedback loop | GitHub webhook to session (`/github/webhook`) | live, inert until the secret exists | GitHub App secret; 1002220 |

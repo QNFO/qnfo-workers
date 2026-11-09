@@ -1,0 +1,20 @@
+import { test } from "node:test";
+import assert from "node:assert";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const git = (cwd, ...a) => execFileSync("git", ["-c", "user.email=a@b", "-c", "user.name=t", ...a], { cwd, stdio: "pipe" }).toString();
+test("removes clean pushed clone, keeps dirty and unpushed", () => {
+  const r = mkdtempSync(join(tmpdir(), "csc-"));
+  const remote = join(r, "remote.git"); const root = join(r, "root"); mkdirSync(root);
+  git(r, "init", "-q", "--bare", remote);
+  for (const n of ["a", "b", "c"]) git(r, "clone", "-q", remote, join(root, n));
+  git(join(root, "a"), "commit", "-q", "--allow-empty", "-m", "x");
+  git(join(root, "a"), "push", "-q", "origin", "HEAD:main");
+  writeFileSync(join(root, "b", "f"), "1");
+  git(join(root, "c"), "commit", "-q", "--allow-empty", "-m", "y");
+  const out = execFileSync("bash", ["scripts/clean-session-clones.sh", root]).toString();
+  assert.match(out, /removed .*[\\/]a/); assert.match(out, /kept-dirty .*[\\/]b/); assert.match(out, /kept-unpushed .*[\\/]c/);
+  assert.ok(!existsSync(join(root, "a")) && existsSync(join(root, "b")) && existsSync(join(root, "c")));
+});
