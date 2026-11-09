@@ -914,6 +914,27 @@ export class CodeSession extends Agent<Env, State> {
     return this.startTurn(text, input.caller);
   }
 
+  // CMDLINE-FORK-SHARE-1 (issue 8256): the done turns of a session (prompt and answer) up to a turn, for a fork or an export. Only the session's own caller reads it.
+  async exportTranscript(caller: string, upTo = 0) {
+    const session = this.sessionRow();
+    if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
+    const lim = upTo > 0 ? upTo : 1000000;
+    const rows: any = this.sql`SELECT turn, prompt, answer, model, neurons FROM code_session_turns WHERE status = 'done' AND turn <= ${lim} ORDER BY turn`;
+    return { ok: true, session_id: this.name, scope: session.scope, status: session.status, turns: Array.from(rows).map((r: any) => ({ turn: r.turn, prompt: r.prompt, answer: r.answer, model: r.model, neurons: r.neurons })) };
+  }
+
+  // A fork is a new session whose earlier turns are already done, so its next turn sees them as context (executeTurn reads the last 8 done turns). The fork starts idle: the caller sends the next turn.
+  async seedFork(input: { from: string; scope: Scope; caller: string; budget?: number; turns: { prompt: string; answer: string }[] }) {
+    if (this.sessionRow()) return { ok: false, error: "session exists" };
+    const now = Date.now();
+    const turns = (Array.isArray(input.turns) ? input.turns : []).slice(0, 40);
+    if (!turns.length) return { ok: false, error: "nothing to fork" };
+    this.sql`INSERT INTO code_session (id, caller, scope, status, neuron_budget, current_turn, created_ms) VALUES (${this.name}, ${input.caller}, ${input.scope}, 'idle', ${sessionBudgetFrom(input.budget)}, ${turns.length}, ${now})`;
+    turns.forEach((t, i) => { this.sql`INSERT INTO code_session_turns (turn, prompt, answer, status, created_ms, finished_ms) VALUES (${i + 1}, ${String(t.prompt || "").slice(0, 8000)}, ${String(t.answer || "").slice(0, 16000)}, 'done', ${now}, ${now})`; });
+    this.event("status", { status: "forked", from: input.from, turns: turns.length });
+    return { ok: true, session_id: this.name, forked_from: input.from, turns: turns.length, status: "idle" };
+  }
+
   async startTurn(text: string, caller = "", opts: { escalate?: boolean } = {}) {
     const session = this.sessionRow();
     if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
@@ -1475,7 +1496,7 @@ function selfDoc(caller: string, scope: Scope) {
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
       loops: ["INSERT INTO qnfo-audit.cf_agent_requests (requester, kind run|sandbox|schedule|code_session|approval_selftest, prompt | code, cron | delay_s, instance?, priority?): drained every 5 minutes, outcome written back to the row"],
-      trusted: ["POST /code-sessions {text}", "POST /code-sessions/<id>/turns {text}", "GET /code-sessions/<id>/events?after=<seq> (replayable SSE)", "GET /code-sessions/<id>", "GET|POST /code-sessions/<id>/plan {approved} (POST: write scope)", "GET /approvals", "POST /approvals/<run id>/<call id> {approved} (write scope)", "GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
+      trusted: ["POST /code-sessions {text}", "POST /code-sessions/<id>/turns {text}", "GET /code-sessions/<id>/export?turn=<n> (the done turns)", "POST /code-sessions/<id>/fork {turn} (a new session holding the turns up to <turn>)", "GET /code-sessions/<id>/events?after=<seq> (replayable SSE)", "GET /code-sessions/<id>", "GET|POST /code-sessions/<id>/plan {approved} (POST: write scope)", "GET /approvals", "POST /approvals/<run id>/<call id> {approved} (write scope)", "GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
     },
     surfaces: { console: "https://fleet.qnfo.org/cmd (cfagent <request>, cfagent! <request> for the write scope)", ops: "https://ops.qnfo.org/v1/agents/..." }
   };
@@ -1555,10 +1576,20 @@ export default {
         return json(await session.startSession({ text, scope, caller, budget: b.budget }), 202);
       }
       let sessionMatch: RegExpExecArray | null;
-      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns|plan|tasks))?$/.exec(path))) {
+      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns|plan|tasks|export|fork))?$/.exec(path))) {
         const session: any = await getAgentByName(env.CodeSession as any, sessionMatch[1]);
         if (sessionMatch[2] === "events" && request.method === "GET") return codeSessionStream(request, session, caller);
         if (sessionMatch[2] === "tasks" && request.method === "GET") { const tl: any = await session.sessionTasks(caller); return json(tl, tl.ok ? 200 : 404); }
+        if (sessionMatch[2] === "export" && request.method === "GET") { const ex: any = await session.exportTranscript(caller, Number(url.searchParams.get("turn")) || 0); return json(ex, ex.ok ? 200 : 404); }
+        if (sessionMatch[2] === "fork" && request.method === "POST") {
+          // CMDLINE-FORK-SHARE-1: copy the done turns up to b.turn into a new session the same caller owns; the fork then takes new turns on its own.
+          const ex: any = await session.exportTranscript(caller, Number(b.turn) || 0);
+          if (!ex.ok) return json(ex, 404);
+          const forkId = runId();
+          const fork: any = await getAgentByName(env.CodeSession as any, forkId);
+          const out: any = await fork.seedFork({ from: sessionMatch[1], scope: ex.scope === "write" ? "write" : "read", caller, budget: b.budget, turns: ex.turns });
+          return json(out, out.ok ? 201 : 409);
+        }
         if (sessionMatch[2] === "turns" && request.method === "POST") {
           const text = String(b.text || "").trim();
           if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);
