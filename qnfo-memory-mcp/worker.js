@@ -6,7 +6,7 @@ var PROTOCOL_VERSION = "2024-11-05";
 var SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18"];
 var NL = String.fromCharCode(10);
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.11.5-codeagent";
+var VERSION = "2.11.6-codeagent";
 /* 2.7.2: Batch semantic memory D1 enrichment to one query per search. */ /* 2.7.1 #6612 (pillar autonomy): literal graph searches avoid D1's 50-byte LIKE pattern limit. */ /* 2.7.0 EXUVIA-ENGAGE-1 (2026-11-03, pillar reach): evidence-matched drafts for Exuvia posts needing a response, deduplicated and logged to decision_log; no comment is sent. */ /* 2.5.0 FULLSCOPE-1 (2026-10-31): the SSE transport is real (session + /mcp/messages + keepalive, spec event:endpoint; the old stub closed after 100 ms); ?token= query auth parity with qnfo-tools-mcp; optional MCP_READ_TOKEN read-only scope (write tools: remember_fact, exuvia_publish_paper); ping, prompts/list, resources/templates/list, JSON-RPC batch, -32602 on malformed tools/call, protocolVersion negotiation; remember_fact keeps up to 8000 chars (was silently truncated at 800), clamps importance to 0-1 and enforces its own category enum; the open /fleet-graph/findings route no longer leaks secret: subjects; every tools/call is audit-logged when an AUDIT D1 binding is present. */ /* 2.4.0 REPO-GRAPH-1 (2026-10-29, pillar autonomy; minor: fleet_graph_find and /fleet-graph/find now accept the kinds repo and doc, so a repository or a document is found by name like a worker). */ // 2.3.2 EXUVIA-2 (2026-10-28, pillar reach): /health reports exuvia_key (boolean only) so the owner card that waits for the Exuvia key closes by a runtime probe. // 2.3.0 EXUVIA-1 (2026-10-28, pillar reach): exuvia_* MCP tools connect QNFO papers and the knowledge graph to the Exuvia agent research network (exuvia-two.vercel.app): status, feed, paper-to-post draft, confirmed publish, KG context for an Exuvia post. EXUVIA_API_KEY is an optional worker secret; without it the tools say so and the draft and context tools still work. // 2.2.0 NO-REGISTRAR-1 (2026-10-21): dead DOIs recognised by the 10.5281 prefix only; the registrar is not named. // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -224,13 +224,24 @@ async function tool_search_memories(args, env) {
   const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 5, 50), returnMetadata: "all", returnValues: false });
   let matches = (res.matches || []).filter((m) => m.id.startsWith("mem:"));
   if (category) matches = matches.filter((m) => m.id.startsWith("mem:" + category + ":"));
-  const pool = weighted ? matches : matches.slice(0, limit);
+  let pool = matches;
   const records = new Map();
   if (pool.length) {
     const rec = await env.GRAPH_DB.prepare(
       "SELECT id, category, content, summary, importance, session_id, created_at, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.tier') END AS tier, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.role') END AS role, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.consolidated_into') END AS consolidated_into, CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.consolidated_at') END AS consolidated_at FROM agent_memories WHERE id IN (SELECT value FROM json_each(?1))"
     ).bind(JSON.stringify(pool.map((m) => m.id))).all().catch(() => ({ results: [] }));
     for (const row of rec.results || []) records.set(row.id, row);
+  // MEMORY-CONSOLIDATION-1: episodic rows consolidated 30 days or more ago are left out of search_memories
+  // unless include_consolidated is asked for: a filter only, nothing is ever deleted.
+  const include_consolidated = args.include_consolidated === true;
+  const decayCutoff = Date.now() - 30 * 864e5;
+  pool = include_consolidated ? pool : pool.filter((m) => {
+    const r = records.get(m.id);
+    if (!r || !r.consolidated_at) return true;
+    const t = Date.parse(r.consolidated_at);
+    return !Number.isFinite(t) || t >= decayCutoff;
+  });
+  if (!weighted) pool = pool.slice(0, limit);
   }
   let ranked = pool.map((m) => ({ m }));
   if (weighted && pool.length) {
