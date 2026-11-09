@@ -166,30 +166,44 @@ def attach_org_route(zone):
     return RESULT["route_id"]
 
 
-def attach_tech_redirect(zone):
-    """Single Redirect on qwav.tech: 301 ask.qwav.tech -> https://ask.qwav.org, path+query kept."""
-    entry = {
+def redirect_entry():
+    """TP-3B-ATTACH-1: the Single Redirect rule. A dynamic redirect takes its target as an expression (static "$uri" text is
+    not substituted, so the old form never produced a working 301); the query string is kept by preserve_query_string."""
+    return {
         "name": REDIRECT_RULE_NAME,
         "expression": '(http.host eq "%s")' % OLD_HOSTNAME,
         "action": "redirect",
         "action_parameters": {
             "from_value": {
                 "status_code": 301,
-                "target_url": {"value": "https://%s$uri" % HOSTNAME},
+                "target_url": {"expression": 'concat("https://%s", http.request.uri.path)' % HOSTNAME},
                 "preserve_query_string": True,
-                "preserve_path_suffix": True,
             }
         },
         "description": "DOMAIN-PLANE-1 issue #100306: ask.qwav.tech 301 -> ask.qwav.org, path and query kept",
     }
+
+
+def attach_tech_redirect(zone):
+    """Single Redirect on qwav.tech: 301 ask.qwav.tech -> https://ask.qwav.org, path+query kept (TP-3B-ATTACH-1: an existing rule
+    with a different action is corrected in place, not reused)."""
+    entry = redirect_entry()
     st, j = req("GET", "/zones/%s/rulesets/phases/http_request_dynamic_redirect/entrypoint" % zone)
     if st == 200 and j.get("success") and j.get("result"):
         ruleset_id = j["result"]["id"]
         for rule in j["result"].get("rules") or []:
             if rule.get("name") == REDIRECT_RULE_NAME:
                 RESULT["redirect_rule_id"] = rule.get("id")
-                print("redirect rule already present: %s" % rule.get("id"))
-                return RESULT["redirect_rule_id"]
+                if rule.get("action_parameters") == entry["action_parameters"] and rule.get("expression") == entry["expression"]:
+                    print("redirect rule already present: %s" % rule.get("id"))
+                    return RESULT["redirect_rule_id"]
+                entry["enabled"] = True
+                st, j = req("PATCH", "/zones/%s/rulesets/%s/rules/%s" % (zone, ruleset_id, rule.get("id")), entry)
+                if st in (200, 201) and j.get("success"):
+                    print("redirect rule corrected: %s" % rule.get("id"))
+                    return RESULT["redirect_rule_id"]
+                report("redirect", "failed", http=st, error="correct rule body=%s" % json.dumps(j)[:800])
+                return None
         entry["enabled"] = True
         st, j = req("POST", "/zones/%s/rulesets/%s/rules" % (zone, ruleset_id), entry)
         if st in (200, 201) and j.get("success"):

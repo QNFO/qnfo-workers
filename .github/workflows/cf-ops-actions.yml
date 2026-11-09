@@ -50,8 +50,12 @@ on:
           - edge-rules
           - secrets-inventory
           - obs-sampling
+          - unbind-unused
+          - set-worker-var
+          - gateway-set-retries
+          - mcp-portals
       target:
-        description: "worker name (worker-history, delete-worker, obs-sampling), KV namespace id (kv-secret-scan), index name (delete-vectorize-index), Pages project name (delete-pages-project) ops-workspace path (r2-get) or zone (zaraz-remove-tool, edge-rules: comma list, empty means every zone) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service)"
+        description: "worker name (worker-history, delete-worker, obs-sampling), KV namespace id (kv-secret-scan), index name (delete-vectorize-index), Pages project name (delete-pages-project) ops-workspace path (r2-get) or zone (zaraz-remove-tool, edge-rules: comma list, empty means every zone) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service, unbind-unused) or WORKER:NAME=VALUE (set-worker-var)"
         required: false
         default: ""
       model:

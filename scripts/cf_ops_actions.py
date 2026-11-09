@@ -107,6 +107,16 @@ ACTIONS
   unbind-service WORKER:BINDING
                          DANGLING-SERVICE-UNBIND-1: remove one service binding whose target worker is gone (absent from
                          the account, RETIRED/FOLDED in the repo) and that the worker's wrangler.toml no longer declares.
+  unbind-unused WORKER:BINDING
+                         UNBIND-UNUSED-1: remove one service or Vectorize binding that worker.js, wrangler.toml and fleet_tasks no
+                         longer name, under the secret-lock lease; the read-back must show exactly one binding fewer.
+  set-worker-var WORKER:NAME=VALUE
+                         D2C-CF-ACTIONS-1: set one plain-text variable on an allowlisted worker (SET_VAR_ALLOWLIST); AI_MODEL must be a
+                         model id of scripts/model-policy.json; read back; already_applied on a rerun.
+  gateway-set-retries --gateway ID
+                         D2C-CF-ACTIONS-1: PUT retry_max_attempts 2, retry_delay 1000, exponential on an AI Gateway with every other field
+                         as read; spend limits must read back unchanged.
+  mcp-portals            RM-BS-CAPABILITY-SECURITY-1: read-only list of Zero Trust MCP server portals, MCP servers and Access apps (status and names).
   delete-d1 NAME         D1-FOLD-1: delete an allowlisted database. Refused unless no wrangler.toml outside a RETIRED/FOLDED
                          directory names it, no live worker binds it, it had zero write queries in 7 days (GraphQL), and the
                          newest d1_fold_backups row verifies, its R2 copy verifies, every jnlaudit_* copy matches, no fleet_tasks
@@ -2224,11 +2234,194 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
     return 0 if ok else 1
 
 
+# UNBIND-UNUSED-1 (agent_issues 1002078): the canonical deploy keeps a live binding by (type, name) and never removes one, so a
+# [[services]] or [[vectorize]] block deleted from wrangler.toml stays on the live worker. This removes one UNUSED service or
+# Vectorize binding: refused when <dir>/worker.js names it, when <dir>/wrangler.toml still declares it, or when a fleet_tasks
+# definition names it. A protected worker is allowed (the refusals above are the proof that nothing uses the binding). Every
+# other binding is sent as {type: inherit} under the secret-lock lease and the read-back must show exactly one binding fewer.
+UNBIND_UNUSED_TYPES = ("service", "vectorize")
+
+
+def _patch_settings(worker: str, acct: str, token: str, settings: dict, owner: str) -> tuple[int, dict]:
+    from secret_lock import secret_lock
+    body, ctype = multipart({"settings": settings})
+    with secret_lock(worker, ttl_sec=600, owner=owner):
+        req = urllib.request.Request(API + f"/accounts/{acct}/workers/scripts/{worker}/settings", data=body, method="PATCH",
+                                     headers={"Authorization": "Bearer " + token, "Content-Type": ctype})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, json.loads(r.read().decode() or "{}")
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read().decode() or "{}")
+
+
+def unbind_unused(target: str, acct: str, token: str) -> int:
+    act = "unbind-unused"
+    worker, _, binding = target.partition(":")
+    if not worker or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", binding or ""):
+        emit({"action": act, "ok": False, "error": "target must be WORKER:BINDING"})
+        return 2
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    bindings = (j.get("result") or {}).get("bindings") or [] if st == 200 else None
+    if bindings is None:
+        emit({"action": act, "worker": worker, "ok": False, "error": "settings HTTP " + str(st)})
+        return 1
+    hit = next((b for b in bindings if b.get("name") == binding), None)
+    if not hit:
+        emit({"action": act, "worker": worker, "binding": binding, "ok": True, "already_absent": True})
+        return 0
+    if hit.get("type") not in UNBIND_UNUSED_TYPES:
+        emit({"action": act, "worker": worker, "binding": binding, "ok": False, "refused": "not a service or vectorize binding"})
+        return 3
+    d = worker_dir(worker)
+    js = os.path.join(d, "worker.js") if d else ""
+    if d is None or not os.path.isfile(js):
+        emit({"action": act, "worker": worker, "ok": False, "refused": "no repo directory/worker.js for the worker"})
+        return 3
+    src = open(js, encoding="utf-8").read()
+    tp = os.path.join(d, "wrangler.toml")
+    wt = open(tp, encoding="utf-8").read() if os.path.isfile(tp) else ""
+    if re.search(r'(?m)^\s*binding\s*=\s*"' + re.escape(binding) + r'"', wt) or re.search(r"(?m)^\s*name\s*=\s*\"" + re.escape(binding) + '"', wt):
+        emit({"action": act, "worker": worker, "ok": False, "refused": d + "/wrangler.toml still declares the binding"})
+        return 3
+    if re.search(r"\b" + re.escape(binding) + r"\b", src):
+        emit({"action": act, "worker": worker, "ok": False, "refused": d + "/worker.js names the binding"})
+        return 3
+    okt, tasks = d1x(acct, token, AUDIT_DB, "SELECT COUNT(*) AS n FROM fleet_tasks WHERE definition LIKE ?1", ['%"' + binding + '"%'])
+    if not okt or int((tasks[0] or {}).get("n") or 0) > 0:
+        emit({"action": act, "worker": worker, "ok": False, "refused": "a fleet_tasks definition names the binding (or the check failed)"})
+        return 3
+    keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != binding]
+    exports = do_exports(acct, token, worker)
+    if exports is None:
+        emit({"action": act, "worker": worker, "ok": False, "refused": "Durable Object namespaces could not be read"})
+        return 1
+    settings = {"bindings": keep}
+    if exports:
+        settings["exports"] = exports
+    pst, pj = _patch_settings(worker, acct, token, settings, "ci/cf-ops-actions/unbind-unused")
+    st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    after = (j2.get("result") or {}).get("bindings") or []
+    ok = bool(pj.get("success")) and not any(b.get("name") == binding for b in after) and len(after) == len(bindings) - 1
+    emit({"action": act, "worker": worker, "binding": binding, "type": hit.get("type"), "ok": ok, "http": pst,
+          "bindings_before": len(bindings), "bindings_after": len(after), "errors": pj.get("errors")})
+    return 0 if ok else 1
+
+
+# D2C-CF-ACTIONS-1 (agent_issues 1001910): two live Cloudflare settings that sessions changed through the account API because
+# no action existed. set-worker-var WORKER:NAME=VALUE writes one plain-text variable of an allowlisted (worker, name) pair; the
+# value of AI_MODEL must be a model id (or its Workers AI id) of scripts/model-policy.json. gateway-set-retries GATEWAY PUTs the
+# gateway with every field as read except the retry policy. Both read the result back; both report already_applied on a rerun.
+SET_VAR_ALLOWLIST = {"qnfo-fleet-lee": {"AI_MODEL"}}
+GATEWAY_RETRY = {"retry_max_attempts": 2, "retry_delay": 1000, "retry_backoff": "exponential"}
+GATEWAY_SPEND_KEYS = ("spend_limits", "spend_limit", "spend_limit_daily", "spend_limit_monthly")
+
+
+def model_policy_ids(root: str = ".") -> set:
+    try:
+        d = json.load(open(os.path.join(root, "scripts", "model-policy.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    out = set()
+    for m in d.get("allowed") or []:
+        for k in ("id", "wa"):
+            if m.get(k):
+                out.add(m[k])
+    return out
+
+
+def set_worker_var(target: str, acct: str, token: str, root: str = ".") -> int:
+    act = "set-worker-var"
+    left, eq, value = target.partition("=")
+    worker, _, name = left.partition(":")
+    if not eq or not worker or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", name or ""):
+        emit({"action": act, "ok": False, "error": "target must be WORKER:NAME=VALUE"})
+        return 2
+    if name not in SET_VAR_ALLOWLIST.get(worker, ()):
+        emit({"action": act, "worker": worker, "name": name, "ok": False, "refused": "not on SET_VAR_ALLOWLIST", "allowed": {k: sorted(v) for k, v in SET_VAR_ALLOWLIST.items()}})
+        return 3
+    if name == "AI_MODEL" and value not in model_policy_ids(root):
+        emit({"action": act, "worker": worker, "name": name, "ok": False, "refused": "value is not a model id of scripts/model-policy.json"})
+        return 3
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    bindings = (j.get("result") or {}).get("bindings") or [] if st == 200 else None
+    if bindings is None:
+        emit({"action": act, "worker": worker, "ok": False, "error": "settings HTTP " + str(st)})
+        return 1
+    hit = next((b for b in bindings if b.get("name") == name), None)
+    if hit and hit.get("type") == "plain_text" and hit.get("text") == value:
+        emit({"action": act, "worker": worker, "name": name, "ok": True, "already_applied": True})
+        return 0
+    if hit and hit.get("type") not in ("plain_text", "inherit"):
+        emit({"action": act, "worker": worker, "name": name, "ok": False, "refused": "the binding is a " + str(hit.get("type")) + ", not a plain-text variable"})
+        return 3
+    keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != name]
+    keep.append({"type": "plain_text", "name": name, "text": value})
+    exports = do_exports(acct, token, worker)
+    if exports is None:
+        emit({"action": act, "worker": worker, "ok": False, "refused": "Durable Object namespaces could not be read"})
+        return 1
+    settings = {"bindings": keep}
+    if exports:
+        settings["exports"] = exports
+    pst, pj = _patch_settings(worker, acct, token, settings, "ci/cf-ops-actions/set-worker-var")
+    st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    after = (j2.get("result") or {}).get("bindings") or []
+    now = next((b for b in after if b.get("name") == name), {})
+    ok = bool(pj.get("success")) and now.get("text") == value and len(after) == len(bindings) + (0 if hit else 1)
+    emit({"action": act, "worker": worker, "name": name, "ok": ok, "http": pst, "before": (hit or {}).get("text"), "after": now.get("text"),
+          "bindings_before": len(bindings), "bindings_after": len(after), "errors": pj.get("errors")})
+    return 0 if ok else 1
+
+
+def gateway_set_retries(gateway: str, acct: str, token: str) -> int:
+    act = "gateway-set-retries"
+    gw = urllib.parse.quote(gateway or "default", safe="")
+    path = f"/accounts/{acct}/ai-gateway/gateways/{gw}"
+    st, j = call("GET", path, token)
+    cur = j.get("result") if st == 200 else None
+    if not isinstance(cur, dict):
+        emit({"action": act, "gateway": gateway, "ok": False, "stage": "read", "http": st, "errors": j.get("errors")})
+        return 1
+    if all(cur.get(k) == v for k, v in GATEWAY_RETRY.items()):
+        emit({"action": act, "gateway": gateway, "ok": True, "already_applied": True, **{k: cur.get(k) for k in GATEWAY_RETRY}})
+        return 0
+    want = {k: v for k, v in cur.items() if k not in ("created_at", "modified_at", "account_id", "account_tag")}
+    want.update(GATEWAY_RETRY)
+    st2, j2 = call("PUT", path, token, want)
+    st3, j3 = call("GET", path, token)
+    after = j3.get("result") if st3 == 200 else None
+    after = after if isinstance(after, dict) else {}
+    spend_same = all(after.get(k) == cur.get(k) for k in GATEWAY_SPEND_KEYS)
+    ok = 200 <= (st2 or 0) < 300 and all(after.get(k) == v for k, v in GATEWAY_RETRY.items()) and spend_same
+    emit({"action": act, "gateway": gateway, "ok": ok, "put_http": st2, "spend_limits_unchanged": spend_same,
+          "before": {k: cur.get(k) for k in GATEWAY_RETRY}, "after": {k: after.get(k) for k in GATEWAY_RETRY}, "errors": j2.get("errors")})
+    return 0 if ok else 1
+
+
+# RM-BS-CAPABILITY-SECURITY-1 (agent_issues 1002032): a READ with the token in place of the Zero Trust MCP server portals and the
+# Access applications, so whether the repository token may front qnfo-ops with a portal is tested, not assumed. Prints the HTTP
+# status and the names found (never a secret); an unreadable answer carries the refusal text for blocker_redteam.
+def mcp_portals(acct: str, token: str) -> int:
+    probes = (("mcp_portals", f"/accounts/{acct}/access/ai-controls/mcp/portals"),
+              ("mcp_servers", f"/accounts/{acct}/access/ai-controls/mcp/servers"),
+              ("access_apps", f"/accounts/{acct}/access/apps"))
+    out, ok = {}, True
+    for key, path in probes:
+        st, j = call("GET", path, token)
+        good = 200 <= (st or 0) < 300 and j.get("success") is not False
+        items = j.get("result") if isinstance(j.get("result"), list) else []
+        out[key] = {"http": st, "ok": good, "count": len(items) if good else None,
+                    "names": [str(i.get("name") or i.get("id"))[:80] for i in items if isinstance(i, dict)][:30] if good else [],
+                    "refusal": None if good else "; ".join(str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in (j.get("errors") or []))[:300] or "HTTP " + str(st)}
+        ok = ok and good
+    emit({"action": "mcp-portals", "ok": ok, "read_only": True, **out})
+    return 0 if ok else 1
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "delete-pages-project", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "gateway-auto-probe", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "gtg-tag", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling"])
+    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "delete-pages-project", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "gateway-auto-probe", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "gtg-tag", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling", "unbind-unused", "set-worker-var", "gateway-set-retries", "mcp-portals"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -2249,6 +2442,15 @@ def main() -> int:
             return 2
         fn = {"d1-backup": d1_backup, "unbind-d1": unbind_d1, "delete-d1": delete_d1, "unbind-service": unbind_service}[a.action]
         return fn(a.target, acct, token)
+    if a.action == "mcp-portals":
+        return mcp_portals(acct, token)
+    if a.action == "gateway-set-retries":
+        return gateway_set_retries(a.gateway, acct, token)
+    if a.action in ("unbind-unused", "set-worker-var"):
+        if not a.target:
+            print("::error::" + a.action + " needs --target")
+            return 2
+        return (unbind_unused if a.action == "unbind-unused" else set_worker_var)(a.target, acct, token)
     if a.action == "delete-worker":
         if not a.target:
             print("::error::delete-worker needs --target")
