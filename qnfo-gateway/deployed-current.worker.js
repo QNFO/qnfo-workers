@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.61.3-codeagent";
+var VERSION="3.61.4-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -2886,46 +2886,6 @@ async function provVerify(sidecar, pubJwk) {
     var pk = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x: pubJwk.x }, { name: "Ed25519" }, false, ["verify"]);
     return await crypto.subtle.verify({ name: "Ed25519" }, pk, provUnb64u(sidecar.signature.value), new TextEncoder().encode(provCanon(sidecar.statement)));
   } catch (e) { return false; }
-}
-async function paperBodySha256(body) { return provSha256Hex(String(body == null ? "" : body)); }
-// PAPER-PIDS-HASH-1 (issue 1000646): serve a content hash and an immutable version URL per paper version.
-// GET /papers/<slug>/v/<version> -> the stored body of that version with X-Content-SHA256; 410 when the stored hash no longer matches the body.
-async function handlePaperVersionPid(request, env, slug, version) {
-  var H = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=31536000, immutable" };
-  var v = String(version || "").replace(/^v/i, "");
-  try {
-    var row = await env.LIVING_PAPER.prepare("SELECT version, version_semver, body_md FROM papers WHERE slug = ?").bind(slug).first();
-    var cur = String((row && (row.version_semver || row.version)) || "").replace(/^v/i, "");
-    if (row && cur === v) {
-      var h = await paperBodySha256(row.body_md);
-      return new Response(String(row.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h }) });
-    }
-    var ch = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM paper_change_bodies WHERE slug = ? AND version = ?").bind(slug, v).first();
-    if (!ch) return new Response(JSON.stringify({ error: "no such paper version" }), { status: 404, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    var h2 = await paperBodySha256(ch.body_md);
-    if (ch.sha256 && String(ch.sha256).toLowerCase() !== h2) {
-      return new Response(JSON.stringify({ error: "stored content hash no longer matches this version; it was withdrawn", sha256: String(ch.sha256), actual: h2 }), { status: 410, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-    }
-    return new Response(String(ch.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h2 }) });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: "paper version lookup failed" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-  }
-}
-// the sha256 of a paper's current body, published into GET /api/papers/<slug>
-async function paperCurrentSha256(env, slug) {
-  try {
-    var row = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM papers WHERE slug = ?").bind(slug).first();
-    if (!row) return null;
-    var h = await paperBodySha256(row.body_md);
-    if (row.sha256 && String(row.sha256).toLowerCase() !== h) return { sha256: h, hash_status: "mismatch_with_stored_hash" };
-    return { sha256: h };
-  } catch (e) { return null; }
-}
-// route dispatcher for the immutable-version surface: returns a Response when the URL is one of the new routes, else null
-async function paperPidsRoutes(request, env, urlObj) {
-  var m = String((urlObj && urlObj.pathname) || "").match(/^\/papers\/([^\/]+)\/v\/([^\/]+)\/?$/);
-  if (!m) return null;
-  return handlePaperVersionPid(request, env, decodeURIComponent(m[1]), decodeURIComponent(m[2]));
 }
 async function provKeyDoc(env) {
   var k = await provKey(env);
