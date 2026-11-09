@@ -52,8 +52,8 @@ PUBLISHED_DEMOS = [
     {"repo": "qwav-demo-hardware-visualizer", "artifact": "A5", "covered": True, "quantum_values": False},
     {"repo": "qwav-demo-bt-qec", "artifact": "-", "covered": True, "quantum_values": False},
     {"repo": "qwav-demo-monna-map-perspective", "artifact": "-", "covered": True, "quantum_values": False},
-    {"repo": "qwav-demos", "artifact": "-", "covered": False, "quantum_values": None,
-     "note": "consolidation (2026-08-04): monna-map-perspective/index.html is byte-identical to the replayed page (git blob eaaf7a8a); convergence-explorer, error-confinement-demo, qpna-playground and hardware-visualizer are older, smaller pages and were not read"},
+    {"repo": "qwav-demos", "artifact": "-", "covered": True, "quantum_values": False,
+     "note": "consolidation (2026-08-04): monna-map-perspective/index.html is byte-identical to the replayed page (git blob eaaf7a8a); the four older pages convergence-explorer, error-confinement-demo, qpna-playground and hardware-visualizer are replayed on fixed inputs (page_outputs keys \"qwav-demos:<page>\", scripts/qwav_page_replay.mjs REPLAYS)"},
 ]
 
 
@@ -635,6 +635,80 @@ def check_bttree(demo, out, readouts):
     return rows
 
 
+# ------------------------------------------------------------------ qwav-demos: the four older pages of the consolidation repository (ROADMAP-1)
+def check_demos_convergence(out):
+    """convergence-explorer/index.html: the older coarse-graining page. Independent method: the seeded generator re-implemented here and direct block
+    means, against the variance-after-coarse-graining series the page's own code recorded."""
+    demo, method = "qwav-demos", "seeded generator re-implemented, direct block means (convergence-explorer)"
+    t_leaf = Tally(demo, method, "leaf values (p, d, seed as recorded)")
+    t_series = Tally(demo, method, "variance after coarse-graining k = 0..d")
+    t_mono = Tally(demo, method, "variance never rises with k and is 0 at the root")
+    for run in out["runs"]:
+        p, d, seed = run["p"], run["d"], run["seed"]
+        rng = mulberry32(seed)
+        leaves = [rng() for _ in range(p ** d)]
+        t_leaf.eq(leaves[:4], run["first_leaves"], "first leaves seed %d" % seed)
+        t_leaf.near(leaves[-1], run["last_leaf"], 1e-12, 1e-15, "last leaf seed %d" % seed)
+        series = []
+        for k in range(d + 1):
+            between, _ = um_between_within(leaves, p, k)
+            series.append(between)
+            t_series.near(between, run["series"][k], 1e-12, 1e-14, "var p=%d d=%d k=%d" % (p, d, k))
+        t_mono.eq(True, all(b <= a + 1e-15 for a, b in zip(run["series"], run["series"][1:])) and run["series"][d] < 1e-12,
+                  "page series monotone p=%d d=%d" % (p, d))
+        t_mono.eq(True, all(b <= a + 1e-15 for a, b in zip(series, series[1:])) and series[d] < 1e-12,
+                  "independent series monotone p=%d d=%d" % (p, d))
+    t_verify = Tally(demo, method, "page Verify button: all checks pass")
+    t_verify.eq((out["verify_default"]["total"], out["verify_default"]["passed"]), (out["verify_default"]["total"], out["verify_default"]["passed"]), "verify")
+    t_verify.eq(True, out["verify_default"]["passed"] == out["verify_default"]["total"] > 0, "verify all pass")
+    return [t.row() for t in (t_leaf, t_series, t_mono, t_verify)]
+
+
+def check_demos_qpna(out):
+    """qpna-playground/index.html: the older classifier page. Independent method: Lance-Williams (and Kruskal for single linkage) on the fixed point
+    sets the page records, with a two-pass Pearson for the CPCC. The points travel with the recorded output, so no page input is trusted."""
+    demo, method = "qwav-demos", "Lance-Williams and Kruskal clustering, two-pass Pearson (qpna-playground)"
+    t_h = Tally(demo, method, "merge heights, in merge order")
+    t_c = Tally(demo, method, "cophenetic distance of every pair")
+    t_p = Tally(demo, method, "cophenetic correlation coefficient (CPCC)")
+    t_k = Tally(demo, method, "single linkage by minimum spanning tree")
+    for s in out["sets"]:
+        pts = s["points"]
+        n = len(pts)
+        x = [dist2(pts[i], pts[j]) for i in range(n) for j in range(i + 1, n)]
+        for lk, res in s["results"].items():
+            heights, sizes, coph = lance_williams(pts, lk)
+            label = "%s %s" % (s["name"], lk)
+            t_h.eq(len(heights), len(res["heights"]), label + " merges")
+            for a, b in zip(heights, res["heights"]):
+                t_h.near(a, b, 1e-9, 1e-12, label + " height")
+            upper = [coph[i][j] for i in range(n) for j in range(i + 1, n)]
+            for a, b in zip(upper, res["cophenetic_upper"]):
+                t_c.near(a, b, 1e-9, 1e-12, label + " cophenetic")
+            t_p.near(pearson_two_pass(x, upper), res["cpcc"], 1e-9, 1e-12, label + " cpcc")
+            if lk == "single":
+                kh, kc = kruskal_single(pts)
+                for a, b in zip(kh, res["heights"]):
+                    t_k.near(a, b, 1e-9, 1e-12, label + " mst height")
+                for a, b in zip([kc[i][j] for i in range(n) for j in range(i + 1, n)], res["cophenetic_upper"]):
+                    t_k.near(a, b, 1e-9, 1e-12, label + " mst cophenetic")
+    return [t.row() for t in (t_h, t_c, t_p, t_k)]
+
+
+def check_demos_hardware(out):
+    """hardware-visualizer/index.html: the older visualizer page. Independent method: explicit breadth-first expansion of the p-ary tree the page
+    builds, recounted level by level, against the atom, gate and per-level counts the page's own code recorded."""
+    demo, method = "qwav-demos", "explicit breadth-first tree expansion and level counts (hardware-visualizer)"
+    t = Tally(demo, method, "atoms, gate edges, atoms per level, parent one level up, unique ids")
+    p, d = out["p"], out["depth"]
+    parent, dep = build(p, d)
+    t.eq(len(parent), out["atoms"], "atoms")
+    t.eq(len(parent) - 1, out["gates"], "gates")
+    t.eq({str(k): sum(1 for dd in dep if dd == k) for k in range(d + 1)}, out["by_depth"], "by depth")
+    t.eq(True, out["every_atom_has_parent_one_level_up"] and out["ids_unique"], "structure")
+    return [t.row()]
+
+
 PAGE_CHECKS = [
     ("tree-distance", lambda g: check_tree_distance(g["page_outputs"]["tree-distance"])),
     ("ultrametric-convergence", lambda g: check_ultrametric(g["page_outputs"]["ultrametric-convergence"])),
@@ -643,6 +717,10 @@ PAGE_CHECKS = [
     ("hardware-visualizer", lambda g: check_hardware(g["page_outputs"]["hardware-visualizer"])),
     ("error-confinement", lambda g: check_bttree("qwav-demo-error-confinement", g["page_outputs"]["error-confinement"], g["page_outputs"]["error-confinement"].get("readouts"))),
     ("bt-qec", lambda g: check_bttree("qwav-demo-bt-qec", g["page_outputs"]["bt-qec"], None)),
+    ("qwav-demos:convergence-explorer", lambda g: check_demos_convergence(g["page_outputs"]["qwav-demos:convergence-explorer"])),
+    ("qwav-demos:error-confinement-demo", lambda g: check_bttree("qwav-demos", g["page_outputs"]["qwav-demos:error-confinement-demo"], g["page_outputs"]["qwav-demos:error-confinement-demo"].get("readouts"))),
+    ("qwav-demos:qpna-playground", lambda g: check_demos_qpna(g["page_outputs"]["qwav-demos:qpna-playground"])),
+    ("qwav-demos:hardware-visualizer", lambda g: check_demos_hardware(g["page_outputs"]["qwav-demos:hardware-visualizer"])),
 ]
 
 
@@ -655,7 +733,8 @@ def page_rows(golden):
     rows = []
     for demo_id, fn in PAGE_CHECKS:
         if demo_id not in golden.get("page_outputs", {}):
-            rows.append({"demo": "qwav-demo-" + demo_id, "method": "page replay", "quantity": "page outputs recorded in docs/qwav-page-golden.json",
+            rows.append({"demo": demo_id if demo_id.startswith("qwav-demos") else "qwav-demo-" + demo_id,
+                         "method": "page replay", "quantity": "page outputs recorded in docs/qwav-page-golden.json",
                          "counted": "missing", "closed_form": "page code", "agree": False})
             continue
         rows.extend(fn(golden))
@@ -708,6 +787,12 @@ def certificates(rows=None, golden=None):
         repo = d["repo"]
         mine = by_demo.get(repo, [])
         page = pages.get(repo.replace("qwav-demo-", "", 1), {})
+        if repo == "qwav-demos":
+            subs = [v for k, v in pages.items() if k.startswith("qwav-demos:")]
+            if subs:
+                page = {"url": "; ".join(s.get("url", "") for s in subs),
+                        "sha256": "; ".join(s.get("sha256", "") for s in subs),
+                        "bytes": sum(s.get("bytes", 0) for s in subs)}
         item = {"demo": repo, "artifact": d["artifact"], "covered": bool(d["covered"] and mine),
                 "quantum_values": d["quantum_values"]}
         if item["covered"]:
@@ -787,10 +872,23 @@ def selftest():
     bad["page_outputs"]["qpna-classifier"]["sets"][0]["results"]["average"]["cpcc"] += 1e-6
     bad["page_outputs"]["error-confinement"]["trees"][0]["error_sizes"][0][2] += 1
     for demo_id, fn in PAGE_CHECKS:
-        if demo_id in ("hardware-visualizer", "bt-qec"):
+        if demo_id in ("hardware-visualizer", "bt-qec", "qwav-demos:convergence-explorer", "qwav-demos:error-confinement-demo",
+                       "qwav-demos:qpna-playground", "qwav-demos:hardware-visualizer"):
             continue
         if all(r["agree"] for r in fn(bad)):
             fails.append("a corrupted %s page value was not detected" % demo_id)
+    for demo_id, mutate in (
+        ("qwav-demos:convergence-explorer", lambda o: o["runs"][0]["series"].__setitem__(1, o["runs"][0]["series"][1] + 1e-6)),
+        ("qwav-demos:error-confinement-demo", lambda o: o["trees"][0]["error_sizes"][0].__setitem__(2, o["trees"][0]["error_sizes"][0][2] + 1)),
+        ("qwav-demos:qpna-playground", lambda o: o["sets"][0]["results"]["average"].__setitem__("cpcc", o["sets"][0]["results"]["average"]["cpcc"] + 1e-6)),
+        ("qwav-demos:hardware-visualizer", lambda o: o.__setitem__("gates", o["gates"] + 1)),
+    ):
+        if demo_id in bad["page_outputs"]:
+            mutate(bad["page_outputs"][demo_id])
+            if all(r["agree"] for r in dict(PAGE_CHECKS)[demo_id](bad)):
+                fails.append("a corrupted %s page value was not detected" % demo_id)
+            restore = json.loads(json.dumps(golden["page_outputs"][demo_id]))
+            bad["page_outputs"][demo_id] = restore
     # mulberry32 is the page's generator: known first values for seed 42 (recorded from the page's own code)
     g = mulberry32(42)
     first = [g() for _ in range(2)]
@@ -806,8 +904,15 @@ def selftest():
     if any(abs(a - b) > 1e-12 for a, b in zip(lw[0], kr[0])):
         fails.append("single linkage by Lance-Williams and by Kruskal disagree")
     cov = coverage()
-    if cov["all"] or "qwav-demos" not in cov["not_covered"]:
-        fails.append("coverage must list qwav-demos as not covered until its subdirectories are read")
+    if not cov["all"] or cov["not_covered"]:
+        fails.append("coverage must list every published repository as covered, qwav-demos subdirectories included")
+    for demo_id in ("qwav-demos:convergence-explorer", "qwav-demos:error-confinement-demo", "qwav-demos:qpna-playground", "qwav-demos:hardware-visualizer"):
+        if demo_id not in golden.get("page_outputs", {}):
+            fails.append("qwav-demos page %s has no recorded outputs in docs/qwav-page-golden.json" % demo_id)
+        elif all(r["agree"] for r in dict(PAGE_CHECKS)[demo_id](golden)):
+            pass
+        else:
+            fails.append("qwav-demos page %s disagrees with the independent check" % demo_id)
     # certificates: one entry per published repository, a not-covered repository is never shown verified, no certificate claims a quantum quantity
     c = certificates(rows=[{"demo": "qwav-demo-bt-qec", "method": "m", "quantity": "q", "counted": 1, "closed_form": 1, "agree": True},
                            {"demo": "qwav-demo-tree-distance", "method": "m", "quantity": "q", "counted": 1, "closed_form": 2, "agree": False}],
