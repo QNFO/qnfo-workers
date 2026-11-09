@@ -302,6 +302,25 @@ def run(d1, r2=None, now=None, sleep=time.sleep, tiers=None, deadline=None):
         order = list(tiers or TIERS)
         k = int((now or time.time()) // 900) % len(order)
         rotated = order[k:] + order[:k]
+
+        # Compute a rough backlog size for each tier (rows older than the cutoff).
+        # This is used to weight the time budget proportionally, so larger backlogs get more work.
+        def _backlog_rows(tier):
+            cutoff = _cutoff(tier, now)
+            # For blob and delete modes we count rows older than the cutoff.
+            # For copy mode we count rows older than the cutoff that have not yet been archived.
+            if tier["mode"] == "copy":
+                last = d1("SELECT COALESCE(MAX(id_max), 0) AS m FROM cold_archive_ledger WHERE src_table = ?1 AND verified = 1", [tier["table"]])[0]["m"]
+                return d1('SELECT COUNT(*) AS n FROM "%s" WHERE id > ?1 AND "%s" < ?2' % (tier["table"], tier["ts"]), [last, cutoff])[0]["n"]
+            else:
+                return d1('SELECT COUNT(*) AS n FROM "%s" WHERE "%s" < ?1' % (tier["table"], tier["ts"]), [cutoff])[0]["n"]
+
+        backlog_counts = {t["table"]: _backlog_rows(t) for t in rotated}
+        total_backlog = sum(backlog_counts.values()) or 1  # avoid division by zero
+
+        # Record the start time so we can proportionally split the remaining budget.
+        start_time = time.time()
+
         for i, t in enumerate(rotated):
             res = out["tiers"].setdefault(t["table"], {"rolled": [], "chunks": 0, "rows": 0, "deleted": 0})
             if not IDENT.match(t["table"]):
@@ -309,7 +328,14 @@ def run(d1, r2=None, now=None, sleep=time.sleep, tiers=None, deadline=None):
                 continue
             try:
                 res["rolled"] = [] if t["mode"] == "blob" else rollup(d1, t, now)
-                tier_stop = min(stop, time.time() + max(0.0, stop - time.time()) / (len(rotated) - i))
+
+                # Allocate a share of the remaining time budget proportional to the tier's backlog.
+                elapsed = time.time() - start_time
+                remaining_budget = max(0.0, stop - time.time())
+                tier_share = backlog_counts[t["table"]] / total_backlog
+                tier_budget = remaining_budget * tier_share
+                tier_stop = min(stop, time.time() + tier_budget)
+
                 for _ in range(t.get("chunks") or CHUNKS_PER_TIER):
                     if time.time() > tier_stop:
                         res["stopped"] = "budget"
