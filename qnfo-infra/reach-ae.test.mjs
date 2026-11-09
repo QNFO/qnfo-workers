@@ -19,7 +19,7 @@ ok(/var VERSION = "1\.(1[2-9]|[2-9]\d)\./.test(src), "VERSION is at least 1.12")
 ok(!/\*\//.test(src.slice(a, b)), "no comment terminator inside the block");
 
 const sandbox = { fetchImpl: null, calls: [] };
-const make = new Function("sandbox", "infraSecret", "VERSION", "fetch", src.slice(a, b) + "\nreturn { REACH_AE_HOST_SQL, REACH_AE_PAGE_SQL, REACH_AE_UPSERT, reachAeSql, reachAeRows, collectReachAe };");
+const make = new Function("sandbox", "infraSecret", "VERSION", "fetch", src.slice(a, b) + "\nreturn { REACH_AE_HOST_SQL, REACH_AE_UTM_SQL, REACH_AE_PAGE_SQL, REACH_AE_UPSERT, reachAeSql, reachAeRows, collectReachAe };");
 const secret = async (env, k, legacy) => env[legacy];
 const L = make(sandbox, secret, "1.12.0-test", (url, init) => { sandbox.calls.push({ url, init }); return sandbox.fetchImpl(url, init); });
 
@@ -68,7 +68,7 @@ sandbox.fetchImpl = async (url, init) => answer(/blob3 AS path/.test(init.body) 
 let res = await L.collectReachAe(env);
 ok(res.rows === 4 && res.loads === 15, "two groups of one host make 4 rows (host, 2 referrers, 1 page) and 15 loads", res);
 const call = sandbox.calls[0];
-ok(call.url === "https://api.cloudflare.com/client/v4/accounts/acc123/analytics_engine/sql" && call.init.method === "POST" && call.init.headers.Authorization === "Bearer tok" && sandbox.calls.length === 2, "two POSTs to the account's Analytics Engine SQL endpoint with the bearer token", sandbox.calls.map((c) => c.url));
+ok(call.url === "https://api.cloudflare.com/client/v4/accounts/acc123/analytics_engine/sql" && call.init.method === "POST" && call.init.headers.Authorization === "Bearer tok" && sandbox.calls.length === 3, "three POSTs to the account's Analytics Engine SQL endpoint with the bearer token", sandbox.calls.map((c) => c.url));
 let all = env.db.prepare("SELECT * FROM reach_signals ORDER BY entity_type, entity_id").all();
 ok(all.length === 4 && all.every((r) => r.source === "reach-ae" && r.channel === "web" && r.metric === "pageloads" && r.quality === "unknown" && r.collected_at), "rows land in reach_signals as source reach-ae, channel web, metric pageloads, quality unknown", all[0]);
 const st = JSON.parse(env.db.prepare("SELECT data FROM infra_state WHERE id = 'reach_ae'").get().data);
@@ -98,5 +98,11 @@ ok(/CF_TOKEN or CF_ACCOUNT/.test(res.error || ""), "a missing token is reported,
 res = await L.collectReachAe({});
 ok(res.skipped === "no AUDIT", "no AUDIT binding skips", res);
 
+// AI-REFERRAL-UTM-1: utm_source rows become ref-utm entities "<referrer or direct>|<utm>"
+{
+  const ur = L.reachAeRows([], [], [{ day: "2026-11-04", ref: "", utm: "chatgpt.com", loads: 3 }, { day: "2026-11-04", ref: "claude.ai", utm: "ChatGPT.com", loads: 2 }, { day: "2026-11-04", ref: "x", utm: "", loads: 9 }]);
+  ok(ur.some((r) => r[1] === "ref-utm" && r[2] === "direct|chatgpt.com" && r[3] === 3) && ur.some((r) => r[1] === "ref-utm" && r[2] === "claude.ai|chatgpt.com") && ur.length === 2, "ref-utm rows (empty utm dropped)", ur);
+  ok(/blob5 AS utm/.test(L.REACH_AE_UTM_SQL) && /blob5 != ''/.test(L.REACH_AE_UTM_SQL), "utm query reads blob5");
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exitCode = fail ? 1 : 0;

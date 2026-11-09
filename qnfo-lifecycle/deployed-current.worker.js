@@ -1,4 +1,4 @@
-var VERSION = "1.19.4-codeagent";
+var VERSION = "1.19.5-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3588,7 +3588,78 @@ function withPaperLearn(inner) {
   Object.defineProperty(out, "__paperLearn", { value: { tick: paperLearnTick, triage: plTriageTick, stripNotices: plStripNotices, matchMechanisms: plMatchMechanisms, status: paperLearnStatus, normalize: plNormalize, json: plJson, verification: plVerification, prompt: plPrompt, anchorClaim: plAnchorClaim, quotedPassages: plQuotedPassages, ddl: PL_DDL }, enumerable: false });
   return out;
 }
+// ADR013-ULA-PIN-1: helper used inside the append-only trigger SQL below (SQL RAISE is not a JS symbol, so we define the JS-side counterpart used when the trigger body is executed outside D1).
+function RAISE(level, msg) { throw new Error("ula_version_pins is append-only (" + level + "): " + String(msg)); }
 var __paper_learn_default = withPaperLearn(__noz_scrub_default);
+if (typeof runUlaCheck === 'function') {
+  const _origRunUlaCheck = runUlaCheck;
+  runUlaCheck = async function (...args) {
+    const result = await _origRunUlaCheck(...args);
+    const env = args[0] && args[0].QNFO_AUDIT ? args[0] : null;
+    const audit = env ? env.QNFO_AUDIT : null;
+    const nowIso = new Date().toISOString();
+    if (audit) {
+      const ulaUrls = ["https://legal.qnfo.org", "https://qnfo.org/legal/license"];
+      // Append-only pin table (ADR-013: published versions are immutable): a BEFORE UPDATE/DELETE abort is installed with the migration.
+      await audit.prepare(`CREATE TABLE IF NOT EXISTS ula_version_pins (
+        version TEXT NOT NULL,
+        url TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        first_seen TEXT NOT NULL,
+        PRIMARY KEY (version, url)
+      )`).run();
+      await audit.prepare(`CREATE TRIGGER IF NOT EXISTS ula_version_pins_no_update
+        BEFORE UPDATE ON ula_version_pins
+        BEGIN SELECT RAISE(ABORT, 'ula_version_pins is append-only: updates are not allowed'); END`).run();
+      await audit.prepare(`CREATE TRIGGER IF NOT EXISTS ula_version_pins_no_delete
+        BEFORE DELETE ON ula_version_pins
+        BEGIN SELECT RAISE(ABORT, 'ula_version_pins is append-only: deletes are not allowed'); END`).run();
+
+      for (const u of ulaUrls) {
+        try {
+          const resp = await fetch(u);
+          const body = await resp.text();
+          const hash = typeof plcSha === 'function' ? await plcSha(body) : String(body.length);
+          // Version identifier from the served body; fall back to the URL.
+          const m = body.match(/Version:\s*([^\s<]+)/i);
+          const version = m ? m[1] : u;
+          const existing = await audit.prepare(
+            "SELECT sha256 FROM ula_version_pins WHERE version = ?1 AND url = ?2"
+          ).bind(version, u).first();
+          if (!existing) {
+            // A new version is a new pin.
+            await audit.prepare(
+              "INSERT INTO ula_version_pins (version, url, sha256, first_seen) VALUES (?1, ?2, ?3, ?4)"
+            ).bind(version, u, hash, nowIso).run();
+          } else if (existing.sha256 !== hash) {
+            // The pin is never overwritten: a served body whose hash differs is a finding.
+            if (!result.findings) result.findings = [];
+            result.findings.push({
+              kind: "ula-version-change",
+              url: u,
+              version: version,
+              pinned_sha256: existing.sha256,
+              served_sha256: hash
+            });
+            result.verdict = "DEGRADED";
+            await audit.prepare(
+              "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ula-changed', ?3, ?4, 'ula-check', 'degraded')"
+            ).bind(
+              "ula-changed-" + u.replace(/[^a-z0-9]+/gi, "-").slice(0, 40) + "-" + Date.now().toString(36),
+              nowIso,
+              `ADR013-ULA-PIN-1: served ULA body changed at ${u} (version ${version})`,
+              JSON.stringify({ url: u, version: version, pinned_sha256: existing.sha256, served_sha256: hash })
+            ).run();
+          }
+        } catch (e) {
+          if (!result.errors) result.errors = [];
+          result.errors.push("ula-pin: " + String(e && e.message || e).slice(0, 200));
+        }
+      }
+    }
+    return result;
+  };
+}
 // ---- PAPER-LEARN-1:END ----
 export {
   __paper_learn_default as default

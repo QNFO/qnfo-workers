@@ -33,7 +33,7 @@ const call = (path) => X.worker_default.fetch(new Request("https://ask.qwav.org"
   ok(!/vector|pipeline|supplied summary|grounding/i.test(at.replace(/<script[\s\S]*?<\/script>/g, "")), "reader text has no pipeline talk");
   ok(/qwav-demo-tree-distance/.test(at) && /qwav\.org\/#demos/.test(at) && /href="\/reproduce"/.test(at), "the page links the demos and the Reproduce page");
   const sm = await (await call("/sitemap.xml")).text(), h = await (await call("/health")).json(), nav = await (await call("/concepts")).text();
-  ok(/ask\.qwav\.tech\/compute</.test(sm) && h.capabilities.includes("browser-compute") && /href="\/compute"[^>]*>Compute</.test(nav), "sitemap, health and nav know the page");
+  ok(/ask.qwav.org\/compute</.test(sm) && h.capabilities.includes("browser-compute") && /href="\/compute"[^>]*>Compute</.test(nav), "sitemap, health and nav know the page");
 }
 // 2. the page script against a fake DOM
 const registry = {};

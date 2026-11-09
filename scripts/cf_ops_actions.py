@@ -654,11 +654,16 @@ def delete_pages_project(name: str, acct: str, token: str, root: str = ".") -> i
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import cf_estate  # noqa: E402  (the verdict function is the single source of truth)
     path = f"/accounts/{acct}/pages/projects"
-    st, j = call("GET", path + "?per_page=100", token)
-    if st != 200 or j.get("success") is False:
-        emit({"action": act, "project": name, "ok": False, "refused": "Pages list unreadable", "http": st})
-        return 3
-    listed = [p for p in (j.get("result") or []) if p.get("name") == name]
+    listed = []
+    for page in range(1, 21):  # the Pages list rejects per_page above 10 with HTTP 400 (code 8000024)
+        st, j = call("GET", f"{path}?per_page=10&page={page}", token)
+        if st != 200 or j.get("success") is False:
+            emit({"action": act, "project": name, "ok": False, "refused": "Pages list unreadable", "http": st})
+            return 3
+        res = j.get("result") or []
+        listed += [p for p in res if p.get("name") == name]
+        if len(res) < 10:
+            break
     if not listed:
         emit({"action": act, "project": name, "ok": True, "already_absent": True})
         return 0

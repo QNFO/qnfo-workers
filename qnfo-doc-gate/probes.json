@@ -1,0 +1,8 @@
+{
+  "_note": "DEPLOY-PROBES-1: the gate must keep answering /health after a deploy.",
+  "mode": "revert",
+  "health": "https://qnfo-doc-gate.q08.workers.dev/health",
+  "http": [
+    { "url": "https://qnfo-doc-gate.q08.workers.dev/health", "contains": ["\"worker\":\"qnfo-doc-gate\""] }
+  ]
+}
