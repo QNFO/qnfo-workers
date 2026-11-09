@@ -51,10 +51,13 @@ due 2026-10-07) and the owner's edits win. This file keeps only what the fleet n
 15+ years turning national data into public decisions (U.S. Federal Highway Administration; AARP Public Policy Institute,
 Livability Index), now building open, auditable AI-assisted research at QNFO. That verifiable career record is the
 credibility anchor; the research sits under it, not on top.
-> Headline: Research systems builder · Founder, QNFO: open, auditable AI-assisted research · 15 years of national data and policy research (FHWA, AARP Livability Index)
+> Headline (AUTONOMY-PIVOT-1, owner directive 2026-11-09): Systems researcher in autonomous AI systems · Founder, QNFO: open, auditable AI-assisted research · 15 years of national data and policy research (FHWA, AARP Livability Index)
+>
+> The owner is a systems researcher, not a software engineer. Quantum-computing cold email to academics drew declines and no collaboration, so outreach, profiles, the site, the resume and the job search lead with AI autonomous systems research (how autonomous agents operate, fail, are overseen and audited; adjacent to AI safety). Code: qnfo-cloud-ops OUTREACH-PIVOT-1 (first contact only to autonomy-topic authors, `ops_config outreach_pivot_autonomy`), qnfo-jobsearch headline H2, qnfo-gateway Person `jobTitle` and the work-with-me pitch, `reach_channel_profiles` drafts.
 
-**Research line (what the work asks):** what computation really costs and delivers: energy per correct answer (JPCUB),
-what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers.
+**Research line (what the work asks):** how autonomous AI systems behave when they run unattended: what an autonomous research
+system actually delivers and where it fails (the fleet's failure ledger), what an AI-assisted claim is worth (ignorance audits),
+and what computation costs per correct answer (JPCUB, now the supporting measurement line, no longer the lead).
 
 **Names:** one name everywhere, Rowan Brad Quni-Gudzinas; earlier work appears as Brad Gudzinas / Bradley Gudzinas and
 some profiles as Rowan Quni, so those go in "also known as" fields wherever a platform allows (that is what links the FHWA
@@ -65,9 +68,9 @@ application numbers, "clearance-eligible", unlinked media features, shifting pub
 "thermodynamic dead end". Fleet size is stated as deployed workers (44 on 2026-10-01), never the repo directory count.
 
 ### 2.3 Research pillars, in the order we lead with them
-1. **Energy-honest computing (JPCUB)**: the lead. Concrete, falsifiable and relevant to industry and academia.
+1. **Autonomous AI systems research** (the lead since 2026-11-09, AUTONOMY-PIVOT-1): what an autonomous research system delivers, at what cost, how it fails and how it is overseen, with a failure ledger. Reaches AI-safety-adjacent and agent-reliability audiences.
 2. **Epistemics of AI-assisted science**: ignorance audits and epistemic legibility.
-3. **Autonomous research operations**: what a 40-worker autonomous research system delivers, at what cost, with a failure ledger.
+3. **Energy-honest computing (JPCUB)**: the supporting measurement line, including energy per agentic inference; no longer sent to quantum academics as cold email.
 4. **Ultrametric programme (theory)**: stays published and indexed, but is **not** used in outreach or headlines until a
    falsifiable test result exists. Speculative unification claims led with in public cost credibility with physicists.
 
@@ -118,7 +121,8 @@ the funding strategy's own "volume trap" warning applies.
 ## 3. Audiences and what each should do
 | Audience | Where they are | What we want them to do | Lead content |
 |---|---|---|---|
-| Quantum-computing researchers and engineers | arXiv, LinkedIn, Bluesky, conferences | cite JPCUB, contribute measurements, invite a talk | works 1-3 |
+| Practitioners who build, run or evaluate autonomous AI systems: agent-platform and tooling companies, AI-evaluation and safety organisations, AI-for-science startups, Amsterdam founders and communities (the lead audience; no cold email to universities or research institutes since 2026-11-09) | their own public contact routes, LinkedIn, Bluesky, local meetups, inbound work-with-me | a conversation or meeting, a pilot, an introduction, a role | works 7, 5, 6, 4 |
+| Quantum-computing researchers and engineers (no cold email since 2026-11-09; they find the work through search and citations) | arXiv, conferences | cite JPCUB, contribute measurements | works 1-3 |
 | AI-for-science / metascience researchers | Bluesky, LinkedIn, LessWrong, workshops | use the ignorance audit, cite, collaborate | works 5-6 |
 | Engineering leaders and practitioners | LinkedIn, Hacker News | follow, subscribe, commission an assessment | works 4 and 7 |
 | Funders (NLnet, Emergent Ventures, Foresight, LTFF) | applications, referrals | fund | the dossier, works 1 and 7 |

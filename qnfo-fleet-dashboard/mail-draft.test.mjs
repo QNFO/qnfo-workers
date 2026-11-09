@@ -46,7 +46,7 @@ const ASK = "I'm not going back and forth with kottevarun@gmail.com. Draft a rep
   ok(calls.some((c) => /lower\(sender\) LIKE/.test(c.sql) && c.b && c.b[0] === "%kottevarun@gmail.com%"), "the message is found by the exact address");
   ok(calls.some((c) => c.db === "IDENTITY" && /key = 'identity'/.test(c.sql)), "the identity document is read from the private store");
   const u = sb.__msgs[1].content;
-  ok(/OWNER_FACTS:[\s\S]*research systems builder[\s\S]*builds research systems at QNFO/.test(u), "the model gets the public profile and the identity document");
+  ok(/OWNER_FACTS:[\s\S]*systems researcher studying autonomous AI systems[\s\S]*builds research systems at QNFO/.test(u), "the model gets the public profile and the identity document");
   ok(/REPO_FACTS:[\s\S]*scripts\/router_calibrate\.py[\s\S]*b33509a 2026-09-26[\s\S]*Calibration-first routing/.test(u), "the model gets the file's path, commits and opening from GitHub", u.slice(0, 900));
   ok(gh.some((x) => /filename%3Arouter_calibrate\.py/.test(x)), "the file named in the thread is looked up in the repository");
   ok(/ready to send/.test(sb.__msgs[0].content) && /never write a placeholder/.test(sb.__msgs[0].content) && /never ask/.test(sb.__msgs[0].content), "the prompt demands a complete reply with no gaps and no questions");
