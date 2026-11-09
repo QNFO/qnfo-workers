@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-09T16:00:44.668Z",
- "sha": "504fec5da344a9b6b47e97941438522382f4b498",
+ "at": "2026-11-09T16:28:30.497Z",
+ "sha": "5360dfbb758214144106c913fe32a3f91c02aa8c",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1673,
+     "ms": 3039,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1355,
+     "ms": 2679,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1630,
+     "ms": 1596,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8813,
+     "ms": 8749,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1383,
+     "ms": 1215,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -176,29 +176,20 @@
      "typing": 0,
      "steps": [],
      "screens": [],
-     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 500 ()"
-     ],
+     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [
-      "500 https://fleet.qnfo.org/api/cmd/lee/health"
-     ],
-     "ok": false,
-     "error": "fleet.qnfo.org has no Cloudflare token for Lee (cf_token_set undefined)",
-     "attempts": 2,
-     "ms": 212,
+     "badResponses": [],
+     "ok": true,
+     "error": null,
+     "attempts": 1,
+     "ms": 2826,
      "grade": {
-      "status": "broken",
-      "reasons": [
-       "did not finish: fleet.qnfo.org has no Cloudflare token for Lee (cf_token_set undefined)"
-      ]
+      "status": "ok",
+      "reasons": []
      }
     }
    ],
-   "screenFindings": [
-    "console error in lee-health-live: Failed to load resource: the server responded with a status of 500 ()",
-    "HTTP 500 https://fleet.qnfo.org/api/cmd/lee/health during lee-health-live"
-   ]
+   "screenFindings": []
   },
   {
    "app": "fleet",
@@ -212,30 +203,20 @@
      "typing": 0,
      "steps": [],
      "screens": [],
-     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 500 ()",
-      "Failed to load resource: the server responded with a status of 500 ()"
-     ],
+     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [
-      "500 https://fleet.qnfo.org/api/cmd/session-tasks",
-      "500 https://fleet.qnfo.org/api/cmd/tasks"
-     ],
+     "badResponses": [],
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 403,
+     "ms": 363,
      "grade": {
       "status": "ok",
       "reasons": []
      }
     }
    ],
-   "screenFindings": [
-    "console error in cmd-mic-allowed: Failed to load resource: the server responded with a status of 500 ()",
-    "HTTP 500 https://fleet.qnfo.org/api/cmd/session-tasks during cmd-mic-allowed",
-    "HTTP 500 https://fleet.qnfo.org/api/cmd/tasks during cmd-mic-allowed"
-   ]
+   "screenFindings": []
   },
   {
    "app": "ipatent",
@@ -274,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2410,
+     "ms": 2175,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -301,6 +282,86 @@
        "emptyOverlays": [],
        "smallTargets": [
         {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
          "name": "Apply and prepare",
          "w": 138,
          "h": 23
@@ -325,34 +386,16 @@
        "axe": []
       }
      ],
-     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 500 ()",
-      "Failed to load resource: the server responded with a status of 500 ()",
-      "Failed to load resource: the server responded with a status of 500 ()",
-      "Failed to load resource: the server responded with a status of 500 ()",
-      "Failed to load resource: the server responded with a status of 500 ()"
-     ],
-     "pageErrors": [
-      "500",
-      "500"
-     ],
-     "badResponses": [
-      "500 https://jobs.q08.org/api/prefs",
-      "500 https://jobs.q08.org/api/matches?",
-      "500 https://jobs.q08.org/api/outcomes",
-      "500 https://jobs.q08.org/api/followups",
-      "500 https://jobs.q08.org/api/linkedin"
-     ],
+     "consoleErrors": [],
+     "pageErrors": [],
+     "badResponses": [],
      "ok": true,
      "error": null,
-     "attempts": 2,
-     "ms": 4639,
+     "attempts": 1,
+     "ms": 5704,
      "grade": {
-      "status": "broken",
-      "reasons": [
-       "page error: 500",
-       "page error: 500"
-      ]
+      "status": "ok",
+      "reasons": []
      }
     },
     {
@@ -479,7 +522,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 7093,
+     "ms": 2246,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -511,7 +554,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1869,
+     "ms": 1857,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -519,13 +562,7 @@
     }
    ],
    "screenFindings": [
-    "home: 4 tap target(s) under 24px, e.g. \"Apply and prepare\" 138x23, \"Claim ledger\" 95x23, \"Operations\" 82x23",
-    "console error in apply-controls-visible: Failed to load resource: the server responded with a status of 500 ()",
-    "HTTP 500 https://jobs.q08.org/api/prefs during apply-controls-visible",
-    "HTTP 500 https://jobs.q08.org/api/matches? during apply-controls-visible",
-    "HTTP 500 https://jobs.q08.org/api/outcomes during apply-controls-visible",
-    "HTTP 500 https://jobs.q08.org/api/followups during apply-controls-visible",
-    "HTTP 500 https://jobs.q08.org/api/linkedin during apply-controls-visible",
+    "home: 20 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22",
     "home-recall: 20 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22"
    ]
   },
@@ -558,7 +595,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10613,
+     "ms": 10270,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -578,7 +615,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 14594,
+     "ms": 14230,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -609,7 +646,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1494,
+     "ms": 1285,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -645,7 +682,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9048,
+     "ms": 8490,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -843,7 +880,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5960,
+     "ms": 5856,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1001,7 +1038,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6139,
+     "ms": 5664,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1075,7 +1112,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14326,
+     "ms": 17122,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1104,7 +1141,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9233,
+     "ms": 8533,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1137,7 +1174,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3371,
+     "ms": 5039,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1168,7 +1205,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1692,
+     "ms": 1424,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1199,7 +1236,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9471,
+     "ms": 9016,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1236,7 +1273,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8847,
+     "ms": 8978,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1378,7 +1415,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2145,
+     "ms": 2311,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2731,7 +2768,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3584,
+     "ms": 3026,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2856,7 +2893,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2921,
+     "ms": 2563,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2881,13 +2918,17 @@
        "axe": []
       }
      ],
-     "consoleErrors": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 ()"
+     ],
      "pageErrors": [],
-     "badResponses": [],
+     "badResponses": [
+      "500 https://fleet.qnfo.org/api/cmd/whoami"
+     ],
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14895,
+     "ms": 15313,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3004,7 +3045,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9636,
+     "ms": 11209,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3035,7 +3076,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9489,
+     "ms": 9434,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3064,7 +3105,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1518,
+     "ms": 916,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3186,7 +3227,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2187,
+     "ms": 1979,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3215,7 +3256,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9211,
+     "ms": 8745,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3229,6 +3270,8 @@
     "home papers.qnfo.org: 263 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "home papers.qnfo.org: an empty 32x20 bar (#q-toast) floats over the page",
     "home archive.qnfo.org: 19 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
+    "console error in fleet-qnfo-org: Failed to load resource: the server responded with a status of 500 ()",
+    "HTTP 500 https://fleet.qnfo.org/api/cmd/whoami during fleet-qnfo-org",
     "home ideas.qnfo.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home qwav.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 34x20, \"QWAV\" 37x20, \"q08\" 22x20",
     "home qwav.org: accessibility serious scrollable-region-focusable (1x): Scrollable region must have keyboard access"
@@ -3271,7 +3314,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3981,
+     "ms": 4513,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3302,7 +3345,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5687,
+     "ms": 5363,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3333,7 +3376,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4927,
+     "ms": 4412,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3375,7 +3418,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1413,
+     "ms": 1087,
      "grade": {
       "status": "ok",
       "reasons": []
