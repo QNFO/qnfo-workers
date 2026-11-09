@@ -32,3 +32,11 @@ assert.equal(classify([{bucket:"b",key:"zbw-p5-capstone/paper.md",size:1}],"load
 assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about: the empty state of the front end page\n", files: ["a.mjs"] }).ok, false, "gap with no fix or issue fails");
 assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about: empty state of the page, fixed with a default row\n", files: ["a.mjs"] }).ok, true, "natural wording fixed passes");
 console.log("r2_doc_audit + self_audit_pr tests passed");
+
+// DOC-IS-CODE-1: the retirement registry cites each archived R2 key in a scanned source file, so classify() counts it as dispositioned.
+import { readFileSync as _rf } from "node:fs";
+const _reg = JSON.parse(_rf(new URL("./r2-doc-dispositions.json", import.meta.url), "utf8")).docs;
+assert.ok(_reg.length > 0);
+for (const d of _reg) assert.ok(d.reason && d.disposition === "archived", "registry row has a reason: " + d.key);
+const _blob = _rf(new URL("./r2-doc-dispositions.json", import.meta.url), "utf8");
+assert.equal(classify(_reg.map((d) => ({ bucket: d.bucket, key: d.key })), _blob).filter((r) => r.orphan).length, 0, "registry retires every listed doc");
