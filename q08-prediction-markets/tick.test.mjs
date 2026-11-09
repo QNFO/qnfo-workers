@@ -70,3 +70,25 @@ test("a second manual order in the same market is refused", async () => {
   assert.equal((await order()).status, 200);
   assert.equal((await order()).status, 400);
 });
+
+test("a stopped-out market is not re-bought in the same tick or the next", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  const feed = (yes, move) => ({ source: "test", markets: [{ slug: "m", title: "M", yes, vol24: 9e4, move, closed: 0 }] });
+  await tick(env, feed(0.5, 0.2));
+  const r = await tick(env, feed(0.3, 0.2));
+  assert.equal(r.closed, 1); assert.equal(r.opened, 0);
+  assert.equal((await tick(env, feed(0.3, 0.2))).opened, 0);
+});
+test("a manual order on a market priced at 0 or 1 is refused instead of making an infinite quantity", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, { source: "test", markets: [{ slug: "z", title: "Z", yes: 0, vol24: 1, move: 0, closed: 0 }] });
+  const r = await worker.fetch(new Request("https://x/api/order", { method: "POST", body: JSON.stringify({ slug: "z", side: "yes", usd: 100 }) }), env);
+  assert.equal(r.status, 400);
+});
+test("a held market not refreshed this tick is not exited on its stored price", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, { source: "test", markets: [{ slug: "m", title: "M", yes: 0.5, vol24: 9e4, move: 0.2, closed: 0 }] });
+  await env.TRADES_DB.prepare("UPDATE pt_market SET yes=0.995 WHERE slug=?").bind("m").run();
+  const r = await tick(env, { source: "test", markets: [{ slug: "other", title: "O", yes: 0.5, vol24: 1, move: 0, closed: 0 }] });
+  assert.equal(r.closed, 0);
+});

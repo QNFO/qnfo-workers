@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.2.3";
+var VERSION = "1.2.4";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -136,10 +136,12 @@ export async function tick(env, feed) {
     const stamp = markets.concat(refreshed);
     await db.batch(stamp.map((m) => db.prepare("INSERT OR REPLACE INTO pt_market VALUES (?,?,?,?,?,?,?,?)").bind(m.slug, m.title, m.yes, m.vol24, m.move, m.closed, source, now)));
     let pos = await openPositions(db);
+    const pos0 = pos;
     const held = pos.filter((p) => !stamp.find((m) => m.slug === p.slug));
     const stored = held.length ? (await db.prepare(`SELECT slug,title,yes,vol24,move,closed FROM pt_market WHERE slug IN (${held.map(() => "?").join(",")})`).bind(...held.map((p) => p.slug)).all()).results : []; // standards-ok: only "?" placeholders are interpolated, every value goes through .bind()
     const all = stamp.concat(stored);
-    const closed = exits(pos, all);
+    // exits settle only on quotes taken this tick; a held market whose refresh failed keeps its position and its stored mark
+    const closed = exits(pos, stamp);
     let delta = 0;
     const writes = [];
     for (const x of closed) {
@@ -149,7 +151,9 @@ export async function tick(env, feed) {
     }
     pos = pos.filter((p) => !closed.find((x) => x.id === p.id));
     const cash0 = (await account(db)).cash + delta;
-    const opened = entries(markets, pos, { cash: cash0 }, CFG);
+    const cool = new Set((await db.prepare("SELECT DISTINCT slug FROM pt_position WHERE closed_at IS NOT NULL AND closed_at > ?").bind(new Date(Date.now() - 6 * 3600 * 1000).toISOString()).all()).results.map((r) => r.slug));
+    for (const x of closed) cool.add(pos0.find((q) => q.id === x.id).slug);
+    const opened = entries(markets.filter((m) => !cool.has(m.slug)), pos, { cash: cash0 }, CFG);
     for (const o of opened) {
       delta -= o.usd;
       writes.push(db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(o.slug, o.title, o.side, o.qty, o.entry, o.strategy, now));
@@ -182,6 +186,7 @@ export async function manualOrder(env, { slug, side, usd }) {
     if (pos.find((q) => q.slug === slug)) return { error: "a position in this market is already open" };
     if (pos.length >= CFG.MAX_OPEN) return { error: `at most ${CFG.MAX_OPEN} open positions` };
     if (exposure + usd > eq * CFG.EXPO_PCT) return { error: `portfolio exposure limit ${(CFG.EXPO_PCT * 100)}% of equity` };
+    if (priceOf(side, m.yes) < 0.01 || priceOf(side, m.yes) > 0.99) return { error: "price too close to 0 or 1 to trade" };
     const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + CFG.SLIP));
     await db.batch([
       db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(slug, m.title, side, usd / fill, fill, "manual", new Date().toISOString()),
