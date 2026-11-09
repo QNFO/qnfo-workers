@@ -3,7 +3,7 @@
 // can reach the browser; a missing binding, an address outside the allowlist, an exhausted per-run budget and ops_config ground_render = off each stop a render with a
 // named reason and no browser launch; a render is a ground-render ledger row; arxivFullText falls back to a render only when the plain page answered but held too
 // little text, and rendered text has to pass the same minimum (a page that stays thin is still dropped, CITE-FULLTEXT-1); without a renderer nothing changes;
-// GET /render-check renders one fixed page, answers 503 with the reason when it cannot, and stores a good answer so a second request renders nothing.
+// GET /render-check renders one fixed page, answers 200 with ok:false and the reason when it cannot, and stores a good answer so a second request renders nothing.
 // Run: node --no-warnings qnfo-research-exec/render-source.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -90,7 +90,7 @@ globalThis.__renderMode = "rich";
   const ctx = { waitUntil(p) { if (p && p.catch) p.catch(() => {}); return p; } };
   let res = await W.worker_default.fetch(new Request("https://research-exec.qnfo.org/render-check"), mkEnv({}), ctx);
   let j = await res.json();
-  ok(res.status === 503 && j.ok === false && j.reason === "no-binding" && res.headers.get("cache-control") === "no-store", "without the binding the check answers 503 with the reason", j);
+  ok(res.status === 200 && j.ok === false && j.reason === "no-binding" && res.headers.get("cache-control") === "no-store", "without the binding the check answers 200 with ok:false and the reason", j);
   const env = mkEnv({ BROWSER: {} });
   res = await W.worker_default.fetch(new Request("https://research-exec.qnfo.org/render-check?url=https://evil.example/"), env, ctx);
   j = await res.json();
