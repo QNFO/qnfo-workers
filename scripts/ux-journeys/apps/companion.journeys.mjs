@@ -5,12 +5,15 @@
 export const name = "companion";
 export const liveBase = "https://me.q08.org";
 export async function startLocal() { const { startCompanion } = await import("./companion-harness.mjs"); return startCompanion(); }
-const signedIn = async (u) => { await u.open("/__harness/session"); await u.open("/"); await u.see("What can I do right now?"); };
+// The Today screen with the right-now card, the Do list and the one-tap journal is the classic page; the default /companion page (PAGE_V3) is a different
+// layout without them (UX-JOURNEY-1 issues 1002789-1002793: every local journey looked for the classic text on the V3 page and never finished).
+const CLASSIC = "/companion/classic";
+const signedIn = async (u) => { await u.open("/__harness/session"); await u.open(CLASSIC); await u.see("What can I do right now?"); };
 
 export const journeys = [
   { id: "sign-in", title: "Sign in on a new phone with the e-mailed code",
     async run(u, env) {
-      await u.open("/"); await u.see("E-mail me a code"); await u.screen("sign-in");
+      await u.open(CLASSIC); await u.see("E-mail me a code"); await u.screen("sign-in");
       await u.tap("E-mail me a code"); await u.see("Sent to");
       const code = await (await fetch(env.base + "/__harness/last-code")).text();
       await u.type("#li-code", code); // the one field the owner must fill: six digits from their inbox
@@ -45,7 +48,7 @@ export const journeys = [
     } },
   { id: "checkin-from-notification", title: "Tap a check-in notification and answer how I feel",
     async run(u) {
-      await u.open("/__harness/session"); await u.open("/#mood"); await u.see("What can I do right now?");
+      await u.open("/__harness/session"); await u.open(CLASSIC + "#mood"); await u.see("What can I do right now?");
       // The notification opens /companion#mood; the owner should land on a one-tap mood scale.
       await u.page.locator("#mood-card button").first().waitFor({ state: "visible", timeout: 4000 }).catch(() => {});
       await u.expect(async () => (await u.page.locator("#mood-card button").filter({ visible: true }).count()) > 0, "the check-in notification opens Today with no mood buttons to tap (no #mood-card)");
@@ -57,6 +60,8 @@ export const journeys = [
       await u.see("Something to read");
       await u.expect(async () => /^https:\/\/mind\.q08\.org\//.test(await u.page.getByRole("link", { name: "Open today’s pick" }).getAttribute("href") || ""), "the reading pick does not link to mind.q08.org");
     } },
+  { id: "today-default", title: "Open the companion and see Today with Ask and Capture",
+    async run(u) { await u.open("/__harness/session"); await u.open("/"); await u.see("Ask me"); await u.see("Capture", { within: "nav" }); await u.screen("today-default"); } },
   { id: "live-sign-in-screen", title: "Open me.q08.org on a phone that is not signed in", modes: ["live"],
     async run(u) { await u.open("/"); await u.see("E-mail me a code"); await u.screen("sign-in"); } },
   { id: "live-guide", title: "Read the one-page guide", modes: ["live"],
