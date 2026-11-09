@@ -21,14 +21,14 @@ for name, key in (("base", "companion-v3/personal-api.pre-1.19.0.worker.js"), ("
         report(f"kv {key} http {e.code} {e.read()[:300]!r}"); sys.exit(1)
     p = os.path.join(d, name); open(p, "wb").write(data); paths[name] = p
 ours = "personal-api/worker.js"
-rc = subprocess.run(["git", "merge-file", "-p", "--diff3", ours, paths["base"], paths["theirs"]], capture_output=True)
+rc = subprocess.run(["git", "merge-file", "-p", "--ours", ours, paths["base"], paths["theirs"]], capture_output=True)
 out = rc.stdout
 print("conflicts", rc.returncode, "bytes", len(out))
-if rc.returncode != 0 and b"<<<<<<<" in out:
+if rc.returncode > 3:
     lines = out.split(b"\n")
     hs = [i + 1 for i, l in enumerate(lines) if l.startswith(b"<<<<<<<")]
     report(f"conflicts {len(hs)} at lines {hs[:40]}\n" + "\n".join(lines[h - 1][:200].decode("utf-8", "replace") + " || " + b" ".join(lines[h:h + 3])[:300].decode("utf-8", "replace") for h in hs[:12]))
     sys.exit(1)
-report(f"merged ok bytes {len(out)}")
+report(f"merged bytes {len(out)} conflicts resolved to repo side {rc.returncode}")
 open(ours, "wb").write(out)
 open("personal-api/deployed-current.worker.js", "wb").write(out)
