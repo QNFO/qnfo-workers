@@ -1028,6 +1028,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/TEMPLATE.md"
     },
     {
+      "path": "docs/handoff/companion-backlog.md",
+      "title": "Companion backlog handoff (code agents: finish from this file and the issues)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/companion-backlog.md"
+    },
+    {
       "path": "docs/handoff/doc-is-code-r2-sweep.md",
       "title": "Handoff: R2 document sweep, fleet audit and weekly dispatch (DOC-IS-CODE-1, SELF-AUDIT-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/doc-is-code-r2-sweep.md"
