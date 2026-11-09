@@ -321,3 +321,34 @@ test("a basket stays open while any leg is undecided, and a failing events fetch
   const bad = await tick(env, feed([]), { ...deps({}), events: async () => { throw new Error("gamma 503"); } });
   assert.equal(bad.arb.error, true); assert.equal(bad.ai, "ok");
 });
+
+// ---- issue 8961 link 2: a q08 line is labelled, recorded under sources, and never counts toward the three pieces of evidence ----
+const q08line = async () => [{ title: "q08 forecast: it happens (70% by 2026-12-31)", domain: "q08.org", date: "20261109", src: "q08" }];
+test("a q08 forecast is shown to the models as another forecaster's estimate and recorded under sources", async () => {
+  const env = { TRADES_DB: fakeD1() }; const prompts = [];
+  const ask = (m, n, model, opts = {}) => { if (!opts.ask && !opts.daysBack) prompts.push(JSON.stringify(n)); return said({ a: 0.8, b: 0.8, c: 0.8 })(m, n, model, opts); };
+  await tick(env, feed([mk("vote", 0.55)]), { news, models: ["a", "b", "c"], ask, q08: q08line });
+  const row = env.TRADES_DB._raw.prepare("SELECT sources, headlines FROM pt_estimate WHERE slug='vote'").get();
+  assert.equal(JSON.parse(row.sources).q08, 1); assert.equal(row.headlines, 4, "the q08 line is not counted as news");
+  assert.ok(prompts.length >= 3 && prompts.every((p) => /q08 forecast/.test(p)));
+});
+test("a market with only two pieces of news and one q08 forecast is still no-evidence, and models are never asked", async () => {
+  const env = { TRADES_DB: fakeD1() }; let asked = 0;
+  const two = async () => [1, 2].map((i) => ({ title: "h" + i, domain: "x.com", date: "20261109", src: "gdelt" }));
+  const r = await tick(env, feed([mk("vote", 0.55)]), { news: two, models: ["a", "b", "c"], ask: (...a) => { asked++; return said({ a: 0.8, b: 0.8, c: 0.8 })(...a); }, q08: q08line });
+  assert.equal(asked, 0); assert.equal(env.TRADES_DB._raw.prepare("SELECT confidence FROM pt_estimate WHERE slug='vote'").get().confidence, "no-evidence"); assert.equal(r.opened, 0);
+});
+test("the q08 line is absent from the evidence digest unless the feature is on (default off)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("vote", 0.55)]), agree80);
+  assert.equal(JSON.parse(env.TRADES_DB._raw.prepare("SELECT sources FROM pt_estimate WHERE slug='vote'").get().sources).q08, undefined);
+});
+test("the real prompt labels a q08 forecast as another forecaster's estimate, not news", async () => {
+  const bodies = [];
+  const QNFO_AI = { fetch: async (u, init) => { bodies.push(String(init.body)); return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ p: 0.8, confidence: "medium", why: "Three outlets report it." }) } }] }), { status: 200 }); } };
+  const env = { TRADES_DB: fakeD1(), QNFO_AI };
+  await tick(env, feed([mk("vote", 0.55)]), { news, models: ["a", "b", "c"], q08: q08line });
+  const first = bodies.filter((b) => !/resolves NO|resolves \\"?NO/.test(b)).find((b) => /q08 forecast/.test(b));
+  assert.ok(first, "a prompt carried the q08 line"); assert.match(first, /another forecaster's estimate, not news: weigh it as one opinion/);
+  assert.ok(bodies.every((b) => !/the market price|\\"yes\\":/.test(b)), "the price is still hidden from the models");
+});

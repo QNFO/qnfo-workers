@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { CHARTER, parseEvent, eventGap, basketPayoff, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, byConfidence, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
+import { CHARTER, q08Lines, q08Evidence, parseEvent, eventGap, basketPayoff, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, byConfidence, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
 
 test("parseMarket reads gamma outcomePrices and the end date", () => {
   const m = parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]', endDate: "2026-11-20T00:00:00Z" });
@@ -283,4 +283,19 @@ test("eventGap: a complete exclusive set that costs less than it pays is a signa
 test("basketPayoff: the payoff is known only when every leg has resolved", () => {
   assert.equal(basketPayoff("yes", 10, [1, 0, 0]), 10); assert.equal(basketPayoff("no", 10, [1, 0, 0]), 20);
   assert.equal(basketPayoff("yes", 10, [0.6, 0, 0]), null); assert.equal(basketPayoff("yes", 10, []), null);
+});
+
+// ---- issue 8961 link 2: q08's own forecasts as one labelled line of evidence, off by default ----
+const q08items = [{ claim: "An Iran Israel ceasefire holds through December", probability: 0.7, horizon: "2026-12-31", resolution: "Both governments keep it for 30 days" }, { claim: "bad", probability: "x" }];
+test("q08Lines turns open forecasts into labelled evidence lines and drops malformed rows", () => {
+  const l = q08Lines(q08items, Date.parse("2026-11-09T12:00:00Z"));
+  assert.equal(l.length, 1); assert.equal(l[0].src, "q08"); assert.equal(l[0].date, "20261109"); assert.match(l[0].title, /^q08 forecast: An Iran Israel ceasefire.*\(70% by 2026-12-31; counts as true if: Both governments/);
+  assert.deepEqual(q08Lines(null), []); assert.equal(q08Lines(Array.from({ length: 9 }, () => q08items[0])).length, 3);
+});
+test("q08Evidence is off unless the flag is on and the binding exists, and a failing service gives nothing", async () => {
+  let calls = 0; const Q08 = { fetch: async (u) => { calls++; return new Response(JSON.stringify({ items: q08items }), { status: 200 }); } };
+  assert.deepEqual(await q08Evidence({ Q08 }, "Iran ceasefire"), []); assert.deepEqual(await q08Evidence({ Q08_EVIDENCE: "on" }, "Iran ceasefire"), []); assert.equal(calls, 0, "never called while off");
+  const on = await q08Evidence({ Q08, Q08_EVIDENCE: "on" }, "Iran ceasefire"); assert.equal(on.length, 1); assert.equal(calls, 1);
+  assert.deepEqual(await q08Evidence({ Q08_EVIDENCE: "on", Q08: { fetch: async () => new Response("x", { status: 503 }) } }, "q"), []);
+  assert.deepEqual(await q08Evidence({ Q08_EVIDENCE: "on", Q08: { fetch: async () => { throw new Error("down"); } } }, "q"), []);
 });
