@@ -32,3 +32,23 @@ assert.equal(classify([{bucket:"b",key:"zbw-p5-capstone/paper.md",size:1}],"load
 assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about: the empty state of the front end page\n", files: ["a.mjs"] }).ok, false, "gap with no fix or issue fails");
 assert.equal(checkPr({ body: "## Self-audit\nReal output: ok\nNot thinking about: empty state of the page, fixed with a default row\n", files: ["a.mjs"] }).ok, true, "natural wording fixed passes");
 console.log("r2_doc_audit + self_audit_pr tests passed");
+
+import { parseRetired, groupKey, groupOrphans, groupIssueFor, classify as classifyG } from "./r2_doc_audit.mjs";
+import test2 from "node:test";
+import assert2 from "node:assert/strict";
+test2("groups orphans per bucket and top folder, retire list and index evidence clear orphans", () => {
+  const docs = [
+    { bucket: "b", key: "a/one.md", size: 1 }, { bucket: "b", key: "a/two.md", size: 2 },
+    { bucket: "b", key: "c/three.md", size: 3 }, { bucket: "b", key: "root.md", size: 4 },
+  ];
+  const rows = classifyG(docs, "", {}, { retired: parseRetired("b/c/\tduplicate of repo copy\nbad line no reason"), indexed: new Set(["root.md"]) });
+  const orphans = rows.filter((r) => r.orphan);
+  assert2.deepEqual(orphans.map((o) => o.key), ["a/one.md", "a/two.md"]);
+  assert2.equal(groupKey(rows[3]), "b/(root)");
+  const g = groupOrphans(orphans);
+  assert2.equal(g.length, 1);
+  const i = groupIssueFor(g[0]);
+  assert2.match(i.title, /under b\/a$/);
+  assert2.match(i.body, /code-task:/); assert2.match(i.body, /code-probe:/);
+  assert2.equal(parseRetired("x/\t").length, 0);
+});
