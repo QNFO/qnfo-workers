@@ -57,6 +57,8 @@ def now_ms():
 # on their own probe; the umbrella closes when no overload group has been observed for QUIET_H hours.
 D1_OVERLOAD_MARK = "d1 db is overloaded"
 UMBRELLA_ID = "d1-overload"
+# DOER-AT-BIRTH-1 (2026-11-09): every issue this bridge files names its doer in linked_session (the convention qnfo-ops uses), so none waits without one; the issue's code-task line names the file.
+DOER = "doer:program-code-loop"
 UMBRELLA_TITLE = PREFIX + "fleet: D1 DB is overloaded, all workers [cf-obs:" + UMBRELLA_ID + "]"
 
 
@@ -111,8 +113,8 @@ def ensure_umbrella(d1, folded, now, res):
             "FLEET-TICK-FANOUT-COST-1 and the other D1-OVERLOAD-1 doers). Closes by verification when no overload group has been observed for %d hours.") % (
         len(folded), occ, len(services), ", ".join(services)[:400], UMBRELLA_ID, QUIET_H)
     try:
-        d1("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
-           "VALUES (?1, ?2, 'cf-obs-bridge', 'reliability', 'high', 'open', ?3, ?3)", [UMBRELLA_TITLE, desc, now])
+        d1("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) "
+           "VALUES (?1, ?2, 'cf-obs-bridge', 'reliability', 'high', 'open', ?4, ?3, ?3)", [UMBRELLA_TITLE, desc, now, DOER])
         row = d1("SELECT id, created_at FROM agent_issues WHERE title = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1", [UMBRELLA_TITLE])
         if row:
             iid = int(row[0]["id"])
@@ -271,8 +273,8 @@ def _file_and_resolve(d1, cf, now, res):
             QUIET_H, code_task_line(svc))
         pri = "high" if (is_high_risk_scan(it) or it.get("type") == "exception" or int(it.get("count") or 0) >= 50) else "medium"
         try:
-            d1("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
-               "VALUES (?1, ?2, 'cf-obs-bridge', 'reliability', ?3, 'open', ?4, ?4)", [title, desc, pri, now])
+            d1("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) "
+               "VALUES (?1, ?2, 'cf-obs-bridge', 'reliability', ?3, 'open', ?5, ?4, ?4)", [title, desc, pri, now, DOER])
             row = d1("SELECT id, created_at FROM agent_issues WHERE title = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1", [title])
             if row:
                 iid = int(row[0]["id"])
