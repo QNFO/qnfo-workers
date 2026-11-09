@@ -1,0 +1,27 @@
+# charter-pillar: cost
+# spof-review: read-only dashboard over the existing AUDIT telemetry; sign-in is an emailed code, and the second path is the same numbers in qnfo-audit (ai_call_counters, ai_spend_ledger).
+name = "qnfo-ai-yield"
+account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
+main = "worker.js"
+# WORKER-SOURCE-IN-REPO-1 (issue 9620): this worker ran live with no tracked source. worker.js is the deployed script,
+# fetched through the Cloudflare API (script content v2) on 2026-11-09 and byte-identical in the mirror.
+# SALT is a secret binding (never in this file); SEND_EMAIL is limited to the owner address below.
+compatibility_date = "2026-10-10"
+workers_dev = true
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[send_email]]
+name = "SEND_EMAIL"
+allowed_destination_addresses = ["rwnquni@outlook.com"]
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
