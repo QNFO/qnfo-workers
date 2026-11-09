@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.6.4";
+var VERSION = "1.6.5";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -204,7 +204,7 @@ export function aggregate(members, cfg = CFG) {
   return { p: mid, spread: ps[ps.length - 1] - ps[0], confidence: conf, ps, n: ms.length, why: (ms.slice().sort((a, b) => b.why.length - a.why.length)[0] || {}).why || "" };
 }
 // Trade only a clear, agreed gap: every member on the same side of the price, a gap of minEdge or more, a spread that is not a disagreement, not low confidence.
-export function decide(agg, m, minEdge = CFG.MIN_EDGE, cfg = CFG, w = 1) {
+export function decide(agg, m, minEdge = CFG.MIN_EDGE, cfg = CFG, w = cfg.blendW == null ? 0.5 : cfg.blendW) {
   if (!agg || agg.confidence === "low" || agg.spread > cfg.MAX_SPREAD) return null;
   const edge = agg.p - m.yes;
   if (Math.abs(edge) < minEdge) return null;
