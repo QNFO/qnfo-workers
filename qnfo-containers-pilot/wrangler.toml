@@ -38,7 +38,7 @@ main = "worker.js"
 # behind two Cloudflare default changes, nodejs_compat on by default (2026-08-04; this worker already declares it) and
 # durable_object_io_tasks_prevent_eviction (2026-10-01: a Durable Object with I/O in flight is not evicted, which keeps
 # the ShellContainer alive while a command runs). deploy-containers-pilot.yml verifies /status after the deploy.
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 

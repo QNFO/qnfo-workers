@@ -1,6 +1,6 @@
 name = "qnfo-github-steward"
 main = "worker.js"
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 workers_dev = true
 # charter-pillar: autonomy (GITHUB-STEWARD-1)
 #

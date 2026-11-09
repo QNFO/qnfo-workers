@@ -9,7 +9,7 @@ main = "worker.js"
 # COMPAT-HEALTH-BINDINGS-2 binding before the upload, keeps the date only when /health answers with the deployed VERSION
 # and otherwise restores the previous date (deployment_history compat-restore).
 # compat-advance: reviewed 2026-10-12
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
 
 # Canonical source: QNFO/qnfo-workers/qnfo-ipatent (restored 2026-09-03 from deployed v3.3 bundle).
 # Deploys: wrangler deploy from THIS directory (bindings below reproduce the live set exactly).
