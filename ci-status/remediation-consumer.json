@@ -1,8 +1,396 @@
 {
- "ok": false,
- "error": "no parseable consumer output: Extra data: line 2 column 1 (char 446)",
+ "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "head": "6c204b2961cd9cc334dda48789be1d976f57ea01",
- "job_status": "success",
- "ts": "2026-11-09T11:47:44Z"
-}
+ "verifier": "remediation-consumer@e24ad772e611",
+ "due": 624,
+ "pass": 359,
+ "fail": 233,
+ "skipped": 32,
+ "deferred": 19,
+ "contracts": [
+  {
+   "class": "issue-1001893",
+   "issue_id": 1001893,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-mcp-front-door-open",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-mcp-front-door-open-memory",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1001841",
+   "issue_id": 1001841,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-radar-heartbeat-d1-transient",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-d1-hotspot-index-missing",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "4",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "fm-migration-noop-replace",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1002505",
+   "issue_id": 1002505,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1002085",
+   "issue_id": 1002085,
+   "verdict": "fail",
+   "expected": "yes",
+   "observed": "no",
+   "written": true
+  },
+  {
+   "class": "issue-1002277",
+   "issue_id": 1002277,
+   "verdict": "fail",
+   "expected": 1,
+   "observed": 0,
+   "written": true
+  },
+  {
+   "class": "issue-1002506",
+   "issue_id": 1002506,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "belief-research-publishes-without-zenodo",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-stale-untrusted-verdict",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "issue-1002105",
+   "issue_id": 1002105,
+   "verdict": "fail",
+   "expected": "invoice_daily=1 view=1 metric_measured=1",
+   "observed": "invoice_daily=0 view=0 metric_measured=0",
+   "written": true
+  },
+  {
+   "class": "belief-repo-token-writes-routes",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-enum-abort-drop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-migration-run-cancelled",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1002187",
+   "issue_id": 1002187,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1002423",
+   "issue_id": 1002423,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1002135 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1002135 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-metric-refresher-replaced",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-remediation-tick-starved",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "178",
+   "written": true
+  },
+  {
+   "class": "fm-tool-issue-no-probe",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-research-watchdog-held-stall",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-catalogue-mapping-overwritten",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "8",
+   "written": true
+  },
+  {
+   "class": "issue-1001873",
+   "issue_id": 1001873,
+   "verdict": "fail",
+   "expected": "staged_push_after_2026-11-02",
+   "observed": "none",
+   "written": true
+  },
+  {
+   "class": "issue-1002503",
+   "issue_id": 1002503,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-ops-stream-incomplete-long",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1001419",
+   "issue_id": 1001419,
+   "verdict": "fail",
+   "expected": "no live probe ever",
+   "observed": "no version from /health",
+   "written": true
+  },
+  {
+   "class": "issue-1002255",
+   "issue_id": 1002255,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "10",
+   "written": true
+  },
+  {
+   "class": "fm-remediation-over-budget-metric-lifetime-count",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-owner-routed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1001684",
+   "issue_id": 1001684,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "fm-diagnosis-raw-markup",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-standing-report-issue",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1002515",
+   "issue_id": 1002515,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:personal-companion/travel.js",
+   "written": true
+  },
+  {
+   "class": "fm-diagnosis-unresolved-anchor",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1002516",
+   "issue_id": 1002516,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:personal-companion/travel.js",
+   "written": true
+  },
+  {
+   "class": "fm-contract-cadence-drift",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-close-no-dwell",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1001916",
+   "issue_id": 1001916,
+   "verdict": "fail",
+   "expected": "open handbacks pointing at closed issues: 0",
+   "observed": "open handbacks pointing at closed issues: 10",
+   "written": true
+  },
+  {
+   "class": "issue-1002202",
+   "issue_id": 1002202,
+   "verdict": "fail",
+   "expected": "demoted_usd > 0",
+   "observed": "demoted_usd = 0 of $9.13 across 60 ledger rows (last day)",
+   "written": true
+  },
+  {
+   "class": "fm-claim-reaper-stalled",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1002185",
+   "issue_id": 1002185,
+   "verdict": "fail",
+   "expected": "PASS",
+   "observed": "FAIL latest=570.54 cur7d=540.89 prev7d=381.49",
+   "written": true
+  },
+  {
+   "class": "issue-2954",
+   "issue_id": 2954,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "64",
+   "written": true
+  },
+  {
+   "class": "issue-1001713",
+   "issue_id": 1001713,
+   "verdict": "fail",
+   "expected": "retired",
+   "observed": "missing",
+   "written": true
+  },
+  {
+   "class": "fm-coe-null-id",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-outreach-chain-enum",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-ai-account-over-target",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "fm-plus-dige
