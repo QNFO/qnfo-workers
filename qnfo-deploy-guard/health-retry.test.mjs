@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 const source = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const start = source.indexOf("async function readLiveHealthVersion(");
+const start = source.indexOf("async function readHealthViaBinding(");
 const end = source.indexOf("async function refreshRegistryVersion(", start);
 assert.ok(start >= 0 && end > start, "readLiveHealthVersion found");
 const helper = source.slice(start, end);
@@ -33,5 +33,16 @@ const abortErr = () => Object.assign(new Error("The operation was aborted"), { n
   const logs = []; let n = 0;
   const read = make(async () => { n++; return { ok: true, json: async () => ({ ok: true }) }; }, logs);
   assert.equal(await read("qnfo-x", 1), ""); assert.equal(n, 1);
+}
+{ // DEPLOY-GUARD-HEALTH-BINDING-1: a CH_<WORKER> binding answers first with no public fetch; a failing or absent binding falls back to the public read
+  const s2 = source.indexOf("async function readHealthViaBinding("), e2 = source.indexOf("async function refreshRegistryVersion(", s2);
+  let pub = 0;
+  const ctx = vm.createContext({ fetch: async () => { pub++; return { ok: true, json: async () => ({ version: "9.9.9" }) }; }, console: { error() {} }, setTimeout, clearTimeout, AbortController, String, Promise });
+  vm.runInContext(source.slice(s2, e2) + "\nthis.read = readLiveHealthVersion;", ctx);
+  const ok = { CH_PERSONAL_WATCH: { fetch: async () => ({ ok: true, json: async () => ({ version: "1.1.1" }) }) } };
+  assert.equal(await ctx.read("personal-watch", 1, ok), "1.1.1"); assert.equal(pub, 0);
+  const bad = { CH_PERSONAL_WATCH: { fetch: async () => { throw new Error("x"); } } };
+  assert.equal(await ctx.read("personal-watch", 1, bad), "9.9.9"); assert.equal(pub, 1);
+  assert.equal(await ctx.read("personal-watch", 1, {}), "9.9.9"); assert.equal(pub, 2);
 }
 console.log("health-retry: passed");
