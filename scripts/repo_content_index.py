@@ -300,7 +300,7 @@ def main():
         print(json.dumps({
             "ok": True,
             "note": "no reader for Vectorize index qnfo-repos; skipping embedding",
-            "index": idx
+            "index": None
         }))
         return 0
 
