@@ -1,3 +1,4 @@
+var VERSION = "1.0.0";
 
 const TO = "rwnquni@outlook.com";
 const FROM = { email: "qnfo@qnfo.org", name: "QNFO fleet" };
@@ -103,7 +104,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
-      if (url.pathname === "/health") return new Response("ok", { headers: H });
+      if (url.pathname === "/health") return json({ ok: true, version: VERSION });
       if (request.method === "POST") {
         if (request.headers.get("x-yield") !== "1") return json({ ok: false, error: "bad request" }, 400);
         if (url.pathname === "/api/code") { const r = await sendCode(env); return json(r.body, r.status); }
