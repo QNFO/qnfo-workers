@@ -1,0 +1,36 @@
+{
+  "_doc": "REPO-CONSOLIDATION-1 (rwnq8/agent-operating-system#3, plan REPOSITORIES.md there). The only repositories scripts/repo-consolidation.mjs may write. Archive, never delete. Owner request 2026-11-09: complete the consolidation.",
+  "date": "2026-11-09",
+  "issue": "rwnq8/agent-operating-system#3",
+  "copy": [
+    {
+      "source": "rwnq8/agent-operating-system",
+      "target": "QNFO/agent-operating-system",
+      "exclude_prefixes": [".github/"],
+      "conflict_dir": "imported/rwnq8-agent-operating-system/"
+    }
+  ],
+  "archive": [
+    { "repo": "rwnq8/career-engine", "home": "the live job search and CV at https://jobs.q08.org (worker `qnfo-jobsearch` in QNFO/qnfo-workers)" },
+    { "repo": "rwnq8/agent-operating-system", "home": "QNFO/agent-operating-system (agent rules and skills; files that differed are under `imported/rwnq8-agent-operating-system/` there)", "after_copy": true },
+    { "repo": "rwnq8/play-the-ball-not-the-player", "home": "rwnq8/rwnq8.github.io, folder `play-the-ball-not-the-player/` (full history, same URL path)" },
+    { "repo": "rwnq8/r2-infra", "home": "nowhere else: the scripts stay here, read-only. They are not copied into a public repository because their history holds R2 credentials (see the rotation issue in QNFO/qnfo-workers)" },
+    { "repo": "QNFO/qwav-demo-tree-distance", "home": "QNFO/qwav-demos, folder `qwav-demo-tree-distance/` (full history)" },
+    { "repo": "QNFO/qwav-demo-hardware-visualizer", "home": "QNFO/qwav-demos, folder `qwav-demo-hardware-visualizer/` (full history)" },
+    { "repo": "QNFO/qwav-demo-ultrametric-convergence", "home": "QNFO/qwav-demos, folder `qwav-demo-ultrametric-convergence/` (full history)" },
+    { "repo": "QNFO/qwav-demo-bt-qec", "home": "QNFO/qwav-demos, folder `qwav-demo-bt-qec/` (full history)" },
+    { "repo": "QNFO/qwav-demo-error-confinement", "home": "QNFO/qwav-demos, folder `qwav-demo-error-confinement/` (full history)" },
+    { "repo": "QNFO/qwav-demo-qpna-classifier", "home": "QNFO/qwav-demos, folder `qwav-demo-qpna-classifier/` (full history)" },
+    { "repo": "QNFO/qwav-demo-monna-map-perspective", "home": "QNFO/qwav-demos, folder `qwav-demo-monna-map-perspective/` (full history)" },
+    { "repo": "QNFO/ultrametric-lean", "home": "QNFO/qnfo-workers, folder `research-code/ultrametric-lean/` (the tested source). This repository still clones and builds" },
+    { "repo": "QNFO/ignorance-audit", "home": "QNFO/qnfo-workers, folder `research-code/ignorance-audit/` (the tested source). `pip install git+https://github.com/QNFO/ignorance-audit.git` still works" },
+    { "repo": "QNFO/agentic-collapse", "home": "QNFO/qnfo-workers, folder `research-code/agentic-collapse/` (the tested source). `pip install git+https://github.com/QNFO/agentic-collapse.git` still works" },
+    { "repo": "QNFO/qnfo-workers-branch-archive", "home": "nowhere else: it is the cold archive of pruned qnfo-workers branches and is now read-only" },
+    { "repo": "QNFO/qnfo-config-backup", "home": "QNFO/deepchat (the one DeepChat backup kept active). Not merged because this backup holds credentials" },
+    { "repo": "QNFO/.deepchat", "home": "QNFO/deepchat (the one DeepChat backup kept active)" },
+    { "repo": "QNFO/qnfo-setup-bootstrap", "home": "QNFO/deepchat (the one DeepChat backup kept active)" }
+  ],
+  "transfer": [
+    { "repo": "rwnq8/qnfo-fleet-dashboard", "new_owner": "QNFO" }
+  ]
+}
