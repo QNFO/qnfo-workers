@@ -33,7 +33,8 @@ ok(T.verify(res.replace("44+", "400+"), JOB).length > 0, "inflated number reject
 ok(T.verify(res + "- Expert in Kubernetes. <!--F:F06-->\n", JOB).length > 0, "invented skill rejected");
 ok(T.verify(note + "I also hold a PhD.\n", JOB).length > 0, "untagged line rejected");
 ok(T.verify(note.replace(/"[^"]+"/, '"quantum cryptography"'), JOB).length > 0, "foreign quoted term rejected");
-for (const [title, loc] of [["Sales Lead, Research", "Amsterdam"], ["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Staff Engineer, Research Platform", "Amsterdam"], ["Senior AI Governance Counsel", "Amsterdam"], ["Product Marketing, Data Products", "Amsterdam"], ["Forward Deployed Product Manager, Public Sector", "Amsterdam"]])
+// JOBSEARCH-CONTENT-FIRST-1: a seniority word in the title and a residence restriction still exclude; no other title word does (the posting text decides)
+for (const [title, loc] of [["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Junior Policy Analyst", "Amsterdam"]])
   ok(T.evaluate({ ...JOB, title, location: loc }).status === "excluded", "gate " + title + " / " + loc);
 const jobAt = (location, title = "Senior Policy Advisor") => ({ ...JOB, title, location });
 ok(T.scoreJob({ ...JOB, location: "", desc: JOB.desc + " The team is based in Amsterdam." }).drops.some((x) => x.includes("no location in the posting")), "missing feed locations are dropped even when a city appears elsewhere in the description");
@@ -55,7 +56,13 @@ const dis = T.makeCtx({}, [{ title: "Analytics Operations Specialist", verdict: 
 ok(dis.learned.block.has("analytics") && dis.learned.boost.has("housing") && !dis.learned.block.has("policy"), "two dislikes block a word, a like boosts one");
 const an = T.scoreJob(jobAt("Tokyo, Japan"), T.makeCtx({}), "analyze");
 ok(an.drops.length > 0 && an.fit > 0, "analysis keeps the fit when the gates would drop the job", an);
-ok(T.evaluate(jobAt("Amsterdam", "Product Marketing Manager")).status === "excluded" && T.evaluate(jobAt("Amsterdam", "Senior AI Governance Counsel")).status === "excluded", "marketing and legal titles stay out");
+{ // a title is never the reason: the same words in the title with a posting that shows nothing of the record are dropped, with one that shows the record they are kept
+  const blank = "Sell subscriptions to retail customers. Quarterly quotas, cold calls and negotiation of renewals. Travel to customer sites every week. ".repeat(2);
+  for (const title of ["Product Marketing Manager", "Senior AI Governance Counsel", "Sales Lead, Research", "Staff Engineer, Research Platform", "Forward Deployed Product Manager, Public Sector"]) {
+    ok(T.evaluate({ ...JOB, title, desc: blank }).status === "excluded", "no sign of the record in the text: " + title);
+    ok(T.evaluate({ ...JOB, title }).status === "ok", "the record in the text keeps it, whatever the title says: " + title);
+  }
+}
 ok(T.evaluate({ ...JOB, desc: JOB.desc + " A PhD is required." }).flags.some((f) => f.startsWith("DEGREE")), "PhD flag");
 {
   const now = Date.now(), applied = now - 40 * 86400000;
@@ -122,7 +129,7 @@ ok(list.count === 1 && list.matches[0].title.startsWith("Research Program Manage
 const id = list.matches[0].id;
 const one = (await call("/api/matches/" + encodeURIComponent(id)))[1];
 ok(one.verified === 1 && one.resume_md.includes("Federal Highway") && !one.note_md.includes("<!--"), "detail has clean verified artifacts");
-ok((await call("/api/matches?tier=A"))[1].count === 1 && (await call("/api/matches?tier=B"))[1].count === 0, "tier filter");
+ok((await call("/api/matches?tier=A"))[1].count + (await call("/api/matches?tier=B"))[1].count === 1, "tier filter", [(await call("/api/matches?tier=A"))[1].count, (await call("/api/matches?tier=B"))[1].count]);
 ok((await call("/api/ledger"))[1].facts.length >= 14, "ledger served");
 ok((await call("/health"))[1].version.startsWith("1."), "health");
 const ui = await call("/", undefined);
@@ -351,12 +358,12 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   const tokyo = { ...JOB, location: "Tokyo, Japan", title: "Senior Policy Advisor" };
   const wideT = T.evaluate(tokyo, T.makeCtx({}), true);
   ok(T.evaluate(tokyo, T.makeCtx({})).status === "excluded" && wideT.status === "ok" && wideT.tier === "C" && wideT.flags.some((f) => f.startsWith("OUTSIDE YOUR PREFERENCES")), "wide mode keeps a role outside the stated places as a flagged stretch", wideT);
-  ok(T.evaluate({ ...JOB, title: "Sales Lead, Research" }, T.makeCtx({}), true).status === "excluded", "wide mode still drops hard noise");
+  ok(T.evaluate({ ...JOB, title: "Sales Lead, Research", desc: "Sell subscriptions to retail customers. Quarterly quotas and cold calls." }, T.makeCtx({}), true).status === "excluded", "wide mode still drops postings with no sign of the record");
   ok(T.evaluate({ ...JOB, location: "Remote - US only" }, T.makeCtx({}), true).status === "excluded", "wide mode still drops postings that restrict residence");
   const eng = { ...JOB, title: "Research Engineer, Evaluations", desc: JOB.desc };
-  ok(T.evaluate(eng, T.makeCtx({}), true).status === "ok" && T.evaluate(eng, T.makeCtx({})).status === "excluded", "a research-engineering title passes in wide mode when the posting matches the record");
+  ok(T.evaluate(eng, T.makeCtx({}), true).status === "ok" && T.evaluate(eng, T.makeCtx({})).status === "ok", "an engineering title passes when the posting matches the record");
   ok(T.evaluate({ ...eng, desc: "We build code." }, T.makeCtx({}), true).status === "excluded", "an engineering title with no evidence in the posting stays out");
-  ok(T.evaluate({ ...JOB, title: "Staff Engineer, Research Platform" }, T.makeCtx({}), true).status === "excluded", "a plain engineer title stays out");
+  ok(T.evaluate({ ...JOB, title: "Staff Engineer, Research Platform" }, T.makeCtx({}), true).status === "ok", "an engineer title is not a reason to drop a posting that carries the record");
   const [kept, ex] = T.rank([tokyo, { ...JOB, id: "t:2", title: "Receptionist" }], T.makeCtx({}), true);
   ok(kept.length === 1 && kept[0].match.tier === "C", "rank keeps stretch matches in wide mode", { kept: kept.length, ex });
   // evidence the CV lacks counts for less and is named
