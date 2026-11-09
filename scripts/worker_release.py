@@ -131,6 +131,32 @@ def sync_mirror(worker):
     return "mirror copied from worker.js"
 
 
+PKG_VERSION = re.compile(r'("version"\s*:\s*")([^"]*)(")')
+
+
+def package_version_path(worker):
+    """WORKER-RELEASE-AGENTS-PKG-1: <worker>/package.json when build.mjs generates worker.js' VERSION from it (qnfo-agents), else None."""
+    d = os.path.join(ROOT, worker)
+    pkg, build = os.path.join(d, "package.json"), os.path.join(d, "build.mjs")
+    if not (os.path.isfile(pkg) and os.path.isfile(build)):
+        return None
+    with open(build, encoding="utf-8") as fh:
+        return pkg if "package.json" in fh.read() else None
+
+
+def package_version(pkg):
+    with open(pkg, encoding="utf-8") as fh:
+        m = PKG_VERSION.search(fh.read())
+    return m.group(2) if m else None
+
+
+def write_package_version(pkg, new):
+    with open(pkg, encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    with open(pkg, "w", encoding="utf-8", newline="") as fh:
+        fh.write(PKG_VERSION.sub(lambda m: m.group(1) + new + m.group(3), text, count=1))
+
+
 def cmd_claims(args):
     worker = args[0]
     held = claims(worker, next((args[i + 1] for i, a in enumerate(args[:-1]) if a == "--prs-file"), None))
@@ -174,12 +200,20 @@ def cmd_bump(args):
         print("release fragment %s already exists; pick another version" % os.path.relpath(frag, ROOT), file=sys.stderr)
         return 1
     body = "# %s %s (%s)\n\n%s%s\n" % (worker, new, datetime.date.today().isoformat(), ("%s: " % opt("--name")) if opt("--name") else "", note.strip())
+    pkg = package_version_path(worker)
+    if pkg:
+        report.append("package.json: %s -> %s (WORKER-RELEASE-AGENTS-PKG-1: build.mjs derives VERSION from it)" % (package_version(pkg), new))
     if "--dry-run" in args:
         print("\n".join(report))
         print("would write %s" % os.path.relpath(frag, ROOT))
         return 0
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write(new_text)
+    if pkg:
+        write_package_version(pkg, new)
+        if shutil.which("node"):
+            built = subprocess.run(["node", "build.mjs"], cwd=os.path.dirname(pkg), capture_output=True, text=True)
+            report.append("node build.mjs ok" if built.returncode == 0 else "node build.mjs failed (run npm ci && npm run build; worker.js VERSION was set directly): " + (built.stderr or "")[:200])
     os.makedirs(os.path.dirname(frag), exist_ok=True)
     with open(frag, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)

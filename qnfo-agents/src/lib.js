@@ -293,6 +293,11 @@ export function agentDrainPlan(spent, budget, nowMs, est, perTick) {
   const left = Math.max(0, budget - Number(spent));
   const share = left / ticksLeft;
   const runs = Math.floor(share / e);
+  // AGENTS-SHED-PACING-1 (issue 8133): below the straight line of the day (budget x fraction elapsed, plus one run) start up to the per-tick cap; the duty cycle
+  // applies only above it. The line still bounds the day at the budget, so a request is not shed for waiting while most of the budget is unspent.
+  const line = budget * ((now - dayStart) / 864e5) + e;
+  const lineRuns = Math.min(left, line - Number(spent)) >= e ? Math.max(1, Math.floor((line - Number(spent)) / e)) : 0;
+  if (lineRuns >= 1) return { limited: true, take: Math.min(per, Math.max(runs, lineRuns)), duty: 1, left, share };
   if (runs >= 1) return { limited: true, take: Math.min(per, runs), duty: 1, left, share };
   const duty = share > 0 ? Math.min(AGENT_FLOOR_EVERY_TICKS, Math.ceil(e / share)) : AGENT_FLOOR_EVERY_TICKS;
   const slot = Math.floor(now / AGENT_TICK_MS) % duty === 0;
@@ -496,4 +501,19 @@ export function searchSkills(items, q, limit) {
     return { name: it.name, description: String(it.description || "").slice(0, 200), source: it.source || "direct", score };
   });
   return (toks.length ? rows.filter((r) => r.score > 0) : rows).sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name))).slice(0, cap);
+}
+
+// ROADMAP-1 approval-card (issue 7975): the owner card for one paused identity-bound step; its why carries the IDENTITY-BOUND line with the payload hash.
+export function approvalCardSpec(runId, action, callId, payloadJson) {
+  let h = 5381;
+  const t = String(payloadJson || "");
+  for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+  const hash = h.toString(16).padStart(8, "0");
+  return {
+    slug: "approval-" + runId,
+    title: "Approve " + action + " for run " + runId,
+    why: "IDENTITY-BOUND: " + action + " from qnfo-agents run " + runId + " (call " + callId + ", payload hash " + hash + ") is paused until the owner answers in /cmd (POST /approvals/" + runId + "/" + callId + ").",
+    default_in_effect: "rejected after 24 h",
+    action: "Answer the pending approval in /cmd"
+  };
 }

@@ -192,7 +192,7 @@ with tempfile.TemporaryDirectory() as t6:
 with tempfile.TemporaryDirectory() as t7:
     q = pathlib.Path(t7); sh(t7, "git", "init", "-q"); sh(t7, "git", "config", "user.email", "a@b.c"); sh(t7, "git", "config", "user.name", "t")
     obs = "[observability]\nenabled=true\n[observability.traces]\nenabled=true\n"
-    for i in range(30):
+    for i in range(W.WORKER_HARD_CAP):
         d = q / ("w%02d" % i); d.mkdir()
         (d / "worker.js").write_text("export default {};\n")
         (d / "wrangler.toml").write_text('name="w%02d"\n' % i + obs)
@@ -214,12 +214,12 @@ with tempfile.TemporaryDirectory() as t7:
     ok(r.returncode == 0, "a new Worker with a same-change retirement marker passes: " + r.stdout)
 with tempfile.TemporaryDirectory() as t8:
     q = pathlib.Path(t8); sh(t8, "git", "init", "-q"); sh(t8, "git", "config", "user.email", "a@b.c"); sh(t8, "git", "config", "user.name", "t")
-    for i in range(29):
+    for i in range(W.WORKER_HARD_CAP - 1):
         d = q / ("w%02d" % i); d.mkdir()
         (d / "worker.js").write_text("export default {};\n")
         (d / "wrangler.toml").write_text('name="w%02d"\n' % i)
     sh(t8, "git", "add", "-A"); sh(t8, "git", "commit", "-qm", "base below worker cap")
-    for name in ("w29", "w30"):
+    for name in ("w%02d" % (W.WORKER_HARD_CAP - 1), "w%02d" % W.WORKER_HARD_CAP):
         d = q / name; d.mkdir()
         (d / "worker.js").write_text("export default {};\n")
         (d / "wrangler.toml").write_text('name="%s"\n' % name + obs)

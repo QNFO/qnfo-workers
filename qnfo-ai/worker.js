@@ -6,11 +6,12 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.49.8-codeagent";
+var VERSION = "5.50.0-codeagent";
 /* 5.46.2 SPEND-PRICE-FALLBACK-1 (2026-11-04, pillar cost, #7026; patch): spendPriceFallback(provider, model) says when spendUsd prices a model from a catch-all rate, and spendRecord counts each such call in ai_call_counters (purpose spend-price-fallback, by model), so a spend alarm that is a pricing artifact (the 6980 class) is visible by model. Telemetry only: no price changes. Suite: spend-price-fallback.test.mjs. prior 5.46.1-codeagent */ /* 5.46.1 CHAT-PAGE-REGEX-1 (2026-11-04, pillar core; patch, found by UX-JOURNEYS-1): the chat page at ai.qnfo.org threw "Invalid regular expression" on load, so nothing on it worked on any device: the markdown renderer's regular expressions sat in the PLAYGROUND_HTML template literal with single backslashes, which the template strips (\\s became s, \\/\\/ became // and started a comment). They are now written with doubled backslashes; scripts/inline-page-scripts.test.mjs parses the served script. prior 5.46.0-codeagent */ /* 5.46.0 HISTORY-OWNER-LOGIN-1 (2026-11-04, pillar core; minor): the /history page signs the owner in with the emailed code (POST /v1/owner/login, /v1/owner/verify, no key to paste) and /v1/conversations accepts the qnfo-ops owner session token as well as a router key; measured 2026-11-04: the Bearer key saved in the owner Claude Code settings was rejected on every key-gated route (HTTP 401 on /v1/history, /v1/threads), so a page that needed a pasted key could not be used. prior 5.45.2-codeagent */ /* 5.45.2 SPEND-GATEWAY-CF-PRICE-1 (#6980, pillar cost; patch): spendUsd prices a @cf/ model on provider gateway at Workers AI neuron rates instead of the GPT-5.5 "*" rate (llama-3.2-3b 752253 in / 144684 out: 8.10 USD before, under 0.10 after), and llama-3.2-3b-instruct gets its neuron rate (SPEND_GATEWAY_CF_RATES). */ /* 5.45.1 THREAD-HISTORY-1 (2026-11-04, pillar core; patch): the /v1/conversations list reads the chat log in two passes (window function) instead of one correlated subquery per thread, in line with D1-OVERLOAD-1. prior 5.45.0-codeagent */ /* 5.45.0 THREAD-HISTORY-1 (2026-11-04, pillar core; minor): GET /v1/conversations (list, ?q= text filter, ?limit=) and GET /v1/conversations/:id read the server-side chat log chatbox_conversations, so conversations from every client (Chatbox, Claude Code, any OpenAI or Anthropic compatible app) are browsable without a desktop app; GET /history is a read-only page over them. Read-only, router-key auth, qnfo-ai rows only (the personal twin keeps its own store). Suite: conversations.test.mjs; the older /v1/threads reads the narrower chat table and is unchanged. prior 5.44.4-codeagent */ /* 5.44.4 D1-OVERLOAD-1c (pillar autonomy; patch): spendQualityBlock reads output_quality_headline_cache (one row) instead of v_output_quality_headline: 36 calls, 55.7M rows read, 325 s D1 time per day measured 2026-11-04. */ /* 5.44.0 GLM-4.7-FLASH-CHAT-1 (#5535, pillar cost; minor): add the evaluated GLM-4.7 Flash model to the chat catalog and attribution. */ /* 5.42.4 D1-OVERLOAD-TELEMETRY-BREAKER-1 (#5269, pillar core; patch): share the 60s D1 overload breaker with optional cost, query and ensemble telemetry while preserving in-memory spend accounting. */ /* 5.42.0 CF-OBS-ISSUE-1 (#1000993, charter pillar core; minor): after transient gateway 502/503/504 retries and dynamic/value fallback exhaust, recover through the independent Workers AI binding. */ /* 5.41.8 DYNAMIC-ROUTE-TRANSIENT-FAILOVER-1 (#1001231, charter pillar core; patch): after same-route retries exhaust on a transient gateway 502/503/504, retry once through dynamic/value with the remaining request budget. */ /* 5.41.3 CF-OBS-502-RETRY-1 (#1468, charter pillar core; patch): retry transient upstream HTTP 502 errors with bounded same-route retries before fallback. */ /* 5.41.1 CF-OBS-504-RETRY-1 (#1558, charter pillar core; patch): retry transient upstream HTTP 504 errors on the same route within the existing bounded backoff. */ /* 5.40.7 BP26-A11Y-LABELS-1 (2026-10-28, pillar security, cluster D; patch): the chat page model select carries aria-label (axe label violation on ai.qnfo.org). prior 5.40.6-codeagent */ /* 5.40.3 QNFO-AI-SPEND-TWIN-PATHS-1 (2026-10-26, pillar cost, agent_issues 1000439, 1000440; patch): (a) QNFO-AI-SWALLOW-REVERT-1: the 5.40.2 code-loop change in the Workers AI binding wrapper (__aiAttrEnv) returned an empty successful reply for any error whose text matched spend, budget or cap, which includes the capacity error 3040, so a capacity error stopped reaching the fallback chains as an error; the wrapper rethrows again. (b) QNFO-AI-STREAM-SPEND-TWIN-1: a streamed deepseek-v4-pro or deepseek-v4-flash request whose paid call is refused (402 breaker, deepseek cap, router ledger total, fleet cap) is served by its Workers AI twin through the Workers AI stream branch with the caller's tools, the chunks name the twin, and the free chain that answers when there is no twin names the model that answered instead of the requested route. (c) QNFO-AI-ENSEMBLE-CTX-SPEND-TWIN-1: the oversize-ensemble context fallback serves a refused paid call from the twin of deepseek-v4-flash (truncated to the twin context, _router.served_by and twin_reason name it) instead of HTTP 502. Suite: spend-twin-paths.test.mjs. prior 5.40.2-codeagent */ /* 5.40.1 QUALITY-FLOOR-RECORD-1 (2026-10-26, pillar cost, from the independent review of 5.40.0; patch): every lift of a spend downgrade and every read of v_output_quality_headline is counted in ai_call_counters (purpose quality-floor-lift:<point> by requested model, purpose quality-floor-read with errors on a failed read), so the floor's use and its silent failure can be read from D1; 5.40.0's note said a lift was named in the ledger reason, which is only the in-memory decision (an allow writes no ledger row). */ /* 5.40.0 COST-QUALITY-FLOOR-ENFORCE-1 (2026-10-26, pillar cost, agent_issues 1000408; OWNER_DIRECTIVE_2026_10_21_COST_QUALITY_1): the three places that downgrade a model at a breached spend cap (spendGovern, spendGovernWA, fleetSteerRun) serve the requested model while v_output_quality_headline.worse is above 0, through one cached check (spendQualityBlock); a lifted downgrade is named in _router.quality_floor and the ledger reason, and /health spend.quality_floor shows the read. It replaces the 5.39.11 read, whose SELECT named an updated_at column the view does not have, so every spendGovern call ran a failing query and the floor never applied. */ /* 5.39.0 OWNER-OTP-1 (2026-10-20): a chat request with no valid key (or a wrong one) is answered by qnfo-ops in public read-only mode with owner login by emailed code; /v1/owner/login and /v1/owner/verify are served there; qnfo-ops session tokens (qos_...) are accepted here through the federated check. */ /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+// MODEL-MATRIX-1: rates for gemma-4-26b and deepseek-v4-pro-0813 (neurons per 1M tokens, in/out) are in this table; copies elsewhere must match.
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-4.7-flash": [5500, 36364], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0], "@cf/google/gemma-4-26b-a4b-it": [9091, 27273] };
 // CF-OBS-ISSUE-1 (#1000902, RED-DRAIN-1): D1 overload root cause. Every AI call wrote up to two analytics
 // counter rows through the binding, and on a D1 "overloaded / queued for too long" error each write retried
@@ -127,6 +128,8 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
           var outTok = Number(u.completion_tokens || u.output_tokens || 0);
           var r = __AI_ATTR_RATES[String(model)] || [0, 0];
           var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+          // AI-METER-KIMI-1: while the D1 breaker is open the counter write below is skipped, so the call is counted in Analytics Engine instead.
+          if (d1AttrWriteSkip() && typeof aiMeterWrite === "function" && !/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) aiMeterWrite(env, aiMeterPoint("workers-ai", model, (env && env.__spendCaller) || worker, inTok, outTok, 0, 0, {}));
           for (var _j = 0; !d1AttrWriteSkip() && _j < 5; _j++) {
   try {
     await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
@@ -533,8 +536,8 @@ function spendRecord(env, provider, model, inTok, outTok, flags) {
       // that is a pricing artifact shows up as a count by model (purpose spend-price-fallback). Telemetry only; the price is unchanged.
       if (calls && typeof spendPriceFallback === "function" && spendPriceFallback(provider, model)) {
         try {
-          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_tok, out_tok, neurons) VALUES (?1, 'qnfo-ai', 'spend-price-fallback', ?2, 1, 0, 0, 0, 0) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls = calls + 1")
-            .bind(spendDay(0), String(model).slice(0, 120)).run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_tok, out_tok, neurons) VALUES (?1, 'qnfo-ai', 'spend-price-fallback', ?2, 1, 0, ?3, ?4, ?5) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls = calls + 1, in_tok = in_tok + excluded.in_tok, out_tok = out_tok + excluded.out_tok, neurons = neurons + excluded.neurons")
+            .bind(spendDay(0), String(model).slice(0, 120), Math.round(Number(inTok) || 0), Math.round(Number(outTok) || 0), Math.round(usd / SPEND_NEURON_USD)).run();
         } catch (e2) {
         }
       }
@@ -2218,7 +2221,7 @@ __name2(executeBuiltinTools, "executeBuiltinTools");
 __name22(executeBuiltinTools, "executeBuiltinTools");
 async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP, toolChoice) {
   const route = chatRoute(effSpec.wa || effSpec.api || effSpec.model);
-  const out = await runDynamicChat(env, route, messages, maxTokens, false, { tools, temperature: effTemp, top_p: effTopP, tool_choice: toolChoice });
+  const out = await runDynamicChat(env, route, messages, maxTokens, false, { tools, temperature: effTemp, top_p: effTopP, tool_choice: toolChoice, reasoning_effort: reasoningEffortFor(effSpec.wa || effSpec.model, maxTokens, null, !!(tools && tools.length)) });
   return { content: extractWAContent(out), toolCalls: extractWAToolCalls(out), provider: out.provider || "gateway", served_by: out.model || route };
 }
 __name(runModelTurn, "runModelTurn");
@@ -4291,6 +4294,7 @@ async function autoRouterShadowRun(env, limit) {
       output_length_ratio: null,
       quality_verdict: "unjudged",
       quality_judge_model: null,
+      judge_orders: null,
       recorded: false
     };
     const eventId = "autorouter-shadow-" + runId + "-" + sourceHash.slice(0, 12);
@@ -4309,20 +4313,24 @@ async function autoRouterShadowRun(env, limit) {
             id: "default",
             cacheTtl: 0,
             metadata: { worker: "qnfo-ai", purpose: "autorouter-shadow" }
-          }
+          },
+          // AUTOROUTER-EVAL-1.3: the default Auto Router pool holds anthropic, openai and xai models; the fleet has no such upstream, so the pool is Workers AI only
+          extraHeaders: { "cf-aig-allowed-providers": "workers-ai" }
         });
         const text = String(response && (response.response ||
           response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content) || "").trim();
         const usage = spendUsageOf(response, spendInEstimate(messages), spendOutEstimate(response));
         const selected = response && (response.model || response.result && response.result.model);
-        result.status = text ? "ok" : "empty";
+        const poolOk = !!selected && String(selected).startsWith("@cf/");
+        result.status = !poolOk ? "skipped_pool" : text ? "ok" : "empty";
         result.selected_model = selected ? String(selected).slice(0, 120) : null;
         result.auto_latency_ms = Date.now() - startedAt;
         result.auto_input_tokens = usage.in;
         result.auto_output_tokens = usage.out;
-        result.auto_response_sha256 = await autoRouterShadowHash(text);
-        result.exact_match = !!text && text.toLowerCase().replace(/\s+/g, " ") === baseline.toLowerCase().replace(/\s+/g, " ");
-        result.output_length_ratio = text ? Math.round(text.length / baseline.length * 1e4) / 1e4 : null;
+        result.auto_response_sha256 = poolOk ? await autoRouterShadowHash(text) : null;
+        if (!poolOk) result.baseline_response_sha256 = null;
+        result.exact_match = poolOk && !!text && text.toLowerCase().replace(/\s+/g, " ") === baseline.toLowerCase().replace(/\s+/g, " ");
+        result.output_length_ratio = poolOk && text ? Math.round(text.length / baseline.length * 1e4) / 1e4 : null;
         const hasWorkersAiRate = !!selected && Object.prototype.hasOwnProperty.call(__AI_ATTR_RATES, String(selected));
         const hasGatewayRate = !!selected && Object.prototype.hasOwnProperty.call(SPEND_PRICES.gateway, String(selected));
         if (hasWorkersAiRate || hasGatewayRate) {
@@ -4332,23 +4340,12 @@ async function autoRouterShadowRun(env, limit) {
             result.cost_delta_usd = Math.round((result.auto_cost_estimate_usd - result.baseline_cost_usd) * 1e6) / 1e6;
           }
         }
-        if (text) {
-          // judge while both answers are in memory: pairwise verdict from a family disjoint from both the baseline and cloudflare/auto (ENSEMBLE-POLICY-1)
-          const judgeModel = "@cf/zai-org/glm-5.3-flash";
-          result.quality_judge_model = judgeModel;
-          try {
-            const judged = await aiRunAttr(env, "qnfo-ai", "autorouter-shadow", judgeModel, {
-              messages: [{ role: "user", content: "Two assistants answered the same user prompt. Answer A:\n" + baseline.slice(0, 4000) + "\n\nAnswer B:\n" + text.slice(0, 4000) + "\n\nWhich answer is better for the user? Reply with exactly one word: A, B, or tie." }],
-              max_tokens: 16,
-              temperature: 0
-            });
-            const jt = String(extractWAContent(judged) || "").toLowerCase();
-            if (/\btie\b/.test(jt)) result.quality_verdict = "tie";
-            else if (/\bb\b/.test(jt) && !/\ba\b/.test(jt)) result.quality_verdict = "auto_better";
-            else if (/\ba\b/.test(jt) && !/\bb\b/.test(jt)) result.quality_verdict = "baseline_better";
-          } catch (e) {
-            result.quality_verdict = "judge_error";
-          }
+        if (poolOk && text) {
+          // AUTOROUTER-QUALITY-1: judge while both answers are in memory, once per answer order, with a model of a family disjoint from the baseline and cloudflare/auto (ENSEMBLE-POLICY-1)
+          const judged = await autoRouterShadowJudge(env, prompt, baseline, text, result.baseline_model, result.selected_model);
+          result.quality_verdict = judged.verdict;
+          result.quality_judge_model = judged.judge_model;
+          result.judge_orders = judged.orders;
         }
       }
     } catch (e) {
@@ -4376,6 +4373,8 @@ async function autoRouterShadowRun(env, limit) {
         output_length_ratio: result.output_length_ratio,
         quality_verdict: result.quality_verdict,
         quality_judge_model: result.quality_judge_model,
+        judge_model: result.quality_judge_model,
+        judge_orders: result.judge_orders || null,
         error_type: result.error_type || null
       }), result.status === "ok" ? "ok" : result.status).run();
       result.recorded = true;
@@ -4395,6 +4394,44 @@ async function autoRouterShadowRun(env, limit) {
     results
   };
 }
+// AUTOROUTER-QUALITY-1: pairwise judge over anonymous answers, asked once with each order. Returns better / same / worse for the Auto Router answer, split when the two
+// orders disagree, unjudged when the judge fails or the spend governor does not allow the call (skipped, not failed). No answer text is kept.
+function autoRouterShadowJudgeModel(baselineModel, selectedModel) {
+  const fam = /glm|zai/i.test(String(baselineModel || "") + " " + String(selectedModel || "")) ? "@cf/openai/gpt-oss-20b" : "@cf/zai-org/glm-5.3-flash";
+  return fam;
+}
+async function autoRouterShadowJudge(env, prompt, baseline, auto, baselineModel, selectedModel) {
+  const judgeModel = autoRouterShadowJudgeModel(baselineModel, selectedModel);
+  const out = { verdict: "unjudged", judge_model: judgeModel, orders: [null, null] };
+  try {
+    const governed = await spendGovern(env, "workers-ai", judgeModel, false);
+    if (governed.action !== "allow") { out.orders = ["skipped_budget", "skipped_budget"]; return out; }
+  } catch (e) { return out; }
+  const ask = async (first, second) => {
+    const judged = await aiRunAttr(env, "qnfo-ai", "autorouter-shadow", judgeModel, {
+      messages: [{ role: "user", content: "Two assistants answered the same user prompt.\n\nUser prompt:\n" + prompt.slice(0, 2000) + "\n\nAnswer A:\n" + first.slice(0, 4000) + "\n\nAnswer B:\n" + second.slice(0, 4000) + "\n\nWhich answer is better for the user? Reply with exactly one word: A, B, or tie." }],
+      max_tokens: 16,
+      temperature: 0
+    });
+    const jt = String(extractWAContent(judged) || "").toLowerCase();
+    if (/\btie\b/.test(jt)) return "tie";
+    if (/\bb\b/.test(jt) && !/\ba\b/.test(jt)) return "B";
+    if (/\ba\b/.test(jt) && !/\bb\b/.test(jt)) return "A";
+    return null;
+  };
+  const toAuto = (v, autoLetter) => v === "tie" ? "same" : v === autoLetter ? "better" : v ? "worse" : null;
+  try {
+    const o1 = toAuto(await ask(baseline, auto), "B");
+    const o2 = toAuto(await ask(auto, baseline), "A");
+    out.orders = [o1, o2];
+    if (!o1 || !o2) out.verdict = "unjudged";
+    else if (o1 === o2) out.verdict = o1;
+    else out.verdict = "split";
+  } catch (e) {
+    out.verdict = "unjudged";
+  }
+  return out;
+}
 async function autoRouterShadowHash(text) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text || "")));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -4408,10 +4445,10 @@ async function autoRouterShadowHash(text) {
 // the kill rule a moved stage would live under is: candidate accuracy below the incumbent's by more than that width means "worse" (revert if it had moved).
 // Cost is measured, not assumed: neurons from the response usage times the rate table, same fixtures for both models. Each candidate writes one cloud_ops_events row
 // kind cascade-shadow (meta carries the numbers), each run one row kind cascade-shadow-run. BUDGET-SOFT-ROUTE-1: when the spend governor does not say allow the run
-// goes lean (12 fixtures, one candidate), it is never skipped. Spend: at most 96 model calls a day (4 models x 24 fixtures), about 3k neurons.
+// goes lean (12 fixtures, every candidate: CASCADE-SHADOW-1.1), it is never skipped. Spend: at most 96 model calls a day (4 models x 24 fixtures), about 3k neurons.
 // ops_config cascade_shadow = off stops the schedule without a deploy. Fixtures are public in the repository, so they are a v0 set, not yet sealed against the code loop.
 var CASCADE_STAGE = "decision-classify";
-var CASCADE_REV = 1;
+var CASCADE_REV = 2;
 var CASCADE_INCUMBENT = "@cf/openai/gpt-oss-120b";
 var CASCADE_CANDIDATES = ["@cf/qwen/qwen3-30b-a3b-fp8", "@cf/openai/gpt-oss-20b", "@cf/zai-org/glm-5.3-flash"];
 var CASCADE_MIN_SAVING = 0.3;
@@ -4492,7 +4529,7 @@ function cascadeEnvRaw(env) {
   return env && env.__rawAI ? Object.assign({}, env, { AI: env.__rawAI }) : env;
 }
 async function cascadeAsk(env, model, fx, deadline) {
-  var rec = { id: fx.id, set: fx.set, ok: 0, err: null, empty: 0, retried: 0, in_tok: 0, out_tok: 0 };
+  var rec = { id: fx.id, set: fx.set, ok: 0, err: null, empty: 0, retried: 0, in_tok: 0, out_tok: 0, meter: 0, metered: 0 };
   if (Date.now() > deadline) { rec.err = "deadline"; return rec; }
   try {
     var budget = 1024;
@@ -4500,6 +4537,8 @@ async function cascadeAsk(env, model, fx, deadline) {
       var res = await aiRunAttr(env, "qnfo-ai", "cascade-shadow", model, { messages: [{ role: "user", content: fx.prompt }], max_tokens: budget, temperature: 0 });
       var u = spendUsageOf(res, Math.ceil(fx.prompt.length / 4), 0);
       rec.in_tok += u.in;
+      var mn = res && (res.usage || res.result && res.result.usage); mn = mn && Number(mn.neurons);
+      if (Number.isFinite(mn) && mn >= 0) { rec.meter += mn; rec.metered++; }
       rec.out_tok += u.out;
       var text = extractWAContent(res);
       var ch = res && (res.result || res) && (res.result || res).choices && (res.result || res).choices[0];
@@ -4566,7 +4605,7 @@ function cascadeAssess(inc, cand, fixtureCount) {
     acc_incumbent: n ? Math.round(accInc / n * 1e4) / 1e4 : null, acc_candidate: n ? Math.round(accCand / n * 1e4) / 1e4 : null,
     diff: diff == null ? null : Math.round(diff * 1e4) / 1e4, noise_floor: noise == null ? null : Math.round(noise * 1e4) / 1e4,
     would_revert_if_moved: verdict === "worse", discordant_candidate_wins: bWins, discordant_incumbent_wins: cWins,
-    neurons_incumbent: nInc, neurons_candidate: nCand, cost_ratio: ratio, projected_saving_pct: saving == null ? null : Math.round(saving * 1e3) / 10,
+    neurons_incumbent: nInc, neurons_candidate: nCand, neurons_meter_incumbent: sum(inc, "metered") ? Math.round(sum(inc, "meter") * 100) / 100 : null, neurons_meter_candidate: sum(cand, "metered") ? Math.round(sum(cand, "meter") * 100) / 100 : null, cost_ratio: ratio, projected_saving_pct: saving == null ? null : Math.round(saving * 1e3) / 10,
     empty_incumbent: sum(inc, "empty"), empty_candidate: sum(cand, "empty"), errors_incumbent: errs(inc), errors_candidate: errs(cand),
     acc_by_set_incumbent: bySet(inc), acc_by_set_candidate: bySet(cand)
   };
@@ -4585,7 +4624,8 @@ async function cascadeShadowRun(env, opts) {
   }
   var fixtures = cascadeFixtures(lean);
   var wanted = Array.isArray(opts.candidates) && opts.candidates.length ? opts.candidates.filter(function (m) { return CASCADE_CANDIDATES.indexOf(m) >= 0; }) : CASCADE_CANDIDATES;
-  var candidates = lean ? wanted.slice(0, 1) : wanted;
+  // CASCADE-SHADOW-1.1: lean keeps every candidate (48 calls, about 280 neurons); the cut to 12 fixtures is the fewer-items answer to a breached cap
+  var candidates = wanted;
   var inc = await cascadeEval(raw, CASCADE_INCUMBENT, fixtures, deadline);
   var assessments = [];
   for (var ci = 0; ci < candidates.length; ci++) {
@@ -4607,7 +4647,7 @@ async function cascadeShadowRun(env, opts) {
   var calls = fixtures.length * (1 + candidates.length);
   // A run is finished when at least one candidate produced a verdict and every row was written; a candidate that faulted keeps its own error row and does not
   // make the other candidates' answers be asked again the same day.
-  var summary = { ok: assessments.some(function (a) { return a.verdict !== "error"; }) && recorded === assessments.length, faulted_candidates: assessments.filter(function (a) { return a.verdict === "error"; }).length, run_id: runId, stage: CASCADE_STAGE, lean: lean, gov_note: govNote, fixtures: fixtures.length, model_calls: calls, ms: Date.now() - started, recorded: recorded, verdicts: assessments.map(function (a) { return a.candidate + ":" + a.verdict; }) };
+  var summary = { ok: assessments.some(function (a) { return a.verdict !== "error"; }) && recorded === assessments.length, faulted_candidates: assessments.filter(function (a) { return a.verdict === "error"; }).length, rev: CASCADE_REV, run_id: runId, stage: CASCADE_STAGE, lean: lean, gov_note: govNote, fixtures: fixtures.length, model_calls: calls, ms: Date.now() - started, recorded: recorded, verdicts: assessments.map(function (a) { return a.candidate + ":" + a.verdict; }) };
   try {
     await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'cascade-shadow-run', ?3, ?4, 'qnfo-ai', ?5)").bind(
       "cascade-shadow-run-" + runId, new Date().toISOString(), "Cascade shadow run " + runId + (summary.ok ? " finished" : " finished with a fault"), JSON.stringify(summary), summary.ok ? "ok" : "error").run();
@@ -4615,6 +4655,54 @@ async function cascadeShadowRun(env, opts) {
   return Object.assign({}, summary, { assessments: assessments });
 }
 // The gate: one finished run per 22 hours (a manual force: 30 minutes), at most three faulted runs in the same window, ops_config cascade_shadow = off stops everything.
+// CASCADE-SHADOW-1.2: the stage decision read from the shadow rows. Three consecutive finished runs in which one candidate was eligible promote it; a worse latest run
+// (or fewer than three runs, or a candidate missing from a run) returns the incumbent at once. ops_config cascade_stage_decision-classify = shadow (default) or live.
+async function cascadeDecision(env) {
+  var db = env.QNFO_AUDIT;
+  var mode = "shadow";
+  try {
+    var sw = await db.prepare("SELECT value FROM ops_config WHERE key = 'cascade_stage_decision-classify' LIMIT 1").first();
+    if (sw && /^live$/i.test(String(sw.value || "").trim())) mode = "live";
+  } catch (e) { /* a missing key reads as shadow */ }
+  var runs = [];
+  var rr = await db.prepare("SELECT id, ts, meta FROM cloud_ops_events WHERE kind = 'cascade-shadow-run' AND status = 'ok' ORDER BY ts DESC LIMIT 3").all();
+  var rrows = rr && rr.results || [];
+  for (var i = 0; i < rrows.length; i++) {
+    var m = {};
+    try { m = JSON.parse(rrows[i].meta || "{}"); } catch (e) { m = {}; }
+    var runId = m.run_id || String(rrows[i].id || "").replace(/^cascade-shadow-run-/, "");
+    var cr = await db.prepare("SELECT meta FROM cloud_ops_events WHERE kind = 'cascade-shadow' AND id LIKE ?1").bind("cascade-shadow-" + runId + "-%").all();
+    var byCand = {};
+    (cr && cr.results || []).forEach(function (x) { try { var cm = JSON.parse(x.meta || "{}"); if (cm.candidate) byCand[cm.candidate] = cm; } catch (e) { /* skip an unreadable row */ } });
+    runs.push(byCand);
+  }
+  var choice = CASCADE_INCUMBENT, reason, noise = null, saving = null;
+  if (runs.length < 3) reason = "fewer than three finished runs (" + runs.length + "): the incumbent stays";
+  else {
+    var best = null;
+    CASCADE_CANDIDATES.forEach(function (c) {
+      var rows = runs.map(function (r) { return r[c]; });
+      if (!rows.every(function (x) { return x && x.verdict === "eligible"; })) return;
+      var avg = rows.reduce(function (t, x) { return t + (Number(x.projected_saving_pct) || 0); }, 0) / 3;
+      if (!best || avg > best.avg) best = { c: c, avg: avg, latest: rows[0] };
+    });
+    if (best) { choice = best.c; noise = best.latest.noise_floor == null ? null : best.latest.noise_floor; saving = best.latest.projected_saving_pct == null ? null : best.latest.projected_saving_pct; reason = best.c.split("/").pop() + " was eligible in all three newest runs and the latest run is not worse"; }
+    else reason = "no candidate was eligible in all three newest runs (or the latest run read worse): the incumbent stays";
+  }
+  var out = { stage: CASCADE_STAGE, mode: mode, choice: mode === "live" ? choice : CASCADE_INCUMBENT, reason: reason, runs_read: runs.length, noise_floor: noise, projected_saving_pct: saving };
+  if (mode === "shadow") out.would_be_choice = choice;
+  try {
+    var last = await db.prepare("SELECT meta FROM cloud_ops_events WHERE kind = 'cascade-shadow-decision' ORDER BY ts DESC LIMIT 1").first();
+    var lm = {};
+    try { lm = last && last.meta ? JSON.parse(last.meta) : {}; } catch (e) { lm = {}; }
+    if (!last || lm.choice !== choice) {
+      await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'cascade-shadow-decision', ?3, ?4, 'qnfo-ai', 'ok')").bind(
+        "cascade-shadow-decision-" + rid(12), new Date().toISOString(), "Cascade decision " + CASCADE_STAGE + " changed to " + choice.split("/").pop(), JSON.stringify({ stage: CASCADE_STAGE, choice: choice, previous: lm.choice || null, mode: mode, reason: reason, runs_read: runs.length })).run();
+      out.recorded_change = true;
+    }
+  } catch (e) { out.recorded_change = false; }
+  return out;
+}
 async function cascadeShadowTick(env, opts) {
   opts = opts || {};
   var db = env && env.QNFO_AUDIT;
@@ -4625,7 +4713,8 @@ async function cascadeShadowTick(env, opts) {
   } catch (e) { /* a missing key table reads as on */ }
   var since = new Date(Date.now() - (opts.force ? CASCADE_FORCE_GATE_MS : CASCADE_GATE_MS)).toISOString();
   try {
-    var rows = await db.prepare("SELECT status, COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'cascade-shadow-run' AND ts > ?1 GROUP BY status").bind(since).all();
+    // CASCADE-SHADOW-1.1: only runs of the current harness revision count, so a harness fix re-arms the gate at once (the AB_HARNESS_REV pattern)
+    var rows = await db.prepare("SELECT status, COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'cascade-shadow-run' AND ts > ?1 AND meta LIKE ?2 GROUP BY status").bind(since, '%"rev":' + CASCADE_REV + ',%').all();
     var by = {};
     (rows && rows.results || []).forEach(function (r) { by[r.status] = Number(r.n) || 0; });
     if (by.ok) return { ok: true, skipped: "a run finished inside the gate window" };
@@ -4747,6 +4836,16 @@ var worker_default = {
         return json(await autoRouterShadowRun(env, limit));
       } catch (e) {
         return json({ ok: false, error: "shadow evaluation unavailable" }, 500);
+      }
+    }
+    if (path === "/internal/eval/cascade-shadow/decision" && method === "GET") {
+      // CASCADE-SHADOW-1.2: read only (it records a change of choice); same auth as the shadow routes.
+      if (!await authOk(request.headers.get("Authorization") || "", env, ctx)) return json({ error: "Unauthorized" }, 401);
+      if (!env.QNFO_AUDIT) return json({ error: "QNFO_AUDIT binding required" }, 503);
+      try {
+        return json(await cascadeDecision(env));
+      } catch (e) {
+        return json({ ok: false, error: "cascade decision unavailable" }, 500);
       }
     }
     if (path === "/internal/eval/cascade-shadow" && method === "POST") {

@@ -2163,7 +2163,7 @@ async function lakeRoute(request, env, url, path, method, cors) {
     return json({ ok: true, result: await lakeDriftTick(env, tbl) });
   }
   if (path === "/lake/ingest" && method === "POST") {
-    // Ingest arbitrary rows into a lake table (default fleet_probe_log)
+    // LAKE-SPINE-2.1: POST /lake/ingest?table=fleet_probe_log takes a JSON array of at most 500 rows, drops keys that are not table fields, sets exported_at and sends through lakeSend.
     let rows;
     try {
       const body = await request.json();
@@ -2193,7 +2193,7 @@ async function lakeRoute(request, env, url, path, method, cors) {
     } catch (e) {
       return json({ ok: false, error: String(e && e.message || e).slice(0, 300) }, 502);
     }
-    return json({ ok: true, result: filtered.length });
+    return json({ ok: true, committed: filtered.length, result: filtered.length });
   }
   if (path === "/lake/query" && method === "POST") {
     let body = null;
@@ -2383,7 +2383,7 @@ var worker_default = {
     } catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", event: "fleet-heartbeat-write-failed", error: String(e && e.message || e) })); }
     if (err) throw err;
   },
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-infra", "AI", "AUDIT");
     const url = new URL(request.url);
     const path = url.pathname;
@@ -2404,7 +2404,9 @@ var worker_default = {
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     // LAKE-SPINE-1: these routes read and move telemetry, so they await the token check (the shared check below does not).
     if (path.indexOf("/lake/") === 0) {
-      if (!(await auth(token, env))) return new Response("unauthorized", { status: 401, headers: cors });
+      // LAKE-SPINE-2.1: the ingest door also admits the fleet dashboard's service binding (INTERNAL-CALLER-PROPS-1, ctx.props.caller), never a copy of the token; every other lake route needs the token.
+      const viaBinding = path === "/lake/ingest" && !!ctx && !!ctx.props && ctx.props.caller === "qnfo-fleet-dashboard";
+      if (!viaBinding && !(await auth(token, env))) return new Response("unauthorized", { status: 401, headers: cors });
       return lakeRoute(request, env, url, path, method, cors);
     }
     if (path === "/cred/status" && method === "GET") {

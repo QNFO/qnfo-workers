@@ -95,7 +95,7 @@ const makeEnv = (o = {}) => {
           if (/FROM ai_spend_ledger/.test(sql)) return { results: st.spendRows };
           if (/FROM cloud_ops_events WHERE kind = 'cascade-shadow-run'/.test(sql)) {
             const by = {};
-            st.events.filter((e) => e.kind === "cascade-shadow-run" && e.ts > q.args[0]).forEach((e) => { by[e.status] = (by[e.status] || 0) + 1; });
+            st.events.filter((e) => e.kind === "cascade-shadow-run" && e.ts > q.args[0] && (!q.args[1] || q.args[1].replace(/%/g, "") === '"rev":' + e.meta.rev + ",")).forEach((e) => { by[e.status] = (by[e.status] || 0) + 1; });
             return { results: Object.entries(by).map(([status, n]) => ({ status, n })) };
           }
           return { results: [] };
@@ -189,8 +189,56 @@ try {
     const w = await load();
     const { env, st } = makeEnv({ waCap: "1", spendRows: [{ provider: "workers-ai", usd: 500 }] });
     const r = await post(w, env, { confirm: true });
-    ok(r.status === 200 && r.json.lean === true && r.json.fixtures === 12 && r.json.assessments.length === 1 && r.json.model_calls === 24, "a breached workers-ai cap runs lean: 12 fixtures, one candidate, 24 calls", { lean: r.json.lean, fixtures: r.json.fixtures, calls: r.json.model_calls, gov: r.json.gov_note });
-    ok(st.events.filter((e) => e.kind === "cascade-shadow").length === 1 && st.events.find((e) => e.kind === "cascade-shadow").meta.lean === true, "the lean flag is on the recorded row");
+    ok(r.status === 200 && r.json.lean === true && r.json.fixtures === 12 && r.json.assessments.length === 3 && r.json.model_calls === 48, "a breached workers-ai cap runs lean: 12 fixtures, every candidate, 48 calls (CASCADE-SHADOW-1.1)", { lean: r.json.lean, fixtures: r.json.fixtures, calls: r.json.model_calls, gov: r.json.gov_note });
+    ok(st.events.filter((e) => e.kind === "cascade-shadow").length === 3 && st.events.find((e) => e.kind === "cascade-shadow").meta.lean === true && st.events.find((e) => e.kind === "cascade-shadow-run").meta.rev === 2, "the lean flag is on the recorded row");
+  }
+  {
+    // CASCADE-SHADOW-1.1: a run of an older harness revision does not close the gate; the meter is recorded next to the rate-table neurons
+    const w = await load();
+    const { env, st } = makeEnv({ usage: () => ({ prompt_tokens: 100, completion_tokens: 50, neurons: 2 }) });
+    st.events.push({ kind: "cascade-shadow-run", id: "old", ts: new Date().toISOString(), meta: { rev: 1 }, status: "ok" });
+    const r = await post(w, env, { confirm: true });
+    ok(r.json.run_id && r.json.rev === 2, "a finished run of revision 1 does not close the gate for revision 2", r.json.skipped);
+    ok(r.json.assessments.every((a) => a.neurons_meter_incumbent === 48 && a.neurons_meter_candidate === 48), "usage.neurons is recorded as neurons_meter_incumbent and neurons_meter_candidate", r.json.assessments[0]);
+  }
+  {
+    // CASCADE-SHADOW-1.2: the stage decision from the last three finished runs
+    const decide = async (o) => {
+      const w = await load();
+      const { env } = makeEnv();
+      const decisions = [];
+      const runs = o.runs; // newest first: [{ candidate: verdict }]
+      env.QNFO_AUDIT = { prepare(sql) {
+        const q = { args: [] };
+        q.bind = (...a) => { q.args = a; return q; };
+        q.first = async () => /cascade_stage_decision/.test(sql) ? (o.mode ? { value: o.mode } : null) : /kind = 'cascade-shadow-decision'/.test(sql) ? (decisions.length ? { meta: JSON.stringify(decisions[decisions.length - 1]) } : null) : null;
+        q.all = async () => {
+          if (/kind = 'cascade-shadow-run'/.test(sql)) return { results: runs.map((r, i) => ({ id: "cascade-shadow-run-r" + i, ts: "t" + i, meta: JSON.stringify({ run_id: "r" + i }) })) };
+          if (/kind = 'cascade-shadow' AND id LIKE/.test(sql)) { const i = Number(/cascade-shadow-r(\d+)-/.exec(q.args[0])[1]); return { results: Object.entries(runs[i]).map(([c, v]) => ({ meta: JSON.stringify({ candidate: c, verdict: v, noise_floor: 0.05, projected_saving_pct: 60 }) })) }; }
+          return { results: [] };
+        };
+        q.run = async () => { if (/cascade-shadow-decision/.test(sql)) decisions.push(JSON.parse(q.args[3])); return { meta: {} }; };
+        return q;
+      } };
+      const resp = await w.fetch(new Request("https://ai.test/internal/eval/cascade-shadow/decision", { headers: { Authorization: "Bearer test-key" } }), env, ctx);
+      return { status: resp.status, json: await resp.json(), decisions };
+    };
+    const Q = "@cf/qwen/qwen3-30b-a3b-fp8", INC = "@cf/openai/gpt-oss-120b";
+    const e3 = [{ [Q]: "eligible" }, { [Q]: "eligible" }, { [Q]: "eligible" }];
+    let d = await decide({ runs: e3 });
+    ok(d.status === 200 && d.json.choice === INC && d.json.would_be_choice === Q && d.json.mode === "shadow" && d.json.runs_read === 3 && d.json.noise_floor === 0.05, "shadow mode returns the incumbent with the would-be choice in the body", d.json);
+    ok(d.decisions.length === 1 && d.decisions[0].choice === Q, "a change of choice is recorded as one cascade-shadow-decision row", d.decisions);
+    d = await decide({ runs: e3, mode: "live" });
+    ok(d.json.choice === Q && d.json.projected_saving_pct === 60 && d.json.stage === "decision-classify", "live mode returns the promoted candidate", d.json);
+    d = await decide({ runs: [{ [Q]: "worse" }, { [Q]: "eligible" }, { [Q]: "eligible" }], mode: "live" });
+    ok(d.json.choice === INC && /incumbent stays/.test(d.json.reason), "a worse latest run returns the incumbent at once (kill rule)", d.json);
+    d = await decide({ runs: e3.slice(0, 2), mode: "live" });
+    ok(d.json.choice === INC && d.json.runs_read === 2, "fewer than three runs keep the incumbent", d.json);
+    d = await decide({ runs: [{ [Q]: "eligible" }, { [Q]: "not_cheaper" }, { [Q]: "eligible" }], mode: "live" });
+    ok(d.json.choice === INC, "one non-eligible run in the three blocks promotion", d.json);
+    const w2 = await load();
+    const r401 = await w2.fetch(new Request("https://ai.test/internal/eval/cascade-shadow/decision", { headers: { Authorization: "Bearer bad" } }), makeEnv().env, ctx);
+    ok(r401.status === 401, "the decision route needs the router key");
   }
   {
     // reasoning model that spends its budget on thought: asked once more, scored on the second reply

@@ -554,5 +554,6 @@ check("purge floor: a 4-row partial run against 114 rows is refused", not fa.pur
 check("purge floor: a run covering 80 percent of the table purges", fa.purge_allowed(100, 80) and not fa.purge_allowed(100, 79))
 check("purge floor: a purge-skipped warning is an actionable finding", any("purge skipped" in x for x in fa.actionable({}, {}, [], "purge skipped: run classified 4 workers")))
 
+check("purge skip: a guarded skip does not fail the run (PURGE-SKIP-NOT-FAIL-1)", "rc = 1 if (failed or (purge_err and not purge_skipped)) else 0" in open("scripts/fleet-autoaudit.py", encoding="utf-8").read())
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)

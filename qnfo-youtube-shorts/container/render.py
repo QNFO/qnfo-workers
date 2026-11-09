@@ -201,7 +201,7 @@ def render(job, out):
                 b["bg"] = str(out / f"bg{i}.jpg")
             except Exception as e:
                 print("bg skipped:", repr(e), file=sys.stderr)
-    spec = {"theme": theme, "beats": [{k: v for k, v in b.items() if k not in ("sentences", "bg_b64")} for b in beats]}
+    spec = {"theme": theme, "slug": job.get("slug", ""), "beats": [{k: v for k, v in b.items() if k not in ("sentences", "bg_b64")} for b in beats]}
     (out / "spec.json").write_text(json.dumps(spec), "utf8")
     env = dict(os.environ, SHORT_SPEC=str(out / "spec.json"), SHORT_FONT=FONT)
     t_voice = time.monotonic()

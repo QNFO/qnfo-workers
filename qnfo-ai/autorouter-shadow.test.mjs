@@ -30,6 +30,8 @@ const rows = [
 const calls = [];
 const events = [];
 let failAutoRouter = false;
+let judgeMode = "auto"; // auto | baseline | tie | split | fail
+let selectedModel = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 const waits = [];
 const ctx = { props: {}, waitUntil(p) { waits.push(Promise.resolve(p).catch(() => {})); } };
 const env = () => ({
@@ -53,9 +55,15 @@ const env = () => ({
     async run(model, input, opts) {
       calls.push({ model, input, opts });
       if (failAutoRouter && model === "cloudflare/auto") throw new Error("provider details not returned");
-      if (model === "@cf/zai-org/glm-5.3-flash") return { response: "B", usage: { prompt_tokens: 10, completion_tokens: 1 } };
+      if (model === "@cf/zai-org/glm-5.3-flash" || model === "@cf/openai/gpt-oss-20b") {
+        if (judgeMode === "fail") throw new Error("judge down");
+        const c = input.messages[0].content;
+        const autoFirst = c.indexOf("Answer A:\nA comparable") >= 0;
+        const v = judgeMode === "tie" ? "tie" : judgeMode === "split" ? "B" : judgeMode === "auto" ? (autoFirst ? "A" : "B") : (autoFirst ? "B" : "A");
+        return { response: v, usage: { prompt_tokens: 10, completion_tokens: 1 } };
+      }
       return {
-        model: "openai/gpt-5-mini",
+        model: selectedModel,
         response: "A comparable evaluation response",
         usage: { prompt_tokens: 10, completion_tokens: 5 }
       };
@@ -83,9 +91,36 @@ try {
   ok(calls.filter((c) => c.model === "cloudflare/auto").every((c) => c.opts.gateway.id === "default" && c.opts.gateway.cacheTtl === 0), "replays use uncached Cloudflare Auto Router on the existing gateway", calls.map((c) => c.opts));
   ok(calls.every((c) => c.input.messages.length === 1 && !/user@example.org/.test(JSON.stringify(c.input))), "obvious email addresses are excluded and each replay is bounded to one logged prompt");
   ok(events.length === 5 && events.every((e) => e.args[2].indexOf("A safe evaluation prompt") < 0 && !e.args[3].includes("Historical answer")), "event records contain hashes and metrics, not prompts or responses", events);
-  ok(r.json.results.every((x) => x.quality_verdict === "auto_better" && x.quality_judge_model === "@cf/zai-org/glm-5.3-flash" && x.exact_match === false && x.auto_cost_estimate_usd > 0 && x.cost_delta_usd === Math.round((x.auto_cost_estimate_usd - x.baseline_cost_usd) * 1e6) / 1e6), "each replay is judged pairwise by a disjoint-family model and known model costs are compared with the historical ladder cost", r.json.results);
-  ok(calls.filter((c) => c.model === "@cf/zai-org/glm-5.3-flash").length === 5, "a disjoint-family judge scores every successful replay", calls.map((c) => c.model));
+  ok(r.json.results.every((x) => x.quality_verdict === "better" && x.judge_orders.join() === "better,better" && x.quality_judge_model === "@cf/zai-org/glm-5.3-flash" && x.exact_match === false && x.auto_cost_estimate_usd > 0 && x.cost_delta_usd === Math.round((x.auto_cost_estimate_usd - x.baseline_cost_usd) * 1e6) / 1e6), "each replay is judged pairwise by a disjoint-family model and known model costs are compared with the historical ladder cost", r.json.results);
+  ok(calls.filter((c) => c.model === "@cf/zai-org/glm-5.3-flash").length === 10, "a disjoint-family judge scores every successful replay once per answer order", calls.map((c) => c.model));
   ok(r.json.quality_comparison.includes("disjoint"), "the recorded quality comparison states how it was judged", r.json.quality_comparison);
+
+  ok(calls.filter((c) => c.model === "cloudflare/auto").every((c) => c.opts.extraHeaders && c.opts.extraHeaders["cf-aig-allowed-providers"] === "workers-ai"), "AUTOROUTER-EVAL-1.3: every replay restricts the Auto Router pool to Workers AI by header", calls.map((c) => c.opts));
+  ok(events.every((e) => JSON.parse(e.args[3]).judge_model === "@cf/zai-org/glm-5.3-flash" && JSON.parse(e.args[3]).judge_orders.length === 2), "the event meta carries judge_model and both order verdicts");
+
+  // AUTOROUTER-QUALITY-1: the other verdicts and the failure case
+  const one = async (mode) => {
+    judgeMode = mode; calls.length = 0; events.length = 0;
+    const rr = await post({ confirm: true, limit: 1 });
+    await Promise.all(waits);
+    return rr.json.results[0];
+  };
+  let x = await one("baseline");
+  ok(x.quality_verdict === "worse" && x.judge_orders.join() === "worse,worse", "baseline preferred in both orders reads worse", x);
+  x = await one("tie");
+  ok(x.quality_verdict === "same", "tie in both orders reads same", x);
+  x = await one("split");
+  ok(x.quality_verdict === "split" && x.judge_orders.join() === "better,worse", "a position-biased judge reads split", x);
+  x = await one("fail");
+  ok(x.quality_verdict === "unjudged" && x.status === "ok", "a judge failure reads unjudged and keeps the replay", x);
+  judgeMode = "auto";
+
+  // AUTOROUTER-EVAL-1.3: a non-@cf selected model is skipped with no hashes and no judge
+  selectedModel = "anthropic/claude-haiku-5.5";
+  x = await one("auto");
+  ok(x.status === "skipped_pool" && x.auto_response_sha256 === null && x.baseline_response_sha256 === null && x.quality_verdict === "unjudged" && calls.filter((c) => c.model !== "cloudflare/auto").length === 0, "a non-@cf selected model is recorded as skipped_pool without hashes or a judge", x);
+  ok(events.length === 1 && events[0].args[4] === "skipped_pool" && JSON.parse(events[0].args[3]).auto_response_sha256 === null, "the skipped_pool event is written with status skipped_pool");
+  selectedModel = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 
   rows.splice(0, rows.length, { ...rows[1], id: "failed-sample" });
   calls.length = 0;
