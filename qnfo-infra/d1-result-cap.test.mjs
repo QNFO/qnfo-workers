@@ -4,7 +4,7 @@ import vm from "node:vm";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8").split(String.fromCharCode(13)).join("");
 const i = src.indexOf("var D1_RESULT_NEAR_BYTES"), j = src.indexOf("\n", src.indexOf("return out;\n}", i) + 13);
 if (i < 0 || j < i) throw new Error("block not found");
-const sb = { Date, Math, Number, String, JSON, Array, Promise, VERSION: "t" };
+const sb = { Date, Math, Number, String, JSON, Array, Promise, crypto: { randomUUID: () => "u" }, VERSION: "t" };
 vm.createContext(sb);
 vm.runInContext(src.slice(i, j) + "\n;__x = { d1ReadAll, d1ResultSizeError };", sb);
 const X = sb.__x;

@@ -42,9 +42,7 @@ INSERT OR IGNORE INTO analytics_metric_triggers
   (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 VALUES
   ('paper_version_drifted_7d', 'A served paper version changed in place', 'registry', 'gt', 0, 5,
-   'PAPER-PIDS-PIN-2: select slug, version, pinned_sha256, served_sha256, seen_at from paper_version_drift order by seen_at desc. A body was edited under a version that had already been served; revise the paper under a new version instead of editing in place, and find the writer that skipped the version bump (paper_change_ledger shows change_actor).
-code-task: repo=qnfo-workers path=qnfo-gateway/worker.js
-code-anchor: async function handlePaperVersion(env, slug, version, head) {',
+   'PAPER-PIDS-PIN-2: select slug, version, pinned_sha256, served_sha256, seen_at from paper_version_drift order by seen_at desc. A body was edited under a version that had already been served; revise the paper under a new version instead of editing in place, and find the writer that skipped the version bump (paper_change_ledger shows change_actor).',
    'qnfo-gateway', 'agent_issues', 2, 1,
    'PAPER-PIDS-PIN-2: the trigger is the closing probe for in-place edits of served versions.');
 

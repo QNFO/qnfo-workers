@@ -93,7 +93,7 @@ async function d1CapEvent(env, mode, sql, bytes, rows) {
     const db = env.AUDIT;
     if (!db) return;
     await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'd1_result_cap_near', ?3, ?4, 'qnfo-infra', 'warn')").bind(
-      "d1cap-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36),
+      "d1cap-" + crypto.randomUUID(),
       new Date().toISOString(),
       ("D1 result near the 50 MB cap (" + mode + "): " + String(sql).slice(0, 160)).slice(0, 300),
       JSON.stringify({ mode: mode, bytes: bytes, rows: rows, v: VERSION })
