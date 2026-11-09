@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.69.5-codeagent";
+var VERSION = "2.69.6-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -5126,7 +5126,12 @@ async function compatSnapshot(env, opts) {
   try {
     if (!(opts && opts.force) && env.QNFO_AUDIT) {
       const last = await env.QNFO_AUDIT.prepare("SELECT MAX(checked_at) AS t FROM worker_compat_state").first().catch(function() { return null; });
-      if (last && last.t && Date.now() - Date.parse(last.t) < 6 * 36e5) { out.ok = true; out.skipped = "newest snapshot " + last.t + " is under 6 h old"; return out; }
+      if (last && last.t && Date.now() - Date.parse(last.t) < 6 * 36e5) {
+        // COMPAT-SNAPSHOT-FRESH-1 (2026-11-09): the 6 h throttle held a snapshot taken at 04:32 while 28 workers advanced their date at 07:36-07:49, and the portfolio autopilot
+        // re-filed eight upgrade-compat gaps from the old rows. A compat-advancing deploy recorded after the newest snapshot lifts the throttle, so the next hourly tick refreshes it.
+        const adv = await env.QNFO_AUDIT.prepare("SELECT MAX(deployed_at) AS t FROM deployment_history WHERE status = 'success' AND notes LIKE '%compat_date=%->%'").first().catch(function() { return null; });
+        if (!(adv && adv.t && String(adv.t) > String(last.t))) { out.ok = true; out.skipped = "newest snapshot " + last.t + " is under 6 h old"; return out; }
+      }
     }
     const cfH = { "Authorization": "Bearer " + env.CF_API_TOKEN };
     const lr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts?per_page=200", { headers: cfH });
