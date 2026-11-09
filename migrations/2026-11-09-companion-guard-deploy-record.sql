@@ -9,7 +9,7 @@
 -- CAUSE-MAPPED: registers no metric_registry row.
 
 CREATE TABLE IF NOT EXISTS bak_20261109_companion_guard_gaps AS
-SELECT id, kind, entity, status FROM portfolio_gaps WHERE entity IN ('qnfo-companion-guard', 'W.qnfo-companion-guard');
+SELECT kind, entity, day, status FROM portfolio_gaps WHERE entity IN ('qnfo-companion-guard', 'W.qnfo-companion-guard');
 
 INSERT INTO deployment_history (resource_type, resource_name, action, version_id, deployed_by, deployed_at, status, notes)
 SELECT 'worker', 'qnfo-companion-guard', 'deployed', '1.1.0', 'session:companion-guard-record-1', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'success',
