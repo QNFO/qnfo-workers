@@ -1009,7 +1009,15 @@ export async function buildCode(root, deps, live) {
   }
   addMigrations(g, root);
   addWorkflows(g, root, liveTables);
-  const retired = readdirSync(root).filter((d) => !d.startsWith(".") && (existsSync(join(root, d, "RETIRED")) || existsSync(join(root, d, "FOLDED"))));
+  const isMarked = (base, d) => existsSync(join(base, d, "RETIRED")) || existsSync(join(base, d, "FOLDED"));
+  const retired = readdirSync(root).filter((d) => !d.startsWith(".") && isMarked(root, d));
+  // ARCHIVE-MARKER-READ-2 (RM-REPO-DEAD-SOURCES-1): archive/<name>/ keeps its RETIRED or FOLDED marker, so archived names stay retired
+  const archiveRoot = join(root, "archive");
+  if (existsSync(archiveRoot)) {
+    for (const d of readdirSync(archiveRoot)) {
+      if (!d.startsWith(".") && !retired.includes(d) && isMarked(archiveRoot, d)) retired.push(d);
+    }
+  }
   const repoDocs = addRepoDocs(g, root, codeNames, retired); // REPO-GRAPH-1: repo:* and doc:* nodes from repos.json and the Markdown tree
   g.stats.workers = workers.length; g.stats.repos = repoDocs.repos; g.stats.docs = repoDocs.docs;
   return { g, codeWorkers, codeSql, liveTables, repoDocs };

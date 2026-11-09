@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.96.1";
+var VERSION = "1.99.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -2549,7 +2549,7 @@ var AREA_REGISTRY = [
   { id: "reach", name: "Reach and growth", short: "Reach", what: "who reads it: pageviews, referrers, search, outreach, subscribers, attention", sources: ["v_metric_trigger_state", "metric_history", "outreach_queue"],
     rx: /subscri|pageview|referr|social|outreach|work_with_me|inbound_contact|attention|impression|engage|reply_rate|distribution|buffer/, star: { key: "pageviews_30d", label: "Pageviews, 30d", unit: "", good: "up" },
     flows: ["outreach"], widgets: ["progress", "controls"], controls: ["social_paused"],
-    pages: [{ key: "analytics", label: "Google Analytics 4", href: "/analytics", feed: "/api/ga4/overview" }],
+    pages: [{ key: "analytics", label: "Google Analytics 4", href: "/analytics", feed: "/api/ga4/overview" }, { key: "search", label: "Search Console", href: "/search", feed: "/api/gsc/overview" }],
     queue: { sources: ["inbox"], rx: /subscriber|social|bluesky|linkedin|mastodon|outreach|audience|inbox|pageview|referrer|buffer|newsletter|substack/i } },
   { id: "autonomy", name: "Autonomy loop", short: "Autonomy", what: "how the fleet works on itself: issues, the code loop, remedies, dispatches, the owner queue", sources: ["v_metric_trigger_state", "metric_history", "agent_issues", "code_tasks", "human_actions"],
     rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/, star: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
@@ -2715,6 +2715,7 @@ var API_INDEX = [
   { path: "/api/content", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "content-pipeline/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "v_content_pipeline, living-paper, q08-signal", what: "The content production line end to end." },
   { path: "/api/changelog", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
   { path: "/api/ga4", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
+  { path: "/api/gsc/overview", area: "reach", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "gsc-overview/v1", cache: "public 120s, stale 300s, in-isolate 5 min", freshness: "read from the Search Console API when the page opens; 28 days ending 3 days ago and the 28 before", what: "Google Search Console: clicks, impressions, CTR and position with the previous window, the daily series, top queries, pages, countries and devices." },
   { path: "/api/ga4/overview", area: "reach", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "ga4-overview/v1", cache: "public 120s, stale 300s, in-isolate 5 min", freshness: "read from the GA4 Data API when the page opens; 28 complete UTC days and a 30-minute realtime count", what: "Google Analytics 4: 28-day totals with the previous window, the daily series, top pages, channels, countries, devices, hosts and realtime." },
   { path: "/api/cost", area: "cost", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-cost/v1", cache: "public 15s, ETag", freshness: "v_cost_run_rate, cost_daily, ai_call_counters and fleet_budget read at request time", what: "Spend: the 30-day run-rate by source, 14 days of daily spend, Workers AI calls, errors and neurons by model and by worker over 7 days, and every spend budget with its headroom." },
   { path: "/api/q08-review", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
@@ -4171,6 +4172,16 @@ if (path === "/health") {
       return rtRead(request, url, gv, { schema: "ga4-overview/v1", cache: "public, max-age=120, stale-while-revalidate=300" });
     }
     return new Response(ga4Html(gv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
+  }
+  // GOOGLE-HUB-1: the Search Console read and its page, open and read-only.
+  if ((path === "/search" || path === "/search/" || path === "/api/gsc/overview") && request.method === "GET") {
+    let sv = null;
+    try { sv = await gscOverviewData(env); } catch (e) { console.error(JSON.stringify({ worker: NAME, where: "gscOverview", error: reachErr(e) })); }
+    if (path === "/api/gsc/overview") {
+      if (!sv) return json({ ok: false, error: "Search Console overview unavailable" }, 503);
+      return rtRead(request, url, sv, { schema: "gsc-overview/v1", cache: "public, max-age=120, stale-while-revalidate=300" });
+    }
+    return new Response(gscHtml(sv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
   }
   if (path === "/api/ga4") {
     if (request.method === "POST") {
@@ -6613,6 +6624,111 @@ async function gscIngest(env, opts) {
   }
   if (out.error) console.error(JSON.stringify({ worker: NAME, where: "gscIngest", day, error: out.error }));
   return out;
+}
+// GOOGLE-HUB-1: the Search Console read behind /search and /api/gsc/overview. Mirrors ga4OverviewData: the last 28 complete days
+// (ending today minus the GSC lag) beside the 28 before for deltas, read live from searchAnalytics.query, cached 5 minutes.
+// A failed query is null with its reason in errors, never a zero.
+var GSC_OVERVIEW_TTL_MS = 3e5;
+var GSC_OVERVIEW_DAYS = 28;
+var gscOverviewCache = null;
+async function gscSafe(errors, panel, token, site, body) {
+  try { return await gscQuery(token, site, body); } catch (e) { errors.push({ panel: panel, error: reachErr(e) }); return null; }
+}
+// Pure: the totals row of one searchAnalytics answer, or nulls when the query failed or returned no row.
+function gscTotalsOf(rep) {
+  const r = rep && rep.rows && rep.rows[0];
+  const n = function(k) { const v = r ? Number(r[k]) : NaN; return Number.isFinite(v) ? v : null; };
+  return { clicks: n("clicks"), impressions: n("impressions"), ctr: n("ctr"), position: n("position") };
+}
+function gscKeyRows(rep) {
+  return ((rep && rep.rows) || []).map(function(r) { return { key: String((r.keys && r.keys[0]) || ""), clicks: Number(r.clicks) || 0, impressions: Number(r.impressions) || 0, ctr: Number(r.ctr) || 0, position: Number(r.position) || 0 }; });
+}
+async function gscOverviewData(env, opts) {
+  const now = (opts && opts.nowMs) || Date.now();
+  if (gscOverviewCache && now - gscOverviewCache.at < GSC_OVERVIEW_TTL_MS) return gscOverviewCache.v;
+  const errors = [];
+  const key = ga4ParseKey(env.GA4_SA_KEY);
+  if (!key) throw new Error(env.GA4_SA_KEY ? "GA4_SA_KEY is not a service-account JSON key" : "GA4_SA_KEY is not set");
+  let site = GSC_DEFAULT_SITE;
+  try { const c = await d1all(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'gsc_site_url'"); if (c.length && String(c[0].value).trim()) site = String(c[0].value).trim(); } catch (e) { errors.push({ panel: "site", error: reachErr(e) }); }
+  const token = await ga4AccessToken(key, now, GSC_SCOPE);
+  const DAY = 864e5;
+  const iso = function(ms) { return new Date(ms).toISOString().slice(0, 10); };
+  const end = iso(now - GSC_LAG_DAYS * DAY);
+  const start = iso(now - (GSC_LAG_DAYS + GSC_OVERVIEW_DAYS - 1) * DAY);
+  const prevEnd = iso(now - (GSC_LAG_DAYS + GSC_OVERVIEW_DAYS) * DAY);
+  const prevStart = iso(now - (GSC_LAG_DAYS + 2 * GSC_OVERVIEW_DAYS - 1) * DAY);
+  const cur = { startDate: start, endDate: end };
+  const prev = { startDate: prevStart, endDate: prevEnd };
+  const res = await Promise.all([
+    gscSafe(errors, "totals", token, site, Object.assign({ rowLimit: 1 }, cur)),
+    gscSafe(errors, "previous totals", token, site, Object.assign({ rowLimit: 1 }, prev)),
+    gscSafe(errors, "daily series", token, site, Object.assign({ dimensions: ["date"], rowLimit: 100 }, cur)),
+    gscSafe(errors, "top queries", token, site, Object.assign({ dimensions: ["query"], rowLimit: 25 }, cur)),
+    gscSafe(errors, "top pages", token, site, Object.assign({ dimensions: ["page"], rowLimit: 25 }, cur)),
+    gscSafe(errors, "countries", token, site, Object.assign({ dimensions: ["country"], rowLimit: 15 }, cur)),
+    gscSafe(errors, "devices", token, site, Object.assign({ dimensions: ["device"], rowLimit: 5 }, cur))
+  ]);
+  const totals = gscTotalsOf(res[0]);
+  const prevTotals = gscTotalsOf(res[1]);
+  const deltas = {};
+  for (const k of ["clicks", "impressions"]) deltas[k] = totals[k] !== null && prevTotals[k] ? (totals[k] - prevTotals[k]) / prevTotals[k] : null;
+  const seen = {};
+  for (const r of gscKeyRows(res[2])) seen[r.key] = r;
+  const daily = [];
+  for (let i = 0; i < GSC_OVERVIEW_DAYS; i++) {
+    const d = iso(now - (GSC_LAG_DAYS + GSC_OVERVIEW_DAYS - 1 - i) * DAY);
+    const s = seen[d];
+    daily.push({ day: d, clicks: s ? s.clicks : null, impressions: s ? s.impressions : null });
+  }
+  const v = {
+    ok: true, schema: "gsc-overview/v1", as_of: new Date(now).toISOString(), version: VERSION, site: site,
+    range: { start: start, end: end, days: GSC_OVERVIEW_DAYS }, previous: { start: prevStart, end: prevEnd },
+    totals: totals, previous_totals: prevTotals, deltas: deltas, daily: daily,
+    queries: gscKeyRows(res[3]), pages: gscKeyRows(res[4]), countries: gscKeyRows(res[5]), devices: gscKeyRows(res[6]),
+    errors: errors,
+    notes: [
+      "Search Console data lags by about " + GSC_LAG_DAYS + " days; the window ends " + GSC_LAG_DAYS + " days ago.",
+      "A day with no search traffic is absent from the API and drawn as not measured, never as a zero.",
+      "Position is the average rank over the window; lower is better. Query and page rows are the top 25 by clicks."
+    ]
+  };
+  gscOverviewCache = { at: now, v: v };
+  return v;
+}
+function gscHtml(v, holder) {
+  const head = fleetHead("Search Console");
+  const css = '<style>' + KPI_CSS + '.ga-d{display:block;font-size:11px;opacity:.75;margin-top:2px}.ga-up{color:#0a7a3d}.ga-down{color:#b3261e}</style>';
+  if (!v) {
+    return head + css + fleetTop("search", false, holder) + '<main class="wrap fl kp"><h1>Search Console</h1>'
+      + '<p class="kp-lede">The Search Console read failed, so this page shows no number. The reason is in the ledger (cloud_ops_events kind gsc-ingest) and in the worker logs; a failed read is never shown as a zero.</p>'
+      + '<p><a href="/api/gsc/overview">The read as JSON</a> &middot; <a href="/analytics">Google Analytics 4</a></p></main>' + FLEET_SHELL_JS + '</body></html>';
+  }
+  const T = v.totals || {};
+  const D = v.deltas || {};
+  const pct = function(x) { return x === null || x === undefined ? kpiU("not returned") : esc((Math.round(x * 1000) / 10) + "%"); };
+  const tiles = kpiTile("Clicks", T.clicks === null ? kpiU("not returned") : esc(kpiFmt(T.clicks)), ga4Delta(D.clicks))
+    + kpiTile("Impressions", T.impressions === null ? kpiU("not returned") : esc(kpiFmt(T.impressions)), ga4Delta(D.impressions))
+    + kpiTile("Click-through rate", pct(T.ctr), "")
+    + kpiTile("Average position", T.position === null ? kpiU("not returned") : esc(String(Math.round(T.position * 10) / 10)), "");
+  const rowsOf = function(list, label) {
+    return list.length ? kpiTable([[label], ["Clicks", 1], ["Impressions", 1], ["CTR", 1], ["Position", 1]], list.map(function(r) {
+      return '<tr><td>' + esc(r.key) + '</td><td class="n">' + esc(kpiFmt(r.clicks)) + '</td><td class="n">' + esc(kpiFmt(r.impressions)) + '</td><td class="n">' + esc((Math.round(r.ctr * 1000) / 10) + "%") + '</td><td class="n">' + esc(String(Math.round(r.position * 10) / 10)) + '</td></tr>';
+    })) : '<p class="meta">Search Console returned no rows for this window.</p>';
+  };
+  const card = function(title, dim, list, label) { return '<div class="kp-card"><h3>' + title + '</h3>' + kpiSrc("Search Console searchAnalytics " + dim + ", " + v.range.days + " days", v.as_of, v.range.end) + rowsOf(list, label) + '</div>'; };
+  const trend = '<div class="kp-card"><h3>Daily series</h3>' + kpiSrc("Search Console date, " + v.range.days + " days", v.as_of, v.range.end)
+    + (v.daily.some(function(d) { return d.clicks !== null; }) ? kpiDualBars(v.daily, "clicks", "impressions", "clicks", "impressions") : '<p class="meta">Search Console returned no daily rows for this window.</p>') + '</div>';
+  return head + css + fleetTop("search", false, holder) + '<main class="wrap fl kp"><h1>Search Console</h1>'
+    + '<p class="kp-lede">How people find ' + esc(v.site) + ' in Google Search: clicks, impressions, the queries and pages that earn them, and the countries and devices they come from, read from the Search Console API when you open this page. The window is the ' + v.range.days + ' days ending ' + esc(v.range.end) + ' (data lags about ' + GSC_LAG_DAYS + ' days).</p>'
+    + '<nav class="kp-jump" aria-label="Sections"><a href="#summary">Summary</a><a href="#queries">Queries</a><a href="#pages">Pages</a><a href="#audience">Audience</a><a href="/api/gsc/overview">The same data as JSON</a><a href="/analytics">Google Analytics 4</a></nav>'
+    + '<section class="kp-sec" id="summary"><h2>Summary</h2><div class="kp-tiles">' + tiles + '</div>' + trend + '</section>'
+    + '<section class="kp-sec" id="queries"><h2>Queries</h2>' + card("Top queries", "query", v.queries, "Query") + '</section>'
+    + '<section class="kp-sec" id="pages"><h2>Pages</h2>' + card("Top pages", "page", v.pages, "Page") + '</section>'
+    + '<section class="kp-sec" id="audience"><h2>Audience</h2><div class="kp-two">' + card("Countries", "country", v.countries, "Country") + card("Devices", "device", v.devices, "Device") + '</div></section>'
+    + '<section class="kp-sec" id="notes"><h2>What this page does and does not see</h2>' + kpiNotes(v.notes)
+    + (v.errors.length ? '<p class="meta">Queries that failed in this read: ' + esc(v.errors.map(function(e) { return e.panel + " (" + e.error + ")"; }).join(", ")) + '. Those panels are shown as not measured.</p>' : '<p class="meta">Every query in this read succeeded.</p>') + '</section>'
+    + '<p class="fl-foot">Computed ' + esc(String(v.as_of).slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + '; cached for ' + (GSC_OVERVIEW_TTL_MS / 1000) + ' s.</p></main>' + FLEET_SHELL_JS + '</body></html>';
 }
 // ==== GA4-RICH-1 (1.57.0, 2026-10-25): the full Google Analytics 4 read ====
 // GA4-RICH-1 (1.57.0, pillar reach; owner directive 2026-10-25: "ensure fleet dashboard metrics contain full-scope of rich
