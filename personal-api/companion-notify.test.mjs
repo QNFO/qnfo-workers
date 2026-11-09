@@ -102,6 +102,8 @@ console.log("\n[the page opens the mood picker]");
   const html = C.PAGE_HTML;
   ok("Today's mood card has an anchor", html.includes("id:'mood-card'"));
   ok("the #mood hash goes to Today and scrolls to it", /q\.mood!==undefined\)\{go\('today'\)[^}]*mood-card/.test(html));
+  // COMPANION-TESTS-2: the default view is set first, then the hash, so #focus (and every other deep link) is not overwritten by Today (at start and after sign-in).
+  ok("a deep link is applied after the default view, never before it", html.includes("go('today');fromHash()") && !html.includes("fromHash();go('today')"));
   ok("SW_JS has no template-literal hazards (no backtick, no ${})", !C.SW_JS.includes("`") && !C.SW_JS.includes("${"));
 }
 

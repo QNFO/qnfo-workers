@@ -3457,7 +3457,7 @@ function getKey(){try{var k=localStorage.getItem('cmp-key');if(k)return k;var o=
 function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='Bearer '+k;return h}
 function showLogin(){closeGp();$('composer').classList.add('hide');Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
 function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
-function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
+function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');go('today');fromHash()}).catch(warn)}
 function signOut(){(qstore?qstore.clear().catch(warn):Promise.resolve()).then(function(){showPending();return api('/companion/api/logout',{json:{}})}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
 function api(path,opt){opt=opt||{};opt.headers=Object.assign(hdrs(),opt.headers||{});if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json);delete opt.json}
  var q=CMPQ.queueable(path,opt);
@@ -3682,7 +3682,7 @@ function fromHash(){var h=location.hash.slice(1);if(!h)return;if(h==='focus'){hi
 // MOOD-HASH-1: with mood prompts off Today has no mood card, so a check-in tap would land on nothing to answer: show the one-tap scale on top.
 api('/companion/api/today').then(function(t){var v=$('v-today'),c=moodCard(t);v.insertBefore(c,v.children[1]||null);c.scrollIntoView()}).catch(warn)},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
-fromHash();go('today')
+go('today');fromHash()
 window.addEventListener('hashchange',fromHash);
 window.addEventListener('online',flushQueue);document.addEventListener('visibilitychange',function(){if(!document.hidden)flushQueue()});
 flushQueue();showPending();
