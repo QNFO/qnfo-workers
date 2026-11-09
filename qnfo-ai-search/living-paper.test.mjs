@@ -85,7 +85,7 @@ const call = (path, headers) => X.worker_default.fetch(new Request("https://ask.
   const a = await call("/paper"), at = await a.text();
   ok(a.status === 200 && /data-page="living-paper"/.test(at) && /<title>Living paper/.test(at), "the picker page and its marker");
   const b = await call("/paper/live"), bt = await b.text();
-  ok(b.status === 200 && /rel="canonical" href="https:\/\/ask\.qwav\.tech\/paper\/live"/.test(bt), "a paper page has its own canonical address");
+  ok(b.status === 200 && /rel="canonical" href="https:\/\/ask.qwav.org\/paper\/live"/.test(bt), "a paper page has its own canonical address");
   const none = await call("/paper/A"), none2 = await call("/paper/live/extra");
   ok(none.status === 404 && none2.status === 404, "a malformed paper address is a 404", [none.status, none2.status]);
   ok(b.headers.get("x-frame-options") === "DENY" && b.headers.get("x-content-type-options") === "nosniff", "the page carries the security headers");
@@ -99,7 +99,7 @@ const call = (path, headers) => X.worker_default.fetch(new Request("https://ask.
   ok(/not part of it|not part of the paper/.test(bt), "the page says the explanations are not part of the paper");
   const robots = await (await call("/robots.txt")).text(), sm = await (await call("/sitemap.xml")).text(), h = await (await call("/health")).json();
   ok(/Disallow: \/api\/paper/.test(robots), "robots keeps crawlers off the paper route");
-  ok(/ask\.qwav\.tech\/paper</.test(sm), "sitemap lists the picker page");
+  ok(/ask.qwav.org\/paper</.test(sm), "sitemap lists the picker page");
   ok(h.capabilities.includes("living-paper"), "health lists the capability");
   const nav = await (await call("/concepts")).text();
   ok(/href="\/paper"[^>]*>Read</.test(nav), "the other pages link to the reader");

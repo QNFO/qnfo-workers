@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { cfSkillFor, cfSkillUrl, cfSkillNote } from "./src/lib.js";
+assert.equal(cfSkillFor("add an alarm() to this Durable Object"), "durable-objects");
+assert.equal(cfSkillFor("why does wrangler.toml fail"), "wrangler");
+assert.equal(cfSkillFor("improve LCP and lighthouse score"), "web-perf");
+assert.equal(cfSkillFor("what is 2+2"), null);
+assert.equal(cfSkillUrl("wrangler"), "https://raw.githubusercontent.com/cloudflare/skills/main/skills/wrangler/SKILL.md");
+assert.equal(cfSkillNote("wrangler", ""), "");
+assert.ok(cfSkillNote("wrangler", "x".repeat(7000), 100).includes("[skill text cut]"));
+console.log("cf-skill ok");
+import { wantsSystemMap, systemMapNote } from "./src/lib.js";
+assert.equal(wantsSystemMap("which worker binds this D1 table"), true);
+assert.equal(wantsSystemMap("write a haiku"), false);
+assert.equal(systemMapNote(""), "");
+assert.ok(systemMapNote("y".repeat(5000), 100).includes("[map cut]"));
+console.log("system-map ok");

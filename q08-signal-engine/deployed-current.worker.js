@@ -3033,6 +3033,8 @@ async function pickForecastSource(env) {
     "AND p.slug IN (SELECT slug FROM q08_audits WHERE verdict = 'pass') AND p.slug NOT IN (SELECT slug FROM q08_retractions) " +
     "AND NOT EXISTS (SELECT 1 FROM q08_forecasts f WHERE f.source_slug = p.slug) " +
     "AND (SELECT COUNT(*) FROM engine_runs e WHERE e.status = 'gate_failed' AND e.top_signal = substr('q08-forecast:' || p.slug, 1, 80)) < 2 " +
+    // Q08-FORECAST-PASS-OVER-1 (issue 9636): a source whose research came back thin 3 times in 24 h (runs 1633-1647: one essay, "4 usable sources; need 6", every 3 h) is passed over for the next essay until the window clears.
+    "AND (SELECT COUNT(*) FROM engine_runs e WHERE e.status = 'deferred' AND e.top_signal = substr('q08-forecast:' || p.slug, 1, 80) AND e.ran_at >= datetime('now', '-24 hours')) < 3 " +
     "ORDER BY COALESCE(p.feedback_score, 0) DESC, p.reads DESC, p.published_at DESC LIMIT 1"
   ).bind(new Date(Date.now() - 30 * 864e5).toISOString()).first();
 }

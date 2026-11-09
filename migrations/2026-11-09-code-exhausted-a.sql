@@ -1,7 +1,7 @@
 -- CODE-EXHAUSTED-A (2026-11-09, pillar autonomy): eleven CODE-LOOP-EXHAUSTED-1 tickets (GitHub 8731 8702 8694 8690 8678 8671 8670 8666 8664 8657 8653)
 -- name code tasks the code loop could not finish in five attempts. Each defect was implemented by hand in one pull request (branch claude/code-exhausted-a):
 --   ct_im1001933 scripts/cf_ops_actions.py      moot: def delete_pages_project( is on main since commit 1d8003195 (PR 9747)
---   ct_im1002076 scripts/fleet_graph.mjs        ARCHIVE-MARKER-READ-2: archive/<name>/ RETIRED and FOLDED markers are read again
+--   ct_im1002076 scripts/fleet_graph.mjs        moot: ARCHIVE-MARKER-READ-2 is on main (archive/<name>/ markers are read)
 --   ct_im1002107 personal-api/worker.js         MEMORY-KEYED-1: memory_keyed table, memory_set, owner-only immutable instructions, weekly canary
 --   ct_e6wbg1q46obarm q08-signal-engine         CROSS-LINK-FOLLOWUP-3: family bar and Keep exploring rendered on the server
 --   ct_im1002087 qnfo-gateway/worker.js         ATLAS-GATEWAY-ROUTE-1: /data/ai-science-failures/<file> from R2, listed in llms.txt

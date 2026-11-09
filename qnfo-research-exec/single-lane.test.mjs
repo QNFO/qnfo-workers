@@ -142,7 +142,8 @@ const put = (db, id, o = {}) => db.prepare("INSERT INTO research_queue (id, sour
   ok(JSON.stringify(cycles) === JSON.stringify([1, 2, 3]), "every re-entry is counted in terminal_rearms, which the stages never rewrite", cycles);
   ok(JSON.stringify(statuses) === JSON.stringify(["queued", "queued", "deferred"]), "the first TERMINAL_RECOVERY_MAX cycles re-enter as queued, every later one as deferred", statuses);
   ok(laneStatusFor(0) === "queued" && laneStatusFor(1) === "queued" && laneStatusFor(2) === "deferred" && laneStatusFor(9) === "deferred", "laneStatusFor is the ceiling rule");
-  ok(laneStageFor("findings", 0) === "revise" && laneStageFor("findings", 1) === "revise" && laneStageFor("findings", 2) === "ground" && laneStageFor("poison", 0) === "ground" && laneStageFor("noop", 0) === "ground", "laneStageFor: findings keep their draft for the first two cycles, every other failure drafts again");
+  ok(laneStageFor("findings", 3) === "ground" && laneStageFor("findings", 4) === "revise" && laneStageFor("findings", 9) === "revise" && laneStageFor("poison", 4) === "ground", "laneStageFor: no fifth ground draft for a row with findings (issue 8794)");
+ok(laneStageFor("findings", 0) === "revise" && laneStageFor("findings", 1) === "revise" && laneStageFor("findings", 2) === "ground" && laneStageFor("poison", 0) === "ground" && laneStageFor("noop", 0) === "ground", "laneStageFor: findings keep their draft for the first two cycles, every other failure drafts again");
   // the claim selector (the one the executor runs) never picks a deferred row; a queued row is picked
   const sel = src.match(/var RESEARCH_CLAIM_ID_SQL = `([^`]+)`;/)[1];
   const pick = () => (db.prepare("SELECT (" + sel + ") AS id").get() || {}).id;

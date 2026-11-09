@@ -2653,7 +2653,8 @@ async function contentSignalAudit(env) {
         out.active++;
         var title = "[" + s.source + "] " + String(s.content || "").slice(0, 90);
         var prio = Number(s.evidential_weight) >= 0.8 ? "P1" : "P2";
-        var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE kind='failure-mode' AND title=?1 AND status IN ('proposed','approved','in_progress') LIMIT 1").bind(title).first();
+        // RM-KAIZEN-SCHEDULED-1.2: queued is non-terminal too, else the hourly audit re-files the same title
+        var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE kind='failure-mode' AND title=?1 AND status IN ('proposed','approved','in_progress','queued') LIMIT 1").bind(title).first();
         if (!ex) {
           var iid = await improvement(env, "content-signal", dom || "fleet", "failure-mode", title, String(s.decision || "").slice(0, 400), prio);
           try {
@@ -7838,6 +7839,34 @@ function pfHygiene(r, tier, nowMs) {
   return flags;
 }
 // Pure: org repositories + WBS rows -> the portfolio's measured state. No I/O.
+// RES-NUMBER-DRIFT-1 (issue 9768): WBS RES numbers in repository labels against program_registry. Lists a RES number carried by two
+// project rows, a repository whose name, description or topics name a RES number other than the one its registry row carries
+// (RES.030 vs RES.031), and the next free number. Pure: no reads, no writes.
+function pfResNumberDrift(wbsRows, repos) {
+  var re = /RES[.\-_ ]?(\d{1,3})(?!\d)/gi;
+  function nums(text) { var out = [], m; re.lastIndex = 0; while ((m = re.exec(String(text || "")))) { var n = parseInt(m[1], 10); if (out.indexOf(n) < 0) out.push(n); } return out; }
+  var byNum = {}, max = 0, byRepo = {};
+  (wbsRows || []).forEach(function(w) {
+    if (!w || !w.wbs_code) return;
+    var ns = nums(w.wbs_code);
+    if (!ns.length) return;
+    var n = ns[0];
+    if (n > max) max = n;
+    if (String(w.level || "project") === "project" || /^project$/i.test(String(w.level))) (byNum[n] = byNum[n] || []).push(w.wbs_code);
+    var key = String(w.github_repo || "").replace(/^QNFO\//, "");
+    if (key) (byRepo[key] = byRepo[key] || []).push(n);
+  });
+  var duplicates = Object.keys(byNum).filter(function(n) { return byNum[n].length > 1; }).map(function(n) { return { res: parseInt(n, 10), codes: byNum[n] }; });
+  var mismatches = [];
+  (repos || []).forEach(function(r) {
+    var reg = byRepo[r.name];
+    if (!reg || !reg.length) return;
+    var label = nums([r.name, r.description, (r.topics || []).join(" ")].join(" "));
+    label.forEach(function(n) { if (reg.indexOf(n) < 0) mismatches.push({ repo: r.name, label_res: n, registry_res: reg }); });
+  });
+  var next = String(max + 1); while (next.length < 3) next = "0" + next;
+  return { duplicates: duplicates, mismatches: mismatches, next_free: "RES." + next, count: duplicates.length + mismatches.length };
+}
 function pfEvaluate(repos, wbsRows, nowIso) {
   var nowMs = Date.parse(nowIso || new Date().toISOString());
   var wbsByRepo = {}, codeKnown = {};
@@ -7884,7 +7913,7 @@ function pfEvaluate(repos, wbsRows, nowIso) {
     graded: graded.length, hygiene_score: graded.length ? Math.round(100 * clean / graded.length) / 100 : null,
     dormant: dormant.map(function(r) { return r.name; }), unlinked_research: unlinked.map(function(r) { return r.name; }),
     archive_candidates: candidates.map(function(r) { return r.name; }), wbs_linked: Object.keys(linkedWbs).length, wbs_total: (wbsRows || []).length,
-    standards: pfStandardsSummary(rows)
+    standards: pfStandardsSummary(rows), res_number_drift: pfResNumberDrift(wbsRows, repos)
   };
 }
 function pfCell(s) { return String(s === null || s === void 0 ? "" : s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " "); }
@@ -8298,7 +8327,7 @@ async function portfolioSync(env, force) {
   actions = actions.filter(function(a) { return a.status !== "unchanged"; });
   ev.actions = actions;
   try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:portfolioSync:caught", error: String(e && e.message) })); }
-  return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, standards: ev.standards, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
+  return { ok: true, status: status, res_number_drift: ev.res_number_drift, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, standards: ev.standards, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
 // PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
 // a fully written run (ok) holds for PF_STALE_H. The writes are idempotent (unchanged content is a no-op), so an
@@ -12481,20 +12510,12 @@ async function costImpactGuard(env) {
     } else if (!divergence && curLimit != null && curLimit < CEILING) {
       newLimit = Math.min(CEILING, Math.round(curLimit * 1.1)); action = "relax";
     }
+    // GATEWAY-RUNWAY-BRAKE-1 (issue 7986, BUDGET-SOFT-ROUTE-1): a gateway spend rule is a hard stop and the PUT needs the whole gateway object, so the guard only recommends. No PUT is sent; the brake shape is read from the same GET.
     if ((action === "tighten" || action === "relax") && newLimit !== curLimit) {
-      var newRules = rules.map(function(r, i){ var n = Object.assign({}, r); if (i === 0) n.limit = newLimit; return n; });
-      var pr3 = await fetch(gurl, { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ spend_limits: { enabled: true, rules: newRules } }), signal: AbortSignal.timeout(8e3) });
-      var pj3 = await pr3.json().catch(function(){ return null; });
-      var applied = !!(pj3 && pj3.success);
-      var vr = await fetch(gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
-      var vj = await vr.json().catch(function(){ return null; });
-      var verified = !!(vj && vj.success && vj.result.spend_limits && vj.result.spend_limits.rules && Number(vj.result.spend_limits.rules[0].limit) === newLimit);
-      if (!applied || !verified) {
-        var putStatus = pr3 && pr3.status ? pr3.status : 0;
-        var bodySnippet = pj3 ? JSON.stringify(pj3).slice(0, 120) : "";
-        action = action + "-failed:put=" + putStatus + ":body=" + bodySnippet;
-        newLimit = curLimit;
-      }
+      var brakeRl = gw && gw.rate_limiting_limit != null ? Number(gw.rate_limiting_limit) : null;
+      var brakeOk = brakeRl != null && brakeRl <= 300 && !!(gw && gw.authentication) && rules.some(function(r){ return r && r.enabled !== false; });
+      action = action + "-recommended:brake=" + (brakeOk ? "ok" : "check") + ",rl=" + brakeRl;
+      newLimit = curLimit;
     }
     await db.prepare("INSERT INTO cost_impact_guard (ts, cost_7d, cost_prev_7d, impact_7d, impact_prev_7d, top_model, top_share, cpi, impact_flat, due_cents, gateway_limit_before, gateway_limit_after, action) VALUES (datetime('now'),?,?,?,?,?,?,?,?,?,?,?,?)").bind(cost7, costPrev, impact7, impactPrev, topModel, share, cpi === Infinity ? -1 : cpi, impactFlat ? 1 : 0, dueCents == null ? -1 : dueCents, curLimit, newLimit, action).run();
     return { ok: true, cost7: cost7, impact7: impact7, topModel: topModel, share: share, cpi: cpi === Infinity ? -1 : cpi, divergence: divergence, action: action, limitBefore: curLimit, limitAfter: newLimit };
