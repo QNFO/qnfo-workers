@@ -49,6 +49,13 @@ export function stagedActionArgs(args) {
 
 // One cf_agent_approvals row per (run, action): the lifecycle awaiting -> approved|rejected -> executed|failed. next() refuses a step backwards.
 export const APPROVAL_STATES = ["awaiting", "approved", "rejected", "executed", "failed"];
+// APPROVAL-EXPIRY-1 (issue 9761): the card says "rejected after 24 h"; the sweep enforces it. Rows still awaiting past the cutoff are answered as rejected.
+export const APPROVAL_EXPIRY_MS = 24 * 3600 * 1000;
+export const APPROVAL_EXPIRY_NOTE = "default rejected after 24h";
+export function approvalExpired(row, now) {
+  return !!row && row.status === "awaiting" && Number(row.created_ms) > 0 && Number(now) - Number(row.created_ms) >= APPROVAL_EXPIRY_MS;
+}
+
 export function approvalNext(from, to) {
   const order = { awaiting: 0, approved: 1, rejected: 1, executed: 2, failed: 2 };
   if (!(from in order) || !(to in order)) return false;
@@ -541,4 +548,16 @@ export function cfSkillNote(name, text, max) {
   if (!name || !body) return "";
   const cap = max || 6000;
   return "\n\nCloudflare skill (" + name + ", from github.com/cloudflare/skills; follow it for this Cloudflare work):\n" + (body.length > cap ? body.slice(0, cap) + "\n[skill text cut]" : body);
+}
+
+// CODE-AGENT-UX-1.6 (issue 8245): a turn about fleet code or infrastructure gets the head of docs/SYSTEM-MAP.md (the whole system on one page) instead of the agent reading whole worker files.
+export function wantsSystemMap(prompt) {
+  return /\b(worker|binding|d1|route|cron|deploy|queue|vectorize|r2|durable object|blast radius|depends on|fleet graph)\b/i.test(String(prompt || "").slice(0, 4000));
+}
+export function systemMapUrl() { return "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SYSTEM-MAP.md"; }
+export function systemMapNote(text, max) {
+  const body = String(text || "").trim();
+  if (!body) return "";
+  const cap = max || 3500;
+  return "\n\nFleet system map (docs/SYSTEM-MAP.md, head; read the file or ops_fleet_graph for more):\n" + (body.length > cap ? body.slice(0, cap) + "\n[map cut]" : body);
 }

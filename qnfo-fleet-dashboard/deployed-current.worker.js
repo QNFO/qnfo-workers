@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.98.1";
+var VERSION = "1.99.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -13685,6 +13685,56 @@ var CMD_TASKS_JS = "(function(){var b=document.getElementById('ctasks');if(!b)re
 function cmdTasksPanelHtml() {
   return '<section class="cmd" id="ctasks" style="margin-top:18px"><h2 class="fl-h" style="font-size:18px">Tasks</h2><div class="tl"><p class="meta">Loading...</p></div><h2 class="fl-h" style="font-size:18px">Undo an agent merge</h2><div class="ul"></div><p class="us meta" role="status"></p></section>';
 }
+// CMD-TASKS-1 and CMD-SKILLS-1 (issues 9673, 9675): the latest code session's persistent plan (qnfo-agents code_session_tasks) and a keyword search over the skill repository.
+function cmdSessionIdOf(row) {
+  const a = String(row && row.actions_json || "");
+  let m = /"session_id"\s*:\s*"(run_[a-z0-9_]{8,60})"/.exec(a);
+  if (!m) m = /session:(run_[a-z0-9_]{8,60})/.exec(String(row && row.answer || ""));
+  return m ? m[1] : "";
+}
+async function cmdLatestTasks(env) {
+  let rows = [];
+  try {
+    rows = (await env.AUDIT.prepare("SELECT id, actions_json, answer, ts FROM cmd_log WHERE kind = 'agent-stream' AND owner = 1 ORDER BY ts DESC LIMIT 4").all()).results || [];
+  } catch (e) {
+    return { ok: false, error: "cmd_log: " + String(e && e.message || e).slice(0, 120) };
+  }
+  let first = null;
+  for (const row of rows) {
+    const sid = cmdSessionIdOf(row);
+    if (!sid) continue;
+    const r = await cmdCodeSessionGet(env, "/code-sessions/" + sid + "/tasks");
+    if (!r.ok) continue;
+    if (!first) first = Object.assign({ session_id: sid, at: row.ts }, r);
+    if (r.tasks && r.tasks.length) return Object.assign({ session_id: sid, at: row.ts }, r);
+  }
+  return first || { ok: true, tasks: [], summary: { total: 0, done: 0, doing: 0 }, note: "no code session with a task list yet" };
+}
+function cmdTasksText(r) {
+  if (!r || !r.ok) return "Tasks: " + String(r && r.error || "unavailable");
+  if (!r.tasks || !r.tasks.length) return "No task list yet. A write-scope code session creates one when it proposes its plan.";
+  return (r.plan || "Plan") + " (" + r.summary.done + " of " + r.summary.total + " done)\n" + r.tasks.map(function(t) { return "  " + (t.status === "done" ? "[x]" : t.status === "doing" ? "[~]" : "[ ]") + " " + t.id + ". " + t.title; }).join("\n");
+}
+async function cmdSkillsSearch(env, q) {
+  return await cmdCodeSessionGet(env, "/skill-repo" + (q ? "?q=" + encodeURIComponent(q) : ""));
+}
+function cmdSkillsText(r, q) {
+  if (!r || !r.ok) return "Skills: " + String(r && r.error || "unavailable");
+  if (!r.skills || !r.skills.length) return 'No skill matches "' + q + '". Type: skills (lists all ' + (r.count || "") + ').';
+  return (q ? r.skills.length + ' skills matching "' + q + '"' : r.count + " skills") + ":\n" + r.skills.map(function(s) { return "  " + s.name + "  " + s.what; }).join("\n");
+}
+var CMD_PANELS_JS = "(function(){var P=document.getElementById('cpanels');if(!P||!window.fetch)return;function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}" +
+  "function get(u){return fetch(u,{credentials:'same-origin'}).then(function(r){return r.json()})}" +
+  "var tk=document.getElementById('cp-stasks'),sk=document.getElementById('cp-skills'),timer=0;" +
+  "function loadTasks(){get('/api/cmd/session-tasks').then(function(j){tk.textContent='';var h=el('h2','cp-h','Code session plan');tk.appendChild(h);if(j.need){tk.appendChild(el('p','meta','Sign in with your email code to see the running task list.'));return}if(!j.tasks||!j.tasks.length){tk.appendChild(el('p','meta','No task list yet. A code session creates one when it proposes its plan.'));return}h.textContent='Task list: '+j.summary.done+' of '+j.summary.total+' done';if(j.plan)tk.appendChild(el('p','meta',j.plan));var ul=el('ul','cp-ul');j.tasks.forEach(function(t){ul.appendChild(el('li','cp-'+t.status,(t.status==='done'?'[x] ':t.status==='doing'?'[~] ':'[ ] ')+t.id+'. '+t.title))});tk.appendChild(ul);clearTimeout(timer);if(j.summary.done<j.summary.total)timer=setTimeout(function(){if(!document.hidden)loadTasks();else timer=setTimeout(loadTasks,15000)},8000)}).catch(function(e){console.error(JSON.stringify({where:'cmd-panels',error:String(e&&e.message||e)}))})}" +
+  "var f=el('form','cp-row');var inp=el('input','cp-in');inp.type='search';inp.placeholder='Search skills: revert a pr, bump version, durable object';inp.setAttribute('aria-label','Search skills');var go=el('button','cp-btn','Search');go.type='submit';var res=el('div','cp-res');f.appendChild(inp);f.appendChild(go);sk.appendChild(el('h2','cp-h','Skills'));sk.appendChild(f);sk.appendChild(res);" +
+  "function showSkill(n){get('/api/cmd/skills?name='+encodeURIComponent(n)).then(function(j){res.textContent='';if(!j.ok){res.appendChild(el('p','meta',j.error||'not found'));return}res.appendChild(el('b',null,j.skill.name+': '+j.skill.what));var ol=el('ol');j.skill.steps.forEach(function(s){ol.appendChild(el('li',null,s))});res.appendChild(ol)})}" +
+  "function search(q){get('/api/cmd/skills?q='+encodeURIComponent(q)).then(function(j){res.textContent='';if(!j.ok||!j.skills||!j.skills.length){res.appendChild(el('p','meta',q?'No skill matches. Try other words.':'No skills.'));return}j.skills.forEach(function(s){var r=el('div','cp-row');var a=el('a',null,s.name);a.href='#';a.onclick=function(e){e.preventDefault();showSkill(s.name)};r.appendChild(a);r.appendChild(el('span','meta',' '+s.what));res.appendChild(r)})}).catch(function(e){console.error(JSON.stringify({where:'cmd-panels',error:String(e&&e.message||e)}))})}" +
+  "f.onsubmit=function(e){e.preventDefault();search(inp.value.trim())};loadTasks()})();";
+function cmdPanelsHtml() {
+  return '<style>.cp{margin:18px 0 0;display:grid;gap:12px}.cp>section{border:1px solid var(--line,#d9dcec);border-radius:10px;padding:12px 14px;background:var(--card,#fff)}.cp-h{font-size:16px;margin:0 0 6px}.cp-ul{list-style:none;padding:0;margin:6px 0 0}.cp-ul li{padding:3px 0;font-family:ui-monospace,monospace;font-size:14px}.cp-done{opacity:.6}.cp-doing{font-weight:600}.cp-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.cp-btn{min-height:44px;min-width:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line,#999);background:var(--wash,#eef);cursor:pointer}.cp-in{flex:1;min-width:200px;min-height:44px;padding:0 10px;border-radius:8px;border:1px solid var(--line,#999)}.cp-res{margin-top:6px}</style>' +
+    '<div class="cp" id="cpanels"><section id="cp-stasks" aria-live="polite"><h2 class="cp-h">Code session plan</h2><p class="meta">Loading</p></section><section id="cp-skills"></section></div><script>' + CMD_PANELS_JS + "</script>";
+}
 async function cmdRoutes(request, env, ctx, path, owner) {
   if (path === "/ctl.js") return new Response(CTL_JS, { headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*" } });
   if (path === "/cmd" || path === "/cmd/") {
@@ -13770,6 +13820,16 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     const [tasks, mg] = await Promise.all([cmdTaskRows(env), cmdAgentMerges(env)]);
     return ownerJson({ ok: true, tasks, merges: mg.merges, merges_error: mg.ok ? null : mg.error });
   }
+  if (request.method === "GET" && path === "/api/cmd/session-tasks") {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The plan needs your email code." }, 401);
+    return ownerJson(await cmdLatestTasks(env));
+  }
+  if (request.method === "GET" && path === "/api/cmd/skills") {
+    const sp = new URL(request.url).searchParams;
+    const nm = String(sp.get("name") || "").toLowerCase();
+    if (/^[a-z0-9-]{2,60}$/.test(nm)) return ownerJson(await cmdCodeSessionGet(env, "/skill-repo/" + nm));
+    return ownerJson(await cmdSkillsSearch(env, String(sp.get("q") || "").slice(0, 120)));
+  }
   if (request.method !== "POST") return ownerJson({ error: "method_not_allowed", path: path, allow: ["POST"], hint: "Use POST /api/cmd to send a command; GET /api lists the read-only endpoints." }, 405, { Allow: "POST" });
   if (request.headers.get("x-fleet-ui") !== "1") return ownerJson({ error: "missing x-fleet-ui header" }, 400);
   let b = null;
@@ -13853,6 +13913,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   const from = String(b && b.from || "").slice(0, 500);
   if (text.length < 1 || text.length > (/^reply\s/i.test(text) ? 8e3 : 2e3)) return ownerJson({ error: /^reply\s/i.test(text) ? "a reply is 1-8000 characters" : "type 1-2000 characters" }, 400);
   const c = await cmdContext(env, from, holder);
+  { // CMD-SKILLS-1: typed form of the skills panel, answered without a model.
+    const mk = /^skills?(?:\s+(.{1,120}))?$/i.exec(text.trim());
+    if (mk) { const q = String(mk[1] || "").trim(); return ownerJson({ ok: true, kind: "answer", text: cmdSkillsText(await cmdSkillsSearch(env, q), q), holder }); }
+  }
   // AGENT-TOOLS-1: deterministic tool commands, before any model call.
   if (/^tools?(\s+\S+)?$/i.test(text.trim())) {
     const tl = await cmdToolList(env);
@@ -13977,7 +14041,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
       // RM-CMD-FAILURES-1: the row carries the link to its session ("session:<id> turn:<n>" until it is settled) and its id goes to the client, which may poll /api/cmd/job/<id>.
       const logId = "cmd-" + cmdRandHex(10);
       try {
-        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, answer, owner, model) VALUES (?1, ?2, ?3, 'agent-stream', 'running', ?4, 1, 'deepseek-v4-flash-wa')").bind(logId, text, from || null, "session:" + session.session_id + " turn:" + (Number(session.turn) || 1)).run();
+        await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, answer, owner, model, actions_json) VALUES (?1, ?2, ?3, 'agent-stream', 'running', ?4, 1, 'deepseek-v4-flash-wa', ?5)").bind(logId, text, from || null, "session:" + session.session_id + " turn:" + (Number(session.turn) || 1), JSON.stringify({ session_id: session.session_id })).run();
       } catch (e) {}
       return ownerJson({ ok: true, kind: "stream", id: logId, session_id: session.session_id, turn: session.turn, holder }, 202);
     }
@@ -16326,7 +16390,7 @@ function cmdScript(holder) {
   return turnstileWidget(null, "fleet_cmd") + TURNSTILE_SCRIPT + "<script>" + CMD_JS.replace("holder=HOLDER;", "holder=" + (holder ? "true" : "false") + ";") + "</script><script>" + DEC_JS + "</script>";
 }
 function cmdPageHtml(holder, from, q) {
-  return fleetHead("Fleet command line") + fleetTop("cmd", false, holder) + '<main class="wrap fl" style="max-width:860px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 16px">Command line</h1><p class="meta" style="margin:-6px 0 18px">Ask the fleet in plain English, or type a command (<code>help</code> lists them). Reading and asking are open to everyone. <a href="/">Back to the queue</a>.</p>' + cmdPanelHtml(holder, from, q) + cmdTasksPanelHtml() + "</main>" + cmdScript(holder) + "<script>" + CMD_TASKS_JS + "</script>" + FLEET_SHELL_JS + "</body></html>";
+  return fleetHead("Fleet command line") + fleetTop("cmd", false, holder) + '<main class="wrap fl" style="max-width:860px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 16px">Command line</h1><p class="meta" style="margin:-6px 0 18px">Ask the fleet in plain English, or type a command (<code>help</code> lists them). Reading and asking are open to everyone. <a href="/">Back to the queue</a>.</p>' + cmdPanelHtml(holder, from, q) + cmdTasksPanelHtml() + cmdPanelsHtml() + "</main>" + cmdScript(holder) + "<script>" + CMD_TASKS_JS + "</script>" + FLEET_SHELL_JS + "</body></html>";
 }
 // /ctl.js: one script tag gives any fleet page a discreet link to the command line, scoped to that page.
 // It never shows in print or PDF output (@media print) and stays out of automated/headless browsers (navigator.webdriver),

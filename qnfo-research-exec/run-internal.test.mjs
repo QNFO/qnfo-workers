@@ -25,8 +25,19 @@ for (const host of ["https://RESEARCH_EXEC", "https://qnfo-research-exec.interna
   const b = await hit(host + "/run?sync=1");
   ok(b.status !== 403, "I " + host + " /run?sync=1 (service binding) is not refused", b);
 }
-const d = await hit("https://qnfo-research-exec.q08.workers.dev/run");
-ok(d.status !== 403, "the deferred POST /run kick stays open (it only wakes the cron)", d);
+// WRITE-ROUTES-RESEARCH-KICK-1: the deferred kick wrote an event row per anonymous call; a public host is refused before any write.
+for (const host of ["https://qnfo-research-exec.q08.workers.dev", "https://research.qnfo.org"]) {
+  const d = await hit(host + "/run");
+  ok(d.status === 403 && /WRITE-ROUTES-RESEARCH-KICK-1/.test(d.body), "P " + host + " deferred POST /run is refused before it writes", d);
+}
+for (const host of ["https://RESEARCH_EXEC", "https://qnfo-research-exec.internal"]) {
+  const d = await hit(host + "/run");
+  ok(d.status !== 403, "I " + host + " deferred POST /run (service binding) still reaches the kick handler", d);
+}
+// BP26-GW-RESEARCH-EXEC-1: the aiText gateway sample is flagged by ops_config and falls back to the direct path.
+const wsrc = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+ok(/bp26_gw_research_exec_pct/.test(wsrc) && /gateway = \{ id: "default", skipCache: true, metadata: \{ worker: "qnfo-research-exec", purpose: "aiText" \} \}/.test(wsrc), "aiRunOpts samples calls through the gateway with metadata");
+ok(/catch \(e\) \{ pct = 0;/.test(wsrc), "an unreadable flag means the direct path");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
