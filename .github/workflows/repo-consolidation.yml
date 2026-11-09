@@ -1,0 +1,61 @@
+name: repo-consolidation
+run-name: repo-consolidation ${{ inputs.action }} ${{ inputs.mode }}
+
+# REPO-CONSOLIDATION-1 (owner request 2026-11-09, rwnq8/agent-operating-system#3). Finishes the repository consolidation planned in
+# rwnq8/agent-operating-system REPOSITORIES.md: copy the rwnq8 agent rules into QNFO/agent-operating-system, write a README line naming
+# the new home, archive (never delete) the repositories listed in scripts/repo-consolidation.json, and move the fleet dashboard to QNFO.
+# An agent session holds no archive or transfer right; the repository secret QNFO_GH_PAT is the credential the fleet already has.
+# All logic is in scripts/repo-consolidation.mjs; it prints one RESULT_JSON line with the status and GitHub's message of every call.
+# Dispatch only, never a schedule. dry (the default) makes GET calls only. Revert an archive with PATCH archived=false.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "report | copy | archive | transfer | all"
+        required: true
+        type: choice
+        options:
+          - report
+          - copy
+          - archive
+          - transfer
+          - all
+      mode:
+        description: "dry (default, reads only) or live"
+        required: false
+        type: choice
+        default: dry
+        options:
+          - dry
+          - live
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-consolidation
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_ADMIN_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      IN_ACTION: ${{ inputs.action }}
+      IN_MODE: ${{ inputs.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Offline tests
+        run: node scripts/repo-consolidation.test.mjs
+
+      - name: Run the consolidation action
+        run: node scripts/repo-consolidation.mjs "$IN_ACTION" --mode "${IN_MODE:-dry}"
