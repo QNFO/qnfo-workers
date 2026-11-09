@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.98.0";
+var VERSION = "1.99.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -17925,6 +17925,16 @@ async function plusView(env) {
   out.week = await read("plus_ledger", "SELECT product, kind, title, status, decided_at, issue_id, pr_url, outcome FROM plus_ledger WHERE date(decided_at) >= date('now', '-7 days') ORDER BY decided_at DESC LIMIT 40");
   out.digests = await read("plus_digest", "SELECT day, products, in_flight, decided_7d, deployed_7d, reverted_7d, body_md, created_at FROM plus_digest ORDER BY day DESC LIMIT 4");
   out.digest = out.digests[0] || null;
+  // PLUS-QUALITY-1 (agent_issues 1002191): kept-rate and median hours proposed->decided, per product and fleet-wide. Read-only; delete this block to remove it.
+  const qlag = await read("plus_ledger.lag", "SELECT product, created_at, decided_at FROM plus_ledger WHERE decided_at IS NOT NULL AND created_at IS NOT NULL ORDER BY decided_at DESC LIMIT 2000");
+  const qmedian = function(a) { if (!a.length) return null; const s = a.slice().sort(function(x, y) { return x - y; }); const m = s.length >> 1; return Math.round((s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2) * 10) / 10; };
+  const qkept = function(sh, rv) { return sh + rv > 0 ? Math.round(sh / (sh + rv) * 1000) / 1000 : null; };
+  const qhours = function(r) { const h = (Date.parse(r.decided_at) - Date.parse(String(r.created_at).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(r.created_at)) ? "" : "Z"))) / 36e5; return Number.isFinite(h) && h >= 0 ? h : null; };
+  const qby = {};
+  qlag.forEach(function(r) { const h = qhours(r); if (h != null) (qby[r.product] = qby[r.product] || []).push(h); });
+  let qSh = 0, qRv = 0;
+  const qprod = led.map(function(l) { const sh = Number(l.shipped || 0), rv = Number(l.reverted || 0); qSh += sh; qRv += rv; return { product: l.product, kept_rate: qkept(sh, rv), median_hours_to_decision: qmedian(qby[l.product] || []), decided: (qby[l.product] || []).length }; });
+  out.quality = { kept_rate: qkept(qSh, qRv), median_hours_to_decision: qmedian([].concat.apply([], Object.keys(qby).map(function(k) { return qby[k]; }))), products: qprod };
   out.products = prods.map(function(p) {
     const l = led.find(function(x) { return x.product === p.product; }) || {};
     return {
@@ -17952,6 +17962,7 @@ function plusHtml(v, holder) {
   } else if (!(v.unavailable || []).includes("plus_digest")) {
     body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 6px">Digest</h2><p class="meta">No digest has been written yet; the first one is written by the hourly plus task on a Monday.</p></section>';
   }
+  if (v.quality) body += '<p class="meta" style="margin:0 0 12px;max-width:95ch">Quality: ' + (v.quality.kept_rate == null ? "no decided plus yet" : esc(String(Math.round(v.quality.kept_rate * 100))) + ' percent of decided plusses were kept') + (v.quality.median_hours_to_decision == null ? "" : ', median ' + esc(String(v.quality.median_hours_to_decision)) + ' hours from proposal to decision') + '.</p>';
   body += '<section class="card" style="margin:0 0 16px"><h2 style="font-size:18px;margin:0 0 8px">Products</h2><div class="pl-w" role="region" aria-label="Products" tabindex="0"><table class="pl-t"><thead><tr><th>Product</th><th>Host</th><th>Last plus</th><th>In flight</th><th>Kept</th><th>Reverted</th><th>Used (7 days)</th></tr></thead><tbody>';
   for (const p of v.products) {
     const rest = p.rest_until && String(p.rest_until) > new Date().toISOString() ? ' <span class="tag">resting to ' + day(p.rest_until) + '</span>' : "";
