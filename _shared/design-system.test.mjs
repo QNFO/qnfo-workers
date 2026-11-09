@@ -52,12 +52,16 @@ ok(DS.dsLint("<body>x</body>").some((p) => /DS_CSS/.test(p)), "dsLint flags a pa
 
 // ---- adopters: current block in worker and mirror, and the rendered page passes dsLint
 const root = new URL("../", import.meta.url);
+// An empty D1: every query answers no rows, so a page renders its empty states offline.
+function d1Stub() { const st = { bind() { return st; }, async all() { return { results: [] }; }, async first() { return null; }, async run() { return { success: true }; } }; return { prepare() { return st; }, async batch() { return []; } }; }
 const ADOPTERS = [
   { dir: "q08-prediction-markets", path: "/", env: () => ({}) },
   { dir: "qnfo-jobsearch", path: "/", env: () => ({}) },
   { dir: "qnfo-jobsearch", path: "/cv", env: () => ({}) },
   { dir: "qnfo-jobsearch", path: "/prep", env: () => ({}) },
-  { dir: "personal-api", path: "/companion", env: () => ({}) }
+  { dir: "personal-api", path: "/companion", env: () => ({}) },
+  { dir: "qnfo-fleet-dashboard", path: "/", env: () => ({}) },
+  { dir: "qnfo-fleet-dashboard", path: "/focus", env: () => ({ AUDIT: d1Stub() }) }
 ];
 for (const a of ADOPTERS) {
   for (const f of ["worker.js", "deployed-current.worker.js"]) {

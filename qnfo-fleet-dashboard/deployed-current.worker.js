@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.105.0";
+var VERSION = "1.106.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -3895,31 +3895,217 @@ async function v3Routes(request, env, ctx, path, url, owner) {
 }
 // ==== end V3-DASH-1 ====
 // V3-DASH-1 page. Client script uses no backticks and no template placeholders, so it lives in String.raw untouched.
-var V3_CSS = String.raw`:root{--bg:#f7f6f2;--card:#fff;--ink:#1b1b1a;--mut:#6b6a66;--rule:#e4e2da;--ok:#1a7f4b;--warn:#b26b00;--bad:#b3261e;--acc:#2f5fd0}
-@media(prefers-color-scheme:dark){:root{--bg:#121211;--card:#1c1c1a;--ink:#ecebe6;--mut:#9a988f;--rule:#2e2d29;--ok:#4cc38a;--warn:#e0a03a;--bad:#ff7b72;--acc:#8aa8ff}}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+// DESIGN-SYSTEM-1:BEGIN (sourced from _shared/design-system.js; applied by _shared/inline-design-system.mjs; do not edit inside a worker)
+// ---- DESIGN-SYSTEM-1 (owner directive 2026-11-09). One design system for every page a person opens on q08.org, qnfo.org or qwav.org.
+//
+// WHAT. Design tokens (colour, type, spacing, radius, tap size) for a light and a dark theme, the CSS built from them, and the component
+// classes every fleet page uses: top bar, page, card, button (primary, secondary, quiet), segmented control, Yes / No / Not sure choices,
+// stat tiles, notes, badges, fields, disclosure, tables that scroll instead of crushing, empty states. Plus dsContrast(), so the contrast of
+// every text and control colour pair is proven by '_shared/design-system.test.mjs' (WCAG 2.2 AA), and dsLint(), the check that fails a
+// page with text under 13 px, a field under 16 px (iOS zooms) or a button under the 44 px tap size.
+//
+// WHY. Owner, 2026-11-09: "bad UI makes me sad ... the job site and even the markets ... are great examples of bad design ... implement
+// design standards ... Don't give me shitty design anywhere." Before this file each worker carried its own inline palette (jobs: 13 px
+// muted text and 12 px badges; markets: an unstyled 15 px system page with 8 px buttons and tables that broke words letter by letter on a
+// phone). The standard below is written once here and inlined into each page's worker.
+//
+// THE STANDARD (what every page follows; the test enforces the parts a machine can check).
+//  1. One primary action per screen. Exactly one .btn-primary is visible in a view; everything else is secondary or quiet.
+//  2. Hierarchy before decoration. A page title, one sentence of status, then the content. Status lines are stat tiles, not run-on text.
+//  3. Tap, do not type. Choices are buttons (Yes / No / Not sure, segmented views), never free text or tiny radio buttons. 44 px minimum.
+//  4. Progressive disclosure. Secondary tools, links and explanations sit behind a "More" disclosure, not in the top bar.
+//  5. Calm. Neutral surfaces, one accent colour, colour carries meaning only for good / warning / bad, generous spacing (8 px scale).
+//  6. Readable. 16 px body, 14 px minimum for secondary text, line length under 75 characters for prose, tabular numbers in figures.
+//  7. Accessible. WCAG 2.2 AA contrast in both themes, visible focus ring, labels on every field, reduced motion respected.
+//  8. Every state designed. Loading, empty and error states say what happens next in one sentence.
+//
+// HOW TO ADOPT. 1) 'node _shared/inline-design-system.mjs <worker> --anchor "<line prefix>"' once (later runs replace the block in place,
+// '--check' reports a stale copy). 2) Put '<style>${DS_CSS}</style>' (or dsHead(title)) in the page head and give <body> class="ds".
+// 3) Build with the classes below; page-specific CSS uses the var(--ds-*) tokens, never raw hex. 4) Add the worker to ADOPTERS in
+// '_shared/design-system.test.mjs', which renders the page and runs dsLint on it.
+//
+// RULES FOR EDITING. ES5 style (var and function), no import or export, every name starts with DS_ or ds, no '*' followed by '/' inside a
+// comment, no backtick anywhere (the block is inlined into workers that hold their pages in template literals). Version every change in DS_VERSION.
+var DS_VERSION = "1.0.0";
+
+var DS_TOKENS = {
+  light: {
+    bg: "#f5f6f8", surface: "#ffffff", surface2: "#eef1f5", ink: "#15181e", ink2: "#4b5363", line: "#d5dae1", lineStrong: "#7b8494",
+    accent: "#1d4ed8", accentHover: "#1e40af", onAccent: "#ffffff", accentSoft: "#e3eaff", accentSoftInk: "#1e3a8a",
+    good: "#166534", goodSoft: "#dcfce7", warn: "#854d0e", warnSoft: "#fef3c7", bad: "#b42318", badSoft: "#fee4e2", focus: "#2563eb"
+  },
+  dark: {
+    bg: "#0e1116", surface: "#161a21", surface2: "#1d222b", ink: "#e8ebf0", ink2: "#a4adbb", line: "#2b313c", lineStrong: "#6b7385",
+    accent: "#8cb4ff", accentHover: "#a9c6ff", onAccent: "#0a1530", accentSoft: "#1b2a4a", accentSoftInk: "#c7d8ff",
+    good: "#6ee7a0", goodSoft: "#12301f", warn: "#f6c453", warnSoft: "#33270d", bad: "#ff9a8f", badSoft: "#3a1715", focus: "#8cb4ff"
+  },
+  font: "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+  mono: "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
+  size: { small: 14, body: 16, lead: 18, h3: 17, h2: 20, h1: 26, stat: 26 },
+  space: [0, 4, 8, 12, 16, 24, 32, 48],
+  radius: { s: 8, m: 12, l: 16, pill: 999 },
+  tap: 44,
+  maxWidth: 960
+};
+
+// The pairs whose contrast the test proves in both themes: [foreground token, background token, minimum ratio].
+var DS_CONTRAST_PAIRS = [
+  ["ink", "bg", 4.5], ["ink", "surface", 4.5], ["ink", "surface2", 4.5], ["ink2", "bg", 4.5], ["ink2", "surface", 4.5], ["ink2", "surface2", 4.5],
+  ["accent", "surface", 4.5], ["accent", "bg", 4.5], ["onAccent", "accent", 4.5], ["onAccent", "accentHover", 4.5], ["accentSoftInk", "accentSoft", 4.5],
+  ["good", "surface", 4.5], ["good", "goodSoft", 4.5], ["warn", "surface", 4.5], ["warn", "warnSoft", 4.5], ["bad", "surface", 4.5], ["bad", "badSoft", 4.5],
+  ["ink", "warnSoft", 4.5], ["ink", "goodSoft", 4.5], ["ink", "badSoft", 4.5], ["ink", "accentSoft", 4.5],
+  ["lineStrong", "surface", 3], ["focus", "surface", 3], ["focus", "bg", 3]
+];
+
+function dsLum(hex) {
+  var h = String(hex).replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var c = [0, 2, 4].map(function (i) { var v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function dsContrast(a, b) { var x = dsLum(a), y = dsLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
+function dsVars(t) {
+  var map = { bg: "bg", surface: "surface", surface2: "surface-2", ink: "ink", ink2: "ink-2", line: "line", lineStrong: "line-strong", accent: "accent",
+    accentHover: "accent-hover", onAccent: "on-accent", accentSoft: "accent-soft", accentSoftInk: "accent-soft-ink", good: "good", goodSoft: "good-soft",
+    warn: "warn", warnSoft: "warn-soft", bad: "bad", badSoft: "bad-soft", focus: "focus" };
+  return Object.keys(map).map(function (k) { return "--ds-" + map[k] + ":" + t[k]; }).join(";");
+}
+
+var DS_CSS = [
+  "/* DESIGN-SYSTEM-1 v" + DS_VERSION + " (_shared/design-system.js) */",
+  ":root{color-scheme:light dark;" + dsVars(DS_TOKENS.light) + ";--ds-font:" + DS_TOKENS.font + ";--ds-mono:" + DS_TOKENS.mono + ";--ds-tap:" + DS_TOKENS.tap + "px;--ds-r-s:8px;--ds-r-m:12px;--ds-r-l:16px;--ds-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08)}",
+  "@media (prefers-color-scheme:dark){:root{" + dsVars(DS_TOKENS.dark) + ";--ds-shadow:none}}",
+  "*,*::before,*::after{box-sizing:border-box}",
+  "body.ds{margin:0;background:var(--ds-bg);color:var(--ds-ink);font:16px/1.55 var(--ds-font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}",
+  ".ds a{color:var(--ds-accent);text-underline-offset:2px}.ds a:hover{color:var(--ds-accent-hover)}",
+  ".ds h1,.ds h2,.ds h3{line-height:1.25;margin:0 0 8px;letter-spacing:-.01em}.ds h1{font-size:26px;font-weight:700}.ds h2{font-size:20px;font-weight:650;margin-top:32px}.ds h3{font-size:17px;font-weight:650}",
+  ".ds p{margin:0 0 12px}.ds small,.ds-muted{color:var(--ds-ink-2);font-size:14px}",
+  ".ds :focus-visible{outline:3px solid var(--ds-focus);outline-offset:2px;border-radius:6px}",
+  ".ds-skip{position:absolute;left:-9999px}.ds-skip:focus{left:16px;top:8px;z-index:20;background:var(--ds-surface);padding:8px 12px}",
+  ".ds-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}",
+  // top bar and page
+  ".ds-top{position:sticky;top:0;z-index:10;background:var(--ds-surface);border-bottom:1px solid var(--ds-line)}",
+  ".ds-top-in{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:60px}",
+  ".ds-brand{font-weight:700;font-size:17px;color:var(--ds-ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:8px}",
+  ".ds-brand small{font-weight:500}",
+  ".ds-main{max-width:960px;margin:0 auto;padding:20px 16px 64px}",
+  ".ds-head{margin:4px 0 20px}.ds-head p{color:var(--ds-ink-2);margin:4px 0 0}",
+  // buttons
+  ".ds .btn,.ds button.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:10px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}",
+  ".ds .btn:hover{background:var(--ds-surface-2)}.ds .btn:disabled,.ds .btn[aria-disabled=true]{opacity:.55;cursor:not-allowed}",
+  ".ds .btn.btn-primary{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds .btn.btn-primary:hover{background:var(--ds-accent-hover);border-color:var(--ds-accent-hover);color:var(--ds-on-accent)}",
+  ".ds .btn.btn-quiet{background:transparent;border-color:transparent;color:var(--ds-accent)}.ds .btn.btn-quiet:hover{background:var(--ds-accent-soft)}",
+  ".ds .btn.btn-block{width:100%}.ds .btn.btn-lg{min-height:52px;font-size:16px;padding:12px 20px}",
+  ".ds-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}",
+  // segmented control (views)
+  ".ds-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:var(--ds-surface-2);border-radius:var(--ds-r-m)}",
+  "@media (max-width:560px){.ds-seg{grid-auto-flow:row;grid-template-columns:1fr 1fr}}",
+  ".ds-seg button{min-height:44px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ds-ink-2);font:600 15px var(--ds-font);cursor:pointer;line-height:1.2}",
+  ".ds-seg button[aria-pressed=true],.ds-seg button[aria-selected=true]{background:var(--ds-surface);color:var(--ds-ink);box-shadow:var(--ds-shadow)}",
+  // Yes / No / Not sure
+  ".ds-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}",
+  ".ds-choices button{min-height:56px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 16px var(--ds-font);cursor:pointer}",
+  ".ds-choices button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}",
+  ".ds-choices button[aria-pressed=true]{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}",
+  ".ds-options{display:grid;gap:8px;margin-top:12px}.ds-options button{text-align:left;min-height:56px;padding:12px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:16px/1.4 var(--ds-font);cursor:pointer}",
+  ".ds-options button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}.ds-options button b{display:block;font-weight:650}",
+  ".ds-q{font-size:18px;font-weight:650;line-height:1.35;margin:6px 0}.ds-step{font-size:14px;color:var(--ds-ink-2);font-weight:600;letter-spacing:.02em}",
+  ".ds-progress{height:6px;border-radius:99px;background:var(--ds-surface-2);overflow:hidden;margin:8px 0 4px}.ds-progress>i{display:block;height:100%;background:var(--ds-accent);border-radius:99px}",
+  // cards, notes, badges
+  ".ds-card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}",
+  ".ds-card-title{font-size:17px;font-weight:650;line-height:1.35;margin:0}",
+  ".ds-meta{color:var(--ds-ink-2);font-size:14px;margin-top:4px}",
+  ".ds-note{border-radius:var(--ds-r-m);padding:12px 14px;margin:0 0 12px;background:var(--ds-accent-soft);color:var(--ds-ink);font-size:15px}",
+  ".ds-note-warn{background:var(--ds-warn-soft)}.ds-note-good{background:var(--ds-good-soft)}.ds-note-bad{background:var(--ds-bad-soft)}",
+  ".ds-badge{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;line-height:1;padding:5px 9px;border-radius:99px;background:var(--ds-surface-2);color:var(--ds-ink);white-space:nowrap}",
+  ".ds-badge-accent{background:var(--ds-accent-soft);color:var(--ds-accent-soft-ink)}.ds-badge-good{background:var(--ds-good-soft);color:var(--ds-good)}.ds-badge-warn{background:var(--ds-warn-soft);color:var(--ds-warn)}.ds-badge-bad{background:var(--ds-bad-soft);color:var(--ds-bad)}",
+  ".ds-good{color:var(--ds-good)}.ds-warn{color:var(--ds-warn)}.ds-bad{color:var(--ds-bad)}",
+  // stats
+  ".ds-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:0 0 16px}",
+  ".ds-stat{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-stat .k{font-size:14px;color:var(--ds-ink-2)}.ds-stat .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}",
+  // fields
+  ".ds input:not([type=radio]):not([type=checkbox]),.ds select,.ds textarea{font:16px/1.4 var(--ds-font);color:var(--ds-ink);background:var(--ds-surface);border:1px solid var(--ds-line-strong);border-radius:var(--ds-r-s);padding:10px 12px;min-height:44px;max-width:100%}",
+  ".ds textarea{width:100%}.ds label{font-size:15px}",
+  ".ds-field{display:grid;gap:4px;margin:0 0 12px}.ds-field>span{font-size:14px;font-weight:600;color:var(--ds-ink-2)}",
+  // disclosure
+  ".ds details.ds-more{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);margin:0 0 12px}",
+  ".ds details.ds-more>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-weight:650}",
+  ".ds details.ds-more>summary::-webkit-details-marker{display:none}.ds details.ds-more>summary::after{content:'+';font-size:22px;color:var(--ds-ink-2);font-weight:400}",
+  ".ds details.ds-more[open]>summary::after{content:'\\2212'}.ds details.ds-more>.ds-more-body{padding:0 16px 16px}",
+  // tables: scroll, never crush
+  ".ds-table-wrap{overflow-x:auto;border:1px solid var(--ds-line);border-radius:var(--ds-r-m);background:var(--ds-surface)}",
+  ".ds-table{width:100%;border-collapse:collapse;font-size:15px}.ds-table th{font-size:13px;font-weight:650;color:var(--ds-ink-2);text-transform:uppercase;letter-spacing:.04em;text-align:left;background:var(--ds-surface-2)}",
+  ".ds-table th,.ds-table td{padding:10px 12px;border-bottom:1px solid var(--ds-line);vertical-align:top}.ds-table tr:last-child td{border-bottom:0}",
+  ".ds-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.ds-table td.title{min-width:200px}",
+  // lists of items as cards on phones
+  ".ds-rows{display:grid;gap:8px}.ds-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-row .main{min-width:0;flex:1}.ds-row .side{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
+  // empty and loading
+  ".ds-empty{text-align:center;padding:32px 16px;color:var(--ds-ink-2);border:1px dashed var(--ds-line-strong);border-radius:var(--ds-r-l)}",
+  ".ds-empty b{display:block;color:var(--ds-ink);font-size:17px;margin-bottom:4px}",
+  ".ds pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:var(--ds-r-s);padding:12px;font:14px/1.5 var(--ds-mono);overflow-x:auto}",
+  ".ds hr{border:0;border-top:1px solid var(--ds-line);margin:24px 0}",
+  "@media (max-width:640px){.ds-hide-sm{display:none!important}.ds h1{font-size:23px}.ds-top-in{padding:8px 12px}}",
+  "@media (prefers-reduced-motion:reduce){.ds *{transition:none!important;animation:none!important}}"
+].join("\n");
+
+function dsEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+// The head of a page: charset, viewport, title, description, theme colours and the design system CSS. extraCss uses var(--ds-*) only.
+function dsHead(title, description, extraCss) {
+  return "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>" + dsEsc(title) + "</title>"
+    + (description ? "<meta name=\"description\" content=\"" + dsEsc(description) + "\">" : "")
+    + "<meta name=\"theme-color\" content=\"" + DS_TOKENS.light.surface + "\" media=\"(prefers-color-scheme: light)\"><meta name=\"theme-color\" content=\"" + DS_TOKENS.dark.surface + "\" media=\"(prefers-color-scheme: dark)\">"
+    + "<style>" + DS_CSS + (extraCss ? "\n" + extraCss : "") + "</style>";
+}
+
+// Machine-checkable parts of the standard, run on a rendered page. Returns a list of problems (empty when the page passes).
+function dsLint(html) {
+  var out = [], m, re;
+  if (String(html).indexOf("DESIGN-SYSTEM-1 v") < 0) out.push("page does not include DS_CSS");
+  if (!/<body[^>]*class="[^"]*\bds\b/.test(html)) out.push("body is missing class=\"ds\"");
+  if (!/name="?viewport"?/.test(html)) out.push("no viewport meta");
+  re = /font(?:-size)?\s*:\s*(?:[0-9]+\s+)?([0-9.]+)px/g;
+  while ((m = re.exec(html))) { if (+m[1] < 13) out.push("text under 13px: " + m[0]); }
+  re = /min-height\s*:\s*([0-9.]+)px/g;
+  var css = String(html).split("<style>").slice(1).map(function (s) { return s.split("</style>")[0]; }).join("\n");
+  re = /(button|\.btn)[^{}]*\{[^}]*min-height\s*:\s*([0-9.]+)px/g;
+  while ((m = re.exec(css))) { if (+m[2] < 40) out.push("button under the tap size: " + m[0].slice(0, 80)); }
+  if (/style="[^"]*#[0-9a-fA-F]{3,6}/.test(html)) out.push("inline style with a raw hex colour (use var(--ds-*))");
+  var prim = (html.match(/class="[^"]*\bbtn-primary\b/g) || []).length;
+  if (prim > 1) out.push("more than one primary button in the static page (" + prim + ")");
+  return out;
+}
+// DESIGN-SYSTEM-1:END
+// FLEET-DESIGN-1 (DESIGN-SYSTEM-2, #9926): the home page takes every colour, the type and the tap size from the shared design system
+// (DS_CSS is put in front of this block by v3Html); the names below are kept so the page script needs no change.
+var V3_CSS = String.raw`:root{--bg:var(--ds-bg);--card:var(--ds-surface);--ink:var(--ds-ink);--mut:var(--ds-ink-2);--rule:var(--ds-line);--ok:var(--ds-good);--warn:var(--ds-warn);--bad:var(--ds-bad);--acc:var(--ds-accent)}
+*{box-sizing:border-box}html,body.ds{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--ds-font)}
 header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;padding:12px 18px}
-header b{font-size:17px;letter-spacing:.2px}#pill{font-size:13px;color:var(--mut);display:flex;gap:7px;align-items:center}
+header b{font-size:17px;letter-spacing:.2px}#pill{font-size:14px;color:var(--mut);display:flex;gap:7px;align-items:center}
 #pill i{width:9px;height:9px;border-radius:50%;background:var(--mut);display:inline-block}#pill.ok i{background:var(--ok)}#pill.warn i{background:var(--warn)}#pill.bad i{background:var(--bad)}
 main{max-width:720px;margin:0 auto;padding:18px 16px 110px}.scr{display:none}.scr.on{display:block}
 .hero{border-radius:16px;padding:22px 20px;background:var(--card);border:1px solid var(--rule);border-left:6px solid var(--mut);margin-bottom:14px}
 .hero.ok{border-left-color:var(--ok)}.hero.warn{border-left-color:var(--warn)}.hero.bad{border-left-color:var(--bad)}
-.hero h1{margin:0 0 4px;font-size:26px;line-height:1.15}.hero p{margin:0;color:var(--mut)}
+.hero h1{margin:0 0 4px;font-size:26px;line-height:1.15}.ds .hero p{margin:0;color:var(--mut)}
 .card{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:16px 18px;margin-bottom:14px}
-.card h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);display:flex;justify-content:space-between;gap:8px}
+.card h2{margin:0 0 10px;font-size:14px;font-weight:650;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);display:flex;justify-content:space-between;gap:8px}
 .card h2 span{text-transform:none;letter-spacing:0;font-weight:400}.card h2 span.warn{color:var(--warn)}.card h2 span.bad{color:var(--bad)}
 .big{font-size:40px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}.row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--rule)}.row:first-of-type{border-top:0}
 .row span:last-child{font-variant-numeric:tabular-nums;color:var(--mut);text-align:right}.bar{height:8px;border-radius:5px;background:var(--rule);overflow:hidden;margin:10px 0 6px}.bar div{height:100%;background:var(--ok)}.bar.warn div{background:var(--warn)}.bar.bad div{background:var(--bad)}
-.note{color:var(--mut);font-size:14px;margin:8px 0 0}.err{color:var(--bad);font-size:14px}
+.ds .note{color:var(--mut);font-size:14px;margin:8px 0 0}.err{color:var(--bad);font-size:14px}
 .need{border-top:1px solid var(--rule);padding:12px 0}.need:first-of-type{border-top:0}.need b{display:block}.need small{color:var(--mut);display:block;margin:3px 0 8px}
-button{font:inherit;border:1px solid var(--rule);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 14px;cursor:pointer}button.pri{background:var(--acc);border-color:var(--acc);color:#fff}button:disabled{opacity:.5}
+button{font:600 15px/1.2 var(--ds-font);border:1px solid var(--ds-line-strong);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 16px;min-height:44px;cursor:pointer}button:hover{background:var(--ds-surface-2)}button.pri{background:var(--acc);border-color:var(--acc);color:var(--ds-on-accent)}button.pri:hover{background:var(--ds-accent-hover)}button.quiet{background:transparent;border-color:transparent;color:var(--acc)}button:disabled{opacity:.5}
+.need .acts{display:flex;flex-wrap:wrap;gap:8px}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--rule);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
-nav a{flex:1;max-width:240px;text-align:center;padding:14px 8px;color:var(--mut);text-decoration:none;font-weight:600}nav a.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+.ds nav a{flex:1;max-width:240px;text-align:center;padding:14px 8px;min-height:52px;color:var(--mut);text-decoration:none;font-weight:600}.ds nav a.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
 #log{min-height:40vh}.msg{margin:0 0 12px;padding:12px 14px;border-radius:12px;background:var(--card);border:1px solid var(--rule);white-space:pre-wrap;word-break:break-word;font-size:15px}
-.msg.you{background:transparent;border-style:dashed;color:var(--mut)}.steps{font:12.5px/1.5 ui-monospace,Consolas,monospace;color:var(--mut);margin:0 0 8px}
+.msg.you{background:transparent;border-style:dashed;color:var(--mut)}.steps{font:13px/1.5 var(--ds-mono);color:var(--mut);margin:0 0 8px}
 #cbar{position:fixed;left:0;right:0;bottom:52px;background:var(--bg);border-top:1px solid var(--rule);padding:10px 14px;display:none}#cbar.on{display:block}
 #cbar form{max-width:720px;margin:0 auto;display:flex;gap:8px}textarea,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:10px 12px;width:100%}textarea{resize:none;height:46px}
-.more{max-width:720px;margin:24px auto 0;padding:0 16px calc(84px + env(safe-area-inset-bottom));color:var(--mut);font-size:13px;text-align:center}.more a{display:inline-block;color:var(--mut);margin:0 2px;padding:8px 6px}.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.chips button{font-size:14px;padding:6px 12px}#sib{display:flex;gap:8px;margin-top:10px}`;
+.more{max-width:720px;margin:24px auto 0;padding:0 16px calc(84px + env(safe-area-inset-bottom));color:var(--mut);font-size:14px;text-align:center}.ds .more a{display:inline-block;color:var(--mut);margin:0 2px;padding:12px 8px}.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.chips button{font-size:15px;padding:8px 14px}#sib{display:flex;gap:8px;margin-top:10px}`;
 var V3_JS = String.raw`(function(){
 var $=function(i){return document.getElementById(i)};
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -3942,7 +4128,7 @@ else if(sp.ok&&ratio>1.1){tone='warn';title='Spending ahead of budget';sub='At t
 else sub='Nothing urgent needs you.'+(n.ok&&n.optional?' '+n.optional+' optional items are parked below.':'')+(n.ok&&n.fleet_handles?' The fleet is handling '+n.fleet_handles+' other items by itself.':'');
 var o='<div class="hero '+tone+'"><h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p></div>';
 var wk=d.work||{};o+='<div class="card"><h2>Your four numbers</h2><div class="row"><span>Readers: visits from a named source, 30 days</span><span>'+(wk.ok&&wk.referral_30d!=null?num(wk.referral_30d)+' for '+num(wk.publications_30d)+' papers':'n/a')+'</span></div><div class="row"><span>Cost: '+(ai0?'all-vendor forecast':'fleet pace')+' per month, against '+usd(sp.budget_month_usd)+'</span><span>'+(sp.ok&&fc!=null?usd(fc):'n/a')+'</span></div><div class="row"><span>Your load: urgent items</span><span>'+(n.ok?n.count:'n/a')+'</span></div><div class="row"><span>Reliability: workers reporting</span><span>'+(h.ok?h.workers_reporting+' of '+h.workers_total:'n/a')+'</span></div></div>';
-if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+(!it.key?'<small>Sign in on the Code tab to act on this.</small><div hidden>':'')+'<button data-k="'+esc(it.key)+'" data-h="1" class="pri">Fleet: you do it</button> <button data-k="'+esc(it.key)+'" data-a="snooze">Snooze 7 days</button> <button data-k="'+esc(it.key)+'" data-h="verify">I did it</button> <button data-k="'+esc(it.key)+'" data-a="snooze90">Not needed</button>'+(!it.key?'</div>':'')+'</div>'});o+='</div>'}
+if(n.ok&&n.items&&n.items.length){o+='<div class="card"><h2>'+(n.count>0?'Needs you':'Optional, not urgent')+'</h2>';n.items.forEach(function(it,ix){o+='<div class="need"><b>'+esc(it.title)+'</b>'+(it.why?'<small>'+esc(it.why)+'</small>':'<small>Sign in to see the detail.</small>')+(!it.key?'<small>Sign in on the Code tab to act on this.</small><div hidden>':'')+'<div class="acts"><button data-k="'+esc(it.key)+'" data-h="1"'+(ix===0&&it.key?' class="pri"':'')+'>Fleet: you do it</button><button data-k="'+esc(it.key)+'" data-h="verify">I did it</button><button data-k="'+esc(it.key)+'" data-a="snooze" class="quiet">Snooze 7 days</button><button data-k="'+esc(it.key)+'" data-a="snooze90" class="quiet">Not needed</button></div>'+(!it.key?'</div>':'')+'</div>'});o+='</div>'}
 o+='<div class="card"><h2>Money this month<span class="'+(sp.ok&&ratio>1.1?'bad':sp.ok?cls(sp.data_age_s,10800):'')+'">'+(sp.ok&&ratio!=null?Math.round(ratio*100)+'% of budget'+(ai0?' (all-in forecast)':' pace')+', ':'')+(sp.ok?'updated '+ago(sp.data_age_s):'')+'</span></h2>'+sec(sp,'spend');
 if(sp.ok){var pct=sp.budget_month_usd?Math.min(100,Math.round(sp.month_to_date_usd/sp.budget_month_usd*100)):0,bt=sp.pace_vs_budget>1.1?'bad':sp.pace_vs_budget>0.9?'warn':'';
 var ai=sp.all_in;if(ai&&ai.budget_month_usd){pct=Math.min(100,Math.round(ai.mtd_usd/ai.budget_month_usd*100));bt=ai.forecast_month_usd>ai.budget_month_usd*1.1?'bad':ai.forecast_month_usd>ai.budget_month_usd*0.9?'warn':''}
@@ -4006,7 +4192,7 @@ async function v3PublicBlock(env) {
 }
 function v3Html(env, pub) {
   pub = pub || { desc: "QNFO fleet dashboard: open issues, readers, papers, cost and live workers.", html: "" };
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><meta name="description" content="' + esc(pub.desc) + '"><link rel="canonical" href="https://fleet.qnfo.org/"><meta property="og:title" content="QNFO fleet: live status"><meta property="og:description" content="' + esc(pub.desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="https://fleet.qnfo.org/"><meta name="twitter:card" content="summary"><style>' + V3_CSS + '</style></head><body>' +
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><meta name="description" content="' + esc(pub.desc) + '"><link rel="canonical" href="https://fleet.qnfo.org/"><meta property="og:title" content="QNFO fleet: live status"><meta property="og:description" content="' + esc(pub.desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="https://fleet.qnfo.org/"><meta name="twitter:card" content="summary"><style>' + DS_CSS + '\n' + V3_CSS + '</style></head><body class="ds">' +
     '<header><b>Fleet</b><div id="pill"><i></i><span>loading</span></div></header><main><p id="off" class="err"></p>' + pub.html +
     '<section id="s-now" class="scr on"><div class="hero"><h1>Loading...</h1><p>Reading the fleet.</p></div></section>' +
     '<section id="s-readers" class="scr"><div class="hero"><h1>Loading...</h1></div></section>' +
@@ -4051,33 +4237,45 @@ async function focusAnswer(env, id, key, via) {
   await env.AUDIT.prepare("UPDATE owner_asks SET answer = ?1, answer_label = ?2, answered_at = ?3, answered_via = ?4 WHERE id = ?5").bind(opt.key, opt.label, new Date().toISOString(), via, row.id).run();
   return { ok: true, label: opt.label };
 }
+// FOCUS-DESIGN-1 (DESIGN-SYSTEM-2, #9926): /focus on the shared design system. One question in a card, the answers as equal tap buttons
+// (Yes / No / Not sure style ds-choices for up to three short answers, stacked ds-options otherwise), plain form posts so the page needs no script.
 function focusPage(state, ask, authed, notice) {
   const e = ownerEsc;
-  const o = ['<main style="max-width:680px;margin:0 auto;padding:18px 16px 48px"><h1>Research focus</h1><p class="mut">What the fleet works on next follows your answers. A paused line stops getting new papers; a line you push goes first. Every answer can be changed by the next one.</p>'];
-  if (notice) o.push("<p><strong>" + e(notice) + "</strong></p>");
+  const o = ['<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Fleet</a><a class="btn btn-quiet" href="/">Status</a></div></header><main class="ds-main" id="main" style="max-width:720px"><div class="ds-head"><h1>Research focus</h1><p>What the fleet works on next follows your answers. A paused line gets no new papers; a line you push goes first. The next answer can change any of them.</p></div>'];
+  if (notice) o.push('<p class="ds-note ' + (/^Saved/.test(notice) ? "ds-note-good" : "ds-note-warn") + '" role="status">' + e(notice) + "</p>");
   if (ask) {
-    o.push('<section style="border:1px solid #CBD5DE;border-radius:14px;padding:16px;margin:16px 0"><p style="font-size:1.15rem;font-weight:650;margin:0 0 6px">' + e(ask.question) + "</p>" + (ask.cue ? '<p class="mut" style="margin:0 0 12px">' + e(ask.cue) + "</p>" : ""));
+    o.push('<section class="ds-card" aria-label="Question"><div class="ds-step">Question' + (state.open_asks > 1 ? " 1 of " + e(String(state.open_asks)) : "") + '</div><p class="ds-q">' + e(ask.question) + "</p>" + (ask.cue ? '<p class="ds-muted">' + e(ask.cue) + "</p>" : ""));
     if (authed) {
-      o.push('<form method="post" action="/focus" style="display:flex;flex-wrap:wrap;gap:8px"><input type="hidden" name="id" value="' + e(String(ask.id)) + '">');
-      ask.options.forEach(function(op) { o.push('<button name="key" value="' + e(op.key) + '" style="font:inherit;padding:12px 16px;min-height:48px;border-radius:12px;border:1px solid #14213A;' + (op.key === "unsure" ? "background:transparent;color:inherit" : "background:#14213A;color:#fff") + '">' + e(op.label) + "</button>"); });
-      o.push("</form>");
-      if (state.open_asks > 1) o.push('<p class="mut" style="margin-top:8px">' + (state.open_asks - 1) + " more after this.</p>");
-    } else o.push('<p>Answer it on your phone: <a href="https://me.q08.org/companion">me.q08.org</a>, Today, Quick question. Or sign in here from <a href="/cmd">the command line</a>.</p>');
+      const opts = ask.options || [];
+      const short = opts.length <= 3 && opts.every(function(op) { return String(op.label || "").length <= 12; });
+      o.push('<form method="post" action="/focus"><input type="hidden" name="id" value="' + e(String(ask.id)) + '"><div class="' + (short ? "ds-choices" : "ds-options") + '" role="group" aria-label="' + e(ask.question) + '"' + (short ? ' style="grid-template-columns:repeat(' + opts.length + ',1fr)"' : "") + ">");
+      opts.forEach(function(op) { o.push('<button name="key" value="' + e(op.key) + '">' + e(op.label) + "</button>"); });
+      o.push("</div></form>");
+    } else o.push('<p class="ds-note">Answer it on your phone at <a href="https://me.q08.org/companion">me.q08.org</a> (Today, Quick question), or sign in on <a href="/cmd">the command line</a> and come back.</p>');
     o.push("</section>");
-  } else o.push('<p class="mut">No questions waiting. The next ones come within a day.</p>');
-  o.push('<h2>Where attention goes now</h2><table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">Line</th><th style="text-align:left">Your call</th><th>Waiting</th><th>Held</th><th>Published 30 d</th></tr>');
-  state.lines.forEach(function(l) {
-    o.push('<tr style="border-top:1px solid #CBD5DE"><td>' + e(l.label) + "</td><td>" + (l.stance ? "<strong>" + e(FOCUS_STANCE[l.stance] || l.stance) + "</strong>" : '<span class="mut">not asked yet</span>') + '</td><td style="text-align:center">' + e(String(l.waiting)) + '</td><td style="text-align:center">' + e(String(l.paused_by_owner)) + '</td><td style="text-align:center">' + e(String(l.published_30d)) + "</td></tr>");
-  });
-  o.push("</table>");
+  } else o.push('<div class="ds-empty"><b>No questions waiting</b>The next ones arrive within a day.</div>');
+  o.push('<h2>Where attention goes now</h2>');
+  if (state.lines.length) {
+    o.push('<div class="ds-table-wrap"><table class="ds-table"><thead><tr><th>Line</th><th>Your call</th><th class="num">Waiting</th><th class="num">Held</th><th class="num">Published 30 d</th></tr></thead><tbody>');
+    state.lines.forEach(function(l) {
+      const badge = l.stance === "push" ? "ds-badge-good" : l.stance === "pause" ? "ds-badge-warn" : "ds-badge-accent";
+      o.push('<tr><td class="title">' + e(l.label) + "</td><td>" + (l.stance ? '<span class="ds-badge ' + badge + '">' + e(FOCUS_STANCE[l.stance] || l.stance) + "</span>" : '<span class="ds-muted">Not asked yet</span>') + '</td><td class="num">' + e(String(l.waiting)) + '</td><td class="num">' + e(String(l.paused_by_owner)) + '</td><td class="num">' + e(String(l.published_30d)) + "</td></tr>");
+    });
+    o.push("</tbody></table></div>");
+  } else o.push('<div class="ds-empty"><b>No research lines yet</b>They appear here once the focus view can be read.</div>');
   if (state.recent.length) {
-    o.push("<h2>Your last answers</h2><ul>");
-    state.recent.forEach(function(r) { o.push("<li>" + e(r.question) + " <strong>" + e(r.answer_label || "") + '</strong> <span class="mut">' + e(String(r.answered_at || "").slice(0, 10)) + (r.answered_via ? ", " + e(r.answered_via) : "") + "</span></li>"); });
-    o.push("</ul>");
+    o.push('<h2>Your last answers</h2><div class="ds-rows">');
+    state.recent.forEach(function(r) { o.push('<div class="ds-row"><div class="main">' + e(r.question) + '<div class="ds-meta">' + e(String(r.answered_at || "").slice(0, 10)) + (r.answered_via ? ", " + e(r.answered_via) : "") + '</div></div><div class="side"><span class="ds-badge">' + e(r.answer_label || "") + "</span></div></div>"); });
+    o.push("</div>");
   }
-  if (state.unavailable.length) o.push('<p class="mut">Not readable right now: ' + e(state.unavailable.join(", ")) + ".</p>");
-  o.push('<p class="mut"><a href="/api/focus">JSON</a></p></main>');
+  if (state.unavailable.length) o.push('<p class="ds-note ds-note-warn">Not readable right now: ' + e(state.unavailable.join(", ")) + ". The page shows the rest and tries again on the next load.</p>");
+  o.push('<p class="ds-muted" style="margin-top:24px"><a href="/api/focus">The same data as JSON</a></p></main>');
   return o.join("");
+}
+// The /focus page wrapper: the owner page headers (no script, no framing) around a design-system document.
+function focusHtml(title, inner, status) {
+  const r = ownerHtml(title, "", status);
+  return new Response('<!doctype html><html lang="en"><head>' + dsHead(title, "Tap to set what the fleet researches next.") + '<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head><body class="ds">' + inner + "</body></html>", { status: r.status, headers: r.headers });
 }
 async function focusRoute(request, env, path, owner) {
   if (path !== "/focus" && path !== "/focus/" && path !== "/api/focus") return null;
@@ -4086,7 +4284,7 @@ async function focusRoute(request, env, path, owner) {
   const authed = !!(owner && (owner.authed || owner.loop));
   let notice = "";
   if (request.method === "POST") {
-    if (!authed) return ownerHtml("Research focus", '<main style="max-width:680px;margin:0 auto;padding:18px 16px"><p>Sign in first.</p><p><a href="/focus">Back</a></p></main>', 401);
+    if (!authed) return focusHtml("Research focus", '<main class="ds-main"><div class="ds-empty"><b>Sign in first</b>Your answer was not saved. <a href="/focus">Back to the question</a></div></main>', 401);
     let form = null;
     try { form = new URLSearchParams((await request.text()).slice(0, 2000)); } catch (e) { form = new URLSearchParams(); }
     const res = await focusAnswer(env, form.get("id"), String(form.get("key") || ""), "fleet.qnfo.org/focus");
@@ -4097,7 +4295,7 @@ async function focusRoute(request, env, path, owner) {
   notice = String(u.searchParams.get("done") || "").slice(0, 120);
   let ask = null;
   try { ask = await focusNextAsk(env); } catch (e) { ask = null; }
-  return ownerHtml("Research focus", focusPage(await focusState(env), ask, authed, notice));
+  return focusHtml("Research focus", focusPage(await focusState(env), ask, authed, notice));
 }
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
