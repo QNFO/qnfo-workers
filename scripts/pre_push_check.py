@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
 """PUSH-GATE-1: run a worker's suites, the narrative guard and the mirror check; exit 1 on any failure.
 Usage: python3 scripts/pre_push_check.py <worker> [--skip-guard]"""
-import glob, os, subprocess, sys
+import glob, os, shutil, subprocess, sys
+
+def suite_environment(platform=None, environ=None, git_path=None):
+    """Use Git's installed shell on Windows, not the WindowsApps WSL launcher.
+
+    This affects only suite subprocesses; the caller's environment and non-Windows
+    runners remain unchanged. No shell is installed or global setting modified.
+    """
+    env = dict(os.environ if environ is None else environ)
+    if (os.name if platform is None else platform) != 'nt':
+        return env
+    git_path = git_path or shutil.which('git', path=env.get('PATH'))
+    if git_path:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(git_path)))
+        bins = [os.path.join(root, 'bin'), os.path.join(root, 'usr', 'bin')]
+        if os.path.isfile(os.path.join(bins[0], 'bash.exe')):
+            env['PATH'] = os.pathsep.join(bins + [env.get('PATH', '')])
+    return env
 
 def run(cmd, cwd):
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    p = subprocess.run(cmd, cwd=cwd, env=suite_environment(), capture_output=True, text=True)
     return p.returncode, (p.stdout + p.stderr)
 
 def main(argv):
