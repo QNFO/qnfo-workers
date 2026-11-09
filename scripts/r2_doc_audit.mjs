@@ -4,7 +4,7 @@
 // Pure functions are exported for tests; the CLI reads a key list (JSON lines {bucket,key,size}) and a source blob.
 //   node scripts/r2_doc_audit.mjs --keys keys.jsonl --src-dir . [--emit out/]
 // Writes nothing to Cloudflare. Exit 1 with --strict when orphans exist.
-import { readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
 
 export const DOC_EXT = /\.(md|txt|pdf)$/i;
@@ -15,16 +15,56 @@ const RULE_ID = /\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)*-\d+\b/g;
 // Generic names (paper.md, README.md, PROJECT-PLAN.md ...) appear in unrelated source text; they count only by full key.
 export const GENERIC = /^(paper|paper-v[\d.]+|readme|project-plan|handoff|index|test|notes|synthesis|artifacts?)\.(md|txt|pdf)$/i;
 
+/** docs/retired-r2-documents.txt: `<bucket>/<prefix><TAB><reason>` per line; a retired prefix is a recorded decision, not an orphan. */
+export function parseRetired(text) {
+  return String(text || "").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#")).map((l) => {
+    const [prefix, ...why] = l.split("\t");
+    return { prefix: prefix.trim(), reason: why.join(" ").trim() };
+  }).filter((r) => r.prefix && r.reason);
+}
+
+/** One issue per project folder, not per file: bucket plus the first path segment. */
+export function groupKey(o) {
+  const parts = o.key.split("/");
+  return `${o.bucket}/${parts.length > 1 ? parts[0] : "(root)"}`;
+}
+
+export function groupOrphans(orphans) {
+  const g = new Map();
+  for (const o of orphans) { const k = groupKey(o); if (!g.has(k)) g.set(k, []); g.get(k).push(o); }
+  return [...g.entries()].sort((a, b) => b[1].length - a[1].length).map(([group, items]) => ({ group, items }));
+}
+
+export function groupIssueFor({ group, items }) {
+  const shown = items.slice(0, 300);
+  return {
+    title: `DOC-IS-CODE-1: implement or retire R2 documents under ${group}`,
+    labels: ["doc-orphan", "code-task"],
+    body: [
+      `Problem: ${items.length} document(s) under \`r2://${group}/\` are cited by no worker, script, migration or workflow and are not retired (NO-STANDALONE-DOCS-1). Each is also a roadmap_implementation row (source doc-orphan).`,
+      `Acceptance: for each document, code that uses what it specifies lands (a rule, probe, metric, migration or worker change) and cites the file name, or the prefix is retired by adding a line \`<bucket>/<prefix><TAB><reason>\` to docs/retired-r2-documents.txt in a PR.`,
+      `code-task: take the documents below in order; implement the ones that specify behaviour, retire the rest by prefix with the reason`,
+      `code-probe: node scripts/r2_doc_audit.mjs --keys <r2-keys.jsonl> --retired docs/retired-r2-documents.txt --src-dir . --strict reports no orphan under ${group}`,
+      `Pillar: core. Doer: the code loop (qnfo-code-orchestrator). Metric: orphan count under ${group} (${items.length} now) falls to 0.`,
+      "Documents:",
+      ...shown.map((o) => `- [ ] ${o.key} (${o.size} bytes)`),
+      ...(items.length > shown.length ? [`- and ${items.length - shown.length} more; the weekly sweep lists them all in its summary`] : []),
+    ].join("\n"),
+  };
+}
+
 export function isDoc(key) { return DOC_EXT.test(key) && !SKIP.test(key); }
 
 /** A doc is implemented when its file name, its key, or one of its rule ids appears in non-doc source. */
-export function classify(docs, srcBlob, texts = {}) {
+export function classify(docs, srcBlob, texts = {}, { retired = [], indexed = new Set() } = {}) {
   return docs.filter((d) => isDoc(d.key)).map((d) => {
     const stem = basename(d.key);
     const ids = [...new Set((texts[d.key] || "").match(RULE_ID) || [])];
     const hitPath = GENERIC.test(stem) ? srcBlob.includes(d.key) : (srcBlob.includes(stem) || srcBlob.includes(d.key));
     const hitIds = ids.filter((i) => srcBlob.includes(i));
-    return { bucket: d.bucket, key: d.key, size: d.size ?? 0, rule_ids: ids.length, ids_in_code: hitIds.length, path_in_code: hitPath, orphan: !hitPath && !hitIds.length };
+    const isRetired = retired.some((r) => `${d.bucket}/${d.key}`.startsWith(r.prefix));
+    const isIndexed = indexed.has(d.key) || indexed.has(`${d.bucket}/${d.key}`);
+    return { bucket: d.bucket, key: d.key, size: d.size ?? 0, rule_ids: ids.length, ids_in_code: hitIds.length, path_in_code: hitPath, retired: isRetired, indexed: isIndexed, orphan: !hitPath && !hitIds.length && !isRetired && !isIndexed };
   });
 }
 
@@ -64,12 +104,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const textsPath = arg("--texts");
   const texts = textsPath ? JSON.parse(readFileSync(textsPath, "utf8")) : {};
   const blob = walk(arg("--src-dir", ".")).map((f) => readFileSync(f, "utf8")).join("\n");
-  const rows = classify(keys, blob, texts);
+  const retiredPath = arg("--retired");
+  const retired = retiredPath && existsSync(retiredPath) ? parseRetired(readFileSync(retiredPath, "utf8")) : [];
+  const indexedPath = arg("--indexed");
+  const indexed = new Set(indexedPath && existsSync(indexedPath) ? JSON.parse(readFileSync(indexedPath, "utf8")) : []);
+  const rows = classify(keys, blob, texts, { retired, indexed });
   const orphans = rows.filter((r) => r.orphan);
   const emit = arg("--emit");
   if (emit) {
     mkdirSync(emit, { recursive: true });
-    writeFileSync(join(emit, "issues.jsonl"), orphans.map((o) => JSON.stringify(issueFor(o))).join("\n") + "\n");
+    writeFileSync(join(emit, "issues.jsonl"), groupOrphans(orphans).map((g) => JSON.stringify(groupIssueFor(g))).join("\n") + "\n");
     writeFileSync(join(emit, "roadmap.jsonl"), orphans.map((o) => JSON.stringify(roadmapRow(o))).join("\n") + "\n");
   }
   for (const r of rows) console.log(JSON.stringify(r));
