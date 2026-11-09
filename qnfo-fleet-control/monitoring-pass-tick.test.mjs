@@ -133,7 +133,7 @@ const contract = (db, cls) => db.prepare("SELECT * FROM remediation_contracts WH
 }
 // the wiring: the tick calls the pass after the overload stop, and the version bump keeps the mirror
 const tick = fnBody("async function remediationContractsTick(env, opts) {");
-ok(/if \(out\.stopped\) return out;[\s\S]{0,400}rtMonitoringPass\(db, \{ t0: t0, budgetMs: budgetMs \}\)/.test(tick), "remediationContractsTick calls rtMonitoringPass after the overload stop with the tick budget");
+ok(/if \(out\.stopped\) return out;[\s\S]{0,400}rtMonitoringPass\(db, \{ t0: Date\.now\(\), budgetMs: budgetMs \? RT_MONITORING_PASS_BUDGET_MS : 0 \}\)/.test(tick), "remediationContractsTick calls rtMonitoringPass after the overload stop with its own time slice (MONITORING-PASS-SLICE-1)");
 ok((src.match(/function rtMonitoringPass\(/g) || []).length === 1 && /async function rtMonitoringPass\(db, o\) \{/.test(src), "the function is defined once");
 const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
 ok(mirror === src, "deployed-current.worker.js is identical to worker.js");
