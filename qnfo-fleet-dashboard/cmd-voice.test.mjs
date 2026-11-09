@@ -45,7 +45,7 @@ ok(r.status === 503, "no AI binding is a 503", r);
 ok(/id="cmic"/.test(src) && /\/api\/cmd\/transcribe/.test(src) && /path === "\/api\/cmd\/transcribe"/.test(src), "the page has the Speak button and the route is wired before the JSON body parse");
 const routes = src.slice(src.indexOf("async function cmdRoutes("));
 ok(routes.indexOf('path === "/api/cmd/transcribe"') < routes.indexOf("b = await request.json();"), "the transcribe route runs before the JSON parse");
-ok(/^var VERSION = "1\.(7[5-9]|[89]\d)\.\d+"|^var VERSION = "[2-9]\./m.test(src), "VERSION is at least 1.75.0");
+ok(/^var VERSION = "1\.(7[5-9]|[89]\d|\d{3,})\.\d+"|^var VERSION = "[2-9]\./m.test(src), "VERSION is at least 1.75.0");
 
 // terminal client against a stub of the route
 let seen = null;

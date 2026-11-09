@@ -20,5 +20,5 @@ const gated = analyze('<html lang="en"><head><meta name="viewport" content="x"><
 ok(gated.findings[0].k === "auth-gated" && gated.score === 100, "401 is auth-gated, not a defect", gated);
 ok(/uxTargets\(env\)/.test(src) && /cf-rum-human/.test(src) && /entity_type = 'paper'/.test(src), "targets follow real readers");
 ok(/api\/seo\/crawl/.test(src) && /"crawl:" \+ host/.test(src), "crawler 404 paths are audit targets under crawl:<host>");
-ok(/ctx\.waitUntil\(uxAudit\(env\)\)/.test(src) && /var VERSION = "1\.(8[4-9]|9\d)\./.test(src), "wired and versioned");
+ok(/ctx\.waitUntil\(uxAudit\(env\)\)/.test(src) && /var VERSION = "1\.(8[4-9]|9\d|\d{3,})\./.test(src), "wired and versioned");
 console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);

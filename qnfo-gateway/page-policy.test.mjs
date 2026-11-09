@@ -16,7 +16,7 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
 
 const REF = "strict-origin-when-cross-origin";
-const PERM = "camera=(), microphone=(), geolocation=()";
+const PERM = "camera=(), microphone=(self), geolocation=()"; // VOICE-INPUT-1: the Ask box on paper pages has a mic, same-origin only
 const PUBLIC = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
 
 // ---- the pure helper ----
