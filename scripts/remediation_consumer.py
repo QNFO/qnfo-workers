@@ -1224,28 +1224,51 @@ def checkout_behind_contract(ts, root=None):
     return newer_than_checkout(ts, checkout_epoch(root)) and checkout_is_tip(root) is not True
 
 
+# STAMP-ESCALATE-1 (issue 9762, DOC-ITEMS-REMAINDER-1): the stamp never set status 'escalated', so a contract that kept failing sat at active forever
+# (grep escalat matched only the escalate_to column lists). A contract whose verdict is a real fail, with attempts + 1 >= max_attempts and as many
+# fails in a row since its last pass, takes 'escalated' and an escalate_to owner. Standing detectors (fm-* and belief-*, 335 contracts) are probes that
+# stay active by design and are exempt by class filter (DETECTOR-NEVER-PARKS-2), as are liveness contracts, which file RUNTIME-PROBE-FAIL-1 instead.
+ESCALATE_TO_DEFAULT = "qnfo-fleet-control"
+
+
+def verdict_next_status(c, rec):
+    """Status the stamp should move a d1-query or code-read contract to for this verdict: 'escalated' or None (keep)."""
+    if rec.get("verdict") != "fail" or is_standing_detector(c.get("class")) or c.get("module") == LIVENESS_MODULE:
+        return None
+    max_att = max(1, int(c.get("max_attempts") or 3))
+    if int(c.get("attempts") or 0) + 1 < max_att:
+        return None
+    try:
+        if fails_since_last_pass(c.get("class")) < max_att:
+            return None
+    except Exception:  # noqa: BLE001 - an unreadable history keeps the contract where it is
+        return None
+    return "escalated"
+
+
 def consume_code(c, rec, out, trusted):
     """Run one code-read contract against this checkout of main."""
     probe, why = parse_code_probe(c.get("verify_probe"))
     if probe is None:
         rec["verdict"], rec["reason"] = "probe-not-machine-executable", why
         out["skipped"] += 1
-        return
+        return None, None
     if CODE_TRANSPORT not in trusted:
         rec["verdict"], rec["reason"] = "untrusted-transport", "%r not trusted" % CODE_TRANSPORT
         out["skipped"] += 1
-        return
+        return None, None
     obs = run_code_probe(probe)
     passed, verdict = classify("ok", obs)
     if passed != 1 and checkout_behind_contract(c.get("ts")):
         rec.update({"expected": "ok", "observed": obs, "verdict": "checkout-older-than-contract",
                     "reason": "contract created %s, after this checkout's commit, and main has moved past it (or its tip cannot be read); the next run judges it" % c.get("ts")})
         out["skipped"] += 1
-        return
+        return None, None
     rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
     record_verification(c.get("issue_id"), c.get("class"), "code:" + ",".join(probe["paths"])[:200], CODE_TRANSPORT, "ok", obs, passed)
     rec["written"] = True
     out["pass" if passed == 1 else "fail"] += 1
+    return verdict_next_status(c, rec), None
 
 
 # PROBE-AUTHOR-SINK-GUARD-1 (2026-10-26, agent_issues 1000421, pillar security; doctrine section 9): the birth dry run of a probe the live-path author writes is gated to a number or one
@@ -1274,7 +1297,7 @@ def consume_d1(c, rec, out, trusted):
         rec["verdict"] = "probe-not-machine-executable"
         rec["reason"] = why
         out["skipped"] += 1
-        return
+        return None, None
     transport = c.get("verify_transport")
     if str(transport or "").startswith("d1-query@"):
         pid, why = plane_db_id(transport)
@@ -1282,7 +1305,7 @@ def consume_d1(c, rec, out, trusted):
             rec["verdict"] = why
             rec["reason"] = "%s is not run here (%s)" % (transport, why)
             out["skipped"] += 1
-            return
+            return None, None
         rows = d1_plane(transport, c["verify_probe"])
     else:
         rows = d1(c["verify_probe"])
@@ -1314,6 +1337,7 @@ def consume_d1(c, rec, out, trusted):
             out["pass"] += 1
         else:
             out["fail"] += 1
+    return verdict_next_status(c, rec), None
 
 
 def next_due_offset(cadence_h, steady_state=False):
@@ -1376,9 +1400,9 @@ def consume_one(c, trusted):
         if c.get("verify_transport") == HTTPS_TRANSPORT:
             next_status, cadence = consume_https(c, rec, local, trusted)
         elif c.get("verify_transport") == CODE_TRANSPORT:
-            consume_code(c, rec, local, trusted)
+            next_status, cadence = consume_code(c, rec, local, trusted)
         else:
-            consume_d1(c, rec, local, trusted)
+            next_status, cadence = consume_d1(c, rec, local, trusted)
     except Exception as e:  # noqa: BLE001 - one bad contract must not kill the run
         streak = transient_streak(c.get("last_verdict")) + 1
         rec["reason"] = str(e)[:300]
@@ -1432,8 +1456,10 @@ def consume_one(c, trusted):
             "last_attempt_at = datetime('now'), last_verdict = ?, "
             # CONSUMER-STAMP-STATUS-1 (session_01SPji35 root cause): a status another writer set between the probe and this stamp (the superseded-closure
             # trigger sets 'superseded') must not be written back; only an active or holding contract takes the verdict's next status.
-            "next_due_at = datetime('now', ?), status = CASE WHEN status IN ('active', 'holding') THEN COALESCE(?, status) ELSE status END WHERE class = ?",
-            [rec["verdict"], next_due_offset(cadence, steady_backoff), next_status, cls],
+            "next_due_at = datetime('now', ?), status = CASE WHEN status IN ('active', 'holding') THEN COALESCE(?, status) ELSE status END, "
+            # STAMP-ESCALATE-1: an escalation names its owner
+            "escalate_to = CASE WHEN ? = 'escalated' THEN COALESCE(NULLIF(escalate_to, ''), ?) ELSE escalate_to END WHERE class = ?",
+            [rec["verdict"], next_due_offset(cadence, steady_backoff), next_status, next_status, ESCALATE_TO_DEFAULT, cls],
         )
     except Exception as e:  # noqa: BLE001
         log("contract %s stamp failed: %s" % (cls, e))
