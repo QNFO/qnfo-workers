@@ -13,9 +13,9 @@ db.exec(`
   CREATE UNIQUE INDEX ux_pl ON project_ledger(project_id, task_id);
   CREATE TABLE projects (project_code TEXT);
   CREATE TABLE phases (project_code TEXT, phase_number INTEGER);
-  CREATE TABLE portfolio_gaps (id INTEGER PRIMARY KEY, kind TEXT, entity TEXT, status TEXT, detail TEXT, resolved_at TEXT);
+  CREATE TABLE portfolio_gaps (kind TEXT NOT NULL, entity TEXT NOT NULL, detail TEXT, day TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', resolved_at TEXT, PRIMARY KEY (kind, entity, day));
   INSERT INTO projects VALUES ('W.qnfo-companion-guard');
-  INSERT INTO portfolio_gaps (kind, entity, status) VALUES ('deploy-unrecorded','qnfo-companion-guard','open'), ('project-stale-deploy','W.qnfo-companion-guard','open'), ('deploy-unrecorded','other','open');
+  INSERT INTO portfolio_gaps (kind, entity, day, status) VALUES ('deploy-unrecorded','qnfo-companion-guard','2026-11-09','open'), ('project-stale-deploy','W.qnfo-companion-guard','2026-11-09','open'), ('deploy-unrecorded','other','2026-11-09','open');
 `);
 db.exec(migration);
 db.exec(migration); // idempotent
