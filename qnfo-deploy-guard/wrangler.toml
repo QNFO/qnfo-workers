@@ -51,3 +51,185 @@ crons = ["*/20 * * * *"]
 binding = "CH_PERSONAL_WATCH"
 service = "personal-watch"
 environment = "production"
+
+# DEPLOY-GUARD-HEALTH-BINDING-2 (issue 9708): one CH_<WORKER> binding per live worker directory with a /health route (all 200 on 2026-11-09), so refreshRegistryVersion never needs the public workers.dev hop.
+
+[[services]]
+binding = "CH_IDEA_HUB"
+service = "idea-hub"
+environment = "production"
+
+[[services]]
+binding = "CH_PERSONAL_API"
+service = "personal-api"
+environment = "production"
+
+[[services]]
+binding = "CH_PERSONAL_COMPANION"
+service = "personal-companion"
+environment = "production"
+
+[[services]]
+binding = "CH_Q08_MIND"
+service = "q08-mind"
+environment = "production"
+
+[[services]]
+binding = "CH_Q08_PREDICTION_MARKETS"
+service = "q08-prediction-markets"
+environment = "production"
+
+[[services]]
+binding = "CH_Q08_SIGNAL_ENGINE"
+service = "q08-signal-engine"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AGENTS"
+service = "qnfo-agents"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AI_CALIBRATION"
+service = "qnfo-ai-calibration"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AI_SEARCH"
+service = "qnfo-ai-search"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AI_YIELD"
+service = "qnfo-ai-yield"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_CLOUD_OPS"
+service = "qnfo-cloud-ops"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_CODE_ORCHESTRATOR"
+service = "qnfo-code-orchestrator"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_COMPANION_GUARD"
+service = "qnfo-companion-guard"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_CONTAINERS_PILOT"
+service = "qnfo-containers-pilot"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_FLEET_CONTROL"
+service = "qnfo-fleet-control"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_FLEET_DASHBOARD"
+service = "qnfo-fleet-dashboard"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_GATEWAY"
+service = "qnfo-gateway"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_GITHUB_STEWARD"
+service = "qnfo-github-steward"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_INFRA"
+service = "qnfo-infra"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_INTENT_ORCHESTRATOR"
+service = "qnfo-intent-orchestrator"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_IPATENT"
+service = "qnfo-ipatent"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_JOBSEARCH"
+service = "qnfo-jobsearch"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_LIFECYCLE"
+service = "qnfo-lifecycle"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_MEMORY_MCP"
+service = "qnfo-memory-mcp"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_OBSERVABILITY"
+service = "qnfo-observability"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_OPS"
+service = "qnfo-ops"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_PDF"
+service = "qnfo-pdf"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_RESEARCH_EXEC"
+service = "qnfo-research-exec"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_SOCIAL"
+service = "qnfo-social"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_SUBSCRIBERS"
+service = "qnfo-subscribers"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_TOOLS_MCP"
+service = "qnfo-tools-mcp"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_WASTE_AGENT"
+service = "qnfo-waste-agent"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_YOUTUBE_SHORTS"
+service = "qnfo-youtube-shorts"
+environment = "production"
+
+[[services]]
+binding = "CH_RADAR_HUB"
+service = "radar-hub"
+environment = "production"
