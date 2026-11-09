@@ -9,7 +9,7 @@ for (const file of ["worker.js", "deployed-current.worker.js"]) {
     const src = readFileSync(new URL("./" + file, import.meta.url), "utf8");
     const bare = /(^|[^.\w])erratapublishMod\.renderSourceHtml/.test(src);
     const topLevel = /^var erratapublishMod = /m.test(src);
-    const viaGlobal = /globalThis\.__erratapublishMod\.renderSourceHtml/.test(src) && /globalThis\.__erratapublishMod = erratapublishMod2;/.test(src);
+    const viaGlobal = /globalThis\.__erratapublishMod\.renderSourceHtml/.test(src) && /globalThis\.__erratapublishMod = erratapublishMod\d*;/.test(src);
     assert.ok((bare && topLevel) || viaGlobal, "renderSourceHtml is reached through a name that is defined where it is used");
   });
 }
