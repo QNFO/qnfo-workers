@@ -1936,8 +1936,8 @@ async function travelTick(env, deps = {}) {
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 
 function page(title, inner, status) {
-  const html = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>" + esc(title) + "</title>" +
-    "<style>body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a;background:#fff}a{color:#0b57d0}button{font:inherit;padding:.6rem 1rem;margin:.25rem .5rem .25rem 0;border-radius:.5rem;border:1px solid #888;background:#f4f4f4;cursor:pointer}.pick{background:#0b57d0;color:#fff;border-color:#0b57d0}.muted{color:#555}@media(prefers-color-scheme:dark){body{background:#121212;color:#eee}a{color:#8ab4f8}button{background:#222;color:#eee}.muted{color:#aaa}}</style></head><body>" + inner + "</body></html>";
+  // TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): the sign-in and approval pages use the shared design system; buttons are the ds buttons, one primary per screen.
+  const html = "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\">" + trvHead(title, "", "body.ds{max-width:34rem;margin:0 auto;padding:24px 16px}.ds button{font:inherit;min-height:44px;min-width:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);cursor:pointer}.ds button.pick{background:var(--ds-accent);color:var(--ds-on-accent);border-color:var(--ds-accent)}.ds .muted{color:var(--ds-ink-2)}") + "</head><body class=\"ds\">" + inner + "</body></html>";
   return new Response(html, { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" } });
 }
 
@@ -2256,22 +2256,25 @@ async function chatState(db, c, nowMs) {
   return { history: hist, where, models: { current: chatModels(c)[0], menu: CHAT_MODEL_MENU }, known: profile.map((p) => ({ id: p.id, facet: p.facet, label: p.label, statement: p.statement, removable: p.facet === "travel" })) };
 }
 
-function chatPage(nonce) {
-  return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><meta name=\"robots\" content=\"noindex\"><title>Travel planner</title><style nonce=\"" + nonce + "\">" + CHAT_CSS + "</style></head><body>" + CHAT_BODY + "<script nonce=\"" + nonce + "\">" + CHAT_JS + "</script></body></html>";
+// TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): in the worker the shared design system's dsHead() is in scope; standalone (the suites load this file alone) a plain head stands in.
+function trvHead(title, css) {
+  return typeof dsHead === "function" ? dsHead(title, "", css) : "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + esc(title) + "</title><style>" + css + "</style>";
 }
-
-const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;--line:#dedbd4;--accent:#0b57d0;--accent-ink:#fff;--me:#e6eefc;--warn:#9a3412}" +
-  "@media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;--accent:#8ab4f8;--accent-ink:#0b0b0b;--me:#23314d;--warn:#fdba74}}" +
-  "*{box-sizing:border-box}html,body{margin:0;height:100%}body{font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}" +
-  "header{padding:.75rem 1rem;border-bottom:1px solid var(--line);display:flex;gap:.75rem;align-items:baseline;flex-wrap:wrap}header h1{font-size:1.1rem;margin:0}#where{color:var(--muted);font-size:.9rem}" +
+function chatPage(nonce) {
+  return "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\">" + trvHead("Travel planner", "", CHAT_CSS).replace("<style>", "<style nonce=\"" + nonce + "\">") + "</head><body class=\"ds\">" + CHAT_BODY + "<script nonce=\"" + nonce + "\">" + CHAT_JS + "</script></body></html>";
+}
+const CHAT_CSS = "/* TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): neutrals, accent, warning colour and contrast come from the shared design system (light and dark). */" +
+  ":root{--bg:var(--ds-bg);--card:var(--ds-surface);--ink:var(--ds-ink);--muted:var(--ds-ink-2);--line:var(--ds-line);--accent:var(--ds-accent);--accent-ink:var(--ds-on-accent);--me:var(--ds-accent-soft);--warn:var(--ds-warn)}" +
+  "*{box-sizing:border-box}html,body{margin:0;height:100%}body.ds{font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}" +
+  "header{padding:.75rem 1rem;border-bottom:1px solid var(--line);display:flex;gap:.75rem;align-items:baseline;flex-wrap:wrap}.ds header h1{font-size:1.1rem;margin:0;font-weight:700}#where{color:var(--muted);font-size:.9rem}" +
   "main{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}" +
   ".msg{margin:0 0 1rem;max-width:100%}.msg.user{margin-left:auto;background:var(--me);padding:.55rem .85rem;border-radius:1rem 1rem .25rem 1rem;width:fit-content;max-width:85%}" +
   ".msg.assistant .text p{margin:.3rem 0}.msg.assistant .text ul{margin:.3rem 0;padding-left:1.2rem}.err{color:var(--warn)}" +
   ".opts{display:grid;gap:.6rem;margin:.6rem 0}.opt{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.75rem .9rem}.opt.pick{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}" +
-  ".opt h3{margin:0;font-size:1.02rem}.opt .meta{color:var(--muted);font-size:.88rem}.opt .why{margin:.35rem 0}.opt .tag{font-size:.75rem;color:var(--accent);font-weight:600;margin-left:.4rem}" +
+  ".opt h3{margin:0;font-size:1.02rem}.opt .meta{color:var(--muted);font-size:.88rem}.opt .why{margin:.35rem 0}.opt .tag{font-size:.875rem;color:var(--accent);font-weight:600;margin-left:.4rem}" +
   ".opt.rejected{opacity:.55}.opt.picked{border-color:var(--accent)}.row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.45rem;align-items:center}" +
-  "button,.btn{font:inherit;font-size:.92rem;padding:.42rem .8rem;border-radius:.6rem;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}" +
-  "button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}a{color:var(--accent)}" +
+  "button,.btn{font:inherit;font-size:.92rem;min-height:44px;min-width:44px;padding:.42rem .8rem;border-radius:.6rem;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}" +
+  "button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}.ds a{color:var(--accent)}" +
   ".chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.q{margin:.5rem 0 .2rem;font-weight:600}" +
   ".learned{font-size:.85rem;color:var(--muted);margin:.3rem 0}" +
   "footer{border-top:1px solid var(--line);padding:.6rem .75rem calc(.6rem + env(safe-area-inset-bottom));background:var(--bg)}" +
@@ -2279,16 +2282,16 @@ const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;-
   "details{max-width:44rem;margin:.4rem auto 0;font-size:.9rem;color:var(--muted)}details li{margin:.2rem 0}select{font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:.4rem;padding:.2rem}" +
   ".typing{color:var(--muted);font-style:italic}" +
   "nav.tabs{display:flex;gap:.3rem;margin-left:auto}nav.tabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}" +
-  "section.tab{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}section.tab h2{font-size:1rem;margin:1.2rem 0 .5rem}" +
+  "section.tab{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}.ds section.tab h2{font-size:1rem;margin:1.2rem 0 .5rem;font-weight:650}" +
   ".card{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.7rem .9rem;margin:0 0 .6rem}.card.warn{border-color:var(--warn)}.card.over{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn)}" +
   ".big{font-size:1.4rem;font-weight:700}.flag{color:var(--warn);font-size:.88rem;margin:.15rem 0}.muted{color:var(--muted);font-size:.88rem}" +
-  ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.75rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
+  ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.875rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
   "pre.draft{white-space:pre-wrap;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:.5rem;padding:.5rem;margin:.4rem 0}" +
   ".ed{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.ed label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.ed input{font:inherit;font-size:.92rem;padding:.3rem .4rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);max-width:11rem}" +
   ".pillar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.45rem 0 0}.picks{flex-basis:100%;margin:.1rem 0 .2rem;padding-left:1.1rem}.picks li{margin:.3rem 0}button.small{font-size:.8rem;padding:.15rem .5rem;margin:.2rem 0 0}.pillar .pl{font-weight:600;font-size:.85rem;min-width:3.2rem}" +
   "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}" +
-  ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:2.4rem;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:#b45309}" +
-  ".st{font-size:.75rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
+  ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:44px;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:var(--warn)}" +
+  ".st{font-size:.875rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
 
 const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
@@ -3732,7 +3735,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.47.7-codeagent";
+var VERSION = "1.48.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -5510,24 +5513,208 @@ function formLabel(f) {
 __name(formLabel, "formLabel");
 __name2(formLabel, "formLabel");
 __name22(formLabel, "formLabel");
+// DESIGN-SYSTEM-1:BEGIN (sourced from _shared/design-system.js; applied by _shared/inline-design-system.mjs; do not edit inside a worker)
+// ---- DESIGN-SYSTEM-1 (owner directive 2026-11-09). One design system for every page a person opens on q08.org, qnfo.org or qwav.org.
+//
+// WHAT. Design tokens (colour, type, spacing, radius, tap size) for a light and a dark theme, the CSS built from them, and the component
+// classes every fleet page uses: top bar, page, card, button (primary, secondary, quiet), segmented control, Yes / No / Not sure choices,
+// stat tiles, notes, badges, fields, disclosure, tables that scroll instead of crushing, empty states. Plus dsContrast(), so the contrast of
+// every text and control colour pair is proven by '_shared/design-system.test.mjs' (WCAG 2.2 AA), and dsLint(), the check that fails a
+// page with text under 13 px, a field under 16 px (iOS zooms) or a button under the 44 px tap size.
+//
+// WHY. Owner, 2026-11-09: "bad UI makes me sad ... the job site and even the markets ... are great examples of bad design ... implement
+// design standards ... Don't give me shitty design anywhere." Before this file each worker carried its own inline palette (jobs: 13 px
+// muted text and 12 px badges; markets: an unstyled 15 px system page with 8 px buttons and tables that broke words letter by letter on a
+// phone). The standard below is written once here and inlined into each page's worker.
+//
+// THE STANDARD (what every page follows; the test enforces the parts a machine can check).
+//  1. One primary action per screen. Exactly one .btn-primary is visible in a view; everything else is secondary or quiet.
+//  2. Hierarchy before decoration. A page title, one sentence of status, then the content. Status lines are stat tiles, not run-on text.
+//  3. Tap, do not type. Choices are buttons (Yes / No / Not sure, segmented views), never free text or tiny radio buttons. 44 px minimum.
+//  4. Progressive disclosure. Secondary tools, links and explanations sit behind a "More" disclosure, not in the top bar.
+//  5. Calm. Neutral surfaces, one accent colour, colour carries meaning only for good / warning / bad, generous spacing (8 px scale).
+//  6. Readable. 16 px body, 14 px minimum for secondary text, line length under 75 characters for prose, tabular numbers in figures.
+//  7. Accessible. WCAG 2.2 AA contrast in both themes, visible focus ring, labels on every field, reduced motion respected.
+//  8. Every state designed. Loading, empty and error states say what happens next in one sentence.
+//
+// HOW TO ADOPT. 1) 'node _shared/inline-design-system.mjs <worker> --anchor "<line prefix>"' once (later runs replace the block in place,
+// '--check' reports a stale copy). 2) Put '<style>${DS_CSS}</style>' (or dsHead(title)) in the page head and give <body> class="ds".
+// 3) Build with the classes below; page-specific CSS uses the var(--ds-*) tokens, never raw hex. 4) Add the worker to ADOPTERS in
+// '_shared/design-system.test.mjs', which renders the page and runs dsLint on it.
+//
+// RULES FOR EDITING. ES5 style (var and function), no import or export, every name starts with DS_ or ds, no '*' followed by '/' inside a
+// comment, no backtick anywhere (the block is inlined into workers that hold their pages in template literals). Version every change in DS_VERSION.
+var DS_VERSION = "1.0.0";
+
+var DS_TOKENS = {
+  light: {
+    bg: "#f5f6f8", surface: "#ffffff", surface2: "#eef1f5", ink: "#15181e", ink2: "#4b5363", line: "#d5dae1", lineStrong: "#7b8494",
+    accent: "#1d4ed8", accentHover: "#1e40af", onAccent: "#ffffff", accentSoft: "#e3eaff", accentSoftInk: "#1e3a8a",
+    good: "#166534", goodSoft: "#dcfce7", warn: "#854d0e", warnSoft: "#fef3c7", bad: "#b42318", badSoft: "#fee4e2", focus: "#2563eb"
+  },
+  dark: {
+    bg: "#0e1116", surface: "#161a21", surface2: "#1d222b", ink: "#e8ebf0", ink2: "#a4adbb", line: "#2b313c", lineStrong: "#6b7385",
+    accent: "#8cb4ff", accentHover: "#a9c6ff", onAccent: "#0a1530", accentSoft: "#1b2a4a", accentSoftInk: "#c7d8ff",
+    good: "#6ee7a0", goodSoft: "#12301f", warn: "#f6c453", warnSoft: "#33270d", bad: "#ff9a8f", badSoft: "#3a1715", focus: "#8cb4ff"
+  },
+  font: "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+  mono: "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
+  size: { small: 14, body: 16, lead: 18, h3: 17, h2: 20, h1: 26, stat: 26 },
+  space: [0, 4, 8, 12, 16, 24, 32, 48],
+  radius: { s: 8, m: 12, l: 16, pill: 999 },
+  tap: 44,
+  maxWidth: 960
+};
+
+// The pairs whose contrast the test proves in both themes: [foreground token, background token, minimum ratio].
+var DS_CONTRAST_PAIRS = [
+  ["ink", "bg", 4.5], ["ink", "surface", 4.5], ["ink", "surface2", 4.5], ["ink2", "bg", 4.5], ["ink2", "surface", 4.5], ["ink2", "surface2", 4.5],
+  ["accent", "surface", 4.5], ["accent", "bg", 4.5], ["onAccent", "accent", 4.5], ["onAccent", "accentHover", 4.5], ["accentSoftInk", "accentSoft", 4.5],
+  ["good", "surface", 4.5], ["good", "goodSoft", 4.5], ["warn", "surface", 4.5], ["warn", "warnSoft", 4.5], ["bad", "surface", 4.5], ["bad", "badSoft", 4.5],
+  ["ink", "warnSoft", 4.5], ["ink", "goodSoft", 4.5], ["ink", "badSoft", 4.5], ["ink", "accentSoft", 4.5],
+  ["lineStrong", "surface", 3], ["focus", "surface", 3], ["focus", "bg", 3]
+];
+
+function dsLum(hex) {
+  var h = String(hex).replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var c = [0, 2, 4].map(function (i) { var v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function dsContrast(a, b) { var x = dsLum(a), y = dsLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
+function dsVars(t) {
+  var map = { bg: "bg", surface: "surface", surface2: "surface-2", ink: "ink", ink2: "ink-2", line: "line", lineStrong: "line-strong", accent: "accent",
+    accentHover: "accent-hover", onAccent: "on-accent", accentSoft: "accent-soft", accentSoftInk: "accent-soft-ink", good: "good", goodSoft: "good-soft",
+    warn: "warn", warnSoft: "warn-soft", bad: "bad", badSoft: "bad-soft", focus: "focus" };
+  return Object.keys(map).map(function (k) { return "--ds-" + map[k] + ":" + t[k]; }).join(";");
+}
+
+var DS_CSS = [
+  "/* DESIGN-SYSTEM-1 v" + DS_VERSION + " (_shared/design-system.js) */",
+  ":root{color-scheme:light dark;" + dsVars(DS_TOKENS.light) + ";--ds-font:" + DS_TOKENS.font + ";--ds-mono:" + DS_TOKENS.mono + ";--ds-tap:" + DS_TOKENS.tap + "px;--ds-r-s:8px;--ds-r-m:12px;--ds-r-l:16px;--ds-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08)}",
+  "@media (prefers-color-scheme:dark){:root{" + dsVars(DS_TOKENS.dark) + ";--ds-shadow:none}}",
+  "*,*::before,*::after{box-sizing:border-box}",
+  "body.ds{margin:0;background:var(--ds-bg);color:var(--ds-ink);font:16px/1.55 var(--ds-font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}",
+  ".ds a{color:var(--ds-accent);text-underline-offset:2px}.ds a:hover{color:var(--ds-accent-hover)}",
+  ".ds h1,.ds h2,.ds h3{line-height:1.25;margin:0 0 8px;letter-spacing:-.01em}.ds h1{font-size:26px;font-weight:700}.ds h2{font-size:20px;font-weight:650;margin-top:32px}.ds h3{font-size:17px;font-weight:650}",
+  ".ds p{margin:0 0 12px}.ds small,.ds-muted{color:var(--ds-ink-2);font-size:14px}",
+  ".ds :focus-visible{outline:3px solid var(--ds-focus);outline-offset:2px;border-radius:6px}",
+  ".ds-skip{position:absolute;left:-9999px}.ds-skip:focus{left:16px;top:8px;z-index:20;background:var(--ds-surface);padding:8px 12px}",
+  ".ds-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}",
+  // top bar and page
+  ".ds-top{position:sticky;top:0;z-index:10;background:var(--ds-surface);border-bottom:1px solid var(--ds-line)}",
+  ".ds-top-in{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:60px}",
+  ".ds-brand{font-weight:700;font-size:17px;color:var(--ds-ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:8px}",
+  ".ds-brand small{font-weight:500}",
+  ".ds-main{max-width:960px;margin:0 auto;padding:20px 16px 64px}",
+  ".ds-head{margin:4px 0 20px}.ds-head p{color:var(--ds-ink-2);margin:4px 0 0}",
+  // buttons
+  ".ds .btn,.ds button.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:10px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}",
+  ".ds .btn:hover{background:var(--ds-surface-2)}.ds .btn:disabled,.ds .btn[aria-disabled=true]{opacity:.55;cursor:not-allowed}",
+  ".ds .btn.btn-primary{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds .btn.btn-primary:hover{background:var(--ds-accent-hover);border-color:var(--ds-accent-hover);color:var(--ds-on-accent)}",
+  ".ds .btn.btn-quiet{background:transparent;border-color:transparent;color:var(--ds-accent)}.ds .btn.btn-quiet:hover{background:var(--ds-accent-soft)}",
+  ".ds .btn.btn-block{width:100%}.ds .btn.btn-lg{min-height:52px;font-size:16px;padding:12px 20px}",
+  ".ds-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}",
+  // segmented control (views)
+  ".ds-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:var(--ds-surface-2);border-radius:var(--ds-r-m)}",
+  "@media (max-width:560px){.ds-seg{grid-auto-flow:row;grid-template-columns:1fr 1fr}}",
+  ".ds-seg button{min-height:44px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ds-ink-2);font:600 15px var(--ds-font);cursor:pointer;line-height:1.2}",
+  ".ds-seg button[aria-pressed=true],.ds-seg button[aria-selected=true]{background:var(--ds-surface);color:var(--ds-ink);box-shadow:var(--ds-shadow)}",
+  // Yes / No / Not sure
+  ".ds-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}",
+  ".ds-choices button{min-height:56px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 16px var(--ds-font);cursor:pointer}",
+  ".ds-choices button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}",
+  ".ds-choices button[aria-pressed=true]{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}",
+  ".ds-options{display:grid;gap:8px;margin-top:12px}.ds-options button{text-align:left;min-height:56px;padding:12px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:16px/1.4 var(--ds-font);cursor:pointer}",
+  ".ds-options button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}.ds-options button b{display:block;font-weight:650}",
+  ".ds-q{font-size:18px;font-weight:650;line-height:1.35;margin:6px 0}.ds-step{font-size:14px;color:var(--ds-ink-2);font-weight:600;letter-spacing:.02em}",
+  ".ds-progress{height:6px;border-radius:99px;background:var(--ds-surface-2);overflow:hidden;margin:8px 0 4px}.ds-progress>i{display:block;height:100%;background:var(--ds-accent);border-radius:99px}",
+  // cards, notes, badges
+  ".ds-card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}",
+  ".ds-card-title{font-size:17px;font-weight:650;line-height:1.35;margin:0}",
+  ".ds-meta{color:var(--ds-ink-2);font-size:14px;margin-top:4px}",
+  ".ds-note{border-radius:var(--ds-r-m);padding:12px 14px;margin:0 0 12px;background:var(--ds-accent-soft);color:var(--ds-ink);font-size:15px}",
+  ".ds-note-warn{background:var(--ds-warn-soft)}.ds-note-good{background:var(--ds-good-soft)}.ds-note-bad{background:var(--ds-bad-soft)}",
+  ".ds-badge{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;line-height:1;padding:5px 9px;border-radius:99px;background:var(--ds-surface-2);color:var(--ds-ink);white-space:nowrap}",
+  ".ds-badge-accent{background:var(--ds-accent-soft);color:var(--ds-accent-soft-ink)}.ds-badge-good{background:var(--ds-good-soft);color:var(--ds-good)}.ds-badge-warn{background:var(--ds-warn-soft);color:var(--ds-warn)}.ds-badge-bad{background:var(--ds-bad-soft);color:var(--ds-bad)}",
+  ".ds-good{color:var(--ds-good)}.ds-warn{color:var(--ds-warn)}.ds-bad{color:var(--ds-bad)}",
+  // stats
+  ".ds-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:0 0 16px}",
+  ".ds-stat{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-stat .k{font-size:14px;color:var(--ds-ink-2)}.ds-stat .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}",
+  // fields
+  ".ds input:not([type=radio]):not([type=checkbox]),.ds select,.ds textarea{font:16px/1.4 var(--ds-font);color:var(--ds-ink);background:var(--ds-surface);border:1px solid var(--ds-line-strong);border-radius:var(--ds-r-s);padding:10px 12px;min-height:44px;max-width:100%}",
+  ".ds textarea{width:100%}.ds label{font-size:15px}",
+  ".ds-field{display:grid;gap:4px;margin:0 0 12px}.ds-field>span{font-size:14px;font-weight:600;color:var(--ds-ink-2)}",
+  // disclosure
+  ".ds details.ds-more{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);margin:0 0 12px}",
+  ".ds details.ds-more>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-weight:650}",
+  ".ds details.ds-more>summary::-webkit-details-marker{display:none}.ds details.ds-more>summary::after{content:'+';font-size:22px;color:var(--ds-ink-2);font-weight:400}",
+  ".ds details.ds-more[open]>summary::after{content:'\\2212'}.ds details.ds-more>.ds-more-body{padding:0 16px 16px}",
+  // tables: scroll, never crush
+  ".ds-table-wrap{overflow-x:auto;border:1px solid var(--ds-line);border-radius:var(--ds-r-m);background:var(--ds-surface)}",
+  ".ds-table{width:100%;border-collapse:collapse;font-size:15px}.ds-table th{font-size:13px;font-weight:650;color:var(--ds-ink-2);text-transform:uppercase;letter-spacing:.04em;text-align:left;background:var(--ds-surface-2)}",
+  ".ds-table th,.ds-table td{padding:10px 12px;border-bottom:1px solid var(--ds-line);vertical-align:top}.ds-table tr:last-child td{border-bottom:0}",
+  ".ds-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.ds-table td.title{min-width:200px}",
+  // lists of items as cards on phones
+  ".ds-rows{display:grid;gap:8px}.ds-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-row .main{min-width:0;flex:1}.ds-row .side{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
+  // empty and loading
+  ".ds-empty{text-align:center;padding:32px 16px;color:var(--ds-ink-2);border:1px dashed var(--ds-line-strong);border-radius:var(--ds-r-l)}",
+  ".ds-empty b{display:block;color:var(--ds-ink);font-size:17px;margin-bottom:4px}",
+  ".ds pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:var(--ds-r-s);padding:12px;font:14px/1.5 var(--ds-mono);overflow-x:auto}",
+  ".ds hr{border:0;border-top:1px solid var(--ds-line);margin:24px 0}",
+  "@media (max-width:640px){.ds-hide-sm{display:none!important}.ds h1{font-size:23px}.ds-top-in{padding:8px 12px}}",
+  "@media (prefers-reduced-motion:reduce){.ds *{transition:none!important;animation:none!important}}"
+].join("\n");
+
+function dsEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+// The head of a page: charset, viewport, title, description, theme colours and the design system CSS. extraCss uses var(--ds-*) only.
+function dsHead(title, description, extraCss) {
+  return "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>" + dsEsc(title) + "</title>"
+    + (description ? "<meta name=\"description\" content=\"" + dsEsc(description) + "\">" : "")
+    + "<meta name=\"theme-color\" content=\"" + DS_TOKENS.light.surface + "\" media=\"(prefers-color-scheme: light)\"><meta name=\"theme-color\" content=\"" + DS_TOKENS.dark.surface + "\" media=\"(prefers-color-scheme: dark)\">"
+    + "<style>" + DS_CSS + (extraCss ? "\n" + extraCss : "") + "</style>";
+}
+
+// Machine-checkable parts of the standard, run on a rendered page. Returns a list of problems (empty when the page passes).
+function dsLint(html) {
+  var out = [], m, re;
+  if (String(html).indexOf("DESIGN-SYSTEM-1 v") < 0) out.push("page does not include DS_CSS");
+  if (!/<body[^>]*class="[^"]*\bds\b/.test(html)) out.push("body is missing class=\"ds\"");
+  if (!/name="?viewport"?/.test(html)) out.push("no viewport meta");
+  re = /font(?:-size)?\s*:\s*(?:[0-9]+\s+)?([0-9.]+)px/g;
+  while ((m = re.exec(html))) { if (+m[1] < 13) out.push("text under 13px: " + m[0]); }
+  re = /min-height\s*:\s*([0-9.]+)px/g;
+  var css = String(html).split("<style>").slice(1).map(function (s) { return s.split("</style>")[0]; }).join("\n");
+  re = /(button|\.btn)[^{}]*\{[^}]*min-height\s*:\s*([0-9.]+)px/g;
+  while ((m = re.exec(css))) { if (+m[2] < 40) out.push("button under the tap size: " + m[0].slice(0, 80)); }
+  if (/style="[^"]*#[0-9a-fA-F]{3,6}/.test(html)) out.push("inline style with a raw hex colour (use var(--ds-*))");
+  var prim = (html.match(/class="[^"]*\bbtn-primary\b/g) || []).length;
+  if (prim > 1) out.push("more than one primary button in the static page (" + prim + ")");
+  return out;
+}
+// DESIGN-SYSTEM-1:END
 var CSS = L(
-  ":root{--bg:#faf8f5;--fg:#1b1a18;--mut:#6b6560;--line:#e2dcd4;--acc:#8a5a2b}",
-  "@media(prefers-color-scheme:dark){:root{--bg:#161513;--fg:#e8e4de;--mut:#9a938b;--line:#2e2b27;--acc:#c99a5e}}",
+  "/* READING-DESIGN-1 (DESIGN-SYSTEM-3, #9929): neutrals, accent and contrast come from the shared design system (light and dark); the serif reading face stays. */",
+  ":root{--bg:var(--ds-bg);--fg:var(--ds-ink);--mut:var(--ds-ink-2);--line:var(--ds-line);--acc:var(--ds-accent)}",
   "*{box-sizing:border-box}",
-  "body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.62 Georgia,'Iowan Old Style',serif;-webkit-font-smoothing:antialiased}",
+  "body.ds{margin:0;background:var(--bg);color:var(--fg);font:17px/1.62 Georgia,'Iowan Old Style',serif;-webkit-font-smoothing:antialiased}",
   ".wrap{max-width:44rem;margin:0 auto;padding:3.5rem 1.4rem 6rem}",
   "header.mast{border-bottom:1px solid var(--line);padding-bottom:1.2rem;margin-bottom:2.4rem}",
-  "header.mast h1{font-size:1.05rem;margin:0;letter-spacing:.14em;text-transform:uppercase;font-weight:600}",
+  ".ds header.mast h1{font-size:1.05rem;margin:0;letter-spacing:.14em;text-transform:uppercase;font-weight:600}",
   "header.mast p{margin:.5rem 0 0;color:var(--mut);font-size:.9rem}",
-  "a{color:var(--acc)}",
-  "h2{font-size:1.32rem;margin:2.4rem 0 .7rem;line-height:1.3}",
-  "h3{font-size:1.08rem;margin:1.8rem 0 .5rem}",
-  "p{margin:0 0 1.05rem}",
+  ".ds a{color:var(--acc)}",
+  ".ds h2{font-size:1.32rem;margin:2.4rem 0 .7rem;line-height:1.3;font-weight:700}",
+  ".ds h3{font-size:1.08rem;margin:1.8rem 0 .5rem}",
+  ".ds p{margin:0 0 1.05rem}",
   "ul{margin:0 0 1.1rem;padding-left:1.2rem}",
   "li{margin:.35rem 0}",
   "blockquote{margin:1.3rem 0;padding:.2rem 0 .2rem 1rem;border-left:2px solid var(--line);color:var(--mut)}",
   ".lede{font-size:1.14rem;color:var(--mut);font-style:italic;margin-bottom:1.6rem}",
-  ".meta{color:var(--mut);font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;margin-bottom:1.9rem}",
+  ".meta{color:var(--mut);font-size:.875rem;letter-spacing:.04em;text-transform:uppercase;margin-bottom:1.9rem}",
   ".obj{margin:2.4rem 0 0;padding:1.1rem 1.2rem;border:1px solid var(--line);border-radius:3px}",
   ".obj h3{margin-top:0}",
   ".obj p:last-child{margin-bottom:0}",
@@ -5536,20 +5723,20 @@ var CSS = L(
   ".idx .t{font-size:1.1rem;display:block;margin-bottom:.25rem}",
   ".idx .m{color:var(--mut);font-size:.8rem;letter-spacing:.05em;text-transform:uppercase}",
   ".idx .l{color:var(--mut);font-size:.93rem;margin-top:.35rem}",
-  "nav.forms{margin:1.6rem 0 2.2rem;color:var(--mut);font-size:.85rem}",
+  "nav.forms{margin:1.6rem 0 2.2rem;color:var(--mut);font-size:.875rem}",
   "nav.forms a{margin-right:.9rem}",
-  "header.mast h1 a,nav.forms a{display:inline-block;padding:.35rem 0;min-width:24px;text-align:center}",
-  ".fb{margin:2.6rem 0 0;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.85rem}",
-  ".fb a{margin-right:1rem;display:inline-block;padding:.35rem 0;min-width:24px;text-align:center}",
-  ".sub input,.sub button{min-height:28px}",
-  "footer a{display:inline-block;padding:.45rem 0;min-width:24px;text-align:center}",
-  "footer{margin-top:3.4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.78rem}",
+  "header.mast h1 a,nav.forms a{display:inline-flex;align-items:center;padding:0;min-height:44px;min-width:44px;justify-content:center}",
+  ".fb{margin:2.6rem 0 0;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.875rem}",
+  ".fb a{margin-right:1rem;display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px}",
+  ".sub input,.sub button{min-height:44px}",
+  "footer a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px}",
+  "footer{margin-top:3.4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.875rem}",
   ".src{margin-top:2rem;color:var(--mut);font-size:.8rem}"
 );
 function page(title, inner, extraHead, desc) {
   // READING-FEED-LEDE-1: a piece page passes its own description (the shown lede); every other page keeps the one site sentence.
-  var Q = String.fromCharCode(34), d = desc ? escHtml(String(desc)) : "A personal companion that writes one piece at a time - essays, field notes, and long-form serials.";
-  return "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=robots content=noindex><meta name=viewport content=" + Q + "width=device-width,initial-scale=1" + Q + "><title>" + escHtml(title) + "</title><link rel=alternate type=application/rss+xml title=Reading href=/feed.xml><meta name=description content=" + Q + d + Q + "><style>" + CSS + "</style>" + (extraHead || "") + "</head><body><div class=wrap>" + inner + "</div><script src='https://fleet.qnfo.org/ctl.js' defer></script></body></html>";
+  var d = desc ? escHtml(String(desc)) : "A personal companion that writes one piece at a time - essays, field notes, and long-form serials.";
+  return "<!doctype html><html lang=en><head><meta name=robots content=noindex>" + dsHead(title, "", CSS) + "<link rel=alternate type=application/rss+xml title=Reading href=/feed.xml><meta name=description content=" + String.fromCharCode(34) + d + String.fromCharCode(34) + ">" + (extraHead || "") + "</head><body class=\"ds\"><div class=wrap>" + inner + "</div><script src='https://fleet.qnfo.org/ctl.js' defer></script></body></html>";
 }
 __name(page, "page");
 __name2(page, "page");

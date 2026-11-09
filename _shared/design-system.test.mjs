@@ -60,6 +60,9 @@ const ADOPTERS = [
   { dir: "qnfo-jobsearch", path: "/cv", env: () => ({}) },
   { dir: "qnfo-jobsearch", path: "/prep", env: () => ({}) },
   { dir: "personal-api", path: "/companion", env: () => ({}) },
+  { dir: "personal-companion", path: "/", host: "reading.q08.org", env: () => ({ PERSONAL: d1Stub(), AUDIT: d1Stub() }) },
+  { dir: "personal-companion", path: "/travel", host: "travel.q08.org", env: () => ({ PERSONAL: d1Stub(), AUDIT: d1Stub(), COMPANION_KEY: "k" }) },
+  { dir: "q08-prediction-markets", path: "/whitepaper", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/focus", env: () => ({ AUDIT: d1Stub() }) }
 ];
@@ -68,9 +71,12 @@ for (const a of ADOPTERS) {
     const text = readFileSync(new URL(a.dir + "/" + f, root), "utf8");
     ok(current(text) === block(), a.dir + "/" + f + " holds the current DESIGN-SYSTEM-1 block (run node _shared/inline-design-system.mjs " + a.dir + ")");
   }
-  const mod = (await import(pathToFileURL(fileURLToPath(new URL(a.dir + "/worker.js", root))).href)).default;
+  // personal-companion imports cloudflare:workers and sibling modules: load it through its own harness with the import stubbed.
+  const mod = a.dir === "personal-companion"
+    ? (await (await import(pathToFileURL(fileURLToPath(new URL("personal-companion/_harness-import-worker.mjs", root))).href)).importWorker(() => readFileSync(new URL("personal-companion/worker.js", root), "utf8").replace('import { WorkflowEntrypoint } from "cloudflare:workers";', "var WorkflowEntrypoint = class {};") + "\n//" + Math.random(), new URL("personal-companion/", root))).default
+    : (await import(pathToFileURL(fileURLToPath(new URL(a.dir + "/worker.js", root))).href)).default;
   let html = "";
-  try { const r = await mod.fetch(new Request("https://test.invalid" + a.path), a.env(), { waitUntil() {}, passThroughOnException() {} }); html = await r.text(); }
+  try { const r = await mod.fetch(new Request("https://" + (a.host || "test.invalid") + a.path), a.env(), { waitUntil() {}, passThroughOnException() {} }); html = await r.text(); }
   catch (e) { ok(false, a.dir + a.path + " renders offline", e.message); continue; }
   const problems = DS.dsLint(html);
   ok(problems.length === 0, a.dir + a.path + " passes dsLint", problems);
