@@ -20,7 +20,7 @@ import cf_obs_issue_bridge as B  # noqa: E402
 H = 3600 * 1000
 
 SCHEMA = """
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, linked_session TEXT, created_at INTEGER, updated_at INTEGER);
 CREATE UNIQUE INDEX open_title ON agent_issues(lower(trim(title))) WHERE status = 'open';
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, verify_probe TEXT, verify_transport TEXT, status TEXT, issue_id INTEGER, next_due_at TEXT, attempts INTEGER DEFAULT 0,
   precondition TEXT, action TEXT, max_attempts INTEGER, escalate_to TEXT, expected_cadence_h INTEGER, module TEXT);
@@ -149,6 +149,8 @@ def test_live_group_filed_once_and_probe_lifecycle():
     assert row["title"] == "CF-OBS-ISSUE-1: qnfo-ai: HttpServerError · HTTP 502 [cf-obs:g-live]" and "cf-obs-id: g-live" in row["description"], row
     scan = env.issues()[1]
     assert "Potential vulnerability scan · wordpress · high risk" in scan["title"] and scan["status"] == "open", scan
+    # DOER-AT-BIRTH-1: every filed issue names its doer, none waits without one
+    assert all(env.d1("SELECT linked_session FROM agent_issues WHERE id = ?", [i["id"]])[0]["linked_session"] == "doer:program-code-loop" for i in (row, scan)), "doer at birth"
     assert env.d1("SELECT priority FROM agent_issues WHERE id = ?", [scan["id"]])[0]["priority"] == "high", scan
     pr = env.d1("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-%d'" % row["id"])[0]["verify_probe"]
     assert pr.startswith("SELECT '1' AS expected") and "cf-obs-g-live" in pr, pr
