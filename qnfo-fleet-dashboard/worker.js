@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.95.2";
+var VERSION = "1.96.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -13645,6 +13645,46 @@ async function cmdTranscribe(request, env, holder) {
   }
   return ownerJson({ ok: false, error: "transcription failed (" + lastErr + ")", ms: Date.now() - t0 }, 502);
 }
+// CMD-TASKS-UNDO-1 (issues 1002676 and 1002677, pillar autonomy; minor): the command line keeps a task list that survives a reload and a
+// device change (cmd_log rows of the owner's last 7 days: agent runs, tools, actions, undos) and a one-tap undo for an agent pull request
+// (GitHub revertPullRequest opens the revert PR; the merge lane merges it). Both are owner-only reads/writes behind the existing code
+// sign-in; undo is destructive, so it needs the fresh-code step-up like every other destructive action.
+var CMD_UNDO_REPO = "QNFO/qnfo-workers";
+var CMD_AGENT_BRANCH_RE = /^(claude\/|copilot\/|codeagent-|agent-)/;
+async function cmdTaskRows(env) {
+  const rows = await d1all(env.AUDIT, "SELECT id, ts, kind, status, text, done_ms FROM cmd_log WHERE owner = 1 AND kind IN ('agent','agent-stream','tool','action','undo') AND ts >= datetime('now', '-7 days') ORDER BY ts DESC LIMIT 25").catch(function() { return []; });
+  return rows.map(function(r) { return { id: r.id, ts: r.ts, kind: r.kind, status: r.status, text: String(r.text || "").slice(0, 160), done_ms: r.done_ms == null ? null : Number(r.done_ms) }; });
+}
+async function cmdAgentMerges(env) {
+  const r = await ghCall(env, "GET", "/repos/" + CMD_UNDO_REPO + "/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30");
+  if (!r.ok || !Array.isArray(r.json)) return { ok: false, error: "GitHub " + (r.status || "network") + (r.error ? ": " + r.error : ""), merges: [] };
+  const merges = r.json.filter(function(p) { return p.merged_at && p.head && CMD_AGENT_BRANCH_RE.test(String(p.head.ref || "")) && !/^Revert "/.test(String(p.title || "")); }).slice(0, 8).map(function(p) { return { number: p.number, title: String(p.title || "").slice(0, 120), merged_at: p.merged_at, url: p.html_url }; });
+  return { ok: true, merges: merges };
+}
+async function cmdUndoPr(env, num) {
+  const t0 = Date.now();
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret not set" };
+  const g = await ghCall(env, "GET", "/repos/" + CMD_UNDO_REPO + "/pulls/" + num);
+  if (!g.ok || !g.json) return { ok: false, error: "GitHub " + (g.status || "network") + ": cannot read pull request " + num };
+  const p = g.json;
+  if (!p.merged_at || !p.base || p.base.ref !== "main") return { ok: false, error: "Pull request " + num + " is not a merged change on main." };
+  if (!p.head || !CMD_AGENT_BRANCH_RE.test(String(p.head.ref || ""))) return { ok: false, error: "Pull request " + num + " is not an agent pull request." };
+  const q = "mutation($id:ID!,$t:String!){revertPullRequest(input:{pullRequestId:$id,title:$t,draft:false}){revertPullRequest{number url}}}";
+  let j = null;
+  try {
+    const r = await fetch(GH_API + "/graphql", { method: "POST", headers: ghHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify({ query: q, variables: { id: p.node_id, t: 'Revert "' + String(p.title || "").slice(0, 200) + '"' } }), signal: AbortSignal.timeout(2e4) });
+    j = await r.json();
+  } catch (e) {
+    return { ok: false, error: "GitHub unreachable: " + String(e && e.message || e).slice(0, 120) };
+  }
+  const rp = j && j.data && j.data.revertPullRequest && j.data.revertPullRequest.revertPullRequest;
+  if (!rp) return { ok: false, error: "GitHub refused the revert: " + String(j && j.errors && j.errors[0] && j.errors[0].message || "no detail").slice(0, 200) };
+  return { ok: true, revert_pr: rp.number, url: rp.url, of: num, ms: Date.now() - t0 };
+}
+var CMD_TASKS_JS = "(function(){var b=document.getElementById('ctasks');if(!b)return;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function e(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}function ld(){fetch('/api/cmd/tasks',{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){if(!j.ok){b.querySelector('.tl').innerHTML='<p class=\"meta\">'+e(j.error||'Sign in to see the task list.')+'</p>';return}var t=(j.tasks||[]).map(function(x){return '<li><span class=\"st\">'+e(x.status)+'</span> <span>'+e(x.text||x.kind)+'</span> <small>'+e(x.ts)+'</small></li>'}).join('');b.querySelector('.tl').innerHTML=t?'<ul>'+t+'</ul>':'<p class=\"meta\">No runs in the last 7 days.</p>';var m=(j.merges||[]).map(function(x){return '<li><a href=\"'+e(x.url)+'\">#'+x.number+'</a> '+e(x.title)+' <button type=\"button\" data-undo=\"'+x.number+'\" style=\"min-height:44px;min-width:44px\">Undo</button></li>'}).join('');b.querySelector('.ul').innerHTML=m?'<ul>'+m+'</ul>':'<p class=\"meta\">'+e(j.merges_error||'No recent agent merges.')+'</p>'}).catch(function(){})}b.addEventListener('click',function(ev){var t=ev.target.closest('[data-undo]');if(!t)return;t.disabled=true;fetch('/api/cmd/undo',{method:'POST',credentials:'same-origin',headers:H,body:JSON.stringify({pr:Number(t.getAttribute('data-undo'))})}).then(function(r){return r.json()}).then(function(j){var s=b.querySelector('.us');s.innerHTML=j.ok?'Revert PR <a href=\"'+e(j.url)+'\">#'+j.revert_pr+'</a> opened; it merges when its checks pass.':e(j.error||'Undo failed.');ld()}).catch(function(){t.disabled=false})});ld();setInterval(ld,15000)})();";
+function cmdTasksPanelHtml() {
+  return '<section class="cmd" id="ctasks" style="margin-top:18px"><h2 class="fl-h" style="font-size:18px">Tasks</h2><div class="tl"><p class="meta">Loading...</p></div><h2 class="fl-h" style="font-size:18px">Undo an agent merge</h2><div class="ul"></div><p class="us meta" role="status"></p></section>';
+}
 async function cmdRoutes(request, env, ctx, path, owner) {
   if (path === "/ctl.js") return new Response(CTL_JS, { headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*" } });
   if (path === "/cmd" || path === "/cmd/") {
@@ -13732,6 +13772,24 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     b = await request.json();
   } catch (e) {
     return ownerJson({ error: "invalid JSON" }, 400);
+  }
+  if (request.method === "GET" && path === "/api/cmd/tasks") {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The task list needs your email code. Type login." }, 401);
+    const [tasks, mg] = await Promise.all([cmdTaskRows(env), cmdAgentMerges(env)]);
+    return ownerJson({ ok: true, tasks, merges: mg.merges, merges_error: mg.ok ? null : mg.error });
+  }
+  if (request.method === "POST" && path === "/api/cmd/undo") {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "Undo needs your email code. Type login." }, 401);
+    if (!owner.loop && !(owner.session && owner.session.stepup) && !owner.legacy) return ownerJson({ ok: false, need: "stepup", error: "Undo is destructive: enter a fresh code." }, 401);
+    const num = Number(b && b.pr);
+    if (!Number.isInteger(num) || num < 1) return ownerJson({ ok: false, error: "pr number required" }, 400);
+    const traceId = "cmd-" + cmdRandHex(10);
+    const r = await cmdUndoPr(env, num);
+    try {
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'undo', ?3, ?4, ?5, 1, ?6)").bind(traceId, "undo PR " + num, r.ok ? "done" : "failed", r.ok ? r.url : null, r.ok ? null : String(r.error || "").slice(0, 400), r.ms || 0).run();
+    } catch (e) {
+    }
+    return ownerJson(r, r.ok ? 200 : 400);
   }
   if (path === "/api/cmd/tool") {
     if (!holder) return ownerJson({ ok: false, need: "code", error: "Tools need your email code. Type login." }, 401);
@@ -16267,7 +16325,7 @@ function cmdScript(holder) {
   return turnstileWidget(null, "fleet_cmd") + TURNSTILE_SCRIPT + "<script>" + CMD_JS.replace("holder=HOLDER;", "holder=" + (holder ? "true" : "false") + ";") + "</script><script>" + DEC_JS + "</script>";
 }
 function cmdPageHtml(holder, from, q) {
-  return fleetHead("Fleet command line") + fleetTop("cmd", false, holder) + '<main class="wrap fl" style="max-width:860px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 16px">Command line</h1><p class="meta" style="margin:-6px 0 18px">Ask the fleet in plain English, or type a command (<code>help</code> lists them). Reading and asking are open to everyone. <a href="/">Back to the queue</a>.</p>' + cmdPanelHtml(holder, from, q) + "</main>" + cmdScript(holder) + FLEET_SHELL_JS + "</body></html>";
+  return fleetHead("Fleet command line") + fleetTop("cmd", false, holder) + '<main class="wrap fl" style="max-width:860px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 16px">Command line</h1><p class="meta" style="margin:-6px 0 18px">Ask the fleet in plain English, or type a command (<code>help</code> lists them). Reading and asking are open to everyone. <a href="/">Back to the queue</a>.</p>' + cmdPanelHtml(holder, from, q) + cmdTasksPanelHtml() + "</main>" + cmdScript(holder) + "<script>" + CMD_TASKS_JS + "</script>" + FLEET_SHELL_JS + "</body></html>";
 }
 // /ctl.js: one script tag gives any fleet page a discreet link to the command line, scoped to that page.
 // It never shows in print or PDF output (@media print) and stays out of automated/headless browsers (navigator.webdriver),
