@@ -80,6 +80,6 @@ const stream = await sb.run({ AI: {} }, "dynamic/premium", [], 512, true, { tool
 assert.equal(await stream.text(), sse);
 assert.match(stream.headers.get("content-type"), /event-stream/);
 assert.ok(!src.includes('model: "workers-ai/" + modelId'));
-assert.ok(src.includes('primaryKey: _primaryKey, hedgeKey: null'));
+assert.ok(src.includes("primaryKey: _primaryKey, hedgeKey: (/^(dynamic") && src.includes("hedgeMs: _budgetMs"));
 assert.equal(src, readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8").replace(/\r\n/g, "\n"));
 console.log("dynamic transport: binding/compat/tools/stream/spend/errors passed");
