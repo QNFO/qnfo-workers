@@ -198,6 +198,20 @@ try:
     repo(tmp, host=HOST.replace('var VERSION = "2.0.0-host"; // host\n', 'var VERSION = "2.0.0-host"; // host\nvar VERSION = "x";\n'))
     r = run(tmp)
     ok(r.returncode != 0 and "top-level" in r.stderr, "a host with two top-level VERSION lines is refused", r.stderr)
+    # FOLD-HOST-ROUTE-1: --host serves a stateless guest at a hostname root; a stateful guest is refused without --allow-bindings
+    shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
+    repo(tmp)
+    r = run(tmp, ["--host", "watch.q08.org"])
+    ok(r.returncode != 0 and "FOLD-HOST-ROUTE-1" in r.stderr, "--host refuses a guest with bindings or a cron unless --allow-bindings is named", r.stderr)
+    shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
+    repo(tmp, guest=GUEST.replace('(env.GDB ? "db" : "nodb")', '"x"').replace("ctx.waitUntil(env.GDB.prepare(\"SELECT 1\").run());", ""),
+         )
+    with open(os.path.join(tmp, "g-one", "wrangler.toml"), "w") as fh:
+        fh.write('name = "g-one"\nmain = "worker.js"\ncompatibility_date = "2026-08-01"\n')
+    r = run(tmp, ["--host", "watch.q08.org", "--env-map", "{}"])
+    ok(r.returncode == 0 and "FOLD-HOST-ROUTE-1" in open(os.path.join(tmp, "h-one", "worker.js")).read(), "--host folds a stateless guest", r.stderr)
+    t = subprocess.run(["node", "--no-warnings", os.path.join(tmp, "h-one", "g-one-fold.test.mjs")], capture_output=True, text=True)
+    ok("FAIL host watch.q08.org" not in t.stdout and "FAIL a foreign hostname" not in t.stdout and "passed" in t.stdout, "the generated suite proves the hostname routing", t.stdout + t.stderr)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 print("%d passed, %d failed" % (passed, failed))
