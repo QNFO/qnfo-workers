@@ -30,7 +30,7 @@ export async function insertRoadmap(rows, { fetchImpl = fetch, tok = process.env
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [file, cap = "25", roadmapFile] = process.argv.slice(2);
   const items = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const openIssues = JSON.parse(execFileSync("gh", ["issue", "list", "--state", "open", "--limit", "1000", "--json", "title,number"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
+  const openIssues = JSON.parse(execFileSync("gh", ["issue", "list", "--state", "open", "--label", "doc-orphan", "--limit", "1000", "--json", "title,number"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
   const open = new Map(openIssues.map((i) => [i.title, i]));
   let made = 0, skipped = 0, updated = 0;
   for (const it of items) {

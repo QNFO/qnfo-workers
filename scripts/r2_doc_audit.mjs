@@ -44,7 +44,7 @@ export function groupIssueFor({ group, items }) {
       `Problem: ${items.length} document(s) under \`r2://${group}/\` are cited by no worker, script, migration or workflow and are not retired (NO-STANDALONE-DOCS-1). Each is also a roadmap_implementation row (source doc-orphan).`,
       `Acceptance: for each document, code that uses what it specifies lands (a rule, probe, metric, migration or worker change) and cites the file name, or the prefix is retired by adding a line \`<bucket>/<prefix><TAB><reason>\` to docs/retired-r2-documents.txt in a PR.`,
       `code-task: take the documents below in order; implement the ones that specify behaviour, retire the rest by prefix with the reason`,
-      `code-probe: node scripts/r2_doc_audit.mjs --keys <r2-keys.jsonl> --retired docs/retired-r2-documents.txt --src-dir . --strict reports no orphan under ${group}`,
+      `code-probe: node scripts/r2_doc_audit.mjs --keys <r2-keys.jsonl> --texts <texts.json> --indexed <indexed.json> --retired docs/retired-r2-documents.txt --src-dir . --strict reports no orphan under ${group}`,
       `Pillar: core. Doer: the code loop (qnfo-code-orchestrator). Metric: orphan count under ${group} (${items.length} now) falls to 0.`,
       "Documents:",
       ...shown.map((o) => `- [ ] ${o.key} (${o.size} bytes)`),
@@ -62,7 +62,7 @@ export function classify(docs, srcBlob, texts = {}, { retired = [], indexed = ne
     const ids = [...new Set((texts[d.key] || "").match(RULE_ID) || [])];
     const hitPath = GENERIC.test(stem) ? srcBlob.includes(d.key) : (srcBlob.includes(stem) || srcBlob.includes(d.key));
     const hitIds = ids.filter((i) => srcBlob.includes(i));
-    const isRetired = retired.some((r) => `${d.bucket}/${d.key}`.startsWith(r.prefix));
+    const isRetired = retired.some((r) => { const full = `${d.bucket}/${d.key}`; return full === r.prefix || (full.startsWith(r.prefix) && (r.prefix.endsWith("/") || full[r.prefix.length] === "/")); });
     const isIndexed = indexed.has(d.key) || indexed.has(`${d.bucket}/${d.key}`);
     return { bucket: d.bucket, key: d.key, size: d.size ?? 0, rule_ids: ids.length, ids_in_code: hitIds.length, path_in_code: hitPath, retired: isRetired, indexed: isIndexed, orphan: !hitPath && !hitIds.length && !isRetired && !isIndexed };
   });

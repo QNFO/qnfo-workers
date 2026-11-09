@@ -59,3 +59,8 @@ assert.ok(_reg.length > 0);
 for (const d of _reg) assert.ok(d.reason && d.disposition === "archived", "registry row has a reason: " + d.key);
 const _blob = _rf(new URL("./r2-doc-dispositions.json", import.meta.url), "utf8");
 assert.equal(classify(_reg.map((d) => ({ bucket: d.bucket, key: d.key })), _blob).filter((r) => r.orphan).length, 0, "registry retires every listed doc");
+
+test2("retired prefix matches only at a path boundary", () => {
+  const r = classifyG([{ bucket: "b", key: "docs/retro.md", size: 1 }, { bucket: "b", key: "docs/ret/x.md", size: 1 }], "", {}, { retired: parseRetired("b/docs/ret\treason") });
+  assert2.deepEqual(r.map((x) => x.orphan), [true, false]);
+});
