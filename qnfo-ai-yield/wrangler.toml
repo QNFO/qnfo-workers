@@ -6,7 +6,8 @@ main = "worker.js"
 # WORKER-SOURCE-IN-REPO-1 (issue 9620): this worker ran live with no tracked source. worker.js is the deployed script,
 # fetched through the Cloudflare API (script content v2) on 2026-11-09 and byte-identical in the mirror.
 # SALT is a secret binding (never in this file); SEND_EMAIL is limited to the owner address below.
-compatibility_date = "2026-10-10"
+compatibility_date = "2026-11-04"
+# compat-advance: reviewed 2026-11-09 (compat-risk-scan clean; no COMPAT_FLIPS entry between 2026-10-10 and 2026-11-04)
 workers_dev = true
 
 [[d1_databases]]
