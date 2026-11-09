@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.96.1";
+var VERSION = "1.98.1";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -3812,7 +3812,7 @@ async function v3CodeStart(env, b) {
 }
 async function v3CodeStatus(env, id) {
   const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "result", id: id }) });
-  const run = r.json && r.json.run;
+  const run = r.json && (r.json.latest || r.json.run);
   if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], miss: r.http !== 404, note: r.http !== 404 ? String(r.error || "executor http " + r.http).slice(0, 120) : null, error: r.http === 404 ? "the executor no longer has this run" : null });
   const steps = (run.steps || []).map(function(s) { return { tool: String(s.tool || ""), args: String(s.args || "").replace(/\s+/g, " ").slice(0, 160), ms: Number(s.ms) || 0 }; });
   // Any status other than queued/running is final, as in cmdAgentPoll: an unknown one ("timeout", "cancelled") must end the poll, not spin it for 25 minutes.
@@ -13495,7 +13495,8 @@ function cmdAgentTrace(steps) {
 }
 async function cmdAgentPoll(env, id) {
   const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "result", id: id }) });
-  const run = r.json && r.json.run;
+  // SESSION-AUTOCONTINUE-1: follow a continued chain to its last run, so a partial first run is not settled as the answer.
+  const run = r.json && (r.json.latest || r.json.run);
   if (!run) {
     // The run is unknown to the agent (evicted or never stored): fail the row instead of polling for 30 minutes.
     const msg = "agent run lost: " + (r.error || (r.json && r.json.error) || "http " + r.http);
