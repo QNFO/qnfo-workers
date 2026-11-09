@@ -413,6 +413,7 @@ async function ledger(env: Env, row: Record<string, unknown>) {
     await env.AUDIT_DB.prepare("INSERT OR REPLACE INTO cf_agent_runs (id, instance, caller, scope, status, model, steps, tools_used, prompt, result, error, created_ms, finished_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
       .bind(row.id, row.instance, row.caller, row.scope, row.status, row.model ?? null, row.steps ?? 0, row.tools_used ?? null, clip(String(row.prompt || ""), 2000), row.result == null ? null : clip(String(row.result), 8000), row.error ?? null, row.created_ms, row.finished_ms ?? null).run();
     // A turn whose Durable Object never finished it (the agent sweeps its own SQLite in onStart) is closed here too.
+    // These 'abandoned%' rows are what the cmd_run_abandoned_7d metric counts (migrations/2026-11-09-cmd-run-abandoned-metric.sql).
     await env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'failed', error = 'abandoned: no progress for " + STALE_RUN_MIN + " minutes', finished_ms = ?1 WHERE status IN ('queued', 'running') AND created_ms < ?2").bind(Date.now(), Date.now() - STALE_RUN_MIN * 60000).run();
   } catch (e) { logErr("ledger", e); }
 }
