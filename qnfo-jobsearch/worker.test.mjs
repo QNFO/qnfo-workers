@@ -227,12 +227,12 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(!!stuck, "run left open for an hour is closed by the next run");
   for (const feed of ["greenhouse:cwi", "greenhouse:deepmind", "greenhouse:tno"])
     db.prepare("INSERT INTO jobsearch_feeds (feed, last_error, consecutive_fail) VALUES (?, 'HTTP 404', 126)").run(feed);
-  const ops = (await call("/api/ops", {}, env2));
+  const ops = (await call("/api/ops?fresh=1", {}, env2));
   ok(ops[1].checks.length === 8 && ops[1].checks.find((c) => c.fm === "jobsearch-auth-unavailable").ok, "ops report lists 8 checks, auth ok", ops[1].checks.filter((c) => !c.ok));
   ok(ops[1].checks.find((c) => c.fm === "jobsearch-feed-down").ok && ops[1].feeds.filter((f) => !f.active && f.consecutive_fail === 126).length === 3, "retired failing feeds remain visible but do not degrade active feed health");
   ok(ops[1].checks.find((c) => c.fm === "jobsearch-cron-stalled").ok, "ops: cron fresh");
   db.prepare("UPDATE jobsearch_feeds SET consecutive_fail=3 WHERE feed='greenhouse:anthropic'").run();
-  const activeFailure = (await call("/api/ops", {}, env2))[1];
+  const activeFailure = (await call("/api/ops?fresh=1", {}, env2))[1];
   ok(!activeFailure.checks.find((c) => c.fm === "jobsearch-feed-down").ok, "three failures on an active feed still fail the detector");
   ok(db.prepare("SELECT v FROM jobsearch_meta WHERE k='ledger_verified_on'").get().v === "2026-10-01", "ledger date recorded each run");
   ok((await call("/health", {}, env2))[1].ledger_verified_on === "2026-10-01", "health shows ledger date");
